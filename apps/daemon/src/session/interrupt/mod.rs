@@ -15,8 +15,9 @@
 //!   at a time, each seen on the screen, and an empty or unread composer gets one Ctrl-U. Ctrl-C at
 //!   an idle Grok asks to be pressed again to quit.
 //!
-//! So a key goes in only while the session reads `Working` by its hooks and its terminal title
-//! shows the turn running ([`crate::session::title_activity::TitleActivity::shows_running`]),
+//! So a key goes in only while the session reads `Working` by its hooks and its terminal shows the
+//! turn running, by its title or by the status the agent reports through OSC 7501
+//! ([`crate::session::title_activity::TitleActivity::shows_running`]),
 //! checked under the input lock right before each key: a turn that ended in the meantime gets no
 //! key at all. Each key is a write of its own, never joined to a message.
 //!
@@ -186,8 +187,8 @@ const NOTHING_TO_INTERRUPT: &str = "Nothing to interrupt: the session is not in 
      turn. It is awaiting instructions; send it the next step with `instruct_session`.";
 
 const NOT_SHOWN_RUNNING: &str = "No key was sent: the session reads as working, but its terminal \
-     does not show a turn running (its title shows none, or has stopped changing), so a key could \
-     land on something other than a turn. Check it with `get_session`.";
+     does not show a turn running (neither its title nor the status it reports says one runs), so \
+     a key could land on something other than a turn. Check it with `get_session`.";
 
 /// What the session is waiting on: a dialog of its own, or the title `agent`'s provider shows
 /// when only the user can act, where it has one.
@@ -741,14 +742,14 @@ fn press(
             && input_before.is_some()
             && title.stops() == before.stops;
         // For Claude Code a prompt its hook reports after the key is the cancelled turn ended once
-        // the title has shown the cancel (its stop count has moved, about 70 ms after the Esc): the
-        // hook also opens a turn and sets `Working` at once, so neither the end count nor the
-        // status moves. Without the title it proves nothing, as the hook also fires for a message
-        // queued mid-turn, before the cancel has landed. Only for Claude Code: Codex's prompt hook
-        // fires when a message is steered, before the cancel; for Grok Build it is not measured
-        // when its hook fires for a message queued mid-turn, and its cancel is told by
-        // `StopCancelled`, or by its title when no hook fires. The title gate is measured only for
-        // Claude Code.
+        // the title has shown the cancel (its stop count has moved, about 70 ms after the Esc; the
+        // `idle` report that stands in for it on 2.1.322 comes about 80 ms after): the hook also
+        // opens a turn and sets `Working` at once, so neither the end count nor the status moves.
+        // Without the title it proves nothing, as the hook also fires for a message queued
+        // mid-turn, before the cancel has landed. Only for Claude Code: Codex's prompt hook fires
+        // when a message is steered, before the cancel; for Grok Build it is not measured when its
+        // hook fires for a message queued mid-turn, and its cancel is told by `StopCancelled`, or
+        // by its title when no hook fires. The title gate is measured only for Claude Code.
         let prompted = live.agent == AgentId::CLAUDE
             && live.prompts_sent() != before.prompts
             && title.stops() != before.stops;
@@ -788,8 +789,9 @@ fn key(
     }
 }
 
-/// Whether the session is in a turn by both its hooks and its terminal title, with nothing of the
-/// agent's own up that a key would answer. Called under the input lock, right before a key.
+/// Whether the session is in a turn by both its hooks and its terminal (its title or the status it
+/// reports), with nothing of the agent's own up that a key would answer. Called under the input
+/// lock, right before a key.
 ///
 /// The status a hook reported is held only in the store, so the record is read here, under the
 /// lock: that is what makes the check and the key one step against a hook applied in between. It

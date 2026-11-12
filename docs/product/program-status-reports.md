@@ -1,9 +1,9 @@
 # Program status reports
 
 How the program running in a session's terminal can report its own status through OSC 7501, the Program Status
-Protocol, revision 0.4 (<https://www.superlogical.com/rex/docs/build/program-status>), and when such reports become the
-session's status. What the statuses mean, and where they come from for the other agents, is in
-`docs/product/session-statuses.md`.
+Protocol, revision 0.4 (<https://www.superlogical.com/rex/docs/build/program-status>), how such reports tell whether a
+turn is running, and when they become the session's status. What the statuses mean, and where they come from for the
+other agents, is in `docs/product/session-statuses.md`.
 
 ## Where the protocol is supported and where reports give the status
 
@@ -13,14 +13,15 @@ session's status. What the statuses mean, and where they come from for the other
   session's status.
 - **Reports give a session its status only when its agent has no status integration of its own**, no hooks or
   signals of the agent that give its status. Claude Code, Codex and Grok Build each have one (see "What the statuses
-  are derived from" in `docs/product/session-statuses.md`), and in their sessions reports move nothing: no status, no
-  turn, no pause and no notice to an owner. Every agent supported today has one, so in this build no session takes its
-  status from reports.
+  are derived from" in `docs/product/session-statuses.md`), and in their sessions reports move no status, no turn, no
+  pause and no notice to an owner. Every agent supported today has one, so in this build no session takes its status
+  from reports. What reports still do in every session is say whether a turn is running (see "Reports as the sign that
+  a turn is running" below).
 - **A shell terminal of the Terminal panel** (see `docs/product/terminal-panel.md`) does not support the protocol:
   reports reach the clients as ordinary output, and so does the support query, which no client answers.
 
 "From the root record to the session's status" and "Reports at the end of the process" below apply only to a session
-whose status reports give.
+whose status reports give; "Reports as the sign that a turn is running" applies to every session.
 
 ## The support query
 
@@ -79,6 +80,40 @@ whose status reports give.
   no status, since the end of the process settles the status itself (see "Reports at the end of the process" below).
 - **A terminal reset (RIS, `ESC c`) forgets every record. A soft reset (DECSTR, `CSI ! p`) forgets none.**
 
+## Reports as the sign that a turn is running
+
+An agent's terminal title has shown whether one of its turns is running, by the activity glyph it starts the title
+with. An agent that reports through OSC 7501 once the support query is answered can drop those glyphs (Claude Code
+2.1.322 does), so in every session, whichever its agent and whether or not reports give its status, the root record's
+reports are read as that sign too:
+
+- **`working` is a turn running. Every other state — `idle`, `done`, `error`, `blocked` — and the root record going
+  away** (cleared, removed to make room, or forgotten at a shell prompt or a reset) **is the program back at its
+  prompt.** `blocked` is a turn waiting on the user, which the title showed as at the prompt too;
+  where hooks give the status, they move the session to *waiting for the user* then.
+- **The first report of the root record takes over from the title for as long as the session's process runs**: from
+  then on the title's activity glyphs are ignored, whatever they show.
+- **A reported `working` stays current until the next report.** A program reports only when its state changes, so the
+  rule that a running title counts only while the agent keeps sending it (see "When a key is sent" in
+  `docs/product/interrupting-turns.md`) applies to titles alone.
+- **Before any report**, the title alone says whether a turn runs, as for an agent that never reports.
+- **After a daemon restart that adopts the session's terminal** (see "What a daemon start takes over" in
+  `docs/product/process-holders.md`), the root record the terminal was rebuilt with — from the saved screen of a
+  planned restart, or from the holder's tail of the output — is taken as the program's last report, since the program
+  does not report it again. A tail that starts after the program's last report rebuilds no root record; the turn then
+  reads as not running until the program reports again, unless the title shows it running.
+
+This reading, never a status, is what the following go by: whether `interrupt_session` may send a key, its watch for
+the prompt the agent puts back in its input box, and when a prompt after the key counts as the turn's end (see "When a
+key is sent", "The input box afterwards" and "After the keys" in `docs/product/interrupting-turns.md`); and the watch
+that moves a Claude Code session to its prompt after a cancel no hook reports (see "Cancelling a Claude Code turn" in
+`docs/product/turns-hooks-do-not-report.md`).
+
+This applies to every agent that reports, not only to Claude Code. Codex on Windows has been seen reporting `idle`,
+`working` and `done` while keeping the spinner in its title, so from its first report its turn is read off the reports
+too; whether it reports leaving `working` when an Esc cancels its turn is not measured. Its cancel still reaches the
+session through its `Interrupt` hook, and a key goes in only while the hooks read *working* as well.
+
 ## From the root record to the session's status
 
 - **The root record's state is the session's status**:
@@ -102,6 +137,12 @@ whose status reports give.
   (see "How long records last" above). For a session bound to an owner, the turn is reported as a turn that ended
   without the session reporting, one that produced no message: a report's `msg` is never passed on (see "When a session
   does not report" in `docs/product/reporting-to-owners.md`).
+- **After a daemon restart that adopts the session's terminal**, the session keeps the status it had before the
+  restart; the root record the terminal was rebuilt with (see "Reports as the sign that a turn is running" above) is
+  not applied again, but is taken as the state the next report moves from, and a record of `working` or `blocked`
+  reopens the turn it was in, since the daemon that had it open kept it only in memory. So a `done` that ends a turn
+  running across the restart closes and reports that turn, as it would have without the restart, and a `blocked` in
+  between opens no other.
 - **Going to *waiting for the user* tells an owner** that the session waits for the user, as any route to that status
   does (see "Notices to an owner" in `docs/product/reporting-to-owners.md`), and messages held for the session are
   released once a report brings it to its prompt, as they are on a hook's report.

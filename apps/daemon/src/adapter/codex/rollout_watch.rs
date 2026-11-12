@@ -36,7 +36,7 @@ use serde_json::Value;
 use crate::hooks::TurnEnd;
 use crate::messaging::capacity_retry::{self, Judgement};
 use crate::protocol::SessionStatus;
-use crate::records::watch::{self, Owed, Start, Watch};
+use crate::records::watch::{self, Owed, Start, Then, Watch};
 use crate::state::{AppState, TurnClose};
 use crate::text::trimmed_or_none;
 
@@ -129,13 +129,16 @@ pub fn watch_for_failure(
         },
         |_, _| Owed::Yes,
         move |line| ending_in_line(line, &turn_id),
-        |state, session_id, _, ending| match ending {
-            // `Stop` is on its way and ends the turn in the usual way.
-            Ending::Completed => {}
-            Ending::Failed {
-                message,
-                at_capacity,
-            } => end_failed_turn(state, session_id, message, at_capacity),
+        |state, session_id, _, ending| {
+            match ending {
+                // `Stop` is on its way and ends the turn in the usual way.
+                Ending::Completed => {}
+                Ending::Failed {
+                    message,
+                    at_capacity,
+                } => end_failed_turn(state, session_id, message, at_capacity),
+            }
+            Then::Stop
         },
     );
 }

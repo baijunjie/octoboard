@@ -92,6 +92,16 @@ pub enum Owed {
     Unknown,
 }
 
+/// What a watch does once its owner has acted on a finding.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Then {
+    /// The watch is done.
+    Stop,
+    /// The watch goes on reading from where the scan that found it ended, for a record whose
+    /// finding does not end what the watch covers.
+    KeepWatching,
+}
+
 /// How a watch runs.
 pub struct Watch {
     /// How often the file is checked for new lines.
@@ -105,9 +115,11 @@ pub struct Watch {
 /// Each poll, the watch stops if a newer watch for the session has superseded it
 /// (`AppState::begin_record_watch`) or a hook retired it (`AppState::end_record_watch`), if the
 /// process is gone, or if `owed` says `No`. Otherwise it scans the lines added since it last read,
-/// and when `line_found` recognises one it stops and, if it is still the session's current watch,
-/// calls `on_found` with what that returned and the watch's generation — for a caller whose write
-/// must not land once the watch is retired (`AppState::while_record_watch_current`). Whether a
+/// and when `line_found` recognises one it calls `on_found`, if it is still the session's current
+/// watch, with what that returned and the watch's generation — for a caller whose write must not
+/// land once the watch is retired (`AppState::while_record_watch_current`) — and then stops, unless
+/// `on_found` says to keep watching. Only a scan's last finding is acted on: an earlier one in the
+/// same scan is dropped, which a line check that keeps state across lines can rely on. Whether a
 /// file that is not there yet is waited for is [`Start`]'s to say. Returns the watch's generation,
 /// or `None` when the record could not be read and no watch was started.
 ///
@@ -126,7 +138,7 @@ pub fn spawn<T, P, A>(
 where
     T: Send + 'static,
     P: Fn(&str) -> Option<T> + Send + Sync + 'static,
-    A: FnOnce(&Arc<AppState>, &str, u64, T) + Send + 'static,
+    A: FnMut(&Arc<AppState>, &str, u64, T) -> Then + Send + 'static,
 {
     let mut offset = match watch.start {
         Start::AtEnd => match std::fs::metadata(&path) {
@@ -157,6 +169,7 @@ where
     let state = state.clone();
     let session_id = session_id.to_string();
     let line_found = Arc::new(line_found);
+    let mut on_found = on_found;
     tokio::spawn(async move {
         loop {
             tokio::time::sleep(watch.interval).await;
@@ -230,8 +243,10 @@ where
             let Some(found) = scan.found else {
                 continue;
             };
-            if state.record_watch_current(&session_id, generation) {
-                on_found(&state, &session_id, generation, found);
+            if state.record_watch_current(&session_id, generation)
+                && on_found(&state, &session_id, generation, found) == Then::KeepWatching
+            {
+                continue;
             }
             return;
         }

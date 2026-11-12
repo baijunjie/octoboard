@@ -329,7 +329,9 @@ impl LiveSession {
         prompt: &str,
         allow_mixed: bool,
     ) -> Result<(), PartialWrite> {
-        if allow_mixed || !self.checks_composer || self.settled_composer().as_deref() == Some("") {
+        // Past the draft's grace too, text the box shows is stashed where the agent can stash it:
+        // only where it cannot, or does not confirm the stash, does the message join that text.
+        if !self.checks_composer || self.settled_composer().as_deref() == Some("") {
             return self.write_empty_message_input(message, prompt, allow_mixed);
         }
         let native = {
@@ -343,7 +345,7 @@ impl LiveSession {
                     .draft
                     .lock()
                     .expect("draft lock poisoned")
-                    .at_input_boundary()
+                    .at_input_boundary(Instant::now())
                 && !self.stash_shown()
                 && self.composer().is_some_and(|text| !text.is_empty())
                 && !self.trust.holds_writes()
@@ -432,12 +434,11 @@ impl LiveSession {
                     "the session cannot take a message while a dialog or trust confirmation is open",
                 ));
             }
-            self.draft
-                .lock()
-                .expect("draft lock poisoned")
-                .submission(None, prompt.to_string());
+            let mut draft = self.draft.lock().expect("draft lock poisoned");
+            draft.submission(None, prompt.to_string());
             self.input_writes.fetch_add(1, Ordering::AcqRel);
             self.pty.write_input_locked(&input, now)?;
+            draft.message_written(Instant::now());
         }
         // Not required to show the message alone: a stash the agent never confirmed leaves the
         // draft in the box.
@@ -593,10 +594,11 @@ impl LiveSession {
             };
             self.swap.lock().expect("input swap lock poisoned").bytes -= written;
             if written > 0 {
-                self.draft
-                    .lock()
-                    .expect("draft lock poisoned")
-                    .input(&data[..written]);
+                let mut draft = self.draft.lock().expect("draft lock poisoned");
+                draft.typed(&data[..written], self.output_total(), Instant::now());
+                // When these keys were typed is past knowing.
+                draft.typed_mid_turn();
+                drop(draft);
                 self.input_writes.fetch_add(1, Ordering::AcqRel);
             }
             if written != data.len() {
@@ -873,6 +875,140 @@ mod tests {
         assert!(!live.input_swap_active());
     }
 
+    /// Claude Code's screen with a prompt brought back from its history in the box, its label
+    /// written faint as Claude Code writes it.
+    fn history_screen() -> Vec<u8> {
+        let mut bytes = b"\x1b[2J\x1b[H".to_vec();
+        bytes.extend(
+            super::super::input_box::captures::HISTORY
+                .trim_end()
+                .replace('\n', "\r\n")
+                .replace("History 100/100", "\x1b[2mHistory 100/100\x1b[22m")
+                .into_bytes(),
+        );
+        bytes
+    }
+
+    /// Past the draft's grace a box that shows text is still stashed around the message where the
+    /// agent can stash it: a prompt brought back from history is never joined to the message.
+    #[test]
+    fn past_the_grace_text_in_the_box_is_stashed_rather_than_joined() {
+        let history = history_screen();
+        let live = crate::test_support::fake_live_session(
+            "grace-stash",
+            AgentId::CLAUDE,
+            120,
+            40,
+            "sleep 30",
+        )
+        .with_composer();
+        live.enable_native_stash(true);
+        live.on_output(&draw("", false, AgentId::CLAUDE));
+        live.write_terminal_input(b"\x1b[A").unwrap();
+        live.on_output(&history);
+        let before = live.input_writes();
+        let agent = live.clone();
+        let screen = std::thread::spawn(move || {
+            wait_until(|| agent.input_swap_active());
+            agent.on_output(&draw("", true, AgentId::CLAUDE));
+            wait_until(|| agent.swap.lock().unwrap().phase == Some(RecoveryPhase::Submitted));
+            agent.on_output(&history);
+        });
+        let framed = crate::session::term::frame_message(AgentId::CLAUDE, "peer");
+        live.write_message_input(&framed, "peer", true).unwrap();
+        screen.join().unwrap();
+        assert_eq!(
+            live.input_writes(),
+            before + 2,
+            "one stash key and the message"
+        );
+        assert!(!live.input_swap_active());
+    }
+
+    /// Past the draft's grace a box read empty right after Up holds a message: the prompt it
+    /// brings back may not be drawn yet. Once the key has settled and the prompt shows, the
+    /// message goes in with the prompt stashed, alone.
+    #[test]
+    fn past_the_grace_a_box_read_empty_right_after_up_holds_until_the_prompt_shows() {
+        let history = history_screen();
+        let live = crate::test_support::fake_live_session(
+            "grace-just-up",
+            AgentId::CLAUDE,
+            120,
+            40,
+            "sleep 30",
+        )
+        .with_composer();
+        live.enable_native_stash(true);
+        live.on_output(&draw("", false, AgentId::CLAUDE));
+        live.settle_input();
+        live.write_terminal_input(b"\x1b[A").unwrap();
+        // However slowly the test runs, the Up stays younger than the time its prompt may take.
+        live.draft.lock().unwrap().fresh_typing();
+        let framed = crate::session::term::frame_message(AgentId::CLAUDE, "peer");
+        let before = live.input_writes();
+        assert_eq!(
+            live.write_message_input(&framed, "peer", true)
+                .unwrap_err()
+                .written,
+            0
+        );
+        assert_eq!(live.input_writes(), before);
+        live.on_output(&history);
+        live.settle_input();
+        let agent = live.clone();
+        let screen = std::thread::spawn(move || {
+            wait_until(|| agent.input_swap_active());
+            agent.on_output(&draw("", true, AgentId::CLAUDE));
+            wait_until(|| agent.swap.lock().unwrap().phase == Some(RecoveryPhase::Submitted));
+            agent.on_output(&history);
+        });
+        live.write_message_input(&framed, "peer", true).unwrap();
+        screen.join().unwrap();
+        assert_eq!(
+            live.input_writes(),
+            before + 2,
+            "one stash key and the message"
+        );
+        assert!(!live.input_swap_active());
+    }
+
+    /// A prompt Claude Code brought back with Up, under its labelled history rule, is a draft the
+    /// box can be read to hold: a message is written with it stashed, never joined to it.
+    #[test]
+    fn a_prompt_brought_back_from_history_is_stashed_around_a_message() {
+        let history = history_screen();
+        let live = crate::test_support::fake_live_session(
+            "history-stash",
+            AgentId::CLAUDE,
+            120,
+            40,
+            "sleep 30",
+        )
+        .with_composer();
+        live.enable_native_stash(true);
+        live.on_output(&draw("", false, AgentId::CLAUDE));
+        live.write_terminal_input(b"\x1b[A").unwrap();
+        live.on_output(&history);
+        assert_eq!(live.composer().as_deref(), Some("say only: pong-f"));
+        let before = live.input_writes();
+        let agent = live.clone();
+        let screen = std::thread::spawn(move || {
+            wait_until(|| agent.input_swap_active());
+            agent.on_output(&draw("", true, AgentId::CLAUDE));
+            wait_until(|| agent.swap.lock().unwrap().phase == Some(RecoveryPhase::Submitted));
+            agent.on_output(&history);
+        });
+        crate::session::term::send_message(&live, "peer").unwrap();
+        screen.join().unwrap();
+        assert_eq!(
+            live.input_writes(),
+            before + 2,
+            "one stash key and the message"
+        );
+        assert!(!live.input_swap_active());
+    }
+
     #[test]
     fn an_existing_native_stash_is_never_overwritten() {
         for text in ["draft", ""] {
@@ -1033,20 +1169,20 @@ mod tests {
         );
     }
 
+    /// Past the draft's grace, where no stash can be taken (none offered, one already shown, a key
+    /// left unfinished) or the box cannot be read, a message goes into the input as it is; never
+    /// into a dialog or an archived process.
     #[test]
     fn an_expired_draft_wait_bypasses_only_editor_protection() {
+        // Each write past the grace looks at the box first, waiting for the message written just
+        // before to leave it; no screen here ever shows it leave, and that wait is not tested.
+        OWN_MESSAGE_SETTLE_OVERRIDE.with(|settle| settle.set(Some(Duration::ZERO)));
         for (screen, input, native, blocked_first) in [
             (
                 draw("draft", false, AgentId::CLAUDE),
                 &b"draft"[..],
                 false,
                 true,
-            ),
-            (
-                draw("draft", false, AgentId::CLAUDE),
-                &b"draft"[..],
-                true,
-                false,
             ),
             (b"unknown composer".to_vec(), &b"draft"[..], false, true),
             (
@@ -1073,6 +1209,7 @@ mod tests {
             live.enable_native_stash(native);
             live.on_output(&screen);
             live.write_terminal_input(input).unwrap();
+            live.settle_input();
             let framed = crate::session::term::frame_message(AgentId::CLAUDE, "peer");
             if blocked_first {
                 assert_eq!(
@@ -1098,6 +1235,7 @@ mod tests {
                 "a deadline never writes into an archived process"
             );
         }
+        OWN_MESSAGE_SETTLE_OVERRIDE.with(|settle| settle.set(None));
     }
 
     #[tokio::test(flavor = "multi_thread")]

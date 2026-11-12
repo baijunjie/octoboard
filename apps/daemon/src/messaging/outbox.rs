@@ -2475,6 +2475,9 @@ mod tests {
         .with_composer();
         live.on_output(include_bytes!("../../testdata/claude_input_restored.bin"));
         live.write_terminal_input(b"unfinished user input").unwrap();
+        // Typed well before: text typed just now may not be drawn yet, which holds even a message
+        // past its grace.
+        live.settle_input();
         outbox.push(&live.id, "automatic message");
         let before = live.input_writes();
         assert_eq!(outbox.drain(&live, &MidTurn), Drain::Pending);

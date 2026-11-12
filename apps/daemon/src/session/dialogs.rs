@@ -185,7 +185,8 @@ impl Sighting {
 
 /// Watches the session's screen for dialogs for as long as the session lives. Publishes the
 /// session when one comes or goes, so clients see it waiting for the user, and writes out what was
-/// queued when one goes.
+/// queued when one goes, or when the input box is drawn empty after keys that held it
+/// (`LiveSession::schedule_draft_release`).
 pub fn watch(state: &Arc<AppState>, live: &Arc<LiveSession>) {
     let state = state.clone();
     // Weak, so that the session being dropped ends this task.
@@ -213,6 +214,11 @@ async fn poll(state: Arc<AppState>, live: Weak<LiveSession>) {
             live.schedule_unsent_submit_retry();
             state.retry_pending_outbox(&live.id);
             retry_at = std::time::Instant::now();
+        }
+        // A message held for what the user typed goes in once the input box is drawn empty, not
+        // at the next retry, which can be past the draft's grace and then no longer checks the box.
+        if state.outbox.len(&live.id) > 0 {
+            live.schedule_draft_release();
         }
         let total = live.output_total();
         if total == output {

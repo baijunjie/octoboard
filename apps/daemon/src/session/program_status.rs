@@ -2,7 +2,9 @@
 //! OSC 7501 (`crate::terminal::program_status`), for an agent whose hooks and own signals give no
 //! status (`AgentProvider::has_status_integration`). Where they do, they win: every session's
 //! terminal still keeps the reports, takes them out of what the clients receive and answers their
-//! support query, since supporting the protocol is the terminal's, but they move nothing.
+//! support query, since supporting the protocol is the terminal's, and the reports stand in for
+//! the activity glyphs an agent that reports drops from its title
+//! (`crate::session::title_activity`), but they move no status.
 //!
 //! The root record's state is the session's status: `working` is `Working`, `blocked` is
 //! `WaitingUser`, `idle` and `done` are `Idle` with the session not paused, `error` is `Idle` with
@@ -68,16 +70,60 @@ pub(super) fn wire_status(root: Option<ReportedState>) -> SessionStatus {
 }
 
 impl LiveSession {
-    /// Takes the moves of the root status record the latest chunk of output made, and has them
-    /// applied where the reports give this session its status. Called on the PTY reader thread
-    /// after each chunk.
+    /// Takes the moves of the root status record the latest chunk of output made, notes each in the
+    /// title activity, and has them applied where the reports give this session its status. Called
+    /// on the PTY reader thread after each chunk.
     pub(super) fn note_program_status(&self) {
         let moves = self.pty.take_program_status();
-        if moves.is_empty() || !self.status_from_reports {
+        if moves.is_empty() {
+            return;
+        }
+        // Every agent's reports say whether a turn runs, as its title did before it took to
+        // reporting (`title_activity`), whether or not they give the session its status.
+        self.note_reported_activity(&moves);
+        if !self.status_from_reports {
             return;
         }
         self.status_reports.moves().pending.extend(moves);
         self.apply_program_status();
+    }
+
+    /// Takes the root status record an adopted terminal was rebuilt with, from the saved screen
+    /// (`PtyCore::restore_screen`) or the holder's tail (`PtyCore::seed_output`), as what the
+    /// program last reported about its turn
+    /// ([`super::title_activity::TitleActivity::note_report`]). The rebuilding drops the moves, and
+    /// a program does not repeat a report, so a turn running across the restart would otherwise
+    /// never read as running. Its status is the store's, kept across the restart.
+    ///
+    /// Where the reports give the session its status, the record is also taken as the state last
+    /// applied to it, so the program's next move is applied from it rather than from nothing; and
+    /// a record in a turn reopens that turn in `state`, whose open turns are held in memory and
+    /// lost with the daemon that had them. So a `done` after a turn that ran across the restart
+    /// closes and reports that turn, and a `blocked` in between does not open another. A tail that
+    /// starts after the program's last report rebuilds no record, and the turn then reads as not
+    /// running until the program reports again. Called before the session is registered, so no
+    /// move of the program's is applied first.
+    pub(crate) fn note_restored_program_status(&self, state: &AppState) {
+        let Some(root) = self.pty.program_status_root() else {
+            return;
+        };
+        self.note_reported_activity(&[Some(root)]);
+        if !self.status_from_reports {
+            return;
+        }
+        self.status_reports.moves().applied = Some(root);
+        if root.in_turn() {
+            state.turn_started(&self.id, None);
+        }
+    }
+
+    /// Notes `moves` of the root status record in the title activity.
+    fn note_reported_activity(&self, moves: &[Option<ReportedState>]) {
+        let mut observer = self.title.lock().expect("title observer lock poisoned");
+        let now = std::time::Instant::now();
+        for root in moves {
+            observer.activity.note_report(*root, now);
+        }
     }
 
     /// Starts a task applying the pending moves, unless one runs or the session is not yet bound

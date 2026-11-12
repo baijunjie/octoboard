@@ -2,7 +2,8 @@
 
 A session's status follows the hook events its agent reports (see "What the statuses are derived from" in
 `docs/product/session-statuses.md`). A few ways a turn ends, or a raised hand comes down, are reported by no hook event,
-and Octoboard reads them from somewhere else instead: the agent's own record of the conversation, or its terminal title.
+and Octoboard reads them from somewhere else instead: the agent's own record of the conversation, or its terminal title
+or the status it reports in its terminal.
 This doc covers each of those cases, what Octoboard reads for it, and where that reading fails. They apply whoever
 caused them: a cancel the user makes in the terminal and one an owner's `interrupt_session` makes (see
 `docs/product/interrupting-turns.md`) are recovered the same way. Each ending recovered here leaves the session *paused*
@@ -68,9 +69,20 @@ the session to its prompt as soon as either shows the cancel, normally within ab
   but the hook events that come with those have moved the session by then, and a session they moved stays where they put
   it.
 
-After a cancel before any output, Claude Code puts the prompt's text back in its input box. A message Octoboard writes
-into the session from then on goes in after that text and is sent together with it, whether the session reads *working*
-or at its prompt at the time. A cancel made by `interrupt_session` clears that text first (see "The input box
+  Once the terminal answers its OSC 7501 support query, Claude Code 2.1.322 drops these glyphs from its title and
+  reports its state instead: `working` when a turn starts, `idle` when it is cancelled (about 80 ms after the Esc,
+  before output or after it), `done` when it ends normally. From its first report on, the title watch reads the
+  reports instead of the title's glyphs: `working` stands for the turning circle, and any other state, or the record
+  gone, for `✳`, under the same three conditions (see "Reports as the sign that a turn is running" in
+  `docs/product/program-status-reports.md`). Should it report `blocked`, a turn waiting on the user (not measured), that
+  counts as `✳` does; the hook event that raises the hand moves the session out of *working* itself.
+
+After a cancel before any output, Claude Code puts the prompt's text back in its input box. For a message Octoboard
+has for the session from then on, whether the session reads *working* or at its prompt at the time, that text is a
+draft like one the user typed (see "Messages held until a session can take them" in
+`docs/product/message-delivery.md`): where the agent's native stash is used, it is set aside around the message and
+put back after; otherwise the message waits out the draft protection grace period and then goes in after that text
+and is sent together with it. A cancel made by `interrupt_session` clears that text first (see "The input box
 afterwards" in `docs/product/interrupting-turns.md`); a cancel the user makes in the terminal is left as the agent
 leaves it.
 
@@ -79,7 +91,17 @@ leaves it.
   the session leaves *working* some other way, raises its hand, or its process ends. While a session request holds the
   session's hand up (see "Waiting for the answer" in `docs/product/session-requests.md`), the title watch waits: a
   cancel the title showed meanwhile moves the session once the request ends, if it is then back at *working*.
-- **Only this turn's cancel counts.** Only transcript entries written after the watch started are read, and an interrupt
+- **A cancel Claude Code carries straight on from leaves the session *working*.** Esc pressed while the user has a
+  message waiting in Claude Code's queue cancels the turn and runs that message as the next one, with no hook for it.
+  When the cancel's interrupt is read with the queue handing the message over beside it (within a second), or with the
+  message's own prompt entry written under the interrupt as a new turn, the cancelled turn counts as ended but the
+  session stays *working*, and the watch carries on for the turn now running: that turn's own cancel still moves the
+  session, and its end leaves the session idle. A message taken into the running turn at a tool boundary starts no
+  turn, and a cancel after it is an ordinary one.
+- **Only this turn's cancel counts.** Claude Code stamps every user entry of a turn, its interrupt included, with the
+  turn's id (`promptId`), and passes the same id in its hook events (`prompt_id`). An interrupt counts only if it names
+  the turn of the hook event that started the watch, or, once the watch carries on for a turn it ran straight on to,
+  that turn. Where the hook event or the entry names no turn, only the rules that follow apply. Only transcript entries written after the watch started are read, and an interrupt
   counts only if it is timestamped no earlier than a few seconds before the watch started, so an earlier turn's
   interrupt, and one in the history of a resumed or copied conversation, does not. An interrupt replayed inside a logged
   request does not count either, for the reason given in "Declining a Claude Code prompt or question" above. A `✳`
@@ -106,16 +128,17 @@ Where it is not recovered, the session keeps reading *working* until its next pr
   delivered asynchronously — as can happen with a cancel very soon after the prompt was submitted; its interrupt entry
   and its `✳` can then both be missed;
 - an event from the cancelled turn reaches Octoboard after the move, reporting the session as *working* again;
-- for a cancel before any output, which only the title shows: Claude Code has been told not to set its terminal title,
-  or the title showing the turn running and the `✳` after it reached Octoboard in one piece of output, of which only the
-  last title is seen (rare);
+- for a cancel before any output, which only the title or the reports show: Claude Code has been told not to set its
+  terminal title and reports no status, or the title showing the turn running and the `✳` after it reached Octoboard in
+  one piece of output, of which only the last title is seen (rare);
 - for a cancel after output: the interrupt entry carries no timestamp Octoboard can read, and the title misses it too.
 
 **What this costs to keep working.** As with a decline, the transcript is a file format Claude Code owns and rewrites on
 upgrade, and a cancel is recognised there by the two fixed interrupt strings above; they were seen in real transcripts
 of Claude Code 2.1.296, 2.1.302 and 2.1.303, where a cancel while the model thinks wrote `[Request interrupted by user]`
 too, and of 2.1.310 for cancels after output. The title is read by its fixed glyphs, `◐`/`◑` and `✳`, measured on Claude
-Code 2.1.310. A release that renames the strings or changes the glyphs breaks this silently — there is no error and
+Code 2.1.310, and the reports that replace them by their states, measured on Claude Code 2.1.322. A release that
+renames the strings, or changes the glyphs or the reports, breaks this silently — there is no error and
 nothing is reported as having failed — and the only symptom is a cancelled turn reading *working* until the next prompt.
 
 ## Cancelling a Grok Build turn before its first token

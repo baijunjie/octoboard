@@ -94,13 +94,19 @@ const RUNNING: std::ops::RangeInclusive<char> = '\u{25D0}'..='\u{25D3}';
 const AT_PROMPT: char = '\u{2733}';
 
 /// The rows of Claude Code's input box: from the last one starting with `❯` right below a
-/// horizontal rule up to the next rule.
+/// horizontal rule, plain or labelled with a place in the prompt history ([`is_top_rule`]), up to
+/// the next rule.
 fn input_box_rows(screen: &str) -> Option<Vec<String>> {
     let rows: Vec<&str> = screen.lines().map(str::trim_end).collect();
     let start = (1..rows.len())
         .rev()
-        .find(|&row| rows[row].starts_with(PROMPT_MARK) && is_rule(rows[row - 1]))?;
+        .find(|&row| rows[row].starts_with(PROMPT_MARK) && is_top_rule(rows[row - 1]))?;
     let end = start + 1 + rows[start + 1..].iter().position(|row| is_rule(row))?;
+    // A labelled rule spans the box as the plain rule below it does.
+    let width = |row: &str| row.trim().chars().count();
+    if !is_rule(rows[start - 1]) && width(rows[start - 1]) != width(rows[end]) {
+        return None;
+    }
     Some(box_rows(rows[start..end].iter().copied(), PROMPT_MARK))
 }
 
@@ -113,6 +119,47 @@ fn is_placeholder(row: &str) -> bool {
         || row
             .strip_prefix("Try \"")
             .is_some_and(|rest| rest.len() > 1 && rest.ends_with('"'))
+}
+
+/// Whether a row is the rule above Claude Code's input box: a plain rule, or, while the box holds
+/// a prompt brought back from its history with Up, one that says where in the history it is,
+/// `─── History 100/100 ───…` (2.1.322; see `testdata/claude-input-box.md`). Claude Code writes
+/// that label faint and the spaces around it plain, so on a screen with faint cells blanked the
+/// label is a gap of spaces as wide as it was.
+fn is_top_rule(row: &str) -> bool {
+    if is_rule(row) {
+        return true;
+    }
+    let row = row.trim();
+    if row.chars().count() < 20 {
+        return false;
+    }
+    let rule = |part: &str, least: usize| {
+        part.chars().count() >= least && part.chars().all(|c| c == '\u{2500}')
+    };
+    let Some(open) = row.find(' ') else {
+        return false;
+    };
+    let Some(close) = row.rfind(' ') else {
+        return false;
+    };
+    let (lead, label, tail) = (&row[..open], &row[open..=close], &row[close + 1..]);
+    let label_text = label.trim();
+    let place = |text: &str| {
+        text.split_once('/').is_some_and(|(at, of)| {
+            [at, of]
+                .iter()
+                .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
+        })
+    };
+    let is_label = match label_text.strip_prefix("History") {
+        Some("") => true,
+        Some(rest) => rest.strip_prefix(' ').is_some_and(place),
+        // Blanked: as wide as ` History ` up to ` History 99999/99999 `.
+        None => label_text.is_empty() && (9..=21).contains(&label.chars().count()),
+    };
+    // Claude Code draws the label two cells in from the rule's start, after the corner's place.
+    lead == "\u{2500}\u{2500}\u{2500}" && rule(tail, 3) && is_label
 }
 
 /// Whether a row is one of the horizontal rules around Claude Code's input box.

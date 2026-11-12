@@ -237,7 +237,9 @@ impl HookInterpreter for ClaudeHooks {
     /// watch: a new prompt always, its caller having just retired the previous turn's watch, and
     /// any other event that finds the agent not already working, such as the hand coming down on
     /// an answered prompt. An event reporting more of the same work arms nothing, since arming
-    /// again would only retire a watch that is already reading.
+    /// again would only retire a watch that is already reading. The interrupt watch is given the
+    /// event's `prompt_id`, the `promptId` Claude Code stamps on every user entry of the turn, its
+    /// interrupt included.
     fn record_watch<'a>(
         &self,
         event: &str,
@@ -251,7 +253,13 @@ impl HookInterpreter for ClaudeHooks {
             SessionStatus::Working
                 if self.starts_conversation(event) || previous != Some(SessionStatus::Working) =>
             {
-                Some(RecordWatch::Interrupt { record: transcript })
+                Some(RecordWatch::Interrupt {
+                    record: transcript,
+                    turn_id: payload
+                        .get("prompt_id")
+                        .and_then(Value::as_str)
+                        .filter(|id| !id.is_empty()),
+                })
             }
             _ => None,
         }

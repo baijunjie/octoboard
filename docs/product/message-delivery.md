@@ -78,14 +78,59 @@ partly written message (see "A message only partly written while the draft is st
 again from its first attempt after the hold ends. So does a message a Codex session's private app server held back
 before the terminal took it (see "Messages through Codex's own queue" below): its grace period starts again from its
 first attempt after the server first held it back. It starts again that way once per message only, so time the server
-holds the message back after that counts toward the grace period. During the grace period, ordinary terminal delivery requires a
-recognised empty composer and confirmation that preceding user edits were submitted. A delayed report for an earlier
-prompt, an automatic message or a background completion does not confirm a newer draft. An unsupported stash, an
+holds the message back after that counts toward the grace period. During the grace period, ordinary terminal delivery
+requires a recognised empty composer and confirmation that preceding user edits were submitted. A delayed report for an
+earlier prompt, an automatic message or a background completion does not confirm a newer draft. An unsupported stash, an
 existing stash, an unrecognised composer, unconfirmed edits or an incomplete input sequence can hold delivery
-temporarily. Once the grace period has elapsed, the next delivery attempt writes the message into the current input and
-submits it, even if unfinished user text is included. It does not start another native stash wait then. Draft protection
-therefore does not wait indefinitely for an ordinary prompt or a new process. This grace period does not raise the
-session's hand.
+temporarily; an Esc typed on its own counts as a complete key once it is 500 ms old, so it holds nothing as an
+incomplete sequence after that, and does not keep the native stash from being used. Once the grace period has elapsed,
+the next delivery attempt no longer waits for edits to be confirmed: a composer that reads empty takes the message
+directly, once the user's last key is half a second old and the screen shows a whole frame, and one that shows text has
+it stashed around the message where the agent's native stash can be used. Only where it cannot — an agent without one,
+such as Codex, a stash already shown, an unfinished key, an unreadable composer, or a stash the agent did not confirm —
+is the message written into the current input and submitted with whatever unfinished user text is there. Draft
+protection therefore does not wait indefinitely for an ordinary prompt or a new process. The one exception is a composer
+that cannot be read at all after a key that can put unknown text into it (see below): the message then waits past the
+grace period, with no bound, until the composer can be read again or a typed prompt is matched, since a view that hides
+the composer, such as a picker, would take the message's keys. Claude Code's composer is read while it shows a prompt
+recalled from history under its `History` rule. This grace period does not raise the session's hand.
+
+**Keys that leave the composer empty are confirmed by the screen.** User edits are confirmed by the agent reporting a
+prompt sent that they account for, or, for keys no submitted prompt accounts for — an Esc, Ctrl-U, Ctrl-C, text typed
+and cleared again, a prompt sent that no hook matched — by the composer reading empty once all of these hold:
+
+- the empty composer is read off a whole frame: no synchronized-output update (`ESC[?2026h` to `ESC[?2026l`, which
+  Codex and Grok Build wrap each frame in) is open, the agent's output has been quiet for 50 ms, and nothing arrives
+  while the screen is read;
+- the agent has printed output since the user's last key. A single Esc typed at the prompt while no other key held
+  the session is the exception: it needs no output after it, since an agent can print nothing for an Esc at an empty
+  prompt and such an Esc types no text. It counts as typed at the prompt only while neither the title nor the agent's
+  reported status last showed a turn running; an Esc typed during a turn cancels it, and the prompt the agent puts
+  back can come after any output, so it waits for output like any other key. So does retained typing replayed after a
+  native stash (see above), whose timing is not known;
+- that key is at least 500 ms old;
+- no input sequence the user typed is still incomplete; a single Esc counts as a complete key once it is 500 ms old,
+  as above, and a key typed after that is a key of its own, not the rest of a sequence;
+- Octoboard's record of the typing knows of no text typed into the composer that nothing since removed: text typed
+  and left there still holds as a draft, even over a composer that reads empty;
+- no key typed since the last prompt Octoboard matched to a prompt the agent reported sending is one that can put
+  text into the composer that Octoboard cannot know.
+
+**Keys that can put unknown text into the composer hold even over an empty one.** The text they bring can be drawn later
+than the empty composer is read, and a message written meanwhile would go in after it. Such a key holds until the agent
+reports sending a prompt that Octoboard matches to an Enter typed at or after the key, Octoboard writes a message at
+least half a second after the key, or the grace period elapses. They are: a prompt recalled from history (Up, Down,
+Ctrl-P, Ctrl-N, Ctrl-R), a completion (Tab), a suggestion accepted (Right, End, Ctrl-E, Ctrl-F), a yank (Ctrl-Y, Alt-Y),
+a paste or a stash brought back with Ctrl-V or Ctrl-S, an undo, Esc pressed twice within two seconds with no message of
+Octoboard's written between the presses (which can bring back an earlier prompt to edit), Enter on text that begins with
+`/` or contains `@` (it can take a completion the agent's menu offers), and any other key not known to only remove text,
+move the cursor back or do nothing. The keys known to do only that are Ctrl-A, Ctrl-B, Ctrl-C, Ctrl-D, Ctrl-K, Ctrl-L,
+Ctrl-U, Ctrl-W, Backspace, Delete, Alt-B, Alt-D, Alt-Backspace, Left and Home (plain or with modifiers), and a single
+Esc. Text pasted through the terminal's bracketed paste is text Octoboard knows, and holds as typed text does.
+
+A message queued while keys held the session is written as soon as the composer is confirmed empty, unless another
+hold applies, rather than waiting out the grace period: while a message is queued, the session's screen is checked for
+this about every quarter of a second.
 
 The deadline never answers a recognised dialog or trust confirmation, overrides an agent's permission wait, or writes
 into an ended or frozen session. Such holds must clear first. A partial terminal write remains a delivery failure;

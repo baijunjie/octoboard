@@ -170,8 +170,9 @@ A session's end is not taken from a hook either: the process is observed directl
 All of the above is for an agent with a status integration of its own — hooks or signals of the agent that give its
 status — which Claude Code, Codex and Grok Build all have. A session whose agent has none takes its status from what the
 program in its terminal reports about itself through OSC 7501 instead, still held at *waiting for the user* by a session
-request as above; in a session whose agent has one, such reports move nothing. See "Where the protocol is supported and
-where reports give the status" in `docs/product/program-status-reports.md`.
+request as above; in a session whose agent has one, such reports move no status, and only say whether a turn is
+running. See "Where the protocol is supported and where reports give the status" in
+`docs/product/program-status-reports.md`.
 
 Where an agent reports nothing, the status simply stays at its last reported value. The known cases, which are
 limitations of what the agents expose rather than of this one:

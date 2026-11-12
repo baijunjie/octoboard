@@ -208,6 +208,11 @@ impl Fan {
         self.lock().terminal.end_program_status();
     }
 
+    /// The state of the program's root status record as it stands, moves not yet taken included.
+    pub fn program_status_root(&self) -> Option<ReportedState> {
+        self.lock().terminal.program_status_root()
+    }
+
     /// The states the program's root status record moved to since the last call, in order;
     /// `None` where it went. See [`Self::keep_program_status`].
     pub fn take_program_status(&self) -> Vec<Option<ReportedState>> {

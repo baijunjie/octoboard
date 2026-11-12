@@ -437,6 +437,31 @@ fn status_reports_move_the_root_record_and_are_left_out_of_the_delivered_output(
 }
 
 #[test]
+fn the_root_record_s_state_is_readable_as_it_stands() {
+    use crate::terminal::program_status::ReportedState;
+
+    let mut terminal = keeping_program_status(false);
+    assert_eq!(terminal.program_status_root(), None);
+    let _ = terminal.take_in(b"\x1b]7501;state=working\x07");
+    assert_eq!(terminal.program_status_root(), Some(ReportedState::Working));
+    // A child's record is not the root's.
+    let _ = terminal.take_in(b"\x1b]7501;state=done:id=child\x07");
+    assert_eq!(terminal.program_status_root(), Some(ReportedState::Working));
+    let _ = terminal.take_in(b"\x1b]7501;state=blocked:kind=question\x07");
+    assert_eq!(terminal.program_status_root(), Some(ReportedState::Blocked));
+    let _ = terminal.take_in(b"\x1b]7501;state=clear\x07");
+    assert_eq!(terminal.program_status_root(), None);
+    let _ = terminal.take_in(b"\x1b]7501;state=idle\x07");
+    assert_eq!(terminal.program_status_root(), Some(ReportedState::Idle));
+
+    // Where nothing keeps the reports, there is no record.
+    let mut terminal = answering(24, 80);
+    let _ = terminal.take_in(b"\x1b]7501;state=working\x07");
+    assert_eq!(terminal.program_status_root(), None);
+    assert_eq!(TerminalSnapshot::new(24, 80).program_status_root(), None);
+}
+
+#[test]
 fn a_prompt_start_ends_working_and_blocked_records_and_still_reaches_the_clients() {
     use crate::terminal::program_status::ReportedState;
 

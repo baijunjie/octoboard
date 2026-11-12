@@ -327,6 +327,14 @@ fn claude_hook(event: &str, transcript: &std::path::Path) -> Vec<u8> {
     .into_bytes()
 }
 
+/// [`claude_hook`] for the turn `prompt_id` names, as every turn-scoped Claude Code event carries.
+fn claude_turn_hook(event: &str, transcript: &std::path::Path, prompt_id: &str) -> Vec<u8> {
+    let mut hook: serde_json::Value =
+        serde_json::from_slice(&claude_hook(event, transcript)).unwrap();
+    hook["prompt_id"] = serde_json::json!(prompt_id);
+    hook.to_string().into_bytes()
+}
+
 /// Whether the session reaches `status` within [`PATIENCE`], polled from a blocking thread on the
 /// real clock, so not from a test on tokio's paused clock.
 async fn reaches_on_real_clock(state: &Arc<AppState>, status: SessionStatus) -> bool {
@@ -621,6 +629,39 @@ async fn only_the_next_turns_own_interrupt_ends_it() {
     std::fs::write(&path, crate::test_support::fresh_interrupt().repeat(2)).unwrap();
     crate::adapter::claude::transcript_watch::polls_ran().await;
     assert_eq!(status(), SessionStatus::Idle);
+}
+
+/// Esc pressed while a message the user typed waits in Claude Code's queue cancels the turn and
+/// runs the message as the next one (2.1.322). The message's `UserPromptSubmit` comes when it is
+/// queued, naming the running turn; nothing comes when it is taken, and the cancelled turn's
+/// interrupt names that same turn. The session keeps working through the next turn, and its `Stop`
+/// leaves it idle, not paused.
+#[tokio::test(start_paused = true)]
+async fn a_cancel_claude_carries_on_from_with_a_queued_message_keeps_the_session_working() {
+    use crate::test_support::{queued_prompt_after_interrupt, CAPTURED_TURN, QUEUED_TURN};
+    let (state, _dir, _live, path) =
+        claude_session_with_transcript("server-interrupt-queued", SessionStatus::Idle);
+    let status = || state.store.get_session("s").unwrap().unwrap().status;
+    for _ in 0..2 {
+        apply_hook(
+            &state,
+            "s",
+            &claude_turn_hook("UserPromptSubmit", &path, CAPTURED_TURN),
+        );
+    }
+    std::fs::write(&path, queued_prompt_after_interrupt(QUEUED_TURN)).unwrap();
+
+    crate::adapter::claude::transcript_watch::polls_ran().await;
+    assert_eq!(
+        status(),
+        SessionStatus::Working,
+        "the queued turn must keep working"
+    );
+    assert_eq!(state.turn_ends("s"), 1, "the cancelled turn ended");
+
+    apply_hook(&state, "s", &claude_turn_hook("Stop", &path, QUEUED_TURN));
+    assert_eq!(status(), SessionStatus::Idle);
+    assert!(!state.last_turn_abnormal("s"));
 }
 
 /// Claude Code's hook events of a turn whose one message started a background `Agent` call and

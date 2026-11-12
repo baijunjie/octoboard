@@ -544,6 +544,69 @@ async fn a_screen_saved_at_the_handover_is_restored_with_the_tail_replayed_over_
     }
 }
 
+/// The program's root status record, restored with a screen saved at the handover, is what the
+/// adopted session notes as its program's last report of its turn: the program does not report
+/// it again, so a turn running across the restart reads as running, and one at its prompt, or
+/// one that never reported, does not.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread")]
+async fn an_adopted_session_takes_the_root_status_record_it_was_restored_with_as_its_turn() {
+    use crate::holder::client::HeldAt;
+    use crate::holder::protocol::HandoverTail;
+    use crate::terminal::saved_screen::SavedScreen;
+
+    for (saved, running) in [
+        (
+            &b"\x1b[H\x1b[2J\x1b]7501;state=working:app=claude-code\x1b\\"[..],
+            true,
+        ),
+        (
+            b"\x1b[H\x1b[2J\x1b]7501;state=idle:app=claude-code\x1b\\",
+            false,
+        ),
+        (
+            b"\x1b[H\x1b[2J\x1b]7501;state=working\x07\x1b]7501;state=done\x07",
+            false,
+        ),
+        (b"\x1b[H\x1b[2Jno report\r\n", false),
+    ] {
+        let (state, dir) = console_with_project_and_accounts("adopt-reported-turn");
+        record(&state, "s1", SessionStatus::Working);
+        let run_dir = dir.join("run");
+        let pid = left_running_script(
+            &dir,
+            "t1",
+            session_meta("s1", &run_dir.join("s1")),
+            "printf 'written since\\r\\n'; while :; do sleep 0.05; done",
+            Size { rows: 24, cols: 80 },
+        );
+        let _guard = KillOnDrop(vec![pid]);
+        let (_next, mut found) = found_when(&dir, |found| tail_has(found, "written since")).await;
+        let since = String::from_utf8_lossy(&found[0].tail)
+            .find("written since")
+            .expect("the tail holds the output since the mark") as u64;
+        found[0].handover = Some(HandoverTail {
+            token: "token".to_string(),
+            since,
+            truncated: false,
+            ages: Vec::new(),
+        });
+        let at = HeldAt {
+            holder_id: found[0].holder_id.clone(),
+            terminal_id: found[0].id.clone(),
+        };
+        state.keep_restart_screen("token", at, SavedScreen::of_bytes(24, 80, saved));
+        adopt_in_blocking(&state, found, run_dir).await;
+
+        let live = state.live_session("s1").expect("the session is live");
+        assert_eq!(
+            live.title_activity().shows_running(Instant::now()),
+            running,
+            "{saved:?}"
+        );
+    }
+}
+
 /// A terminal started by this daemon is not marked.
 #[tokio::test(flavor = "multi_thread")]
 async fn a_session_the_daemon_started_has_no_inexact_screen() {

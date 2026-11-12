@@ -49,12 +49,18 @@ What happens depends on where the session stands when the call is made:
 | Any, once the daemon has begun a planned stop | Refused with `daemon_shutting_down` (see "While the terminals are handed over" in `docs/product/server-form.md`). |
 
 A key is written only while **both** of these hold, checked right before each key: the session reads *working* by its
-hooks, and its terminal title shows a turn running — a running indicator the agent has sent within the last few
-seconds (Claude Code's turning half-filled circle, Codex's and Grok Build's braille spinner). When either fails at
-that moment — the turn has just ended, or the title does not show it running — nothing is sent and the answer is
-`interrupted: false`, with a note saying which. The same goes for a screen of the agent's own coming up just then, and
-for anything else being written into the session's terminal between the check and the key. None of these is an
-error.
+hooks, and its terminal shows a turn running. The terminal shows it by its title — a running indicator the agent has
+sent within the last few seconds (Claude Code's turning half-filled circle, Codex's and Grok Build's braille spinner) —
+or, once the agent has reported its status through OSC 7501, by its last report being `working`, however long ago it
+came (see "Reports as the sign that a turn is running" in `docs/product/program-status-reports.md`); Claude Code
+2.1.322 reports and drops the glyphs from its title. When either fails at that moment — the turn has just ended, or the
+terminal does not show it running — nothing is sent and the answer is `interrupted: false`, with a note saying which.
+The same goes for a screen of the agent's own coming up just then, and for anything else being written into the
+session's terminal between the check and the key. None of these is an error.
+
+Wherever the sections below go by the title showing a turn running or back at the prompt, the same holds: once the
+agent reports its status, its reports say it in place of the title, `working` being a turn running and any other state,
+or the record gone, the turn back at the prompt.
 
 ## The keys each agent gets
 
@@ -127,8 +133,8 @@ anything.
 
 The session leaves *working* the way it does when the user presses the key: on Codex's own `Interrupt` hook event, on
 Grok Build's `StopCancelled`, or, for the cancels that fire no hook event, from Claude Code's transcript and terminal
-title and from Grok Build's terminal title (see "Cancelling a Claude Code turn" and "Cancelling a Grok Build turn
-before its first token" in `docs/product/turns-hooks-do-not-report.md`). Either way:
+title or status reports and from Grok Build's terminal title (see "Cancelling a Claude Code turn" and "Cancelling a
+Grok Build turn before its first token" in `docs/product/turns-hooks-do-not-report.md`). Either way:
 
 - the session is at its prompt, its process and conversation intact;
 - the interrupted turn is not reported on: no report is synthesised for the owner for it (see "When a session does not

@@ -443,6 +443,8 @@ fn adopt_session(
             live.seed_output(&tail);
         }
     }
+    // What the program last reported about its turn, which it does not report again.
+    live.note_restored_program_status(state);
     // This title belongs to the same held terminal, so its provider's startup signal remains
     // valid without replaying the old output's status changes. Hosts that render their own
     // titles still use the input box as their start signal.

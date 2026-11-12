@@ -31,3 +31,10 @@ overwritten with a string of the same length):
   faint.
 - `claude_input_queued_draft.bin`: the near miss — the same session after `draft words` was typed while the message
   was still queued: the text replaces the hint, written plain.
+
+Captured on 2026-11-13 from Claude Code 2.1.322 running interactively in a 120-column PTY against the real API, as the
+daemon's parsed screen showed it (trailing spaces removed):
+
+- `claude_input_history.txt`: Up pressed at an idle, empty input box: Claude Code put the last prompt back in the box
+  and labelled the rule above it with where in the prompt history it is, `─── History 100/100 ───…`; the rule below is
+  plain.

@@ -480,7 +480,7 @@ fn a_named_subagents_start_and_stop_change_the_tasks() {
 #[test]
 fn each_provider_asks_for_the_record_watch_its_hooks_leave_a_gap_for() {
     use SessionStatus::{Idle, WaitingUser, Working};
-    let transcript = json!({"transcript_path": "/t.jsonl", "turn_id": "u1"});
+    let transcript = json!({"transcript_path": "/t.jsonl", "turn_id": "u1", "prompt_id": "p1"});
     let claude = of(AgentId::CLAUDE);
     assert!(claude.watch_reads_previous_status());
     assert_eq!(
@@ -492,13 +492,15 @@ fn each_provider_asks_for_the_record_watch_its_hooks_leave_a_gap_for() {
     assert_eq!(
         claude.record_watch("UserPromptSubmit", &transcript, Some(Working), Working),
         Some(RecordWatch::Interrupt {
-            record: Some("/t.jsonl")
+            record: Some("/t.jsonl"),
+            turn_id: Some("p1")
         })
     );
     assert_eq!(
         claude.record_watch("PostToolUse", &transcript, Some(WaitingUser), Working),
         Some(RecordWatch::Interrupt {
-            record: Some("/t.jsonl")
+            record: Some("/t.jsonl"),
+            turn_id: Some("p1")
         })
     );
     assert_eq!(
@@ -528,11 +530,17 @@ fn each_provider_asks_for_the_record_watch_its_hooks_leave_a_gap_for() {
     assert!(grok.watch_reads_previous_status());
     assert_eq!(
         grok.record_watch("UserPromptSubmit", &transcript, Some(Working), Working),
-        Some(RecordWatch::Interrupt { record: None })
+        Some(RecordWatch::Interrupt {
+            record: None,
+            turn_id: None
+        })
     );
     assert_eq!(
         grok.record_watch("PostToolUse", &transcript, Some(WaitingUser), Working),
-        Some(RecordWatch::Interrupt { record: None })
+        Some(RecordWatch::Interrupt {
+            record: None,
+            turn_id: None
+        })
     );
     assert_eq!(
         grok.record_watch("PostToolUse", &transcript, Some(Idle), Working),

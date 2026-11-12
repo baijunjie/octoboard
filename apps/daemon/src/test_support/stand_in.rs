@@ -31,6 +31,61 @@ pub(crate) fn fresh_interrupt() -> String {
     captured_interrupt().replace(CAPTURED_AT, "\"timestamp\":\"2100-01-01T00:00:00.000Z\"")
 }
 
+/// The turn [`captured_interrupt`] cut short, as its `promptId` names it: the `prompt_id` Claude
+/// Code's hooks carried through that turn.
+pub(crate) const CAPTURED_TURN: &str = "9a8d2166-70bf-4781-a730-2c6d4b349398";
+
+/// The turn the message waiting in the queue in [`queued_prompt_after_interrupt`] runs as, as its
+/// prompt entry's `promptId` names it.
+pub(crate) const QUEUED_TURN: &str = "f36bf7fb-3d4c-4a0e-9a59-6d1b8a4c2e10";
+
+/// [`fresh_interrupt`] as the interrupt of the turn `turn` names instead.
+pub(crate) fn fresh_interrupt_of(turn: &str) -> String {
+    let captured = format!("\"promptId\":\"{CAPTURED_TURN}\"");
+    assert!(captured_interrupt().contains(&captured));
+    fresh_interrupt().replace(&captured, &format!("\"promptId\":\"{turn}\""))
+}
+
+/// What Claude Code 2.1.322 adds to the transcript, in this order, when Esc cancels a turn while a
+/// message the user typed waits in its queue: the queue handing the message over (stamped a few
+/// milliseconds after the interrupt, though written before it), [`fresh_interrupt`] closing the
+/// cancelled turn, [`CAPTURED_TURN`], the logged request that replays the interrupt, and the
+/// message as the prompt of the turn `next_turn` names, whose parent is the interrupt. Shaped
+/// after real transcripts of that cancel, its ids kept from [`captured_interrupt`]. No hook comes
+/// with any of it: the message's `UserPromptSubmit` fired when it was queued, naming the turn it
+/// was queued in.
+pub(crate) fn queued_prompt_after_interrupt(next_turn: &str) -> String {
+    let interrupt = fresh_interrupt();
+    let entry: serde_json::Value = serde_json::from_str(&interrupt).expect("interrupt entry");
+    let session = &entry["sessionId"];
+    let dequeue = serde_json::json!({
+        "type": "queue-operation",
+        "operation": "dequeue",
+        "timestamp": "2100-01-01T00:00:00.006Z",
+        "sessionId": session,
+    });
+    let replay = serde_json::json!({
+        "type": "api-request-blob",
+        "sessionId": session,
+        "message": {"role": "user", "content": [
+            {"type": "text", "text": "[Request interrupted by user]"},
+            {"type": "text", "text": "say hi"},
+        ]},
+    });
+    let prompt = serde_json::json!({
+        "parentUuid": entry["uuid"],
+        "isSidechain": false,
+        "promptId": next_turn,
+        "type": "user",
+        "message": {"role": "user", "content": "say hi"},
+        "uuid": "27c7262d-71b9-47e3-bb72-9eaaa053bc88",
+        "timestamp": "2100-01-01T00:00:00.014Z",
+        "sessionId": session,
+        "version": "2.1.322",
+    });
+    format!("{dequeue}\n{interrupt}{replay}\n{prompt}\n")
+}
+
 /// Claude Code's view of a background subagent as drawn on the screen.
 pub(crate) const SUBAGENT_VIEW: &str = "\u{276F} Message @general-purpose\u{2026}\n\
     \x20 \u{25EF} main\n  \u{23FA} general-purpose  Slow probe agent  8s\n";

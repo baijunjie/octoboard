@@ -171,8 +171,13 @@ impl HookInterpreter for NoHooks {}
 pub enum RecordWatch<'a> {
     /// A prompt now waiting on the user may be declined without a hook saying so.
     Decline { record: Option<&'a str> },
-    /// The turn just started may be interrupted without a hook saying so.
-    Interrupt { record: Option<&'a str> },
+    /// The turn just started may be interrupted without a hook saying so. `turn_id` is the turn the
+    /// event belongs to, as the agent's record names it, so that an interrupt the record holds for
+    /// another turn is not taken for this one's.
+    Interrupt {
+        record: Option<&'a str>,
+        turn_id: Option<&'a str>,
+    },
     /// The turn just started may end in an error without a hook saying so.
     Failure {
         record: Option<&'a str>,

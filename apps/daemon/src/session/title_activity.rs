@@ -1,14 +1,25 @@
-//! What an agent's terminal title says about its turn: whether one is running, and how often it
-//! has gone back to the prompt. Each agent starts its title with a glyph of its own while a turn
-//! runs and drops or changes it when the turn is over; the forms are in
-//! `docs/agent-cli-reference.md`, section "## Across the three agents" ("Terminal titles and the
-//! titles in an agent's own records"). The title observer in `crate::session` notes every completed
-//! title here; `title_interrupt` reads a cancel no hook reports off it, and
-//! `interrupt` checks that a turn is running before it sends a key.
+//! What an agent's terminal says about its turn: whether one is running, and how often it has gone
+//! back to the prompt. Each agent starts its title with a glyph of its own while a turn runs and
+//! drops or changes it when the turn is over; the forms are in `docs/agent-cli-reference.md`,
+//! section "## Across the three agents" ("Terminal titles and the titles in an agent's own
+//! records"). The title observer in `crate::session` notes every completed title here, and
+//! `crate::session::program_status` every move of the program's status reports; `title_interrupt`
+//! reads a cancel no hook reports off it, and `interrupt` checks that a turn is
+//! running before it sends a key.
+//!
+//! An agent that reports its state through OSC 7501 (`crate::terminal::program_status`) once the
+//! terminal answers the protocol's support query can drop the glyphs from its title: Claude Code
+//! 2.1.322 titles itself `Claude Code` or the conversation's title, with no glyph, and reports
+//! `working` when a turn starts, `idle` when it is cancelled and `done` when it ends. So the first
+//! report the program makes of its root record takes over from the title for the rest of the launch
+//! ([`TitleActivity::note_report`]): `working` is a turn running and every other state, the record
+//! gone included, is back at the prompt, as the title showed it. A report is made only when the
+//! state changes, so a running state reported once stays current until the next report.
 
 use std::time::{Duration, Instant};
 
 use crate::protocol::AgentId;
+use crate::terminal::program_status::ReportedState;
 
 /// How recently a running title must have been sent for the turn to count as still running. Every
 /// agent changes its running title at least once a second (Claude Code's circle turns about once a
@@ -49,11 +60,12 @@ pub fn spinner_activity(glyph: Option<char>) -> Option<Shown> {
     }
 }
 
-/// What a session's terminal title has said about its turns, kept per session by the title
-/// observer on the PTY reader thread.
+/// What a session's terminal has said about its turns, by its title or, once the program reports
+/// its status, by those reports; kept per session on the PTY reader thread. "The title" below is
+/// whichever of the two says it.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct TitleActivity {
-    /// Whether the last title that said anything showed a turn running.
+    /// Whether the last title or report that said anything showed a turn running.
     working: bool,
     /// When the title last showed a turn running.
     running_at: Option<Instant>,
@@ -61,11 +73,34 @@ pub struct TitleActivity {
     stops: u64,
     /// When it last did.
     stopped_at: Option<Instant>,
+    /// The program has reported its root status record, whose reports say what the title said
+    /// before ([`Self::note_report`]); titles change nothing from then on.
+    reported: bool,
 }
 
 impl TitleActivity {
-    /// Notes a completed title that said `shown`, or nothing.
+    /// Notes a completed title that said `shown`, or nothing. Ignored once the program reports its
+    /// status ([`Self::note_report`]).
     pub fn note(&mut self, shown: Option<Shown>, now: Instant) {
+        if !self.reported {
+            self.take(shown, now);
+        }
+    }
+
+    /// Notes a move of the program's root status record to `root` (`None`, the record gone), which
+    /// from now on says what the title said: `working` is a turn running, every other state back
+    /// at the prompt. `blocked` is a turn waiting on the user, which Claude Code's title showed as
+    /// back at the prompt too.
+    pub fn note_report(&mut self, root: Option<ReportedState>, now: Instant) {
+        self.reported = true;
+        let shown = match root {
+            Some(ReportedState::Working) => Shown::Running,
+            _ => Shown::AtPrompt,
+        };
+        self.take(Some(shown), now);
+    }
+
+    fn take(&mut self, shown: Option<Shown>, now: Instant) {
         match shown {
             Some(Shown::Running) => {
                 self.working = true;
@@ -80,18 +115,27 @@ impl TitleActivity {
         }
     }
 
-    /// How many times the title has gone from a running turn back to the prompt so far.
+    /// How many times the title (or the reports) has gone from a running turn back to the prompt
+    /// so far.
     pub fn stops(&self) -> u64 {
         self.stops
     }
 
+    /// Whether the last title or report that said anything showed a turn running, however long
+    /// ago: a turn whose output has stalled still reads as running here.
+    pub fn last_said_running(&self) -> bool {
+        self.working
+    }
+
     /// Whether the title shows a turn running, and has sent a running title within [`FRESH`] of
-    /// `now`.
+    /// `now`; or, once the program reports its status, whether it last reported `working`, which
+    /// it does not repeat.
     pub fn shows_running(&self, now: Instant) -> bool {
         self.working
-            && self
-                .running_at
-                .is_some_and(|at| now.saturating_duration_since(at) < FRESH)
+            && (self.reported
+                || self
+                    .running_at
+                    .is_some_and(|at| now.saturating_duration_since(at) < FRESH))
     }
 
     /// Whether the title has gone back to the prompt since `armed`, the count of stops taken
@@ -161,5 +205,130 @@ mod tests {
         assert!(activity.shows_running(start + FRESH));
         activity.note(IDLE, start + FRESH);
         assert!(!activity.shows_running(start + FRESH));
+    }
+
+    const WORKING_REPORT: Option<ReportedState> = Some(ReportedState::Working);
+    const IDLE_REPORT: Option<ReportedState> = Some(ReportedState::Idle);
+
+    /// A report of `working` is a turn running and of `idle` the turn back at the prompt, which
+    /// counts a stop the way a title does.
+    #[test]
+    fn reports_say_whether_a_turn_is_running_and_count_its_stops() {
+        let start = Instant::now();
+        let mut activity = TitleActivity::default();
+        activity.note_report(WORKING_REPORT, start);
+        assert!(activity.shows_running(start));
+        assert_eq!(activity.stops(), 0);
+        assert_eq!(activity.at_prompt_since(0), None);
+
+        let end = start + Duration::from_millis(80);
+        activity.note_report(IDLE_REPORT, end);
+        assert!(!activity.shows_running(end));
+        assert_eq!(activity.stops(), 1);
+        assert_eq!(activity.at_prompt_since(0), Some(end));
+        assert_eq!(activity.at_prompt_since(1), None, "no stop since the first");
+
+        activity.note_report(WORKING_REPORT, end);
+        activity.note_report(IDLE_REPORT, end);
+        assert_eq!(activity.stops(), 2);
+    }
+
+    /// Every state but `working`, and the record's going away, is the program back at its prompt.
+    #[test]
+    fn every_report_but_working_is_back_at_the_prompt() {
+        use ReportedState::*;
+        let start = Instant::now();
+        for root in [Some(Idle), Some(Done), Some(Error), Some(Blocked), None] {
+            let mut activity = TitleActivity::default();
+            activity.note_report(WORKING_REPORT, start);
+            activity.note_report(root, start);
+            assert!(!activity.shows_running(start), "{root:?}");
+            assert_eq!(activity.stops(), 1, "{root:?}");
+            assert_eq!(activity.at_prompt_since(0), Some(start), "{root:?}");
+        }
+    }
+
+    /// A report of a program that was not running a turn is no stop.
+    #[test]
+    fn a_report_from_the_prompt_to_the_prompt_counts_no_stop() {
+        use ReportedState::*;
+        let start = Instant::now();
+        let mut activity = TitleActivity::default();
+        for root in [Some(Idle), Some(Done), None, Some(Blocked)] {
+            activity.note_report(root, start);
+        }
+        assert_eq!(activity.stops(), 0);
+        assert_eq!(activity.at_prompt_since(0), None);
+        assert!(!activity.shows_running(start));
+    }
+
+    /// A program reports only when its state changes, so a running state reported once stays
+    /// current however long ago it was, where a running title stops counting after [`FRESH`].
+    #[test]
+    fn a_reported_working_state_stays_shown_running_until_the_next_report() {
+        let start = Instant::now();
+        let mut activity = TitleActivity::default();
+        activity.note_report(WORKING_REPORT, start);
+        for later in [FRESH, FRESH * 10, Duration::from_secs(3600)] {
+            assert!(activity.shows_running(start + later), "{later:?}");
+        }
+        activity.note_report(IDLE_REPORT, start + FRESH * 10);
+        assert!(!activity.shows_running(start + FRESH * 10));
+    }
+
+    /// Once the program has reported, the glyphs of its title say nothing: it drops them, and a
+    /// stale one must not turn a state the reports gave.
+    #[test]
+    fn titles_are_ignored_once_the_program_has_reported() {
+        let start = Instant::now();
+
+        let mut at_prompt = TitleActivity::default();
+        at_prompt.note_report(IDLE_REPORT, start);
+        at_prompt.note(WORKING, start);
+        at_prompt.note(TURNING, start);
+        assert!(!at_prompt.shows_running(start), "a running title");
+        assert_eq!(at_prompt.stops(), 0);
+
+        let mut running = TitleActivity::default();
+        running.note_report(WORKING_REPORT, start);
+        running.note(IDLE, start);
+        running.note(None, start);
+        assert!(running.shows_running(start), "a prompt title");
+        assert_eq!(running.stops(), 0, "a prompt title counts no stop");
+        assert_eq!(running.at_prompt_since(0), None);
+    }
+
+    /// The report that takes over carries on from what the title had shown: a turn running by the
+    /// title is ended by the report, and one the report confirms no longer lapses.
+    #[test]
+    fn the_first_report_takes_over_from_what_the_title_showed() {
+        let start = Instant::now();
+
+        let mut ended = TitleActivity::default();
+        ended.note(WORKING, start);
+        ended.note_report(IDLE_REPORT, start);
+        assert!(!ended.shows_running(start));
+        assert_eq!(ended.stops(), 1);
+
+        let mut confirmed = TitleActivity::default();
+        confirmed.note(WORKING, start);
+        confirmed.note_report(WORKING_REPORT, start + FRESH / 2);
+        assert!(confirmed.shows_running(start + FRESH * 10));
+    }
+
+    /// With no report, the title governs as it always did: only a title fresh within [`FRESH`]
+    /// shows a turn running, and the stops it counts are its own.
+    #[test]
+    fn without_reports_titles_govern_as_before() {
+        let start = Instant::now();
+        let mut activity = TitleActivity::default();
+        activity.note(WORKING, start);
+        assert!(activity.shows_running(start));
+        assert!(!activity.shows_running(start + FRESH * 10));
+        activity.note(IDLE, start + FRESH * 10);
+        activity.note(WORKING, start + FRESH * 11);
+        activity.note(IDLE, start + FRESH * 12);
+        assert_eq!(activity.stops(), 2);
+        assert!(!activity.shows_running(start + FRESH * 12));
     }
 }

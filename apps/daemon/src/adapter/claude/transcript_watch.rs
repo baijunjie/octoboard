@@ -40,9 +40,12 @@
 //! seen in real transcripts of 2.1.296, 2.1.302 and 2.1.303; on 2.1.310 only once the model has
 //! shown output) or `[Request interrupted by user for tool use]` (one while a tool runs, after the
 //! rejection `tool_result` above; see the same section of `docs/agent-cli-reference.md`).
-//! [`is_interrupt_line`] recognises either, and [`watch_for_interrupt`] arms the watch with it each
-//! time a hook moves a Claude Code session into `Working`, until the interrupt is found or the
-//! session leaves `Working` some other way.
+//! [`is_interrupt_entry`] recognises either, and [`watch_for_interrupt`] arms the watch with it
+//! each time a hook moves a Claude Code session into `Working`, until the interrupt is found or the
+//! session leaves `Working` some other way. Only an interrupt of the turn the hook named counts,
+//! told by the `promptId` the entry carries. A cancel the agent carries straight on from, taking a
+//! message the user left in its queue as the next turn, leaves the session working
+//! ([`InterruptReading`]).
 //!
 //! An interrupt before the model has shown anything — while the request waits for its response or
 //! the model is still thinking — leaves no marker at all on 2.1.310: the transcript is not written
@@ -59,7 +62,7 @@ use std::time::Duration;
 use serde_json::Value;
 
 use crate::protocol::SessionStatus;
-use crate::records::watch::{self, Owed, Start, Watch};
+use crate::records::watch::{self, Owed, Start, Then, Watch};
 use crate::state::AppState;
 use crate::time::now_millis;
 use crate::time::parse_rfc3339_millis;
@@ -77,6 +80,15 @@ const INTERRUPTED_PLAIN_MARKER: &str = "[Request interrupted by user]";
 
 /// What both interrupt markers start with, for ruling a line out before it is parsed.
 const INTERRUPTED_MARKER_STEM: &str = "[Request interrupted by user";
+
+/// What a `queue-operation` entry for a message taken from Claude Code's queue carries, for ruling
+/// a line out before it is parsed.
+const DEQUEUE_OPERATION: &str = "\"dequeue\"";
+
+/// How far apart a dequeue and an interrupt may be stamped and still be one cancel that the agent
+/// carried straight on from. Seen 4 to 11 ms apart (2.1.322), so a dequeue a second or more from
+/// the interrupt is taken for something else.
+const DEQUEUE_GAP: Duration = Duration::from_secs(1);
 
 /// How long before the interrupt watch was armed an interrupt may be timestamped and still count.
 /// The watch is armed when the daemon applies the hook event that moved the session into work,
@@ -111,7 +123,7 @@ const POLL_INTERVAL: Duration = Duration::from_secs(1);
 /// this check even though the structural check below, which matches the decoded string, would
 /// still have caught it.
 ///
-/// Only a user entry counts, for the reason [`is_interrupt_line`] gives: the transcript also holds
+/// Only a user entry counts, for the reason [`is_interrupt_entry`] gives: the transcript also holds
 /// logged requests whose `message.content` replays the conversation so far, earlier declines
 /// included. Whether one is ever written while the hand is up was not measured; matching only user
 /// entries makes that not matter.
@@ -144,34 +156,160 @@ fn is_rejection_marker(block: &Value) -> bool {
     }
 }
 
-/// Whether one transcript line is an interrupt record: a user entry, timestamped `not_before`
-/// (milliseconds since the epoch) or later, with a text block that is exactly either interrupt
-/// marker. Unrecognised lines read as `false`, as in [`is_rejection_line`], and the same substring
-/// check keeps most lines away from the parser.
+/// What the interrupt watch found.
+#[derive(Debug, PartialEq, Eq)]
+enum Interrupt {
+    /// The turn was cancelled, and the agent is back at its prompt.
+    Cancelled,
+    /// The turn was cancelled, and the agent went straight on with a message the user had left in
+    /// its queue, as a turn of its own the watch now reads for.
+    CarriedOn,
+}
+
+/// What one interrupt watch has read, across its scans: which turn it is reading for, and enough
+/// to tell a cancel that leaves the agent at its prompt from one it carries straight on from.
+///
+/// Esc pressed while a message waits in Claude Code's queue cancels the turn and runs the message
+/// as the next one, and no hook says so: the message's `UserPromptSubmit` fired when it was queued,
+/// carrying the running turn's `prompt_id`, and none fires when it is taken; the next hook is that
+/// turn's own `Stop` (2.1.322). What the transcript shows, all within some 25 ms, is the cancelled
+/// turn's interrupt, a `queue-operation` entry whose `operation` is `dequeue` (written before the
+/// interrupt in the file every time it was seen, though stamped a few milliseconds after it), and
+/// the message as a user entry whose `parentUuid` is the interrupt's `uuid` and whose `promptId`
+/// names a new turn. Either the dequeue or that entry, read with the interrupt, says the agent
+/// carried on, and the watch goes on for the new turn: the turn the entry names, or any turn until
+/// it is read, the cancelled turn's interrupt being behind it by then. A message taken into the
+/// running turn instead, at a tool's end, is removed from the queue (`remove`), not dequeued, and
+/// the turn's own interrupt then ends it as any other.
+struct InterruptReading {
+    /// How early an interrupt may be stamped and still count, in milliseconds since the epoch.
+    not_before: i64,
+    /// The turn being read for, as its `prompt_id` names it, where that is known.
+    turn: Option<String>,
+    /// The latest interrupt of the turn being read for, until the entry of a turn the agent
+    /// carried on to from it has been read.
+    interrupt: Option<InterruptEntry>,
+    /// When the latest dequeue not yet taken for a carried-on cancel was stamped.
+    dequeued_at: Option<i64>,
+}
+
+/// The parts of an interrupt entry the entries after it are told by.
+struct InterruptEntry {
+    uuid: Option<String>,
+    turn: Option<String>,
+    written: i64,
+    /// The agent has been found to carry on from it.
+    carried_on: bool,
+}
+
+impl InterruptReading {
+    fn new(not_before: i64, turn: Option<String>) -> Self {
+        Self {
+            not_before,
+            turn,
+            interrupt: None,
+            dequeued_at: None,
+        }
+    }
+
+    /// What `line` makes of the turn being read for, or `None` where it changes nothing. A watch's
+    /// scan acts on the last answer it got, so a line read after the interrupt that shows the agent
+    /// carried on overrides the [`Interrupt::Cancelled`] the interrupt gave, and the next turn's
+    /// own interrupt after that overrides it in turn.
+    ///
+    /// Unrecognised lines change nothing, as in [`is_rejection_line`], and a substring check keeps
+    /// most lines away from the parser.
+    fn read(&mut self, line: &str) -> Option<Interrupt> {
+        let names_interrupt = self
+            .interrupt
+            .as_ref()
+            .and_then(|interrupt| interrupt.uuid.as_deref())
+            .is_some_and(|uuid| line.contains(uuid));
+        if !line.contains(INTERRUPTED_MARKER_STEM)
+            && !line.contains(DEQUEUE_OPERATION)
+            && !names_interrupt
+        {
+            return None;
+        }
+        let value = serde_json::from_str::<Value>(line).ok()?;
+        if value.get("type").and_then(Value::as_str) == Some("queue-operation") {
+            if value.get("operation").and_then(Value::as_str) == Some("dequeue") {
+                self.dequeued_at = written(&value);
+                return self.carry_on_if_dequeued();
+            }
+            return None;
+        }
+        if is_interrupt_entry(&value, self.not_before, self.turn.as_deref()) {
+            self.interrupt = Some(InterruptEntry {
+                uuid: text_field(&value, "uuid"),
+                turn: text_field(&value, "promptId"),
+                written: written(&value)?,
+                carried_on: false,
+            });
+            return Some(self.carry_on_if_dequeued().unwrap_or(Interrupt::Cancelled));
+        }
+        let interrupt = self.interrupt.as_ref()?;
+        let next_turn = text_field(&value, "promptId")?;
+        if value.get("type").and_then(Value::as_str) != Some("user")
+            || interrupt.uuid.is_none()
+            || value.get("parentUuid").and_then(Value::as_str) != interrupt.uuid.as_deref()
+            || Some(&next_turn) == interrupt.turn.as_ref()
+        {
+            return None;
+        }
+        let found = (!interrupt.carried_on).then_some(Interrupt::CarriedOn);
+        self.turn = Some(next_turn);
+        self.interrupt = None;
+        self.dequeued_at = None;
+        found
+    }
+
+    /// Takes the latest interrupt as one the agent carried on from, if a dequeue was stamped close
+    /// enough to it to be the agent taking the next message from its queue as the cancel ended the
+    /// turn. The turn being read for is not known again until the next turn's entry is read.
+    fn carry_on_if_dequeued(&mut self) -> Option<Interrupt> {
+        let dequeued_at = self.dequeued_at?;
+        let interrupt = self.interrupt.as_mut()?;
+        if interrupt.carried_on
+            || (dequeued_at - interrupt.written).abs() > DEQUEUE_GAP.as_millis() as i64
+        {
+            return None;
+        }
+        interrupt.carried_on = true;
+        self.turn = None;
+        self.dequeued_at = None;
+        Some(Interrupt::CarriedOn)
+    }
+}
+
+/// Whether one transcript entry is an interrupt record of the turn `turn` names: a user entry,
+/// timestamped `not_before` (milliseconds since the epoch) or later, with a text block that is
+/// exactly either interrupt marker.
 ///
 /// An entry with no timestamp this can read is not counted: that leaves the session reading
 /// `Working`, as it did before this watch existed, which is the safer of the two mistakes.
+///
+/// Claude Code stamps every user entry of a turn, its interrupt included, with the turn's
+/// `promptId`, the `prompt_id` its hooks carry through the same turn, so an interrupt naming
+/// another turn is not this one's, wherever it falls in the file. Where either side names no turn,
+/// the entry is judged on its timestamp and place in the file alone.
 ///
 /// The entry's own `type` is checked as well as its content, because the transcript also logs each
 /// request sent to the model as an `api-request-blob` entry whose `message.content` replays the
 /// conversation so far — interrupt markers from earlier turns included, seen with a trailing
 /// newline in real transcripts but not guaranteed to keep one. Such an entry is written while the
 /// session is working, which is exactly when this watch reads.
-fn is_interrupt_line(line: &str, not_before: i64) -> bool {
-    if !line.contains(INTERRUPTED_MARKER_STEM) {
-        return false;
-    }
-    let Ok(value) = serde_json::from_str::<Value>(line) else {
-        return false;
-    };
+fn is_interrupt_entry(value: &Value, not_before: i64, turn: Option<&str>) -> bool {
     if value.get("type").and_then(Value::as_str) != Some("user") {
         return false;
     }
-    let written = value
-        .get("timestamp")
-        .and_then(Value::as_str)
-        .and_then(parse_rfc3339_millis);
-    if written.is_none_or(|written| written < not_before) {
+    let named = value.get("promptId").and_then(Value::as_str);
+    if let (Some(turn), Some(named)) = (turn, named) {
+        if named != turn {
+            return false;
+        }
+    }
+    if written(value).is_none_or(|written| written < not_before) {
         return false;
     }
     let Some(content) = value.pointer("/message/content").and_then(Value::as_array) else {
@@ -184,6 +322,22 @@ fn is_interrupt_line(line: &str, not_before: i64) -> bool {
                 Some(INTERRUPTED_MARKER | INTERRUPTED_PLAIN_MARKER)
             )
     })
+}
+
+/// When a transcript entry was written, in milliseconds since the epoch.
+fn written(value: &Value) -> Option<i64> {
+    value
+        .get("timestamp")
+        .and_then(Value::as_str)
+        .and_then(parse_rfc3339_millis)
+}
+
+fn text_field(value: &Value, key: &str) -> Option<String> {
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .filter(|text| !text.is_empty())
+        .map(str::to_string)
 }
 
 /// A `tool_result` block's text, however its `content` is shaped: a plain string in every
@@ -238,15 +392,16 @@ pub fn watch_for_rejection(state: &Arc<AppState>, session_id: &str, transcript_p
                 generation,
                 SessionStatus::WaitingUser,
                 "transcript rejection",
-            )
+            );
+            Then::Stop
         },
     );
 }
 
 /// Starts watching `session_id`'s transcript for the record an interrupted turn leaves, the only
 /// trace of the user cancelling it; Claude Code's hook interpreter says when
-/// (`HookInterpreter::record_watch`). Returns the watch's generation,
-/// or `None` when no watch was started.
+/// (`HookInterpreter::record_watch`), and names the turn as `turn`, the event's `prompt_id`.
+/// Returns the watch's generation, or `None` when no watch was started.
 ///
 /// The watch reads only what is written after it is armed ([`Start::AtEndOrNew`]), so an interrupt
 /// left over from an earlier turn, or from a conversation resumed with its history, is never
@@ -255,19 +410,24 @@ pub fn watch_for_rejection(state: &Arc<AppState>, session_id: &str, transcript_p
 /// file (measured on 2.1.303, in print mode). A file created then could still be seeded with older
 /// lines, should Claude Code ever copy a forked or resumed conversation's history into it lazily,
 /// so an interrupt also counts only if it is stamped no earlier than the watch was armed, less
-/// [`ARMING_SLACK`]. The next prompt retires the watch before its turn opens
-/// (`end_record_watch`), and the write takes effect only while the watch is still current, so an
-/// interrupt found late is never applied to the turn after it. Spawned, never awaited, as
-/// [`watch_for_rejection`] is.
+/// [`ARMING_SLACK`], and only if it names the watch's turn ([`is_interrupt_entry`]). The next prompt
+/// retires the watch before its turn opens (`end_record_watch`), and the write takes effect only
+/// while the watch is still current, so an interrupt found late is never applied to the turn after
+/// it. Spawned, never awaited, as [`watch_for_rejection`] is.
 ///
 /// The turn is left open, as a declined prompt leaves it: no report is owed for a turn the user
 /// cancelled, Claude Code has no clock-attributed turn end that could find it open, and the next
 /// prompt's `turn_started` replaces it. Closing it here could instead close the next turn, were its
 /// prompt to land between the status write and the close.
+///
+/// A cancel the agent carries straight on from, with a message from its queue, leaves the session
+/// working, and the watch reading for the turn it carried on to ([`InterruptReading`],
+/// [`carried_on`]).
 pub fn watch_for_interrupt(
     state: &Arc<AppState>,
     session_id: &str,
     transcript_path: Option<&str>,
+    turn: Option<&str>,
 ) -> Option<u64> {
     let Some(transcript_path) = transcript_path else {
         tracing::debug!(
@@ -276,7 +436,10 @@ pub fn watch_for_interrupt(
         );
         return None;
     };
-    let not_before = now_millis() - ARMING_SLACK.as_millis() as i64;
+    let reading = std::sync::Mutex::new(InterruptReading::new(
+        now_millis() - ARMING_SLACK.as_millis() as i64,
+        turn.map(str::to_string),
+    ));
     watch::spawn(
         state,
         session_id,
@@ -286,17 +449,55 @@ pub fn watch_for_interrupt(
             start: Start::AtEndOrNew,
         },
         |state, session_id| still_at(state, session_id, SessionStatus::Working),
-        move |line| is_interrupt_line(line, not_before).then_some(()),
-        |state, session_id, generation, ()| {
-            watch::back_at_prompt(
-                state,
-                session_id,
-                generation,
-                SessionStatus::Working,
-                "transcript interrupt",
-            )
+        move |line| {
+            reading
+                .lock()
+                .expect("interrupt reading poisoned")
+                .read(line)
+        },
+        |state, session_id, generation, found| match found {
+            Interrupt::Cancelled => {
+                watch::back_at_prompt(
+                    state,
+                    session_id,
+                    generation,
+                    SessionStatus::Working,
+                    "transcript interrupt",
+                );
+                Then::Stop
+            }
+            Interrupt::CarriedOn => carried_on(state, session_id, generation),
         },
     )
+}
+
+/// The turn watch `generation` was reading for was cancelled, and the agent went straight on with
+/// a message from its queue as the next turn, which no hook announces ([`InterruptReading`]). The
+/// session stays `Working`, and so does the turn the daemon holds open: the message joined it when
+/// its `UserPromptSubmit` came at queueing, and the next turn's `Stop` closes it. The cancel still
+/// counts as a turn ending (`note_turn_end`), and the watch, with the title watch sharing its
+/// generation, goes on reading for the next turn, so a cancel of that one is caught too.
+fn carried_on(state: &Arc<AppState>, session_id: &str, generation: u64) -> Then {
+    let still_working = state.while_record_watch_current(session_id, generation, || {
+        let working = still_at(state, session_id, SessionStatus::Working) == Owed::Yes;
+        if working {
+            state.note_turn_end(session_id);
+        }
+        working
+    });
+    if still_working == Some(true) {
+        tracing::debug!(
+            session = %session_id,
+            "a transcript interrupt was found, and the agent went on with a queued message"
+        );
+        Then::KeepWatching
+    } else {
+        tracing::debug!(
+            session = %session_id,
+            "a transcript interrupt was found, but the session had already moved on"
+        );
+        Then::Stop
+    }
 }
 
 /// Whether the agent is still at the `status` the watch was armed for.
@@ -340,9 +541,37 @@ mod tests {
     use super::*;
     use crate::protocol::{AgentId, Console, Session, SessionKind};
     use crate::test_support::{
-        bare_session, captured_interrupt, fresh_interrupt, idle_stand_in, ScratchDir, ScratchFile,
-        StandIn,
+        bare_session, captured_interrupt, fresh_interrupt, fresh_interrupt_of, idle_stand_in,
+        queued_prompt_after_interrupt, ScratchDir, ScratchFile, StandIn, CAPTURED_TURN,
+        QUEUED_TURN,
     };
+
+    /// Whether `line`, read on its own by a watch for `turn` armed at `not_before`, is an interrupt
+    /// of that turn.
+    fn is_interrupt_line(line: &str, not_before: i64, turn: Option<&str>) -> bool {
+        InterruptReading::new(not_before, turn.map(str::to_string)).read(line)
+            == Some(Interrupt::Cancelled)
+    }
+
+    /// What a watch for `turn` makes of `lines` read in order, as the last answer a scan of them
+    /// acts on, and the turn it reads for afterwards.
+    fn read_through(lines: &[&str], turn: &str) -> (Option<Interrupt>, Option<String>) {
+        let mut reading = InterruptReading::new(i64::MIN, Some(turn.to_string()));
+        let found = lines.iter().filter_map(|line| reading.read(line)).last();
+        (found, reading.turn)
+    }
+
+    /// The lines of [`queued_prompt_after_interrupt`]: the dequeue, the interrupt, the logged
+    /// request replaying it and the queued message's prompt.
+    fn queued_cancel_lines() -> Vec<String> {
+        let lines: Vec<String> = queued_prompt_after_interrupt(QUEUED_TURN)
+            .lines()
+            .map(str::to_string)
+            .collect();
+        assert_eq!(lines.len(), 4);
+        assert!(lines[0].contains("\"dequeue\"") && lines[1].contains(INTERRUPTED_PLAIN_MARKER));
+        lines
+    }
 
     /// A real rejection record, trimmed to the two lines that carry the markers, captured from a
     /// permission-prompt decline on Claude Code 2.1.274; a capture of the same decline on 2.1.286
@@ -451,6 +680,7 @@ mod tests {
 
     /// Both interrupt markers count: the plain one an interrupt while the model writes leaves, and
     /// the tool-use one in the rejection pair, which an interrupt while a tool runs also writes.
+    /// Each is read as the watch of its own turn reads it.
     #[test]
     fn either_interrupt_record_is_found() {
         let tool_use_interrupt = REJECTION
@@ -458,8 +688,88 @@ mod tests {
             .nth(1)
             .expect("the rejection's interrupt line");
         for line in [captured_interrupt().trim_end(), tool_use_interrupt] {
-            assert!(is_interrupt_line(line, i64::MIN), "{line}");
+            let entry: Value = serde_json::from_str(line).expect("entry");
+            let turn = entry["promptId"].as_str();
+            assert!(turn.is_some(), "{line}");
+            assert!(is_interrupt_line(line, i64::MIN, turn), "{line}");
         }
+    }
+
+    /// An interrupt that names another turn is that turn's, however fresh.
+    #[test]
+    fn an_interrupt_naming_another_turn_is_not_this_ones() {
+        let line = captured_interrupt().trim_end();
+        assert!(!is_interrupt_line(line, i64::MIN, Some(QUEUED_TURN)));
+        assert!(is_interrupt_line(line, i64::MIN, Some(CAPTURED_TURN)));
+    }
+
+    /// Where the watch was given no turn, or the entry names none, the interrupt is judged by its
+    /// timestamp and its place in the file.
+    #[test]
+    fn an_interrupt_is_counted_when_either_side_names_no_turn() {
+        let mut entry: Value = serde_json::from_str(captured_interrupt()).expect("entry");
+        assert!(is_interrupt_line(&entry.to_string(), i64::MIN, None));
+        entry.as_object_mut().expect("an object").remove("promptId");
+        assert!(is_interrupt_line(
+            &entry.to_string(),
+            i64::MIN,
+            Some(QUEUED_TURN)
+        ));
+    }
+
+    /// The dequeue, written before the interrupt, says the agent carried on, and the watch then
+    /// reads for any turn until the next turn's prompt names it.
+    #[test]
+    fn a_dequeue_beside_the_interrupt_says_the_agent_carried_on() {
+        let lines = queued_cancel_lines();
+        let (found, turn) = read_through(&[&lines[0], &lines[1]], CAPTURED_TURN);
+        assert_eq!(found, Some(Interrupt::CarriedOn));
+        assert_eq!(turn, None);
+
+        let lines: Vec<&str> = lines.iter().map(String::as_str).collect();
+        let (found, turn) = read_through(&lines, CAPTURED_TURN);
+        assert_eq!(found, Some(Interrupt::CarriedOn));
+        assert_eq!(turn.as_deref(), Some(QUEUED_TURN));
+    }
+
+    /// The next turn's prompt under the interrupt says so too, with no dequeue read.
+    #[test]
+    fn the_next_turns_prompt_under_the_interrupt_says_the_agent_carried_on() {
+        let lines = queued_cancel_lines();
+        let (found, turn) = read_through(&[&lines[1], &lines[3]], CAPTURED_TURN);
+        assert_eq!(found, Some(Interrupt::CarriedOn));
+        assert_eq!(turn.as_deref(), Some(QUEUED_TURN));
+    }
+
+    /// A dequeue stamped well apart from the interrupt is not the agent taking the next message as
+    /// the cancel ended the turn.
+    #[test]
+    fn a_dequeue_far_from_the_interrupt_is_not_the_agent_carrying_on() {
+        let lines = queued_cancel_lines();
+        let early = lines[0].replace("2100-01-01T00:00:00.006Z", "2099-12-31T23:59:50.000Z");
+        let (found, turn) = read_through(&[&early, &lines[1]], CAPTURED_TURN);
+        assert_eq!(found, Some(Interrupt::Cancelled));
+        assert_eq!(turn.as_deref(), Some(CAPTURED_TURN));
+    }
+
+    /// A message taken into the running turn at a tool's end is removed from the queue, not
+    /// dequeued, and the turn's interrupt then ends it (2.1.322).
+    #[test]
+    fn a_message_taken_into_the_running_turn_does_not_carry_the_cancel_on() {
+        let lines = queued_cancel_lines();
+        let removed = lines[0].replace("\"dequeue\"", "\"remove\"");
+        let (found, _) = read_through(&[&removed, &lines[1]], CAPTURED_TURN);
+        assert_eq!(found, Some(Interrupt::Cancelled));
+    }
+
+    /// An entry under the interrupt that names the same turn is not a next turn.
+    #[test]
+    fn an_entry_of_the_cancelled_turn_under_its_interrupt_is_not_a_next_turn() {
+        let lines = queued_cancel_lines();
+        let same_turn = lines[3].replace(QUEUED_TURN, CAPTURED_TURN);
+        let (found, turn) = read_through(&[&lines[1], &same_turn], CAPTURED_TURN);
+        assert_eq!(found, Some(Interrupt::Cancelled));
+        assert_eq!(turn.as_deref(), Some(CAPTURED_TURN));
     }
 
     /// The rejection `tool_result` alone is not an interrupt: the `Chat about this` exit writes one
@@ -468,7 +778,7 @@ mod tests {
     fn a_rejected_tool_result_alone_is_not_an_interrupt() {
         assert!(!QUESTION_CHAT_EXIT
             .lines()
-            .any(|line| is_interrupt_line(line, i64::MIN)));
+            .any(|line| is_interrupt_line(line, i64::MIN, None)));
     }
 
     /// A logged request replays the conversation so far, an earlier turn's interrupt included, and
@@ -479,7 +789,7 @@ mod tests {
             "{{\"type\":\"api-request-blob\",\"message\":{{\"role\":\"user\",\
              \"content\":[{{\"type\":\"text\",\"text\":\"{INTERRUPTED_PLAIN_MARKER}\"}}]}}}}"
         );
-        assert!(!is_interrupt_line(&line, i64::MIN));
+        assert!(!is_interrupt_line(&line, i64::MIN, None));
     }
 
     /// An interrupt whose time cannot be read is not counted: the watch cannot tell it from an
@@ -488,7 +798,7 @@ mod tests {
     fn an_interrupt_with_no_readable_timestamp_is_not_one() {
         let mut entry: Value = serde_json::from_str(captured_interrupt()).expect("entry");
         entry["timestamp"] = Value::from("not a time");
-        assert!(!is_interrupt_line(&entry.to_string(), i64::MIN));
+        assert!(!is_interrupt_line(&entry.to_string(), i64::MIN, None));
     }
 
     fn state_with_console(name: &str) -> (Arc<AppState>, ScratchDir) {
@@ -810,7 +1120,12 @@ mod tests {
     #[tokio::test(start_paused = true)]
     async fn an_interrupt_found_while_working_is_applied() {
         let fixture = Fixture::new("interrupt", working_session("s"));
-        watch_for_interrupt(&fixture.state, "s", Some(&fixture.path.to_string_lossy()));
+        watch_for_interrupt(
+            &fixture.state,
+            "s",
+            Some(&fixture.path.to_string_lossy()),
+            Some(CAPTURED_TURN),
+        );
 
         std::fs::write(&fixture.path, fresh_interrupt()).expect("write interrupt");
 
@@ -832,7 +1147,12 @@ mod tests {
         // Stamped as if fresh, so only where it sits in the file rules it out.
         let interrupt = fresh_interrupt();
         std::fs::write(&fixture.path, &interrupt).expect("write the earlier interrupt");
-        watch_for_interrupt(&fixture.state, "s", Some(&fixture.path.to_string_lossy()));
+        watch_for_interrupt(
+            &fixture.state,
+            "s",
+            Some(&fixture.path.to_string_lossy()),
+            Some(CAPTURED_TURN),
+        );
 
         std::fs::write(
             &fixture.path,
@@ -846,13 +1166,74 @@ mod tests {
         );
     }
 
+    /// Esc pressed while a message waits in Claude Code's queue cancels the turn and runs the
+    /// message as the next one, with no hook: the watch armed when the message was queued, for
+    /// the turn it was queued in, reads that turn's interrupt and then the agent carrying on. The
+    /// session keeps working, the cancel counts as a turn ending, and the watch goes on.
+    #[tokio::test(start_paused = true)]
+    async fn a_cancel_the_agent_carries_on_from_with_a_queued_message_keeps_it_working() {
+        let fixture = Fixture::new("queued-prompt", working_session("s"));
+        watch_for_interrupt(
+            &fixture.state,
+            "s",
+            Some(&fixture.path.to_string_lossy()),
+            Some(CAPTURED_TURN),
+        );
+        assert_watch_armed(&fixture.state, "s");
+
+        std::fs::write(&fixture.path, queued_prompt_after_interrupt(QUEUED_TURN))
+            .expect("write the cancel and the queued prompt");
+
+        assert!(
+            reaches(&fixture.state, SessionStatus::Working).await,
+            "the turn carried on to must keep the session working"
+        );
+        assert_eq!(fixture.state.turn_ends("s"), 1, "the cancel ends a turn");
+        assert!(!fixture.state.last_turn_abnormal("s"));
+        assert_watch_armed(&fixture.state, "s");
+    }
+
+    /// The turn the agent carried on to is still watched: its own interrupt ends it, whether read
+    /// in a later scan or in the same one.
+    #[tokio::test(start_paused = true)]
+    async fn the_turn_carried_on_to_is_ended_by_its_own_interrupt() {
+        for in_one_write in [false, true] {
+            let fixture = Fixture::new("queued-own-interrupt", working_session("s"));
+            watch_for_interrupt(
+                &fixture.state,
+                "s",
+                Some(&fixture.path.to_string_lossy()),
+                Some(CAPTURED_TURN),
+            );
+            let cancel = queued_prompt_after_interrupt(QUEUED_TURN);
+            if !in_one_write {
+                std::fs::write(&fixture.path, &cancel).expect("write the cancel");
+                assert!(reaches(&fixture.state, SessionStatus::Working).await);
+            }
+
+            std::fs::write(&fixture.path, cancel + &fresh_interrupt_of(QUEUED_TURN))
+                .expect("write the queued turn's interrupt");
+
+            assert!(
+                reaches(&fixture.state, SessionStatus::Idle).await,
+                "the queued turn's own interrupt must be applied (in one write: {in_one_write})"
+            );
+            assert!(fixture.state.last_turn_abnormal("s"));
+        }
+    }
+
     /// A new conversation's transcript does not exist yet when its first prompt arms the watch;
     /// once it appears it is read from its start.
     #[tokio::test(start_paused = true)]
     async fn a_transcript_that_appears_after_the_watch_is_read_from_its_start() {
         let fixture = Fixture::new("new-transcript", working_session("s"));
         std::fs::remove_file(&fixture.path).expect("no transcript yet");
-        watch_for_interrupt(&fixture.state, "s", Some(&fixture.path.to_string_lossy()));
+        watch_for_interrupt(
+            &fixture.state,
+            "s",
+            Some(&fixture.path.to_string_lossy()),
+            Some(CAPTURED_TURN),
+        );
         assert_watch_armed(&fixture.state, "s");
 
         std::fs::write(&fixture.path, fresh_interrupt()).expect("write interrupt");
@@ -870,7 +1251,12 @@ mod tests {
     async fn an_older_interrupt_in_a_transcript_that_appears_later_is_not_applied() {
         let fixture = Fixture::new("copied-history", working_session("s"));
         std::fs::remove_file(&fixture.path).expect("no transcript yet");
-        watch_for_interrupt(&fixture.state, "s", Some(&fixture.path.to_string_lossy()));
+        watch_for_interrupt(
+            &fixture.state,
+            "s",
+            Some(&fixture.path.to_string_lossy()),
+            Some(CAPTURED_TURN),
+        );
         assert_watch_armed(&fixture.state, "s");
 
         std::fs::write(&fixture.path, captured_interrupt()).expect("write copied history");

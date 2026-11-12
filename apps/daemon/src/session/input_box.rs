@@ -89,6 +89,9 @@ pub(super) mod captures {
         include_str!("../../testdata/claude_input_cleared.txt");
     pub(in crate::session) const DRAFT: &str =
         include_str!("../../testdata/claude_input_draft.txt");
+    /// Captured from Claude Code 2.1.322; see `testdata/claude-input-box.md`.
+    pub(in crate::session) const HISTORY: &str =
+        include_str!("../../testdata/claude_input_history.txt");
 
     /// Captures from Grok Build 1.0.70; see `testdata/grok-composer.md`.
     pub(in crate::session) const GROK_RESTORED: &str =
@@ -165,6 +168,56 @@ mod tests {
             Some("Line one: think carefully about zero.\nLine two: then write a 600-word essay.")
         );
         assert_eq!(input_box(AgentId::CLAUDE, CLEARED).as_deref(), Some(""));
+        // A prompt brought back with Up, under a rule that says where in the history it is.
+        assert_eq!(
+            input_box(AgentId::CLAUDE, HISTORY).as_deref(),
+            Some("say only: pong-f")
+        );
+        // The same as read with its faint label blanked.
+        let blanked = HISTORY.replace("History 100/100", &" ".repeat(15));
+        assert_eq!(
+            input_box(AgentId::CLAUDE, &blanked).as_deref(),
+            Some("say only: pong-f")
+        );
+        let dashes = |count: usize| "\u{2500}".repeat(count);
+        let labelled = |lead: usize, label: &str, width: usize| {
+            let used = lead + label.chars().count();
+            format!(
+                "{}{label}{}",
+                dashes(lead),
+                dashes(width.saturating_sub(used))
+            )
+        };
+        let read = |top: &str, bottom: usize| {
+            input_box(
+                AgentId::CLAUDE,
+                &format!("{top}\n\u{276F} text\n{}\n", dashes(bottom)),
+            )
+        };
+        assert_eq!(
+            read(&labelled(3, " History 1/1 ", 40), 40).as_deref(),
+            Some("text")
+        );
+        assert_eq!(
+            read(&labelled(3, &" ".repeat(9), 40), 40).as_deref(),
+            Some("text")
+        );
+        for (near_miss, bottom) in [
+            (labelled(3, " History of zero ", 40), 40),
+            (
+                "\u{2500}\u{2500}\u{2500}\u{2500} Slow probe agent \u{2500}".to_string(),
+                40,
+            ),
+            // A gap narrower or wider than any History label leaves.
+            (labelled(3, &" ".repeat(8), 40), 40),
+            (labelled(3, &" ".repeat(22), 40), 40),
+            // Too short for a rule, a lead of two dashes, a width other than the rule below.
+            (labelled(3, " History 1/1 ", 19), 19),
+            (labelled(2, " History 1/1 ", 40), 40),
+            (labelled(3, " History 1/1 ", 40), 41),
+        ] {
+            assert_eq!(read(&near_miss, bottom), None, "{near_miss}");
+        }
         assert_eq!(
             input_box(AgentId::CLAUDE, DRAFT).as_deref(),
             Some("draft words")

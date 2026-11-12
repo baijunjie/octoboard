@@ -40,9 +40,10 @@ the Grok Build section's "Leader mode leaves the TUI's stop to a `SIGKILL` of th
 on **Claude Code 2.1.318** and **2.1.319**, **Codex 0.166.0** (the stop, the hook commands and the app server also on
 **0.163.0**) and **Grok Build 1.0.77**. What the Claude Code section says about the calls of one message overlapping was
 measured on **Claude Code 2.1.319** on 2026-11-10, and what the Grok Build section says about the calls of one response
-running side by side on **Grok Build 1.0.77** on the same day. All three rewrite their hook surface, their payload
-fields, their configuration layering and their on-disk layout on upgrade, so check a detail here against the installed
-version before relying on it.
+running side by side on **Grok Build 1.0.77** on the same day. What the Claude Code section says about its Program
+Status Protocol reports and its title without activity glyphs was measured on **Claude Code 2.1.322** on 2026-11-13.
+All three rewrite their hook surface, their payload fields, their configuration layering and their on-disk layout on
+upgrade, so check a detail here against the installed version before relying on it.
 
 The permission-resume note below distinguishes the native implementations in **Claude Code 2.1.274** and **2.1.319**.
 Grok's permission-mode startup and resume behavior was measured on **Grok Build 1.0.77** with isolated configuration,
@@ -197,7 +198,16 @@ by a user block `[Request interrupted by user for tool use]`. Both are entries w
 of blocks, and the first of them — the one holding the `tool_result` — also carries `"toolDenialKind": "user-rejected"`,
 at entry level rather than inside the block; the `[Request interrupted by user for tool use]` entry carries no
 `toolDenialKind`, and from 2.1.310 carries `interruptedMessageId` as well. A declined prompt and a declined
-`AskUserQuestion` write this same pair, which is why one mechanism recovers all three cases.
+`AskUserQuestion` write this same pair, which is why one mechanism recovers all three cases. Every user entry
+of a turn, both interrupt entries included, carries the turn's `promptId` (in the fixtures from 2.1.274 on), the
+`prompt_id` the turn's hooks carry. Esc pressed while a message the user queued waits cancels the turn and runs the
+message as the next one, with no hook at all for it (2.1.322, hook payloads captured in a PTY): its `UserPromptSubmit`
+fired when it was queued, about 15 ms after its Enter and mid-turn, carrying the *running* turn's `prompt_id`. The
+cancelled turn's `[Request interrupted by user]` carries the cancelled turn's `promptId`; a `queue-operation` entry of
+`dequeue` is written just before it in the file, though stamped 4–11 ms after it; and the dequeued message follows
+within about 25 ms as a user entry with a new `promptId` whose `parentUuid` is the marker. That turn's `Stop` fires at
+its end. A message taken into the running turn at a tool boundary instead writes `queue-operation` `remove` and a
+`queued_command` attachment, with no new `promptId`.
 
 **An interrupt before the model has shown anything writes nothing** on 2.1.310 (measured in a PTY against a local stub
 API, with the request held unanswered and with only `message_start` sent, and once against the real API with Opus still
@@ -212,6 +222,17 @@ Esc. The same `✳` follows every `Stop` (14 ms after the hook was posted) and e
 shown (20–45 ms after), and stays through the dialog; after the dialog is answered the glyph turns again with no hook
 until the tool's `PostToolUse`. The `◐` of a new turn came 6 ms *before* its `UserPromptSubmit` was posted. All on
 2.1.310.
+
+**From 2.1.322 the glyphs give way to Program Status Protocol reports** (measured in a bare PTY on macOS). Claude Code
+sends the OSC 7501 support query at startup; once the terminal answers it, it reports its root state through OSC 7501
+(`state=<state>:app=claude-code`) and drops the activity glyph from its title, which reads just `Claude Code` or the
+conversation's title (`Essay about rivers`). It reports `state=idle` right after the answer; `state=working` about 55 ms
+after a prompt is submitted (its `UserPromptSubmit` hook comes about 40 ms after the Enter either way); `state=idle`
+about 80 ms after an Esc cancels a turn, before output or after it; `state=done` when a turn ends normally; and
+`state=clear` three times at exit, followed by an empty title. A report is made only when the state changes, never
+repeated. Without the answer the title keeps its glyphs: `✳ Claude Code` at the prompt, `◐`/`◑` alternating about once
+a second while a turn runs, and `✳` again at its end. Whether it reports `blocked` at a permission prompt or a question
+was not measured.
 
 **The markers are also replayed.** `api-request-blob` entries written into the main transcript while a session works
 carry the conversation so far in their `message.content`, earlier interrupt markers included (once with a trailing
@@ -1062,7 +1083,9 @@ name):
   The transcript carries `{"type":"custom-title","customTitle"}` (the user's rename) and `{"type":"ai-title","aiTitle"}`
   lines; the last of each kind wins and the rename outranks the generated one. A conversation that opens with a slash
   command gets no `ai-title` line and its terminal title stays `✳ Claude Code` (2.1.308), until a prompt of the
-  user's own gets one generated.
+  user's own gets one generated. From 2.1.322, once the terminal answers its OSC 7501 support query, the glyph is
+  dropped (`Claude Code`, `Essay about rivers`, and an empty title at exit), and the turn's state goes into OSC 7501
+  reports instead (see "## Claude Code").
 - Grok Build — items joined by ` - `, its own name last: `grok` at startup and exit, `⠋ - Waiting for response… - grok`
   and `⠋ - Waiting for response… - Explain in one sentence what a pseudo te… - grok` while working, `Explain in one
   sentence what a pseudo te… - grok` when idle. The session directory's `summary.json` holds `generated_title`.

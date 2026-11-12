@@ -8,8 +8,10 @@
 //! `crate::adapter::claude::transcript_watch` never sees it, and the session would read `Working`
 //! until its next prompt. What does change is the terminal title: Claude Code starts it with a
 //! turning half-filled circle (`◐`, `◑`) while a turn runs and with `✳` when it is back at its
-//! prompt, and the glyph turns to `✳` within a tenth of a second of the Esc. See
-//! `docs/agent-cli-reference.md`, section "## Claude Code".
+//! prompt, and the glyph turns to `✳` within a tenth of a second of the Esc. From 2.1.322, once the
+//! terminal answers its OSC 7501 support query, it drops the glyphs and reports `working` and
+//! `idle` instead, the `idle` about 80 ms after the Esc, which the title activity takes in their
+//! place (`title_activity`). See `docs/agent-cli-reference.md`, section "## Claude Code".
 //!
 //! **Grok Build.** Ctrl-C pressed before the first token arrives fires no hook either (1.0.70,
 //! against a stand-in inference server): no `StopCancelled`, no `Stop`, and the prompt goes back
@@ -35,10 +37,11 @@
 //! A cancel this close to the prompt's submission can come before the watch is armed, which happens
 //! when the daemon applies the hook event that started the turn; the title has then already turned,
 //! and the session keeps reading `Working`, as it did before this watch existed. So does a session
-//! whose title the agent has been told not to set, a release that changes the glyphs, and a running
-//! frame and the prompt title after it read from the PTY in one chunk, of which only the last title
-//! is seen. A prompt title while one of `crate::session::dialogs`' dialogs is up is a turn waiting
-//! on the user, with no hook to say so, and is not counted either.
+//! whose title the agent has been told not to set and that reports no status, a release that
+//! changes the glyphs, and a running frame and the prompt title after it read from the PTY in one
+//! chunk, of which only the last title is seen. A prompt title while one of
+//! `crate::session::dialogs`' dialogs is up is a turn waiting on the user, with no hook to say so,
+//! and is not counted either.
 //!
 //! Codex reports its own cancels (`Interrupt`), so its title is not watched for one.
 
@@ -242,6 +245,13 @@ mod tests {
     const CANCEL_TITLES: &[u8] = include_bytes!("../../testdata/claude_title_cancel.bin");
     const PERMISSION_TITLES: &[u8] = include_bytes!("../../testdata/claude_title_permission.bin");
 
+    /// A title Claude Code 2.1.322 sends once the terminal answers its Program Status Protocol
+    /// query, and the reports it makes of its turn instead of the glyphs.
+    const GLYPHLESS_TITLE: &[u8] = b"\x1b]0;Claude Code\x07";
+    const REPORTS_WORKING: &[u8] = b"\x1b]7501;state=working:app=claude-code\x1b\\";
+    const REPORTS_IDLE: &[u8] = b"\x1b]7501;state=idle:app=claude-code\x1b\\";
+    const REPORTS_BLOCKED: &[u8] = b"\x1b]7501;state=blocked:app=claude-code:kind=permission\x1b\\";
+
     /// Captures from Grok Build 1.0.70; see `testdata/grok-activity-titles.md`.
     const GROK_CANCEL_TITLES: &[u8] =
         include_bytes!("../../testdata/grok_title_cancel_before_output.bin");
@@ -387,6 +397,66 @@ mod tests {
         assert!(
             fixture.state.last_turn_abnormal("s"),
             "a cancelled turn leaves it paused"
+        );
+    }
+
+    /// Claude Code 2.1.322 titles itself with no glyph and reports its state through OSC 7501: a
+    /// turn it reports `working` and then `idle`, as an Esc before any output makes it, puts the
+    /// session back at its prompt as the glyphs turning to `✳` do.
+    #[tokio::test]
+    async fn a_cancel_only_the_reports_show_puts_the_session_at_its_prompt() {
+        let fixture = fixture("cancel-reported", SessionStatus::Working);
+        armed(&fixture);
+        fixture.live.on_output(GLYPHLESS_TITLE);
+        fixture.live.on_output(REPORTS_WORKING);
+        fixture.live.on_output(REPORTS_IDLE);
+        assert!(reaches(&fixture.state, SessionStatus::Idle).await);
+        assert!(
+            fixture.state.last_turn_abnormal("s"),
+            "a cancelled turn leaves it paused"
+        );
+    }
+
+    /// A turn the agent reports running, and goes on running, ends nothing.
+    #[tokio::test]
+    async fn a_turn_reported_working_is_left_running() {
+        let fixture = fixture("reported-working", SessionStatus::Working);
+        armed(&fixture);
+        fixture.live.on_output(GLYPHLESS_TITLE);
+        fixture.live.on_output(REPORTS_WORKING);
+        polls_settled().await;
+        assert_eq!(status(&fixture.state), Some(SessionStatus::Working));
+    }
+
+    /// The idle report the previous turn left is no cancel of this one.
+    #[tokio::test]
+    async fn the_idle_report_the_previous_turn_left_ends_nothing() {
+        let fixture = fixture("reported-previous", SessionStatus::Working);
+        fixture.live.on_output(REPORTS_WORKING);
+        fixture.live.on_output(REPORTS_IDLE);
+        armed(&fixture);
+        fixture.live.on_output(REPORTS_IDLE);
+        polls_settled().await;
+        assert_eq!(status(&fixture.state), Some(SessionStatus::Working));
+    }
+
+    /// A report of `blocked` is the agent waiting on the user, which the hook that says so, applied
+    /// within the settle, keeps up; the watch waits while the session waits for the user.
+    #[tokio::test]
+    async fn a_blocked_report_with_a_hook_waiting_on_the_user_does_not_end_the_turn() {
+        let fixture = fixture("reported-blocked", SessionStatus::Working);
+        armed(&fixture);
+        fixture.live.on_output(REPORTS_WORKING);
+        fixture.live.on_output(REPORTS_BLOCKED);
+        assert!(fixture
+            .state
+            .apply_reported_status_if("s", SessionStatus::Working, SessionStatus::WaitingUser)
+            .unwrap());
+        polls_settled().await;
+        assert_eq!(status(&fixture.state), Some(SessionStatus::WaitingUser));
+        assert!(
+            !fixture.state.last_turn_abnormal("s"),
+            "a write that moved nothing leaves no mark"
         );
     }
 

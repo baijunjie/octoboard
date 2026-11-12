@@ -392,8 +392,9 @@ pub trait AgentProvider: Send + Sync {
     }
 
     /// Whether the provider's hooks or its own signals give its sessions their status. Where they
-    /// do, they win over the status a program reports through OSC 7501, which then moves nothing
-    /// (`crate::session::program_status`); where they do not, OSC 7501 is the status's source.
+    /// do, they win over the status a program reports through OSC 7501, which then moves no status
+    /// and only says whether a turn runs (`crate::session::program_status`,
+    /// `crate::session::title_activity`); where they do not, OSC 7501 is the status's source.
     fn has_status_integration(&self) -> bool {
         false
     }

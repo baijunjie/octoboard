@@ -32,6 +32,14 @@ const CTRL_C: &[u8] = b"\x03";
 const CLAUDE_AT_PROMPT_TITLE: &[u8] = "\x1b]0;\u{2733} Claude Code\x07".as_bytes();
 const GROK_AT_PROMPT_TITLE: &[u8] = b"\x1b]0;NOTOKEN wait - grok\x07";
 
+/// A title Claude Code 2.1.322 sends once the terminal answers its Program Status Protocol query:
+/// no glyph, whatever its turn does.
+const CLAUDE_GLYPHLESS_TITLE: &[u8] = b"\x1b]0;Claude Code\x07";
+
+/// What it reports of its turn instead.
+const CLAUDE_REPORTS_WORKING: &[u8] = b"\x1b]7501;state=working:app=claude-code\x1b\\";
+const CLAUDE_REPORTS_IDLE: &[u8] = b"\x1b]7501;state=idle:app=claude-code\x1b\\";
+
 struct Fixture {
     state: Arc<AppState>,
     live: StandIn,
@@ -124,6 +132,15 @@ fn fixture_with(
 fn working(name: &str, agent: AgentId) -> Fixture {
     let fixture = fixture(name, agent, SessionStatus::Working, false);
     fixture.live.on_output(running_title(agent));
+    fixture
+}
+
+/// [`working`] for a Claude Code that reports its state through OSC 7501 and titles itself with no
+/// glyph: its hooks say `Working`, and only its reports say the turn is running.
+fn working_by_reports(name: &str) -> Fixture {
+    let fixture = fixture(name, AgentId::CLAUDE, SessionStatus::Working, false);
+    fixture.live.on_output(CLAUDE_GLYPHLESS_TITLE);
+    fixture.live.on_output(CLAUDE_REPORTS_WORKING);
     fixture
 }
 
@@ -404,6 +421,150 @@ async fn claude_is_sent_one_esc_and_the_prompt_it_restores_is_cleared() {
     assert!(result.interrupted, "{result:?}");
     assert!(!result.note.contains("input box"), "{}", result.note);
     assert_eq!(fixture.keys_after_marker(), [ESC, CTRL_U, CTRL_U].concat());
+}
+
+/// A Claude Code that reports its state and titles itself with no glyph is sent one Esc while its
+/// reports say a turn is running; its `idle` report is the turn over, and the prompt it restores is
+/// cleared as it is for one whose title turns.
+#[tokio::test]
+async fn a_claude_whose_turn_shows_only_in_its_reports_is_sent_one_esc_and_its_restored_prompt_is_cleared(
+) {
+    let fixture = working_by_reports("claude-reported-restored");
+    draw(&fixture.live, CLEARED);
+    let live = fixture.live();
+    let (first, second) = (live.clone(), live.clone());
+    let back = back_at_prompt(&fixture.state);
+    let agent = respond(
+        &fixture,
+        vec![
+            (
+                ESC,
+                Box::new(move || {
+                    live.on_output(CLAUDE_REPORTS_IDLE);
+                    draw(&live, RESTORED_LINES);
+                }),
+            ),
+            (CTRL_U, Box::new(move || draw(&first, ONE_CTRL_U))),
+            (
+                CTRL_U,
+                Box::new(move || {
+                    draw(&second, CLEARED);
+                    back();
+                }),
+            ),
+        ],
+    );
+
+    let result = interrupt_session(&fixture.state, "s").await.unwrap();
+    agent.join().unwrap();
+
+    assert!(result.interrupted, "{result:?}");
+    assert!(!result.note.contains("input box"), "{}", result.note);
+    assert_eq!(fixture.keys_after_marker(), [ESC, CTRL_U, CTRL_U].concat());
+}
+
+/// The same cancel with nothing restored into the box: one Esc, and no Ctrl-U.
+#[tokio::test]
+async fn a_reported_cancel_that_restores_nothing_is_one_esc() {
+    let fixture = working_by_reports("claude-reported-plain");
+    draw(&fixture.live, CLEARED);
+    let live = fixture.live();
+    let back = back_at_prompt(&fixture.state);
+    let agent = respond(
+        &fixture,
+        vec![(
+            ESC,
+            Box::new(move || {
+                live.on_output(CLAUDE_REPORTS_IDLE);
+                back();
+            }),
+        )],
+    );
+
+    let result = interrupt_session(&fixture.state, "s").await.unwrap();
+    agent.join().unwrap();
+
+    assert!(result.interrupted, "{result:?}");
+    assert_eq!(fixture.keys_after_marker(), ESC);
+}
+
+/// A turn the reports say is running can be interrupted though no title was ever sent, and one
+/// that a stale prompt glyph in the title would deny: the reports are what the agent says of its
+/// turn.
+#[tokio::test]
+async fn a_working_report_allows_the_key_whatever_the_title_says_or_does_not() {
+    for title in [
+        None,
+        Some(CLAUDE_AT_PROMPT_TITLE),
+        Some(CLAUDE_GLYPHLESS_TITLE),
+    ] {
+        let fixture = fixture(
+            "claude-no-title",
+            AgentId::CLAUDE,
+            SessionStatus::Working,
+            false,
+        );
+        fixture.live.on_output(CLAUDE_REPORTS_WORKING);
+        if let Some(title) = title {
+            fixture.live.on_output(title);
+        }
+        let live = fixture.live();
+        let back = back_at_prompt(&fixture.state);
+        let agent = respond(
+            &fixture,
+            vec![(
+                ESC,
+                Box::new(move || {
+                    live.on_output(CLAUDE_REPORTS_IDLE);
+                    back();
+                }),
+            )],
+        );
+
+        let result = interrupt_session(&fixture.state, "s").await.unwrap();
+        agent.join().unwrap();
+
+        assert!(result.interrupted, "{title:?}: {result:?}");
+        assert_eq!(fixture.keys_after_marker(), ESC, "{title:?}");
+    }
+}
+
+/// Working by its hooks while the agent reports its turn over gets no key, and the caller is told
+/// why: whichever state it left the turn for.
+#[tokio::test]
+async fn no_key_goes_in_once_the_agent_reports_the_turn_over() {
+    for state in ["idle", "done", "error", "blocked"] {
+        let fixture = working_by_reports(&format!("claude-reported-{state}"));
+        fixture
+            .live
+            .on_output(format!("\x1b]7501;state={state}:app=claude-code\x1b\\").as_bytes());
+
+        let result = interrupt_session(&fixture.state, "s").await.unwrap();
+
+        assert!(!result.interrupted, "{state}");
+        assert_eq!(result.note, NOT_SHOWN_RUNNING, "{state}");
+        assert_eq!(fixture.keys_after_marker(), b"", "{state}");
+    }
+}
+
+/// A running title the agent left behind says nothing once it reports: the turn it reported over
+/// gets no key whatever glyph the title still carries.
+#[tokio::test]
+async fn a_stale_running_title_does_not_outvote_a_report_of_the_turn_over() {
+    let fixture = fixture(
+        "claude-stale-running",
+        AgentId::CLAUDE,
+        SessionStatus::Working,
+        false,
+    );
+    fixture.live.on_output(CLAUDE_REPORTS_IDLE);
+    fixture.live.on_output(running_title(AgentId::CLAUDE));
+
+    let result = interrupt_session(&fixture.state, "s").await.unwrap();
+
+    assert!(!result.interrupted);
+    assert_eq!(result.note, NOT_SHOWN_RUNNING);
+    assert_eq!(fixture.keys_after_marker(), b"");
 }
 
 /// A session whose writes are held for the usage limit is at its prompt or in a turn like any other,

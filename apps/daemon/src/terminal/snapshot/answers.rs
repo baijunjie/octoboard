@@ -116,6 +116,14 @@ impl TerminalSnapshot {
         }
     }
 
+    /// The state of the program's root status record, where the records are kept and it has one.
+    pub fn program_status_root(&self) -> Option<ReportedState> {
+        self.answering
+            .as_ref()
+            .and_then(|answering| answering.program_status.as_ref())
+            .and_then(ProgramStatus::root)
+    }
+
     /// The records kept once [`Self::keep_program_status`] has asked for them.
     fn program_status_mut(&mut self) -> Option<&mut ProgramStatus> {
         self.answering

@@ -1,0 +1,39 @@
+⏺ esc-idle
+
+✻ Cooked for 1s · done 6:35 AM
+
+❯ say only: esc-idle
+
+⏺ esc-idle
+
+✻ Churned for 1s · done 6:35 AM
+
+❯ say only: esc-idle
+
+⏺ esc-idle
+
+✻ Crunched for 1s · done 6:35 AM
+
+❯ say only: esc-idle-immediate
+
+⏺ esc-idle-immediate
+
+✻ Baked for 2s · done 6:35 AM
+
+❯ say only: esc-idle-immediate
+
+⏺ esc-idle-immediate
+
+✻ Cogitated for 1s · done 6:36 AM
+
+❯ say only: pong-f
+
+⏺ pong-f
+
+✻ Churned for 1s · done 6:36 AM
+
+─── History 100/100 ────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ say only: pong-f
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+  ⏵⏵ auto mode on (shift+tab to cycle)

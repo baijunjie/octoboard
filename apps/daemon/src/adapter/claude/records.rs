@@ -159,9 +159,9 @@ impl RecordStore for ClaudeRecords {
             RecordWatch::Decline { record } => {
                 transcript_watch::watch_for_rejection(state, session_id, record)
             }
-            RecordWatch::Interrupt { record } => {
+            RecordWatch::Interrupt { record, turn_id } => {
                 if let Some(generation) =
-                    transcript_watch::watch_for_interrupt(state, session_id, record)
+                    transcript_watch::watch_for_interrupt(state, session_id, record, turn_id)
                 {
                     crate::session::title_interrupt::watch(state, session_id, generation);
                 }

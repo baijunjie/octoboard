@@ -686,6 +686,12 @@ impl PtyCore {
         self.fan.end_program_status();
     }
 
+    /// The state of the program's root status record as it stands; see
+    /// [`Fan::program_status_root`].
+    pub fn program_status_root(&self) -> Option<ReportedState> {
+        self.fan.program_status_root()
+    }
+
     /// The states the program's root status record moved to since the last call; see
     /// [`Fan::take_program_status`].
     pub fn take_program_status(&self) -> Vec<Option<ReportedState>> {
@@ -1161,6 +1167,7 @@ mod tests {
 
     use crate::platform::proc::Polite;
     use crate::platform::term::{self, Size};
+    use crate::terminal::program_status::ReportedState;
     use crate::test_support::{is_running, KillOnDrop};
 
     const SIZE: Size = Size { rows: 24, cols: 80 };
@@ -1429,6 +1436,62 @@ mod tests {
         assert_eq!(restored.save_screen().as_ref(), Some(&saved));
         original.stop(Polite::Terminate);
         restored.stop(Polite::Terminate);
+    }
+
+    /// The root record a restored screen carries is readable as the program's state, though the
+    /// restoring dropped the move that brought it: what an adopted terminal's session notes as the
+    /// program's last report.
+    #[test]
+    fn a_restored_screen_gives_the_root_status_record_it_was_saved_with() {
+        let core = |label: &str| {
+            let cmd = crate::test_support::programs::sleep(30).term_command();
+            let core = super::PtyCore::on_host(
+                super::NewPty {
+                    label: label.to_string(),
+                    spawned: term::spawn(cmd, SIZE, None).expect("process").into(),
+                    scratch_dir: None,
+                    kill_session_leftovers: false,
+                    before_scratch_removal: None,
+                    display: Default::default(),
+                },
+                false,
+            );
+            core.keep_program_status();
+            core
+        };
+        for (output, expected) in [
+            (
+                &b"\x1b]7501;state=working\x07out\r\n"[..],
+                Some(ReportedState::Working),
+            ),
+            (
+                b"\x1b]7501;state=working\x07\x1b]7501;state=blocked\x07",
+                Some(ReportedState::Blocked),
+            ),
+            (
+                b"\x1b]7501;state=idle:app=claude-code\x07",
+                Some(ReportedState::Idle),
+            ),
+            (
+                b"\x1b]7501;state=working\x07\x1b]7501;state=clear\x07",
+                None,
+            ),
+            (b"\x1b]7501;state=working:id=child\x07no root\r\n", None),
+            (b"plain output\r\n", None),
+        ] {
+            let original = core("saved");
+            original.push_output(output, |_, _| {});
+            assert_eq!(original.program_status_root(), expected, "{output:?}");
+            let saved = original.save_screen().expect("a screen to save");
+
+            let restored = core("restored");
+            assert_eq!(restored.program_status_root(), None);
+            restored.restore_screen(&saved);
+            assert!(restored.take_program_status().is_empty(), "{output:?}");
+            assert_eq!(restored.program_status_root(), expected, "{output:?}");
+            original.stop(Polite::Terminate);
+            restored.stop(Polite::Terminate);
+        }
     }
 
     /// The reader is stopped by its wake pipe, not by the PTY reaching its end: here the process

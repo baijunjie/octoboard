@@ -169,7 +169,10 @@ impl HookInterpreter for GrokHooks {
     ) -> Option<RecordWatch<'a>> {
         (status == SessionStatus::Working
             && (self.starts_conversation(event) || previous == Some(SessionStatus::WaitingUser)))
-        .then_some(RecordWatch::Interrupt { record: None })
+        .then_some(RecordWatch::Interrupt {
+            record: None,
+            turn_id: None,
+        })
     }
 }
 
