@@ -51,7 +51,7 @@ pub fn unarchive(
     if output.status.success() {
         return Ok(());
     }
-    let message = account_cli::last_stderr_line(&output);
+    let message = account_cli::failure_detail(&output, |line| line);
     Err(failed(if message.is_empty() {
         output.status.to_string()
     } else {
@@ -83,8 +83,28 @@ mod tests {
         assert!(err.to_string().ends_with("no such thread"), "{err}");
     }
 
+    /// A reason printed on stdout is reported too, beside the stderr line when there is one.
+    #[test]
+    fn a_failure_reports_a_reason_printed_on_stdout() {
+        let dir = ScratchDir::new("unarchive-stdout");
+        let env = fake_agent(&dir, "codex", "echo 'no such thread'; exit 1");
+        let err = unarchive(&env, None, "t1").unwrap_err();
+        assert!(err.to_string().ends_with("no such thread"), "{err}");
+
+        let env = fake_agent(
+            &dir,
+            "codex",
+            "echo 'no such thread'; echo warn >&2; exit 1",
+        );
+        let err = unarchive(&env, None, "t1").unwrap_err();
+        assert!(
+            err.to_string().ends_with("no such thread (stderr: warn)"),
+            "{err}"
+        );
+    }
+
     /// Only the first 4 KiB of its stderr is kept, as for every other short query of an agent CLI,
-    /// so a failure reports the last line within those.
+    /// so a failure reports the last line within those, cut when it is long.
     #[test]
     fn a_failure_reports_the_last_line_within_the_stderr_that_is_kept() {
         let dir = ScratchDir::new("unarchive-stderr");
@@ -99,7 +119,11 @@ mod tests {
             coded.code,
             Code::of_provider(crate::providers::codex::UNARCHIVE_FAILED)
         );
-        assert_eq!(coded.params["detail"], "x".repeat(4096));
+        // The kept stderr holds one long line, cut and marked when the detail is built.
+        let detail = coded.params["detail"].as_str();
+        let kept = detail.strip_suffix('…').expect("a cut line is marked");
+        assert!(!kept.is_empty() && kept.len() < 4096, "{}", kept.len());
+        assert!(kept.chars().all(|c| c == 'x'), "{detail}");
     }
 
     /// Its output is bounded like every other short query of an agent CLI: a CLI that floods it

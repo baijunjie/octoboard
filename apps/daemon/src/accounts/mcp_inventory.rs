@@ -91,9 +91,10 @@ pub(crate) fn query_unavailable(failure: QueryFailure) -> McpInventoryUnavailabl
     }
 }
 
-/// The last line of a query's stderr, else `fallback`.
-pub(crate) fn stderr_detail(output: &std::process::Output, fallback: &str) -> String {
-    let last = crate::adapter::account_cli::last_stderr_line(output);
+/// What says why a query failed (see [`crate::adapter::account_cli::failure_detail`]), else
+/// `fallback`.
+pub(crate) fn failure_detail(output: &std::process::Output, fallback: &str) -> String {
+    let last = crate::adapter::account_cli::failure_detail(output, |line| line);
     if last.is_empty() {
         fallback.to_string()
     } else {
@@ -367,6 +368,24 @@ mod tests {
                 agent.wire_name()
             );
         }
+    }
+
+    /// What a failed query printed on either stream is its detail; with nothing printed it is the
+    /// fallback.
+    #[test]
+    fn a_failure_detail_is_what_the_query_printed_else_the_fallback() {
+        let printed = |stdout: &str, stderr: &str| std::process::Output {
+            status: std::process::ExitStatus::default(),
+            stdout: stdout.as_bytes().to_vec(),
+            stderr: stderr.as_bytes().to_vec(),
+        };
+        assert_eq!(failure_detail(&printed("", ""), "no word"), "no word");
+        assert_eq!(failure_detail(&printed("why\n", ""), "no word"), "why");
+        assert_eq!(failure_detail(&printed("", "why\n"), "no word"), "why");
+        assert_eq!(
+            failure_detail(&printed("why\n", "warn\n"), "no word"),
+            "why (stderr: warn)"
+        );
     }
 
     #[tokio::test(start_paused = true)]

@@ -90,19 +90,10 @@ pub(super) fn kick(
     Ok(())
 }
 
-/// What says why a kick failed: the last line on stdout and the last on stderr, whichever were
-/// printed, each redacted and the whole cut as any agent text bound for the log is. Claude Code in
-/// print mode writes its error (a model it does not know) to stdout, while its stderr can end in
-/// unrelated warnings, such as the settings an untrusted directory ignores. Neither line is
-/// dropped, since which one holds the reason is not known for every CLI.
+/// What says why a kick failed, each line redacted and the whole cut as any agent text bound for
+/// the log is.
 fn failure_reason(output: &std::process::Output) -> String {
-    let stdout = redact(&account_cli::last_line(&output.stdout));
-    let stderr = redact(&account_cli::last_line(&output.stderr));
-    let reason = match (stdout.is_empty(), stderr.is_empty()) {
-        (false, false) => format!("{stdout} (stderr: {stderr})"),
-        (false, true) => stdout,
-        _ => stderr,
-    };
+    let reason = account_cli::failure_detail(output, |line| redact(&line));
     truncate(&reason, LINE_LIMIT)
 }
 
@@ -330,6 +321,12 @@ mod tests {
             err.ends_with(&format!(": {}…", "x".repeat(LINE_LIMIT))),
             "{err}"
         );
+
+        // A key-shaped word cut by the line limit is masked, not left as its characters and a `…`.
+        let key = "aB3dE5fG7h".repeat(120);
+        let err = failure(&format!("echo '{key}'; exit 1"));
+        assert!(!err.contains(&key[..50]), "{err}");
+        assert!(err.contains("[redacted]"), "{err}");
     }
 
     /// A kick run with the cancel flag already set fails as cancelled, without waiting out its CLI.

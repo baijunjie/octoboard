@@ -7,6 +7,14 @@ pub(crate) fn trimmed_or_none(text: Option<&str>) -> Option<String> {
         .map(str::to_string)
 }
 
+/// `text` cut to at most `limit` characters, marked when it was.
+pub(crate) fn truncate(text: &str, limit: usize) -> String {
+    match text.char_indices().nth(limit) {
+        Some((end, _)) => format!("{}…", &text[..end]),
+        None => text.to_string(),
+    }
+}
+
 /// `names` as a list in prose: "A", "A and B", "A, B and C". Empty for none.
 pub(crate) fn list_names(names: &[impl AsRef<str>]) -> String {
     match names.split_last() {
@@ -49,6 +57,19 @@ fn is_closing_tag(line: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Text within the limit is returned whole; longer text is cut to the limit in characters, never
+    /// inside one, and marked.
+    #[test]
+    fn text_is_cut_to_a_character_limit_and_marked() {
+        assert_eq!(truncate("abc", 3), "abc");
+        assert_eq!(truncate("abcd", 3), "abc…");
+        assert_eq!(truncate("", 3), "");
+        assert_eq!(truncate("abc", 0), "…");
+        assert_eq!(truncate("界界界界", 2), "界界…");
+        assert_eq!(truncate("a😀😀", 2), "a😀…");
+        assert_eq!(truncate("界界", 2), "界界");
+    }
 
     #[test]
     fn names_read_as_a_list_in_prose() {

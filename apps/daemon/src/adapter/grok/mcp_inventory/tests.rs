@@ -287,3 +287,24 @@ fn an_entry_of_the_report_that_cannot_be_read_does_not_void_the_others() {
     assert_eq!(servers[1].origin, None);
     assert_eq!(servers[1].sign_in, McpSignInState::NotNeeded);
 }
+
+/// A reason `grok mcp list` prints on stdout reaches the detail, beside the stderr line.
+#[test]
+fn a_failing_list_that_says_why_on_stdout_carries_it() {
+    let dir = ScratchDir::new("mcp-inventory-grok-failing-stdout");
+    let failing = fake_agent(
+        &dir,
+        AgentId::GROK.descriptor().binary,
+        "echo 'config invalid'; echo 'warn' >&2; exit 2",
+    );
+    let failed = read(&failing, None).unwrap_err();
+    assert_eq!(failed.reason, McpInventoryFailure::Failed);
+    assert_eq!(
+        failed.detail.as_deref(),
+        Some("config invalid (stderr: warn)")
+    );
+
+    let silent = fake_agent(&dir, AgentId::GROK.descriptor().binary, "exit 2");
+    let failed = read(&silent, None).unwrap_err();
+    assert_eq!(failed.detail.as_deref(), Some("`grok mcp list` failed"));
+}

@@ -58,6 +58,29 @@ fn redaction_masks_the_value_after_a_secret_name_in_json_and_pairs() {
     assert_eq!(redact("the login worked"), "the login worked");
 }
 
+/// `truncate` marks cut text with `…`, so a key cut short ends in one; it is still masked.
+#[test]
+fn redaction_masks_a_long_key_that_was_cut_short() {
+    let key = "aB3dE5fG7h".repeat(100);
+    let cut = truncate(&format!("{key}{key}"), 1000);
+    assert!(cut.ends_with('…'));
+    let out = redact(&format!("failed: {cut}"));
+    assert!(!out.contains(&key[..50]), "key leaked: {out}");
+    assert!(out.contains(MASK), "{out}");
+
+    // Text after the mark is judged as before.
+    let out = redact(&format!("{key}… and me@example.com"));
+    assert!(!out.contains(&key[..50]), "key leaked: {out}");
+    assert!(!out.contains("me@example.com"), "{out}");
+}
+
+#[test]
+fn redaction_leaves_plain_words_before_a_cut_mark_alone() {
+    for text in ["wait…", "still running… done", "reading the quota…"] {
+        assert_eq!(redact(text), text);
+    }
+}
+
 #[test]
 fn redaction_leaves_ordinary_text_alone() {
     let text = "reading Claude Code's quota failed: ended without replying (exit status: 1)";

@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 
 use super::login::{logged_in, STATUS_OUTPUT_LIMIT, STATUS_TIMEOUT};
 use crate::accounts::mcp_inventory::{
-    query_unavailable, stderr_detail, Listing, McpInventoryReader,
+    failure_detail, query_unavailable, Listing, McpInventoryReader,
 };
 use crate::adapter::account_cli;
 use crate::protocol::{
@@ -74,7 +74,7 @@ impl McpInventoryReader for ClaudeMcpInventory {
             None => {
                 return Err(unavailable(
                     McpInventoryFailure::Failed,
-                    Some(stderr_detail(
+                    Some(failure_detail(
                         &status,
                         "`claude auth status` gave no answer",
                     )),
@@ -90,7 +90,7 @@ impl McpInventoryReader for ClaudeMcpInventory {
         if !list.status.success() {
             return Err(unavailable(
                 McpInventoryFailure::Failed,
-                Some(stderr_detail(&list, "`claude mcp list` failed")),
+                Some(failure_detail(&list, "`claude mcp list` failed")),
             ));
         }
         Ok(parse_list(&String::from_utf8_lossy(&list.stdout)))

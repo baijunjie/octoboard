@@ -348,3 +348,42 @@ fn only_the_listing_runs_with_the_server_timeout_and_auth_status_keeps_the_shell
         );
     }
 }
+
+/// A reason `claude mcp list` prints on stdout reaches the detail, beside the stderr line.
+#[test]
+fn a_failing_list_that_says_why_on_stdout_carries_it() {
+    let dir = ScratchDir::new("mcp-inventory-claude-failing-stdout");
+    let status = r#"{"loggedIn": true}"#;
+    let failing = fake_agent(
+        &dir,
+        AgentId::CLAUDE.descriptor().binary,
+        &format!(
+            "case \"$1\" in auth) echo '{status}';; *) echo 'config invalid'; echo 'warn' >&2; exit 2;; esac"
+        ),
+    );
+    let failed = read(&failing, None).unwrap_err();
+    assert_eq!(failed.reason, McpInventoryFailure::Failed);
+    assert_eq!(
+        failed.detail.as_deref(),
+        Some("config invalid (stderr: warn)")
+    );
+}
+
+/// A status that is not an answer says why from either stream, else names the command.
+#[test]
+fn a_status_with_no_readable_answer_carries_what_it_printed_else_names_the_command() {
+    let dir = ScratchDir::new("mcp-inventory-claude-status-unreadable");
+    let binary = AgentId::CLAUDE.descriptor().binary;
+    let broken = fake_agent(&dir, binary, "echo 'session expired'; exit 1");
+    let failed = read(&broken, None).unwrap_err();
+    assert_eq!(failed.reason, McpInventoryFailure::Failed);
+    assert_eq!(failed.detail.as_deref(), Some("session expired"));
+
+    let silent = fake_agent(&dir, binary, "exit 1");
+    let failed = read(&silent, None).unwrap_err();
+    assert_eq!(failed.reason, McpInventoryFailure::Failed);
+    assert_eq!(
+        failed.detail.as_deref(),
+        Some("`claude auth status` gave no answer")
+    );
+}

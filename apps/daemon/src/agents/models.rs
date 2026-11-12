@@ -253,7 +253,7 @@ pub(crate) fn run_catalogue_command(
         QueryFailure::Bounded(other) => failed(agent, &other.to_string()),
     })?;
     if !output.status.success() {
-        let detail = account_cli::last_stderr_line(&output);
+        let detail = account_cli::failure_detail(&output, |line| line);
         let detail = if detail.is_empty() {
             output.status.to_string()
         } else {
@@ -432,6 +432,43 @@ mod tests {
             detail.contains("not logged in") && !detail.contains("noise"),
             "{detail}"
         );
+    }
+
+    /// A reason printed on stdout reaches the detail, beside the stderr line that ends the
+    /// stream, whichever the CLI printed it on; the status leads.
+    #[test]
+    fn a_non_zero_exit_carries_a_reason_printed_on_stdout() {
+        let dir = ScratchDir::new("agent-models-exit-stdout");
+        for (agent, name) in [(AgentId::CODEX, "codex"), (AgentId::GROK, "grok")] {
+            let env = fake_agent(&dir, name, "echo 'not logged in'; exit 3");
+            let listing = list(agent, &env, None, COMMAND_TIMEOUT);
+            assert_eq!(reason(&listing), code::COMMAND_FAILED);
+            let detail = &listing.unavailable.unwrap().params["detail"];
+            assert!(detail.ends_with(": not logged in"), "{detail}");
+            assert!(detail.contains('3'), "{detail}");
+
+            let env = fake_agent(&dir, name, "echo 'not logged in'; echo noise >&2; exit 3");
+            let listing = list(agent, &env, None, COMMAND_TIMEOUT);
+            let detail = &listing.unavailable.unwrap().params["detail"];
+            assert!(
+                detail.ends_with(": not logged in (stderr: noise)"),
+                "{detail}"
+            );
+        }
+    }
+
+    /// With nothing printed the detail is the exit status alone.
+    #[test]
+    fn a_non_zero_exit_that_printed_nothing_carries_only_the_status() {
+        let dir = ScratchDir::new("agent-models-exit-silent");
+        let env = fake_agent(&dir, "grok", "exit 4");
+        let listing = list(AgentId::GROK, &env, None, COMMAND_TIMEOUT);
+        let detail = &listing.unavailable.unwrap().params["detail"];
+        let status = std::process::Command::new("sh")
+            .args(["-c", "exit 4"])
+            .status()
+            .unwrap();
+        assert_eq!(detail, &status.to_string());
     }
 
     #[test]

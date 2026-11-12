@@ -21,7 +21,7 @@ use std::time::{Duration, Instant};
 use serde::Deserialize;
 
 use crate::accounts::mcp_inventory::{
-    enabled_by_default, query_unavailable, stderr_detail, Listing, McpInventoryReader,
+    enabled_by_default, failure_detail, query_unavailable, Listing, McpInventoryReader,
 };
 use crate::adapter::account_cli;
 use crate::protocol::{
@@ -67,7 +67,7 @@ impl McpInventoryReader for GrokMcpInventory {
         if !list.status.success() {
             return Err(unavailable(
                 McpInventoryFailure::Failed,
-                Some(stderr_detail(&list, "`grok mcp list` failed")),
+                Some(failure_detail(&list, "`grok mcp list` failed")),
             ));
         }
         let configured: Vec<Configured> = serde_json::from_slice(&list.stdout).map_err(|err| {

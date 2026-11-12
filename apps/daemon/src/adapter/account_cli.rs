@@ -15,6 +15,7 @@ use crate::platform::shell::ResolvedBinary;
 use crate::processes::subprocess::{run_bounded, BoundedFailure, Bounds};
 use crate::protocol::{AgentId, CodedError};
 use crate::providers::layout::layout;
+use crate::text::truncate;
 
 /// The home directory the launch's shell snapshot carries, else the daemon's own.
 pub(crate) fn snapshot_home(shell_env: &HashMap<String, String>) -> PathBuf {
@@ -259,13 +260,33 @@ pub(crate) fn query(
         .map_err(QueryFailure::Bounded)
 }
 
-/// The last line of what a query printed on stderr, trimmed; empty when it printed none.
-pub(crate) fn last_stderr_line(output: &Output) -> String {
-    last_line(&output.stderr)
+/// The most characters of one stream's line that [`failure_detail`] keeps.
+const DETAIL_LINE_LIMIT: usize = 1000;
+
+/// What says why a query failed: the last line of its stdout and of its stderr, whichever it
+/// printed, each cut to [`DETAIL_LINE_LIMIT`] characters and passed through `line`; empty when it
+/// printed neither. Claude Code writes some failures to stdout while its stderr ends in unrelated
+/// warnings (settings an untrusted directory ignores), and which stream holds the reason is not
+/// known for every CLI, so neither is dropped. Stdout is left out when it, or its last line, is
+/// JSON: that is the query's own answer (a status object, a server listing with its headers and
+/// environment), not a reason, and may carry what the caller never means to show.
+pub(crate) fn failure_detail(output: &Output, line: impl Fn(String) -> String) -> String {
+    let stdout = last_line(&output.stdout);
+    let stdout = if is_json(&stdout) || is_json(&String::from_utf8_lossy(&output.stdout)) {
+        String::new()
+    } else {
+        line(truncate(&stdout, DETAIL_LINE_LIMIT))
+    };
+    let stderr = line(truncate(&last_line(&output.stderr), DETAIL_LINE_LIMIT));
+    match (stdout.is_empty(), stderr.is_empty()) {
+        (false, false) => format!("{stdout} (stderr: {stderr})"),
+        (false, true) => stdout,
+        _ => stderr,
+    }
 }
 
 /// The last line of a stream an agent CLI printed, trimmed; empty when it printed none.
-pub(crate) fn last_line(stream: &[u8]) -> String {
+fn last_line(stream: &[u8]) -> String {
     String::from_utf8_lossy(stream)
         .trim()
         .lines()
@@ -273,6 +294,12 @@ pub(crate) fn last_line(stream: &[u8]) -> String {
         .map(str::trim)
         .unwrap_or_default()
         .to_string()
+}
+
+/// Whether `text` is one JSON object or array.
+fn is_json(text: &str) -> bool {
+    let text = text.trim();
+    text.starts_with(['{', '[']) && serde_json::from_str::<serde_json::Value>(text).is_ok()
 }
 
 #[cfg(test)]

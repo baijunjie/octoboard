@@ -212,17 +212,12 @@ pub(super) fn stderr_tail(stderr: &[u8]) -> String {
         .join(" | ")
 }
 
-/// `text` cut to at most `limit` characters, marked when it was.
-pub(crate) fn truncate(text: &str, limit: usize) -> String {
-    match text.char_indices().nth(limit) {
-        Some((end, _)) => format!("{}…", &text[..end]),
-        None => text.to_string(),
-    }
-}
+pub(crate) use crate::text::truncate;
 
-/// Characters that end a word for [`redact`].
+/// Characters that end a word for [`redact`]. The `…` that [`truncate`] leaves on cut text is one,
+/// so a key cut short is still judged on its own characters.
 fn is_separator(c: char) -> bool {
-    c.is_whitespace() || "\"'<>()[]{},;|".contains(c)
+    c.is_whitespace() || "\"'<>()[]{},;|…".contains(c)
 }
 
 /// Words after which the next word is a credential.
