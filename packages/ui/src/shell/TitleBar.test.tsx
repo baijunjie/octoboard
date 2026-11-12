@@ -90,8 +90,9 @@ it("hands focus to the terminal, with the focus ring, when the toggle that holds
   const { container, render } = mount({ panelToggles: [toggle(false, onPress)], focusTerminal });
   act(() => container.querySelector<HTMLElement>(".title-bar-end button")!.focus());
   act(() => {
-    // Reset touchInput's last input as well: an earlier touch press can leave its module state set to touch.
-    document.body.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "mouse", bubbles: true }));
+    // The last input was a key, whose ring the handoff follows; this also replaces an earlier touch press in
+    // touchInput's state.
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
     setInteractionModality("pointer");
   });
   render({ panelToggles: [], focusTerminal });
@@ -193,8 +194,8 @@ it("hands focus to the terminal at once, with the focus ring, when the note goes
   const focusTerminal = vi.fn(() => landing.focus());
   const { container, render } = mountWithSession(session, focusTerminal);
   act(() => recoveredMark(container)!.focus());
-  // A mouse press just before, which an earlier touch in the file would otherwise outlast.
-  document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "mouse", bubbles: true }));
+  // A key just before, whose ring the handoff follows and which an earlier touch in the file would otherwise outlast.
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
   act(() => setInteractionModality("pointer"));
   render({ ...session, screen_inexact: false });
   // No frame has passed: the handoff is in the commit that removed the mark.

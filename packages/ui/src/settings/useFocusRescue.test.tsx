@@ -3,7 +3,7 @@ import { act, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { framesAsTimers, settleFrames } from "../components/dialog/dialogTestSupport";
+import { framesAsTimers, settleFrames, withModality } from "../components/dialog/dialogTestSupport";
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { useFocusRescue } from "./useFocusRescue";
 
@@ -57,7 +57,9 @@ function mount(tab: TabState = "shown") {
 it("moves focus to the field, with the keyboard ring, when the element holding it is hidden", async () => {
   const page = mount();
   act(() => page.row().focus());
-  // `framesAsTimers` leaves the modality virtual, as after a press that came from a script.
+  // A hardware key makes the ring follow it; the modality is then virtual, as after a press that came from a script.
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+  withModality("virtual");
   expect(getInteractionModality()).toBe("virtual");
   change("hidden");
   await settleFrames();

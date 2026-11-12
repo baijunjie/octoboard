@@ -7,8 +7,8 @@ import { focusFellToPage } from "./regionFocus";
 /** Renders nothing; when it unmounts while focus is inside `from` (a selector, or a function finding the
  * element when it is not one a selector can name), calls `to` to move it. It is for
  * a handoff whose trigger is a render rather than a call site, such as the daemon taking the last
- * console away. The user did not ask for the move, so the keyboard modality is set first and the
- * destination shows its focus ring, except on a touch screen (`ringForAutomaticFocus`). With `ring` false
+ * console away. The user did not ask for the move, so the ring follows the last input
+ * (`ringForAutomaticFocus`): a key shows the destination's focus ring, a press never does. With `ring` false
  * that is left to `to`, for one that moves focus only on some of its calls. `to` runs inside React's commit,
  * where React drops the focus event, so a destination whose ring comes from react-aria's `useFocusRing` gets
  * no keyboard-focus mark (Chromium's `:focus-visible` fallback hides this; WKWebView after a click shows no
@@ -59,9 +59,9 @@ export function HandoffOnUnmount({ from, to, ring = true }: { from: string | (()
 }
 
 /** Moves focus on to `target`, a move the user did not ask for, if it is in the document and enabled and focus is not
- * held elsewhere, turning the focus ring on just before (`ringForAutomaticFocus`), so a target that turns out not to be
- * there leaves the modality alone. Focus is held elsewhere unless it has fallen to `<body>` (or nowhere); with
- * `duringRemoval`, from a `HandoffOnUnmount`'s `to`, it is still on the source, which that already checked. */
+ * held elsewhere, letting the ring follow the last input just before (`ringForAutomaticFocus`), so a target that turns
+ * out not to be there leaves the modality alone. Focus is held elsewhere unless it has fallen to `<body>` (or nowhere);
+ * with `duringRemoval`, from a `HandoffOnUnmount`'s `to`, it is still on the source, which that already checked. */
 export function focusHandoffTarget(target: HTMLElement | null | undefined, { duringRemoval = false } = {}): void {
   if (!target?.isConnected || target.matches(":disabled") || (!duringRemoval && !focusFellToPage())) return;
   ringForAutomaticFocus();

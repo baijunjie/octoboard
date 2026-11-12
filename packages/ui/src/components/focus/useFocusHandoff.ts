@@ -14,8 +14,8 @@ import { focusTopBar } from "./regionFocus";
  * handoff also needs focus to have actually fallen to `<body>` (or to be on the disabled element).
  * It then goes where `restore` puts it — the terminal, say, or a control beside the one that went —
  * or to the top bar's first control when that leaves it on `<body>`. The user did not ask for the
- * move, so the modality is set to keyboard first: the previous input was often a pointer press,
- * which would leave the destination without a ring (see "Focus moved by a change the user did not
+ * move, so the ring follows the last input (`ringForAutomaticFocus`): a key shows it, a press of a
+ * finger, a pen or a mouse never does (see "Focus moved by a change the user did not
  * make" in `docs/ui-standard.md`).
  *
  * The caller must stay mounted while the control goes away (render `null`, not unmount): the check

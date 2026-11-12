@@ -41,10 +41,10 @@ export function useFocusVisibleProps(): FocusVisibleProps {
  * (xterm.js's textarea), where every key, Escape and Tab included, is typed into that input. Whether the container
  * shows focus is decided as focus lands on an element in it, from outside or from another element inside (a cover's
  * region handing focus back to the input): shown when the modality is the keyboard's then (F6 or Tab, an automatic
- * handoff that called `ringForAutomaticFocus`), not after a click. Keys typed into the focused element never turn it
- * on, as they would with react-aria's own text-input rule, since they do not move focus; a pointer press anywhere
- * turns it off, and it ends when focus leaves the container. Focus that leaves and comes back to the same element with
- * the window (the element still active meanwhile) keeps the decision made for it.
+ * handoff that called `ringForAutomaticFocus`), not after a click or a tap. Keys typed into the focused element never
+ * turn it on, as they would with react-aria's own text-input rule, since they do not move focus; a pointer press
+ * anywhere turns it off, and it ends when focus leaves the container. Focus that leaves and comes back to the same
+ * element with the window (the element still active meanwhile) keeps the decision made for it.
  */
 export function useArrivalFocusProps(): FocusVisibleProps {
   const keyboard = useKeyboardModality();

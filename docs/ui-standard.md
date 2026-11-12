@@ -691,8 +691,8 @@ everything a tooltip would, so the button carries only its accessible name (the 
 every window it draws included; how many processes run). A modal opened by something other than a press on the entry
 (Settings from the native menu, a status mark's or Details popover opened elsewhere in the window) closes the panel in
 either form, rather than leaving it up under the modal. Closing a processes panel with focus inside it hands focus to
-its button after React's commit, so react-aria sees the move and draws the ring; a row's press instead lands focus in
-the Processes panel it opens.
+its button after React's commit, so react-aria sees the move and the ring follows the last input; a row's press instead
+lands focus in the Processes panel it opens.
 
 ### A touch gesture is never the only way
 
@@ -756,10 +756,11 @@ view) draws the ring on the container, since the input itself is kept out of sig
 rule for text inputs, which turns the ring on at those two keys, would light it after a click as soon as the user typed
 one into the terminal. The ring is decided as focus lands on an element in the container, from outside or from another
 element inside it (the pending cover handing focus back to the input): shown when that move came by keyboard (F6 or Tab)
-or was an automatic handoff (`ringForAutomaticFocus`), not after a click; keys typed into the focused input never change
-it, since they do not move focus; a pointer press anywhere turns it off, and it ends when focus leaves the container (not when it leaves with the window,
-which keeps the decision). It is not drawn while a cover (loading, reconnecting, disconnected, pending, an account
-switch; every terminal cover is opaque) hides the content it would frame (`TerminalSurface`'s `covered`).
+or was an automatic handoff after a key (`ringForAutomaticFocus`), not after a click or a tap; keys typed into the
+focused input never change it, since they do not move focus; a pointer press anywhere turns it off, and it ends when
+focus leaves the container (not when it leaves with the window, which keeps the decision). It is not drawn while a cover
+(loading, reconnecting, disconnected, pending, an account switch; every terminal cover is opaque) hides the content it
+would frame (`TerminalSurface`'s `covered`).
 
 ### Never style focus with CSS `:focus-visible`
 
@@ -776,38 +777,40 @@ into that root (`[data-expand-button][data-focus-visible]` and `[data-separator-
 ### Focus moved by a change the user did not make
 
 A handoff that runs because what held focus went away — a pane hidden, a panel closed, a region unmounted by a daemon
-event — also calls `setKeyboardModality()` before it focuses the destination. The user did not ask for the
-move, so they have to be able to see where focus went, and the previous input was often a pointer press, which leaves
-the destination without a ring. `handFocusOff` takes a `showRing` flag for the handoff whose trigger is a press, where
-the ring follows how the press came; `HandoffOnUnmount` sets it by default, its trigger being a render, and so does
-`useFocusHandoff`, whose trigger is the render that took the control away. That covers the handoffs through
-`useFocusHandoff` whose trigger is really a press — the change filter field closed from the header's toggle, which takes
-no focus itself, and a session selected while focus is in the history, where the destination takes no focus (below) —
-knowingly: focus lands on a control the user did not aim it at either way.
+event — calls `ringForAutomaticFocus()` before it focuses the destination, not `setKeyboardModality()` itself. The
+user did not ask for the move, so the ring follows the last input: after a key (`F6`, `Tab`, a shortcut) the destination
+shows its ring, so they can see where focus went; after a press of a mouse, a trackpad, a finger or a pen it never does,
+as a focus ring never results from a mouse operation. Before any input it shows one unless the device cannot hover.
+`handFocusOff` takes a `showRing` flag for the handoff whose trigger is a press, where the ring follows how the press
+came; `HandoffOnUnmount` sets it by default, its trigger being a render, and so does `useFocusHandoff`, whose trigger is
+the render that took the control away. Both go through the same rule, so a pane or panel closed with the mouse hands
+focus on without a ring and one closed with a key hands it on with one. Keep `setKeyboardModality()` itself for what a
+key alone starts (`F6`, a shortcut, a find key).
 
 A mark or link whose focus goes to a control of its own surface (a field's trigger, a row's action, its dialog) hands
-focus on through `useHandoffAfterRemoval`, which sets the ring only when it actually moves focus. It decides in the
-layout effect of the component that renders the source, later in the commit that removes it: a target the same render
-disabled is left alone, the effects of an enclosing `useFocusHandoff` or `useSectionRefocus`, which would take focus
-from `<body>` elsewhere, have not run yet, and when a dialog closes with focus in the source the component has gone with
-it, so nothing is moved and the modality is left alone; the dialog's restore, a frame later, then places focus, its ring
-following the input that closed the dialog. A source whose component goes with it (the sharing switch's mark, in its
-warning) moves focus inside React's commit instead, from `HandoffOnUnmount`. React passes no focus event on to
-react-aria there, so `HandoffOnUnmount` sends the destination a `focusin` of its own once the commit is over; without it
-the destination would hold focus with no ring. A mark whose focus goes to the start of its panel (the Files and Report
-panels' marks) and the handoffs of panes and panels taken away keep `HandoffOnUnmount` with its ring: no dialog's
-restore follows them.
+focus on through `useHandoffAfterRemoval`, which applies the ring rule only when it actually moves focus. It decides in
+the layout effect of the component that renders the source, later in the commit that removes it: a target the same
+render disabled is left alone, the effects of an enclosing `useFocusHandoff` or `useSectionRefocus`, which would take
+focus from `<body>` elsewhere, have not run yet, and when a dialog closes with focus in the source the component has
+gone with it, so nothing is moved and the modality is left alone; the dialog's restore, a frame later, then places
+focus, its ring following the input that closed the dialog. A source whose component goes with it (the sharing switch's
+mark, in its warning) moves focus inside React's commit instead, from `HandoffOnUnmount`. React passes no focus event on
+to react-aria there, so `HandoffOnUnmount` sends the destination a `focusin` of its own once the commit is over; without
+it the destination would hold focus with no ring. A mark whose focus goes to the start of its panel (the Files and
+Report panels' marks) and the handoffs of panes and panels taken away keep `HandoffOnUnmount`, with the ring following
+the last input: no dialog's restore follows them.
 
 The Settings search re-matches its rows whenever what it matches changes without the user touching the query (the
-language changed, a setting changed from another window, a read of the system answered or failed), so a row can go
-away under focus, even a control whose own change made it go. Such a re-match never moves the panel: the section on
-screen stays while it is listed, and only a tab press or a navigation request changes it. Value-dependent wordings are
-all indexed so that changing a control never takes its own row away; for what remains, `useFocusRescue`
+language changed, a setting changed from another window, a read of the system answered or failed), so a row can go away
+under focus, even a control whose own change made it go. Such a re-match never moves the panel: the section on screen
+stays while it is listed, and only a tab press or a navigation request changes it. Value-dependent wordings are all
+indexed so that changing a control never takes its own row away; for what remains, `useFocusRescue`
 (`packages/ui/src/settings/`) is the dialog's last fallback after the sections' own handoffs: once focus has fallen, it
-moves focus to the search field with the ring (`ringForAutomaticFocus`), and after a tap to the selected section tab
-instead, or to Close while nothing is found, since the field would raise the on-screen keyboard. Focus moved elsewhere
-in the dialog meanwhile is left alone, except the focus scope catching the fall on its first control, Close, which
-Chromium's does when the focused element is removed and WebKit's does not (focus stays on `<body>` until the rescue).
+moves focus to the search field, with the ring after a key only (`ringForAutomaticFocus`), and after a tap to the
+selected section tab instead, or to Close while nothing is found, since the field would raise the on-screen keyboard.
+Focus moved elsewhere in the dialog meanwhile is left alone, except the focus scope catching the fall on its first
+control, Close, which Chromium's does when the focused element is removed and WebKit's does not (focus stays on `<body>`
+until the rescue).
 
 A third shape is for a source whose explanation popover restores focus itself, from a frame of its own, as the popover
 goes with the source: the agent title bar's recovered-display mark, whose focus goes to the terminal. Focus on the mark
@@ -815,22 +818,23 @@ alone moves at once, from `HandoffOnUnmount` with `ring` false and a `to` that s
 popover waits two frames for that restore, then moves only if focus has fallen to `<body>`: a control that claimed focus
 meanwhile keeps it, and the restore cannot take focus back from the terminal after the handoff.
 
-Selecting another session while focus is in the history on screen is not such a move: a sidebar row's press keeps
-focus where it is, so the history it replaces drops focus to `<body>`, but the user made the switch, whether from a
-row, Back and Forward, the rail or the history's owner link. Selecting none is the user's move too: a console with no
-session to show, chosen from the rail's avatars, say, or Back to where none was selected. The live terminal is a second
-source of such focus: clearing the selection turns it inert under focus, which would drop it to `<body>` with no event.
+Selecting another session while focus is in the history on screen is not such a move: a sidebar row's press keeps focus
+where it is, so the history it replaces drops focus to `<body>`, but the user made the switch, whether from a row, Back
+and Forward, the rail or the history's owner link. Selecting none is the user's move too: a console with no session to
+show, chosen from the rail's avatars, say, or Back to where none was selected. The live terminal is a second source of
+such focus: clearing the selection turns it inert under focus, which would drop it to `<body>` with no event.
 `TerminalPane` hands focus on, in a layout effect for the terminal and, for the history, ahead of `useFocusHandoff`, to
 where focus meant for the agent terminal goes, in this order of precedence (the first that applies): a covering panel,
-the open archive view (see below), after a tap the top bar, then the new history, a live session's terminal, and with
-no session shown the empty state's action, else the top bar. It sets no modality of its own, so the ring follows the
-input that selected: none after a pointer press, shown after a key. Where nothing there can take focus (a live session
-held by an account switch, say), `useFocusHandoff` still moves it to the top bar with the ring, as focus then lands
-where the user did not aim. An empty state's creation button that goes away under focus (its list gaining content)
-goes through `useFocusHandoff` too, with the ring: to the next empty-state action if there is one, else the top bar. A session that goes away by itself, its record gone while it is still the selected one, is
-not the user's move, and from the history or the live terminal alike it reaches the same destination through the same
-restore, with the ring on (`ringForAutomaticFocus`, so not after a tap): from the history through `useFocusHandoff`,
-as any control taken away does, from the terminal through the layout effect.
+the open archive view (see below), after a tap the top bar, then the new history, a live session's terminal, and with no
+session shown the empty state's action, else the top bar. It sets no modality of its own, so the ring follows the input
+that selected: none after a pointer press, shown after a key. Where nothing there can take focus (a live session held by
+an account switch, say), `useFocusHandoff` still moves it to the top bar, with the ring after a key only, as focus then
+lands where the user did not aim. An empty state's creation button that goes away under focus (its list gaining content)
+goes through `useFocusHandoff` too, the ring following the last input: to the next empty-state action if there is one,
+else the top bar. A session that goes away by itself, its record gone while it is still the selected one, is not the
+user's move, and from the history or the live terminal alike it reaches the same destination through the same restore,
+the ring following the last input (`ringForAutomaticFocus`, so only after a key): from the history through
+`useFocusHandoff`, as any control taken away does, from the terminal through the layout effect.
 
 While the archive view is open, the whole agent pane under it (the terminal, the history, the covers and the bars) is
 inert, so Tab from the view's last control cannot reach what is hidden under it, and the pane's spoken sentences are
@@ -841,35 +845,36 @@ the pane when the view opens goes there at once, not to `<body>`. When the view 
 `<body>`) is handed on once the view has closed and the pane is reachable again, to where focus meant for the agent
 terminal goes, from one place after the commit, so it sees the pane as it now is (with no session shown, the empty
 state's action else the top bar). The modality follows who closed it: a close the user makes leaves it alone, so the
-ring follows the input that closed it, and a close nobody made (what the view lists is gone) forces the ring, like any
-automatic move. The user's closes are Close, Escape, selecting or opening a session or creating a console from this
-window, Back and Forward, committing a preview and a console switch (the rail, a process jump).
+ring follows the input that closed it, and a close nobody made (what the view lists is gone) lets the ring follow the
+last input, like any automatic move. The user's closes are Close, Escape, selecting or opening a session or creating a
+console from this window, Back and Forward, committing a preview and a console switch (the rail, a process jump).
 
-After a tap (`interactionIsTouch` in `packages/ui/src/input/touchInput.ts`: the last press was a finger; a mouse, a trackpad
-or any key counts as not, so an iPad with a keyboard keeps the desktop rules) two things change. An automatic move does
-not turn the ring on — every such move asks `ringForAutomaticFocus`, F6 being the one exception, as a key — since there
-is no keyboard to follow it with, and a ring left on a top-bar control would also open its tooltip and leave it
-standing. And the window does not move focus into a terminal on its own initiative, since a terminal's text field
-raises the on-screen keyboard over the content the user tapped to see: a floating panel lands on its first control that
-takes no text (`focusLandingWithoutText`; the Report panel lands on its page, marked `data-touch-landing`), focus meant
-for the agent terminal goes to a covering panel's first such control, else the open archive view's root, else the top
-bar's first control, so it never falls to `<body>`, and a tapped session pick does not focus the terminal. The file
-filter field's incomplete-search mark, as the search completes, hands focus to the field's input, but after a tap to the
-filter toggle instead. A tap on a text field still focuses it, and form dialogs still focus their first field, since
-the user opened them to fill in.
+A press, of a mouse or of a finger, never turns the ring on: `ringForAutomaticFocus` follows the last input, and only a
+key's shows it. A press with no pointer behind it, a screen reader's or a script's, leaves the last input as it was.
+Every automatic move asks `ringForAutomaticFocus`, F6 being the one exception, as a key, since a ring left on a top-bar
+control after a press would also open its tooltip and leave it standing. After a tap (`interactionIsTouch` in
+`packages/ui/src/input/touchInput.ts`: the last press was a finger or a pen; a mouse, a trackpad or any key counts as
+not, so an iPad with a keyboard keeps the desktop rules) one thing more changes: the window does not move focus into a
+terminal on its own initiative, since a terminal's text field raises the on-screen keyboard over the content the user
+tapped to see. A floating panel lands on its first control that takes no text (`focusLandingWithoutText`; the Report
+panel lands on its page, marked `data-touch-landing`), focus meant for the agent terminal goes to a covering panel's
+first such control, else the open archive view's root, else the top bar's first control, so it never falls to `<body>`,
+and a tapped session pick does not focus the terminal. The file filter field's incomplete-search mark, as the search
+completes, hands focus to the field's input, but after a tap to the filter toggle instead. A tap on a text field still
+focuses it, and form dialogs still focus their first field, since the user opened them to fill in.
 
 A separator of collapsed lines taken off the screen is such a move: the bar for the run past a diff's last hunk goes
-once the daemon's reply says that hunk reaches the end of the file, and the handoff to the code frame sets the
-modality itself. `handFocusOff` cannot be used there, since it looks at `document.activeElement` and cannot see into a
+once the daemon's reply says that hunk reaches the end of the file, and the handoff to the code frame applies the ring
+rule itself. `handFocusOff` cannot be used there, since it looks at `document.activeElement` and cannot see into a
 shadow root. The redraw after an expansion that takes the pressed control away, with no separator control left to take
-focus, hands focus to the code frame the same way (`handFocusToCode` in `packages/ui/src/viewer/code/rendererDom.ts`), so
-focus never falls to the page.
+focus, hands focus to the code frame the same way (`handFocusToCode` in `packages/ui/src/viewer/code/rendererDom.ts`),
+so focus never falls to the page.
 
 A focus restore after a press decides by whether the pressed control had focus, not by whether the press was a key:
 VoiceOver presses with a click (an accessibility press), so a restore keyed to Enter or Space misses the screen reader's
 press and leaves focus on the page when the control goes. The instance is `Expansion.activate` in
-`packages/ui/src/viewer/code/expansion.ts`, which is told whether the control used was the focused one; a mouse press on a
-control that did not have focus still takes none.
+`packages/ui/src/viewer/code/expansion.ts`, which is told whether the control used was the focused one; a mouse press on
+a control that did not have focus still takes none.
 
 A dialog opened from a control that never took focus, is disabled, or is gone by the time it closes cannot always hand
 focus back to it: React Aria restores focus to what held it when the dialog opened, which is not the control after an
@@ -884,13 +889,14 @@ Settings by its backdrop returns focus there even when Manage accounts was activ
 terminal closed through its busy confirmation is repaired once the confirmation goes (`focusAfterConfirmedClose` in
 `packages/ui/src/terminal/shell/ShellTerminalPanel.tsx`): when the terminal's tab or view that the dialog gave focus
 back to has gone with it, focus goes to the shown tab after a close asked from a menu, or to the shown terminal after
-one asked from the terminal itself; the ring is turned on only as it moves focus, so a close the daemon refuses leaves
-focus where the dialog put it back, ringed or not as the press was. The archive view
-(`packages/ui/src/archive/ArchiveView.tsx`) sends focus to its header's Close, with the ring turned on, once a deletion
-has taken the control focus would go back to (a row's Delete, or Delete all), or after a deletion confirmed from a Delete
-all whose `focusOnPress={false}` press had its dialog hand focus back to the ring-less view itself. All four wait at least a frame past React Aria's restore and leave
-a restore that landed right alone; they act where focus is on `<body>`, the login handoff also where it is on its going
-button, and the archive view also where it is on the view itself after a dialog that deleted rows.
+one asked from the terminal itself; the ring follows the last input only as it moves focus, so a close the daemon
+refuses leaves focus where the dialog put it back, ringed or not as the press was. The archive view
+(`packages/ui/src/archive/ArchiveView.tsx`) sends focus to its header's Close, the ring following the last input, once a
+deletion has taken the control focus would go back to (a row's Delete, or Delete all), or after a deletion confirmed
+from a Delete all whose `focusOnPress={false}` press had its dialog hand focus back to the ring-less view itself. All
+four wait at least a frame past React Aria's restore and leave a restore that landed right alone; they act where focus
+is on `<body>`, the login handoff also where it is on its going button, and the archive view also where it is on the
+view itself after a dialog that deleted rows.
 
 A dialog that the Agent accounts section opens by itself as Settings opens (the account settings dialog for View in
 Settings, a login found running, Add agent) saves its restore target before Settings' tabs exist, so on closing it hands
@@ -898,16 +904,16 @@ focus on itself rather than leave it to React Aria: to the section's tab, or for
 button, else the empty panel's own. A row's account dialog goes back to the row's actions button, else the section's
 tab. An agent's Settings or Version dialog goes back to the control whose menu opened it (the tab's actions button, or
 the tab for its context menu), else the tab, else the section's tab; one that closes itself because its agent left the
-list or its CLI is no longer installed hands focus on with the ring, as a change the user did not make. These run ahead
-of React Aria's restore, wait until the target can take focus (the dialog has gone and nothing covers Settings), ring it
-as focus the user did not aim, and take it back once if a give-back lands after them (`handFocusOnceClosed` in
-`packages/ui/src/settings/accounts/AgentAccountsSection.tsx`). Settings itself, closing with no dialog under it, goes to
-the selected session's terminal, else to the control that opened it while that is still there, even one that never took
-focus (the press it ended on is recorded by `usePressedControl` in `packages/ui/src/components/`), else to the window's
-fallback (`focusAfterModalCloses` in `packages/ui/src/components/focus/modalFocus.ts`). Closing over another dialog,
-focus the restore left on `<body>` goes to the control in that dialog that opened Settings, else the control that dialog
-opens on. A return to the control that opened a dialog is a restore, not a handoff: its ring follows the input that
-closed the dialog.
+list or its CLI is no longer installed hands focus on, the ring following the last input, as a change the user did not
+make. These run ahead of React Aria's restore, wait until the target can take focus (the dialog has gone and nothing
+covers Settings), let the ring follow the last input as for focus the user did not aim, and take it back once if a
+give-back lands after them (`handFocusOnceClosed` in `packages/ui/src/settings/accounts/AgentAccountsSection.tsx`).
+Settings itself, closing with no dialog under it, goes to the selected session's terminal, else to the control that
+opened it while that is still there, even one that never took focus (the press it ended on is recorded by
+`usePressedControl` in `packages/ui/src/components/`), else to the window's fallback (`focusAfterModalCloses` in
+`packages/ui/src/components/focus/modalFocus.ts`). Closing over another dialog, focus the restore left on `<body>` goes
+to the control in that dialog that opened Settings, else the control that dialog opens on. A return to the control that
+opened a dialog is a restore, not a handoff: its ring follows the input that closed the dialog.
 
 A dialog opened by a press inside the sidebar's drawer is a third such case: the drawer is not modal and a tap does not
 move focus, so React Aria would restore focus to whatever held it behind the drawer. The window remembers the drawer
@@ -1459,7 +1465,8 @@ read again because settings changed."; a read that fails while the review is beh
 with its own Try again (a failure no retry can change says to choose the file again, with a button that does), not an
 error alert dialog, as it is automatic behaviour, and Import is an unavailable button (see "Buttons") until the review
 is current again: the Alert's title is its tooltip and description, and a press explains by moving focus to the Alert's
-button (Try again, or Choose file), with the focus ring shown, instead of doing nothing.
+button (Try again, or Choose file), the ring following the last input (so only after a key), instead of doing
+nothing.
 
 Once a submit has passed the form's own validation, anything that goes wrong afterwards that the window could not
 foresee — a refusal from the daemon included, even one about a single field's value — is a failure of the user's own
@@ -2538,13 +2545,12 @@ group by folder — the Files mode's filter toggle and include-ignored toggle, a
 (its find toggle among them) are built this way.
 
 A two-state control that is also what shows and hides a region carries `aria-expanded` beside its `aria-pressed`, the
-two saying the same thing in the two vocabularies: the Git mode's filter toggle is pressed while its field is on
-screen, and expanded for the same reason (`expanded` on `IconToggle`), and so is the viewer's find toggle while its
-find bar is. The region it shows has no id of its own and so
-no `aria-controls`; "Expanded and selected" above asks only for `aria-expanded`. A region taken away this way hands
-keyboard focus back to the toggle when it was holding it, the toggle being pressed without taking focus itself; the
-handoff turns the ring on whether the press came from a key or a mouse (not after a tap, as for any automatic move),
-as "Focus moved by a change the user did not make" above has it.
+two saying the same thing in the two vocabularies: the Git mode's filter toggle is pressed while its field is on screen,
+and expanded for the same reason (`expanded` on `IconToggle`), and so is the viewer's find toggle while its find bar is.
+The region it shows has no id of its own and so no `aria-controls`; "Expanded and selected" above asks only for
+`aria-expanded`. A region taken away this way hands keyboard focus back to the toggle when it was holding it, the toggle
+being pressed without taking focus itself; the handoff shows the ring only when the last input was a key, never after a
+mouse press or a tap, as "Focus moved by a change the user did not make" above has it.
 
 The right pane's panel kind toggles are the exception: each keeps one icon, and its open state is a filled chip behind
 the icon (the rail's current-console fill), a shape rather than a tint, with `aria-expanded` for assistive technology.
@@ -2699,14 +2705,14 @@ shared list-motion implementation. This applies to navigation lists, settings re
 wrapping chips and virtualized file and change collections. Use stable item identities, not array indices or
 translated labels. Horizontal and wrapping collections move on both axes, including under RTL.
 
-Use a 300 ms ease with `cubic-bezier(0.2, 0, 0, 1)` for position changes. In nonvirtualized collections, new items
-fade in from the left while removed items fade out to the right as inert, accessibility-hidden visual copies.
-These effects move by 25% of each item's own width over 300 ms with `cubic-bezier(0.4, 0, 0.2, 1)`, starting alongside
-the surviving items' movement. Removed items stop accepting input immediately; do not delay an action or keep a
-removed control reachable to play an exit animation. Preserve keyboard focus on surviving controls and retain the
-surface's focus handoff when the focused item is removed: a tab removed while it or its context menu holds focus
-hands focus to the strip's shown tab, or into the panel when no tab is left, with the ring shown, and so does one
-closed through a confirmation its context menu asked for, once the confirmation has gone.
+Use a 300 ms ease with `cubic-bezier(0.2, 0, 0, 1)` for position changes. In nonvirtualized collections, new items fade
+in from the left while removed items fade out to the right as inert, accessibility-hidden visual copies. These effects
+move by 25% of each item's own width over 300 ms with `cubic-bezier(0.4, 0, 0.2, 1)`, starting alongside the surviving
+items' movement. Removed items stop accepting input immediately; do not delay an action or keep a removed control
+reachable to play an exit animation. Preserve keyboard focus on surviving controls and retain the surface's focus
+handoff when the focused item is removed: a tab removed while it or its context menu holds focus hands focus to the
+strip's shown tab, or into the panel when no tab is left, the ring following the last input, and so does one closed
+through a confirmation its context menu asked for, once the confirmation has gone.
 
 Initial rendering, scrolling, viewport recycling and container resizing do not trigger item movement animations, and
 neither does every item of a row changing width at once (the text zoomed). Virtualized collections keep virtualization

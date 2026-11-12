@@ -151,8 +151,8 @@ owner link — hands focus to the terminal of what is now shown: another archive
 live session's terminal, or a panel covering the terminal; after a tap, as described in "Focus after a tap" in
 `docs/product/moving-focus-between-regions.md`. The focus ring follows the input that made the selection: it shows after
 a key, and not after a pointer press. Where nothing there can take focus, such as a live session shown as switching its
-account (see `docs/product/switching-session-accounts.md`), focus goes to the top bar's first enabled control with its
-ring showing. Selecting no session from the history, or the selected session's record going away by itself, hands focus
-on as the session going away from a live terminal does (see "With no session selected" in
-`docs/product/session-terminal.md`). While the archive view is open, the history cannot hold focus at all (see "The
+account (see `docs/product/switching-session-accounts.md`), focus goes to the top bar's first enabled control, its focus
+ring showing only when the last input was a key. Selecting no session from the history, or the selected session's record
+going away by itself, hands focus on as the session going away from a live terminal does (see "With no session selected"
+in `docs/product/session-terminal.md`). While the archive view is open, the history cannot hold focus at all (see "The
 archive view" in `docs/product/archive-view.md`).

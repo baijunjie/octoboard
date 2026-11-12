@@ -35,7 +35,8 @@ it("hands focus from the account's mark to the account picker, with its ring, wh
     />,
   ));
   render(true);
-  document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "mouse", bubbles: true }));
+  // The last input was a key, whose ring the handoff follows; the modality is put back to the pointer's before it.
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
   act(() => {
     setInteractionModality("pointer");
     container.querySelector<HTMLElement>("[data-status-mark-id]")!.focus();

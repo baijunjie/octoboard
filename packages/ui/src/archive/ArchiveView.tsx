@@ -160,8 +160,8 @@ export function ArchiveView({
   // dialog hand it back to the ring-less section instead. The delay lets the dialog close and
   // restore focus to a control that still exists (a cancelled one) first; only a focus still lost
   // then, or left on the section by a dialog that deleted something, is brought here. It lands on
-  // Close, which is always present and shows a ring; the user did not ask for the move, so the ring
-  // is turned on. `dialogCount` is how many rows there were when the dialog opened, kept until the
+  // Close, which is always present; the user did not ask for the move, so the ring follows the last
+  // input. `dialogCount` is how many rows there were when the dialog opened, kept until the
   // check after it closes.
   const dialogCount = useRef<number | null>(null);
   useEffect(() => {

@@ -102,11 +102,12 @@ The dialog also opens by itself, in front of Settings, when Settings is opened o
 and the dialog opens over it, holding keyboard focus. It opens once per such request; switching to another section of
 Settings and back does not open it again. When the user closes a dialog opened this way, keyboard focus goes to the
 **Add agent** button at the end of the agent strip, or, while no agent is added and there is no strip, to the empty
-state's own **Add agent** button (see "With no agent added" below), its focus ring showing. A later request for
-Settings to show a section without this dialog closes the dialog, however it was opened, and focus goes to that
-section's tab. A refused
-addition — the agent is not installed, is already added, or which agents are installed is not determined yet — is shown
-in an error alert (see `docs/product/error-alerts.md`).
+state's own **Add agent** button (see "With no agent added" below), its focus ring showing only when the last input was
+a key (see "The focus ring after a focus move the window makes on its own" in
+`docs/product/moving-focus-between-regions.md`). A later request for Settings to show a section without this dialog
+closes the dialog, however it was opened, and focus goes to that section's tab. A refused addition — the agent is not
+installed, is already added, or which agents are installed is not determined yet — is shown in an error alert (see
+`docs/product/error-alerts.md`).
 
 ## The agent's menu
 
@@ -137,9 +138,9 @@ It has no footer: it closes on its close button, on Escape and on a press outsid
 they change, from any window, and closes by itself when the agent is removed from the list of added agents.
 
 Closed by the user, it gives keyboard focus back to the control whose menu opened it — the tab's actions button, or the
-tab itself when its context menu was used — its focus ring following the input that closed the dialog. Closed by
-itself, it hands focus to that control, else to the agent's tab, else, when the agent's tab has gone with the agent, to
-the Agent accounts tab in Settings' list of sections, its focus ring showing.
+tab itself when its context menu was used — its focus ring following the input that closed the dialog. Closed by itself,
+it hands focus to that control, else to the agent's tab, else, when the agent's tab has gone with the agent, to the
+Agent accounts tab in Settings' list of sections, its focus ring showing only when the last input was a key.
 
 ## The agent version dialog
 
@@ -311,10 +312,11 @@ Besides the Redeem reset button, the dialog holds no control but its close butto
 settings dialog (below), and no **Log in** button (see "Where Log in appears" in `docs/product/logging-accounts-in.md`).
 The account's connectors and MCP servers are not in it either: they have a dialog of their own (see "The Connectors and
 MCP dialog" in `docs/product/account-mcp-servers-and-connectors.md`). It has no footer: it closes on its close button,
-on Escape and on a press outside it. It follows the account as it changes, from any window, tells assistive
-technology, naming the account, when a login of the account succeeds while it is open, and closes by itself when the
-account is removed. However it closes, keyboard focus then goes, its focus ring showing, back to the account's actions menu button in the table, or,
-when the account's row has gone with the account, to the Agent accounts tab in Settings' list of sections.
+on Escape and on a press outside it. It follows the account as it changes, from any window, tells assistive technology,
+naming the account, when a login of the account succeeds while it is open, and closes by itself when the account is
+removed. However it closes, keyboard focus then goes back to the account's actions menu button in the table, or, when
+the account's row has gone with the account, to the Agent accounts tab in Settings' list of sections, its focus ring
+showing only when the last input was a key.
 
 ## The account settings dialog
 
@@ -331,7 +333,7 @@ removed as the account details dialog does. Opened from the account's actions me
 same way. Settings also opens it by itself as Settings opens, by **View in Settings** (see "Starting a session on an
 account whose last change is incomplete" in `docs/product/sharing-the-default-configuration.md`), with keyboard focus on
 the Share default configuration switch, scrolled into view; closing a dialog opened so puts keyboard focus on the Agent
-accounts tab, its focus ring showing.
+accounts tab, its focus ring showing only when the last input was a key.
 
 ## Turning an account off
 

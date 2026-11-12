@@ -34,7 +34,8 @@ async function openOnFailure() {
   onTestFinished(() => act(() => Reflect.apply(setInteractionModality, undefined, [modality])));
   render();
   await openAdvanced();
-  document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "mouse", bubbles: true }));
+  // The last input was a key, whose ring the handoff follows; the modality is put back to the pointer's before it.
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
   act(() => {
     setInteractionModality("pointer");
     marks()[0]!.focus();

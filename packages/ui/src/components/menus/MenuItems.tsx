@@ -11,11 +11,12 @@ import { useT } from "../../i18n/react";
 import { FadeOverflow } from "../text/FadeOverflow";
 import { registerMenuCommand } from "./menuCommands";
 import { useLatest } from "../hooks/useLatest";
+import { ringForAutomaticFocus } from "../../input/touchInput";
 import { MODAL_DIALOG, TABBABLE } from "../focus/selectors";
 import { useResolvedMenuEntries } from "./useResolvedMenuEntries";
 import { MenuShortcutScope } from "./menuShortcutScope";
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuPanelContext } from "./menuEntries";
-import { activateMenuItem, Description, Kbd, KbdContent, Label, MenuChoices, MenuItem, MenuItemCheck, MenuList, MenuPopover, MenuSeparator, setKeyboardModality, Submenu, SubmenuIndicator, useSubmenuPanel } from "../../primitives";
+import { activateMenuItem, Description, Kbd, KbdContent, Label, MenuChoices, MenuItem, MenuItemCheck, MenuList, MenuPopover, MenuSeparator, Submenu, SubmenuIndicator, useSubmenuPanel } from "../../primitives";
 
 /** HeroUI's menu item label ignores the pointer, and its content inherits that, so a clipped label never sees
  * the hover that opens its tooltip. The label's content takes the pointer back, a disabled item's too (see
@@ -288,8 +289,8 @@ function LoadedMenuItems({ load }: { load: () => Promise<ActionMenuEntry[]> }): 
     focusNext.current = undefined;
     if (next === "retry") {
       // The render took the focused control away, not a press, and the last input was often a
-      // pointer: the ring has to show where focus went.
-      setKeyboardModality();
+      // pointer: the ring follows that input, so only a key's shows where focus went.
+      ringForAutomaticFocus();
       // The recovery action stands last, at the trailing edge, after Details.
       [...(root.current?.querySelectorAll<HTMLElement>(TABBABLE) ?? [])].at(-1)?.focus();
     } else if (next === "menu") root.current?.querySelector<HTMLElement>("[role=menu]")?.focus();

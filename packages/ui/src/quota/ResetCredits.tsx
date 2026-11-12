@@ -50,7 +50,7 @@ export function ResetCreditsLine({ quota, accountName, onUse, focusOnPress }: {
 /** Hands focus on once `UseResetCreditDialog` has closed, for the surface that opened it: returns the function to call
  * when it closes, which two frames later (React Aria restores focus in the frame after the dialog unmounts) runs
  * `restore` if focus fell to the page, the way `useLoginFocusReturn` does for the login dialog. The user did not ask for
- * the move, so the destination shows its ring. Nothing runs once the surface is gone. */
+ * the move, so the ring follows the last input. Nothing runs once the surface is gone. */
 export function useResetFocusReturn(restore: () => void): () => void {
   const cancel = useRef<() => void>(undefined);
   useEffect(() => () => cancel.current?.(), []);

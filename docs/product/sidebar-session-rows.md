@@ -232,12 +232,12 @@ Lock controls are offered only for sessions that are not archived. Their action 
 including nested sessions and a console session's own card in its focus mode. Protection and persistence follow "Locking
 a session" in `docs/product/sessions.md`.
 
-A locked session has a persistent yellow lock button before its other action controls, ahead of its pin
-button when there is one. It remains visible without hover on sidebar rows and focus cards, a console session's own
-card in its focus mode included. Pointer hover or visible keyboard focus changes the closed lock
-to an open lock. Its tooltip offers unlocking, and its accessible name also identifies the session. Pressing it
-unlocks that session; a mouse press neither selects the session nor moves keyboard focus. When the disappearing
-button holds keyboard focus, focus goes to its row or card with a visible focus ring.
+A locked session has a persistent yellow lock button before its other action controls, ahead of its pin button when
+there is one. It remains visible without hover on sidebar rows and focus cards, a console session's own card in its
+focus mode included. Pointer hover or visible keyboard focus changes the closed lock to an open lock. Its tooltip offers
+unlocking, and its accessible name also identifies the session. Pressing it unlocks that session; a mouse press neither
+selects the session nor moves keyboard focus. When the disappearing button holds keyboard focus, focus goes to its row
+or card, its focus ring showing only when the last input was a key.
 
 Archived sessions have no Lock or Unlock action or lock button, in either the full archive or
 focus mode's compact preview. A stored lock remains effective: Delete is disabled for a locked archived session,

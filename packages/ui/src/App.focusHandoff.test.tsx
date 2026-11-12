@@ -25,6 +25,24 @@ vi.mock("./report/ReportPanel", () => ({ ReportPanel: () => null }));
 vi.mock("./project-browser/LazyProjectBrowser", () => ({ LazyProjectBrowser: () => null }));
 // The agent terminal's input stands in for xterm's.
 vi.mock("./terminal/TerminalController", () => import("./terminalControllerTestSupport"));
+// The shell's text input stands in for a shell terminal's view, inside the element that marks one.
+vi.mock("./terminal/shell/ShellTerminalPanel", async () => {
+  const { PanelHeader } = await import("./components/panel/PanelHeader");
+  return {
+    ShellTerminalPanel: () => (
+      <>
+        <PanelHeader title="Terminal" />
+        <div data-shell-terminal>
+          <textarea aria-label="shell input" data-region-landing />
+        </div>
+      </>
+    ),
+  };
+});
+vi.mock("./terminal/shell/shellTerminals", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./terminal/shell/shellTerminals")>();
+  return { ...actual, startShellTerminal: vi.fn(async () => undefined) };
+});
 
 const console_ = consoleOf("c-main", "Main");
 const project = projectOf("p-site", console_.id, "Website");
@@ -113,6 +131,8 @@ it("hands focus on the connection banner's Try again to the agent terminal once 
   expect(retry).toBeDefined();
   act(() => retry!.focus());
 
+  // A mouse press, not the tap an earlier test may have left, which keeps focus off the terminal.
+  document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "mouse", bubbles: true }));
   await pressElement(retry);
   expect(daemon.reconnect).toHaveBeenCalledOnce();
   // The client reports its new attempt, and the banner drops Try again for the reconnecting line.
@@ -161,16 +181,23 @@ it.each([
   expect(getInteractionModality()).toBe(modality);
 });
 
-it("hands focus on with the ring when the record of the archived session on screen is deleted, even after a pointer press", async () => {
+/** The last input before the daemon takes the focused thing away: a mouse press, or a hardware keyboard's key. */
+const lastInput = (input: "mouse" | "key") => (input === "mouse" ? press(document.body, "mouse") : void act(() => void document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }))));
+
+it.each([
+  ["mouse", false, "pointer"],
+  ["key", true, "keyboard"],
+] as const)("hands focus on from the archived session on screen to the empty state's action when its record is deleted, ringed only when the last input was a %s", async (input, ringed, modality) => {
   const { daemon, archived } = await mountFocusedHistory("pointer");
+  lastInput(input);
 
   await deliver(daemon, { type: "session_deleted", session: archived.id });
   expect(document.querySelector("[data-region=terminal] [role=region][tabindex]")).toBeNull();
   // The same place as from a live terminal: the empty state's action, which is offered here.
   expect(regionOfFocus()).toBe("terminal");
   expect(document.activeElement?.textContent).toBe("New console session");
-  expect(document.activeElement?.hasAttribute("data-focus-visible")).toBe(true);
-  expect(getInteractionModality()).toBe("keyboard");
+  expect(document.activeElement?.hasAttribute("data-focus-visible")).toBe(ringed);
+  expect(getInteractionModality()).toBe(modality);
 });
 
 it.each([
@@ -198,21 +225,23 @@ it.each([
   expect(getInteractionModality()).toBe(modality);
 });
 
-it("hands focus on from a live session's terminal to the empty state's action, with the ring even after a pointer press, when its record is deleted", async () => {
+it.each([
+  ["mouse", false, "pointer"],
+  ["key", true, "keyboard"],
+] as const)("hands focus on from a live session's terminal to the empty state's action when its record is deleted, ringed only when the last input was a %s", async (input, ringed, modality) => {
   stubWindow();
-  withModality("pointer");
   const daemon = fakeDaemon(snapshotState({ consoles: [console_], projects: [project], sessions: [live] }));
   mountApp(daemon);
   await pressElement(row(live.title));
   act(() => (agentInput() as HTMLElement).focus());
-  withModality("pointer");
+  lastInput(input);
 
   await deliver(daemon, { type: "session_deleted", session: live.id });
   expect(agentInput()?.closest("[inert]")).not.toBeNull();
   expect(regionOfFocus()).toBe("terminal");
   expect(document.activeElement?.textContent).toBe("New console session");
-  expect(document.activeElement?.hasAttribute("data-focus-visible")).toBe(true);
-  expect(getInteractionModality()).toBe("keyboard");
+  expect(document.activeElement?.hasAttribute("data-focus-visible")).toBe(ringed);
+  expect(getInteractionModality()).toBe(modality);
 });
 
 it("hands focus on from a live session's terminal to the top bar, with no ring, when its record is deleted after a tap", async () => {
@@ -245,4 +274,61 @@ it("hands focus on from a live session's terminal to the top bar, not the empty 
   expect(regionOfFocus()).toBe("topbar");
   expect(document.activeElement?.hasAttribute("data-focus-visible")).toBe(false);
   expect(getInteractionModality()).toBe("pointer");
+});
+
+/** The docked Terminal panel opened over a selected session, with focus in the shell input after a press on it. */
+async function mountFocusedShell() {
+  stubWindow();
+  const daemon = fakeDaemon(snapshotState({ consoles: [console_], projects: [project], sessions: [live] }));
+  mountApp(daemon);
+  await pressElement(row(live.title));
+  await pressElement(byLabel("Show terminal panel", document.querySelector("[data-region=topbar]")!));
+  const shell = document.querySelector<HTMLElement>("#panel-terminal [aria-label='shell input']");
+  expect(shell).not.toBeNull();
+  return shell!;
+}
+
+/** Whether the agent terminal's surface, the element that draws its ring, shows keyboard focus. */
+const agentRinged = () => agentInput()?.closest("[data-focus-visible]") != null;
+
+it.each([
+  ["the top bar's Terminal toggle", () => byLabel("Hide terminal panel", document.querySelector("[data-region=topbar]")!)],
+  ["the card header's Close button", () => byLabel("Close panel", document.getElementById("panel-terminal")!)],
+] as const)("hands focus from the docked shell terminal to the agent terminal with no ring when %s closes the panel with a mouse press", async (_, closer) => {
+  const shell = await mountFocusedShell();
+  press(shell, "mouse");
+  act(() => shell.focus());
+  expect(document.activeElement).toBe(shell);
+
+  press(closer()!, "mouse");
+  await act(async () => {});
+  expect(document.getElementById("panel-terminal")).toBeNull();
+  expect(document.activeElement).toBe(agentInput());
+  expect(agentRinged()).toBe(false);
+});
+
+it.each([
+  // Focus never leaves the shell: a navigation key pressed in it (Enter typed into a text field is not a hardware
+  // keyboard's mark), then the toggle activated without a pointer (a script or a screen reader), which leaves the
+  // last input as that key.
+  ["the top bar's Terminal toggle, activated without a pointer after a key", (shell: HTMLElement) => {
+    act(() => void shell.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true })));
+    act(() => byLabel("Hide terminal panel", document.querySelector("[data-region=topbar]")!)!.click());
+  }],
+  ["the card header's Close button, pressed by a key", () => {
+    const close = byLabel("Close panel", document.getElementById("panel-terminal")!)!;
+    act(() => close.focus());
+    tap(close, "Enter");
+  }],
+] as const)("hands focus from the docked shell terminal to the agent terminal with the ring when %s closes the panel", async (_, closeBy) => {
+  const shell = await mountFocusedShell();
+  press(shell, "mouse");
+  act(() => shell.focus());
+  expect(document.activeElement).toBe(shell);
+
+  closeBy(shell);
+  await act(async () => {});
+  expect(document.getElementById("panel-terminal")).toBeNull();
+  expect(document.activeElement).toBe(agentInput());
+  expect(agentRinged()).toBe(true);
 });

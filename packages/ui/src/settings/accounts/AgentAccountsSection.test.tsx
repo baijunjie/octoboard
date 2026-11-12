@@ -530,14 +530,14 @@ it("shows the agent tab of an account Settings was asked about and opens its set
   expect(document.activeElement).toBe(switchOf());
 });
 
-it("shows the focus ring on the sharing switch even after a pointer press opened Settings", async () => {
-  framesAsTimers("pointer");
+it.each(["keyboard", "pointer"] as const)("sets the modality to %s on the sharing switch after the input that opened Settings", async (input) => {
+  framesAsTimers(input);
   const { showSharingOf } = mount("Claude Code");
   act(() => setInteractionModality("pointer"));
   showSharingOf("codex-work");
   await settleFrames();
   expect(document.activeElement).toBe(document.body.querySelector('[data-sharing-account="codex-work"] input[role="switch"]'));
-  expect(getInteractionModality()).toBe("keyboard");
+  expect(getInteractionModality()).toBe(input);
 });
 
 it("opens no settings for an account whose agent is not in the list, focusing the section's tab", async () => {

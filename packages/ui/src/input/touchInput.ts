@@ -34,13 +34,33 @@ function isTouchPointer(pointerType: string | null | undefined): boolean {
   return pointerType === "touch" || pointerType === "pen";
 }
 
-/** What the interaction under way came from: the last press's pointer (a finger and a pen alike
- * count as a tap), or a hardware keyboard's key. */
-let lastInput: "touch" | "other" | undefined;
-if (typeof document !== "undefined") {
-  document.addEventListener("pointerdown", (event) => (lastInput = isTouchPointer(event.pointerType) ? "touch" : "other"), true);
-  document.addEventListener("keydown", (event) => {
-    if (fromHardwareKeyboard(event)) lastInput = "other";
+/** Whether `event` is a press with no pointer behind it, which a screen reader or a script sends.
+ * Follows react-aria's `isVirtualPointerEvent` (`utils/isVirtualEvent`) except in two places: no pointer size marks
+ * one, but TalkBack's double tap, which arrives with a size of 1, is told apart by the rest of its signature on
+ * Android only (WebKit reports a pressure of 0 for real mouse presses, so react-aria's broader 1x1 rule could mark
+ * those virtual); and an empty pointer type counts as virtual, being a screen reader's too (JAWS or NVDA in
+ * Firefox). */
+function isVirtualPress(event: PointerEvent): boolean {
+  if (!event.pointerType) return true;
+  if (/Android/i.test(navigator.userAgent)) {
+    return event.width === 1 && event.height === 1 && event.pressure === 0 && event.detail === 0 && event.pointerType === "mouse";
+  }
+  return event.width === 0 && event.height === 0;
+}
+
+/** What the interaction under way came from: the last press's pointer (a finger and a pen count as
+ * a tap, a mouse or a trackpad as a pointer), or a hardware keyboard's key. A virtual press leaves
+ * it as it was. Listens on `window` in the capture phase, registered at load ahead of every
+ * component's listener, so a handler that stops a key or a press before `document` (Escape closing
+ * a floating panel) cannot hide it. */
+let lastInput: "touch" | "pointer" | "key" | undefined;
+if (typeof window !== "undefined") {
+  window.addEventListener("pointerdown", (event) => {
+    if (isVirtualPress(event)) return;
+    lastInput = isTouchPointer(event.pointerType) ? "touch" : "pointer";
+  }, true);
+  window.addEventListener("keydown", (event) => {
+    if (fromHardwareKeyboard(event)) lastInput = "key";
   }, true);
 }
 
@@ -55,11 +75,13 @@ export function interactionIsTouch(): boolean {
 }
 
 /** Called before a focus move the user did not ask for (a handoff as something goes away, a
- * return after a press elsewhere): its destination shows a focus ring, as for the keyboard. Not
- * after a tap, where a ring shows nothing a finger can use and the tooltip it opens would stay up
- * with nothing to send it away. Call it right before the `focus()` that actually happens, after every
+ * return after a press elsewhere): the ring follows the last input. After a hardware keyboard's key
+ * its destination shows a focus ring; after a press, of a finger, a pen or a mouse, it never does,
+ * as a ring is for finding one's place with the keyboard, and on a tap shows nothing a finger can
+ * use while the tooltip it opens would stay up with nothing to send it away. Before any input it
+ * shows one unless the device cannot hover. Call it right before the `focus()` that actually happens, after every
  * guard: called earlier, it sets the keyboard modality even when nothing moves, and a dialog's later
  * restore after a pointer close then shows a ring. */
 export function ringForAutomaticFocus(): void {
-  if (!interactionIsTouch()) setKeyboardModality();
+  if (lastInput === undefined ? !interactionIsTouch() : lastInput === "key") setKeyboardModality();
 }

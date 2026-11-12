@@ -113,9 +113,9 @@ What happens after **Use reset** depends on Codex's answer:
     those failures always give.
 
 However the dialog closes — Cancel, Done, Escape, a notice — keyboard focus, when it would otherwise be left on nothing,
-goes back to where the redeem started, its focus ring showing: from the rail's panel, which has closed, to the rail's
-**Account usage** button; from the account details dialog, to its **Redeem reset** button while it is still there, and
-otherwise to where that dialog places focus when it opens.
+goes back to where the redeem started, its focus ring showing only when the last input was a key: from the rail's panel,
+which has closed, to the rail's **Account usage** button; from the account details dialog, to its **Redeem reset**
+button while it is still there, and otherwise to where that dialog places focus when it opens.
 
 ## How a reset is redeemed
 

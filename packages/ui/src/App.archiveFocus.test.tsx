@@ -292,18 +292,21 @@ it.each([
   expect(getInteractionModality()).toBe("pointer");
 });
 
-it("forces the ring when the view closes by itself, as what it lists is gone, with focus in it", async () => {
+it.each([
+  ["pointer", "pointer"],
+  ["keyboard", "keyboard"],
+] as const)("lets the ring follow the last input when the view closes by itself, as what it lists is gone, with focus in it: %s", async (modality, after) => {
   const daemon = mount();
-  withModality("pointer");
+  withModality(modality);
   await pressElement(row(live.title));
   await openArchive();
   act(() => archiveSection()!.focus());
-  withModality("pointer");
+  withModality(modality);
 
   await deliver(daemon, { type: "project_deleted", project: project.id });
   expect(archiveSection()).toBeNull();
   expect(document.activeElement).not.toBe(document.body);
-  expect(getInteractionModality()).toBe("keyboard");
+  expect(getInteractionModality()).toBe(after);
 });
 
 it.each([

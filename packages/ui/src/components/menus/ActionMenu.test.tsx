@@ -175,6 +175,30 @@ it("loads a submenu on open and retries its failed load without closing", async 
   expect(document.activeElement?.closest("[role=menu]")).not.toBeNull();
 });
 
+it.each([
+  ["a mouse press", "pointer", () => new PointerEvent("pointerdown", { bubbles: true, pointerType: "mouse", button: 0, width: 1, height: 1 })],
+  ["a key", "keyboard", () => new KeyboardEvent("keydown", { key: "F1", bubbles: true })],
+] as const)("shows the ring on the Try again that a failed load hands focus to only after a key, not after a press: %s", async (_, modality, input) => {
+  let fail!: (error: Error) => void;
+  const load = vi.fn(() => new Promise<ActionMenuEntry[]>((_, reject) => (fail = reject)));
+  await openMenu([{ label: "Switch branch", icon: Trash2, items: [], loadItems: load }]);
+  await act(async () => {
+    const item = document.querySelector<HTMLElement>("[role=menuitem]")!;
+    item.focus();
+    item.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+  });
+  expect(load).toHaveBeenCalledTimes(1);
+  expect(document.activeElement?.closest("[role=menu]")).not.toBeNull();
+
+  // The last input before the load fails, the way the user was last interacting with the open menu.
+  act(() => void document.activeElement!.dispatchEvent(input()));
+  await act(async () => fail(new Error("repository unavailable")));
+  const retry = [...document.querySelectorAll("button")].find((button) => button.textContent === "Try again")!;
+  expect(document.activeElement).toBe(retry);
+  expect(getInteractionModality()).toBe(modality);
+  expect(retry.hasAttribute("data-focus-visible")).toBe(modality === "keyboard");
+});
+
 it("offers Download Git before Try again in a submenu whose load found no Git", async () => {
   const load = vi.fn().mockRejectedValueOnce(new CodedError("`git` was not found", "binary_not_found", { binary: "git" })).mockResolvedValueOnce([
     { label: "feature", icon: Trash2, onClick: () => {} },

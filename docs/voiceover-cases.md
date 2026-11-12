@@ -1737,14 +1737,14 @@ proxy and VoiceOver were stopped afterwards; `cleanup.json` records the exact ow
 - **Location and state change.** End the isolated agent process, or close the shown shell, while the recovered trigger
   or its pressed explanation holds focus. The explanation really opens and receives native focus before removal.
 - **Mechanism.** `shell/TitleBar.tsx` (`Breadcrumb`, `HandoffOnUnmount`) waits two frames for the explanation's
-  focus-scope restore when focus was inside the explanation, then focuses the terminal only if focus is still
-  unclaimed. With only the trigger focused, E17 hands off immediately. `terminal/TerminalSurface.tsx` uses
-  `primitives/focus.ts` (`useArrivalFocusProps`) in E17 to decide the ring as focus arrives; E15 used
-  `useFocusVisibleProps` with the text-input rule. E17's ring is shown for keyboard arrival or an automatic handoff,
-  suppressed beneath an opaque cover, and unchanged by Escape/Tab typed after a pointer arrival.
-  `terminal/shell/ShellTerminalPanel.tsx` keys the recovered-mark wrapper by terminal identity, so replacing a marked
-  shell with another marked shell unmounts the old source; `useShellTabFocus` hands focus to the selected tab or
-  New terminal. Events while another control holds focus move nothing.
+  focus-scope restore when focus was inside the explanation, then focuses the terminal only if focus is still unclaimed.
+  With only the trigger focused, E17 hands off immediately. `terminal/TerminalSurface.tsx` uses `primitives/focus.ts`
+  (`useArrivalFocusProps`) in E17 to decide the ring as focus arrives; E15 used `useFocusVisibleProps` with the
+  text-input rule. E17's ring is shown for keyboard arrival or an automatic handoff after a key, suppressed beneath an
+  opaque cover, and unchanged by Escape/Tab typed after a pointer arrival. `terminal/shell/ShellTerminalPanel.tsx` keys
+  the recovered-mark wrapper by terminal identity, so replacing a marked shell with another marked shell unmounts the
+  old source; `useShellTabFocus` hands focus to the selected tab or New terminal. Events while another control holds
+  focus move nothing.
 - **ARIA wiring as rendered.** The trigger is `AXButton`, expanded while pressed; the explanation is a named native
   web dialog with its body in a group. Agent landing is `AXTextArea`, named `Terminal input`; shell landing is the
   selected native `AXRadioButton` tab, or the header's `AXButton` named `New terminal` when no tabs remain.

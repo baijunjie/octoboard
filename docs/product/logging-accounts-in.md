@@ -55,10 +55,12 @@ answered the cancel, or to that same control if the button has gone by then: the
 after all, or the account was turned off meanwhile. When Log in in the actions menu opened it, focus goes back to the
 row's actions menu button.
 
-When the Agent accounts section opens while a login is already running — after a reload, or started in another window
-— the dialog opens on that login (on one of them, when several are running), without starting another, so it can be
+When the Agent accounts section opens while a login is already running — after a reload, or started in another window —
+the dialog opens on that login (on one of them, when several are running), without starting another, so it can be
 followed or cancelled there. A dialog opened this way has no control to return focus to: however it closes, keyboard
-focus goes to the Agent accounts tab in Settings' list of sections, its focus ring showing.
+focus goes to the Agent accounts tab in Settings' list of sections, its focus ring showing only when the last input was
+a key (see "The focus ring after a focus move the window makes on its own" in
+`docs/product/moving-focus-between-regions.md`).
 
 ## How a login ends
 

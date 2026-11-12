@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-// Where focus goes, and whether the ring is forced, as the archive view closes: focus the view held, or lost to
+// Where focus goes, and whether the ring is shown, as the archive view closes: focus the view held, or lost to
 // `<body>` as it went, is handed on once the close is committed; a close the user makes leaves the modality alone, one
-// nobody made (what the view lists is gone) forces the ring. The real `ArchiveLayer` stands over the hook, as `App`
+// nobody made (what the view lists is gone) follows the last input (a hardware key shows the ring, a mouse press
+// does not). The real `ArchiveLayer` stands over the hook, as `App`
 // has it, with the view's own content stubbed.
 import { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -62,6 +63,12 @@ async function mountOpen({ opened = true }: { opened?: boolean } = {}) {
   return { daemon, archive: () => archive, focusTerminal, section };
 }
 
+/** The input a close nobody made follows, and the modality it leaves (`ringForAutomaticFocus`). */
+const INPUTS = [
+  ["a hardware key", () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true })), "keyboard"],
+  ["a mouse press", () => document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "mouse", width: 1, height: 1, bubbles: true })), "pointer"],
+] as const;
+
 const modalityAfter = (previous: "pointer" | "keyboard") => expect(getInteractionModality()).toBe(previous);
 
 it("leaves the modality alone when the user closes the view with focus in it, and hands focus on once", async () => {
@@ -72,12 +79,13 @@ it("leaves the modality alone when the user closes the view with focus in it, an
   modalityAfter("pointer");
 });
 
-it("forces the ring when what the view lists goes away with focus in it", async () => {
+it.each(INPUTS)("follows %s for the ring when what the view lists goes away with focus in it", async (_name, send, ring) => {
   const { daemon, focusTerminal, section } = await mountOpen();
+  send();
   act(() => daemon.store.setState({ projects: new Map() }));
   expect(section()).toBeNull();
   expect(focusTerminal).toHaveBeenCalledOnce();
-  modalityAfter("keyboard");
+  modalityAfter(ring);
 });
 
 it("treats a scope the user set to none like a close of their own", async () => {
@@ -88,26 +96,28 @@ it("treats a scope the user set to none like a close of their own", async () => 
   modalityAfter("pointer");
 });
 
-it("still forces the ring for a close nobody made after the user asked for the scope already open, which changes nothing", async () => {
+it.each(INPUTS)("still follows %s for the ring of a close nobody made after the user asked for the scope already open, which changes nothing", async (_name, send, ring) => {
   const { daemon, archive, focusTerminal, section } = await mountOpen();
+  send();
   // The very same scope: React bails out of the state, so no commit follows to end the user's move.
   act(() => archive().setArchiveScopeByUser(scope));
   expect(section()).not.toBeNull();
   expect(focusTerminal).not.toHaveBeenCalled();
   act(() => daemon.store.setState({ projects: new Map() }));
   expect(section()).toBeNull();
-  modalityAfter("keyboard");
+  modalityAfter(ring);
 });
 
-it("still forces the ring for a close nobody made after the user moved the view to another scope that stays open", async () => {
+it.each(INPUTS)("still follows %s for the ring of a close nobody made after the user moved the view to another scope that stays open", async (_name, send, ring) => {
   const second = projectOf("p-api", main.id, "API");
   const { daemon, archive, section } = await mountOpen();
+  send();
   act(() => daemon.store.setState({ projects: new Map([[site.id, site], [second.id, second]]) }));
   act(() => archive().setArchiveScopeByUser({ console: main.id, project: second.id }));
   expect(section()).not.toBeNull();
   act(() => daemon.store.setState({ projects: new Map([[site.id, site]]) }));
   expect(section()).toBeNull();
-  modalityAfter("keyboard");
+  modalityAfter(ring);
 });
 
 it("reads whether the view is open at the time of the call, not when the caller was rendered", async () => {

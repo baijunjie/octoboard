@@ -191,7 +191,7 @@ export function TerminalPane({
   // The session going away turns the terminal inert, and focus inside it would then fall to `<body>`
   // with no event; it is handed on first. Where the user cleared the selection, with the modality the
   // input left, as the history's switch below does; where the selected session's record went away by
-  // itself, with the ring, as `useFocusHandoff` does.
+  // itself, with the ring following the last input, as `useFocusHandoff` does.
   useLayoutEffect(() => {
     if (!noSession || !rootRef.current?.contains(document.activeElement)) return;
     if (!noSelection) ringForAutomaticFocus();
@@ -329,13 +329,12 @@ export function TerminalPane({
   // Selecting another session, or none, replaces the history, and focus in it falls to `<body>` (a
   // sidebar row's or a rail avatar's press leaves focus where it was). The user made that move, so
   // focus goes where focus meant for the terminal goes — the new history, a live session's terminal,
-  // or, with none selected, the empty state's action or the top bar — with the modality the
-  // selecting input left: no ring after a pointer press, unlike `held`, which turns the ring on for
-  // a control that went away by itself. `held` cannot tell the two apart, so this runs first, as a
-  // layout effect, and leaves it nothing to do; where nothing there takes focus, `held` still moves
-  // it to the top bar with the ring. Not when the selected session's record went away: nobody
-  // selected that, and `held` hands focus on with the ring. The flag goes while no history is shown
-  // or it is inert (resuming, or under the archive view), as focus can leave it then without a blur.
+  // or, with none selected, the empty state's action or the top bar — with the modality the selecting input left.
+  // `held`, which hands focus on for a control that went away by itself, follows the last input too, but cannot tell
+  // the two apart, so this runs first, as a layout effect, and leaves it nothing to do; where nothing there takes
+  // focus, `held` still moves it to the top bar. Not when the selected session's record went away: nobody selected
+  // that, and `held` hands focus on, the ring following the last input. The flag goes while no history is shown or it
+  // is inert (resuming, or under the archive view), as focus can leave it then without a blur.
   useLayoutEffect(() => {
     if (!historyFocusedRef.current || document.activeElement !== document.body) return;
     historyFocusedRef.current = false;

@@ -153,11 +153,11 @@ the filter button followed by this button.
   projects with unarchived sessions. Projects a filter is hiding count, and changing the filter does not itself flip
   the button. Once it offers Collapse all projects again, collapsing some projects from their rows leaves that
   action in place; collapsing the last expanded project makes it offer to expand projects with unarchived sessions.
-- A mouse press leaves keyboard focus where it was, as the sidebar's other controls do. The one exception: Collapse
-  all projects takes away the session rows under the projects it collapses, so when keyboard focus is standing in one
-  of those it is handed to this button, its focus ring showing, rather than dropped. Expanding does not
-  take rows away, so it does not move focus. The project rows themselves stay, so focus already on a project row is
-  left where it is.
+- A mouse press leaves keyboard focus where it was, as the sidebar's other controls do. The one exception: Collapse all
+  projects takes away the session rows under the projects it collapses, so when keyboard focus is standing in one of
+  those it is handed to this button rather than dropped, its focus ring showing only when the last input was a key.
+  Expanding does not take rows away, so it does not move focus. The project rows themselves stay, so focus already on a
+  project row is left where it is.
 
 ## Empty rows
 

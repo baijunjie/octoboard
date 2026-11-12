@@ -58,22 +58,21 @@ which at 768 px and below goes under the section's introduction.
 
 ## Moving between sections
 
-The list of sections is a tab list — vertical, or the row along the top in a narrow window — with the selected
-section marked. Opening Settings puts keyboard focus on the selected section's tab (unless the Add agent dialog is
-put in front; see "Opening and closing Settings" below). Only that tab is reached with Tab:
-the arrow keys move to the previous or next section and show it at once, wrapping around at either end, and Tab from the
-list moves on into the section's settings. In the row along the top only Left and Right move, mirrored under a
-right-to-left language; in the vertical list Up and Down do too. When a control holding keyboard focus disappears from a
-section — a trusted folder's Remove button or an account's actions menu, which goes with its folder or account once
-the removal is confirmed, an agent's tab once the agent's removal is confirmed, the Notifications Enable button once
-the browser has answered, or a Permissions row's button, which goes once
-the permission is granted or its request has come back without the grant — focus goes back to the selected section's tab rather than
-leaving the dialog. When anything else hides or removes the control holding keyboard focus — a search that no longer
-matches its row once the language changes, or once a setting is changed from another window (see
-`docs/product/searching-settings.md`) — focus goes to the search field, showing its keyboard focus ring. After a tap it
-goes to the selected section's tab instead, so the on-screen keyboard does not come up, or to the dialog's close button
-while the search matches nothing and the tabs are hidden. Focus that has already moved elsewhere in the dialog stays
-there.
+The list of sections is a tab list — vertical, or the row along the top in a narrow window — with the selected section
+marked. Opening Settings puts keyboard focus on the selected section's tab (unless the Add agent dialog is put in front;
+see "Opening and closing Settings" below). Only that tab is reached with Tab: the arrow keys move to the previous or
+next section and show it at once, wrapping around at either end, and Tab from the list moves on into the section's
+settings. In the row along the top only Left and Right move, mirrored under a right-to-left language; in the vertical
+list Up and Down do too. When a control holding keyboard focus disappears from a section — a trusted folder's Remove
+button or an account's actions menu, which goes with its folder or account once the removal is confirmed, an agent's tab
+once the agent's removal is confirmed, the Notifications Enable button once the browser has answered, or a Permissions
+row's button, which goes once the permission is granted or its request has come back without the grant — focus goes back
+to the selected section's tab rather than leaving the dialog. When anything else hides or removes the control holding
+keyboard focus — a search that no longer matches its row once the language changes, or once a setting is changed from
+another window (see `docs/product/searching-settings.md`) — focus goes to the search field, its focus ring showing only
+when the last input was a key. After a tap it goes to the selected section's tab instead, so the on-screen keyboard does
+not come up, or to the dialog's close button while the search matches nothing and the tabs are hidden. Focus that has
+already moved elsewhere in the dialog stays there.
 
 ## Opening and closing Settings
 

@@ -142,12 +142,12 @@ is confirmed closes the confirmation. What the two actions do is in "Process inf
   are still running, with the remedy of running Octoboard with the same permissions as those processes; for any other
   reason, it says the process or some of its child processes are still running after Octoboard tried to stop them,
   with the remedy of trying again in a moment.
-- **Keyboard focus**: where the confirmation was opened from the keyboard, so the card's button held focus, and the
-  tree has left the list, focus goes, with its focus ring, to the first button of the card that followed it, or, with
-  none, to where `F6` lands in the panel. A card that goes away while it or one of its buttons holds focus hands focus
-  to where `F6` lands in the panel as well. A confirmation that closes because a refresh took its tree out of the list,
-  where it was opened from the keyboard, hands focus on the same way: to the first button of the card that followed the
-  tree, or, with none, to where `F6` lands in the panel.
+- **Keyboard focus**: where the confirmation was opened from the keyboard, so the card's button held focus, and the tree
+  has left the list, focus goes to the first button of the card that followed it, or, with none, to where `F6` lands in
+  the panel, its focus ring showing only when the last input was a key. A card that goes away while it or one of its
+  buttons holds focus hands focus to where `F6` lands in the panel as well. A confirmation that closes because a refresh
+  took its tree out of the list, where it was opened from the keyboard, hands focus on the same way: to the first button
+  of the card that followed the tree, or, with none, to where `F6` lands in the panel.
 
 ## Loading, refreshing and failures
 

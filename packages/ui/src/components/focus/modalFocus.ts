@@ -25,9 +25,9 @@ export function focusOpenDialog(previous?: Element | null, { opening = false }: 
  * opening focus goes (see `focusOpenDialog`), else
  * wherever `focusTerminal` puts it, which for the selected session's terminal is the terminal; the empty
  * terminal and the welcome screen decline from `<body>`, so then the first of the sidebar and the rail that has
- * a control takes it, each landing where F6 would. With none to take it, focus stays on `<body>`. Keyboard modality
- * gives the fallback a visible focus ring even when a pointer acknowledged the alert, except on a touch screen
- * (`ringForAutomaticFocus`). */
+ * a control takes it, each landing where F6 would. With none to take it, focus stays on `<body>`. The ring follows
+ * the last input (`ringForAutomaticFocus`): a key shows it on the fallback, a press, one that acknowledged the alert
+ * included, never does. */
 export function focusAfterLoss(focusTerminal: () => void): void {
   ringForAutomaticFocus();
   if (focusOpenDialog(undefined, { opening: true })) return;

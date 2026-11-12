@@ -22,10 +22,11 @@ console at all** there is no terminal in the window and the welcome screen fills
 **When the session on screen goes away while keyboard focus is in its terminal**, focus is handed on to the creation
 action the empty panel now offers, or, with none, to the top bar's first enabled control; after a tap, to the top bar's
 first enabled control (see "Focus after a tap" in `docs/product/moving-focus-between-regions.md`). Where the user
-cleared the selection — a console with no session to show chosen from the rail, say, or Back to where none was
-selected — the focus ring follows the input that cleared it: it shows after a key, and not after a pointer press. Where
-the selected session's record goes away by itself, which nobody chose, the ring shows, except after a tap. The same
-holds when focus is in an archived session's history instead of the terminal (see "Keyboard focus" in
+cleared the selection — a console with no session to show chosen from the rail, say, or Back to where none was selected
+— the focus ring follows the input that cleared it: it shows after a key, and not after a pointer press. Where the
+selected session's record goes away by itself, which nobody chose, the ring shows only when the last input was a key
+(see "The focus ring after a focus move the window makes on its own" in `docs/product/moving-focus-between-regions.md`).
+The same holds when focus is in an archived session's history instead of the terminal (see "Keyboard focus" in
 `docs/product/session-history.md`).
 
 ## Typing and the mouse
@@ -287,14 +288,15 @@ status *Reconnecting* (see "Which status a session shows" in `docs/product/sessi
 
 **Keyboard focus.** The cover is a region named by the session's name, not by its heading, which VoiceOver would
 otherwise read twice, and described by its heading and its line. Keyboard focus in the terminal as the cover comes, or
-on a Reconnect button that goes away with it, moves to the cover, showing its focus ring; whatever hands keyboard focus
-to the terminal — `F6` reaching the terminal's region, for one (see "Moving focus between regions with F6" in
-`docs/product/moving-focus-between-regions.md`) — puts it on the cover; focus anywhere else in the window is left where
-it is. When the cover goes, focus moves on only if it is still on the cover: back to the terminal, showing its focus
-ring, or, when the last interaction was a tap, to the first control that takes no text, so that no on-screen keyboard
-comes up — the first such control of a maximized or floating panel covering the terminal, otherwise the top bar's — with
-no focus ring. Either way the reattach counts as turning to the terminal (see "The most recently active client" in
-`docs/product/terminals-on-several-clients.md`). A recovery never moves focus that is elsewhere.
+on a Reconnect button that goes away with it, moves to the cover, its focus ring showing only when the last input was a
+key; whatever hands keyboard focus to the terminal — `F6` reaching the terminal's region, for one (see "Moving focus
+between regions with F6" in `docs/product/moving-focus-between-regions.md`) — puts it on the cover; focus anywhere else
+in the window is left where it is. When the cover goes, focus moves on only if it is still on the cover: back to the
+terminal, its focus ring showing only when the last input was a key, or, when the last interaction was a tap, to the
+first control that takes no text, so that no on-screen keyboard comes up — the first such control of a maximized or
+floating panel covering the terminal, otherwise the top bar's — with no focus ring. Either way the reattach counts as
+turning to the terminal (see "The most recently active client" in `docs/product/terminals-on-several-clients.md`). A
+recovery never moves focus that is elsewhere.
 
 **Assistive technology** is told the cover's heading and line as one message, once: as the cover comes while the session
 is shown, or, for a session shown while its process already cannot be reached, once the window has been attended
@@ -427,5 +429,5 @@ The sidebar's empty lists stay compact alongside this panel (see "Empty rows" in
   Focus that is on nothing is left on nothing. When the creation button goes away while holding focus, because a session
   is selected or the console's sessions or projects change from this window or another client, focus goes to the
   terminal when it can take it, otherwise to the creation action the panel offers next, if any, and else to the top
-  bar's first enabled control, with its focus ring showing; after a tap, to the top bar's first enabled control with no
-  ring.
+  bar's first enabled control, its focus ring showing only when the last input was a key; after a tap, to the top bar's
+  first enabled control.

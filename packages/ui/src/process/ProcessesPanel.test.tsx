@@ -586,6 +586,8 @@ it("hands focus to the next row's first action after a confirmed stop, with the 
     return { type: "processes_listed", id: null, trees: [tree("1:1"), tree("2:2", { command: "tail -f log" })].filter((candidate) => !stopped.has(candidate.id)) };
   });
   await act(async () => button("Stop").focus());
+  // A hardware key, so the ring follows it whatever input an earlier test left behind.
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
   await act(async () => button("Stop").click());
   await confirmStop();
   await settleFocus();
@@ -594,7 +596,7 @@ it("hands focus to the next row's first action after a confirmed stop, with the 
   expect(getInteractionModality()).toBe("keyboard");
 });
 
-it("hands focus on after a stop opened from the keyboard but confirmed with the pointer", async () => {
+it("hands focus on, with no ring, after a stop opened from the keyboard but confirmed with the pointer", async () => {
   const stopped = new Set<string>();
   await mount({ session: running }, async (body) => {
     if (body.type === "stop_processes") {
@@ -609,7 +611,7 @@ it("hands focus on after a stop opened from the keyboard but confirmed with the 
   await settleFocus();
   expect(rows()).toHaveLength(1);
   expect(document.activeElement).toBe(button("Keep"));
-  expect(getInteractionModality()).toBe("keyboard");
+  expect(getInteractionModality()).not.toBe("keyboard");
 });
 
 it("leaves focus alone after a stop opened and confirmed with the pointer, with no ring", async () => {

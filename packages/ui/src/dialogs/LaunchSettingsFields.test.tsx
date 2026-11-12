@@ -247,7 +247,9 @@ it("turns the focus ring on only when the console matrix's mark hands focus on, 
     container.remove();
     act(() => Reflect.apply(setInteractionModality, undefined, [modality]));
   });
-  document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "mouse", bubbles: true }));
+  // The last input was a key, whose ring the handoff follows; each mark is focused after the modality is put back to
+  // the pointer's.
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
   const pair = { compatibility: {}, model: null, effort: null };
   const render = (shown: boolean, modelFailure?: string) => act(async () => root.render(shown
     ? <LaunchMatrix launch={launchOf(modelFailure)} consoleSessions={pair} projectSessions={pair} onConsoleChange={() => {}} onProjectChange={() => {}} />

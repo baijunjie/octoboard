@@ -57,7 +57,7 @@ export function AccountSettingsDialog({ agent, account, focusSharing = false, on
       const control = body.current?.querySelector<HTMLElement>('[data-sharing-account] input[role="switch"]');
       if (!control) return;
       control.scrollIntoView?.({ block: "center" });
-      // Focus lands from a press in another dialog, so the destination shows its ring.
+      // The user did not ask for this move, so the ring follows the last input.
       ringForAutomaticFocus();
       control.focus();
     });

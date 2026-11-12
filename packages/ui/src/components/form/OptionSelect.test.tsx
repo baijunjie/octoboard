@@ -91,7 +91,9 @@ it("turns the focus ring on only when it hands focus to the trigger, not when th
     container.remove();
     act(() => Reflect.apply(setInteractionModality, undefined, [modality]));
   });
-  document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "mouse", bubbles: true }));
+  // The last input was a key, whose ring the handoff follows; each mark is focused after the modality is put back to
+  // the pointer's.
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
   const render = (shown: boolean, marked: boolean) => act(async () => root.render(shown ? (
     <OptionSelect label="Model" value="a" onChange={() => {}} options={[{ value: "a", label: "A" }]}
       mark={marked ? (markId) => <button type="button" data-status-mark-id={markId}>Why</button> : undefined} />

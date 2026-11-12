@@ -7,6 +7,7 @@ import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { focusAfterLoss } from "./modalFocus";
 import { useFocusVisibleProps } from "../../primitives";
+import { withModality } from "../dialog/dialogTestSupport";
 
 beforeEach(() => {
   const globals = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean };
@@ -64,7 +65,11 @@ it("goes to the sidebar, then the rail, when the terminal takes no focus", () =>
   expect(document.activeElement?.id).toBe("rail-button");
 });
 
-it("marks a fallback control with its focus ring even after a pointer acknowledged the alert", () => {
+it.each([
+  ["marks a fallback control with its focus ring after a hardware key", "keyboard"],
+  ["marks no focus ring on a fallback control after a mouse press", "pointer"],
+] as const)("%s", (_name, modality) => {
+  withModality(modality);
   const container = addToBody("<div></div>");
   const root = createRoot(container);
   onTestFinished(() => act(() => root.unmount()));
@@ -77,7 +82,7 @@ it("marks a fallback control with its focus ring even after a pointer acknowledg
   act(() => focusAfterLoss(() => {}));
   const button = container.querySelector("button")!;
   expect(document.activeElement).toBe(button);
-  expect(button.hasAttribute("data-focus-visible")).toBe(true);
+  expect(button.hasAttribute("data-focus-visible")).toBe(modality === "keyboard");
 });
 
 it("marks no focus ring on a fallback control after a tap", () => {

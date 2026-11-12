@@ -134,13 +134,13 @@ session's menu offers no Pin or Unpin. A focus mode offers no Pin or Unpin for w
 project's focus mode header nor on a console session's own card in its focus mode (see `docs/product/focus-mode.md`).
 
 **The pin button.** A pinned project or session shows a pin button: on its row in the sidebar, after the row's markers
-(a project's branch badge and status marker, a session's binding badge) and before the buttons that show only on
-hover, so that while those are hidden the pin buttons of project and session rows line up in one column at the rows'
-end; after the name on a project's heading in a console session's focus mode; and on the status line of its card in a
-focus mode, except a console session's own card in its focus mode, which never shows one. It is always
-shown while the item is pinned, and is reached with Tab like the row's other buttons. While the pointer is over it or it
-holds keyboard focus, its pin glyph turns into the unpin glyph. Its tooltip is "Unpin", while the name assistive
-technology announces for it also names the item ("Unpin …"). Pressing it unpins the item, as the menu's Unpin does; a
-mouse press neither selects the row nor moves keyboard focus. The button goes away with the pin, so when it held
-keyboard focus, focus is handed first, with its focus ring showing, to the row or card it was on — or, on a project's
-heading in a console session's focus mode, to that heading's **+** button.
+(a project's branch badge and status marker, a session's binding badge) and before the buttons that show only on hover,
+so that while those are hidden the pin buttons of project and session rows line up in one column at the rows' end; after
+the name on a project's heading in a console session's focus mode; and on the status line of its card in a focus mode,
+except a console session's own card in its focus mode, which never shows one. It is always shown while the item is
+pinned, and is reached with Tab like the row's other buttons. While the pointer is over it or it holds keyboard focus,
+its pin glyph turns into the unpin glyph. Its tooltip is "Unpin", while the name assistive technology announces for it
+also names the item ("Unpin …"). Pressing it unpins the item, as the menu's Unpin does; a mouse press neither selects
+the row nor moves keyboard focus. The button goes away with the pin, so when it held keyboard focus, focus is handed
+first to the row or card it was on — or, on a project's heading in a console session's focus mode, to that heading's
+**+** button — its focus ring showing only when the last input was a key.

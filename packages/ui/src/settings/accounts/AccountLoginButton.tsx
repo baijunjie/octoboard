@@ -54,7 +54,7 @@ function useLoginFocusReturn(
       const target = returning.to === "button" && !succeeded && opener ? opener : fallback();
       const focused = document.activeElement;
       if (!target || focused === target || (focused !== document.body && !opener?.contains(focused))) return;
-      // The user did not ask for this move, so the destination shows its ring.
+      // The user did not ask for this move, so the ring follows the last input.
       ringForAutomaticFocus();
       target.focus();
     });

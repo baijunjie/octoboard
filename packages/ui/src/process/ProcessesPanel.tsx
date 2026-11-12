@@ -111,7 +111,7 @@ function ProcessesContent({ data }: { data: NonNullable<ReturnType<typeof usePro
   const opener = useRef(false);
   /** Focus for the panel once a confirmed action opened from the keyboard has taken `tree` out of the list,
    * when the dialog's own return of focus found nothing to return to and focus fell to the page: the first
-   * action of the row that followed it, else where F6 lands in the panel, with the focus ring. */
+   * action of the row that followed it, else where F6 lands in the panel, the ring following the last input. */
   const focusAfterAction = (nextId: string | undefined) =>
     afterCollectionFocus(() => {
       if (!opener.current || !focusFellToPage()) return;

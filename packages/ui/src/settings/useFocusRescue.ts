@@ -11,7 +11,7 @@ const MAX_FRAMES_TO_WAIT = 30;
 
 /** Hands focus to `target` when a render hides or unmounts the element that held it inside the `dialog` (a search
  * that stops matching a row once the language changes, a setting changed from another window), instead of letting it
- * fall to `<body>`. The user did not ask for the move, so the destination shows its focus ring (see "Focus moved by a
+ * fall to `<body>`. The user did not ask for the move, so the ring follows the last input (see "Focus moved by a
  * change the user did not make" in `docs/ui-standard.md`). After a tap the destination is `touchTarget` instead, as a
  * move into a text field raises the on-screen keyboard; it may return `"pending"` for an element not attached yet,
  * and the rescue keeps waiting. The check runs after every render of the caller, and waits for focus to actually be

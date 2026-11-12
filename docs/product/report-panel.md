@@ -166,9 +166,10 @@ newest page again, with anything typed into any page's form and not submitted go
   says it once as it appears. The failure goes once a listing succeeds; when it goes while it, or the mark's popover,
   holds keyboard focus, focus moves to the panel's first enabled control.
 
-When the page holding keyboard focus is replaced — by following a new page or paging through history — focus moves
-to the report panel's first enabled header control, with a visible focus ring. If a modal dialog is open, focus
-stays within it instead. Replacing a page leaves focus elsewhere in the window where it is.
+When the page holding keyboard focus is replaced — by following a new page or paging through history — focus moves to
+the report panel's first enabled header control, its focus ring showing only when the last input was a key (see "The
+focus ring after a focus move the window makes on its own" in `docs/product/moving-focus-between-regions.md`). If a
+modal dialog is open, focus stays within it instead. Replacing a page leaves focus elsewhere in the window where it is.
 
 ## History pages are read-only
 

@@ -105,7 +105,8 @@ export function AccountLoginDialog({ agent, account, start, onClose }: {
   }, [login, current, lastSeen, refusal]);
   // Each form is a dialog of its own, whose own focus handling may leave focus on the dialog or on `<body>`: the
   // form's primary button (Log in again, Cancel login) takes it.
-  // Not asked for by the user, so its ring shows, but only where the form changed, not when the dialog first opens.
+  // Not asked for by the user, so the ring follows the last input, but only where the form changed, not when the
+  // dialog first opens.
   const wasEnded = useRef(ended);
   useEffect(() => {
     if (ended && !wasEnded.current) ringForAutomaticFocus();

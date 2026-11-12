@@ -2,8 +2,8 @@
 
 How `F6` moves keyboard focus between the window's regions: the top bar, the rail, the panes (or the welcome screen
 standing in for them, see `docs/product/welcome-screen.md`), the update notice, the connection banner and the toasts,
-whose places in the window are in `docs/product/window-layout.md`; and where the window does not move focus after a
-tap.
+whose places in the window are in `docs/product/window-layout.md`; when a focus move the window makes on its own shows
+a focus ring; and where the window does not move focus after a tap.
 
 ## Moving focus between regions with F6
 
@@ -89,13 +89,23 @@ it is reconnecting, or no banner is shown, both keys leave focus where it is.
 The menu has to be dismissed before these keys reach Retry. A mouse press can still reach Retry without dismissing
 what is open (see "What an open dialog, menu or popover covers" in `docs/product/window-layout.md`).
 
+## The focus ring after a focus move the window makes on its own
+
+A focus ring never results from a mouse press or a tap. When the window moves focus on its own — handing it on as the
+part holding it goes away (a panel or a pane closing, a record removed, a dialog closing), or returning it after an
+action fails — the destination shows its focus ring only when the last input was a key of a hardware keyboard; after a
+press with a mouse, a trackpad, a finger or a pen it shows none. Typing on a touch screen's on-screen keyboard does not
+count as a key, and a press with no pointer behind it, such as a screen reader's or a script's, leaves the last input
+as it was. Before any input at all, the ring shows unless the device's primary input cannot hover.
+
 ## Focus after a tap
 
-After a **tap** — an interaction whose press came from a finger — the window never puts keyboard focus in a field
-that takes text on its own, since that raises the on-screen keyboard over what was just shown, and a focus move it
-makes on its own shows no focus ring. A press with a mouse or a trackpad, or a key — a tablet's hardware keyboard
-included — keeps the rules described everywhere else, on any device. Before any interaction at all, the window
-treats a device whose primary input cannot hover, such as a phone, as if the last interaction were a tap.
+After a **tap** — an interaction whose press came from a finger or a pen — the window never puts keyboard focus in a
+field that takes text on its own, since that raises the on-screen keyboard over what was just shown; a focus move it
+makes on its own shows no focus ring either (see "The focus ring after a focus move the window makes on its own"). A
+press with a mouse or a trackpad, or a key — a tablet's hardware keyboard included — keeps the rules described
+everywhere else, on any device. Before any interaction at all, the window treats a device whose primary input cannot
+hover, such as a phone, as if the last interaction were a tap.
 
 - **A session picked by a tap is shown without focusing its terminal**; a tap on the terminal focuses it.
 - **Focus handed to the terminal when what held it goes away or is hidden** — a panel closing, a pane going — is not put
@@ -105,7 +115,5 @@ treats a device whose primary input cannot hover, such as a phone, as if the las
   `docs/product/archive-view.md`), and else to the top bar's first enabled control.
 - **A panel that floats over the terminal opened by a tap** takes focus on its first control that takes no text: in the
   Terminal panel a control of its header, not the shell.
-- **Focus moved on the window's own initiative** — handed on as the part holding it goes away, returned after a press
-  elsewhere — shows no focus ring.
 
 `F6`, `Tab` and the controls themselves work as everywhere else.

@@ -362,11 +362,11 @@ project's choice stays unless the new reading no longer offers it, when it goes 
 choice stays while its new status allows it, as do the agents and Settings sections checked. **Import** shows as pending
 while the file is read again, and assistive technology is told that the file was read again because settings changed.
 
-When reading it again fails, an Alert at the top of the review, titled "Could not read the file again", gives the
-reason with **Try again**, or, for a failure no retry can change, says to choose the file again with a **Choose file**
-button that does so. Meanwhile **Import** is unavailable: its tooltip and description are the Alert's title, and a press
-of it moves keyboard focus to the Alert's button, with the focus ring shown. The Alert goes once the file is read again,
-or once nothing checked writes settings any more.
+When reading it again fails, an Alert at the top of the review, titled "Could not read the file again", gives the reason
+with **Try again**, or, for a failure no retry can change, says to choose the file again with a **Choose file** button
+that does so. Meanwhile **Import** is unavailable: its tooltip and description are the Alert's title, and a press of it
+moves keyboard focus to the Alert's button, its focus ring showing only when Import was pressed with a key. The Alert
+goes once the file is read again, or once nothing checked writes settings any more.
 
 ## Applying the import
 

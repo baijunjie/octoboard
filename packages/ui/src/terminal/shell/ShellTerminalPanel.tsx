@@ -209,7 +209,7 @@ export function ShellTerminalPanel({
   /** Focus for the panel once the close confirmation has gone, when the element its dialog would give
    * focus back to went with the terminal (its tab, the menu item, its view), so focus fell to the page:
    * the shown tab after a close asked from a menu, the shown terminal after one asked from the terminal
-   * itself, with the focus ring. The dialog's own return of focus, a frame after it closes, comes first
+   * itself, the ring following the last input. The dialog's own return of focus, a frame after it closes, comes first
    * and stands, and so does focus left where it was when the daemon refused the close. */
   const focusAfterConfirmedClose = (from: CloseOrigin) =>
     afterCollectionFocus(() => {

@@ -678,14 +678,14 @@ describe("selecting another session while focus is in the history", () => {
     expect(getInteractionModality()).toBe("pointer");
   });
 
-  it("hands focus on with the ring when the live session selected is held by an account switch, which leaves its terminal inert", async () => {
+  it("hands focus on with no ring after a pointer press when the live session selected is held by an account switch, which leaves its terminal inert", async () => {
     const bar = addTopBar();
     const { show } = await mountFocusedHistory("pointer");
     // The held terminal cannot take the focus asked of it (the fake controller moves none, as an inert one would).
     show({ session: { ...session, switching_account: true } });
     await act(async () => {});
     expect(document.activeElement).toBe(bar);
-    expect(getInteractionModality()).toBe("keyboard");
+    expect(getInteractionModality()).toBe("pointer");
   });
 
   it("focuses the live session's terminal itself when none is given to restore, with no ring after a pointer selection", async () => {
@@ -701,19 +701,19 @@ describe("selecting another session while focus is in the history", () => {
     expect(getInteractionModality()).toBe("pointer");
   });
 
-  it("hands focus on with the ring when a selected session's record goes away, even after a pointer press", async () => {
+  it("hands focus on with no ring when a selected session's record goes away after a pointer press", async () => {
     const restoreFocus = vi.fn();
     const { show } = await mountFocusedHistory("pointer", { restoreFocus });
     show({ session: undefined, noSelection: false, restoreFocus });
     await act(async () => {});
     expect(restoreFocus).toHaveBeenCalledOnce();
-    expect(getInteractionModality()).toBe("keyboard");
+    expect(getInteractionModality()).toBe("pointer");
   });
 
   it.each([
     ["offers an action", true],
     ["offers no action", false],
-  ] as const)("hands focus to where it goes from a live terminal, with the ring even after a pointer press, when the selected session's record goes away and the empty state %s", async (_case, offered) => {
+  ] as const)("hands focus to where it goes from a live terminal, with no ring after a pointer press, when the selected session's record goes away and the empty state %s", async (_case, offered) => {
     const bar = addTopBar();
     const props = offered ? { noAgents: "add" as const } : {};
     const { container, show } = await mountFocusedHistory("pointer", props);
@@ -721,8 +721,8 @@ describe("selecting another session while focus is in the history", () => {
     await act(async () => {});
     expect(document.activeElement).toBe(offered ? emptyAction(container) : bar);
     // The test's top bar is a plain button, which draws no ring of its own; the modality is what the ring follows.
-    if (offered) expect(focusedElementRinged()).toBe(true);
-    expect(getInteractionModality()).toBe("keyboard");
+    if (offered) expect(focusedElementRinged()).toBe(false);
+    expect(getInteractionModality()).toBe("pointer");
   });
 
   it("does not take focus back for the terminal when focus was not in the history", async () => {
@@ -756,7 +756,7 @@ describe("clearing the selection while focus is in a live session's terminal", (
   it.each([
     ["cleared by the user", "pointer", false, true, "pointer"],
     ["cleared by the user", "keyboard", true, true, "keyboard"],
-    ["gone by itself", "pointer", true, false, "keyboard"],
+    ["gone by itself", "pointer", false, false, "pointer"],
     ["gone by itself", "keyboard", true, false, "keyboard"],
   ] as const)("hands focus to the empty state's action when the session is %s after a %s press, ringed: %s", (_case, modality, ringed, noSelection, after) => {
     const { container, show } = mountFocusedLive(modality, { noAgents: "add" });
@@ -768,7 +768,7 @@ describe("clearing the selection while focus is in a live session's terminal", (
 
   it.each([
     ["cleared by the user", "pointer", true],
-    ["gone by itself", "keyboard", false],
+    ["gone by itself", "pointer", false],
   ] as const)("hands focus to the top bar when the session is %s and the empty state offers no action, leaving modality %s after a pointer press", (_case, after, noSelection) => {
     const { container, topBarButton, show } = mountFocusedLive("pointer");
     show({ session: undefined, noSelection });
@@ -1278,9 +1278,11 @@ describe("a session whose process the daemon cannot reach", () => {
   it("moves focus held in the terminal to the cover, and back only while it is still there on recovery", () => {
     const { container, root } = mount();
     const input = focusTerminalInput(container);
+    // A hardware key, whatever input an earlier test left behind.
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
     render(root, pending);
     expect(document.activeElement).toBe(region(container));
-    // The move is not the user's, so the region draws its ring however the last input came.
+    // The move is not the user's, so the ring follows the last input, here a key.
     expect(region(container)!.hasAttribute("data-focus-visible")).toBe(true);
     const focuses = FakeController.last.focuses;
     render(root, session);
@@ -2063,11 +2065,14 @@ describe("the terminal's focus ring", () => {
     expect(ringed(container)).toBe(true);
   });
 
-  it("is drawn when recovery hands focus from the pending cover back to the input, after a click had put focus there", () => {
+  it.each([
+    ["pointer", false],
+    ["keyboard", true],
+  ] as const)("is drawn only after a key when recovery hands focus from the pending cover back to the input, after a %s had put focus there", (by, drawn) => {
     const { container, root, input } = mountUncovered();
-    modality("pointer");
+    withModality(by);
     act(() => input.focus());
-    expect(ringed(container)).toBe(false);
+    if (by === "pointer") expect(ringed(container)).toBe(false);
     render(root, { ...session, holder_link: "pending" });
     expect(document.activeElement).toBe(container.querySelector("[role=region][aria-label]"));
     const focuses = FakeController.last.focuses;
@@ -2077,7 +2082,7 @@ describe("the terminal's focus ring", () => {
     // The handoff asked the controller to focus xterm's input; the fake one moves no focus, so do what xterm would.
     expect(FakeController.last.focuses).toBeGreaterThan(focuses);
     act(() => input.focus());
-    expect(ringed(container)).toBe(true);
+    expect(ringed(container)).toBe(drawn);
   });
 
   it("is not applied while the loading cover hides the terminal, and is once the first paint has uncovered it", () => {

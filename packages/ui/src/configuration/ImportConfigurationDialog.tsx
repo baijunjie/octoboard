@@ -53,7 +53,8 @@ import { ImportResult, type Imported } from "./ImportResult";
 import { ImportReview } from "./ImportReview";
 import type { Region } from "./RegionTabs";
 import { raiseError } from "../components/alerts/raiseError";
-import { Button, setKeyboardModality } from "../primitives";
+import { ringForAutomaticFocus } from "../input/touchInput";
+import { Button } from "../primitives";
 import { TitledControl } from "../components/hint/TitledControl";
 
 type Stage =
@@ -273,10 +274,10 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
     if (!behind && refreshFailure) setRefreshFailure(undefined);
   }, [behind, refreshFailure]);
   // The Alert's Try again, or a successful read, takes the Alert away while focus may be on its button. The hand-over is
-  // a focus move the user did not make, so it shows the focus ring.
+  // a focus move the user did not make, so the ring follows the last input.
   const importButton = useRef<HTMLButtonElement>(null);
   useRefocusIfLost(() => {
-    setKeyboardModality();
+    ringForAutomaticFocus();
     return importButton.current;
   }, [stuck]);
   // The Alert of a failed refresh, whose last button is the one thing to do about it (Try again, or Choose file).
@@ -286,7 +287,7 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
     if (stage.kind !== "review" || busy || refreshingRef.current) return;
     if (stuck) {
       // The press of an unavailable Import explains by taking focus to what the Alert offers.
-      setKeyboardModality();
+      ringForAutomaticFocus();
       Array.from(refreshAlert.current?.querySelectorAll("button") ?? []).at(-1)?.focus();
       return;
     }

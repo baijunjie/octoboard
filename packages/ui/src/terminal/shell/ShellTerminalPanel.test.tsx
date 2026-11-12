@@ -355,7 +355,7 @@ it.each([true, false])("focuses New terminal after the last tab goes with canMax
   await vi.waitFor(() => expect(document.activeElement).toBe(panel.container.querySelector('button[aria-label="New terminal"]')));
 });
 
-it("hands focus on a tab that goes to the shown tab, with the focus ring, never to the departing copy", async () => {
+it("hands focus on a tab that goes to the shown tab, without a focus ring after a mouse press, never to the departing copy", async () => {
   stubListMotion();
   const panel = mount([shell("a", 1), shell("b", 2), shell("c", 3)]);
   await act(async () => panel.tabs()[1].click());
@@ -365,10 +365,10 @@ it("hands focus on a tab that goes to the shown tab, with the focus ring, never 
   expect(panel.container.querySelector("[data-list-motion-exit]")).not.toBeNull();
   await vi.waitFor(() => expect(document.activeElement).toBe(panel.tabs().find((tab) => tab.textContent === "shell c")));
   expect(document.activeElement!.closest("[data-list-motion-exit]")).toBeNull();
-  expect(getInteractionModality()).toBe("keyboard");
+  expect(getInteractionModality()).toBe("pointer");
 });
 
-it("hands focus to the shown tab, with the focus ring, when the tab goes with its context menu open", async () => {
+it("hands focus to the shown tab, without a focus ring after a mouse press, when the tab goes with its context menu open", async () => {
   const panel = mount([shell("a", 1), shell("b", 2)]);
   act(() => panel.tabs()[0].dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 20, clientY: 30 })));
   await vi.waitFor(() => expect(document.activeElement?.closest("[role=menu]")).not.toBeNull());
@@ -377,7 +377,7 @@ it("hands focus to the shown tab, with the focus ring, when the tab goes with it
   await vi.waitFor(() => expect(document.activeElement).toBe(panel.tabs()[0]));
   expect(panel.tabs()[0].textContent).toBe("shell b");
   expect(document.querySelector("[role=menu]")).toBeNull();
-  expect(getInteractionModality()).toBe("keyboard");
+  expect(getInteractionModality()).toBe("pointer");
 });
 
 it("hands focus to the New terminal button when the last tab goes while it holds focus", async () => {
@@ -434,7 +434,7 @@ async function closeFromContextMenu(tab: HTMLElement) {
 const dialogButton = (name: string) =>
   Array.from(document.querySelectorAll<HTMLButtonElement>("[role=alertdialog] button")).find((button) => button.textContent === name)!;
 
-it("hands focus to the shown tab, with the focus ring, when a busy tab closed from its context menu goes on confirming", async () => {
+it("hands focus to the shown tab, without a focus ring after a mouse press, when a busy tab closed from its context menu goes on confirming", async () => {
   const panel = mount([shell("a", 1, { busy: true }), shell("b", 2)]);
   closesAtOnce(panel);
   await closeFromContextMenu(panel.tabs()[0]);
@@ -445,7 +445,7 @@ it("hands focus to the shown tab, with the focus ring, when a busy tab closed fr
   await vi.waitFor(() => expect(document.activeElement).toBe(panel.tabs()[0]));
   expect(panel.tabs().map((tab) => tab.textContent)).toEqual(["shell b"]);
   expect(document.querySelector("[role=alertdialog]")).toBeNull();
-  expect(getInteractionModality()).toBe("keyboard");
+  expect(getInteractionModality()).not.toBe("keyboard");
 });
 
 it("hands focus to the New terminal button when the last tab, busy, goes on confirming its close", async () => {
@@ -570,14 +570,14 @@ it("words the note in the interface language and places it by flow, not by a phy
   expect(`${box.className} ${mark.className}`).not.toMatch(/(^|\s)(ml|mr|left|right|pl|pr)-/);
 });
 
-it("hands focus to the shown tab, with the focus ring, when the note goes while the mark holds focus", async () => {
+it("hands focus to the shown tab, without a focus ring after a mouse press, when the note goes while the mark holds focus", async () => {
   const panel = mount([shell("a", 1, { screen_inexact: true })]);
   act(() => marks(panel)[0].focus());
   pointerModality();
   setTerminals(panel, [shell("a", 1, { screen_inexact: false })]);
   expect(marks(panel)).toEqual([]);
   await vi.waitFor(() => expect(document.activeElement).toBe(panel.tabs()[0]));
-  expect(getInteractionModality()).toBe("keyboard");
+  expect(getInteractionModality()).toBe("pointer");
 });
 
 it("leaves focus alone when the note goes while focus is elsewhere", () => {
@@ -607,7 +607,9 @@ it.each(["trigger", "explanation"] as const)("hands focus to the remaining tab w
   expect(panel.shown()).toBe("a");
   expect(document.activeElement).toBe(panel.tabs()[0]);
   expect(marks(panel)[0].getAttribute("aria-label")).toBe(`${RECOVERED} (${isolate("shell a")})`);
-  expect(getInteractionModality()).toBe("keyboard");
+  // The explanation was opened with a key, whose ring the handoff follows; the trigger was only pressed.
+  if (from === "explanation") expect(getInteractionModality()).toBe("keyboard");
+  else expect(getInteractionModality()).not.toBe("keyboard");
 });
 
 it("draws no mark or state for a terminal whose process cannot be reached, which stays a running tab among the others", () => {

@@ -6,7 +6,10 @@ import { afterEach, expect, it, vi } from "vitest";
 
 import { interactionIsTouch, ringForAutomaticFocus } from "./touchInput";
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 const press = (pointerType: string) => document.dispatchEvent(new PointerEvent("pointerdown", { pointerType, bubbles: true }));
 
@@ -14,6 +17,16 @@ const press = (pointerType: string) => document.dispatchEvent(new PointerEvent("
 it("takes the device's lack of hover before any interaction, then each interaction's own input", () => {
   vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(hover: none)" }));
   expect(interactionIsTouch()).toBe(true);
+  // With no input yet the ring shows for a focus move the user did not ask for, unless the device cannot hover.
+  const before = getInteractionModality();
+  act(() => setInteractionModality("pointer"));
+  ringForAutomaticFocus();
+  expect(getInteractionModality()).toBe("pointer");
+  vi.stubGlobal("matchMedia", () => ({ matches: false }));
+  ringForAutomaticFocus();
+  expect(getInteractionModality()).toBe("keyboard");
+  act(() => Reflect.apply(setInteractionModality, undefined, [before]));
+  vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(hover: none)" }));
   press("mouse");
   expect(interactionIsTouch()).toBe(false);
   press("touch");
@@ -24,14 +37,82 @@ it("takes the device's lack of hover before any interaction, then each interacti
 });
 
 it.each([
-  ["mouse", "keyboard"],
-  ["touch", "pointer"],
-])("turns the focus ring on for a focus move the user did not ask for, except after a tap (%s)", (pointerType, modality) => {
+  ["a hardware key", () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true })), "keyboard"],
+  ["a mouse press", () => press("mouse"), "pointer"],
+  ["a touch press", () => press("touch"), "pointer"],
+  ["a pen press", () => press("pen"), "pointer"],
+])("follows the last input for the focus ring of a focus move the user did not ask for: %s", (_, input, modality) => {
   const before = getInteractionModality();
-  press(pointerType);
+  input();
   act(() => setInteractionModality("pointer"));
   ringForAutomaticFocus();
   expect(getInteractionModality()).toBe(modality);
+  act(() => Reflect.apply(setInteractionModality, undefined, [before]));
+});
+
+it("keeps the previous input through a virtual press, which a screen reader or a script sends with no pointer behind it", () => {
+  press("mouse");
+  document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "touch", width: 0, height: 0, bubbles: true }));
+  expect(interactionIsTouch()).toBe(false);
+  document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "", bubbles: true }));
+  expect(interactionIsTouch()).toBe(false);
+});
+
+it("counts a zero-sized press as virtual only off Android, and reads TalkBack's size-1 press as virtual on it", () => {
+  const userAgent = vi.spyOn(navigator, "userAgent", "get");
+  const sized = (init: PointerEventInit) => document.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, ...init }));
+  userAgent.mockReturnValue("Mozilla/5.0 (Macintosh)");
+  press("mouse");
+  // Off Android a size of 1 is a real pointer's, whatever its pressure.
+  sized({ pointerType: "touch", width: 1, height: 1, pressure: 0 });
+  expect(interactionIsTouch()).toBe(true);
+  userAgent.mockReturnValue("Mozilla/5.0 (Linux; Android 14)");
+  press("mouse");
+  // On Android a zero size is no screen reader's mark, and only TalkBack's exact signature is virtual.
+  sized({ pointerType: "touch", width: 0, height: 0 });
+  expect(interactionIsTouch()).toBe(true);
+  press("mouse");
+  sized({ pointerType: "touch", width: 1, height: 1, pressure: 0 });
+  expect(interactionIsTouch()).toBe(true);
+  sized({ pointerType: "mouse", width: 1, height: 1, pressure: 0, detail: 1 });
+  expect(interactionIsTouch()).toBe(false);
+  sized({ pointerType: "touch", width: 4, height: 4 });
+  expect(interactionIsTouch()).toBe(true);
+  sized({ pointerType: "mouse", width: 1, height: 1, pressure: 0, detail: 0 });
+  expect(interactionIsTouch()).toBe(true);
+  sized({ pointerType: "", width: 0, height: 0 });
+  expect(interactionIsTouch()).toBe(true);
+});
+
+it("sees a key a handler on window's capture phase stops, so a keyboard close still shows the ring", () => {
+  const stop = (event: Event) => event.stopPropagation();
+  const before = getInteractionModality();
+  press("mouse");
+  window.addEventListener("keydown", stop, true);
+  try {
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  } finally {
+    window.removeEventListener("keydown", stop, true);
+  }
+  act(() => setInteractionModality("pointer"));
+  ringForAutomaticFocus();
+  expect(getInteractionModality()).toBe("keyboard");
+  act(() => Reflect.apply(setInteractionModality, undefined, [before]));
+});
+
+it("keeps a hardware key's ring and a mouse's no-ring through a virtual press", () => {
+  const before = getInteractionModality();
+  const ringed = () => {
+    act(() => setInteractionModality("pointer"));
+    ringForAutomaticFocus();
+    return getInteractionModality() === "keyboard";
+  };
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+  document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "mouse", width: 0, height: 0, bubbles: true }));
+  expect(ringed()).toBe(true);
+  press("mouse");
+  document.dispatchEvent(new PointerEvent("pointerdown", { pointerType: "", bubbles: true }));
+  expect(ringed()).toBe(false);
   act(() => Reflect.apply(setInteractionModality, undefined, [before]));
 });
 

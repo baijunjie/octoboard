@@ -182,8 +182,8 @@ export function setWholeFile(separator: HTMLElement, offered: boolean): void {
 }
 
 /** Gives focus to the code frame around `root` where a redraw or a daemon reply took the focused
- * control away. The user did not aim focus there, so the modality is set to keyboard for the focus
- * ring to show where it went, except on a touch screen (`ringForAutomaticFocus`). */
+ * control away. The user did not aim focus there, so the ring follows the last input
+ * (`ringForAutomaticFocus`): a key shows it where focus went, a press never does. */
 export function handFocusToCode(root: ShadowRoot): void {
   ringForAutomaticFocus();
   focusCodeRegion(root, { preventScroll: true });

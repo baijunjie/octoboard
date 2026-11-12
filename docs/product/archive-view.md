@@ -92,14 +92,14 @@ Archive rows, including inset sessions, follow "Items moving within a collection
 from anywhere else, as in "Selecting a session" in `docs/product/sidebar.md`), when this window opens a new session,
 when another console is made the current one (see "What switching console shows" in `docs/product/console-switcher.md`),
 on a move Back or Forward to a place without it (see `docs/product/navigation-history.md`), and by itself when its
-project, its console session or its console no longer exists. Closing it hands the keyboard focus it held, or focus
-left on nothing, to the terminal once the view has closed, or where the terminal cannot take it, to what takes it in
-the terminal's place: an archived session's history (see "Keyboard focus" in `docs/product/session-history.md`), or,
-with no session selected, the creation action the empty panel offers, else the top bar's first enabled control (see
-"With no session selected" in `docs/product/session-terminal.md`). After a close the user made — every way above but
-the last — the focus ring follows the input that closed it: it shows after a key, and not after a pointer press. After
-the view closed by itself, the ring shows, except after a tap (see "Focus after a tap" in
-`docs/product/moving-focus-between-regions.md`).
+project, its console session or its console no longer exists. Closing it hands the keyboard focus it held, or focus left
+on nothing, to the terminal once the view has closed, or where the terminal cannot take it, to what takes it in the
+terminal's place: an archived session's history (see "Keyboard focus" in `docs/product/session-history.md`), or, with no
+session selected, the creation action the empty panel offers, else the top bar's first enabled control (see "With no
+session selected" in `docs/product/session-terminal.md`). After a close the user made — every way above but the last —
+the focus ring follows the input that closed it: it shows after a key, and not after a pointer press. After the view
+closed by itself, the ring shows only when the last input was a key (see "The focus ring after a focus move the window
+makes on its own" in `docs/product/moving-focus-between-regions.md`).
 
 The view slides up from below on opening and slides down on closing, each over 240 ms. Closing takes effect at
 once: selection and navigation do not wait for the animation, and the departing view no longer accepts input or
@@ -107,20 +107,20 @@ keyboard focus. With reduced motion requested by the system, the view opens and 
 
 It takes keyboard focus as it opens, so keystrokes stop reaching the terminal it covers. While it is open, nothing it
 covers in the terminal's area — the terminal, an archived session's history, and the covers, cards and bars over them —
-can be focused or reached by assistive technology, so `Tab` from the view's last control does not reach them.
-Keyboard focus in that area as the view opens moves to the view at once. Whatever hands keyboard focus to the terminal
-while the view is open — a move Back or Forward that leaves focus on nothing, for one (see "Moving back and forward" in
+can be focused or reached by assistive technology, so `Tab` from the view's last control does not reach them. Keyboard
+focus in that area as the view opens moves to the view at once. Whatever hands keyboard focus to the terminal while the
+view is open — a move Back or Forward that leaves focus on nothing, for one (see "Moving back and forward" in
 `docs/product/navigation-history.md`) — puts it on the view itself instead, after a tap too, unless a panel covers the
 terminal's area, maximized or floating over it at 768 px and below (see "Maximizing a panel" and "At 768 px and below:
-one panel floats over the terminal" in `docs/product/right-pane-panels.md`). What the covered area would tell
-assistive technology meanwhile — the sentences of the session terminal's covers and card, its recovered-display note,
-and the session history's loading, empty and unavailable states — is told once the view has closed; a failed history
-is still announced as it appears. Focus stays in it after a
-deletion: when the deletion takes away the control focus was on or would go back to — a row's Delete, or Delete all,
-including a Delete all confirmation that closes by itself because the scope has emptied — focus goes to the view's
-Close button, its focus ring showing (except after a tap, see "Focus after a tap" in
-`docs/product/moving-focus-between-regions.md`). The same goes for a Delete all pressed with the pointer once its
-confirmed deletion is done; cancelling that confirmation leaves focus on the view itself. It is a region of its own
-in the `F6` cycle (see "Moving focus between regions with F6" in `docs/product/moving-focus-between-regions.md`).
-When the sidebar cannot dock, opening the archive view closes an explicitly opened sidebar overlay. A sidebar
-revealed by hover follows its usual pointer and keyboard-focus dismissal rules.
+one panel floats over the terminal" in `docs/product/right-pane-panels.md`). What the covered area would tell assistive
+technology meanwhile — the sentences of the session terminal's covers and card, its recovered-display note, and the
+session history's loading, empty and unavailable states — is told once the view has closed; a failed history is still
+announced as it appears. Focus stays in it after a deletion: when the deletion takes away the control focus was on or
+would go back to — a row's Delete, or Delete all, including a Delete all confirmation that closes by itself because the
+scope has emptied — focus goes to the view's Close button, its focus ring showing only when the last input was a key
+(see "The focus ring after a focus move the window makes on its own" in `docs/product/moving-focus-between-regions.md`).
+The same goes for a Delete all pressed with the pointer once its confirmed deletion is done; cancelling that
+confirmation leaves focus on the view itself. It is a region of its own in the `F6` cycle (see "Moving focus between
+regions with F6" in `docs/product/moving-focus-between-regions.md`). When the sidebar cannot dock, opening the archive
+view closes an explicitly opened sidebar overlay. A sidebar revealed by hover follows its usual pointer and
+keyboard-focus dismissal rules.

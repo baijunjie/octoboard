@@ -65,9 +65,9 @@ export const MAX_FRAMES_TO_WAIT_FOR_CLOSE = 30;
  * `MAX_FRAMES_TO_WAIT_FOR_CLOSE`. Coming as the dialog goes, it runs ahead of React Aria's restore, which then finds
  * focus off `<body>` and leaves it; but a dialog that a menu item opened gives focus back where that menu chose a turn
  * after it unmounts, which would undo the move, so the move is made again after that if focus has left the target. The
- * user did not aim focus there, so by default the destination shows its ring; with `ring` false the move is a restore of
- * what the user opened the dialog from, and the ring follows the input that closed it. Returns what drops it while it
- * still waits; the second try after it lands still runs, and does nothing once the target has left the document.
+ * user did not aim focus there, so by default the ring follows the last input; with `ring` false the move is a restore
+ * of what the user opened the dialog from, and the ring follows the input that closed it. Returns what drops it while
+ * it still waits; the second try after it lands still runs, and does nothing once the target has left the document.
  */
 function handFocusOnceClosed(find: () => HTMLElement | null | undefined, { ring = true } = {}): () => void {
   return tryEachFrame(() => {
@@ -159,8 +159,8 @@ export function AgentAccountsSection(): React.ReactElement {
     setAgentDialog(undefined);
     // A close the user made restores the control the user opened the dialog from, not a handoff: the ring follows the
     // input that closed it. One made by a change the user did not make (the agent removed, its CLI gone) hands focus
-    // over, with the ring shown. When the agent has left the list, with its tab and button, a detached control cannot
-    // take it and the section's tab does.
+    // over, the ring following the last input. When the agent has left the list, with its tab and button, a detached
+    // control cannot take it and the section's tab does.
     handoff.start(() => [from === "actions" ? tabActionsTrigger(document, agent) : tabs[agent], tabs[agent]].find(canTakeFocus) ?? focusSectionTab(), { ring: automatic });
   };
   // For a dialog the section opens by itself — on Settings' request, or for a login found running as it opens — which

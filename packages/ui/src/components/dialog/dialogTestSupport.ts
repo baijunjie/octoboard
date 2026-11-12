@@ -6,13 +6,26 @@ import { act, createElement, useState } from "react";
 import { onTestFinished, vi } from "vitest";
 import { FAKE_FRAME_MS, flushPromises, framesFaked } from "../../test/clock";
 
+/** Sends the input behind react-aria's `keyboard` or `pointer` modality (a hardware key, a mouse press) and sets the
+ * modality, so a focus move nobody asked for, which follows the last input (`ringForAutomaticFocus`), does not depend
+ * on what an earlier test left behind. Any other modality is only set. */
+function sendInput(modality: ReturnType<typeof getInteractionModality>): void {
+  if (modality === "keyboard") document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+  if (modality === "pointer") {
+    const press = { pointerType: "mouse", width: 1, height: 1, bubbles: true };
+    document.dispatchEvent(new PointerEvent("pointerdown", press));
+  }
+  act(() => Reflect.apply(setInteractionModality, undefined, [modality]));
+}
+
 /** Sets react-aria's interaction modality for the test and restores the previous one when it finishes, even the
  * initial null, which react-aria accepts at runtime despite its setter's type. Call it before `fakeTimers()`, so the
- * restore runs after the clock's drain. */
+ * restore runs after the clock's drain. The keyboard's and the pointer's modality also send the input that makes
+ * them (see `sendInput`); that input stays after the test. */
 export function withModality(modality: ReturnType<typeof getInteractionModality>): void {
   const previous = getInteractionModality();
   onTestFinished(() => { act(() => Reflect.apply(setInteractionModality, undefined, [previous])); });
-  act(() => Reflect.apply(setInteractionModality, undefined, [modality]));
+  sendInput(modality);
 }
 
 /** How long react-aria's `useDialog` waits after a dialog mounts before taking focus to the dialog
@@ -64,7 +77,8 @@ export function accessibleName(field: Element): string {
 /**
  * Has each animation frame come as a 0 ms timer, so it runs ahead of any timer set after it was asked for, as a browser
  * may render one before the next timer task, and sets how react-aria reads the press that opens a dialog (`virtual`: an
- * assistive technology's, a script's `click()`, whose opening focus waits a frame). Both are put back when the test
+ * assistive technology's, a script's `click()`, whose opening focus waits a frame; `pointer` and `keyboard` also send
+ * that input, as `withModality` does). Both are put back when the test
  * finishes. A `fakeTimers()` installed after it replaces the frame stub with the fake clock's 16 ms frames; use
  * `fakeTimersKeepingFrames()` to keep it.
  */
@@ -73,7 +87,7 @@ export function framesAsTimers(modality: "virtual" | "pointer" | "keyboard" = "v
     Number(setTimeout(() => callback(performance.now()), 0)));
   vi.stubGlobal("cancelAnimationFrame", (handle: number) => clearTimeout(handle));
   onTestFinished(() => { vi.unstubAllGlobals(); });
-  act(() => setInteractionModality(modality));
+  sendInput(modality);
   onTestFinished(() => { act(() => setInteractionModality("pointer")); });
 }
 

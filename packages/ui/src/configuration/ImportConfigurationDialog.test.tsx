@@ -3,6 +3,7 @@
 import "../input/focusGuard";
 import { act } from "react";
 import { setInteractionModality } from "react-aria";
+import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { CodedError } from "../errors/codedError";
@@ -10,6 +11,7 @@ import { MIXED_RESULT, REVIEW } from "../fixtures/configurationReview";
 import { press as pressElement } from "../components/alerts/detailsTestSupport";
 import { AFTER_FOCUS_MOVE_DELAY_MS, FIRST_WRITE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { accessibleName } from "../components/dialog/dialogTestSupport";
+import { press as pressWithMouse } from "../components/hint/tooltipTestSupport";
 import { isolate } from "../i18n/isolate";
 import { currentLanguage, setLanguage } from "../i18n/language";
 import { runInBackground } from "../lifecycle/runInBackground";
@@ -393,6 +395,66 @@ it("shows a refresh that fails as an Alert in the review with its own Try again,
   // The file's new reading is said once focus has settled.
   await act(async () => void (await vi.advanceTimersByTimeAsync(AFTER_FOCUS_MOVE_DELAY_MS)));
   expect(Array.from(document.body.querySelectorAll("[role=status]")).map((region) => region.textContent)).toContain("The file was read again because settings changed.");
+});
+
+/** A review whose second reading fails (the settings moved on while it was open), so Import is unavailable and the
+ * Alert offers Try again; the third reading succeeds. */
+async function reviewWithFailedRefresh() {
+  fakeTimers();
+  let inspections = 0;
+  const mounted = await reviewing({
+    reply: (body) => {
+      if (body.type !== "inspect_configuration") return reply(body);
+      inspections += 1;
+      if (inspections === 2) return Promise.reject(new Error("offline"));
+      return Promise.resolve({ type: "configuration_inspected", ...REVIEW, settings_versions: { ...REVIEW.settings_versions, ...(inspections > 2 && { auto_pull_repositories: 2 }) } });
+    },
+  });
+  await checkSettings();
+  moveTo(mounted.store, 2);
+  await act(async () => {});
+  expect(text()).toContain("Could not read the file again");
+  return mounted;
+}
+/** Enter on a focused button: the keydown, the click the browser makes of it, and the keyup. */
+const pressWithKey = (button: HTMLElement) =>
+  act(() => {
+    button.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    button.click();
+    button.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", bubbles: true }));
+  });
+const tryAgain = () => Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Try again")!;
+
+it.each([
+  ["a mouse press", "pointer", (button: HTMLElement) => pressWithMouse(button, "mouse")],
+  ["a key", "keyboard", pressWithKey],
+] as const)("takes focus to the Alert's Try again from a press of the unavailable Import, ringed only after a key: %s", async (_, modality, activate) => {
+  await reviewWithFailedRefresh();
+  runOutTimers();
+  act(() => importButton().focus());
+
+  activate(importButton());
+  await act(async () => {});
+  expect(document.activeElement).toBe(tryAgain());
+  expect(getInteractionModality()).toBe(modality);
+  expect(document.activeElement?.hasAttribute("data-focus-visible")).toBe(modality === "keyboard");
+});
+
+it.each([
+  ["a mouse press", "pointer", (button: HTMLElement) => pressWithMouse(button, "mouse")],
+  ["a key", "keyboard", pressWithKey],
+] as const)("hands focus from Try again back to Import when the read succeeds and the Alert goes, ringed only after a key: %s", async (_, modality, activate) => {
+  await reviewWithFailedRefresh();
+  runOutTimers();
+  const retry = tryAgain();
+  act(() => retry.focus());
+
+  activate(retry);
+  await act(async () => {});
+  expect(text()).not.toContain("Could not read the file again");
+  expect(document.activeElement).toBe(importButton());
+  expect(getInteractionModality()).toBe(modality);
+  expect(document.activeElement?.hasAttribute("data-focus-visible")).toBe(modality === "keyboard");
 });
 
 it("offers to choose the file again where a failed refresh cannot be retried", async () => {

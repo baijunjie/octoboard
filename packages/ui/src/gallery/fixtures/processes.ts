@@ -328,7 +328,7 @@ export const processScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "After a confirmed Stop, focus on the next row",
-    description: "The first process was stopped from the confirmation: its row is gone, the toast \"Stopped the process.\" has been raised (it fades after a few seconds), and, because the Stop button held focus as the confirmation opened (opened from the keyboard, or by a pointer press while nothing else held focus), focus has moved to the next row, whose Stop and Keep buttons are revealed with the focus ring on Stop, whatever confirmed (the pointer too), so a keyboard user can carry on down the list. A Stop pressed while another control held focus returns focus there instead, which this scenario does not show.",
+    description: "The first process was stopped from the confirmation: its row is gone, the toast \"Stopped the process.\" has been raised (it fades after a few seconds), and, because the Stop button held focus as the confirmation opened (opened from the keyboard, or by a pointer press while nothing else held focus), focus has moved to the next row, whose Stop and Keep buttons are revealed. The Stop was opened from the keyboard, so the focus ring is on the next row's first button, Keep, and a keyboard user can carry on down the list; after a mouse press or a tap the same handoff happens with no ring. A Stop pressed while another control held focus returns focus there instead, which this scenario does not show.",
     state,
     preferences: panelPreferences,
     processes: { trees: pair },

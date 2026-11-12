@@ -79,9 +79,9 @@ export function useArchiveView({
   // The closing view hands focus on from here, once the commit that closes it is done: this runs after the pane's own
   // effects, so the pane's handle and refs already hold what it shows now (the layer, rendered before the pane in the
   // tree, would run its effects before the pane's). Only focus the view held, or lost to `<body>` meanwhile, is handed
-  // on. A close the user made (`setArchiveScopeByUser`, `closeArchive`) leaves the modality alone, so the ring follows the input that closed it;
-  // one nobody made (what the view lists is gone) forces the ring, as any automatic move does. The flag is read and
-  // cleared here, in the one commit that carries the change.
+  // on. A close the user made (`setArchiveScopeByUser`, `closeArchive`) leaves the modality alone, so the ring follows
+  // the input that closed it; one nobody made (what the view lists is gone) lets the ring follow the last input, as any
+  // automatic move does. The flag is read and cleared here, in the one commit that carries the change.
   const closedByUser = useRef(false);
   const wasOpen = useRef(false);
   useLayoutEffect(() => {
