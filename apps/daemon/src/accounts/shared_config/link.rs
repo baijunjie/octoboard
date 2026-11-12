@@ -198,10 +198,19 @@ fn is_sharing_link(entry: &Path, item: &SharedItem, dirs: &Dirs) -> bool {
         return false;
     };
     let resolved = resolve(entry).ok().flatten();
+    // A link spelled through a link to the default directory (`~/.claude` leading to another
+    // disk, say) whose entry the default directory does not have resolves to nothing: its
+    // directory, resolved, still says where it leads.
+    let leads_into = leads.parent().zip(leads.file_name()).map(|(parent, name)| {
+        resolve_or_spelled(&crate::hostfs::lexically_normalise(parent)).join(name)
+    });
     std::iter::once(&dirs.default)
         .chain(dirs.current_default.as_ref())
         .any(|default| {
             leads.starts_with(default)
+                || leads_into
+                    .as_ref()
+                    .is_some_and(|leads_into| leads_into.starts_with(default))
                 || resolved.is_some()
                     && resolve(&default.join(item.name)).ok().flatten() == resolved
         })

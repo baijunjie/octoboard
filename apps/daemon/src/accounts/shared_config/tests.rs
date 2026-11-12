@@ -461,6 +461,29 @@ async fn a_file_link_an_agent_replaced_is_repaired_before_a_resume() {
     );
 }
 
+/// A link spelled through a link to the default directory, to an entry the default directory
+/// does not have, is still a sharing link: the repair brings it in again rather than refusing
+/// it as a link of the account's own.
+#[tokio::test]
+async fn a_link_spelled_through_a_link_to_a_missing_default_entry_is_repaired() {
+    let fixture = Fixture::new();
+    let (default, account) = claude_setup(&fixture);
+    fixture.share(AgentId::CLAUDE, true).await.unwrap();
+    let home_spelling = fixture.dir.join("home-claude");
+    crate::test_support::symlink(&default, &home_spelling).unwrap();
+    std::fs::remove_file(account.join("todos")).ok();
+    std::fs::remove_dir_all(default.join("todos")).ok();
+    crate::test_support::symlink(home_spelling.join("todos"), account.join("todos")).unwrap();
+    fixture.session("s", AgentId::CLAUDE);
+
+    assert_eq!(resumed_with(&fixture, "s").await, Some(real(&default)));
+    assert_eq!(
+        std::fs::read_link(account.join("todos")).unwrap(),
+        real(&default.join("todos"))
+    );
+    assert!(backups(&account, "todos").is_empty());
+}
+
 #[tokio::test]
 async fn only_a_sharing_accounts_launch_is_given_the_shared_directory() {
     let fixture = Fixture::new();
