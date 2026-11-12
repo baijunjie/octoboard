@@ -1537,6 +1537,62 @@ async fn an_adopted_codex_session_without_its_own_startup_title_still_refuses_me
     }
 }
 
+/// An idle Claude Code session taken over from a holder ran its `SessionStart` hook before this
+/// daemon was there, and will not run it again: its input box on the screen it is adopted with
+/// stands in for that hook, so a message is not refused as waiting on a trust screen, while one
+/// adopted at its trust screen is still refused.
+#[tokio::test(flavor = "multi_thread")]
+async fn an_adopted_idle_claude_session_takes_messages_and_one_at_its_trust_screen_refuses_them() {
+    // Claude Code's empty input box between its rules, as it draws it at its idle prompt, sized
+    // for the 80 columns the terminal is left with (`left_behind`).
+    let rule = "\u{2500}".repeat(78);
+    let idle =
+        format!("Welcome back\r\n\r\n{rule}\r\n\u{276F} \r\n{rule}\r\n  ? for shortcuts\r\n");
+    let trust_screen = include_bytes!("../../../testdata/claude_trust_screen.bin");
+    for (label, tail, held) in [
+        ("idle", idle.as_bytes(), false),
+        ("trust", trust_screen.as_slice(), true),
+    ] {
+        let (state, dir) = console_with_project_and_accounts(&format!("adopt-claude-{label}"));
+        state
+            .store
+            .insert_session(&project_session("s1", AgentId::CLAUDE, SessionStatus::Idle))
+            .expect("the session is stored");
+        let run_dir = dir.join("run");
+        let mut meta = session_meta("s1", &run_dir.join("s1"));
+        meta["agent"] = json!(AgentId::CLAUDE);
+        let pids = left_behind(&dir, vec![("t1", meta, programs::sleep(60))]);
+        let _guard = KillOnDrop(pids);
+        let (_next, mut found) = found_in(&dir);
+        found[0].tail = tail.to_vec();
+        let adopted = adopt_in_blocking(&state, found, run_dir).await;
+        assert_eq!(adopted.sessions, ["s1"]);
+        let live = state.live_session("s1").expect("the session is live");
+
+        if held {
+            // Long enough for the adopted session's watch to have looked a few times.
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        } else {
+            let deadline = Instant::now() + PATIENCE;
+            while live.trust.holds_writes() && Instant::now() < deadline {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+            }
+        }
+        assert_eq!(live.trust.holds_writes(), held, "{label}");
+
+        let sent =
+            crate::coordinator::messages::send_message(&state, "s1", "hello again".to_string())
+                .await;
+        let trust_pending = sent.as_ref().err().is_some_and(|err| {
+            err.downcast_ref::<crate::protocol::CodedError>()
+                .is_some_and(|coded| {
+                    coded.code == crate::protocol::error_code::SESSION_TRUST_PENDING
+                })
+        });
+        assert_eq!(trust_pending, held, "{label}: {sent:?}");
+    }
+}
+
 /// A console host can set a title before Codex is ready; adoption preserves the rule that its
 /// parsed composer, rather than the host's title, establishes readiness.
 #[cfg(windows)]

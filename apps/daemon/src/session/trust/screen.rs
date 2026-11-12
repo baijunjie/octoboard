@@ -392,6 +392,10 @@ pub struct TrustState {
     /// `SessionStart` hook, which stands for bracketed paste turned on
     /// ([`Self::note_input_box`]).
     input_box_seen: AtomicBool,
+    /// The session was adopted from a holder the previous daemon left running
+    /// ([`Self::note_adopted`]): its agent may have run its start hook before this daemon, and will
+    /// not run it again.
+    adopted: AtomicBool,
     /// An answer has been started. A session is answered at most once.
     pub(super) answered: AtomicBool,
     /// Octoboard's press of the screen succeeded.
@@ -431,6 +435,7 @@ impl TrustState {
             paste_mode_order: Mutex::new(()),
             session_started: AtomicBool::new(false),
             input_box_seen: AtomicBool::new(false),
+            adopted: AtomicBool::new(false),
             answered: AtomicBool::new(false),
             pressed: AtomicBool::new(false),
             dismissed: AtomicBool::new(false),
@@ -611,6 +616,10 @@ impl TrustState {
     /// lasts until the terminal has also been seen with bracketed paste on at the hook or after,
     /// or, where the parsed screen is read, the agent's input box on it after its `SessionStart`
     /// hook, with no time limit, like a hook that never comes.
+    ///
+    /// For a session adopted from a holder the previous daemon left running, whose agent will not
+    /// run its start hook again, its input box shown with no trust screen up stands in for both
+    /// ([`Self::stand_in_for_start`]).
     pub fn holds_writes(&self) -> bool {
         if self.hook_seen.load(Ordering::Acquire) {
             return self.awaits_paste_mode();
@@ -702,6 +711,43 @@ impl TrustState {
                 self.paste_mode_seen.store(false, Ordering::Release);
             }
         }
+    }
+
+    /// The session is one adopted from a holder the previous daemon left running, not launched by
+    /// this daemon: its agent may be long past its screen and its start hook, which it will not run
+    /// again, so its input box is to stand in for that hook ([`Self::stand_in_for_start`]).
+    pub(crate) fn note_adopted(&self) {
+        self.adopted.store(true, Ordering::Release);
+    }
+
+    /// Whether the session was adopted and its start hook is still stood in for by its input box
+    /// ([`Self::stand_in_for_start`]).
+    pub(super) fn awaits_adopted_start(&self) -> bool {
+        self.adopted.load(Ordering::Acquire)
+            && !self.hook_seen.load(Ordering::Acquire)
+            && !self.sighted.load(Ordering::Acquire)
+    }
+
+    /// For an adopted session ([`Self::note_adopted`]) whose hook has not come and whose screen has
+    /// not been sighted: when the parsed `screen` shows the agent's input box (`shows_input_box`)
+    /// and not its trust screen, the agent is past both and reads its input, as its start hook and
+    /// bracketed paste would have said had this daemon launched it, so the watch ends as at that
+    /// hook and nothing more is held for it. A screen still up keeps the hold, as does a screen
+    /// with no input box on it (an onboarding step, or a screen not yet redrawn after the
+    /// adoption), until the box is drawn or a hook comes. Says whether it ended the watch; checked
+    /// under the window's lock a sighting is made under.
+    pub(super) fn stand_in_for_start(&self, screen: &str, shows_input_box: bool) -> bool {
+        let mut watched = self.window.lock().expect("trust window mutex poisoned");
+        if !self.awaits_adopted_start()
+            || !shows_input_box
+            || self.screen.is_up_in(screen.as_bytes())
+        {
+            return false;
+        }
+        self.input_box_seen.store(true, Ordering::Release);
+        self.hook_seen.store(true, Ordering::Release);
+        *watched = Vec::new();
+        true
     }
 
     /// Lets through what is held for an agent whose hook has not come ([`Screen::hook_fallback`]),

@@ -422,6 +422,8 @@ fn adopt_session(
         before_scratch_removal: crate::session::term::before_scratch_removal(transport, after_exit),
         display: DisplaySeed::new(state.display_fallback.clone(), None),
     }));
+    // Its agent ran its start hook, if it ever did, before this daemon was there to see it.
+    live.trust.note_adopted();
     live.enable_native_stash(meta.native_stash);
     if let Some(prompt) = meta.launch_prompt {
         live.note_launch_prompt(prompt);

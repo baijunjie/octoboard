@@ -73,6 +73,12 @@
 //!   Claude Code's terminal probe does at start, does not count. Where the parsed screen is read,
 //!   the host may keep bracketed paste to itself, so the input box drawn on the parsed screen
 //!   after the `SessionStart` hook releases them too ([`on_session_start`]).
+//! - A session adopted from a holder the previous daemon left running (`crate::coordinator::adopt`)
+//!   gets a new watch, but its agent ran its start hook, if it ever did, before this daemon was
+//!   there, and will not run it again: an idle Claude Code session would hold its messages for as
+//!   long as it runs. Its input box on the parsed screen with no trust screen up stands in for that
+//!   hook and for bracketed paste ([`release_when_the_adopted_agent_reads_input`]); one still at
+//!   its trust screen stays held as a launch would.
 //! - Codex runs none until its first prompt, so its messages are held while the watch is still
 //!   looking (until its first terminal title, or, where the parsed screen is read, until that shows
 //!   its input box) and, once its screen is sighted, until Octoboard's
@@ -385,6 +391,9 @@ pub fn supervise(state: &Arc<AppState>, live: &Arc<LiveSession>) {
     if live.trust.screen.waits_for_paste_mode {
         release_when_paste_mode_comes(state, live);
     }
+    if live.trust.awaits_adopted_start() {
+        release_when_the_adopted_agent_reads_input(state, live);
+    }
     if let Some(bound) = live.trust.screen.hook_fallback {
         release_when_no_hook_comes(state, live, bound);
         // A screen that is never looked for is never sighted, so there is nothing to watch go.
@@ -495,6 +504,40 @@ fn release_when_paste_mode_comes(state: &Arc<AppState>, live: &Arc<LiveSession>)
             break;
         }
     });
+}
+
+/// Releases the messages held for a session adopted from a holder the previous daemon left running
+/// ([`TrustState::note_adopted`]), whose agent ran its start hook, if it ever did, before this
+/// daemon was there to see it, and will not run it again: without this, an idle Claude Code
+/// session would hold them for as long as it runs. Its input box on the parsed screen, with no
+/// trust screen up, stands in for that hook ([`TrustState::stand_in_for_start`]); looked at
+/// straight away, for a restored screen that nothing will redraw, and then after each poll, for one the
+/// program draws again after the adoption. A hook or a sighted screen leaves the hold to the
+/// launch's own rules.
+fn release_when_the_adopted_agent_reads_input(state: &Arc<AppState>, live: &Arc<LiveSession>) {
+    let state = state.clone();
+    let live = Arc::downgrade(live);
+    tokio::spawn(async move {
+        loop {
+            let Some(live) = live.upgrade() else { break };
+            if !live.trust.awaits_adopted_start() {
+                break;
+            }
+            if stand_in_for_start(&live) {
+                release_held(&state, &live.id);
+                break;
+            }
+            drop(live);
+            tokio::time::sleep(RELEASE_POLL).await;
+        }
+    });
+}
+
+/// [`TrustState::stand_in_for_start`] for the session's parsed screen as it is now.
+pub(crate) fn stand_in_for_start(live: &LiveSession) -> bool {
+    let screen = live.screen_text();
+    let shows_input_box = live.input_box_rows(&screen).is_some();
+    live.trust.stand_in_for_start(&screen, shows_input_box)
 }
 
 /// Lets through the messages held for a session whose agent should have run a hook by now and has
