@@ -269,7 +269,10 @@ fn a_refused_start_is_judged_by_the_queue_whatever_its_words() {
         (true, true, true),
         (true, false, false),
     ] {
-        let (transport, listener, token) = loopback();
+        let (mut transport, listener, token) = loopback();
+        // An idle thread is read again for the time allowed before the message is called
+        // uncertain; none is allowed here.
+        settle_for(&mut transport, Duration::ZERO);
         transport.shared.identify("main");
         let server = serve(listener, token, move |method, params| match method {
             "thread/queue/start" => Answer::Error("a wording no release used"),
@@ -516,7 +519,9 @@ fn starting_the_queue_starts_octoboards_first_message_unless_another_is_ahead() 
             json!([{"id":"q-1","clientUserMessageId":"mine-1"},
                 {"id":"q-2","clientUserMessageId":"mine-2"}]),
             Some(Answer::Result(json!({"turn":{}}))),
-            "idle",
+            // Codex reports the turn the start began as running, so the start has nothing to wait
+            // for.
+            "active",
             QueueStart::Started(2),
         ),
         (
@@ -587,6 +592,7 @@ fn a_second_start_reports_what_the_first_started() {
         ),
         "thread/queue/list" => Answer::Result(json!({"data":[],"nextCursor":null})),
         "thread/queue/start" => Answer::Result(json!({"turn":{}})),
+        "thread/read" => Answer::Result(json!({"thread":{"status":{"type":"active"}}})),
         other => panic!("unexpected request {other}"),
     });
     assert_eq!(transport.start_queue(), QueueStart::Started(1));
@@ -640,11 +646,617 @@ fn a_second_start_neither_starts_again_nor_under_counts() {
     );
 }
 
+/// Codex answers a start before the thread's status turns active (0.167.1). A second start reading
+/// the status in that gap would take the thread for idle, as after a cancel of its own, try to
+/// start the next message and count only what is left: the first start waits for the status to
+/// settle, so the second still counts everything the first found waiting and starts nothing more.
+#[test]
+fn a_second_start_counts_all_while_the_status_lags_the_first() {
+    let (mut transport, listener, token) = loopback();
+    Arc::get_mut(&mut transport.shared)
+        .unwrap()
+        .start_settle_poll = Duration::ZERO;
+    transport.shared.identify("main");
+    transport
+        .shared
+        .added
+        .lock()
+        .unwrap()
+        .extend((1..=5).map(|n| format!("mine-{n}")));
+    let start = AtomicBool::new(false);
+    let reads = AtomicUsize::new(0);
+    let server = serve_connections(listener, token, 2, move |method, _| match method {
+        "thread/queue/list" => {
+            let first = if start.load(Ordering::Acquire) { 2 } else { 1 };
+            let data: Vec<Value> = (first..=5)
+                .map(
+                    |n| json!({"id": format!("q-{n}"), "clientUserMessageId": format!("mine-{n}")}),
+                )
+                .collect();
+            Answer::Result(json!({"data": data, "nextCursor": null}))
+        }
+        "thread/queue/start" if !start.swap(true, Ordering::AcqRel) => {
+            Answer::Result(json!({"turn":{}}))
+        }
+        "thread/queue/start" => Answer::Error("thread already has an active or pending turn"),
+        // The status turns active only on the second read after the start, whenever that comes.
+        "thread/read" => {
+            let lagging =
+                !start.load(Ordering::Acquire) || reads.fetch_add(1, Ordering::AcqRel) < 1;
+            let status = if lagging { "idle" } else { "active" };
+            Answer::Result(json!({"thread":{"status":{"type": status}}}))
+        }
+        other => panic!("unexpected request {other}"),
+    });
+    assert_eq!(transport.start_queue(), QueueStart::Started(5));
+    assert_eq!(transport.start_queue(), QueueStart::Started(5));
+    drop(transport);
+    let requests = server.join().unwrap();
+    assert_eq!(count_of(&requests, "thread/queue/start"), 1);
+}
+
+/// Sets the time `transport` allows Codex's status to settle after a start to `settle`, read again
+/// without pause: a test drives the lag by the requests it makes, never by the clock. Before
+/// anything else holds the transport's shared state.
+fn settle_for(transport: &mut CodexTransport, settle: Duration) {
+    let shared = Arc::get_mut(&mut transport.shared).unwrap();
+    shared.start_settle = settle;
+    shared.start_settle_poll = Duration::ZERO;
+}
+
+/// A loopback transport whose thread `main` has one of Octoboard's messages, `mine-1`, waiting,
+/// with the wait for a started turn to be reported running set to `settle`.
+fn transport_with_one_waiting(settle: Duration) -> (CodexTransport, TcpListener, String) {
+    let (mut transport, listener, token) = loopback();
+    settle_for(&mut transport, settle);
+    transport.shared.identify("main");
+    transport
+        .shared
+        .added
+        .lock()
+        .unwrap()
+        .insert("mine-1".into());
+    (transport, listener, token)
+}
+
+/// What the fake server answers while one message waits and a start is accepted.
+fn one_waiting_answer(method: &str) -> Option<Answer> {
+    match method {
+        "thread/queue/list" => Some(Answer::Result(
+            json!({"data":[{"id":"q-1","clientUserMessageId":"mine-1"}],"nextCursor":null}),
+        )),
+        "thread/queue/start" => Some(Answer::Result(json!({"turn":{}}))),
+        _ => None,
+    }
+}
+
+fn count_of(requests: &[(String, Value)], name: &str) -> usize {
+    methods(requests).iter().filter(|m| **m == name).count()
+}
+
+/// [`one_waiting_answer`] for a server whose start names the turn `turn` it began.
+fn one_waiting_answer_naming(method: &str, turn: &str) -> Option<Answer> {
+    match method {
+        "thread/queue/start" => Some(Answer::Result(json!({"turn":{"id":turn}}))),
+        other => one_waiting_answer(other),
+    }
+}
+
+/// What the fake server answers the request for a thread's latest turn when that is `turn`.
+fn latest_turn_is(turn: &str) -> Answer {
+    Answer::Result(json!({"data":[{"id":turn}],"nextCursor":null}))
+}
+
+/// What the fake server answers a status read with.
+fn status_is(status: &str) -> Answer {
+    Answer::Result(json!({"thread":{"status":{"type":status}}}))
+}
+
+/// A turn Codex never reports as running within the time allowed does not fail the start: it still
+/// reports what it started, after reading the status once past the deadline.
+#[test]
+fn a_start_whose_turn_is_never_reported_running_still_reports_what_it_started() {
+    let (transport, listener, token) = transport_with_one_waiting(Duration::ZERO);
+    let server = serve(listener, token, |method, _| {
+        one_waiting_answer(method).unwrap_or_else(|| match method {
+            "thread/read" => Answer::Result(json!({"thread":{"status":{"type":"idle"}}})),
+            other => panic!("unexpected request {other}"),
+        })
+    });
+    assert_eq!(transport.start_queue(), QueueStart::Started(1));
+    drop(transport);
+    let requests = server.join().unwrap();
+    assert_eq!(count_of(&requests, "thread/queue/start"), 1);
+    assert_eq!(count_of(&requests, "thread/read"), 1);
+}
+
+/// While the time allowed has not run out, the status is read again until it turns active, and
+/// then no more: reads, not the clock, drive the lag here, and the allowance is far past any wait
+/// the test can meet.
+#[test]
+fn a_start_reads_the_status_until_it_turns_active_and_no_further() {
+    const LAGGING_READS: usize = 3;
+    let (transport, listener, token) = transport_with_one_waiting(PATIENCE);
+    let reads = Arc::new(AtomicUsize::new(0));
+    let count = reads.clone();
+    let server = serve(listener, token, move |method, _| {
+        one_waiting_answer(method).unwrap_or_else(|| match method {
+            "thread/read" => {
+                let read = count.fetch_add(1, Ordering::AcqRel);
+                // A read past the one that reported active means the wait went on: fail the
+                // test through the server rather than leave the client polling for the allowance.
+                assert!(
+                    read <= LAGGING_READS,
+                    "the status was read after it turned active"
+                );
+                let status = if read < LAGGING_READS {
+                    "idle"
+                } else {
+                    "active"
+                };
+                Answer::Result(json!({"thread":{"status":{"type": status}}}))
+            }
+            other => panic!("unexpected request {other}"),
+        })
+    });
+    assert_eq!(transport.start_queue(), QueueStart::Started(1));
+    drop(transport);
+    let requests = server.join().unwrap();
+    assert_eq!(count_of(&requests, "thread/read"), LAGGING_READS + 1);
+}
+
+/// A status that cannot be read after an accepted start, or one that is neither idle nor active,
+/// is no lag to wait out: it ends the wait at once, with the whole time allowed still left, and
+/// the start still reports what it started.
+#[test]
+fn a_start_whose_status_is_no_lag_does_not_wait_for_it() {
+    // No status: the read fails.
+    for status in [None, Some("notLoaded")] {
+        let (transport, listener, token) = transport_with_one_waiting(PATIENCE);
+        let server = serve(listener, token, move |method, _| {
+            one_waiting_answer(method).unwrap_or_else(|| match method {
+                "thread/read" => match status {
+                    Some(status) => Answer::Result(json!({"thread":{"status":{"type": status}}})),
+                    None => Answer::Error("thread not loaded"),
+                },
+                other => panic!("unexpected request {other}"),
+            })
+        });
+        assert_eq!(transport.start_queue(), QueueStart::Started(1));
+        drop(transport);
+        let requests = server.join().unwrap();
+        assert_eq!(count_of(&requests, "thread/read"), 1);
+    }
+}
+
+/// An active status right after a start can still be the turn before it, whose end the server has
+/// not handled yet (0.167.1): a cancel's own start finds the cancelled turn still active. A start
+/// that reported the turn it began waits for that turn to be the latest the thread has, so the
+/// stale active status is waited out as an idle one is, and a second start still counts everything
+/// the first found waiting and starts nothing more.
+#[test]
+fn a_second_start_counts_all_while_the_status_still_reads_the_turn_before() {
+    let (mut transport, listener, token) = loopback();
+    settle_for(&mut transport, PATIENCE);
+    transport.shared.identify("main");
+    transport
+        .shared
+        .added
+        .lock()
+        .unwrap()
+        .extend((1..=5).map(|n| format!("mine-{n}")));
+    let start = AtomicBool::new(false);
+    let reads = AtomicUsize::new(0);
+    let server = serve_connections(listener, token, 2, move |method, _| match method {
+        "thread/queue/list" => {
+            let first = if start.load(Ordering::Acquire) { 2 } else { 1 };
+            let data: Vec<Value> = (first..=5)
+                .map(
+                    |n| json!({"id": format!("q-{n}"), "clientUserMessageId": format!("mine-{n}")}),
+                )
+                .collect();
+            Answer::Result(json!({"data": data, "nextCursor": null}))
+        }
+        "thread/queue/start" if !start.swap(true, Ordering::AcqRel) => {
+            Answer::Result(json!({"turn":{"id":"t-new"}}))
+        }
+        "thread/queue/start" => Answer::Error("thread already has an active or pending turn"),
+        // After the start: active (the turn before, not ended yet), idle (it ended), then active
+        // (the new turn), whenever the reads come. The fourth read is the second start's own.
+        "thread/read" => {
+            let read = reads.fetch_add(1, Ordering::AcqRel);
+            assert!(read <= 3, "the status was read after the second start's");
+            status_is(if read == 1 { "idle" } else { "active" })
+        }
+        // The turn before is the latest until the status has been read three times.
+        "thread/turns/list" => latest_turn_is(if reads.load(Ordering::Acquire) < 3 {
+            "t-old"
+        } else {
+            "t-new"
+        }),
+        other => panic!("unexpected request {other}"),
+    });
+    assert_eq!(transport.start_queue(), QueueStart::Started(5));
+    assert_eq!(transport.start_queue(), QueueStart::Started(5));
+    drop(transport);
+    let requests = server.join().unwrap();
+    assert_eq!(count_of(&requests, "thread/queue/start"), 1);
+    // Both reads that found the status active looked at the latest turn; the idle one did not.
+    assert_eq!(count_of(&requests, "thread/read"), 4);
+    assert_eq!(count_of(&requests, "thread/turns/list"), 2);
+}
+
+/// A start that names the turn it began is waited for until that turn is the latest the thread has,
+/// asked for as the one latest turn without its items, and no further.
+#[test]
+fn a_start_naming_its_turn_waits_until_that_turn_is_the_latest() {
+    const STALE_LISTINGS: usize = 3;
+    let (transport, listener, token) = transport_with_one_waiting(PATIENCE);
+    let listings = AtomicUsize::new(0);
+    let server = serve(listener, token, move |method, _| {
+        one_waiting_answer_naming(method, "t-new").unwrap_or_else(|| match method {
+            "thread/read" => status_is("active"),
+            "thread/turns/list" => {
+                let listing = listings.fetch_add(1, Ordering::AcqRel);
+                assert!(
+                    listing <= STALE_LISTINGS,
+                    "the turns were listed after the started turn showed"
+                );
+                latest_turn_is(if listing < STALE_LISTINGS {
+                    "t-old"
+                } else {
+                    "t-new"
+                })
+            }
+            other => panic!("unexpected request {other}"),
+        })
+    });
+    assert_eq!(transport.start_queue(), QueueStart::Started(1));
+    drop(transport);
+    let requests = server.join().unwrap();
+    assert_eq!(count_of(&requests, "thread/read"), STALE_LISTINGS + 1);
+    assert_eq!(count_of(&requests, "thread/turns/list"), STALE_LISTINGS + 1);
+    let listing = requests
+        .iter()
+        .find(|(method, _)| method == "thread/turns/list")
+        .unwrap();
+    assert_eq!(
+        listing.1,
+        json!({"threadId":"main","limit":1,"sortDirection":"desc","itemsView":"notLoaded"})
+    );
+}
+
+/// Whatever the wait ends on, the start reports what it started: a turn that never becomes the
+/// latest, or a thread with no turn listed, costs the time allowed, which is none here, and no
+/// more.
+#[test]
+fn a_start_whose_turn_never_becomes_the_latest_still_reports_what_it_started() {
+    for latest in [Some("t-old"), None] {
+        let (transport, listener, token) = transport_with_one_waiting(Duration::ZERO);
+        let server = serve(listener, token, move |method, _| {
+            one_waiting_answer_naming(method, "t-new").unwrap_or_else(|| match method {
+                "thread/read" => status_is("active"),
+                "thread/turns/list" => match latest {
+                    Some(turn) => latest_turn_is(turn),
+                    None => Answer::Result(json!({"data":[],"nextCursor":null})),
+                },
+                other => panic!("unexpected request {other}"),
+            })
+        });
+        assert_eq!(transport.start_queue(), QueueStart::Started(1));
+        drop(transport);
+        let requests = server.join().unwrap();
+        assert_eq!(count_of(&requests, "thread/queue/start"), 1);
+        assert_eq!(count_of(&requests, "thread/read"), 1);
+        assert_eq!(count_of(&requests, "thread/turns/list"), 1);
+    }
+}
+
+/// Naming its turn does not make a status that is no lag one: unreadable, or neither idle nor
+/// active, it ends the wait at once with the turns never asked for.
+#[test]
+fn a_start_naming_its_turn_still_ends_the_wait_at_once_on_a_status_that_is_no_lag() {
+    for status in [None, Some("notLoaded"), Some("systemError")] {
+        let (transport, listener, token) = transport_with_one_waiting(PATIENCE);
+        let server = serve(listener, token, move |method, _| {
+            one_waiting_answer_naming(method, "t-new").unwrap_or_else(|| match method {
+                "thread/read" => match status {
+                    Some(status) => status_is(status),
+                    None => Answer::Error("thread not loaded"),
+                },
+                other => panic!("unexpected request {other}"),
+            })
+        });
+        assert_eq!(transport.start_queue(), QueueStart::Started(1));
+        drop(transport);
+        let requests = server.join().unwrap();
+        assert_eq!(count_of(&requests, "thread/read"), 1);
+        assert_eq!(count_of(&requests, "thread/turns/list"), 0);
+    }
+}
+
+/// The latest turn that cannot be read is no lag either: it ends the wait at once, with the whole
+/// time allowed still left, and the start still reports what it started.
+#[test]
+fn a_start_whose_latest_turn_cannot_be_read_does_not_wait_for_it() {
+    let (transport, listener, token) = transport_with_one_waiting(PATIENCE);
+    let server = serve(listener, token, |method, _| {
+        one_waiting_answer_naming(method, "t-new").unwrap_or_else(|| match method {
+            "thread/read" => status_is("active"),
+            "thread/turns/list" => Answer::Error("thread not found"),
+            other => panic!("unexpected request {other}"),
+        })
+    });
+    assert_eq!(transport.start_queue(), QueueStart::Started(1));
+    drop(transport);
+    let requests = server.join().unwrap();
+    assert_eq!(count_of(&requests, "thread/read"), 1);
+    assert_eq!(count_of(&requests, "thread/turns/list"), 1);
+}
+
+/// A start whose answer names no turn has none to look for: the status alone counts, as before, and
+/// the turns are never asked for.
+#[test]
+fn a_start_naming_no_turn_goes_by_the_status_alone() {
+    for answer in [json!({"turn":{}}), json!({})] {
+        let (transport, listener, token) = transport_with_one_waiting(PATIENCE);
+        let server = serve(listener, token, move |method, _| {
+            if method == "thread/queue/start" {
+                return Answer::Result(answer.clone());
+            }
+            one_waiting_answer(method).unwrap_or_else(|| match method {
+                "thread/read" => status_is("active"),
+                other => panic!("unexpected request {other}"),
+            })
+        });
+        assert_eq!(transport.start_queue(), QueueStart::Started(1));
+        drop(transport);
+        let requests = server.join().unwrap();
+        assert_eq!(count_of(&requests, "thread/read"), 1);
+        assert_eq!(count_of(&requests, "thread/turns/list"), 0);
+    }
+}
+
+/// A start Codex refuses has no turn of its own to wait for: one that finds the message gone from
+/// the queue, or the thread active, reads nothing further and looks up no turn.
+#[test]
+fn a_refused_start_that_finds_the_message_running_reads_nothing_further() {
+    // (does the message still wait after the refusal, status reads expected)
+    for (still_waiting, status_reads) in [(false, 0), (true, 1)] {
+        let (transport, listener, token) = transport_with_one_waiting(START_SETTLE);
+        let lists = Arc::new(AtomicUsize::new(0));
+        let count = lists.clone();
+        let server = serve(listener, token, move |method, _| match method {
+            // Read once to find the message, once more to see whether the refusal left it there.
+            "thread/queue/list" if !still_waiting && count.fetch_add(1, Ordering::AcqRel) >= 1 => {
+                Answer::Result(json!({"data":[],"nextCursor":null}))
+            }
+            "thread/queue/start" => Answer::Error("busy"),
+            "thread/read" => Answer::Result(json!({"thread":{"status":{"type":"active"}}})),
+            other => {
+                one_waiting_answer(other).unwrap_or_else(|| panic!("unexpected request {other}"))
+            }
+        });
+        assert_eq!(transport.start_queue(), QueueStart::Started(1));
+        drop(transport);
+        let requests = server.join().unwrap();
+        assert_eq!(count_of(&requests, "thread/queue/start"), 1);
+        assert_eq!(count_of(&requests, "thread/read"), status_reads);
+    }
+}
+
+/// A refused start Codex gives while a turn is just beginning leaves the thread reading idle for a
+/// moment, so the queue and the status are read again, until the status turns active or the message
+/// leaves the queue, and the message is then taken as running rather than failed.
+#[test]
+fn a_refused_start_reads_an_idle_thread_again_until_it_runs_or_the_message_leaves() {
+    for message_leaves in [false, true] {
+        let (transport, listener, token) = transport_with_one_waiting(PATIENCE);
+        let lists = AtomicUsize::new(0);
+        let reads = AtomicUsize::new(0);
+        let server = serve(listener, token, move |method, _| match method {
+            "thread/queue/start" => Answer::Error("thread already has an active or pending turn"),
+            // Read to find the message, then once before each status read after the refusal; the
+            // message leaves at the fourth.
+            "thread/queue/list" => {
+                let list = lists.fetch_add(1, Ordering::AcqRel);
+                if message_leaves && list >= 3 {
+                    Answer::Result(json!({"data":[],"nextCursor":null}))
+                } else {
+                    one_waiting_answer(method).unwrap()
+                }
+            }
+            "thread/read" => {
+                let read = reads.fetch_add(1, Ordering::AcqRel);
+                assert!(
+                    read < 3,
+                    "the status was read after the start counted as run"
+                );
+                status_is(if !message_leaves && read == 2 {
+                    "active"
+                } else {
+                    "idle"
+                })
+            }
+            other => panic!("unexpected request {other}"),
+        });
+        assert_eq!(transport.start_queue(), QueueStart::Started(1));
+        drop(transport);
+        let requests = server.join().unwrap();
+        assert_eq!(count_of(&requests, "thread/queue/start"), 1);
+        assert_eq!(count_of(&requests, "thread/queue/list"), 4);
+        assert_eq!(
+            count_of(&requests, "thread/read"),
+            if message_leaves { 2 } else { 3 }
+        );
+    }
+}
+
+/// Past the time allowed, a thread still reading idle with the message queued runs nothing: the
+/// refusal stands, after the one read the queue and the status each had.
+#[test]
+fn a_refused_start_of_a_thread_idle_past_the_time_allowed_is_not_running() {
+    let (transport, listener, token) = transport_with_one_waiting(Duration::ZERO);
+    let server = serve(listener, token, |method, _| match method {
+        "thread/queue/start" => Answer::Error("busy"),
+        "thread/read" => status_is("idle"),
+        other => one_waiting_answer(other).unwrap_or_else(|| panic!("unexpected request {other}")),
+    });
+    assert!(matches!(transport.start_queue(), QueueStart::Failed(_)));
+    drop(transport);
+    let requests = server.join().unwrap();
+    assert_eq!(count_of(&requests, "thread/queue/start"), 1);
+    assert_eq!(count_of(&requests, "thread/queue/list"), 2);
+    assert_eq!(count_of(&requests, "thread/read"), 1);
+}
+
+/// Only an idle thread is read again: another status after a refused start ends the judgement at
+/// once, with the whole time allowed left; a thread the server unloaded is loaded again once, not
+/// for ever.
+#[test]
+fn a_refused_start_is_not_read_again_for_a_status_that_is_no_lag() {
+    // (status, loads of the thread, status reads)
+    for (status, loads, reads) in [("systemError", 0, 1), ("notLoaded", 1, 2)] {
+        let (transport, listener, token) = transport_with_one_waiting(PATIENCE);
+        let server = serve(listener, token, move |method, _| match method {
+            "thread/queue/start" => Answer::Error("busy"),
+            "thread/read" => status_is(status),
+            "thread/resume" => Answer::Result(json!({"thread":{}})),
+            other => {
+                one_waiting_answer(other).unwrap_or_else(|| panic!("unexpected request {other}"))
+            }
+        });
+        assert!(matches!(transport.start_queue(), QueueStart::Failed(_)));
+        drop(transport);
+        let requests = server.join().unwrap();
+        assert_eq!(count_of(&requests, "thread/resume"), loads, "{status}");
+        assert_eq!(count_of(&requests, "thread/read"), reads, "{status}");
+    }
+}
+
+/// The message just added is judged the same way: its start refused while the status still reads
+/// idle, the message is taken as running once the status turns active, not failed as uncertain.
+#[test]
+fn a_sent_message_whose_start_is_refused_while_the_status_lags_is_taken_as_running() {
+    let (mut transport, listener, token) = loopback();
+    settle_for(&mut transport, PATIENCE);
+    transport.shared.identify("main");
+    let reads = AtomicUsize::new(0);
+    let server = serve(listener, token, move |method, params| match method {
+        "thread/queue/list" => Answer::Result(
+            json!({"data":[{"id":"q1","clientUserMessageId":"id"}],"nextCursor":null}),
+        ),
+        "thread/queue/start" => Answer::Error("thread already has an active or pending turn"),
+        "thread/read" => {
+            let read = reads.fetch_add(1, Ordering::AcqRel);
+            assert!(
+                read < 2,
+                "the status was read after the message counted as run"
+            );
+            status_is(if read == 0 { "idle" } else { "active" })
+        }
+        other => idle_main(other, params),
+    });
+    assert_eq!(transport.send("hello", "id").unwrap(), Sent::Queued);
+    drop(transport);
+    let requests = server.join().unwrap();
+    assert_eq!(count_of(&requests, "thread/read"), 2);
+}
+
+/// A message sent after a start whose turn the status has not shown yet is started where it waits
+/// and refused, as Codex has a turn pending: the first send waited for its turn to be reported
+/// running, so the second finds it running and succeeds, rather than failing with a message that
+/// ran or will run.
+#[test]
+fn a_message_sent_behind_a_turn_the_status_has_not_shown_yet_is_taken_as_running() {
+    let (mut transport, listener, token) = loopback();
+    settle_for(&mut transport, PATIENCE);
+    transport.shared.identify("main");
+    let adds = AtomicUsize::new(0);
+    let starts = AtomicUsize::new(0);
+    let reads = AtomicUsize::new(0);
+    let server = serve_connections(listener, token, 2, move |method, params| match method {
+        "thread/queue/add" => {
+            let n = adds.fetch_add(1, Ordering::AcqRel) + 1;
+            Answer::Result(json!({"queuedSubmission":{"id": format!("q{n}")}}))
+        }
+        // The first message has been started when the second is added, so the one added last is
+        // the only one queued.
+        "thread/queue/list" => {
+            let n = adds.load(Ordering::Acquire);
+            Answer::Result(json!({"data":[
+                {"id": format!("q{n}"), "clientUserMessageId": format!("id-{n}")}
+            ],"nextCursor":null}))
+        }
+        "thread/queue/start" if starts.fetch_add(1, Ordering::AcqRel) == 0 => {
+            Answer::Result(json!({"turn":{"id":"t-1"}}))
+        }
+        "thread/queue/start" => Answer::Error("thread already has an active or pending turn"),
+        // Idle for the first read after the first start, active from then on.
+        "thread/read" => status_is(if reads.fetch_add(1, Ordering::AcqRel) == 0 {
+            "idle"
+        } else {
+            "active"
+        }),
+        "thread/turns/list" => latest_turn_is("t-1"),
+        other => idle_main(other, params),
+    });
+    assert_eq!(transport.send("first", "id-1").unwrap(), Sent::Queued);
+    assert_eq!(transport.send("second", "id-2").unwrap(), Sent::Queued);
+    drop(transport);
+    let requests = server.join().unwrap();
+    assert_eq!(count_of(&requests, "thread/queue/add"), 2);
+    assert_eq!(count_of(&requests, "thread/queue/start"), 2);
+    // The first send read the status twice, until the turn it started showed as the latest; the
+    // second read it once, past the refusal.
+    assert_eq!(count_of(&requests, "thread/read"), 3);
+    assert_eq!(count_of(&requests, "thread/turns/list"), 1);
+}
+
+/// What a start just made is waited for in the send path too, as after a cancel: the message's
+/// start is accepted and the turn it names is waited for until it is the latest.
+#[test]
+fn a_sent_message_waits_for_the_turn_it_started_to_be_reported_running() {
+    let (mut transport, listener, token) = loopback();
+    settle_for(&mut transport, PATIENCE);
+    transport.shared.identify("main");
+    let reads = AtomicUsize::new(0);
+    let server = serve(listener, token, move |method, params| match method {
+        "thread/queue/list" => Answer::Result(
+            json!({"data":[{"id":"q1","clientUserMessageId":"id"}],"nextCursor":null}),
+        ),
+        "thread/queue/start" => Answer::Result(json!({"turn":{"id":"t-new"}})),
+        // Idle, then active as the turn before, then active as the turn started.
+        "thread/read" => {
+            let read = reads.fetch_add(1, Ordering::AcqRel);
+            assert!(
+                read < 3,
+                "the status was read after the started turn showed"
+            );
+            status_is(if read == 0 { "idle" } else { "active" })
+        }
+        "thread/turns/list" => latest_turn_is(if reads.load(Ordering::Acquire) < 3 {
+            "t-old"
+        } else {
+            "t-new"
+        }),
+        other => idle_main(other, params),
+    });
+    assert_eq!(transport.send("hello", "id").unwrap(), Sent::Queued);
+    drop(transport);
+    let requests = server.join().unwrap();
+    assert_eq!(count_of(&requests, "thread/queue/start"), 1);
+    assert_eq!(count_of(&requests, "thread/read"), 3);
+    assert_eq!(count_of(&requests, "thread/turns/list"), 2);
+}
+
 /// A start moments after another, on a thread that is idle again, is for a cancel of its own: what
 /// waits is started as after any cancel, rather than left waiting for good.
 #[test]
 fn a_start_after_another_cancel_starts_what_waits() {
-    let (transport, listener, token) = loopback();
+    let (mut transport, listener, token) = loopback();
+    // Nothing reports the started turn as running here; the start need not wait for it.
+    Arc::get_mut(&mut transport.shared).unwrap().start_settle = Duration::ZERO;
     transport.shared.identify("main");
     transport
         .shared
@@ -676,7 +1288,10 @@ fn a_start_after_another_cancel_starts_what_waits() {
 #[test]
 fn an_overloaded_start_holds_the_message_until_it_is_written_again() {
     for runs_meanwhile in [false, true] {
-        let (transport, listener, token) = loopback();
+        let (mut transport, listener, token) = loopback();
+        // The thread reads idle throughout: none of the time allowed for it to turn active is
+        // spent.
+        settle_for(&mut transport, Duration::ZERO);
         transport.shared.identify("main");
         let starts = AtomicUsize::new(0);
         let lists = AtomicUsize::new(0);
@@ -745,6 +1360,8 @@ fn a_message_added_behind_others_does_not_overtake_them() {
                 assert_eq!(params["queuedSubmissionId"], starts.unwrap());
                 Answer::Result(json!({"turn":{}}))
             }
+            // Read once after an accepted start, which waits for the turn to be reported running.
+            "thread/read" => Answer::Result(json!({"thread":{"status":{"type":"active"}}})),
             other => idle_main(other, params),
         });
         assert_eq!(transport.send("hello", "id").unwrap(), Sent::Queued);
@@ -932,25 +1549,23 @@ fn the_thread_watch_takes_the_first_user_thread_started() {
     });
     let server = std::thread::spawn(move || {
         let mut socket = initialized(&listener, &token);
-        for started in [
-            thread("title", true, "thread_title", None),
-            thread("helper", false, "user", Some("parent")),
-            thread("main", false, "user", None),
-            thread("second", false, "user", None),
+        let started =
+            |started: Value| json!({"method":"thread/started","params":{"thread":started}});
+        // Everything up to the user thread is read before the watch can end: a request of the
+        // server's, which the watch leaves unanswered, and the threads it passes over.
+        for message in [
+            json!({"id":7,"method":"item/commandExecution/requestApproval","params":{}}),
+            started(thread("title", true, "thread_title", None)),
+            started(thread("helper", false, "user", Some("parent"))),
+            started(thread("main", false, "user", None)),
         ] {
-            socket
-                .send(Message::Text(
-                    json!({"method":"thread/started","params":{"thread":started}}).to_string(),
-                ))
-                .unwrap();
+            socket.send(Message::Text(message.to_string())).unwrap();
         }
-        // A request of the server's is left unanswered by the watch.
-        socket
-            .send(Message::Text(
-                json!({"id":7,"method":"item/commandExecution/requestApproval","params":{}})
-                    .to_string(),
-            ))
-            .unwrap();
+        // The watch may already have taken `main` and closed its connection, which fails this
+        // write; a later user thread does not replace the first either way.
+        let _ = socket.send(Message::Text(
+            started(thread("second", false, "user", None)).to_string(),
+        ));
         // The watch ends once it has the thread, which closes its connection; it answered
         // nothing on the way.
         let mut answered = false;
@@ -1256,7 +1871,12 @@ mod fake {
             },
             _ => {}
         }
-        let listener = UnixListener::bind(&socket).unwrap();
+        // The start takes the socket's path appearing for the server listening, as Codex makes it
+        // by linking the path to a socket elsewhere once that listens. Binding at the path itself
+        // would make it appear before the listen, and a connection in between would be refused.
+        let listening = format!("{socket}.listening");
+        let listener = UnixListener::bind(&listening).unwrap();
+        std::os::unix::fs::symlink(&listening, &socket).unwrap();
         for stream in listener.incoming() {
             let Ok(stream) = stream else { continue };
             let mode = mode.clone();
@@ -1707,7 +2327,8 @@ fn messages_an_earlier_run_queued_are_octoboards_by_their_ids_and_started_after_
                 );
                 start.lock().unwrap().take().expect("no start was expected")
             }
-            "thread/read" => Answer::Result(json!({"thread":{"status":{"type":"idle"}}})),
+            // Read only after an accepted start: Codex reports the turn it began as running.
+            "thread/read" => Answer::Result(json!({"thread":{"status":{"type":"active"}}})),
             other => panic!("unexpected request {other}"),
         });
         let started = transport.start_queue();
@@ -1730,6 +2351,8 @@ fn a_message_already_queued_under_its_id_is_started_in_place_and_not_added_again
             json!({"data":[{"id":"q-9","clientUserMessageId":"launch:7"}],"nextCursor":null}),
         ),
         "thread/queue/start" => Answer::Result(json!({"turn":{}})),
+        // Read once after the accepted start, which waits for the turn to be reported running.
+        "thread/read" => Answer::Result(json!({"thread":{"status":{"type":"active"}}})),
         other => panic!("unexpected request {other}"),
     });
     assert_eq!(transport.send("again", "launch:7").unwrap(), Sent::Queued);

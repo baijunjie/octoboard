@@ -62,6 +62,15 @@ const MAX_PAGES: usize = 8;
 /// cancel's own hook and an owner's interrupt both start it, and the interrupt's note is to count
 /// what ran.
 const RECENT_START: Duration = Duration::from_secs(10);
+/// How long a queue start waits for Codex to report the turn it started as running. Codex answers
+/// the start once its core has begun the turn, but the thread's status turns active only when the
+/// server has handled the turn's start event, a moment later (0.167.1): a second start reading the
+/// status in between would take the thread for idle, as after a cancel of its own, and count only
+/// what is left. It also bounds how long a refused start reads an idle thread again: Codex refuses
+/// a start while a turn is just beginning, before the status says so.
+const START_SETTLE: Duration = Duration::from_secs(2);
+/// How often the status is read while a start settles, or a refused start reads it again.
+const START_SETTLE_POLL: Duration = Duration::from_millis(20);
 
 /// The code of the notice that the session's messages have waited long.
 fn held_code() -> crate::protocol::Code {
@@ -107,6 +116,10 @@ struct Shared {
     start_held: Mutex<std::collections::HashSet<String>>,
     /// [`HELD_NOTICE_AFTER`], lowered by a test.
     held_notice_after: Duration,
+    /// [`START_SETTLE`], lowered by a test.
+    start_settle: Duration,
+    /// [`START_SETTLE_POLL`], lowered by a test.
+    start_settle_poll: Duration,
 }
 
 impl Default for Shared {
@@ -122,6 +135,8 @@ impl Default for Shared {
             last_start: Mutex::new(None),
             start_held: Mutex::default(),
             held_notice_after: HELD_NOTICE_AFTER,
+            start_settle: START_SETTLE,
+            start_settle_poll: START_SETTLE_POLL,
         }
     }
 }
@@ -467,21 +482,31 @@ impl CodexTransport {
 
     /// Whether a queue start that was refused leaves the message `id` running or to run: gone from
     /// the queue, or still in it behind a turn that is running. A thread the server unloaded
-    /// meanwhile is loaded again, which runs its queue, and judged again. `None` when that cannot
-    /// be told.
+    /// meanwhile is loaded again, which runs its queue, and judged again. An idle thread is read
+    /// again for at most [`START_SETTLE`]: Codex refuses a start while a turn is just beginning,
+    /// before the thread's status says so. An active status is taken as it reads, though right
+    /// after a cancel it may still be the cancelled turn's, which the server has yet to see end; a
+    /// refused start names no turn to tell them apart. `None` when that cannot be told.
     fn runs_after_refused_start(&self, rpc: &mut Rpc, thread: &str, id: &str) -> Option<bool> {
-        for attempt in 0..2 {
+        let deadline = Instant::now() + self.shared.start_settle;
+        let mut loaded_again = false;
+        loop {
             let queued = queued_items(rpc, thread).ok()?;
             if !queued.iter().any(|item| item.id == id) {
                 return Some(true);
             }
             match thread_status(rpc, thread).ok()?.as_str() {
                 "active" => return Some(true),
-                "notLoaded" if attempt == 0 => load_again(rpc, thread).ok()?,
+                "notLoaded" if !loaded_again => {
+                    load_again(rpc, thread).ok()?;
+                    loaded_again = true;
+                }
+                "idle" if Instant::now() < deadline => {
+                    std::thread::sleep(self.shared.start_settle_poll);
+                }
                 _ => return Some(false),
             }
         }
-        Some(false)
     }
 
     /// Has the message `id`, just added to `thread`'s queue, run in its turn, without overtaking
@@ -512,7 +537,12 @@ impl CodexTransport {
             "thread/queue/start",
             json!({"threadId": thread, "queuedSubmissionId": head.id}),
         ) {
-            Ok(_) => return Ok(AfterAdd::Runs),
+            Ok(started) => {
+                // The next message written reads the status this start saw settle, rather than
+                // take the thread for idle and the turn it began for one that never started.
+                self.await_running(rpc, thread, started_turn(&started));
+                return Ok(AfterAdd::Runs);
+            }
             Err(refusal) => refusal,
         };
         if self.runs_after_refused_start(rpc, thread, id) == Some(true) {
@@ -548,6 +578,51 @@ impl CodexTransport {
                 .find(|item| item.client_id == logical_id)
                 .map(|item| item.id)
         }))
+    }
+
+    /// Waits, for at most [`START_SETTLE`], until Codex reports `thread` running the turn `turn`,
+    /// the one a queue start just began, where the start named it. Only an idle status is the lag
+    /// waited out, along with an active one that is still the turn before, whose end the server may
+    /// not have handled yet: a turn that ends before it is seen running costs the whole wait, while
+    /// any other status, or one that cannot be read, ends it at once. None of these changes what
+    /// the start reports; the next start judges the thread as it finds it.
+    fn await_running(&self, rpc: &mut Rpc, thread: &str, turn: Option<&str>) {
+        let deadline = Instant::now() + self.shared.start_settle;
+        loop {
+            let running = match thread_status(rpc, thread) {
+                Ok(status) if status == "active" => match turn {
+                    // The server merges the turn running into the turns it lists, from the same
+                    // events it reads the status off. The rest of the list comes from the
+                    // rollout, which may record the new turn before those events are handled, so
+                    // a stale status can still pass here in that narrow window.
+                    Some(turn) => match latest_turn(rpc, thread) {
+                        Ok(latest) => latest.as_deref() == Some(turn),
+                        Err(error) => {
+                            tracing::debug!(%error, "could not read which turn Codex runs");
+                            return;
+                        }
+                    },
+                    None => return,
+                },
+                Ok(status) if status == "idle" => false,
+                Ok(status) => {
+                    tracing::debug!(%status, "Codex did not report the started turn as running");
+                    return;
+                }
+                Err(error) => {
+                    tracing::debug!(%error, "could not read whether Codex runs the started turn");
+                    return;
+                }
+            };
+            if running {
+                return;
+            }
+            if Instant::now() >= deadline {
+                tracing::debug!("Codex did not report the started turn as running in time");
+                return;
+            }
+            std::thread::sleep(self.shared.start_settle_poll);
+        }
     }
 
     /// Starts the first of this transport's messages waiting in `thread`'s queue, unless something
@@ -589,7 +664,12 @@ impl CodexTransport {
             "thread/queue/start",
             json!({"threadId": thread, "queuedSubmissionId": id}),
         ) {
-            Ok(_) => true,
+            Ok(started) => {
+                // Starts are made one at a time, so the next one reads the status this one saw
+                // settle rather than the idle one the cancel left.
+                self.await_running(rpc, thread, started_turn(&started));
+                true
+            }
             Err(_) => self.runs_after_refused_start(rpc, thread, id) == Some(true),
         };
         if started {
@@ -903,6 +983,23 @@ fn queued_items(rpc: &mut Rpc, thread: &str) -> Result<Vec<QueuedItem>, RpcFailu
             })
             .collect(),
     )
+}
+
+/// The id of the turn a queue start's answer names, where it names one.
+fn started_turn(answer: &Value) -> Option<&str> {
+    answer.pointer("/turn/id").and_then(Value::as_str)
+}
+
+/// The id of `thread`'s latest turn, the one running included, where it has one.
+fn latest_turn(rpc: &mut Rpc, thread: &str) -> Result<Option<String>, RpcFailure> {
+    let page = rpc.request(
+        "thread/turns/list",
+        json!({"threadId": thread, "limit": 1, "sortDirection": "desc", "itemsView": "notLoaded"}),
+    )?;
+    Ok(page
+        .pointer("/data/0/id")
+        .and_then(Value::as_str)
+        .map(str::to_string))
 }
 
 /// The status of `thread`: `active` with a turn running, `idle`, `notLoaded`, or `systemError`.

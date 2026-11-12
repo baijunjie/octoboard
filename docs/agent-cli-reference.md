@@ -2820,6 +2820,15 @@ model endpoint, in a scratch home:
 - The app server's program carries the reply "Server overloaded; retry later." for a request it has no room for (found
   in the 0.166.0 binary's strings, beside its request intake; the JSON-RPC code was not observed, and is taken to be
   -32001). Octoboard treats it as a wait, not as a refusal of the message.
+- Read from the 0.167.1 source (`rust-v0.167.1`), not measured: `thread/queue/start` answers once the core has begun
+  the turn, with `{"turn":{"id",…,"status":"inProgress"}}`, and refuses with "thread already has an active or pending
+  turn" when the core is not idle. The status `thread/read` reports (`notLoaded`, `idle`, `systemError`, `active`) names
+  no turn, and the server updates it from the turn's start and end events as it handles them, so it lags the start's
+  answer and, after a cancel, the cancelled turn's end. `thread/turns/list {threadId, limit, sortDirection: "desc",
+  itemsView: "notLoaded"}` lists the latest turn first, rebuilt from the rollout with the turn running merged in from
+  those same events; the listing does not say which source a turn came from, and the rollout may record a new turn
+  before the server has handled its events. Octoboard waits for up to 2 seconds after a start until the status is
+  active and the latest turn is the one started.
 
 The terminal paste sequence all three agents accept is `ESC[200~`, the text with LF separators, `ESC[201~`, then `CR`;
 multi-line text arrives as one message with no delay between paste and Enter. Every agent queues a message written

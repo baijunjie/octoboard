@@ -469,10 +469,12 @@ one of Octoboard's own, asks Codex to start that first item (see "Messages throu
 gone from the queue by then, or waiting behind an item someone else queued, counts as accepted. Codex refuses to start
 an item it has already started or will run after the running turn, so a refused start is judged from Codex's queue, not
 from the refusal's wording: the message gone from the queue, or still in it behind a running turn, counts as accepted; a
-conversation the server has unloaded meanwhile is loaded again, which runs its queue, and judged once more; still in
-it with no turn running, or a queue that cannot be read then, leaves its start unconfirmed — unless Codex refused the
-start as overloaded ("Server overloaded; retry later."), in which case the message is not uncertain but waits in
-Codex's queue to be started again (see "Messages through Codex's own queue" above).
+conversation the server has unloaded meanwhile is loaded again, which runs its queue, and judged once more; a
+conversation that reads idle is read again for up to 2 seconds, since Codex reports a turn it has just begun as running
+only a moment later; still in it with no turn running after that, or a queue that cannot be read then, leaves its
+start unconfirmed — unless Codex refused the start as overloaded ("Server overloaded; retry later."), in which case the
+message is not uncertain but waits in Codex's queue to be started again (see "Messages through Codex's own queue"
+above).
 
 If Codex's own queue may have accepted a message but that cannot be confirmed — the connection to the server lost after
 the request went out, an acknowledgement without the queued message's id, or a start left unconfirmed as above —
