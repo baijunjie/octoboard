@@ -268,24 +268,64 @@ fn as_printed(capture: &[u8]) -> Vec<u8> {
 /// Codex's whole conversation: its screen, a read of the Enter, what replaces the screen, and
 /// one more read, so that anything sent after the Enter shows up in what was received.
 fn codex_script(received: &Path) -> String {
-    codex_script_reading(received, 1)
+    codex_script_then(received, take(1, &quoted(received)))
 }
 
-/// [`codex_script`] reading `after` bytes once the screen is gone.
-fn codex_script_reading(received: &Path, after: usize) -> String {
+/// [`codex_script`] reading, once the screen is gone, `typed` bytes the person types and then the
+/// message `text` as [`take_message`] does.
+fn codex_script_reading(received: &Path, typed: usize, text: &str) -> String {
     let r = quoted(received);
+    let message = take_message(&r, text);
+    let after = if typed > 0 {
+        format!("{}; {message}", take(typed, &r))
+    } else {
+        message
+    };
+    codex_script_then(received, after)
+}
+
+/// Codex's screen, a read of the Enter, what replaces the screen, and then `after`.
+fn codex_script_then(received: &Path, after: String) -> String {
     [
         load(&[
             ("SCREEN", "codex_trust_screen.bin"),
             ("DISMISSED", "codex_trust_dismissed.bin"),
         ]),
         show("SCREEN"),
-        take(1, &r),
+        take(1, &quoted(received)),
         show("DISMISSED"),
-        take(after, &r),
+        after,
         "sleep 30".to_string(),
     ]
     .join("; ")
+}
+
+/// Reads the message `text` framed for Codex as Codex takes it: the paste first, then its composer
+/// drawn showing the message, then the rest of the message, its Enter, then the screen cleared as
+/// Codex empties its box on submit (the change `session::paste_apart` waits to see after the
+/// Enter). Where the terminal hands Codex a paste as keys (`TermFacts::paste_as_keys`), the daemon
+/// writes that Enter only once the composer shows the whole message (`session::paste_apart`), so a
+/// stand-in that never drew one would never be sent it. Where the paste and the Enter are written
+/// together, the two reads just take them in turn, and the composer is drawn after the bytes it is
+/// no use to.
+fn take_message(received: &str, text: &str) -> String {
+    let framed = crate::session::term::frame_message(AgentId::CODEX, text);
+    let pasted = crate::platform::term::encode(&framed[..1]).len();
+    let whole = crate::platform::term::encode(&framed).len();
+    [
+        take(pasted, received),
+        composer_showing(text),
+        take(whole - pasted, received),
+        "printf '\\e[2J\\e[H'".to_string(),
+    ]
+    .join("; ")
+}
+
+/// Draws Codex's composer showing `text` alone (one line, free of `'` and `%`) with its status
+/// line below, in the shape `adapter::codex::screen` reads the composer by, over a cleared screen.
+/// The raw terminal does not turn a newline into a carriage return, so each row ends in both.
+fn composer_showing(text: &str) -> String {
+    format!("printf '\\e[2J\\e[H› {text}\\r\\n\\r\\n  gpt-5.5 high · ~/project'")
 }
 
 /// Prints one of the captures [`load_captures`] read.
@@ -2462,7 +2502,7 @@ async fn a_message_waits_while_codex_is_at_its_screen_and_follows_the_press() {
         SessionKind::Project,
         Some("project-1"),
     );
-    let script = codex_script_reading(Path::new("%RECEIVED%"), message.len());
+    let script = codex_script_reading(Path::new("%RECEIVED%"), 0, "hello");
     let (live, received) = start(&state, &dir, record, &script);
     assert!(wait_for(PATIENCE, || live.trust.waiting()));
 
@@ -2556,7 +2596,7 @@ async fn a_message_for_codex_is_let_through_at_its_first_title_with_no_screen() 
     );
     let script = format!(
         "printf 'ready'; {}; sleep 30",
-        take(message.len(), "'%RECEIVED%'")
+        take_message("'%RECEIVED%'", "hello")
     );
     let (live, received) = start(&state, &dir, record, &script);
     supervise(&state, &live);
@@ -2602,7 +2642,7 @@ async fn codex_answered_in_the_terminal_lets_held_messages_through_once_the_scre
         &state,
         &dir,
         answered,
-        &codex_script_reading(Path::new("%RECEIVED%"), 3 + message.len()),
+        &codex_script_reading(Path::new("%RECEIVED%"), 3, "hello"),
     );
     let moved = session(
         "codex-2",

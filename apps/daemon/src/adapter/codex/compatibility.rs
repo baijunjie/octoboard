@@ -362,6 +362,7 @@ fn reference(name: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::adapter::codex::toml_string;
     use crate::test_support::ScratchDir;
 
     fn write(path: &Path, text: &str) {
@@ -384,8 +385,8 @@ mod tests {
 
     fn trusted(project: &Path) -> String {
         format!(
-            "[projects.\"{}\"]\ntrust_level = \"trusted\"\n",
-            project.display()
+            "[projects.{}]\ntrust_level = \"trusted\"\n",
+            toml_string(&project.to_string_lossy())
         )
     }
 
@@ -547,7 +548,10 @@ env_vars = ["NOT VALID"]
         let level = level.map_or(String::new(), |level| {
             format!("trust_level = \"{level}\"\n")
         });
-        format!("[projects.\"{}\"]\n{level}", dir.display())
+        format!(
+            "[projects.{}]\n{level}",
+            toml_string(&dir.to_string_lossy())
+        )
     }
 
     /// The trusted directories of `project` under the given entries, nearest first.
@@ -654,9 +658,11 @@ env_vars = ["NOT VALID"]
     fn the_main_root_is_the_parent_of_the_common_git_directory_by_whatever_name() {
         let (root, _, _) = world();
         let base = canonical_project(&root);
-        let modules = base.join("super/.git/modules");
+        // Joined a component at a time, so that the key reads as Codex writes the canonical path
+        // on every host: one joined with `/` keeps the slash on Windows.
+        let modules = base.join("super").join(".git").join("modules");
         std::fs::create_dir_all(modules.join("child")).unwrap();
-        let child = base.join("super/child");
+        let child = base.join("super").join("child");
         write(
             &child.join(".git"),
             &format!("gitdir: {}\n", modules.join("child").display()),
@@ -794,8 +800,8 @@ env_vars = ["NOT VALID"]
         write(
             &config,
             &format!(
-                "[projects.\"{}\"]\ntrust_level = \"untrusted\"\n",
-                repo.display()
+                "[projects.{}]\ntrust_level = \"untrusted\"\n",
+                toml_string(&repo.to_string_lossy())
             ),
         );
         assert_eq!(CodexCompatibility.skill_dirs(&env, &cwd), [global, user]);
@@ -812,8 +818,8 @@ env_vars = ["NOT VALID"]
         write(
             &config,
             &format!(
-                "[[skills.config]]\npath = \"{}\"\nenabled = false\n",
-                off.join(SKILL_FILE).display()
+                "[[skills.config]]\npath = {}\nenabled = false\n",
+                toml_string(&off.join(SKILL_FILE).to_string_lossy())
             ),
         );
         let names: Vec<_> = CodexCompatibility
@@ -835,9 +841,9 @@ env_vars = ["NOT VALID"]
         write(
             &home(&root).join("config.toml"),
             &format!(
-                "{}[[skills.config]]\npath = \"{}\"\nenabled = false\n",
+                "{}[[skills.config]]\npath = {}\nenabled = false\n",
                 trusted(&repo),
-                near.join(SKILL_FILE).display()
+                toml_string(&near.join(SKILL_FILE).to_string_lossy())
             ),
         );
         assert_eq!(CodexCompatibility.skill_dirs(&env, &cwd), [far]);

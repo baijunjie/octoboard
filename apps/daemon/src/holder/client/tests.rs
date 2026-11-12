@@ -207,6 +207,10 @@ fn an_adopted_draining_holder_of_this_build_keeps_old_terminals_but_gets_no_new_
     old.size()
         .expect("the draining holder still serves its terminal");
     std::mem::forget(old);
+    // Parted from as a planned restart does: on Windows a holder keeps running only after a crash
+    // or a planned restart, since an ordinary parting ends it
+    // (`proc::holder_ends_at_ordinary_parting`).
+    previous.part_planned();
     drop(previous);
 
     let next = holders_of_current_build(registry_dir.clone());

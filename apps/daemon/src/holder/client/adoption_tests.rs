@@ -1,7 +1,7 @@
 //! Which holders a daemon adopts at start, over holders that run in this process: a first
 //! `Holders` of one version stands for the daemon that started the terminals and is gone (it is
-//! parted from, and its terminals are never dropped, which would release them), and a second one,
-//! whose range says what it adopts, for the daemon that starts next.
+//! parted from as a planned restart does, and its terminals are never dropped, which would release
+//! them), and a second one, whose range says what it adopts, for the daemon that starts next.
 
 use std::time::{Duration, Instant};
 
@@ -32,8 +32,11 @@ fn spec(id: &str) -> SpawnSpec {
 }
 
 /// Starts a program in a holder that reports `version`, as a daemon that is gone left it, and
-/// returns its pid. The gone daemon's link is parted from; its terminal is leaked, since
-/// dropping it releases it in the holder.
+/// returns its pid. The gone daemon's link is parted from as a planned restart does (a handover);
+/// its terminal is leaked, since dropping it releases it in the holder. On Windows a holder keeps
+/// running only after a crash or a planned restart, since an ordinary parting ends it
+/// (`proc::holder_ends_at_ordinary_parting`), so the handover is what leaves it for the next
+/// daemon.
 fn left_behind(dir: &ScratchDir, version: &str) -> i32 {
     let previous = in_process_with(
         dir.join("holders"),
@@ -45,6 +48,7 @@ fn left_behind(dir: &ScratchDir, version: &str) -> i32 {
     let held = previous.spawn(spec("old")).expect("the program starts");
     let pid = held.pid().0 as i32;
     std::mem::forget(held);
+    previous.part_planned();
     drop(previous);
     pid
 }

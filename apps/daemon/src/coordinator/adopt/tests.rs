@@ -1,7 +1,7 @@
 //! Adoption over holders that run in this process: a first `Holders` stands for the daemon that
-//! started the terminals and is gone (its link is parted from, and its terminals are never
-//! dropped, so nothing is released), and a second one, over the same registry directory, for the
-//! daemon that starts next.
+//! started the terminals and is gone (its link is parted from as a planned restart does, and its
+//! terminals are never dropped, so nothing is released), and a second one, over the same registry
+//! directory, for the daemon that starts next.
 
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -23,7 +23,10 @@ use crate::test_support::{
 
 /// The terminals a previous daemon left in the holder of `dir`, each started with its meta, and the
 /// pids of their programs. The previous daemon's terminals are leaked on purpose, since dropping
-/// one releases it in the holder; its link is parted from.
+/// one releases it in the holder; its link is parted from as a planned restart does. An ordinary
+/// parting would end the holder on Windows (`proc::holder_ends_at_ordinary_parting`), where a
+/// holder keeps running only after a crash or a planned restart, so the terminals would be gone
+/// when the next daemon looks; the planned parting leaves the holder running on every platform.
 fn left_behind(dir: &ScratchDir, terminals: Vec<(&str, Value, programs::Program)>) -> Vec<i32> {
     let previous = in_process(dir.join("holders")).expect("holders");
     let mut pids = Vec::new();
@@ -42,6 +45,7 @@ fn left_behind(dir: &ScratchDir, terminals: Vec<(&str, Value, programs::Program)
         pids.push(held.pid().0 as i32);
         std::mem::forget(held);
     }
+    previous.part_planned();
     drop(previous);
     pids
 }
@@ -68,9 +72,9 @@ async fn found_when(
             return (next, found);
         }
         assert!(Instant::now() < deadline, "the holder never showed it");
-        // Parted from, and the terminals leaked as the previous daemon's are: dropping a found
-        // terminal releases it in its holder.
-        next.shutdown();
+        // Parted from as `left_behind` does, and the terminals leaked as the previous daemon's
+        // are: dropping a found terminal releases it in its holder.
+        next.part_planned();
         std::mem::forget(found);
         drop(next);
         tokio::time::sleep(Duration::from_millis(50)).await;
@@ -1656,11 +1660,16 @@ async fn an_adopted_idle_claude_session_takes_messages_and_one_at_its_trust_scre
     }
 }
 
-/// A console host can set a title before Codex is ready; adoption preserves the rule that its
-/// parsed composer, rather than the host's title, establishes readiness.
+/// The inbox console host can set a title before Codex is ready; adoption preserves the rule that
+/// its parsed composer, rather than the host's title, establishes readiness.
 #[cfg(windows)]
 #[tokio::test(flavor = "multi_thread")]
 async fn an_adopted_host_rendered_codex_terminal_does_not_start_at_its_title() {
+    // Only the inbox console host renders; the bundled one passes the program's own bytes through,
+    // and no seam makes an adopted session read as a rendered one before its first output.
+    if !crate::platform::term::facts().host_renders {
+        return;
+    }
     let (state, dir) = console_with_project_and_accounts("adopt-codex-host-title");
     record_codex(&state, "s1");
     let run_dir = dir.join("run");

@@ -678,7 +678,7 @@ async fn codex_answered_in_the_terminal_on_the_parsed_screen_lets_held_messages_
     };
     let (answered_live, answered_received) = start(
         "codex-1",
-        &codex_script_reading(Path::new("%RECEIVED%"), 3 + message.len()),
+        &codex_script_reading(Path::new("%RECEIVED%"), 3, "hello"),
     );
     let moved_script = [
         load(&[
