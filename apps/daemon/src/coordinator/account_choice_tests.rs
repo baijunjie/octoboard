@@ -399,6 +399,79 @@ async fn an_account_found_not_logged_in_is_refused_and_a_failed_reading_is_not()
     assert_ne!(code_of(&err), error_code::ACCOUNT_NOT_SIGNED_IN);
 }
 
+/// An account the daemon holds no quota reading of yet (right after a start, before the first
+/// probe finishes) opens a session; once the reading says it is not logged in, a new open on it is
+/// refused and records nothing, leaving a session already on the account on record. Only the open
+/// is checked.
+#[tokio::test]
+async fn an_account_not_read_yet_opens_and_is_refused_once_read_as_not_logged_in() {
+    use crate::coordinator::open::open_session_with;
+    use crate::protocol::{
+        quota_unavailable_code as code, AccountQuota, QuotaUnavailable, QuotaWindow,
+        QuotaWindowKind,
+    };
+
+    let (state, _dir) = console_with_project_and_accounts("coordinator-open-before-first-read");
+    let alt_dir = state
+        .store
+        .account_dir(&Some("claude-a".to_string()))
+        .unwrap()
+        .unwrap();
+    let request = || OpenRequest {
+        agent: Some(AgentId::CLAUDE),
+        account: Some(Some("claude-a".to_string())),
+        ..open_request()
+    };
+    let reading = |unavailable: Option<QuotaUnavailable>| AccountQuota {
+        reset_credits: None,
+        agent: AgentId::CLAUDE,
+        account: Some("claude-a".to_string()),
+        fetched_at: 1,
+        plan: None,
+        email: None,
+        windows: vec![QuotaWindow {
+            kind: QuotaWindowKind::Weekly,
+            label: None,
+            used_percent: 10.0,
+            resets_at: None,
+            window_minutes: None,
+        }],
+        unavailable,
+    };
+
+    // No reading yet: the open is accepted. A session is already on the account.
+    assert!(resolve_open(&state, &request()).is_ok());
+    let mut existing = project_session("existing", AgentId::CLAUDE, SessionStatus::Idle);
+    existing.account_id = Some("claude-a".to_string());
+    state.store.insert_session(&existing).unwrap();
+
+    for reason in [code::NOT_SIGNED_IN, code::CONFIG_DIR_MISSING] {
+        let held = reading(Some(QuotaUnavailable::new(
+            reason,
+            "x",
+            &[("agent", "Claude")],
+        )));
+        state.account_quotas.hold_in_dir_for_test(&held, &alt_dir);
+
+        // The refusal comes before any launch; the closure only keeps a regression from starting
+        // a real agent.
+        let err = open_session_with(&state, request(), |_| {
+            anyhow::bail!("an open that is refused must not launch")
+        })
+        .await
+        .expect_err("refused");
+        assert_eq!(code_of(&err), error_code::ACCOUNT_NOT_SIGNED_IN, "{reason}");
+        let coded = err.downcast_ref::<CodedError>().unwrap();
+        assert_eq!(coded.params["agent"], AgentId::CLAUDE.label());
+        assert_eq!(coded.params["account"], "claude-a");
+        assert_eq!(
+            crate::test_support::session_ids(&state),
+            ["existing"],
+            "{reason}: the refused open recorded nothing"
+        );
+    }
+}
+
 #[test]
 fn automatic_open_choice_uses_another_agent_only_after_all_preferred_accounts() {
     let (state, _dir) = state_for_opening("automatic-open-agent-fallback");

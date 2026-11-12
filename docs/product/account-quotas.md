@@ -242,7 +242,11 @@ An account is **not logged in** while the last reading held for it, under the di
 agent not signed in there or its directory missing (the reading's `unavailable` code is `quota_not_signed_in` or
 `quota_config_dir_missing`; see "Quota states" above). It is judged on the reading already held, as a used-up account
 is. A reading that failed for any other reason — a timeout, a CLI that could not be run — says nothing about the
-sign-in, and neither does an account not read yet: such an account can still be chosen and opened on.
+sign-in, and neither does an account not read yet: such an account can still be chosen and opened on. So until a
+reading of an account is held — after the daemon starts, after the account is added, turned back on or pointed at
+another directory (see "When quotas are read" in `docs/product/account-quota-readings.md`) — the daemon accepts and
+launches a session opened on it even when the account is in fact not logged in, and refuses a new one only once that
+reading is held. A session opened before the reading arrives is not refused or ended when it does.
 
 An account that is not logged in is treated as clearly unusable:
 
