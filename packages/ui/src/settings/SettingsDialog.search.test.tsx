@@ -323,14 +323,14 @@ describe("the section strip while a query is entered", () => {
 
   it("gives the wide menu no indicator while searching, and its selected row keeps its own fill", async () => {
     await open({ section: "general" });
-    expect(selectedTab()!.className).toContain("ui-selected:bg-(--menu-raised)");
+    expect(selectedTab()!.className).toContain("ui-selected:bg-(--menu-selected)");
     await search("sorting");
     expect(indicators()).toHaveLength(0);
-    expect(selectedTab()!.className).toContain("ui-selected:bg-(--menu-raised)");
+    expect(selectedTab()!.className).toContain("ui-selected:bg-(--menu-selected)");
     expect(selectedTab()!.className).not.toContain("ui-selected:bg-segment");
     await click(clearButton());
     expect(indicators()).toHaveLength(0);
-    expect(selectedTab()!.className).toContain("ui-selected:bg-(--menu-raised)");
+    expect(selectedTab()!.className).toContain("ui-selected:bg-(--menu-selected)");
   });
 });
 

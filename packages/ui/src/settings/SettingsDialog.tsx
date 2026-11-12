@@ -91,11 +91,11 @@ const COLUMN_END_INSET = "tablet:me-2";
 const MENU_SEARCH_FIELD_CLASS = "[--field-background:var(--menu-raised)] [--field-focus:var(--menu-raised)] [--field-hover:color-mix(in_oklab,var(--menu-raised)_90%,var(--foreground)_2%)]";
 /** A section's tab in the wide menu column: a row of the column's width that reads from the start, with the hover tint
  * of a sidebar row (translucent, so in dark it stays below the selected row rather than outshining it as a menu item's
- * fill would), and the selected row raised (`--menu-raised`), as the search field above it is, in the foreground
- * colour. The selection is drawn on the tab itself (the tab has no indicator there), and `scroll-my-1` keeps the focus
- * ring of a revealed tab in view inside the list's scroller. A user-approved departure from HeroUI's tab look, recorded
- * in `docs/ui-standard.md`'s "The Settings section menu" section. */
-const MENU_TAB_CLASS = "w-full justify-start gap-2 scroll-my-1 rounded-lg px-3 whitespace-nowrap hover:bg-panel-hover hover:text-foreground ui-selected:bg-(--menu-raised) ui-selected:text-foreground ui-selected:hover:bg-(--menu-raised)";
+ * fill would), and the selected row in `--menu-selected` (darker than the ground in light, a step lighter in
+ * dark), in the foreground colour. The selection is drawn on the tab itself (the tab has no indicator there), and
+ * `scroll-my-1` keeps the focus ring of a revealed tab in view inside the list's scroller. A user-approved departure
+ * from HeroUI's tab look, recorded in `docs/ui-standard.md`'s "The Settings section menu" section. */
+const MENU_TAB_CLASS = "w-full justify-start gap-2 scroll-my-1 rounded-lg px-3 whitespace-nowrap hover:bg-panel-hover hover:text-foreground ui-selected:bg-(--menu-selected) ui-selected:text-foreground ui-selected:hover:bg-(--menu-selected)";
 
 /** A section's panel. The section scrolls on its own inside the dialog and fades at the edge it can
  * still be scrolled towards, as the body of a `Dialog` does. The scroller sits inside the panel, not

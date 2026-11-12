@@ -163,21 +163,25 @@ it("swaps the menu column and the shared strip when the window crosses the table
 
 const dialog = () => document.querySelector<HTMLElement>('[role="dialog"]')!;
 
-it.each([[1440], [500]])("carries the raised fills on the dialog, which the wide menu's field and selected row read their fill from, at %ipx", async (width) => {
+it.each([[1440], [500]])("carries the raised fills on the dialog, which the wide menu's field and selected row read their fills from, at %ipx", async (width) => {
   mount({ nonce: 1, section: "git", addAgent: false }, width);
   await act(async () => {});
   expect(classes(dialog())).toEqual(expect.arrayContaining(["control-fills", "raised-fills"]));
 });
 
-it("fills the wide menu's search field and selected row from the dialog's raised fill, and neither the narrow field nor the strip uses it", async () => {
+it("fills the wide menu's search field from the dialog's raised fill and its selected row from the dialog's selected fill, and neither the narrow field nor the strip uses either", async () => {
   const { selected, resize } = mount({ nonce: 1, section: "git", addAgent: false }, 1440);
   await act(async () => {});
-  const raisedFill = (element: Element | null | undefined) => (element?.getAttribute("class") ?? "").includes("--menu-raised");
-  expect(raisedFill(searchField())).toBe(true);
-  expect(raisedFill(selected())).toBe(true);
+  const fill = (element: Element | null | undefined, name: string) => (element?.getAttribute("class") ?? "").includes(name);
+  expect(fill(searchField(), "--menu-raised")).toBe(true);
+  expect(fill(searchField(), "--menu-selected")).toBe(false);
+  expect(fill(selected(), "--menu-selected")).toBe(true);
+  expect(fill(selected(), "--menu-raised")).toBe(false);
   await resize(500);
-  expect(raisedFill(searchField())).toBe(false);
-  expect(raisedFill(selected())).toBe(false);
+  expect(fill(searchField(), "--menu-raised")).toBe(false);
+  expect(fill(searchField(), "--menu-selected")).toBe(false);
+  expect(fill(selected(), "--menu-raised")).toBe(false);
+  expect(fill(selected(), "--menu-selected")).toBe(false);
 });
 
 it("draws the wide column's divider as the ground's groove, not as a border", async () => {

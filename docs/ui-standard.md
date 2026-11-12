@@ -278,18 +278,20 @@ tabs, by the user's decision (`packages/ui/src/settings/SettingsDialog.tsx`). Th
 on HeroUI's secondary surface (`--surface-secondary`), a step below the dialog's own, for the dialog's full height, and
 a `groove-e` at its end edge divides it from the section. The tabs keep React Aria's tab semantics but drop HeroUI's
 track and indicator: each is a rounded row the column's width, its label in HeroUI's tab colour, taking the sidebar
-rows' `--panel-hover` tint and the foreground colour on hover. The selected row and the search field stand raised on
-the ground in `--menu-raised` (`packages/ui/src/styles/surfaces.css`): the dialog's surface in light (white), and in
-dark the dialog's control fill, a step lighter than its surface, since a raised dark surface reads lighter rather than
-whiter. The selected row's label is the foreground colour. The field is HeroUI's primary variant with its field colours
-set to `--menu-raised`, since HeroUI's dark field is darker than the ground, an exception to "Form controls on a
-surface". The field's edges, icon and text line up with the rows';
-the rows sit as far from the divider as from the dialog's start edge, and the section's content as far from the divider
-as from the dialog's end edge. When the window is too short for every section, the list scrolls inside the column while
-the field, the ground and the divider stay put; its edges fade where it can scroll, and HeroUI's scroll buttons, which
-would sit over the rows' labels, are hidden. While a tab holds keyboard focus the fades give way to its ring (see
-"Visible focus"), so a keyboard user finds the rest of the list by moving through it. At the breakpoint and below the sections are the shared content-fit
-tab strip with HeroUI's look (and the search-time override under "Conformance level and exceptions").
+rows' `--panel-hover` tint and the foreground colour on hover. The search field stands raised on the ground in
+`--menu-raised` (`packages/ui/src/styles/surfaces.css`): the dialog's surface in light (white), and in dark the
+dialog's control fill, a step lighter than its surface, since a raised dark surface reads lighter rather than whiter.
+The field is HeroUI's primary variant with its field colours set to `--menu-raised`, since HeroUI's dark field is
+darker than the ground, an exception to "Form controls on a surface". The selected row is in `--menu-selected`, with
+its label in the foreground colour: in light the dialog's hovered control fill, a grey darker than the ground, by the
+user's decision, since a white row reads oddly as the selection there; in dark the same fill as the field. The field's edges, icon and
+text line up with the rows'; the rows sit as far from the divider as from the dialog's start edge, and the section's
+content as far from the divider as from the dialog's end edge. When the window is too short for every section, the
+list scrolls inside the column while the field, the ground and the divider stay put; its edges fade where it can
+scroll, and HeroUI's scroll buttons, which would sit over the rows' labels, are hidden. While a tab holds keyboard focus
+the fades give way to its ring (see "Visible focus"), so a keyboard user finds the rest of the list by moving through
+it. At the breakpoint and below the sections are the shared content-fit tab strip with HeroUI's look (and the
+search-time override under "Conformance level and exceptions").
 
 ## Third-party UI components come through the wrapper layer
 

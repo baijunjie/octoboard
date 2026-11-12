@@ -162,17 +162,21 @@
   --default-soft-hover: var(--control-fill-hover);
 }
 
-/* The fill of what stands raised on a ground a step darker than its dialog (the Settings section menu's search field
-   and selected row), as `--menu-raised`: the dialog's own surface in light (white), and in dark the dialog's control
-   fill, a step lighter than its floating surface, since a raised dark surface reads lighter rather than whiter. Both
-   are read on the element that carries the class, so a dialog's own `--overlay` and `--control-fill` are the ones that
-   resolve. */
+/* The fills on a ground a step darker than its dialog (the Settings section menu). `--menu-raised` is what stands
+   raised on it, the search field: the dialog's own surface in light (white), and in dark the dialog's control fill, a
+   step lighter than its floating surface, since a raised dark surface reads lighter rather than whiter.
+   `--menu-selected` is the selected row: in light the dialog's hovered control fill, a grey darker than the ground,
+   which reads as the selection on a light ground where a white row does not; in dark the same fill as the field, the step that stands off the
+   dark ground. All are read on the element that carries the class, so a dialog's own `--overlay` and `--control-fill`
+   are the ones that resolve. */
 .raised-fills {
   --menu-raised: var(--overlay);
+  --menu-selected: var(--control-fill-hover);
 }
 
 :is(.dark, [data-theme="dark"]) .raised-fills {
   --menu-raised: var(--control-fill);
+  --menu-selected: var(--control-fill);
 }
 
 /* On a 1x display the groove has room for only one line. In dark it takes the light edge rather
