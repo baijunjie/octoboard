@@ -2547,11 +2547,19 @@ handoff turns the ring on whether the press came from a key or a mouse (not afte
 as "Focus moved by a change the user did not make" above has it.
 
 The right pane's panel kind toggles are the exception: each keeps one icon, and its open state is a filled chip behind
-the icon (the rail's current-console fill), a shape rather than a tint, with `aria-expanded` for assistive technology. A
-grip on a resize handle is a hover cue like a hover tint: light while hovered or focused, below 3:1, with the focus ring
-carrying keyboard focus, and the strong colour, at 3:1, only while pressed. Its "Resize" tooltip opens on pointer hover
-only and is not tied to the separator, whose own accessible name already says what it does; a focused grip shows itself
-and its ring instead.
+the icon (the rail's current-console fill), a shape rather than a tint, with `aria-expanded` for assistive technology.
+The selected item of a list, tree or tab strip is a shape in the same way when only it has a fill behind the whole row
+and the others have none at rest (a selected sidebar or Files row's `--panel-selected`, the Settings section menu's
+`--menu-selected`, the indicator of HeroUI's filled tab strip): it needs no glyph beside it, with `aria-current` or
+`aria-selected` carrying the selection for assistive technology, and the fill, a shape appearing rather than a colour
+changing, is not held to 3:1. HeroUI's underline tab strip marks its selected tab with a bar and its list box and menus
+mark a chosen item with a check mark, shapes of their own. A selection that only changes the colour of a fill every item
+has (the appearance toggle group below) or of its label or icon is not enough.
+
+A grip on a resize handle is a hover cue like a hover tint: light while hovered or focused, below 3:1, with the focus
+ring carrying keyboard focus, and the strong colour, at 3:1, only while pressed. Its "Resize" tooltip opens on pointer
+hover only and is not tied to the separator, whose own accessible name already says what it does; a focused grip shows
+itself and its ring instead.
 
 **A notice carries its severity in a glyph, never in its fill alone.** The file viewer's notices — what is said about
 content that is still shown — are status marks (`StatusMark`) in three tones (`packages/ui/src/viewer/notices.tsx`): an
