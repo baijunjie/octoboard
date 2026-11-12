@@ -31,18 +31,21 @@
 //! ordinary interval brings it back.
 //!
 //! A window that has reset only begins counting at the account's next request, and until then the
-//! reading holds it with no reset time (Codex's placeholder reset is read as none). While the
-//! user's setting asks for it, a successful reading that shows such a window is followed by a kick
-//! (`kick.rs`): one minimal request on the account, and then a reading of it again. The kick and
-//! that reading run in the background, detached from the refresh that found the window, so the
-//! other accounts' readings are not held up behind a model round trip. A window is kicked once per
-//! episode, which ends only when a reading shows it with a reset time again, so a window that a
-//! kick does not start (a credit pool with no period, say) is not kicked over and over, and neither
-//! is one whose kick failed. A model's own weekly window is never kicked: the request goes to one
-//! cheap model and cannot start another's. A kick holds the account's claim and a slot like a
-//! reading does. A reading a session asked for over MCP ([`refresh_on_demand`]) is the exception:
-//! it starts no kick itself, and marks an account whose reading calls for one due instead, so that
-//! the poller's next tick reads it again and kicks it, as it would have after any other reading.
+//! reading holds it with no reset time. An agent that reports such a window with a placeholder
+//! reset that follows the clock is told from one that reports a real reset by watching the reset
+//! over successive readings (`observation.rs`): a window whose reset does not come nearer is held
+//! with none. While the user's setting asks for it, a successful reading that shows such a window
+//! is followed by a kick (`kick.rs`): one minimal request on the account, and then a reading of it
+//! again. The kick and that reading run in the background, detached from the refresh that found the
+//! window, so the other accounts' readings are not held up behind a model round trip. A window is
+//! kicked once per episode, which ends only when a reading shows it with a reset time again, so a
+//! window that a kick does not start (a credit pool with no period, say) is not kicked over and
+//! over, and neither is one whose kick failed. A model's own weekly window is never kicked: the
+//! request goes to one cheap model and cannot start another's. A kick holds the account's claim and
+//! a slot like a reading does. A reading a session asked for over MCP ([`refresh_on_demand`]) is
+//! the exception: it starts no kick itself, and marks an account whose reading calls for one due
+//! instead, so that the poller's next tick reads it again and kicks it, as it would have after any
+//! other reading.
 //!
 //! A reading of a provider that has them also carries the account's rate limit reset credits. Using
 //! one (`reset_credit.rs`, `use_credit.rs`) is only ever the user's own request
@@ -58,6 +61,7 @@ pub(crate) mod diagnostics;
 pub(crate) mod email;
 mod judgement;
 pub(crate) mod kick;
+mod observation;
 mod poll;
 pub(crate) mod probe;
 pub(crate) mod reset_credit;
@@ -74,7 +78,6 @@ use crate::protocol::{
     quota_unavailable_code as code, AccountQuota, AgentId, Event, QuotaWindow, QuotaWindowKind,
 };
 use crate::state::AppState;
-#[cfg(test)]
 use crate::time::now_millis;
 use judgement::{exhausted_in, is_account_state, is_failure};
 pub use judgement::{preferred_signal, AccountSignal, Exhausted};
@@ -137,6 +140,9 @@ struct Inner {
     /// The windows of each account that have been kicked in an episode that has not ended: one
     /// that a reading shows with a reset time again is taken out.
     kicked: HashMap<Key, Vec<WindowId>>,
+    /// What was last seen of each window's reset time as the agent reported it, to tell a window
+    /// that is counting from one that has not begun (see `observation.rs`).
+    resets_seen: HashMap<Key, Vec<(WindowId, observation::Observation)>>,
     /// What the daemon's log has been told of each account's readings, so that only a change is
     /// written (see `diagnostics.rs`).
     observed: HashMap<Key, diagnostics::Observed>,
@@ -181,6 +187,7 @@ fn retain_locked(inner: &mut Inner, wanted: &[Key]) -> bool {
     inner.entries.retain(|key, _| wanted.contains(key));
     inner.in_flight.retain(|key, _| wanted.contains(key));
     inner.kicked.retain(|key, _| wanted.contains(key));
+    inner.resets_seen.retain(|key, _| wanted.contains(key));
     inner.observed.retain(|key, _| wanted.contains(key));
     inner.entries.len() != before
 }
@@ -379,8 +386,15 @@ impl AccountQuotas {
     /// it ran. A failure over a reading that had windows keeps its windows and plan, with the
     /// reason set beside them and the email of the newer attempt, so a client can show it as
     /// stale; an account that never read keeps none. Only a failure counts towards the backoff:
-    /// that the CLI has no quota to report is not one.
-    fn finish(&self, state: &AppState, claim: Claim, mut quota: AccountQuota) -> bool {
+    /// that the CLI has no quota to report is not one. A successful reading's windows are judged
+    /// against the earlier readings of the account first (`observation.rs`), which holds a window
+    /// that is not counting with no reset time.
+    fn finish(&self, state: &AppState, claim: Claim, quota: AccountQuota) -> bool {
+        self.finish_at(state, claim, quota, now_millis())
+    }
+
+    /// [`AccountQuotas::finish`] for a reading taken at `now`, in milliseconds since the epoch.
+    fn finish_at(&self, state: &AppState, claim: Claim, mut quota: AccountQuota, now: i64) -> bool {
         let mut recorded = false;
         self.change(state, |inner| {
             if inner.in_flight.get(&claim.key) != Some(&claim.token) {
@@ -389,6 +403,11 @@ impl AccountQuotas {
             inner.in_flight.remove(&claim.key);
             recorded = true;
             if quota.unavailable.is_none() {
+                observation::judge(
+                    inner.resets_seen.entry(claim.key.clone()).or_default(),
+                    &mut quota.windows,
+                    now,
+                );
                 end_episodes(inner, &claim.key, &quota.windows);
             }
             let previous = inner.entries.get(&claim.key);
@@ -409,6 +428,9 @@ impl AccountQuotas {
                         ..previous.quota.clone()
                     };
                 }
+            }
+            if quota.windows.is_empty() {
+                inner.resets_seen.remove(&claim.key);
             }
             inner.entries.insert(
                 claim.key.clone(),
@@ -557,6 +579,9 @@ impl AccountQuotas {
                 .retain(|key, _| key.account.as_deref() != Some(id));
             inner
                 .kicked
+                .retain(|key, _| key.account.as_deref() != Some(id));
+            inner
+                .resets_seen
                 .retain(|key, _| key.account.as_deref() != Some(id));
             inner
                 .observed

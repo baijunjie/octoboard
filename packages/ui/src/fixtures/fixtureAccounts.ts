@@ -50,10 +50,9 @@ function quotaWithoutUsedCredit(reading: AccountQuota, now: number): AccountQuot
   return { ...rest, reset_credits: { available_count, credits: list && taken >= 0 ? list.filter((_, index) => index !== taken) : null } };
 }
 
-/** An account's reading as the daemon reads it again after a run of Codex: a `reset` leaves every window full and not
- * started, with no reset time, as the daemon holds a Codex window with nothing used and a reset a whole window away
- * (the credits as `quotaWithoutUsedCredit` left them); `no_credit` drops the credits; anything else (`nothing_to_reset`,
- * `already_redeemed`, a failed run) changes only the time. */
+/** An account's reading as the daemon reads it again after a run of Codex: a `reset` leaves every window full, its
+ * reset a whole window away (the credits as `quotaWithoutUsedCredit` left them); `no_credit` drops the credits; anything
+ * else (`nothing_to_reset`, `already_redeemed`, a failed run) changes only the time. */
 function quotaAfterResetCredit(reading: AccountQuota, outcome: ResetCreditOutcome | "failed"): AccountQuota {
   const now = Date.now();
   if (outcome === "no_credit") {
@@ -64,7 +63,7 @@ function quotaAfterResetCredit(reading: AccountQuota, outcome: ResetCreditOutcom
   return {
     ...reading,
     fetched_at: now,
-    windows: reading.windows.map((window) => ({ ...window, used_percent: 0, resets_at: null })),
+    windows: reading.windows.map((window) => ({ ...window, used_percent: 0, resets_at: window.window_minutes == null ? null : now + window.window_minutes * 60_000 })),
   };
 }
 

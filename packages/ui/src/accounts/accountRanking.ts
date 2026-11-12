@@ -43,7 +43,7 @@ export function expiringWeekly(quota: AccountQuota | undefined, now: number): We
 const SESSION_WINDOW_TOLERANCE_MS = 5 * 60 * 60 * 1000;
 
 /** When the session window of `quota` that is running resets: one with quota left and a reset still ahead.
- * A reading holds a reset only once the window has started, so a window with none has not. Of several,
+ * A reading holds a reset only for a window that is counting, so a window with none is not. Of several,
  * the soonest. */
 function runningSessionReset(quota: AccountQuota | undefined, now: number): number | undefined {
   let soonest: number | undefined;

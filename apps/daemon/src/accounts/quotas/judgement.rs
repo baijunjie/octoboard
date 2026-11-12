@@ -210,8 +210,8 @@ impl AccountSignal {
 const SESSION_WINDOW_TOLERANCE_MS: i64 = 5 * 60 * 60 * 1000;
 
 /// When the session window of `windows` that is running resets: one with quota left and a reset
-/// still ahead. A reading holds a reset only once the window has started, so a window with
-/// none has not. With several, the soonest reset.
+/// still ahead. A reading holds a reset only for a window that is counting, so a window with
+/// none is not. With several, the soonest reset.
 fn running_session_reset(windows: &[QuotaWindow], now: i64) -> Option<i64> {
     windows
         .iter()

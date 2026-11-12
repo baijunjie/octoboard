@@ -449,7 +449,7 @@ The dialog and the daemon rank the same way:
 - Across accounts, the soonest weekly reset wins, so quota about to reset is spent first, with one exception: weekly
   resets less than **5 hours** (one five-hour window) after the soonest one count as the same deadline, and among those
   accounts the one whose **five-hour window is already running** goes first. A window is running when it has a reset
-  still ahead and quota left; the agents report a reset only once the window has started, so a window that shows none
+  still ahead and quota left; a reading holds a reset only for a window that is counting, so a window that shows none
   has not started. Of two running windows the sooner reset goes first, because what is left of a window is lost when it
   resets. Between accounts of which neither is running, or both are running with the same reset, the sooner weekly reset
   wins, then the larger remainder, then the earlier candidate. The 5 hours are measured from the soonest weekly reset,

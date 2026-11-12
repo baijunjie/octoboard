@@ -7,12 +7,20 @@ automatically** on (see "Start usage windows automatically" below), Octoboard ma
 **kick** — and then reads the account again, so the window starts counting and its countdown shows. A kick uses a little
 of the account's quota. The setting is off by default and applies to every agent alike.
 
-Codex reports such a window differently: nothing used, and a reset one whole window length from the moment it answers.
-So Octoboard reads a Codex window whose length is known as having no reset time when nothing of it is used and its reset
-is within one minute of a whole window length from now, either side. This includes a window a kick started only seconds
-before the reading; a reading more than about a minute after the kick shows its reset time. So for Codex the countdown
-may first show at the next background reading after the kick, up to about 5 minutes later (see "When quotas are read"
-in `docs/product/account-quota-readings.md`), rather than at the reading right after it.
+Not every agent reports such a window with no reset time: Codex reports a reset that stays a whole window length ahead
+of the moment it answers, moving with every reading. So, for every agent, Octoboard follows each window's reported reset
+time across readings of the account: when two readings at least **2 minutes** apart show that its time to reset has not
+come nearer (by more than one minute) and that none of it is used, the window is not counting and is held as having no
+reset time, like a window its agent reports with none: it shows no countdown, can be kicked, and ranks as a window that
+has not started (see "Which account a session uses" in `docs/product/opening-sessions.md`); a window with any of it used
+is counting. A reset that moves further ahead than the time passed (the window reset, or a reset credit was used) starts
+the comparison afresh. A first reading has nothing to compare with, so a window shows the reset its agent reports until
+a later reading, normally the background one about every 5 minutes (see "When quotas are read" in
+`docs/product/account-quota-readings.md`), shows it is not moving. So a window that has just reset may be kicked up to
+about one background interval after its reset, and right after the daemon starts a window that is not counting may show
+a countdown until the next reading. After a kick, the window shows its countdown once a reading at least 2 minutes after
+the last comparison finds its reset no longer moving, so usually at the next background reading rather than at the
+reading right after the kick. A window its agent reports with no reset time is unaffected.
 
 ## Start usage windows automatically
 

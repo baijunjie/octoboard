@@ -2469,9 +2469,10 @@ quota refusal goes was not measured.
 An unstarted Codex window does not report an empty reset time (measured on **Codex 0.167.1** on 2026-11-12, reading
 `account/rateLimits/read` every 20 seconds for 15 minutes after the 5-hour window reset, with no request made on the
 account): the window was listed with `usedPercent` 0 and a `resetsAt` exactly `windowDurationMins` after the moment of
-each answer, so it moved forward with every reading. Octoboard reads a Codex window with nothing used and a reset a
-whole window away (within a minute) as not started. Whether an unstarted Grok Build window reports a reset time is still
-not measured.
+each answer, so it moved forward with every reading. So whether a window is counting cannot be read from one reading for
+every agent; Octoboard compares readings over time (a reset that keeps its distance from now is not counting), as
+"Starting a usage window that has not begun counting" in `docs/product/starting-usage-windows.md` describes. Whether an
+unstarted Grok Build window reports a reset time is still not measured.
 
 ## Injecting Octoboard into each agent
 

@@ -296,6 +296,8 @@ Where to start, by question:
   picks or accepts an account must check a new reason.
 - [Adding a user setting](memory/adding-a-user-setting.md) — exposing a new setting to agents' settings tools and the
   configuration export, and the flags of a new provider setting.
+- [Building a feature for several agents](memory/building-a-feature-for-several-agents.md) — prefer a solution that
+  works for Claude Code, Codex and Grok Build alike; when handling one agent specially is still justified.
 - [Building and launching the app for verification](memory/building-and-launching-the-app-for-verification.md) —
   building, launching and isolating the real app and its daemon sidecar to verify a change.
 - [Building on HeroUI and react-aria](memory/building-on-heroui-and-react-aria.md) — pitfalls of HeroUI 3 and react-aria

@@ -190,6 +190,169 @@ fn forgetting_an_account_forgets_what_the_log_was_told_of_it() {
     assert_eq!(observed, [kept]);
 }
 
+/// A successful reading of `key` finished at `now` (milliseconds since the epoch), holding one
+/// session window that resets at `resets_at`.
+pub(super) fn finish_session_reading(
+    state: &AppState,
+    key: &Key,
+    resets_at: Option<i64>,
+    now: i64,
+) {
+    let quota = AccountQuota {
+        windows: vec![window(QuotaWindowKind::Session, 0.0, resets_at)],
+        ..quota_of(key, false)
+    };
+    finish_reading(state, key, quota, now);
+}
+
+/// [`AccountQuotas::finish_at`] on a fresh claim of `key`, which must be recorded.
+pub(super) fn finish_reading(state: &AppState, key: &Key, quota: AccountQuota, now: i64) {
+    let quotas = &state.account_quotas;
+    let claim = {
+        let mut inner = quotas.lock();
+        quotas.claim_locked(&mut inner, key.clone(), now)
+    };
+    assert!(quotas.finish_at(state, claim, quota, now));
+}
+
+/// The reset time the held session window of the only account has.
+pub(super) fn held_session_reset(state: &AppState) -> Option<i64> {
+    state.account_quotas.list()[0].windows[0].resets_at
+}
+
+/// A session window's length, as the 5-hour window Codex holds.
+pub(super) const SESSION_MS: i64 = 5 * 60 * 60 * 1000;
+/// When the readings of the observation tests start.
+pub(super) const START: i64 = 1_800_000_000_000;
+
+/// A reset that follows the clock, as Codex gives for a window no request has started, is held
+/// with no reset time; once the reset stands still, as after a kick has started the window, the
+/// reading shows it.
+#[test]
+fn a_reset_that_follows_the_clock_is_held_without_a_reset_time_until_it_stands_still() {
+    let (state, _dir) = crate::test_support::app_state("quota-observe-slide");
+    let key = key(AgentId::CODEX, None);
+    let reset = START + SESSION_MS;
+    finish_session_reading(&state, &key, Some(reset), START);
+    assert_eq!(held_session_reset(&state), Some(reset));
+
+    let slid = reset + observation::MIN_OBSERVATION;
+    finish_session_reading(
+        &state,
+        &key,
+        Some(slid),
+        START + observation::MIN_OBSERVATION,
+    );
+    assert_eq!(held_session_reset(&state), None);
+
+    finish_session_reading(
+        &state,
+        &key,
+        Some(slid),
+        START + 2 * observation::MIN_OBSERVATION,
+    );
+    assert_eq!(held_session_reset(&state), Some(slid));
+}
+
+/// A failed reading carries no windows to judge and takes none of the tracking away: the next
+/// good reading is still judged against the last good one.
+#[test]
+fn a_failed_reading_leaves_what_was_tracked_alone() {
+    let (state, _dir) = crate::test_support::app_state("quota-observe-failed");
+    let key = key(AgentId::CODEX, None);
+    let reset = START + SESSION_MS;
+    finish_session_reading(&state, &key, Some(reset), START);
+    finish_reading(
+        &state,
+        &key,
+        quota_of(&key, true),
+        START + observation::MIN_OBSERVATION,
+    );
+
+    let two_minutes_on = 2 * observation::MIN_OBSERVATION;
+    finish_session_reading(
+        &state,
+        &key,
+        Some(reset + two_minutes_on),
+        START + two_minutes_on,
+    );
+    assert_eq!(held_session_reset(&state), None);
+}
+
+/// A good reading with no windows leaves nothing tracked for the account.
+#[test]
+fn a_reading_without_windows_clears_what_was_tracked() {
+    let (state, _dir) = crate::test_support::app_state("quota-observe-empty");
+    let key = key(AgentId::CODEX, None);
+    finish_session_reading(&state, &key, Some(START + SESSION_MS), START);
+    assert!(state.account_quotas.lock().resets_seen.contains_key(&key));
+
+    finish_reading(
+        &state,
+        &key,
+        quota_of(&key, false),
+        START + observation::MIN_OBSERVATION,
+    );
+    assert!(!state.account_quotas.lock().resets_seen.contains_key(&key));
+}
+
+/// A forgotten account is observed from scratch: the first reading after it counts, whatever the
+/// reset's movement since the last one before.
+#[test]
+fn forgetting_an_account_forgets_what_was_tracked_of_it() {
+    let (state, _dir) = crate::test_support::app_state("quota-observe-forget");
+    let (kept, gone) = (key(AgentId::CODEX, None), key(AgentId::CODEX, Some("a")));
+    let reset = START + SESSION_MS;
+    for key in [&kept, &gone] {
+        finish_session_reading(&state, key, Some(reset), START);
+    }
+    state.account_quotas.forget_account(&state, "a");
+    let tracked: Vec<Key> = state
+        .account_quotas
+        .lock()
+        .resets_seen
+        .keys()
+        .cloned()
+        .collect();
+    assert_eq!(tracked, [kept]);
+
+    let slid = reset + observation::MIN_OBSERVATION;
+    finish_session_reading(
+        &state,
+        &gone,
+        Some(slid),
+        START + observation::MIN_OBSERVATION,
+    );
+    let held = state.account_quotas.list();
+    let gone_window = &held
+        .iter()
+        .find(|q| q.account.as_deref() == Some("a"))
+        .unwrap()
+        .windows[0];
+    assert_eq!(gone_window.resets_at, Some(slid));
+}
+
+/// Accounts no longer targeted lose what was tracked of them with their readings.
+#[test]
+fn accounts_no_longer_targeted_lose_what_was_tracked_of_them() {
+    let (state, _dir) = crate::test_support::app_state("quota-observe-retain");
+    let (kept, gone) = (key(AgentId::CODEX, None), key(AgentId::CODEX, Some("a")));
+    for key in [&kept, &gone] {
+        finish_session_reading(&state, key, Some(START + SESSION_MS), START);
+    }
+    state.account_quotas.change(&state, |inner| {
+        retain_locked(inner, std::slice::from_ref(&kept))
+    });
+    let tracked: Vec<Key> = state
+        .account_quotas
+        .lock()
+        .resets_seen
+        .keys()
+        .cloned()
+        .collect();
+    assert_eq!(tracked, [kept]);
+}
+
 pub(super) const NOW: i64 = 1_000_000;
 
 pub(super) fn window(

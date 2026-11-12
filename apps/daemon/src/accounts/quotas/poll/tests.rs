@@ -4,7 +4,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use crate::accounts::quotas::tests::{key, quota_of, window, NOW};
+use crate::accounts::quotas::observation::MIN_OBSERVATION;
+use crate::accounts::quotas::tests::{
+    finish_session_reading, key, quota_of, window, NOW, SESSION_MS, START,
+};
 use crate::protocol::{
     quota_unavailable_code as code, AccountQuota, AgentId, Availability, Event, QuotaUnavailable,
     QuotaWindow, QuotaWindowKind,
@@ -1227,4 +1230,50 @@ fn a_models_own_weekly_window_with_no_reset_time_is_not_kicked() {
     reading.windows[1] = window(QuotaWindowKind::Session, 0.0, None);
     quotas.recorded(&state, key.clone(), reading);
     assert!(quotas.claim_kick(&state, &key).is_some());
+}
+
+/// A window held with no reset time because its reset follows the clock is one a kick starts,
+/// as one the agent gave no reset time is, and its episode does not end while the next reading
+/// still judges it not counting; it ends once the reset stands still.
+#[test]
+fn a_window_judged_not_counting_is_kicked_once_per_episode() {
+    let (state, _dir) = crate::test_support::app_state("quota-observe-kick");
+    state.store.set_auto_start_quota_windows(true).unwrap();
+    let key = key(AgentId::CODEX, None);
+    let quotas = &state.account_quotas;
+    let reset = START + SESSION_MS;
+
+    // A first reading counts: nothing to kick.
+    finish_session_reading(&state, &key, Some(reset), START);
+    assert!(quotas.claim_kick(&state, &key).is_none());
+
+    // The reset moved with the clock: the window has not begun, and is offered to the kick.
+    let slid = reset + MIN_OBSERVATION;
+    finish_session_reading(&state, &key, Some(slid), START + MIN_OBSERVATION);
+    let id = (QuotaWindowKind::Session, None);
+    assert_eq!(unkicked_windows(&quotas.lock(), &key), Some(vec![id]));
+    let claim = quotas
+        .claim_kick(&state, &key)
+        .expect("a window judged not counting is kicked");
+
+    // The reading after the kick still finds the reset moving: the episode goes on, and the
+    // window is not kicked again.
+    let slid = slid + MIN_OBSERVATION;
+    let now = START + 2 * MIN_OBSERVATION;
+    assert!(quotas.finish_at(&state, claim, quota_with_session(&key, Some(slid)), now));
+    assert!(quotas.is_kicked_for_test(AgentId::CODEX, None));
+    assert!(quotas.claim_kick(&state, &key).is_none());
+
+    // Once the reset stands still the window counts, with its reset shown, and the episode ends.
+    finish_session_reading(&state, &key, Some(slid), now + MIN_OBSERVATION);
+    assert_eq!(quotas.list()[0].windows[0].resets_at, Some(slid));
+    assert!(!quotas.is_kicked_for_test(AgentId::CODEX, None));
+    assert!(quotas.claim_kick(&state, &key).is_none());
+}
+
+fn quota_with_session(key: &Key, resets_at: Option<i64>) -> AccountQuota {
+    AccountQuota {
+        windows: vec![window(QuotaWindowKind::Session, 0.0, resets_at)],
+        ..quota_of(key, false)
+    }
 }

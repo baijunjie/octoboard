@@ -226,7 +226,9 @@ and records tests replay. `apps/daemon/dist/` holds hand-written distribution fi
   Grok's `adapter/grok/mcp_inventory.rs`), `mcp_sign_in.rs` (signing an account in to and out of an MCP server through the
   agent's own commands: the `McpServerAuth` interface, the runs held in `McpServerAuths`, one per account and server,
   and `request`, which starts or joins one; Codex's is `adapter/codex/mcp_auth.rs`), `quotas/` (plan quota read from the agent's CLI, poller, judgement, kicks, reset credits; `probe.rs`
-  the `QuotaProbe` interface with the conversation it runs, `reset_credit.rs` the `ResetCredits` interface), `login/`
+  the `QuotaProbe` interface with the conversation it runs, `reset_credit.rs` the `ResetCredits` interface,
+  `observation.rs` telling a window that is counting from one that has not begun by how its reported reset time moves
+  across readings, for every agent), `login/`
   (background sign-in; `flows.rs` the `LoginFlow` interface with the `Flow` it drives and, for a provider whose sign-in only one login can use, the code a second is refused with), `dirs.rs`, `relocate.rs` (copying a session's record into another account's directory for a
   switch), `thread_registry.rs` (the `ThreadRegistry` interface of a provider's thread database, shared by the switch's copy
   and the shared configuration, with `RowError`, the failure of one row carrying a cause every provider's registry shares; Codex's is `adapter/codex/threads.rs`),
