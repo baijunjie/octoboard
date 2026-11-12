@@ -39,8 +39,9 @@ describe("callout", () => {
 
   it("shows a callout without a title", async () => {
     const { host } = await block({ type: "callout", text: "Only a body" });
-    await markdownDrawn(host, "p");
-    expect(host.querySelector('[role="note"]')?.textContent).toContain("Only a body");
+    // The plain fallback is a paragraph too; only the drawn document sits inside `.report-markdown`.
+    await markdownDrawn(host, ".report-markdown p");
+    expect(host.querySelector('[role="note"] .report-markdown')?.textContent).toContain("Only a body");
   });
 });
 
