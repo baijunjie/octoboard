@@ -241,6 +241,42 @@ fn a_declared_revert_is_allowed_where_the_same_move_without_it_is_rejected() {
 }
 
 #[test]
+fn taking_back_what_a_commit_only_added_is_allowed_even_when_the_file_returns_exactly() {
+    let repo = base_repo();
+    let original = numbered("alpha", 1..=10);
+    let added = commit(
+        &repo,
+        "a.txt",
+        &(original.clone() + &numbered("added", 1..=8)),
+        "append to a.txt",
+    );
+    // The file goes back byte for byte to how it was before the commit, yet the commit deleted
+    // no line, so nothing it took away comes back: removing what was only added is ordinary.
+    std::fs::write(repo.join("a.txt"), &original).unwrap();
+    git(&repo, &["add", "-A"]);
+    let (_, removed) = prepared(&repo, &["commit", "-q", "-m", "drop the appended lines"]);
+    assert_eq!(main_move(&repo, &[], &added, &removed), None);
+
+    // The same return to the earlier file is refused when the commit also deleted lines.
+    let mut rewritten = numbered("beta", 1..=4);
+    rewritten += &numbered("alpha", 5..=10);
+    let rewrote = commit(
+        &repo,
+        "a.txt",
+        &(rewritten + &numbered("added", 1..=8)),
+        "rewrite a.txt",
+    );
+    std::fs::write(
+        repo.join("a.txt"),
+        numbered("alpha", 1..=10) + &numbered("added", 1..=8),
+    )
+    .unwrap();
+    git(&repo, &["add", "-A"]);
+    let (_, restored) = prepared(&repo, &["commit", "-q", "-m", "restore a.txt"]);
+    assert!(main_move(&repo, &[], &rewrote, &restored).is_some());
+}
+
+#[test]
 fn an_ordinary_fast_forward_merge_is_allowed() {
     let repo = base_repo();
     let fork = rev(&repo, "HEAD");

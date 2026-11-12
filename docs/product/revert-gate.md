@@ -77,7 +77,9 @@ refused when:
 
 - **it undoes a recent commit on the branch**: it takes back what one of the branch's recent non-merge commits changed
   — the lines the commit added mostly gone and the lines it removed mostly back, or the file returned to how it was
-  before the commit. Where the move has a fork point — that of another branch at the commit the branch moves to (a
+  before the commit. It is the removed lines coming back that counts: taking back a commit that only added lines —
+  deleting code just added, such as temporary code, even until every file is exactly as before the commit — is
+  ordinary work and is not refused for this, though it can be for a changed base, below. Where the move has a fork point — that of another branch at the commit the branch moves to (a
   fast-forward merge of it, say), recorded or from the reflog (see "Target branches and fork points" above) — recent
   means the 50 most recent and every commit since that fork point as well, up to 1,000; where it has none, the 100
   most recent;
