@@ -2776,15 +2776,19 @@ The daemon watches each git project's refs, so a commit made by an agent session
 without waiting for the next poll. A project counts as a git project the way step 1 does: it has `.git` in its own
 directory, which for a linked worktree is a file naming its git directory. What is watched is the git directory's
 `HEAD` and, in the repository's common directory, `packed-refs` and everything under `refs/heads` and `refs/remotes`,
-so a fetch or push from a terminal is seen too; the working tree is not watched. A change is debounced for a few
+so a fetch or push from a terminal is seen too; a repository in the reftable ref format keeps all of those in its
+`reftable/` stacks instead, and what is watched there is each stack's `tables.list`, in the common directory and in
+the worktree's git directory. The working tree is not watched. When the platform reports that it lost file events (a
+queue overflow, a rescan request), every watched project is re-read the same way. A change is debounced for a few
 hundred milliseconds and answered with step 4 alone, published as `project_git_status`: nothing is fetched, and only
 what the read produced is merged into the project's status, so the `activity` and `error` of an overlapping check,
 pull or push are kept (this includes the refs that check's own fetch or fast-forward writes). A read that fails
 records its own `error` and leaves the branch and counts as they were. A project is re-read by one `git` at a time,
 a change arriving meanwhile owing it one more read, and at most four projects are read at once. A project whose `.git`
 has gone is not re-read; its next check reports `repository: false`. Projects are watched from daemon start, from
-`add_project`, and from the first check that finds one that was not a repository before, until they are deleted. A
-watch that cannot be set up is logged and that project is left to the client's poll.
+`add_project`, and from the first check that finds one that was not a repository before, until they are deleted;
+each check and each watcher-driven re-read also re-watches a project whose layout has changed since (converted to the
+reftable format, say). A watch that cannot be set up is logged and that project is left to the client's poll.
 
 ### Fast-forwarding when the setting is turned on
 

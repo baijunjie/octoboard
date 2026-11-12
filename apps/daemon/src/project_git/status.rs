@@ -217,7 +217,8 @@ fn run_checks(state: &Arc<AppState>, project: Project, mut claim: GitCheckClaim,
     let mut asked = asked;
     loop {
         let status = check_project(state, &project, asked);
-        // A repository made, or reachable, after the daemon started is not watched yet.
+        // A repository made, or reachable, after the daemon started is not watched yet, and one
+        // whose layout changed is watched by its old one.
         crate::project_git::watch::watch_now(state, &project);
         claim.answer(&status);
         let Some(owed) = claim.release_unless_rerun_owed() else {

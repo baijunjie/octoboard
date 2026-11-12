@@ -251,7 +251,9 @@ statuses, and its answer carries `git_refresh` — at the top of `list_projects`
 Between checks, the badge follows what happens in the repository itself: a commit made by an agent session or in a
 terminal, a branch switched, created or deleted there, a fetch, pull or push run there, or a commit in another
 worktree of the same repository. Octoboard watches each git project's `HEAD`, its local branches and its
-remote-tracking branches, packed ones included. The working tree and the index are not watched, so editing or staging
+remote-tracking branches, packed ones included, and those of a repository that keeps its refs in the reftable format.
+When the system reports that it dropped file events, every git project is read again, since any of their refs may
+have changed unseen. The working tree and the index are not watched, so editing or staging
 files changes nothing here. Once those refs have stayed unchanged for 300 milliseconds, the branch, its upstream and
 the ahead/behind counts are read again from the repository — locally, nothing is fetched — and the result reaches
 every window showing the project. So a commit raises the ahead count at once, and a push started right after it is
@@ -276,9 +278,10 @@ This is not a check: the five-minute interval and the one-minute floor do not ap
 console is watched, whether or not its console is current and whether or not a window is connected. A directory is a
 git repository here by the badge's rule (see "What one check does" above). Watching starts when the daemon starts,
 when a project is added, and, for a directory that becomes a repository later, at the first check that finds it one;
-it ends when the project, or its console, is deleted. A project whose refs cannot be watched is left to the checks and to its sessions' reports (above). A
-project whose `.git` has gone is not re-read: its badge keeps what it showed until its next check reports that the
-directory is not a repository.
+it ends when the project, or its console, is deleted. A repository whose ref layout changes while watched (converted to
+the reftable format, say) is watched anew from its next check or re-read. A project whose refs cannot be watched is
+left to the checks and to its sessions' reports (above). A project whose `.git` has gone is not re-read: its badge
+keeps what it showed until its next check reports that the directory is not a repository.
 
 The re-read changes only the branch, its upstream and the counts. It also runs while a check, a pull or a push is in
 flight, and leaves the badge's in-flight indication alone. A failure the last check left stays on the badge, since a
