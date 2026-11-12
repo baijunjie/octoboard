@@ -2,9 +2,9 @@
 export const SETTINGS_SECTION_IDS = [
   "general",
   "app-behavior",
-  "git",
-  "accounts",
   "agent-permissions",
+  "accounts",
+  "git",
   "trusted-folders",
   "permissions",
   "notifications",

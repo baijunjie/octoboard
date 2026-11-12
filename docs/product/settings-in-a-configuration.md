@@ -7,14 +7,14 @@ whose terms this doc uses; how the export dialog and the import's review and res
 
 ## Which settings travel
 
-The **application settings** region carries the settings of Settings' **General**, **App behavior**, **Git**, **Agent
-behavior**, **Keyboard shortcuts** and **Cleanup** sections (see `docs/product/settings.md`), every setting of them
+The **application settings** region carries the settings of Settings' **General**, **App behavior**, **Agent
+behavior**, **Git**, **Keyboard shortcuts** and **Cleanup** sections (see `docs/product/settings.md`), every setting of them
 except App behavior's **Launch at login**, which is the system's own state rather than a setting Octoboard keeps (see
 `docs/product/launch-at-login.md`). Each of the six is a **section** of the region, chosen on its own: an export
 writes the settings of the sections chosen and nothing of the others, the region standing exactly when at least one
 section was chosen, and an import applies the sections it is asked for alone. A document **carries** a section when
-it holds any of that section's settings. The sections are named on the wire `general`, `app_behavior`, `git`,
-`agent_behavior`, `keyboard_shortcuts` and `cleanup`. The **accounts** region carries every setting of its **Agent
+it holds any of that section's settings. The sections are named on the wire `general`, `app_behavior`, `agent_behavior`,
+`git`, `keyboard_shortcuts` and `cleanup`. The **accounts** region carries every setting of its **Agent
 accounts** section: the accounts themselves (see "The accounts" in `docs/product/configuration-export-and-import.md`)
 and the settings that apply to all of an agent's accounts or to every agent (see "The agent account settings an export
 carries" below). The one setting of those sections left out is an account's sharing of the default configuration (see
@@ -66,24 +66,6 @@ language only when the daemon holds one; every other one is in every document wh
   `auto_close_idle_shell_terminals`. The review's line for turning it on says that closing the Terminal panel closes
   idle terminals and keeps terminals with running programs.
 
-**Git**
-
-- **Default clone directory** (see that section in `docs/product/git-settings.md`), under `default_clone_dir`: as `~/`
-  followed by its path under the exporting machine's home directory when it lies there, and as the absolute path
-  otherwise, as an account's directory is written (see "The accounts" in
-  `docs/product/configuration-export-and-import.md`). It is written whatever the choice about project paths.
-- **Automatically pull repositories** (see "Automatically pulling repositories" in
-  `docs/product/project-git-status.md`), under `auto_pull_repositories`.
-- **The application-wide git workflow settings** (see "The five settings" in `docs/product/git-workflow-settings.md`),
-  under `git_workflow`, an object holding all five of `development`, `squash_before_delivery`, `rebase_before_delivery`,
-  `delivery` and `revert_gate`. A document without `git_workflow`, or with `null` there, leaves all five as the
-  importing machine has them; one with an object that leaves out any of the five cannot be read, and the import is
-  refused (see "What is refused, and what is reported instead" in
-  `docs/product/configuration-export-and-import.md`). Applying the Git section sets all five to the document's values.
-  The import review and its result each have one line for all five (see "The import review" in
-  `docs/product/configuration-export-and-import-dialogs.md` and "The import result" in
-  `docs/product/configuration-import-progress-and-result.md`).
-
 **Agent behavior**
 
 - **Automatically approve session requests** (see "Approving requests automatically" in
@@ -101,6 +83,24 @@ language only when the daemon holds one; every other one is in every document wh
 - **Ask questions as choices** (see that section in `docs/product/agent-behavior-settings.md`), under `ask_questions_as_choices`. The
   review's line for turning it on says that Octoboard then asks sessions started afterwards to put a question that needs
   the user's decision as options to pick from.
+
+**Git**
+
+- **Default clone directory** (see that section in `docs/product/git-settings.md`), under `default_clone_dir`: as `~/`
+  followed by its path under the exporting machine's home directory when it lies there, and as the absolute path
+  otherwise, as an account's directory is written (see "The accounts" in
+  `docs/product/configuration-export-and-import.md`). It is written whatever the choice about project paths.
+- **Automatically pull repositories** (see "Automatically pulling repositories" in
+  `docs/product/project-git-status.md`), under `auto_pull_repositories`.
+- **The application-wide git workflow settings** (see "The five settings" in `docs/product/git-workflow-settings.md`),
+  under `git_workflow`, an object holding all five of `development`, `squash_before_delivery`, `rebase_before_delivery`,
+  `delivery` and `revert_gate`. A document without `git_workflow`, or with `null` there, leaves all five as the
+  importing machine has them; one with an object that leaves out any of the five cannot be read, and the import is
+  refused (see "What is refused, and what is reported instead" in
+  `docs/product/configuration-export-and-import.md`). Applying the Git section sets all five to the document's values.
+  The import review and its result each have one line for all five (see "The import review" in
+  `docs/product/configuration-export-and-import-dialogs.md` and "The import result" in
+  `docs/product/configuration-import-progress-and-result.md`).
 
 **Keyboard shortcuts**
 

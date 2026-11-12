@@ -60,13 +60,13 @@ sentence.
   project paths: they can reveal details such as user and folder names; the thing to do is to share the file only with
   people the user trusts.
 - A group headed **Settings**, with a checkbox for each section of Settings whose settings a document can carry, named
-  and ordered as Settings names them: **General**, **App behavior**, **Git**, **Agent behavior**, **Keyboard
+  and ordered as Settings names them: **General**, **App behavior**, **Agent behavior**, **Git**, **Keyboard
   shortcuts** and **Cleanup** (see "Which settings travel" in `docs/product/settings-in-a-configuration.md`). Each has a
   one-sentence note under it saying what it includes: General the appearance, the language, the Markdown style and the
   sorting; App behavior resuming sessions on start, preventing sleep and closing idle terminals and, only where this
   client's platform has both, running in the background and the menu bar icon (named as the system names it);
-  Git the default clone directory, pulling repositories automatically and the Git workflow; Agent behavior which
-  requests are approved automatically and whether questions are asked as choices; Keyboard shortcuts the shortcuts the
+  Agent behavior which requests are approved automatically and whether questions are asked as choices; Git the default
+  clone directory, pulling repositories automatically and the Git workflow; Keyboard shortcuts the shortcuts the
   user has changed; Cleanup deleting archived sessions whose conversation is gone. Trusted folders, Permissions and
   Notifications have no checkbox, since nothing of them travels.
 - A group headed **Agent accounts**, with one checkbox, **Include agent accounts**, whose note says that it includes
@@ -270,7 +270,7 @@ is not absolute and does not start with `~/` is refused.
 ### Settings in the review
 
 A card for each section of Settings the file carries, each headed by its section's name, in the order of Settings'
-sections: **General**, **App behavior**, **Git**, **Agent behavior**, **Keyboard shortcuts** and **Cleanup** (see
+sections: **General**, **App behavior**, **Agent behavior**, **Git**, **Keyboard shortcuts** and **Cleanup** (see
 `docs/product/settings.md`); a section the file does not carry has no card. The card's title is a checkbox named by the
 section, and every section's checkbox is checked when the review opens. Only the sections checked are imported;
 unchecked, a card collapses to its title row, with a **Left out** outcome at its end. Within a card the lines stand in
@@ -279,8 +279,8 @@ the order of that section's rows:
 - **General**: Appearance, Language, Markdown style, then **Sorting**.
 - **App behavior**: the switch Resume sessions on start, then Keep running in the background and Show menu bar icon,
   then the switch Prevent sleep and When to prevent sleep, then the switch Close idle terminals when closing the panel.
-- **Git**: the default clone directory, Automatically pull repositories, then one line for the git workflow.
 - **Agent behavior**: its five switches.
+- **Git**: the default clone directory, Automatically pull repositories, then one line for the git workflow.
 - **Keyboard shortcuts**: one line, **Changed shortcuts**.
 - **Cleanup**: the switch Automatically delete archived sessions whose conversation is gone.
 

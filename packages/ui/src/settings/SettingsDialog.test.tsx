@@ -279,13 +279,13 @@ it("leaves the Add agent request for the accounts section to take up when anothe
   expect(taken.count).toBe(1);
 });
 
-it("lists the Agent behavior section right after Agent accounts and opens on it", async () => {
+it("lists Agent behavior before Agent accounts and Git and opens on it", async () => {
   const { selected } = mount({ nonce: 1, section: "agent-permissions", addAgent: false });
   await act(async () => {});
   expect(selected()?.textContent).toContain("Agent behavior");
   const tabs = [...document.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent);
-  expect(tabs.indexOf("Agent behavior")).toBe(tabs.indexOf("Agent accounts") + 1);
-  expect(tabs).toEqual(["General", "App behavior", "Git", "Agent accounts", "Agent behavior", "Trusted folders", "Permissions", "Notifications", "Keyboard shortcuts", "Cleanup", "Configuration", "About"]);
+  expect(tabs.indexOf("Agent behavior")).toBe(tabs.indexOf("App behavior") + 1);
+  expect(tabs).toEqual(["General", "App behavior", "Agent behavior", "Agent accounts", "Git", "Trusted folders", "Permissions", "Notifications", "Keyboard shortcuts", "Cleanup", "Configuration", "About"]);
 });
 
 it.each([

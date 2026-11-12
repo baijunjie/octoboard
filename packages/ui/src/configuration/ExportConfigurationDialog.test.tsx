@@ -142,7 +142,7 @@ const box = (label: string) =>
   Array.from(document.body.querySelectorAll<HTMLInputElement>("input[type=checkbox]")).find((input) => input.labels?.[0]?.textContent === label)!;
 const exportButton = () => Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Export")!;
 
-const SECTIONS = ["General", "App behavior", "Git", "Agent behavior", "Keyboard shortcuts", "Cleanup"];
+const SECTIONS = ["General", "App behavior", "Agent behavior", "Git", "Keyboard shortcuts", "Cleanup"];
 const OPTIONS = [...SECTIONS, "Include agent accounts"];
 
 it("offers a checkbox for each Settings section that carries something, named as Settings names it and in Settings order, then one for the Agent accounts, all unchecked", () => {

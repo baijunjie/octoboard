@@ -54,7 +54,7 @@ const consoleCard = (name: string) => Array.from(document.body.querySelectorAll(
 /** The checkbox that includes a region of the file in the import. */
 const regionBox = (label: string) =>
   Array.from(document.body.querySelectorAll<HTMLInputElement>("input[type=checkbox]")).find((input) => input.labels?.[0]?.textContent === label)!;
-const SECTIONS = ["General", "App behavior", "Git", "Agent behavior", "Keyboard shortcuts", "Cleanup"];
+const SECTIONS = ["General", "App behavior", "Agent behavior", "Git", "Keyboard shortcuts", "Cleanup"];
 /** Checks the Settings, which brings every section the file carries with it. */
 async function checkSettings(): Promise<void> {
   await act(async () => regionBox("Settings").click());
@@ -496,7 +496,7 @@ it("does not read the preview again for a setting the import does not write", as
 it("applies the settings of the sections checked and no other", async () => {
   const mounted = await reviewingSettings();
   await press("Import");
-  expect(mounted.sent().at(-1)).toMatchObject({ type: "import_configuration", apply_settings: ["general", "app_behavior", "git", "agent_behavior", "keyboard_shortcuts", "cleanup"] });
+  expect(mounted.sent().at(-1)).toMatchObject({ type: "import_configuration", apply_settings: ["general", "app_behavior", "agent_behavior", "git", "keyboard_shortcuts", "cleanup"] });
 });
 
 it("sends the sections still checked in Settings order, whichever order the others were unchecked in", async () => {
@@ -540,17 +540,17 @@ it("groups the application settings as the Settings dialog does, each group in t
   onTestFinished(() => shortcutOverrides.set({}));
   await reviewingSettings({ text: withShortcuts({ focusMode: FOCUS }) });
   const groups = settingGroupsOf(document.body.querySelector("[role=tabpanel]")!);
-  expect(groups.map((group) => group.title)).toEqual(["General", "App behavior", "Git", "Agent behavior", "Keyboard shortcuts", "Cleanup"]);
+  expect(groups.map((group) => group.title)).toEqual(["General", "App behavior", "Agent behavior", "Git", "Keyboard shortcuts", "Cleanup"]);
   expect(groups[0].lines).toEqual([]);
   expect(groups[1].lines).toEqual(["Resume sessions on start", "Prevent sleep", "When to prevent sleep", "Close idle terminals when closing the panel"]);
-  expect(groups[2].lines).toEqual(["Default clone directory", "Automatically pull repositories", "Git workflow"]);
-  expect(groups[3].lines).toEqual([
+  expect(groups[2].lines).toEqual([
     "Automatically approve session requests",
     "Automatically approve resume requests",
     "Automatically approve account switches",
     "Automatically approve handoffs",
     "Ask questions as choices",
   ]);
+  expect(groups[3].lines).toEqual(["Default clone directory", "Automatically pull repositories", "Git workflow"]);
   expect(groups[4].lines).toEqual(["Changed shortcuts"]);
   expect(groups[5].lines).toEqual(["Automatically delete archived sessions whose conversation is gone"]);
 });

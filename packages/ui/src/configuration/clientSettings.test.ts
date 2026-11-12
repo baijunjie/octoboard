@@ -10,7 +10,7 @@ import { applyClientSettings, clientSettingsOf, clientSettingValues, documentCli
 
 const DESKTOP = { backgroundRun: true, menuBarIcon: true };
 const BROWSER = { backgroundRun: false, menuBarIcon: false };
-const ALL: SettingsSection[] = ["general", "app_behavior", "git", "agent_behavior", "keyboard_shortcuts", "cleanup"];
+const ALL: SettingsSection[] = ["general", "app_behavior", "agent_behavior", "git", "keyboard_shortcuts", "cleanup"];
 const FILE = { appearance: "dark", markdown_style: "github", run_in_background: true, show_menu_bar_icon: false };
 
 it("holds the appearance, Markdown style, and session order of the General section, and the background running, menu bar icon of App behavior only where its platform has them", () => {

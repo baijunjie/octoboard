@@ -36,7 +36,7 @@ export function SettingsGroupCard({ title, lines, choice }: { title: string; lin
 
 /**
  * The application settings of a configuration as cards grouped the way the Settings dialog groups them: General, App
- * behavior, Git, Agent behavior, Keyboard shortcuts and Cleanup, each titled with its section's name, in the order of
+ * behavior, Agent behavior, Git, Keyboard shortcuts and Cleanup, each titled with its section's name, in the order of
  * the sections and, within a group, of the lines that section shows. With `current` (this machine's values) it is the
  * review's: each line says what applying `settings` would change, and the git workflow lists the items that would
  * change with what each is now. Without it, it is the result's: each line says what `settings` were applied as, the git

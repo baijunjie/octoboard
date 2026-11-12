@@ -12,8 +12,8 @@ agent's Permission approval row, on the accounts table's Disable heading, after 
 account details dialog, and on the sharing row of an account's settings dialog (see "Approval modes" in
 `docs/product/per-agent-settings.md`, "The accounts table", "The account details dialog" and "Sharing the default
 configuration" in `docs/product/agent-accounts.md`, and "Explanations in help tips" in
-`docs/product/labels-and-tooltips.md`). The sections, in order, are **General**, **App behavior**, **Git**, **Agent
-accounts**, **Agent behavior**, **Trusted folders**, **Permissions**, **Notifications**, **Keyboard shortcuts**,
+`docs/product/labels-and-tooltips.md`). The sections, in order, are **General**, **App behavior**, **Agent
+behavior**, **Agent accounts**, **Git**, **Trusted folders**, **Permissions**, **Notifications**, **Keyboard shortcuts**,
 **Cleanup**, **Configuration** and **About**; the dialog opens on General unless it was asked to open on another
 section. **Permissions** is there only in the macOS application; the Windows application and a browser leave it out. The
 search field narrows the sections and their rows to the settings that match what is typed (see
@@ -224,11 +224,11 @@ How the application behaves around its window, in four groups — **Startup**, *
 each under a heading (see "Group headings" above), some of them only in the desktop application. Which rows each group
 holds, where each is shown and what each does are in `docs/product/app-behavior-settings.md`.
 
-## Git
+## Agent behavior
 
-Three groups, each under a heading (see "Group headings" above): **Repository**, with the default clone directory and
-automatic pulling of repositories; **Development**, with the application-wide git workflow settings for where sessions
-develop and how they deliver; and **Protection**, with the revert gate. The rows are in `docs/product/git-settings.md`.
+What a session may do without asking the user first, and how it asks the user: four switches that approve a session's
+requests automatically, then **Ask questions as choices**. The section and its rows are in
+`docs/product/agent-behavior-settings.md`.
 
 ## Agent accounts
 
@@ -245,11 +245,11 @@ windows automatically**. Where those switches sit, and what the rest of the sect
 settings tools, though a console session reads some of them (see "Who reads and changes what" in
 `docs/product/agent-settings-tools.md`).
 
-## Agent behavior
+## Git
 
-What a session may do without asking the user first, and how it asks the user: four switches that approve a session's
-requests automatically, then **Ask questions as choices**. The section and its rows are in
-`docs/product/agent-behavior-settings.md`.
+Three groups, each under a heading (see "Group headings" above): **Repository**, with the default clone directory and
+automatic pulling of repositories; **Development**, with the application-wide git workflow settings for where sessions
+develop and how they deliver; and **Protection**, with the revert gate. The rows are in `docs/product/git-settings.md`.
 
 ## Trusted folders
 

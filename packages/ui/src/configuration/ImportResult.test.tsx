@@ -227,11 +227,11 @@ it("tells of each application setting that was applied, and lists the values of 
   render({ auto_pull_repositories: true, auto_approve_session_requests: true, auto_approve_handoffs: true, ask_questions_as_choices: false });
   expect(settingGroupsOf(container)).toEqual([
     { title: "App behavior", lines: ["Close idle terminals when closing the panel"] },
-    { title: "Git", lines: ["Automatically pull repositories", "Git workflow"] },
     {
       title: "Agent behavior",
       lines: ["Automatically approve session requests", "Automatically approve resume requests", "Automatically approve account switches", "Automatically approve handoffs", "Ask questions as choices"],
     },
+    { title: "Git", lines: ["Automatically pull repositories", "Git workflow"] },
     { title: "Cleanup", lines: ["Automatically delete archived sessions whose conversation is gone"] },
   ]);
   expect(settingLines(container)).toEqual({
@@ -323,7 +323,7 @@ it("marks a console and a project whose account fell back with a warning mark af
   press(marks[1]);
   expect(document.querySelector("[data-status-mark-popover]")?.textContent).toBe("The Codex account Personal is not set up here, so the default account is used.");
   await openTab("Settings");
-  expect([...container.querySelectorAll("h3")].map((h) => h.textContent)).toEqual(["App behavior", "Git", "Agent behavior", "Cleanup"]);
+  expect([...container.querySelectorAll("h3")].map((h) => h.textContent)).toEqual(["App behavior", "Agent behavior", "Git", "Cleanup"]);
 });
 
 it("writes a failed line's reason under its row, with the raw text behind Details and not in the row", () => {
