@@ -9,6 +9,7 @@ import { AnchoredTooltip } from "../hint/AnchoredTooltip";
 import { InlineReference } from "../../i18n/InlineReference";
 
 import { currentLanguage, setLanguage } from "../../i18n/language";
+import { fakeTimers, runOutTimers } from "../../test/clock";
 
 import { OptionSelect } from "./OptionSelect";
 
@@ -235,6 +236,8 @@ it("closes only an option's tooltip on Escape, leaving the list open with focus 
       </>
     );
   }
+  // react-aria hands focus to the option a frame after the list opens; the fake clock runs that frame out.
+  fakeTimers();
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => { act(() => root.unmount()); container.remove(); });
@@ -243,6 +246,7 @@ it("closes only an option's tooltip on Escape, leaving the list open with focus 
     { value: "b", label: "Long", labelContent: <Hovered /> },
   ]} />));
   await act(async () => container.querySelector<HTMLElement>('[data-slot="select-trigger"]')!.click());
+  runOutTimers();
   const tooltip = () => document.querySelector('[role="tooltip"]');
   const escape = () => act(async () => void document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
   const focused = document.activeElement;

@@ -13,27 +13,33 @@ afterEach(() => {
 
 const press = (pointerType: string) => document.dispatchEvent(new PointerEvent("pointerdown", { pointerType, bubbles: true }));
 
-// Runs first: the module has seen no interaction yet only until a test dispatches one.
-it("takes the device's lack of hover before any interaction, then each interaction's own input", () => {
+// The module has seen no interaction yet only until one is dispatched, and the other tests dispatch them, so this test
+// loads a fresh instance of the module with the react-aria state it writes to (one graph, so the modality it reads is
+// the one the module sets).
+it("takes the device's lack of hover before any interaction, then each interaction's own input", async () => {
+  vi.resetModules();
+  const fresh = await import("./lastInput");
+  const { setInteractionModality } = await import("react-aria");
+  const { getInteractionModality } = await import("react-aria/private/interactions/useFocusVisible");
   vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(hover: none)" }));
-  expect(interactionIsTouch()).toBe(true);
+  expect(fresh.interactionIsTouch()).toBe(true);
   // With no input yet the ring shows for a focus move the user did not ask for, unless the device cannot hover.
   const before = getInteractionModality();
   act(() => setInteractionModality("pointer"));
-  ringForAutomaticFocus();
+  fresh.ringForAutomaticFocus();
   expect(getInteractionModality()).toBe("pointer");
   vi.stubGlobal("matchMedia", () => ({ matches: false }));
-  ringForAutomaticFocus();
+  fresh.ringForAutomaticFocus();
   expect(getInteractionModality()).toBe("keyboard");
   act(() => Reflect.apply(setInteractionModality, undefined, [before]));
   vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(hover: none)" }));
   press("mouse");
-  expect(interactionIsTouch()).toBe(false);
+  expect(fresh.interactionIsTouch()).toBe(false);
   press("touch");
-  expect(interactionIsTouch()).toBe(true);
+  expect(fresh.interactionIsTouch()).toBe(true);
   // A hardware keyboard on a touch device keeps the desktop's behaviour.
   document.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-  expect(interactionIsTouch()).toBe(false);
+  expect(fresh.interactionIsTouch()).toBe(false);
 });
 
 it.each([
