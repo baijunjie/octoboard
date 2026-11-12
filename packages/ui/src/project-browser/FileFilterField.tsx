@@ -10,7 +10,7 @@ import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { useT } from "../i18n/react";
 import { SearchField } from "../primitives";
 import { isImeKey } from "../input/imeKey";
-import { interactionIsTouch } from "../input/touchInput";
+import { interactionIsTouch } from "../input/lastInput";
 
 export interface FileFilterState {
   filter: string;

@@ -1,6 +1,6 @@
 import { type ReactElement, useLayoutEffect, useRef } from "react";
 
-import { ringForAutomaticFocus } from "../../input/touchInput";
+import { ringForAutomaticFocus } from "../../input/lastInput";
 import { useLatest } from "../hooks/useLatest";
 import { focusFellToPage } from "./regionFocus";
 

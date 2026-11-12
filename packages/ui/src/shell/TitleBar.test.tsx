@@ -91,7 +91,7 @@ it("hands focus to the terminal, with the focus ring, when the toggle that holds
   act(() => container.querySelector<HTMLElement>(".title-bar-end button")!.focus());
   act(() => {
     // The last input was a key, whose ring the handoff follows; this also replaces an earlier touch press in
-    // touchInput's state.
+    // lastInput's state.
     document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
     setInteractionModality("pointer");
   });

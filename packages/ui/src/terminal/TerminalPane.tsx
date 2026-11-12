@@ -8,7 +8,7 @@ import { PATH_VAR_PARAMS } from "../components/text/literalParams";
 import { focusTopBar } from "../components/focus/regionFocus";
 import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
-import { ringForAutomaticFocus } from "../input/touchInput";
+import { ringForAutomaticFocus } from "../input/lastInput";
 import { useLatest } from "../components/hooks/useLatest";
 import { Message, useT } from "../i18n/react";
 import { liveAnnouncerProps } from "../primitives";

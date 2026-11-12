@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef } from "react";
 
 import { onReducedMotion, prefersReducedMotion } from "../components/motion/reducedMotion";
-import { ringForAutomaticFocus } from "../input/touchInput";
+import { ringForAutomaticFocus } from "../input/lastInput";
 import { useT } from "../i18n/react";
 import { COLUMN_EASE_CLASS, columnSpan, isDockEasing, usePaneDockMotion, type DockPhase } from "../layout/paneDockMotion";
 import { drawerClass, PANE_ID, RailClip, usePanePeekPointer } from "../layout/paneOverlay";

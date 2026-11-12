@@ -1,4 +1,4 @@
-import { ringForAutomaticFocus } from "../../input/touchInput";
+import { ringForAutomaticFocus } from "../../input/lastInput";
 import { useEffect, useRef } from "react";
 
 import { focusTopBar } from "./regionFocus";

@@ -6,7 +6,7 @@ import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../../components/ann
 import { focusLandingWithoutText, focusTopBar } from "../../components/focus/regionFocus";
 import { useFocusHandoff } from "../../components/focus/useFocusHandoff";
 import { useLatest } from "../../components/hooks/useLatest";
-import { interactionIsTouch } from "../../input/touchInput";
+import { interactionIsTouch } from "../../input/lastInput";
 import { useT } from "../../i18n/react";
 import { liveAnnouncerProps } from "../../primitives";
 import type { ShellTerminal } from "../../protocol";

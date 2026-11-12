@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 
 import { useT } from "../../i18n/react";
 import { isImeKey } from "../../input/imeKey";
-import { interactionIsTouch } from "../../input/touchInput";
+import { interactionIsTouch } from "../../input/lastInput";
 import { useLatest } from "../hooks/useLatest";
 import { OFFSET, PLACEMENT, TOOLTIP_SURFACE } from "./hintSurface";
 import { FloatingPopover, Tooltip, TooltipContent, TooltipTrigger, useTooltipState } from "../../primitives";

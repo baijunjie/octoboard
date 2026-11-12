@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
 
 import { useLatest } from "../components/hooks/useLatest";
-import { interactionIsTouch, ringForAutomaticFocus } from "../input/touchInput";
+import { interactionIsTouch, ringForAutomaticFocus } from "../input/lastInput";
 
 /**
  * Keeps focus somewhere usable as a terminal is covered for a process that cannot be reached

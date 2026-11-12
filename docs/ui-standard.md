@@ -853,7 +853,7 @@ A press, of a mouse or of a finger, never turns the ring on: `ringForAutomaticFo
 key's shows it. A press with no pointer behind it, a screen reader's or a script's, leaves the last input as it was.
 Every automatic move asks `ringForAutomaticFocus`, F6 being the one exception, as a key, since a ring left on a top-bar
 control after a press would also open its tooltip and leave it standing. After a tap (`interactionIsTouch` in
-`packages/ui/src/input/touchInput.ts`: the last press was a finger or a pen; a mouse, a trackpad or any key counts as
+`packages/ui/src/input/lastInput.ts`: the last press was a finger or a pen; a mouse, a trackpad or any key counts as
 not, so an iPad with a keyboard keeps the desktop rules) one thing more changes: the window does not move focus into a
 terminal on its own initiative, since a terminal's text field raises the on-screen keyboard over the content the user
 tapped to see. A floating panel lands on its first control that takes no text (`focusLandingWithoutText`; the Report

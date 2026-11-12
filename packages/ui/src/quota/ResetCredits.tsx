@@ -11,7 +11,7 @@ import { Message, useT } from "../i18n/react";
 import type { AccountQuota, Agent, ResetCreditOutcome } from "../protocol";
 import { useDaemon, useProviders } from "../store";
 import { servedProvider } from "../agents/providers";
-import { ringForAutomaticFocus } from "../input/touchInput";
+import { ringForAutomaticFocus } from "../input/lastInput";
 import { useNow } from "../format/useNow";
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import { AccountQuotaSummary, QuotaStaleMark } from "./AccountQuotaSummary";

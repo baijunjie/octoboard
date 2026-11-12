@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 import { useLatest } from "../components/hooks/useLatest";
 import { focusFellToPage } from "../components/focus/regionFocus";
 import { tryEachFrame } from "../components/focus/tryEachFrame";
-import { interactionIsTouch, ringForAutomaticFocus } from "../input/touchInput";
+import { interactionIsTouch, ringForAutomaticFocus } from "../input/lastInput";
 
 /** How many animation frames (about half a second) the rescue waits for focus to fall, as a popover that restores it
  * to a control that is gone takes a frame or more to close. */

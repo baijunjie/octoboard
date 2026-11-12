@@ -24,7 +24,7 @@ import { HOVER_ACTIONS_CLASS } from "../components/rows/hoverActions";
 import { NESTED_ROW_CLASS, TreeRow } from "../components/rows/TreeRow";
 import { useListMotion } from "../components/motion/useListMotion";
 import { sessionRowModel } from "../sessions/sessionRowModel";
-import { ringForAutomaticFocus } from "../input/touchInput";
+import { ringForAutomaticFocus } from "../input/lastInput";
 import { Button, Spinner } from "../primitives";
 
 /** How many rows the list adds each time its end scrolls into view. */

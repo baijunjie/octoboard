@@ -28,7 +28,7 @@ import { Message, useT } from "../../i18n/react";
 import type { Project, ShellTerminal } from "../../protocol";
 import { useDaemon } from "../../store";
 import { useHostPaths } from "../../components/hooks/useHostPaths";
-import { ringForAutomaticFocus } from "../../input/touchInput";
+import { ringForAutomaticFocus } from "../../input/lastInput";
 import { RECOVERED_DISPLAY_MARK_ID, RecoveredDisplayMark } from "../RecoveredDisplayMark";
 import { shellTerminalTitle } from "./shellTerminalTitle";
 import { setActiveShellTerminal, startShellTerminal, takeShellTerminalFocus, useActiveShellTerminal, useProjectShellTerminals, useShellTerminalStarting } from "./shellTerminals";

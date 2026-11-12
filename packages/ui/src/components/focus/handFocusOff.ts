@@ -1,4 +1,4 @@
-import { ringForAutomaticFocus } from "../../input/touchInput";
+import { ringForAutomaticFocus } from "../../input/lastInput";
 
 /** Focuses `holder` itself when that is a tab stop, else the first button inside it. */
 export function focusHolderOrButton(holder: HTMLElement | null | undefined): void {

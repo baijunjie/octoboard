@@ -11,7 +11,7 @@ import { useT } from "../../i18n/react";
 import { FadeOverflow } from "../text/FadeOverflow";
 import { registerMenuCommand } from "./menuCommands";
 import { useLatest } from "../hooks/useLatest";
-import { ringForAutomaticFocus } from "../../input/touchInput";
+import { ringForAutomaticFocus } from "../../input/lastInput";
 import { MODAL_DIALOG, TABBABLE } from "../focus/selectors";
 import { useResolvedMenuEntries } from "./useResolvedMenuEntries";
 import { MenuShortcutScope } from "./menuShortcutScope";

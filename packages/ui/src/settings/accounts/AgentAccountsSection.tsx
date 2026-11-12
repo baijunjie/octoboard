@@ -18,7 +18,7 @@ import { Message, useT } from "../../i18n/react";
 import type { Account, Agent } from "../../protocol";
 import { useDaemon, useDaemonStore, useProviders } from "../../store";
 import { ProviderName } from "../../components/text/ProviderName";
-import { ringForAutomaticFocus } from "../../input/touchInput";
+import { ringForAutomaticFocus } from "../../input/lastInput";
 import { AccountDetailsDialog } from "./AccountDetailsDialog";
 import { AccountDialog } from "./AccountDialog";
 import { AccountMcpDialog } from "./AccountMcpDialog";

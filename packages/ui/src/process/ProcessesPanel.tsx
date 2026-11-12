@@ -29,7 +29,7 @@ import type { ProcessTree } from "../protocol";
 import { sessionDisplayTitle } from "../sessions/sessionLabel";
 import { useSession } from "../store";
 import { useDaemon, type Daemon } from "../store";
-import { ringForAutomaticFocus } from "../input/touchInput";
+import { ringForAutomaticFocus } from "../input/lastInput";
 import { ConfirmDialog } from "../components/dialog/ConfirmDialog";
 import { useProcessPanelContext } from "./useProcessPanel";
 import { ProcessSessionSelect } from "./ProcessSessionSelect";

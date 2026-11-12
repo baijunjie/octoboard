@@ -9,7 +9,7 @@ import { archiveNeedsConfirmation } from "../sessions/order";
 import { holdsAccountSwitch } from "../sessions/sessionStatus";
 import { useDaemon, useDaemonStore } from "../store";
 import { raiseError } from "../components/alerts/raiseError";
-import { ringForAutomaticFocus } from "../input/touchInput";
+import { ringForAutomaticFocus } from "../input/lastInput";
 
 /**
  * Archiving a session from its row, its menu or a shortcut: at once when nothing would be lost, otherwise through the

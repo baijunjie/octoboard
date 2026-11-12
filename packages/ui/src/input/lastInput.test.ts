@@ -4,7 +4,7 @@ import { setInteractionModality } from "react-aria";
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { afterEach, expect, it, vi } from "vitest";
 
-import { interactionIsTouch, ringForAutomaticFocus } from "./touchInput";
+import { interactionIsTouch, ringForAutomaticFocus } from "./lastInput";
 
 afterEach(() => {
   vi.unstubAllGlobals();

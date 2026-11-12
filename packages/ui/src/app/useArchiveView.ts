@@ -4,7 +4,7 @@ import { useShallow } from "zustand/react/shallow";
 
 import type { ArchiveViewState } from "../archive/ArchiveView";
 import { useLatest, useStableHandler } from "../components/hooks/useLatest";
-import { ringForAutomaticFocus } from "../input/touchInput";
+import { ringForAutomaticFocus } from "../input/lastInput";
 import { archiveKey } from "../navigation/history";
 import type { Console, Project } from "../protocol";
 import { indexSessions, NO_SESSIONS, sessionsOf } from "../sessions/sessionIndex";

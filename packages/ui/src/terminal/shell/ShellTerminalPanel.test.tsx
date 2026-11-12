@@ -43,7 +43,7 @@ const shell = (id: string, created: number, extra: Partial<ShellTerminal> = {}):
 });
 
 let cleanup: (() => void) | undefined;
-// A touch press also persists in touchInput's lastInput; script clicks do not replace it. Start each test with the
+// A touch press also persists in lastInput's record; script clicks do not replace it. Start each test with the
 // desktop input these focus-ring assertions exercise, independently of a preceding test's touch interaction.
 beforeEach(() => pointerModality());
 afterEach(() => {

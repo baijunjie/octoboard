@@ -53,7 +53,7 @@ import { ImportResult, type Imported } from "./ImportResult";
 import { ImportReview } from "./ImportReview";
 import type { Region } from "./RegionTabs";
 import { raiseError } from "../components/alerts/raiseError";
-import { ringForAutomaticFocus } from "../input/touchInput";
+import { ringForAutomaticFocus } from "../input/lastInput";
 import { Button } from "../primitives";
 import { TitledControl } from "../components/hint/TitledControl";
 

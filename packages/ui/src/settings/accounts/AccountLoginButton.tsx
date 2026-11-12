@@ -12,7 +12,7 @@ import { useDaemonStore } from "../../store";
 import { afterFrames } from "../../components/focus/afterFrames";
 import { canTakeFocus } from "../../components/focus/regionFocus";
 import { useLatest } from "../../components/hooks/useLatest";
-import { ringForAutomaticFocus } from "../../input/touchInput";
+import { ringForAutomaticFocus } from "../../input/lastInput";
 import { accountLoginOf, loginIsActive } from "../../accounts/accountRecords";
 import { Button, onFocusScopeRestore } from "../../primitives";
 

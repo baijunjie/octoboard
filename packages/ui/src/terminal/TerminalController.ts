@@ -6,7 +6,7 @@ import { type IBufferRange, Terminal } from "@xterm/xterm";
 import { onWindowFocusReturn, windowHasFocus } from "../components/hooks/windowFocus";
 import type { PathStyle } from "../format/hostPath";
 import type { TermControl, TermEvent } from "../protocol";
-import { interactionIsTouch } from "../input/touchInput";
+import { interactionIsTouch } from "../input/lastInput";
 import { isSecondaryPress } from "../input/keys";
 import type { HostFacts } from "../platform/host";
 import { TerminalLinkColors } from "./links/linkColors";

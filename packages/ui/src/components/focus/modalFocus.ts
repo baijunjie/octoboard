@@ -1,4 +1,4 @@
-import { ringForAutomaticFocus } from "../../input/touchInput";
+import { ringForAutomaticFocus } from "../../input/lastInput";
 import { focusFirstIn, focusRegion, type Region } from "./regionFocus";
 import { MODAL_DIALOG } from "./selectors";
 

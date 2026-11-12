@@ -20,7 +20,7 @@ import { Message, useCurrentLanguage, useT } from "../../i18n/react";
 import type { AccountLogin, Agent } from "../../protocol";
 import { dismissAccountLogin, trackAccountLogin, useDaemon, useDaemonStore } from "../../store";
 import { ProviderName } from "../../components/text/ProviderName";
-import { ringForAutomaticFocus } from "../../input/touchInput";
+import { ringForAutomaticFocus } from "../../input/lastInput";
 import { accountLoginOf, loginIsActive } from "../../accounts/accountRecords";
 import { useAccountLoginActions } from "./AccountLogin";
 import { raiseError } from "../../components/alerts/raiseError";

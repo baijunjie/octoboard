@@ -11,7 +11,7 @@ import { ChromeButton } from "./ChromeButton";
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import { HandoffOnUnmount } from "../components/focus/HandoffOnUnmount";
 import { focusFellToPage } from "../components/focus/regionFocus";
-import { ringForAutomaticFocus } from "../input/touchInput";
+import { ringForAutomaticFocus } from "../input/lastInput";
 import { StatusIcon } from "../components/status/StatusIcon";
 import { STATUS_MARK_POPOVER } from "../components/status/StatusMark";
 import { RECOVERED_DISPLAY_MARK_ID, RecoveredDisplayMark } from "../terminal/RecoveredDisplayMark";

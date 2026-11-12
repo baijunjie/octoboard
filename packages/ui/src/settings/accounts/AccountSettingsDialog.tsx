@@ -6,7 +6,7 @@ import { useT } from "../../i18n/react";
 import type { Agent } from "../../protocol";
 import { useAccountQuota } from "../../quota/useAccountQuota";
 import { useProviders } from "../../store";
-import { ringForAutomaticFocus } from "../../input/touchInput";
+import { ringForAutomaticFocus } from "../../input/lastInput";
 import { AccountDisableSwitch } from "./AccountDisableSwitch";
 import { AccountLoginAnnouncer, useSucceededAccountLogin } from "./AccountLogin";
 import { AccountSharingSwitch } from "./AccountSharingSwitch";
