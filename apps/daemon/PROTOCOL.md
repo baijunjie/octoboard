@@ -2967,7 +2967,13 @@ a change arriving meanwhile owing it one more read, and at most four projects ar
 has gone is not re-read; its next check reports `repository: false`. Projects are watched from daemon start, from
 `add_project`, and from the first check that finds one that was not a repository before, until they are deleted;
 each check and each watcher-driven re-read also re-watches a project whose layout has changed since (converted to the
-reftable format, say). A watch that cannot be set up is logged and that project is left to the client's poll.
+reftable format, say). A watch is on a directory rather than its path, and on Linux and Windows it ends when that
+directory is removed or renamed, or moves with it; so a removal or rename of a watched directory is logged and re-reads
+the projects watching it, as does a `refs/` or `reftable/` directory made again where such a watch was, and that
+re-read and each check set up again every watch that was lost, that could not be set up (inotify out of watches, say),
+or that is on a directory since replaced at the same path (told by its inode or file id where the file system reports
+one: `git refs migrate` rewriting `refs/`, a worktree removed and added again). Until then, and for a watch the
+platform drops without saying so, the project is left to the client's poll.
 
 ### Fast-forwarding when the setting is turned on
 

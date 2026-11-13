@@ -19,23 +19,37 @@
 //! When the platform reports that it lost events (inotify's queue overflowed, FSEvents asks for a
 //! rescan), any ref may have moved unseen, so every watched project is re-read.
 //!
-//! A watch that cannot be set up is logged and left out; the client's poll still covers that
-//! project, as it covers a change the platform never reports: under heavy load macOS
-//! delivers file events late or not at all, without flagging any as dropped. A session's own git
-//! does not wait on either: its hooks report the refs it moves (`super::ref_moves`). A project
-//! that is not a repository when it is added, or at daemon start, is picked up by the first check
-//! that finds it is one (`status::run_checks`), and one whose layout changes after it is watched
-//! (converted to reftable) is watched anew by the next check or watcher-driven re-read.
+//! A watch is on a directory, not on its path: on Linux and Windows it ends, or moves with the
+//! directory, when the directory is removed or renamed, and a directory made again at the same
+//! path (`git refs migrate` rewriting `refs/`, a worktree removed and added again) is not watched
+//! by it. So the watch keeps, for each directory it watches, whether its watch is in place and the
+//! identity (inode, file id) of the directory it was set on. A removal or rename of a watched
+//! directory is logged, marks its watch lost and re-reads the projects holding it, as does a
+//! directory made where a lost watch was and its parent is watched (`refs/`, a `reftable/` stack);
+//! that re-read, and every check, sets up again each watch that was lost, that failed (inotify out
+//! of watches), or that is on a directory since replaced at the same path. On a file system that
+//! reports no file number, a replacement is seen only through the removal it reports.
+//!
+//! A watch that cannot be set up is logged and tried again at the next check; until then the
+//! client's poll still covers that project, as it covers a change the platform never reports:
+//! under heavy load macOS delivers file events late or not at all, without flagging any as dropped,
+//! and the Windows backend drops a directory's watch on an error it does not recognise without
+//! saying so. A session's own git does not wait on either: its hooks report the refs it moves
+//! (`super::ref_moves`). A project that is not a repository when it is added, or at daemon start,
+//! is picked up by the first check that finds it is one (`status::run_checks`), and one whose
+//! layout changes after it is watched (converted to reftable) is watched anew by the next check or
+//! watcher-driven re-read.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{PathsMut, RecommendedWatcher, RecursiveMode, Watcher};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
 use crate::git::layout::is_git_repo;
+use crate::platform::fs::{self, Identity, Links};
 use crate::project_git::debounced::{Debounced, Timing};
 use crate::project_git::header;
 use crate::protocol::Project;
@@ -115,15 +129,68 @@ impl Dirs {
 
 struct Tracked {
     dirs: Dirs,
+    /// Every root of `dirs`, each counted in [`Inner::watched`] whether or not its watch is in
+    /// place: one that failed or was lost is set up again by a later [`Watch::track`].
     roots: Vec<(PathBuf, RecursiveMode)>,
+}
+
+/// What is at a root's path when a project is resolved.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum OnDisk {
+    /// Nothing, or not a directory: there is nothing to watch until one is made there.
+    Missing,
+    /// A directory, with its identity where the file system tells one.
+    Present(Option<Identity>),
+}
+
+impl OnDisk {
+    fn of(path: &Path) -> Self {
+        if path.is_dir() {
+            Self::Present(fs::directory_identity(path, Links::Follow))
+        } else {
+            Self::Missing
+        }
+    }
+}
+
+/// One path the watcher is asked to watch, shared by every project whose roots include it.
+struct Root {
+    /// How many projects hold it among their roots: linked worktrees of one repository share its
+    /// common directory, and one of them going away must not end the others' watch.
+    holders: usize,
+    /// Whether the platform's watch is in place as far as the daemon knows: false until it is
+    /// added, after adding it failed, and after the platform reported the directory removed or
+    /// renamed, which on Linux and Windows ends the watch or moves it with the directory.
+    armed: bool,
+    /// The identity of the directory the watch was set on. A directory replaced at the same path
+    /// (`git refs migrate` rewriting `refs/`, a worktree removed and added again) has another, and
+    /// a watch on the old one sees nothing of the new.
+    identity: Option<Identity>,
+    /// Whether the last attempt to watch it failed, so a retry that fails again is not logged as a
+    /// new failure.
+    failing: bool,
+}
+
+impl Root {
+    /// Whether the watch on this root has to be set up (again) for the directory now `on_disk`:
+    /// it is not in place and there is a directory to watch, or it is on a directory that has
+    /// since been replaced.
+    fn needs_arming(&self, on_disk: OnDisk) -> bool {
+        match on_disk {
+            OnDisk::Missing => false,
+            OnDisk::Present(now) => !self.armed || self.replaced_by(now),
+        }
+    }
+
+    fn replaced_by(&self, now: Option<Identity>) -> bool {
+        matches!((self.identity, now), (Some(then), Some(now)) if then != now)
+    }
 }
 
 struct Inner {
     watcher: RecommendedWatcher,
     projects: HashMap<String, Tracked>,
-    /// How many projects watch each path: linked worktrees of one repository share its common
-    /// directory, and one of them going away must not end the others' watch.
-    watched: HashMap<PathBuf, usize>,
+    watched: HashMap<PathBuf, Root>,
 }
 
 /// The daemon's ref watcher. Empty until [`start`] arms it, so a state built without it (every
@@ -132,6 +199,10 @@ struct Inner {
 pub struct Watch {
     inner: Mutex<Option<Inner>>,
 }
+
+/// A project [`Watch::track`] resolved: what the watch held it with before, its layout now, and
+/// what is at each of that layout's roots, in the order of [`Dirs::roots`].
+type Resolved<'a> = (&'a Project, Option<Dirs>, Dirs, Vec<OnDisk>);
 
 impl Watch {
     fn lock(&self) -> std::sync::MutexGuard<'_, Option<Inner>> {
@@ -145,39 +216,47 @@ impl Watch {
             .is_some_and(|inner| !inner.projects.contains_key(project_id))
     }
 
-    /// The layout the watch holds `project_id` with, if it holds it.
-    fn held(&self, project_id: &str) -> Option<Dirs> {
-        self.lock()
-            .as_ref()?
-            .projects
-            .get(project_id)
-            .map(|tracked| tracked.dirs.clone())
+    /// The layout the watch holds `project_id` with, if it holds it, and whether it is settled:
+    /// held as `dirs` with every root watched on the directory now there.
+    fn held(&self, project_id: &str, dirs: &Dirs, on_disk: &[OnDisk]) -> (Option<Dirs>, bool) {
+        let guard = self.lock();
+        let Some(inner) = guard.as_ref() else {
+            return (None, true);
+        };
+        let held = inner.held(project_id).cloned();
+        let settled = held.as_ref() == Some(dirs) && inner.settled(dirs, on_disk);
+        (held, settled)
     }
 
-    /// Starts watching `projects` that are repositories and not watched yet, and re-watches those
+    /// Starts watching `projects` that are repositories and not watched yet, re-watches those
     /// whose layout changed since they were watched (a repository converted to reftable with
-    /// `git refs migrate`), applying all their paths in one batch: the macOS backend restarts its
-    /// whole event stream on every change to what it watches, so one change per path is quadratic
-    /// over many projects and loses events in each gap. What each project resolves to is read
-    /// before the lock is taken, so what the watch held is noted before that read, and a project
-    /// whose entry another call changed meanwhile is left to that call: its read may be the newer
-    /// one, and acting on this one could put an old layout back.
+    /// `git refs migrate`), and sets up again each root whose watch failed, was lost, or is on a
+    /// directory since replaced at the same path, applying all their paths in one batch: the macOS
+    /// backend restarts its whole event stream on every change to what it watches, so one change
+    /// per path is quadratic over many projects and loses events in each gap. What each project
+    /// resolves to is read before the lock is taken, so what the watch held is noted before that
+    /// read, and a project whose entry another call changed meanwhile is left to that call: its
+    /// read may be the newer one, and acting on this one could put an old layout back.
     fn track(&self, state: &AppState, projects: &[Project]) {
         if self.lock().is_none() {
             return;
         }
-        let resolved: Vec<(&Project, Option<Dirs>, Dirs)> = projects
+        let resolved: Vec<Resolved<'_>> = projects
             .iter()
             .filter(|project| is_git_repo(Path::new(&project.path)))
             .filter_map(|project| {
-                let held = self.held(&project.id);
-                let dirs = Dirs::resolve(Path::new(&project.path));
-                if dirs.is_none() {
+                let Some(dirs) = Dirs::resolve(Path::new(&project.path)) else {
                     tracing::debug!(project = %project.id, "the repository's directories could not be resolved");
-                }
-                Some((project, held, dirs?))
+                    return None;
+                };
+                let on_disk: Vec<OnDisk> = dirs
+                    .roots()
+                    .iter()
+                    .map(|(path, _)| OnDisk::of(path))
+                    .collect();
+                let (held, settled) = self.held(&project.id, &dirs, &on_disk);
+                (!settled).then_some((project, held, dirs, on_disk))
             })
-            .filter(|(_, held, dirs)| held.as_ref() != Some(dirs))
             .collect();
         if resolved.is_empty() {
             return;
@@ -188,13 +267,17 @@ impl Watch {
         };
         // Under the lock, so a project deleted before this runs is not left watched forever: its
         // removal either came first, and is seen here, or finds the entry made below.
-        let resolved: Vec<(&Project, Dirs)> = resolved
+        let resolved: Vec<(&Project, bool, Dirs, Vec<OnDisk>)> = resolved
             .into_iter()
-            .filter(|(project, held, _)| {
+            .filter(|(project, held, dirs, on_disk)| {
                 inner.held(&project.id) == held.as_ref()
+                    && !(held.as_ref() == Some(dirs) && inner.settled(dirs, on_disk))
                     && matches!(state.store.get_project(&project.id), Ok(Some(_)))
             })
-            .map(|(project, _, dirs)| (project, dirs))
+            .map(|(project, _, dirs, on_disk)| {
+                let relaid = inner.held(&project.id) != Some(&dirs);
+                (project, relaid, dirs, on_disk)
+            })
             .collect();
         // Applying even an empty batch restarts the macOS event stream, which loses events.
         if resolved.is_empty() {
@@ -202,27 +285,45 @@ impl Watch {
         }
         // What a re-watched project watched before is let go only after its new roots are added,
         // so a path both layouts share is never unwatched in between.
-        let replaced: Vec<Tracked> = resolved
-            .iter()
-            .filter_map(|(project, _)| inner.projects.remove(&project.id))
-            .collect();
-        let mut paths = inner.watcher.paths_mut();
+        let mut replaced = Vec::new();
         let mut added = Vec::new();
-        for (project, dirs) in resolved {
-            let mut roots = Vec::new();
-            for (path, mode) in dirs.roots() {
-                let count = inner.watched.entry(path.clone()).or_insert(0);
-                if *count == 0 {
-                    if let Err(err) = paths.add(&path, mode) {
-                        tracing::warn!(project = %project.id, path = %path.display(), %err, "watching the repository's refs failed");
-                        inner.watched.remove(&path);
-                        continue;
-                    }
-                }
-                *inner.watched.get_mut(&path).expect("entry made above") += 1;
-                roots.push((path, mode));
+        for (project, relaid, dirs, _) in &resolved {
+            if !relaid {
+                continue;
             }
-            added.push((project.id.clone(), Tracked { dirs, roots }));
+            replaced.extend(inner.projects.remove(&project.id));
+            let roots = dirs.roots();
+            for (path, _) in &roots {
+                inner
+                    .watched
+                    .entry(path.clone())
+                    .or_insert(Root {
+                        holders: 0,
+                        armed: false,
+                        identity: None,
+                        failing: false,
+                    })
+                    .holders += 1;
+            }
+            added.push((
+                project.id.clone(),
+                Tracked {
+                    dirs: dirs.clone(),
+                    roots,
+                },
+            ));
+        }
+        let mut paths = inner.watcher.paths_mut();
+        for (project, _, dirs, on_disk) in &resolved {
+            for ((path, mode), on_disk) in dirs.roots().into_iter().zip(on_disk) {
+                let root = inner
+                    .watched
+                    .get_mut(&path)
+                    .expect("every root of a held layout is counted");
+                if root.needs_arming(*on_disk) {
+                    arm(paths.as_mut(), &project.id, &path, mode, root, *on_disk);
+                }
+            }
         }
         for tracked in replaced {
             for path in release(&mut inner.watched, tracked.roots) {
@@ -243,8 +344,28 @@ impl Watch {
         }
     }
 
-    /// The projects a report concerns: those a change at any of its paths concerns, or every one
-    /// after events were lost.
+    /// Notes that the platform's watch on each of `paths` that is a watched root no longer watches
+    /// that path: the directory was removed or renamed, which on Linux and Windows ends the watch
+    /// or moves it with the directory, so whatever is at that path afterwards is not watched until
+    /// the root is set up again.
+    fn lose(&self, paths: &[PathBuf]) {
+        let mut guard = self.lock();
+        let Some(inner) = guard.as_mut() else {
+            return;
+        };
+        for path in paths {
+            if let Some(root) = inner.watched.get_mut(path) {
+                if root.armed {
+                    root.armed = false;
+                    tracing::info!(path = %path.display(), "a watched repository directory was removed or renamed; it is watched again at its next check or re-read");
+                }
+            }
+        }
+    }
+
+    /// The projects a report concerns: those a change at any of its paths concerns, those that
+    /// watch a directory it removed or one made where a watch they hold is not in place, or every
+    /// one after events were lost.
     fn concerned(&self, report: &Report) -> Vec<String> {
         let guard = self.lock();
         let Some(inner) = guard.as_ref() else {
@@ -254,7 +375,17 @@ impl Watch {
             .projects
             .iter()
             .filter(|(_, tracked)| match report {
-                Report::Changed(paths) => paths.iter().any(|path| tracked.dirs.concerns(path)),
+                // A directory made at a root whose watch is not in place is that root back: the
+                // re-read sets its watch up.
+                Report::Changed(paths) => paths.iter().any(|path| {
+                    tracked.dirs.concerns(path)
+                        || (tracked.roots.iter().any(|(root, _)| root == path)
+                            && inner.watched.get(path).is_some_and(|root| !root.armed))
+                }),
+                Report::Removed(paths) => paths.iter().any(|path| {
+                    tracked.dirs.concerns(path)
+                        || tracked.roots.iter().any(|(root, _)| root == path)
+                }),
                 Report::Lost => true,
             })
             .map(|(id, _)| id.clone())
@@ -262,10 +393,73 @@ impl Watch {
     }
 }
 
+/// Sets up the watch on `root` at `path` for the directory now there, in place of any the
+/// platform still holds for that path: one on a directory replaced since is removed first, and
+/// adding a path the platform's watch already holds would otherwise leave the old one behind
+/// (inotify). A failure is logged once until the root is watched again, and whatever part of a
+/// recursive watch the platform set up before failing is removed, so the next attempt starts clean
+/// and nothing is watched that the daemon does not count.
+fn arm(
+    paths: &mut dyn PathsMut,
+    project_id: &str,
+    path: &Path,
+    mode: RecursiveMode,
+    root: &mut Root,
+    on_disk: OnDisk,
+) {
+    let OnDisk::Present(now) = on_disk else {
+        return;
+    };
+    if root.armed && root.replaced_by(now) {
+        tracing::warn!(project = %project_id, path = %path.display(), "a watched repository directory was replaced; watching the new one");
+    }
+    // A path the platform no longer watches has nothing to remove.
+    paths.remove(path).ok();
+    match paths.add(path, mode) {
+        Ok(()) => {
+            if root.failing {
+                tracing::info!(project = %project_id, path = %path.display(), "watching the repository's refs again");
+            }
+            *root = Root {
+                armed: true,
+                identity: now,
+                failing: false,
+                ..*root
+            };
+        }
+        Err(err) => {
+            paths.remove(path).ok();
+            if root.failing {
+                tracing::debug!(project = %project_id, path = %path.display(), %err, "watching the repository's refs failed again");
+            } else {
+                tracing::warn!(project = %project_id, path = %path.display(), %err, "watching the repository's refs failed; it is tried again at the next check");
+            }
+            *root = Root {
+                armed: false,
+                identity: None,
+                failing: true,
+                ..*root
+            };
+        }
+    }
+}
+
 impl Inner {
     /// The layout `project_id` is held with, if it is.
     fn held(&self, project_id: &str) -> Option<&Dirs> {
         self.projects.get(project_id).map(|tracked| &tracked.dirs)
+    }
+
+    /// Whether every root of `dirs` is counted and needs no arming for what is `on_disk` there.
+    fn settled(&self, dirs: &Dirs, on_disk: &[OnDisk]) -> bool {
+        dirs.roots()
+            .iter()
+            .zip(on_disk)
+            .all(|((path, _), on_disk)| {
+                self.watched
+                    .get(path)
+                    .is_some_and(|root| !root.needs_arming(*on_disk))
+            })
     }
 
     fn untrack(&mut self, project_id: &str) {
@@ -289,19 +483,19 @@ impl Inner {
     }
 }
 
-/// Counts one project fewer watching each of `roots`, and returns those no project watches any
-/// more, for the caller to unwatch.
+/// Counts one project fewer holding each of `roots`, and returns those no project holds any more,
+/// for the caller to unwatch.
 fn release(
-    watched: &mut HashMap<PathBuf, usize>,
+    watched: &mut HashMap<PathBuf, Root>,
     roots: Vec<(PathBuf, RecursiveMode)>,
 ) -> Vec<PathBuf> {
     let mut released = Vec::new();
     for (path, _) in roots {
-        let Some(count) = watched.get_mut(&path) else {
+        let Some(root) = watched.get_mut(&path) else {
             continue;
         };
-        *count -= 1;
-        if *count == 0 {
+        root.holders -= 1;
+        if root.holders == 0 {
             watched.remove(&path);
             released.push(path);
         }
@@ -318,11 +512,24 @@ fn changes_something(kind: &notify::EventKind) -> bool {
     !matches!(kind, notify::EventKind::Access(_))
 }
 
+/// Whether an event of `kind` removes or renames what it names: for a watched root, its watch no
+/// longer watching its path on Linux and Windows.
+fn removes(kind: &notify::EventKind) -> bool {
+    use notify::event::ModifyKind;
+    matches!(
+        kind,
+        notify::EventKind::Remove(_) | notify::EventKind::Modify(ModifyKind::Name(_))
+    )
+}
+
 /// What the watcher's callback passes on.
 #[derive(Debug, PartialEq, Eq)]
 enum Report {
     /// These paths may have changed.
     Changed(Vec<PathBuf>),
+    /// These paths were removed or renamed, from or to. Any of them may also be a watched root,
+    /// whose watch then no longer watches its path ([`Watch::lose`]).
+    Removed(Vec<PathBuf>),
     /// The platform lost events, so anything may have changed: inotify's queue overflowed, or
     /// FSEvents asks for a rescan. Such an event names no path (inotify) or a directory to
     /// rescan (FSEvents), never the ref that moved.
@@ -337,6 +544,9 @@ fn forward(
     move |result| match result {
         Ok(event) if event.need_rescan() => {
             sender.send(Report::Lost).ok();
+        }
+        Ok(event) if removes(&event.kind) => {
+            sender.send(Report::Removed(event.paths)).ok();
         }
         Ok(event) if changes_something(&event.kind) => {
             sender.send(Report::Changed(event.paths)).ok();
@@ -405,6 +615,9 @@ async fn rereads(state: Arc<AppState>, mut receiver: UnboundedReceiver<Report>) 
         owed: Duration::ZERO,
     }));
     while let Some(report) = receiver.recv().await {
+        if let Report::Removed(paths) = &report {
+            state.git_watch.lose(paths);
+        }
         for id in state.git_watch.concerned(&report) {
             scheduler.report(id.clone(), || {
                 let state = state.clone();
@@ -652,17 +865,30 @@ mod tests {
         let mut events = state.subscribe();
         start(&state);
         // The projects are watched off the runtime; a commit made before that would be missed.
+        let deadline = Instant::now() + crate::test_support::PATIENCE;
         while !state
             .git_watch
             .lock()
             .as_ref()
             .is_some_and(|inner| inner.projects.contains_key("p1"))
         {
+            assert!(Instant::now() < deadline, "the project is watched");
             tokio::time::sleep(Duration::from_millis(20)).await;
         }
 
         git(repo, &["commit", "-q", "--allow-empty", "-m", "outside"]);
+        wait_for_the_commit_to_be_reported(&mut events, repo, retouch).await;
+    }
 
+    /// Waits on `events` for a `project_git_status` that says `repo` is one commit ahead of its
+    /// upstream, as a commit made outside the daemon makes it. The platform may never report the
+    /// commit's own writes (see `FILE_EVENT_PATIENCE`), so `retouch` rewrites what the commit
+    /// wrote, unchanged, until one does.
+    async fn wait_for_the_commit_to_be_reported(
+        events: &mut tokio::sync::broadcast::Receiver<Event>,
+        repo: &Path,
+        retouch: fn(&Path),
+    ) {
         let deadline = Instant::now() + FILE_EVENT_PATIENCE;
         let mut retouch_at = Instant::now() + RETOUCH;
         loop {
@@ -687,8 +913,28 @@ mod tests {
         }
     }
 
+    /// Set (to anything) where the reftable tests must run rather than skip: in CI, whose `git` is
+    /// known to be new enough, a skip would let them pass without testing anything.
+    const REQUIRE_REFTABLE: &str = "OCTOBOARD_TEST_REQUIRE_REFTABLE";
+
+    /// Says on stderr that a reftable test is skipped because `git` cannot do `what`, or fails it
+    /// where [`REQUIRE_REFTABLE`] is set.
+    fn skip_without_reftable(what: &str) {
+        let version = crate::test_support::fixture_git(Path::new("."))
+            .arg("--version")
+            .output()
+            .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
+            .unwrap_or_default();
+        assert!(
+            std::env::var_os(REQUIRE_REFTABLE).is_none(),
+            "{REQUIRE_REFTABLE} is set, but {version} cannot {what}"
+        );
+        eprintln!("skipped: {version} cannot {what}");
+    }
+
     /// A repository created with the reftable ref format, with one commit holding a file. `None`
-    /// where `git` does not know the format (before Git 2.45), and the test is skipped.
+    /// where `git` does not know the format (before Git 2.45), and the test is skipped
+    /// ([`skip_without_reftable`]).
     fn reftable_repo_with(label: &str) -> Option<crate::test_support::ScratchDir> {
         let dir = crate::test_support::ScratchDir::new(label);
         let init = crate::test_support::fixture_git(&dir)
@@ -696,6 +942,7 @@ mod tests {
             .output()
             .unwrap();
         if !init.status.success() {
+            skip_without_reftable("create a reftable repository (Git 2.45)");
             return None;
         }
         std::fs::write(dir.join("a"), b"a").unwrap();
@@ -715,27 +962,38 @@ mod tests {
     }
 
     /// A [`Watch`] armed with a watcher that watches nothing, tracking each of `projects`
-    /// (`(id, repository directory)`) without watching its paths, so no real file event can
-    /// reach it.
+    /// (`(id, repository directory)`) with its roots counted as watched on the directories there
+    /// now, without watching them, so no real file event can reach it and a check finds nothing
+    /// to set up.
     fn watch_tracking(projects: &[(&str, &Path)]) -> Watch {
         let watcher =
             notify::recommended_watcher(|_: notify::Result<notify::Event>| {}).expect("a watcher");
+        let mut watched: HashMap<PathBuf, Root> = HashMap::new();
         let projects = projects
             .iter()
             .map(|(id, path)| {
                 let dirs = Dirs::resolve(path).expect("a repository resolves");
-                let tracked = Tracked {
-                    dirs,
-                    roots: Vec::new(),
-                };
-                (id.to_string(), tracked)
+                let roots = dirs.roots();
+                for (root, _) in &roots {
+                    let identity = identity_at(root);
+                    watched
+                        .entry(root.clone())
+                        .or_insert(Root {
+                            holders: 0,
+                            armed: true,
+                            identity,
+                            failing: false,
+                        })
+                        .holders += 1;
+                }
+                (id.to_string(), Tracked { dirs, roots })
             })
             .collect();
         Watch {
             inner: Mutex::new(Some(Inner {
                 watcher,
                 projects,
-                watched: HashMap::new(),
+                watched,
             })),
         }
     }
@@ -1003,7 +1261,8 @@ mod tests {
 
     /// Converts the repository at `repo` to the reftable ref format in place. `false` where `git`
     /// cannot be relied on to migrate a repository with reflogs, as every fixture has: reflog
-    /// migration came in Git 2.48 and `--no-reflog`, probed here, in 2.49, so 2.48 skips too.
+    /// migration came in Git 2.48 and `--no-reflog`, probed here, in 2.49, so 2.48 skips too
+    /// ([`skip_without_reftable`]).
     fn migrated_to_reftable(repo: &Path) -> bool {
         let known = crate::test_support::fixture_git(repo)
             .args(["refs", "migrate", "-h"])
@@ -1012,6 +1271,7 @@ mod tests {
         // `-h` prints the usage to stdout (exiting 129) where the subcommand exists; an older `git`
         // knows no `refs` or no `migrate`, or predates `--no-reflog` (Git 2.49).
         if !String::from_utf8_lossy(&known.stdout).contains("--no-reflog") {
+            skip_without_reftable("migrate a repository with reflogs to reftable (Git 2.49)");
             return false;
         }
         let migrate = crate::test_support::fixture_git(repo)
@@ -1055,7 +1315,9 @@ mod tests {
             .as_ref()
             .expect("the watch is armed")
             .watched
-            .clone()
+            .iter()
+            .map(|(path, root)| (path.clone(), root.holders))
+            .collect()
     }
 
     /// How many of the tracked projects hold each path among their roots: what the watch's own
@@ -1295,10 +1557,16 @@ mod tests {
     fn releasing_roots_counts_one_project_fewer_and_returns_the_paths_no_project_watches() {
         let non_recursive = RecursiveMode::NonRecursive;
         let recursive = RecursiveMode::Recursive;
+        let held_by = |holders| Root {
+            holders,
+            armed: true,
+            identity: None,
+            failing: false,
+        };
         let mut watched = HashMap::from([
-            (PathBuf::from("/repo/shared"), 2),
-            (PathBuf::from("/repo/own"), 1),
-            (PathBuf::from("/repo/other"), 3),
+            (PathBuf::from("/repo/shared"), held_by(2)),
+            (PathBuf::from("/repo/own"), held_by(1)),
+            (PathBuf::from("/repo/other"), held_by(3)),
         ]);
 
         let released = release(
@@ -1311,13 +1579,918 @@ mod tests {
         );
 
         assert_eq!(released, [PathBuf::from("/repo/own")]);
+        let holders: HashMap<PathBuf, usize> = watched
+            .iter()
+            .map(|(path, root)| (path.clone(), root.holders))
+            .collect();
         assert_eq!(
-            watched,
+            holders,
             HashMap::from([
                 (PathBuf::from("/repo/shared"), 1),
                 (PathBuf::from("/repo/other"), 3),
             ])
         );
         assert!(release(&mut watched, Vec::new()).is_empty());
+    }
+
+    /// What the watch holds of one root, to compare before and after a [`Watch::track`].
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct RootState {
+        holders: usize,
+        armed: bool,
+        identity: Option<Identity>,
+        failing: bool,
+    }
+
+    /// The state of the root at `path`; the root must be counted.
+    fn root_state(watch: &Watch, path: &Path) -> RootState {
+        let guard = watch.lock();
+        let root = guard
+            .as_ref()
+            .expect("the watch is armed")
+            .watched
+            .get(path)
+            .unwrap_or_else(|| panic!("{} is counted", path.display()));
+        RootState {
+            holders: root.holders,
+            armed: root.armed,
+            identity: root.identity,
+            failing: root.failing,
+        }
+    }
+
+    /// Whether the watch holds a project and every root it counts is armed.
+    fn all_roots_armed(watch: &Watch) -> bool {
+        let guard = watch.lock();
+        let Some(inner) = guard.as_ref() else {
+            return false;
+        };
+        !inner.projects.is_empty()
+            && !inner.watched.is_empty()
+            && inner.watched.values().all(|root| root.armed)
+    }
+
+    /// The identity of the directory at `path` now.
+    fn identity_at(path: &Path) -> Option<Identity> {
+        fs::directory_identity(path, Links::Follow)
+    }
+
+    fn copy_tree(from: &Path, to: &Path) {
+        std::fs::create_dir(to).unwrap();
+        for entry in std::fs::read_dir(from).unwrap() {
+            let entry = entry.unwrap();
+            let target = to.join(entry.file_name());
+            if entry.file_type().unwrap().is_dir() {
+                copy_tree(&entry.path(), &target);
+            } else {
+                std::fs::copy(entry.path(), target).unwrap();
+            }
+        }
+    }
+
+    /// Replaces the directory at `dir` with a new one holding the same content, as `git refs
+    /// migrate` rewrites `refs/`. The old one is moved aside, not removed: a removed directory's
+    /// inode may be handed to the new one at once, and the two would then be indistinguishable.
+    fn replace_dir(dir: &Path) {
+        let old = dir.with_extension("old");
+        std::fs::rename(dir, &old).unwrap();
+        copy_tree(&old, dir);
+    }
+
+    /// As [`state_watching`], with the project's repository pushed to an upstream, so a commit made
+    /// outside moves its ahead count.
+    fn state_with_upstream(
+        label: &str,
+        repo: &Path,
+    ) -> (Arc<AppState>, crate::test_support::ScratchDir, Project) {
+        let (state, dir, project) = state_watching(label, repo);
+        let remote = dir.join("remote.git");
+        git(&dir, &["init", "-q", "--bare", remote.to_str().unwrap()]);
+        git(repo, &["remote", "add", "origin", remote.to_str().unwrap()]);
+        git(repo, &["push", "-q", "-u", "origin", "main"]);
+        (state, dir, project)
+    }
+
+    fn sorted(mut ids: Vec<String>) -> Vec<String> {
+        ids.sort();
+        ids
+    }
+
+    /// A [`PathsMut`] that records what it is asked and fails as it is told to.
+    struct RecordingPaths {
+        calls: Vec<PathCall>,
+        remove_fails: bool,
+        add_fails: bool,
+    }
+
+    #[derive(Debug, PartialEq, Eq)]
+    enum PathCall {
+        Remove(PathBuf),
+        Add(PathBuf, RecursiveMode),
+    }
+
+    impl RecordingPaths {
+        fn new() -> Self {
+            Self {
+                calls: Vec::new(),
+                remove_fails: false,
+                add_fails: false,
+            }
+        }
+    }
+
+    impl PathsMut for RecordingPaths {
+        fn add(&mut self, path: &Path, recursive_mode: RecursiveMode) -> notify::Result<()> {
+            self.calls
+                .push(PathCall::Add(path.to_path_buf(), recursive_mode));
+            if self.add_fails {
+                Err(notify::Error::generic("out of watches"))
+            } else {
+                Ok(())
+            }
+        }
+
+        fn remove(&mut self, path: &Path) -> notify::Result<()> {
+            self.calls.push(PathCall::Remove(path.to_path_buf()));
+            if self.remove_fails {
+                Err(notify::Error::generic("not watched"))
+            } else {
+                Ok(())
+            }
+        }
+
+        fn commit(self: Box<Self>) -> notify::Result<()> {
+            Ok(())
+        }
+    }
+
+    fn seen(root: &Root) -> RootState {
+        state_of(root.holders, root.armed, root.identity, root.failing)
+    }
+
+    fn state_of(
+        holders: usize,
+        armed: bool,
+        identity: Option<Identity>,
+        failing: bool,
+    ) -> RootState {
+        RootState {
+            holders,
+            armed,
+            identity,
+            failing,
+        }
+    }
+
+    fn root_of(holders: usize, armed: bool, identity: Option<Identity>, failing: bool) -> Root {
+        Root {
+            holders,
+            armed,
+            identity,
+            failing,
+        }
+    }
+
+    #[test]
+    fn what_is_at_a_path_is_told_as_missing_or_as_a_directory_with_its_identity() {
+        let dir = crate::test_support::ScratchDir::new("git-watch-on-disk");
+        std::fs::write(dir.join("file"), b"x").unwrap();
+
+        assert_eq!(OnDisk::of(&dir.join("absent")), OnDisk::Missing);
+        assert_eq!(OnDisk::of(&dir.join("file")), OnDisk::Missing);
+        assert_eq!(OnDisk::of(&dir), OnDisk::Present(identity_at(&dir)));
+        assert!(identity_at(&dir).is_some());
+    }
+
+    #[test]
+    fn a_root_needs_arming_when_it_is_unarmed_or_on_a_replaced_directory_and_there_is_one() {
+        let first = crate::test_support::ScratchDir::new("git-watch-needs-first");
+        let second = crate::test_support::ScratchDir::new("git-watch-needs-second");
+        let first = identity_at(&first).expect("the file system tells directories apart");
+        let second = identity_at(&second).expect("the file system tells directories apart");
+        assert_ne!(first, second);
+
+        // Nothing to watch where there is no directory, whatever the watch's state.
+        assert!(!root_of(1, true, Some(first), false).needs_arming(OnDisk::Missing));
+        assert!(!root_of(1, false, None, true).needs_arming(OnDisk::Missing));
+        assert!(!root_of(1, false, Some(first), false).needs_arming(OnDisk::Missing));
+
+        // A watch not in place is set up where a directory is.
+        assert!(root_of(1, false, None, false).needs_arming(OnDisk::Present(Some(first))));
+        assert!(root_of(1, false, None, true).needs_arming(OnDisk::Present(Some(first))));
+        assert!(root_of(1, false, Some(first), false).needs_arming(OnDisk::Present(Some(first))));
+        assert!(root_of(1, false, None, false).needs_arming(OnDisk::Present(None)));
+
+        // A watch in place on the directory now there is left alone; on another it is set up again.
+        assert!(!root_of(1, true, Some(first), false).needs_arming(OnDisk::Present(Some(first))));
+        assert!(root_of(1, true, Some(first), false).needs_arming(OnDisk::Present(Some(second))));
+    }
+
+    #[test]
+    fn arming_a_root_adds_its_watch_in_place_of_any_held_and_notes_the_directory() {
+        let dir = crate::test_support::ScratchDir::new("git-watch-arm-ok");
+        let now = identity_at(&dir);
+        let mut paths = RecordingPaths::new();
+        let mut root = root_of(2, false, None, false);
+
+        arm(
+            &mut paths,
+            "p1",
+            &dir,
+            RecursiveMode::Recursive,
+            &mut root,
+            OnDisk::Present(now),
+        );
+
+        assert_eq!(
+            paths.calls,
+            [
+                PathCall::Remove(dir.to_path_buf()),
+                PathCall::Add(dir.to_path_buf(), RecursiveMode::Recursive),
+            ]
+        );
+        assert_eq!(seen(&root), state_of(2, true, now, false));
+    }
+
+    #[test]
+    fn arming_a_root_does_not_depend_on_the_platform_having_a_watch_to_remove() {
+        let dir = crate::test_support::ScratchDir::new("git-watch-arm-no-old");
+        let now = identity_at(&dir);
+        let mut paths = RecordingPaths::new();
+        paths.remove_fails = true;
+        let mut root = root_of(1, false, None, false);
+
+        arm(
+            &mut paths,
+            "p1",
+            &dir,
+            RecursiveMode::NonRecursive,
+            &mut root,
+            OnDisk::Present(now),
+        );
+
+        assert!(paths.calls.contains(&PathCall::Add(
+            dir.to_path_buf(),
+            RecursiveMode::NonRecursive
+        )));
+        assert_eq!(seen(&root), state_of(1, true, now, false));
+    }
+
+    #[test]
+    fn arming_a_root_on_a_replaced_directory_notes_the_new_one() {
+        let old = crate::test_support::ScratchDir::new("git-watch-arm-old");
+        let new = crate::test_support::ScratchDir::new("git-watch-arm-new");
+        let (old, new) = (identity_at(&old), identity_at(&new));
+        let mut paths = RecordingPaths::new();
+        let mut root = root_of(1, true, old, false);
+
+        arm(
+            &mut paths,
+            "p1",
+            Path::new("/repo/refs"),
+            RecursiveMode::Recursive,
+            &mut root,
+            OnDisk::Present(new),
+        );
+
+        assert_eq!(seen(&root), state_of(1, true, new, false));
+        assert!(matches!(paths.calls.last(), Some(PathCall::Add(..))));
+    }
+
+    #[test]
+    fn a_root_whose_watch_cannot_be_added_stays_counted_unarmed_and_failing_with_nothing_left_watched(
+    ) {
+        let dir = crate::test_support::ScratchDir::new("git-watch-arm-fail");
+        let now = identity_at(&dir);
+        let mut paths = RecordingPaths::new();
+        paths.add_fails = true;
+        let mut root = root_of(3, false, None, false);
+
+        arm(
+            &mut paths,
+            "p1",
+            &dir,
+            RecursiveMode::Recursive,
+            &mut root,
+            OnDisk::Present(now),
+        );
+
+        assert_eq!(seen(&root), state_of(3, false, None, true));
+        // Whatever part of the watch was set up before failing is let go.
+        assert_eq!(
+            paths.calls.last(),
+            Some(&PathCall::Remove(dir.to_path_buf()))
+        );
+
+        // A retry that fails again leaves it failing; one that succeeds arms it.
+        arm(
+            &mut paths,
+            "p1",
+            &dir,
+            RecursiveMode::Recursive,
+            &mut root,
+            OnDisk::Present(now),
+        );
+        assert_eq!(seen(&root), state_of(3, false, None, true));
+        paths.add_fails = false;
+        arm(
+            &mut paths,
+            "p1",
+            &dir,
+            RecursiveMode::Recursive,
+            &mut root,
+            OnDisk::Present(now),
+        );
+        assert_eq!(seen(&root), state_of(3, true, now, false));
+    }
+
+    #[test]
+    fn a_failure_to_re_arm_a_replaced_directory_leaves_the_root_unarmed() {
+        let old = crate::test_support::ScratchDir::new("git-watch-arm-fail-old");
+        let new = crate::test_support::ScratchDir::new("git-watch-arm-fail-new");
+        let mut paths = RecordingPaths::new();
+        paths.add_fails = true;
+        let mut root = root_of(1, true, identity_at(&old), false);
+
+        arm(
+            &mut paths,
+            "p1",
+            &new,
+            RecursiveMode::Recursive,
+            &mut root,
+            OnDisk::Present(identity_at(&new)),
+        );
+
+        assert!(!root.armed);
+        assert!(root.failing);
+        assert_eq!(root.holders, 1);
+    }
+
+    #[test]
+    fn a_root_with_no_directory_at_its_path_is_not_armed() {
+        let mut paths = RecordingPaths::new();
+        let mut root = root_of(1, false, None, false);
+
+        arm(
+            &mut paths,
+            "p1",
+            Path::new("/repo/absent"),
+            RecursiveMode::Recursive,
+            &mut root,
+            OnDisk::Missing,
+        );
+
+        assert!(paths.calls.is_empty(), "no watch is attempted");
+        assert_eq!(seen(&root), state_of(1, false, None, false));
+    }
+
+    #[tokio::test]
+    async fn every_root_of_a_tracked_project_is_armed_on_the_directory_it_was_set_on() {
+        let repo = repo_with("git-watch-armed-repo", &[(b"a", b"a")]);
+        let (state, _dir, project) = state_watching("git-watch-armed", &repo);
+
+        watch_now(&state, &project);
+
+        let roots = roots_held_as_on_disk(&state.git_watch, "p1", &repo);
+        assert!(!roots.is_empty());
+        for (path, _) in &roots {
+            assert_eq!(
+                root_state(&state.git_watch, path),
+                RootState {
+                    holders: 1,
+                    armed: true,
+                    identity: identity_at(path),
+                    failing: false,
+                },
+                "{}",
+                path.display()
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn a_directory_replaced_at_its_path_is_watched_again_and_its_new_identity_noted() {
+        let repo = repo_with("git-watch-replaced-repo", &[(b"a", b"a")]);
+        let (state, _dir, project) = state_watching("git-watch-replaced", &repo);
+        let watch = &state.git_watch;
+        watch_now(&state, &project);
+        let refs = Dirs::resolve(&repo).unwrap().common_dir.join("refs");
+        let roots = roots_held_as_on_disk(watch, "p1", &repo);
+        let others: Vec<_> = roots
+            .iter()
+            .map(|(path, _)| path)
+            .filter(|path| **path != refs)
+            .map(|path| (path.clone(), root_state(watch, path)))
+            .collect();
+        let before = root_state(watch, &refs);
+        assert!(before.identity.is_some());
+
+        replace_dir(&refs);
+        let new = identity_at(&refs);
+        assert_ne!(before.identity, new, "the fixture made another directory");
+        watch_now(&state, &project);
+
+        assert_eq!(
+            root_state(watch, &refs),
+            RootState {
+                holders: 1,
+                armed: true,
+                identity: new,
+                failing: false,
+            }
+        );
+        for (path, state_before) in &others {
+            assert_eq!(&root_state(watch, path), state_before, "{}", path.display());
+        }
+        assert_eq!(roots_held_as_on_disk(watch, "p1", &repo), roots);
+        assert_eq!(watched_counts(watch), held_counts(watch));
+        // Settled on the new directory: asking again changes nothing.
+        watch_now(&state, &project);
+        assert_eq!(root_state(watch, &refs).identity, new);
+        assert_eq!(watched_counts(watch), held_counts(watch));
+    }
+
+    #[tokio::test]
+    async fn a_watch_reported_lost_is_armed_again_by_the_next_check_even_on_the_same_directory() {
+        let repo = repo_with("git-watch-lost-root-repo", &[(b"a", b"a")]);
+        let (state, _dir, project) = state_watching("git-watch-lost-root", &repo);
+        let watch = &state.git_watch;
+        watch_now(&state, &project);
+        let dirs = Dirs::resolve(&repo).unwrap();
+        let refs = dirs.common_dir.join("refs");
+        let git_dir = dirs.git_dir.clone();
+        let identity = root_state(watch, &refs).identity;
+
+        watch.lose(&[refs.clone()]);
+
+        assert!(!root_state(watch, &refs).armed);
+        assert_eq!(root_state(watch, &refs).holders, 1);
+        assert!(
+            root_state(watch, &git_dir).armed,
+            "another root is not lost"
+        );
+        assert_eq!(watched_counts(watch), held_counts(watch));
+
+        watch_now(&state, &project);
+
+        assert_eq!(
+            root_state(watch, &refs),
+            RootState {
+                holders: 1,
+                armed: true,
+                identity,
+                failing: false,
+            }
+        );
+        assert!(root_state(watch, &git_dir).armed);
+        assert_eq!(watched_counts(watch), held_counts(watch));
+        roots_held_as_on_disk(watch, "p1", &repo);
+    }
+
+    #[tokio::test]
+    async fn a_removal_below_or_beside_a_watched_root_loses_no_watch() {
+        let repo = repo_with("git-watch-lose-other-repo", &[(b"a", b"a")]);
+        let (state, _dir, project) = state_watching("git-watch-lose-other", &repo);
+        let watch = &state.git_watch;
+        watch_now(&state, &project);
+        let refs = Dirs::resolve(&repo).unwrap().common_dir.join("refs");
+
+        watch.lose(&[
+            refs.join("heads"),
+            refs.join("heads/main"),
+            repo.join("a"),
+            PathBuf::from("/nowhere/at/all"),
+        ]);
+        watch.lose(&[]);
+
+        assert!(all_roots_armed(watch));
+        // A watched root itself is lost, and reporting it again changes nothing.
+        watch.lose(&[refs.clone()]);
+        watch.lose(&[refs.clone()]);
+        assert!(!root_state(watch, &refs).armed);
+        assert_eq!(root_state(watch, &refs).holders, 1);
+    }
+
+    #[tokio::test]
+    async fn a_root_missing_when_its_project_is_tracked_is_counted_unarmed_and_armed_once_it_exists(
+    ) {
+        let repo = repo_with("git-watch-missing-repo", &[(b"a", b"a")]);
+        let (state, _dir, project) = state_watching("git-watch-missing", &repo);
+        let watch = &state.git_watch;
+        let refs = Dirs::resolve(&repo).unwrap().common_dir.join("refs");
+        std::fs::remove_dir_all(&refs).unwrap();
+
+        watch_now(&state, &project);
+
+        let roots = roots_held_as_on_disk(watch, "p1", &repo);
+        assert!(roots.contains(&(refs.clone(), RecursiveMode::Recursive)));
+        let unarmed = RootState {
+            holders: 1,
+            armed: false,
+            identity: None,
+            failing: false,
+        };
+        assert_eq!(root_state(watch, &refs), unarmed);
+        for (path, _) in roots.iter().filter(|(path, _)| *path != refs) {
+            assert!(root_state(watch, path).armed, "{}", path.display());
+        }
+        assert_eq!(watched_counts(watch), held_counts(watch));
+
+        // Nothing is there to watch, so nothing is tried, and nothing has failed.
+        watch_now(&state, &project);
+        assert_eq!(root_state(watch, &refs), unarmed);
+
+        std::fs::create_dir(&refs).unwrap();
+        watch_now(&state, &project);
+
+        assert_eq!(
+            root_state(watch, &refs),
+            RootState {
+                holders: 1,
+                armed: true,
+                identity: identity_at(&refs),
+                failing: false,
+            }
+        );
+        assert_eq!(roots_held_as_on_disk(watch, "p1", &repo), roots);
+        assert_eq!(watched_counts(watch), held_counts(watch));
+    }
+
+    #[tokio::test]
+    async fn a_root_removed_and_made_again_is_armed_on_the_new_directory() {
+        let repo = repo_with("git-watch-remade-repo", &[(b"a", b"a")]);
+        let (state, _dir, project) = state_watching("git-watch-remade", &repo);
+        let watch = &state.git_watch;
+        watch_now(&state, &project);
+        let refs = Dirs::resolve(&repo).unwrap().common_dir.join("refs");
+
+        std::fs::remove_dir_all(&refs).unwrap();
+        watch.lose(&[refs.clone()]);
+        watch_now(&state, &project);
+
+        // Gone: still counted for the project, with no watch.
+        assert!(!root_state(watch, &refs).armed);
+        assert_eq!(root_state(watch, &refs).holders, 1);
+        assert_eq!(watched_counts(watch), held_counts(watch));
+
+        std::fs::create_dir_all(refs.join("heads")).unwrap();
+        watch_now(&state, &project);
+
+        assert_eq!(
+            root_state(watch, &refs),
+            RootState {
+                holders: 1,
+                armed: true,
+                identity: identity_at(&refs),
+                failing: false,
+            }
+        );
+        assert_eq!(watched_counts(watch), held_counts(watch));
+    }
+
+    #[tokio::test]
+    async fn a_settled_project_is_not_settled_once_a_watch_is_lost_or_a_directory_replaced() {
+        let repo = repo_with("git-watch-settled-repo", &[(b"a", b"a")]);
+        let (state, _dir, project) = state_watching("git-watch-settled", &repo);
+        let watch = &state.git_watch;
+        let dirs = Dirs::resolve(&repo).unwrap();
+        let refs = dirs.common_dir.join("refs");
+        let on_disk = |dirs: &Dirs| -> Vec<OnDisk> {
+            dirs.roots()
+                .iter()
+                .map(|(path, _)| OnDisk::of(path))
+                .collect()
+        };
+        let settled = |dirs: &Dirs| {
+            let guard = watch.lock();
+            guard.as_ref().unwrap().settled(dirs, &on_disk(dirs))
+        };
+        assert!(!settled(&dirs), "nothing is counted before it is tracked");
+
+        watch_now(&state, &project);
+        assert!(settled(&dirs));
+
+        watch.lose(&[refs.clone()]);
+        assert!(!settled(&dirs));
+        watch_now(&state, &project);
+        assert!(settled(&dirs));
+
+        replace_dir(&refs);
+        assert!(!settled(&dirs));
+        watch_now(&state, &project);
+        assert!(settled(&dirs));
+    }
+
+    #[tokio::test]
+    async fn re_arming_a_root_shared_by_worktrees_once_serves_every_holder() {
+        let repo = repo_with("git-watch-shared-rearm-repo", &[(b"a", b"a")]);
+        let linked_path = repo.join("linked");
+        git(
+            &repo,
+            &[
+                "worktree",
+                "add",
+                "-q",
+                "--detach",
+                linked_path.to_str().unwrap(),
+            ],
+        );
+        let (state, _dir, main) = state_watching("git-watch-shared-rearm", &repo);
+        let linked = insert_second_project(&state, &main, &linked_path);
+        let watch = &state.git_watch;
+        watch.track(&state, &[main.clone(), linked.clone()]);
+        let refs = Dirs::resolve(&repo).unwrap().common_dir.join("refs");
+        assert_eq!(root_state(watch, &refs).holders, 2);
+        let own = Dirs::resolve(&linked_path).unwrap().git_dir;
+        let own_before = root_state(watch, &own);
+
+        // Asked by one holder only, the replaced directory is watched again for both.
+        replace_dir(&refs);
+        watch_now(&state, &linked);
+
+        let rearmed = RootState {
+            holders: 2,
+            armed: true,
+            identity: identity_at(&refs),
+            failing: false,
+        };
+        assert_eq!(root_state(watch, &refs), rearmed);
+        assert_eq!(root_state(watch, &own), own_before);
+        assert_eq!(watched_counts(watch), held_counts(watch));
+        watch_now(&state, &main);
+        assert_eq!(root_state(watch, &refs), rearmed);
+        assert_eq!(watched_counts(watch), held_counts(watch));
+
+        // A watch lost is lost for both holders, and the other holder's check sets it up again.
+        watch.lose(&[refs.clone()]);
+        assert!(!root_state(watch, &refs).armed);
+        assert_eq!(root_state(watch, &refs).holders, 2);
+        watch_now(&state, &main);
+        assert_eq!(root_state(watch, &refs), rearmed);
+        assert_eq!(watched_counts(watch), held_counts(watch));
+    }
+
+    #[tokio::test]
+    async fn a_worktree_removed_and_added_again_is_watched_again() {
+        let repo = repo_with("git-watch-readded-repo", &[(b"a", b"a")]);
+        let linked_path = repo.join("linked");
+        let add = |repo: &Path| {
+            git(
+                repo,
+                &[
+                    "worktree",
+                    "add",
+                    "-q",
+                    "--detach",
+                    linked_path.to_str().unwrap(),
+                ],
+            )
+        };
+        add(&repo);
+        let (state, _dir, main) = state_watching("git-watch-readded", &repo);
+        let linked = insert_second_project(&state, &main, &linked_path);
+        let watch = &state.git_watch;
+        watch.track(&state, &[main, linked.clone()]);
+        let old_git_dir = Dirs::resolve(&linked_path).unwrap().git_dir;
+        assert!(root_state(watch, &old_git_dir).armed);
+
+        git(
+            &repo,
+            &[
+                "worktree",
+                "remove",
+                "--force",
+                linked_path.to_str().unwrap(),
+            ],
+        );
+        // What the platform's removal event does where it ends the watch.
+        watch.lose(&[old_git_dir.clone()]);
+        watch_now(&state, &linked);
+        assert_eq!(watched_counts(watch), held_counts(watch));
+
+        add(&repo);
+        watch_now(&state, &linked);
+
+        let git_dir = Dirs::resolve(&linked_path).unwrap().git_dir;
+        assert_eq!(
+            root_state(watch, &git_dir),
+            RootState {
+                holders: 1,
+                armed: true,
+                identity: identity_at(&git_dir),
+                failing: false,
+            }
+        );
+        roots_held_as_on_disk(watch, "p2", &linked_path);
+        assert_eq!(watched_counts(watch), held_counts(watch));
+    }
+
+    #[tokio::test]
+    async fn a_removal_concerns_the_projects_that_watch_what_it_removed() {
+        let repo = repo_with("git-watch-removed-concerns-repo", &[(b"a", b"a")]);
+        let linked_path = repo.join("linked");
+        git(
+            &repo,
+            &[
+                "worktree",
+                "add",
+                "-q",
+                "--detach",
+                linked_path.to_str().unwrap(),
+            ],
+        );
+        let (state, _dir, main) = state_watching("git-watch-removed-concerns", &repo);
+        let linked = insert_second_project(&state, &main, &linked_path);
+        let watch = &state.git_watch;
+        watch.track(&state, &[main, linked]);
+        let common = Dirs::resolve(&repo).unwrap().common_dir;
+        let linked_git_dir = Dirs::resolve(&linked_path).unwrap().git_dir;
+        let refs = common.join("refs");
+        let removed = |paths: Vec<PathBuf>| sorted(watch.concerned(&Report::Removed(paths)));
+        let changed = |paths: Vec<PathBuf>| watch.concerned(&Report::Changed(paths));
+
+        // A watched root that went: every project that watches it, and only those.
+        assert_eq!(removed(vec![refs.clone()]), ["p1", "p2"]);
+        assert_eq!(removed(vec![common.clone()]), ["p1", "p2"]);
+        assert_eq!(removed(vec![linked_git_dir.clone()]), ["p2"]);
+        assert_eq!(
+            removed(vec![linked_git_dir.clone(), refs.clone()]),
+            ["p1", "p2"]
+        );
+        // A removed ref concerns a project as a change at it does.
+        assert_eq!(removed(vec![refs.join("heads/main")]), ["p1", "p2"]);
+        assert!(removed(vec![repo.join("a")]).is_empty());
+        assert!(removed(Vec::new()).is_empty());
+
+        // A change at a root's own path is not a ref change while its watch is in place.
+        assert!(changed(vec![refs.clone()]).is_empty());
+        assert!(changed(vec![linked_git_dir.clone()]).is_empty());
+
+        // Once its watch is lost, a directory made there is the root back: the projects holding
+        // it are read again, which sets the watch up.
+        watch.lose(&[refs.clone(), linked_git_dir.clone()]);
+        assert_eq!(sorted(changed(vec![refs.clone()])), ["p1", "p2"]);
+        assert_eq!(changed(vec![linked_git_dir.clone()]), ["p2"]);
+        assert!(
+            changed(vec![common.clone()]).is_empty(),
+            "its watch is in place"
+        );
+    }
+
+    #[test]
+    fn a_removal_or_a_rename_is_forwarded_as_removed_with_its_paths() {
+        use notify::event::{ModifyKind, RemoveKind, RenameMode};
+        use notify::EventKind;
+        let paths = vec![
+            PathBuf::from("/repo/.git/refs"),
+            PathBuf::from("/repo/.git/refs.old"),
+        ];
+        for kind in [
+            EventKind::Remove(RemoveKind::Any),
+            EventKind::Remove(RemoveKind::File),
+            EventKind::Remove(RemoveKind::Folder),
+            EventKind::Remove(RemoveKind::Other),
+            EventKind::Modify(ModifyKind::Name(RenameMode::Any)),
+            EventKind::Modify(ModifyKind::Name(RenameMode::From)),
+            EventKind::Modify(ModifyKind::Name(RenameMode::To)),
+            EventKind::Modify(ModifyKind::Name(RenameMode::Both)),
+            EventKind::Modify(ModifyKind::Name(RenameMode::Other)),
+        ] {
+            let mut event = notify::Event::new(kind);
+            event.paths = paths.clone();
+            assert_eq!(
+                forwarded(Ok(event)),
+                Some(Report::Removed(paths.clone())),
+                "{kind:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_other_changes_are_still_forwarded_as_changed_and_a_rescan_as_lost() {
+        use notify::event::{CreateKind, DataChange, MetadataKind, ModifyKind, RemoveKind};
+        use notify::EventKind;
+        let paths = vec![PathBuf::from("/repo/.git/refs/heads/main")];
+        for kind in [
+            EventKind::Any,
+            EventKind::Other,
+            EventKind::Create(CreateKind::File),
+            EventKind::Create(CreateKind::Folder),
+            EventKind::Modify(ModifyKind::Any),
+            EventKind::Modify(ModifyKind::Data(DataChange::Content)),
+            EventKind::Modify(ModifyKind::Metadata(MetadataKind::WriteTime)),
+            EventKind::Modify(ModifyKind::Other),
+        ] {
+            let mut event = notify::Event::new(kind);
+            event.paths = paths.clone();
+            assert_eq!(
+                forwarded(Ok(event)),
+                Some(Report::Changed(paths.clone())),
+                "{kind:?}"
+            );
+        }
+        // An event that says events were lost is that, even where it also names a removal.
+        assert_eq!(
+            forwarded(Ok(
+                rescan(EventKind::Remove(RemoveKind::Folder)).add_path(paths[0].clone())
+            )),
+            Some(Report::Lost)
+        );
+    }
+
+    /// A removal of a watched root reported by the platform makes the projects holding it be read
+    /// again, and the root be watched anew: nothing is watched here and nobody told the watch of
+    /// the commit, so the re-read can only come from the `Removed` the callback sent. The refs
+    /// directory is replaced, and the callback is given as it names that directory only, as inotify
+    /// does when it is removed or renamed.
+    #[tokio::test]
+    async fn a_watched_root_reported_removed_makes_its_projects_be_read_again_and_watched_anew() {
+        let repo = repo_with("git-watch-removed-reread-repo", &[(b"a", b"a")]);
+        let (state, _dir, project) = state_with_upstream("git-watch-removed-reread", &repo);
+        watch_now(&state, &project);
+        let refs = Dirs::resolve(&repo).unwrap().common_dir.join("refs");
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        let callback = forward(sender);
+        tokio::spawn(rereads(state.clone(), receiver));
+        let mut events = state.subscribe();
+
+        replace_dir(&refs);
+        git(&repo, &["commit", "-q", "--allow-empty", "-m", "outside"]);
+        callback(Ok(notify::Event::new(notify::EventKind::Remove(
+            notify::event::RemoveKind::Folder,
+        ))
+        .add_path(refs.clone())));
+
+        tokio::time::timeout(crate::test_support::PATIENCE, async {
+            loop {
+                if let Event::ProjectGitStatus { status } = events.recv().await.unwrap() {
+                    if status.ahead == 1 {
+                        break;
+                    }
+                }
+            }
+        })
+        .await
+        .expect("a project_git_status with the commit arrives");
+        assert_eq!(
+            root_state(&state.git_watch, &refs),
+            RootState {
+                holders: 1,
+                armed: true,
+                identity: identity_at(&refs),
+                failing: false,
+            }
+        );
+    }
+
+    /// Through the real watcher: a directory the watch is on is replaced, the re-read the
+    /// replacement's own events start sets the watch up on the new one, and a commit made after
+    /// that read is noticed, which it can only be if the new directory is watched: the commit and
+    /// the retouches write only inside it. Not on macOS: FSEvents watches by path, so it sees the
+    /// new directory whether or not the watch is set up again, and it may never deliver the
+    /// replacement's events, leaving nothing to wait for.
+    #[cfg(not(target_os = "macos"))]
+    #[tokio::test]
+    async fn a_commit_is_noticed_in_a_refs_directory_replaced_after_it_was_watched() {
+        let repo = repo_with("git-watch-replaced-commit-repo", &[(b"a", b"a")]);
+        let (state, _dir, _) = state_with_upstream("git-watch-replaced-commit", &repo);
+        let mut events = state.subscribe();
+        start(&state);
+        // The projects are watched off the runtime; replacing a directory before that is no test.
+        let deadline = Instant::now() + crate::test_support::PATIENCE;
+        while !all_roots_armed(&state.git_watch) {
+            assert!(Instant::now() < deadline, "every root is watched");
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        let refs = Dirs::resolve(&repo).unwrap().common_dir.join("refs");
+        let old = root_state(&state.git_watch, &refs).identity;
+
+        replace_dir(&refs);
+        // The replacement's own events re-read the project, which sets the watch up on the new
+        // directory (once it is there: a read that ran before it was made leaves that to the
+        // read its making starts). Nothing else touches the watch here.
+        let deadline = Instant::now() + FILE_EVENT_PATIENCE;
+        loop {
+            let now = root_state(&state.git_watch, &refs);
+            if now.armed && now.identity == identity_at(&refs) {
+                assert_ne!(now.identity, old);
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "the replacement of a watched directory sets its watch up again"
+            );
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+        // A commit made before that re-read published would be reported by it, whatever the new
+        // watch sees.
+        tokio::time::timeout(FILE_EVENT_PATIENCE, async {
+            while !matches!(events.recv().await.unwrap(), Event::ProjectGitStatus { .. }) {}
+        })
+        .await
+        .expect("the re-read that set the watch up publishes");
+
+        git(&repo, &["commit", "-q", "--allow-empty", "-m", "outside"]);
+        wait_for_the_commit_to_be_reported(&mut events, &repo, retouch_main).await;
     }
 }

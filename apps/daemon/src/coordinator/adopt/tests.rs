@@ -81,6 +81,13 @@ async fn found_when(
     }
 }
 
+/// What the next daemon finds in the holders of `dir` once it finds all `count` terminals left
+/// there. A single look ([`found_in`]) gives each holder the daemon's own adoption deadline, and a
+/// holder that answers later, as one can on a loaded machine, is pending and missing from it.
+async fn found_all(dir: &ScratchDir, count: usize) -> (Holders, Vec<FoundTerminal>) {
+    found_when(dir, |found| found.len() == count).await
+}
+
 fn tail_has(found: &[FoundTerminal], text: &str) -> bool {
     found
         .first()
@@ -150,7 +157,7 @@ async fn a_running_sessions_terminal_is_adopted_with_its_token_scratch_directory
     );
     let _guard = KillOnDrop(pids.clone());
 
-    let (_next, found) = found_in(&dir);
+    let (_next, found) = found_all(&dir, 1).await;
     assert_eq!(found.len(), 1);
     assert_eq!(found[0].meta["session_id"], "s1");
     let adopted = adopt_in_blocking(&state, found, run_dir).await;
@@ -204,7 +211,7 @@ async fn saved_background_work_comes_back_for_the_same_launch_only() {
     .unwrap();
     state.load_saved_background(&saved);
 
-    let (_next, found) = found_in(&dir);
+    let (_next, found) = found_all(&dir, 2).await;
     let adopted = adopt_in_blocking(&state, found, run_dir).await;
 
     assert_eq!(adopted.sessions.len(), 2);
@@ -229,7 +236,7 @@ async fn only_the_scratch_directory_the_daemon_made_for_the_session_is_kept() {
     );
     let _guard = KillOnDrop(pids);
 
-    let (_next, found) = found_in(&dir);
+    let (_next, found) = found_all(&dir, 1).await;
     let adopted = adopt_in_blocking(&state, found, run_dir).await;
     assert_eq!(adopted.sessions, ["s1"]);
     assert!(adopted.scratch_dirs.is_empty());
@@ -264,7 +271,7 @@ async fn a_terminal_the_daemon_has_no_use_for_is_ended() {
     );
     let _guard = KillOnDrop(pids.clone());
 
-    let (_next, found) = found_in(&dir);
+    let (_next, found) = found_all(&dir, 8).await;
     assert_eq!(found.len(), 8);
     let adopted = adopt_in_blocking(&state, found, run_dir).await;
 
@@ -305,7 +312,7 @@ async fn a_shell_terminal_is_put_back_with_its_project_and_ended_without_one() {
     );
     let _guard = KillOnDrop(pids.clone());
 
-    let (_next, found) = found_in(&dir);
+    let (_next, found) = found_all(&dir, 2).await;
     let adopted = adopt_in_blocking(&state, found, dir.join("run")).await;
 
     assert_eq!(adopted.shells, ["kept"]);
@@ -852,7 +859,7 @@ async fn a_session_a_holder_that_cannot_be_linked_to_runs_stays_claimed_and_is_t
     );
 
     // The holder answers now: what the holders' client resolves it to is done here by hand.
-    let (_next, found) = found_in(&dir);
+    let (_next, found) = found_all(&dir, 1).await;
     let taken = adopt_in_blocking(&state, found, run_dir.clone()).await;
     assert_eq!(taken.sessions, ["s1"]);
     {
@@ -955,7 +962,7 @@ async fn saved_background_work_of_a_claimed_session_is_given_back_when_its_holde
     assert_eq!(adopted.claimed, ["s1"]);
     assert!(state.background_tasks_of("s1").is_empty());
 
-    let (_next, found) = found_in(&dir);
+    let (_next, found) = found_all(&dir, 1).await;
     let taken = adopt_in_blocking(&state, found, run_dir.clone()).await;
     assert_eq!(taken.sessions, ["s1"]);
     {
@@ -1122,7 +1129,7 @@ async fn a_terminal_of_a_session_being_launched_is_ended_not_adopted() {
         .begin_launch("s1")
         .expect("the launch claims the session");
 
-    let (_next, found) = found_in(&dir);
+    let (_next, found) = found_all(&dir, 1).await;
     let adopted = adopt_in_blocking(&state, found, run_dir).await;
     assert!(adopted.sessions.is_empty());
     assert_eq!(adopted.ended, 1);
@@ -1500,7 +1507,7 @@ async fn an_adopted_codex_session_accepts_messages_after_its_startup_title_is_re
         let run_dir = dir.join("run");
         let left = left_with_server(&dir, codex_meta("s1", &run_dir.join("s1")));
         let _guard = KillOnDrop(vec![left.terminal, left.companion]);
-        let (_next, mut found) = found_in(&dir);
+        let (_next, mut found) = found_all(&dir, 1).await;
         let screen = b"\x1b]2;Codex session\x07ready before the daemon stopped\r\n";
         if exact {
             found[0].tail.clear();
@@ -1581,7 +1588,7 @@ async fn an_adopted_codex_session_without_its_own_startup_title_still_refuses_me
             )],
         );
         let _guard = KillOnDrop(pids);
-        let (_next, mut found) = found_in(&dir);
+        let (_next, mut found) = found_all(&dir, 1).await;
         found[0].tail = tail.to_vec();
         let adopted = adopt_in_blocking(&state, found, run_dir).await;
         assert_eq!(adopted.sessions, ["s1"]);
@@ -1630,7 +1637,7 @@ async fn an_adopted_idle_claude_session_takes_messages_and_one_at_its_trust_scre
         meta["agent"] = json!(AgentId::CLAUDE);
         let pids = left_behind(&dir, vec![("t1", meta, programs::sleep(60))]);
         let _guard = KillOnDrop(pids);
-        let (_next, mut found) = found_in(&dir);
+        let (_next, mut found) = found_all(&dir, 1).await;
         found[0].tail = tail.to_vec();
         let adopted = adopt_in_blocking(&state, found, run_dir).await;
         assert_eq!(adopted.sessions, ["s1"]);
@@ -1682,7 +1689,7 @@ async fn an_adopted_host_rendered_codex_terminal_does_not_start_at_its_title() {
         )],
     );
     let _guard = KillOnDrop(pids);
-    let (_next, mut found) = found_in(&dir);
+    let (_next, mut found) = found_all(&dir, 1).await;
     found[0].tail = b"loading\x1b]2;codex.exe\x07".to_vec();
     adopt_in_blocking(&state, found, run_dir).await;
 
@@ -1814,7 +1821,7 @@ async fn an_adopted_codex_sessions_message_goes_through_its_servers_queue_with_t
     let left = left_with_server(&dir, codex_meta("s1", &run_dir.join("s1")));
     let _guard = KillOnDrop(vec![left.terminal, left.companion]);
 
-    let (_next, found) = found_in(&dir);
+    let (_next, found) = found_all(&dir, 1).await;
     assert_eq!(found.len(), 1);
     assert!(found[0].companion.is_some());
     let adopted = adopt_in_blocking(&state, found, run_dir).await;
@@ -1894,7 +1901,7 @@ async fn an_adopted_codex_terminal_with_no_companion_has_no_transport() {
     );
     let _guard = KillOnDrop(pids);
 
-    let (_next, found) = found_in(&dir);
+    let (_next, found) = found_all(&dir, 1).await;
     assert!(found[0].companion.is_none());
     let adopted = adopt_in_blocking(&state, found, run_dir).await;
     assert_eq!(adopted.sessions, ["s1"]);
