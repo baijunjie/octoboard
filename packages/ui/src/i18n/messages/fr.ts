@@ -632,6 +632,7 @@ export const fr: Translation<"one" | "many" | "other"> = {
   "daemon.agent_not_available": "{agent} n’est pas disponible : son exécutable est introuvable dans le {pathVar} de votre shell de connexion. Pour ouvrir une session, vérifiez qu’un de ces agents pris en charge est présent dans votre {pathVar} : {agents}.",
   "daemon.account_disabled": "{account} ({agent}) est désactivé. Il ne peut donc pas être utilisé pour ouvrir une session.",
   "daemon.daemon_shutting_down": "Le service d’arrière-plan est en cours d’arrêt. Réessayez une fois qu’il aura redémarré.",
+  "daemon.agent_update_running": "Un agent est en cours de mise à jour, et redémarrer maintenant le service d’arrière-plan pourrait laisser l’agent partiellement à jour. Réessayez une fois la mise à jour terminée.",
   "daemon.holders_in_service":
     "Les sessions et les terminaux s’exécutent dans l’unité systemd du service d’arrière-plan. Arrêter ou redémarrer ce service interromprait ces sessions et ces terminaux. Pour le faire malgré tout, arrêtez ou redémarrez l’unité avec {command} sur le serveur.",
   "daemon.account_not_signed_in": "{account} ({agent}) n’est pas connecté. Il ne peut donc pas être utilisé pour ouvrir une session.",

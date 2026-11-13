@@ -14,7 +14,7 @@ use super::install::{install, replaceable, InstallError, Sources};
 use super::manifest::{self, archive_name, manifest_url, parse, platform_key, Release};
 use super::record::Files;
 use super::replace::{replace, swap_with_previous, ReplaceError};
-use super::task::{due, scheduled_check, Throttle};
+use super::task::{due, restart_refused, scheduled_check, Throttle};
 use super::unpack::{daemon_entry, unpack_entry, UnpackError};
 use super::verify::{decode_signature, verify_archive, PUBLIC_KEY};
 use super::{DaemonUpdates, Setup};
@@ -22,7 +22,7 @@ use crate::protocol::{
     daemon_update_code, error_code, DaemonUpdateChannel, DaemonUpdateCheckOutcome,
     DaemonUpdateInstallState, DaemonUpdateManualReason, DaemonUpdatePhase,
 };
-use crate::state::AppState;
+use crate::state::{AppState, RestartRefusal};
 use crate::test_support::{app_state, code_of, param_of, ScratchDir, PATIENCE};
 
 const ARCH: &str = "x86_64";
@@ -1469,6 +1469,29 @@ fn phase(updates: &DaemonUpdates) -> DaemonUpdatePhase {
 
 mod requests {
     use super::*;
+
+    /// Each refusal of the planned restart answers `restart_daemon` with its own code: none falls
+    /// into "this daemon does not update itself", which would send the user to the wrong remedy.
+    #[test]
+    fn each_refusal_of_the_restart_has_its_own_answer() {
+        let answer = |refusal| code_of(&restart_refused(refusal));
+        assert_eq!(
+            answer(RestartRefusal::StopInProgress),
+            error_code::DAEMON_SHUTTING_DOWN
+        );
+        assert_eq!(
+            answer(RestartRefusal::HoldersInService),
+            error_code::HOLDERS_IN_SERVICE
+        );
+        assert_eq!(
+            answer(RestartRefusal::AgentUpdateRunning),
+            error_code::AGENT_UPDATE_RUNNING
+        );
+        assert_eq!(
+            answer(RestartRefusal::FollowsApplication),
+            error_code::DAEMON_UPDATE_UNAVAILABLE
+        );
+    }
 
     #[tokio::test]
     async fn a_daemon_that_does_not_update_itself_has_no_status_and_refuses_every_request() {

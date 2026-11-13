@@ -197,9 +197,10 @@ of the screen for a daemon of another version (see "A daemon of another version"
 `docs/product/application-lifecycle.md`): the daemon serves the page of its own build, which speaks its protocol.
 
 The restart is refused, with an error alert titled that Octoboard could not restart and saying why, while a download is
-under way (a restart would end it), while the daemon is already stopping or restarting — unlike `octoboardd restart`,
-which takes a second request as the first — and while a holder inside the daemon's own systemd service runs a session
-(see "Where a holder cannot be started as a unit of its own" in `docs/product/server-form.md`). A page whose connection
+under way (a restart would end it), while the daemon is already stopping or restarting (unlike `octoboardd restart`,
+which takes a second request as the first), while a holder inside the daemon's own systemd service runs a session
+(see "Where a holder cannot be started as a unit of its own" in `docs/product/server-form.md`; the alert names
+`systemctl`), and while an update of an agent's CLI runs (a restart would cut it off mid-install). A page whose connection
 to the daemon is not open sends nothing and says that the connection is closed. `octoboardd restart` on the server
 restarts into the update just the same.
 

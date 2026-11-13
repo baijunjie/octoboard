@@ -1160,10 +1160,13 @@ pub enum RequestBody {
     /// Restarts the daemon in place, the planned restart `octoboardd restart` makes: every session
     /// keeps running under the daemon that takes over, on the same address. Answered with `ack`;
     /// the connection then closes and comes back to the new daemon. Refused with
-    /// `daemon_update_unavailable` where this daemon does not update itself, and
-    /// `daemon_shutting_down` while a stop, restart or handover is under way. A client that
-    /// restarts after an update asks `handover_check` first, to tell the user which sessions the
-    /// restart interrupts.
+    /// `daemon_update_unavailable` where this daemon does not update itself,
+    /// `daemon_update_running` while it downloads an update, `daemon_shutting_down` while a stop,
+    /// restart or handover is under way, `holders_in_service` where a service manager runs the
+    /// daemon and a holder running programs is inside the daemon's own systemd service, and
+    /// `agent_update_running` while an update of an agent's CLI runs. A client that restarts after
+    /// an update asks `handover_check` first, to tell the user which sessions the restart
+    /// interrupts.
     RestartDaemon,
     /// Checks every project of this console's current git status against its remote, concurrently.
     /// Answered with `ack` at once; the statuses follow as `project_git_status` broadcasts, one per

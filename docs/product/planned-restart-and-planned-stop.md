@@ -11,8 +11,9 @@ takes everything over as exactly.
 command line" in `docs/product/daemon-command-line.md`), by the control route `POST /restart`, which answers `202` at once
 and which `octoboardd restart` sends wherever the daemon's key is recorded, or by the signal `SIGUSR1`, which it sends
 outside Windows to a daemon whose key is not. A page served by a daemon that
-updates itself asks for one with **Restart now** once an update is installed, which, unlike the others, is refused while
-a download of the update runs or while any stop or restart is already asked for (see "Restarting into the update" in
+updates itself asks for one with **Restart now** once an update is installed, which is refused, with an alert saying
+why, wherever a planned restart is refused below and, unlike the others, also while a download of the update runs or
+while any stop or restart is already asked for (see "Restarting into the update" in
 `docs/product/server-form-updates.md`). A planned stop is asked for by the control route `POST /planned-stop` or the
 WebSocket request `planned_stop`; both answer at once. They are refused, and nothing is stopped, only for a daemon a
 service manager runs (see below) while a process holder it started runs inside the systemd unit the daemon itself runs
@@ -35,9 +36,10 @@ message says that sessions and terminals run inside the daemon's systemd unit, s
 would end them, and to stop or restart the unit with `systemctl` on the server to do it anyway). That decision is made
 together with admitting new programs there: once the restart is accepted, a session or terminal that would run inside
 the unit (a holder started there, or a program added to a holder already there) is refused until the restart completes.
-A planned restart is refused too, and nothing is stopped, while an update of an agent's CLI runs (`409` with the reason
-`agent_update_running`), since the exit would cut the update off mid-install, and an update asked for once a restart has
-been accepted is refused as the daemon shutting down; a planned stop with no successor is never refused for an update. A
+A planned restart is refused too, and nothing is stopped, while an update of an agent's CLI runs (`POST /restart`
+answers `409` with the reason `agent_update_running`, and **Restart now** fails with that code), since the exit would
+cut the update off mid-install, and an update asked for once a restart has been accepted is refused as the daemon
+shutting down; a planned stop with no successor is never refused for an update. A
 planned stop or restart asked for while an ordinary stop (the shutdown request, a termination signal) is already asked
 for does not replace it, and a planned stop asked for after the desktop application's quit note is made ordinary (see
 "The quit note" in `docs/product/application-lifecycle.md`); an ordinary stop asked for before a planned one has begun

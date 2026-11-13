@@ -650,6 +650,7 @@ export const de: Translation<"one" | "other"> = {
   "daemon.agent_not_available": "{agent} ist nicht verfügbar: Seine Programmdatei wird im {pathVar} deiner Login-Shell nicht gefunden. Um eine Sitzung zu öffnen, stelle sicher, dass einer dieser unterstützten Agenten in deinem {pathVar} verfügbar ist: {agents}.",
   "daemon.account_disabled": "{account} ({agent}) ist deaktiviert. Mit diesem Konto kann daher keine Sitzung geöffnet werden.",
   "daemon.daemon_shutting_down": "Der Hintergrunddienst wird beendet. Versuche es erneut, wenn er wieder läuft.",
+  "daemon.agent_update_running": "Ein Agent wird gerade aktualisiert, und ein Neustart des Hintergrunddienstes jetzt könnte den Agenten nur teilweise aktualisiert zurücklassen. Versuche es erneut, wenn die Aktualisierung abgeschlossen ist.",
   "daemon.holders_in_service":
     "Sitzungen und Terminals laufen in der systemd-Unit des Hintergrunddienstes und würden enden, wenn du den Hintergrunddienst stoppst oder neu startest. Willst du es trotzdem tun, stoppe oder starte die Unit auf dem Server mit {command} neu.",
   "daemon.account_not_signed_in": "{account} ({agent}) ist nicht angemeldet. Mit diesem Konto kann daher keine Sitzung geöffnet werden.",

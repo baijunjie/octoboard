@@ -756,6 +756,7 @@ export const en = {
     "{agent} is not available: its binary does not resolve on your login shell's {pathVar}. To open a session, make sure one of these supported agents is on your {pathVar}: {agents}.",
   "daemon.account_disabled": "{account} ({agent}) is disabled, so a session cannot be opened on it.",
   "daemon.daemon_shutting_down": "The daemon is stopping. Try again after it restarts.",
+  "daemon.agent_update_running": "An agent is being updated, and restarting the daemon now could leave the agent partly updated. Try again when the update finishes.",
   "daemon.holders_in_service":
     "Sessions and terminals run inside the daemon's systemd unit, so stopping or restarting the daemon would end them. To do it anyway, stop or restart the unit with {command} on the server.",
   "daemon.account_not_signed_in": "{account} ({agent}) is not logged in, so a session cannot be opened on it.",

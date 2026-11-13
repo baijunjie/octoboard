@@ -21,7 +21,7 @@ use super::verify::release_key;
 use super::{Claim, InstallRefusal, Setup, RUNNING};
 use crate::platform::{fs, proc};
 use crate::protocol::{error_code, CodedError, DaemonUpdateProgress};
-use crate::state::{shutting_down_refusal, AppState, RestartRefusal};
+use crate::state::{holders_in_service_refusal, shutting_down_refusal, AppState, RestartRefusal};
 use crate::time::now_millis;
 
 /// How long after the daemon starts the first check is made, for the login shell's environment
@@ -205,10 +205,22 @@ pub(crate) fn restart_requested(state: &Arc<AppState>) -> Result<()> {
             tracing::info!("a planned restart was asked for to run the daemon's update");
             Ok(())
         }
-        Err(RestartRefusal::StopInProgress) => Err(shutting_down_refusal()),
-        // Only a daemon that follows an application refuses otherwise, and that one never enables
-        // the update.
-        Err(_) => Err(unavailable()),
+        Err(refusal) => Err(restart_refused(refusal)),
+    }
+}
+
+/// The error `restart_daemon` answers a refused planned restart with. Every refusal is named, so
+/// that one added later has to be given its own answer here.
+pub(super) fn restart_refused(refusal: RestartRefusal) -> anyhow::Error {
+    match refusal {
+        RestartRefusal::StopInProgress => shutting_down_refusal(),
+        RestartRefusal::HoldersInService => holders_in_service_refusal(),
+        RestartRefusal::AgentUpdateRunning => {
+            CodedError::raised(error_code::AGENT_UPDATE_RUNNING, refusal.message(), &[])
+        }
+        // A daemon that follows an application never enables the update, so this is not reached
+        // through `restart_daemon`; it is that daemon's answer all the same.
+        RestartRefusal::FollowsApplication => unavailable(),
     }
 }
 

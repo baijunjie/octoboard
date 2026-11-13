@@ -660,6 +660,16 @@ pub(crate) fn shutting_down_refusal() -> anyhow::Error {
     )
 }
 
+/// The refusal of a planned stop or restart while a holder that runs programs is inside the
+/// daemon's own systemd service ([`RestartRefusal::HoldersInService`]).
+pub(crate) fn holders_in_service_refusal() -> anyhow::Error {
+    CodedError::raised(
+        error_code::HOLDERS_IN_SERVICE,
+        RestartRefusal::HoldersInService.message(),
+        &[],
+    )
+}
+
 /// Broadcasts the current settings record — the pattern every settings-shaped mutation (the
 /// trusted directories, `auto_pull_repositories` and the accounts) follows. The record is read
 /// as it is published (see [`AppState::publish_settings`]).

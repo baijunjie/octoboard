@@ -131,6 +131,7 @@ const CORE_CODES = {
   agent_not_available: { origin: "daemon", recovery: "tool", recoveryLine: true, codeParams: ["pathVar"], uiParams: { pathVar: "PATH" } },
   agent_not_installed: { origin: "daemon", recovery: "tool" },
   agent_order_invalid: { origin: "daemon", recovery: "addedAgents" },
+  agent_update_running: { origin: "daemon", recovery: "none" },
   all_projects_already_added: { origin: "daemon", recovery: "existingProject" },
   // A missing `git` is worded on its own: Git is a tool the application needs, not an agent CLI the user chose, and the
   // download page is the way to it.

@@ -650,6 +650,7 @@ export const tr: Translation<"one" | "other"> = {
   "daemon.agent_not_available": "{agent} kullanılamıyor: çalıştırılabilir dosyası giriş kabuğunuzun {pathVar} değerinde bulunamıyor. Oturum açmak için desteklenen şu ajanlardan birinin {pathVar} değerinizde bulunduğundan emin olun: {agents}.",
   "daemon.account_disabled": "{account} ({agent}) hesabı devre dışı olduğundan bu hesapta oturum açılamaz.",
   "daemon.daemon_shutting_down": "Arka plan hizmeti durduruluyor. Yeniden başladıktan sonra tekrar deneyin.",
+  "daemon.agent_update_running": "Bir ajan güncelleniyor ve arka plan hizmetini şimdi yeniden başlatmak ajanı yalnızca kısmen güncellenmiş bırakabilir. Güncelleme bitince tekrar deneyin.",
   "daemon.holders_in_service":
     "Oturumlar ve terminaller, arka plan hizmetinin systemd biriminde çalışır; bu yüzden hizmeti durdurmak veya yeniden başlatmak bunları sonlandırır. Yine de yapmak için birimi sunucuda {command} ile durdurun veya yeniden başlatın.",
   "daemon.account_not_signed_in": "{account} ({agent}) hesabına giriş yapılmadığından bu hesapta oturum açılamaz.",

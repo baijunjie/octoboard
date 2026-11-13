@@ -375,7 +375,8 @@ pub mod error_code {
     /// or a host there is no release for. Nothing was done.
     pub const DAEMON_UPDATE_UNAVAILABLE: Code = Code("daemon_update_unavailable");
     /// An `update_daemon` while an update is being downloaded or installed, by this daemon or by
-    /// `octoboardd update`. Nothing was started.
+    /// `octoboardd update`, or a `restart_daemon` while this daemon downloads one. Nothing was
+    /// started.
     pub const DAEMON_UPDATE_RUNNING: Code = Code("daemon_update_running");
     /// An `update_daemon` once an update has replaced the executable: the daemon has to restart
     /// before it can update again. Nothing was started.
@@ -509,12 +510,17 @@ pub mod error_code {
     /// once per terminal connection, with no params). The request may be made again once the
     /// daemon is back.
     pub const DAEMON_SHUTTING_DOWN: Code = Code("daemon_shutting_down");
-    /// A planned stop was asked for (`planned_stop`) of a daemon a service manager runs, while a
-    /// process holder that runs sessions or shell terminals is inside the daemon's own systemd
-    /// service, having no unit of its own: the daemon would exit and the service's stop would end
-    /// that holder with everything it runs, which a planned stop promises to keep. Nothing is
-    /// stopped. Has no params; the ordinary stop (`shutdown`) is not refused.
+    /// A planned stop or restart was asked for (`planned_stop`, `restart_daemon`) of a daemon a
+    /// service manager runs, while a process holder that runs sessions or shell terminals is
+    /// inside the daemon's own systemd service, having no unit of its own: the daemon would exit
+    /// and the service's stop would end that holder with everything it runs, which a planned stop
+    /// promises to keep. Nothing is stopped. Has no params; the ordinary stop (`shutdown`) is not
+    /// refused.
     pub const HOLDERS_IN_SERVICE: Code = Code("holders_in_service");
+    /// A planned restart was asked for (`restart_daemon`) while an update of an agent's CLI runs,
+    /// which the restart would cut off mid-install, possibly leaving that CLI broken. Nothing is
+    /// restarted; it can be asked for again once the update has ended. Has no params.
+    pub const AGENT_UPDATE_RUNNING: Code = Code("agent_update_running");
     /// A requested account name collides with an existing one of the same agent, trimmed and
     /// compared ignoring letter case — the default account's name takes part. `params` names
     /// `agent` and the `name` of the account it collides with.

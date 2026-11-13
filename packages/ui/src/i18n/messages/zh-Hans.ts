@@ -665,6 +665,7 @@ export const zhHans: Translation<"other"> = {
     "{agent} 不可用：其程序未能在登录 shell 的 {pathVar} 中找到。要打开会话，请确保以下支持的智能体之一已配置到 {pathVar} 中：{agents}。",
   "daemon.account_disabled": "{account}（{agent}）已停用，无法在其上打开会话。",
   "daemon.daemon_shutting_down": "守护进程正在停止，请在其重新启动后重试。",
+  "daemon.agent_update_running": "有智能体正在更新，此时重启守护进程可能使该智能体只更新一部分。请在更新完成后重试。",
   "daemon.holders_in_service":
     "会话和终端运行在守护进程的 systemd 单元中，停止或重启守护进程会结束它们。如仍要执行，请在服务器上用 {command} 停止或重启该单元。",
   "daemon.account_not_signed_in": "{account}（{agent}）未登录，无法在其上打开会话。",

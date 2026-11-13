@@ -632,6 +632,7 @@ export const it: Translation<"one" | "many" | "other"> = {
   "daemon.agent_not_available": "{agent} non è disponibile: il suo eseguibile non si trova nel {pathVar} della shell di login. Per aprire una sessione, verifica che uno di questi agenti supportati sia nel {pathVar}: {agents}.",
   "daemon.account_disabled": "{account} ({agent}) è disattivato, quindi non è possibile aprire una sessione con questo account.",
   "daemon.daemon_shutting_down": "Il servizio in background si sta arrestando. Riprova dopo il riavvio.",
+  "daemon.agent_update_running": "Un agente è in fase di aggiornamento, e riavviare ora il servizio in background potrebbe lasciare l’agente aggiornato solo in parte. Riprova al termine dell’aggiornamento.",
   "daemon.holders_in_service":
     "Le sessioni e i terminali vengono eseguiti nell’unità systemd del servizio in background, quindi se arresti o riavvii il servizio, queste sessioni e questi terminali si chiuderanno. Per farlo comunque, arresta o riavvia l’unità con {command} sul server.",
   "daemon.account_not_signed_in": "{account} ({agent}) non ha effettuato l’accesso, quindi non è possibile aprire una sessione con questo account.",

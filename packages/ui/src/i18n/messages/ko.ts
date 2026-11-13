@@ -646,6 +646,7 @@ export const ko: Translation<"other"> = {
   "daemon.agent_not_available": "{agent}을(를) 사용할 수 없습니다. 로그인 셸의 {pathVar}에서 실행 파일을 찾을 수 없습니다. 세션을 열려면 아래 지원 에이전트 중 하나가 {pathVar}에 있는지 확인해 주세요: {agents}.",
   "daemon.account_disabled": "{account} ({agent})이(가) 비활성화되어 이 계정에서 세션을 열 수 없습니다.",
   "daemon.daemon_shutting_down": "데몬이 중지되는 중입니다. 재시작된 후 재시도해 주세요.",
+  "daemon.agent_update_running": "에이전트를 업데이트하는 중이며, 지금 데몬을 재시작하면 에이전트가 일부만 업데이트된 상태로 남을 수 있습니다. 업데이트가 끝난 후 재시도해 주세요.",
   "daemon.holders_in_service":
     "세션과 터미널은 데몬의 systemd 유닛 안에서 실행되므로 데몬을 중지하거나 재시작하면 종료됩니다. 그래도 진행하려면 서버에서 {command}(으)로 유닛을 중지하거나 재시작해 주세요.",
   "daemon.account_not_signed_in": "{account} ({agent})에 로그인되어 있지 않아 이 계정에서 세션을 열 수 없습니다.",
