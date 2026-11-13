@@ -8,8 +8,9 @@ daemon exits with status 0, and the next daemon started — by hand, by `octoboa
 takes everything over as exactly.
 
 **Asking for one.** A planned restart is asked for by `octoboardd restart` (see "Running in the background from the
-command line" in `docs/product/daemon-command-line.md`), by the signal `SIGUSR1` it sends, or by the control route `POST
-/restart`, which answers `202` at once and which `octoboardd restart` sends on Windows. A page served by a daemon that
+command line" in `docs/product/daemon-command-line.md`), by the control route `POST /restart`, which answers `202` at once
+and which `octoboardd restart` sends wherever the daemon's key is recorded, or by the signal `SIGUSR1`, which it sends
+outside Windows to a daemon whose key is not. A page served by a daemon that
 updates itself asks for one with **Restart now** once an update is installed, which, unlike the others, is refused while
 a download of the update runs or while any stop or restart is already asked for (see "Restarting into the update" in
 `docs/product/server-form-updates.md`). A planned stop is asked for by the control route
@@ -28,7 +29,9 @@ one asked for once it has begun cuts it short (see "An ordinary stop during a pl
 everything over and let go of `daemon.lock`: in the background, as `octoboardd start` does, on the same port and with
 the same launch key, so a page or program that held the old address and key reaches the new daemon unchanged. The key goes to
 the next daemon on its standard input, never on its command line or in its environment, where other users of the
-machine could find it (see `docs/product/who-can-reach-the-daemon.md`). On Windows, where
+machine could find it (see `docs/product/who-can-reach-the-daemon.md`); a second line there names the stopping daemon,
+which the next daemon records as the daemon it took over from (see `daemon.owner` in
+`docs/product/files-octoboard-owns.md`), and a next daemon of an earlier build reads the key alone. On Windows, where
 the job the daemon runs in does not let a process leave it, the next daemon is started inside that job, as
 `octoboardd start` starts it, and ends when the job does; the daemon logs a warning saying so. A window open on it loses
 its connection meanwhile and reconnects as after any dropped connection (see "Losing the daemon connection" in
@@ -123,9 +126,9 @@ planned restart's included, and the daemon exits with status 0.
 
 `octoboardd stop` on Windows, which sends the shutdown request, does not cut a planned stop short: it waits for the
 handover to end (see `octoboardd stop` in "Running in the background from the command line" in
-`docs/product/daemon-command-line.md`). When the next daemon of a planned restart, which the daemon started itself with
-its own key, has taken over by then, `stop` stops that one, which ends every session and shell terminal as an ordinary
-stop does; a daemon that took over without that key is left running, and `stop` says so; when the daemon has ended with
+`docs/product/daemon-command-line.md`). When the next daemon of a planned restart, which the daemon started itself, has
+taken over by then, `stop` stops that one, which ends every session and shell terminal as an ordinary stop does; a
+daemon that does not show itself that next daemon is left running, and `stop` says so; when the daemon has ended with
 none taking over, as after a planned stop, `stop` says the daemon stopped and exits with status 0; if that was a planned
 stop, where holders run the sessions and shell terminals, they are kept for the next start (an ordinary stop already
 under way has ended them). Outside Windows, the termination signal `octoboardd stop` sends reaches the daemon in its

@@ -5,6 +5,7 @@
 //! agent's cross-project guard, which decides from a file alone; and the holder, which the running
 //! daemon calls instead.
 
+mod address;
 mod background;
 #[cfg(all(test, unix))]
 mod background_tests;
@@ -13,12 +14,15 @@ pub(crate) mod hook;
 mod installation;
 #[cfg(test)]
 mod key_source_tests;
+mod lock_holder;
+mod service_unit;
 mod succession;
 pub(crate) mod update;
 mod verify_archive;
 
 pub(crate) use background::start_successor;
 pub(crate) use installation::launch_path;
+pub(crate) use succession::handed_over_from;
 
 use std::path::Path;
 
@@ -282,7 +286,7 @@ pub(crate) fn run(command: Command) -> Result<()> {
         Command::VerifyArchive { archive, signature } => {
             std::process::exit(verify_archive::run(&archive, &signature))
         }
-        Command::Address { rotate } => std::process::exit(background::print_address(rotate)?),
+        Command::Address { rotate } => std::process::exit(address::print_address(rotate)?),
         // The hook path must stay silent and must not pay for a runtime: it is on the agent's
         // turn critical path, several times per turn.
         Command::Hook {

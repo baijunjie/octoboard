@@ -55,9 +55,10 @@ rotated (`POST /owner-key/rotate` below, or `octoboardd address --rotate`). The 
 (with `--parent-pid`) never reads, creates or accepts it. It is the browser's key only: it is never written to
 `daemon.key`, a helper's key file or a holder's record, never put in any argument, environment, log or the startup
 line, and the launch key keeps every other use it has. A daemon that accepts it says so in its owner record
-`daemon.owner` by a last token, `owner-key`, after the port and the tokens that say whether it follows an application
-(`application` or `alone`) and whether a service manager starts its successor (`service` or `no-service`); it is read
-wherever it stands after the port, and a record without it is of a daemon that accepts none. An earlier build reads
+`daemon.owner` by a token, `owner-key`, after the port and the tokens that say whether it follows an application
+(`application` or `alone`) and whether a service manager starts its successor (`service` or `no-service`), and before
+the tokens naming its systemd unit and the daemon it took over from (see `docs/product/files-octoboard-owns.md`); it is
+read wherever it stands after the port, and a record without it is of a daemon that accepts none. An earlier build reads
 only the third token of the record and takes a word it does not know there as none, and a build that reads the service
 token anywhere after the port ignores tokens it does not know, so the token changes nothing either reads.
 
@@ -4171,7 +4172,8 @@ replace it. A caller reads the new key from `owner.key` (`octoboardd address --r
 
 Asks for a planned stop (see "`POST /planned-stop`" below) after which the next daemon comes up on the same port, so a
 client reconnects as it would after a dropped connection and finds every session still running, with its screen.
-`octoboardd restart` asks for the same through a signal, and on Windows, which has no signal for it, through this route.
+`octoboardd restart` asks for the same through this route wherever the daemon's key is recorded, and through a signal
+outside Windows for a daemon whose key is not.
 It takes no body, is behind the guard like every route, and answers `202` with an empty body at once; the caller learns
 the restart is done from the daemon answering again. The key is kept only where the daemon starts the next one itself. A
 daemon leaves the next start to a service manager only when it was started with `--service-managed`, which the
@@ -4183,7 +4185,9 @@ starts the next one, which makes a new launch key, so a client holding the launc
 handshake line) before it reconnects; a browser holding the owner key reconnects with it unchanged.
 Any other daemon starts the next one itself in the background, as `octoboardd start` would, from the path it was invoked
 by (made absolute where it was not, the last symlink left unresolved) when that names the image it runs, else from the
-running image, and hands it its own key over standard input. `--service-managed` is ignored on Windows, where no service
+running image, and hands it its own key over standard input, followed by a second line, `after <pid>:<start time in
+microseconds>`, naming itself, which the next daemon records as the daemon it took over from (a build that predates
+the line reads the key alone). `--service-managed` is ignored on Windows, where no service
 manager restarts the daemon, and does not combine with a subcommand. A next daemon that fails to start leaves the
 sessions to the holders and the next start. Just before it removes its owner record and releases its lock for the next
 daemon, the daemon writes `daemon.handover`, which the next daemon removes once it has recorded itself (see

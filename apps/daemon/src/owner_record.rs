@@ -29,12 +29,20 @@ use crate::platform::proc_table;
 /// reads, whether it comes fourth or, without a third, in its place. It is read wherever it
 /// stands after the port; a record without it, as an earlier build writes, does not say.
 ///
-/// A daemon that accepts the owner key ([`crate::owner_key`]) adds `owner-key` after everything
-/// else, and is read wherever it stands after the port. It changes nothing an earlier build reads
+/// A daemon that accepts the owner key ([`crate::owner_key`]) adds `owner-key` after the tokens
+/// above, and is read wherever it stands after the port. It changes nothing an earlier build reads
 /// for the same reason: it is the third token only in a record that has none of the others, and
 /// that build takes an unknown word there as no third token. A record without it is of a daemon
 /// that takes no owner key, as one that follows the application or an earlier build.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// Two more tokens follow for the same reason, read wherever they stand after the port:
+/// `unit=<name>`, the systemd unit a service-managed daemon runs as, so that a command can ask
+/// systemd whether it is restarting the daemon; and `after=<pid:start>` or `after=none`, which
+/// daemon this one took over from after a planned restart (or after a crash, in a service), so that
+/// a command following a daemon through a planned restart compares identities. A record without
+/// `after=`, as a build before it writes or a daemon that cannot tell writes, does not say
+/// ([`Predecessor::Unsaid`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Owner {
     pub identity: ProcessIdentity,
     pub port: u16,
@@ -48,11 +56,31 @@ pub struct Owner {
     /// Whether the daemon accepts the owner key, which `address` then prints in place of the
     /// launch key.
     pub takes_owner_key: bool,
+    /// The systemd unit the daemon runs as, where a service manager restarts it and it could name
+    /// the unit (a systemd user service, systemd 248 or later); `None` otherwise.
+    pub unit: Option<String>,
+    /// The daemon this one took over from.
+    pub predecessor: Predecessor,
+}
+
+/// Which daemon a daemon took over from, as its record says.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Predecessor {
+    /// The record does not say: a build before the token wrote it; a daemon whose predecessor
+    /// handed it no identity (one of such a build, or one that could not tell its own start time);
+    /// or a service-managed daemon that found no note or leftover record of a daemon before it
+    /// (see [`Owner::service_predecessor`]).
+    Unsaid,
+    /// None: a daemon a user or the desktop application started.
+    None,
+    /// The daemon with this identity, which handed over to it in a planned restart, or which a
+    /// service manager restarted it after.
+    Daemon(ProcessIdentity),
 }
 
 /// A daemon that has released the instance lock, or is about to, to the daemon that takes over
 /// from it after a planned restart, as its note says ([`Owner::note_handover`]).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HandoverNote {
     /// The daemon, as its owner record named it, whether or not its process still runs.
     pub from: Owner,
@@ -76,24 +104,65 @@ const NO_SERVICE: &str = "no-service";
 /// The token of a record of a daemon that accepts the owner key.
 const OWNER_KEY: &str = "owner-key";
 
+/// What leads the token naming the daemon's systemd unit.
+const UNIT: &str = "unit=";
+
+/// What leads the token naming the daemon this one took over from.
+const AFTER: &str = "after=";
+
+/// What follows [`AFTER`] for a daemon that took over from none.
+const AFTER_NONE: &str = "none";
+
+/// The identity of this process; `None` when the host cannot tell when it started.
+pub fn own_identity() -> Option<ProcessIdentity> {
+    let pid = std::process::id();
+    let start_micros = proc_table::start_of(i32::try_from(pid).ok()?)?;
+    Some(ProcessIdentity {
+        pid: ProcessId(pid),
+        start_micros,
+    })
+}
+
+/// Whether `unit` has the form of a systemd unit name, which the record can hold as one token.
+fn is_unit_name(unit: &str) -> bool {
+    !unit.is_empty()
+        && unit.len() <= 256
+        && unit
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b":-_.\\@".contains(&byte))
+}
+
 impl Owner {
     /// This process, listening on `port`, following an application or not; `None` when the host
     /// cannot tell when it started. Without `takes_restart`, the record has no third token, since
     /// a request for a planned restart would end this process rather than restart it. Whether a
     /// service manager starts its successor is not said until [`Owner::with_service_manager`].
     pub fn current(port: u16, follows_application: bool, takes_restart: bool) -> Option<Self> {
-        let pid = std::process::id();
-        let start_micros = proc_table::start_of(i32::try_from(pid).ok()?)?;
         Some(Self {
-            identity: ProcessIdentity {
-                pid: ProcessId(pid),
-                start_micros,
-            },
+            identity: own_identity()?,
             port,
             follows_application: takes_restart.then_some(follows_application),
             service_managed: None,
             takes_owner_key: false,
+            unit: None,
+            predecessor: Predecessor::Unsaid,
         })
+    }
+
+    /// This owner, naming the systemd unit it runs as, where it is one the record can hold.
+    pub fn with_unit(self, unit: Option<String>) -> Self {
+        Self {
+            unit: unit.filter(|unit| is_unit_name(unit)),
+            ..self
+        }
+    }
+
+    /// This owner, saying which daemon it took over from.
+    pub fn with_predecessor(self, predecessor: Predecessor) -> Self {
+        Self {
+            predecessor,
+            ..self
+        }
     }
 
     /// This owner, saying whether the daemon accepts the owner key.
@@ -127,6 +196,36 @@ impl Owner {
     /// [`Owner::recorded`] for the daemon whose data directory is `data`.
     pub fn recorded_in(data: &Path) -> Option<Self> {
         Self::read_from(&record_path_in(data)).filter(|owner| owner.identity.is_running())
+    }
+
+    /// What the owner record names, whether or not its process still runs: a daemon killed or
+    /// crashed before it could remove its record leaves it there.
+    pub fn last_recorded() -> Option<Self> {
+        Self::read_from(&record_path())
+    }
+
+    /// The daemon a service-managed daemon starting in the unit `unit` takes over from: the one
+    /// whose note says it handed over, else the one the owner record still names, having ended
+    /// without removing it (it crashed), where that daemon was service-managed too, has ended, as
+    /// a service manager waits for, and ran in the same unit where both name one. Read before this
+    /// daemon writes its own record and settles the note. Where neither qualifies it does not say
+    /// ([`Predecessor::Unsaid`]) rather than name none: a daemon of an earlier build that exited for
+    /// the service manager leaves neither a note nor a record, and the commands then compare keys,
+    /// which a start by a service manager never shares with the daemon before it.
+    pub fn service_predecessor(unit: Option<&str>) -> Predecessor {
+        Self::service_predecessor_in(&crate::paths::data_dir(), unit)
+    }
+
+    /// [`Owner::service_predecessor`] in the data directory `data`.
+    pub fn service_predecessor_in(data: &Path, unit: Option<&str>) -> Predecessor {
+        let qualifies = |from: &Owner| restarted_in_service(from, unit, from.identity.is_running());
+        Self::handover_noted_in(data)
+            .map(|noted| noted.from)
+            .filter(qualifies)
+            .or_else(|| Self::read_from(&record_path_in(data)).filter(qualifies))
+            .map_or(Predecessor::Unsaid, |from| {
+                Predecessor::Daemon(from.identity)
+            })
     }
 
     /// Records `key`, the key this daemon requires of every connection, for the owner's `address`
@@ -254,6 +353,14 @@ impl Owner {
         if self.takes_owner_key {
             content.push_str(&format!(" {OWNER_KEY}"));
         }
+        if let Some(unit) = &self.unit {
+            content.push_str(&format!(" {UNIT}{unit}"));
+        }
+        match self.predecessor {
+            Predecessor::Unsaid => {}
+            Predecessor::None => content.push_str(&format!(" {AFTER}{AFTER_NONE}")),
+            Predecessor::Daemon(from) => content.push_str(&format!(" {AFTER}{}", from.key())),
+        }
         content.push('\n');
         replace_beside(path, content.as_bytes(), Permissions::Private)
     }
@@ -275,21 +382,47 @@ impl Owner {
             _ => None,
         });
         let takes_owner_key = rest.contains(&OWNER_KEY);
+        let unit = rest
+            .iter()
+            .find_map(|token| token.strip_prefix(UNIT))
+            .filter(|unit| is_unit_name(unit))
+            .map(str::to_owned);
+        // A value that is neither reads as a record that does not say.
+        let predecessor = rest
+            .iter()
+            .find_map(|token| token.strip_prefix(AFTER))
+            .and_then(|after| match after {
+                AFTER_NONE => Some(Predecessor::None),
+                identity => ProcessIdentity::parse(identity).map(Predecessor::Daemon),
+            })
+            .unwrap_or(Predecessor::Unsaid);
         Some(Self {
             identity,
             port,
             follows_application,
             service_managed,
             takes_owner_key,
+            unit,
+            predecessor,
         })
     }
 
     fn remove_from(&self, path: &Path) -> std::io::Result<()> {
-        if Self::read_from(path) != Some(*self) {
+        if Self::read_from(path).as_ref() != Some(self) {
             return Ok(());
         }
         remove_replaced(path)
     }
+}
+
+/// Whether a service-managed daemon starting in the unit `unit` takes over from `from`, which
+/// still `running` or not (see [`Owner::service_predecessor`]).
+fn restarted_in_service(from: &Owner, unit: Option<&str>, running: bool) -> bool {
+    let same_unit = match (from.unit.as_deref(), unit) {
+        (Some(from), Some(unit)) => from == unit,
+        _ => true,
+    };
+    !running && from.service_managed == Some(true) && same_unit
 }
 
 fn record_path() -> PathBuf {
@@ -350,6 +483,8 @@ mod tests {
             follows_application: Some(false),
             service_managed: None,
             takes_owner_key: false,
+            unit: None,
+            predecessor: Predecessor::Unsaid,
         }
     }
 
@@ -361,7 +496,7 @@ mod tests {
 
         let ours = owner(10, 7531);
         ours.write_to(&path).expect("the record was written");
-        assert_eq!(Owner::read_from(&path), Some(ours));
+        assert_eq!(Owner::read_from(&path), Some(ours.clone()));
 
         owner(11, 7531).remove_from(&path).unwrap();
         owner(10, 7532).remove_from(&path).unwrap();
@@ -407,7 +542,11 @@ mod tests {
         };
         for content in ["10:123456 7531\n", "10:123456 7531 elsewhere\n"] {
             std::fs::write(&path, content).unwrap();
-            assert_eq!(Owner::read_from(&path), Some(unknown), "{content:?}");
+            assert_eq!(
+                Owner::read_from(&path),
+                Some(unknown.clone()),
+                "{content:?}"
+            );
         }
         // The daemon that wrote such a record removes it on its way out.
         std::fs::write(&path, "10:123456 7531\n").unwrap();
@@ -436,7 +575,7 @@ mod tests {
             .with_service_manager(managed);
             ours.write_to(&path).unwrap();
             assert_eq!(std::fs::read_to_string(&path).unwrap(), expected);
-            assert_eq!(Owner::read_from(&path), Some(ours), "{expected:?}");
+            assert_eq!(Owner::read_from(&path), Some(ours.clone()), "{expected:?}");
             ours.remove_from(&path).unwrap();
             assert!(!path.exists(), "{expected:?}");
         }
@@ -491,7 +630,7 @@ mod tests {
             ours.service_managed = managed;
             ours.write_to(&path).unwrap();
             assert_eq!(std::fs::read_to_string(&path).unwrap(), expected);
-            assert_eq!(Owner::read_from(&path), Some(ours), "{expected:?}");
+            assert_eq!(Owner::read_from(&path), Some(ours.clone()), "{expected:?}");
             ours.remove_from(&path).unwrap();
             assert!(!path.exists(), "{expected:?}");
         }
@@ -559,6 +698,7 @@ mod tests {
             );
             for managed in [true, false] {
                 without
+                    .clone()
                     .with_service_manager(managed)
                     .write_to(&path)
                     .unwrap();
@@ -759,7 +899,7 @@ mod tests {
         ours.withdraw_handover_in(&data);
         assert_eq!(
             Owner::handover_noted_in(&data).map(|note| note.from),
-            Some(theirs)
+            Some(theirs.clone())
         );
         theirs.withdraw_handover_in(&data);
         assert_eq!(Owner::handover_noted_in(&data), None);
@@ -774,7 +914,7 @@ mod tests {
         assert_eq!(Owner::recorded_in(&data), None);
         let ours = Owner::current(7531, false, true).expect("this process's start time");
         ours.record_in(&data, KEY).unwrap();
-        assert_eq!(Owner::recorded_in(&data), Some(ours));
+        assert_eq!(Owner::recorded_in(&data), Some(ours.clone()));
         assert_eq!(ours.recorded_key_in(&data).as_deref(), Some(KEY));
 
         let gone = Owner {
@@ -802,12 +942,472 @@ mod tests {
         let ours = Owner::current(7531, true, true).expect("this process's start time");
         assert_eq!(ours.service_managed, None);
         for managed in [true, false] {
-            let told = ours.with_service_manager(managed);
+            let told = ours.clone().with_service_manager(managed);
             assert_eq!(told.service_managed, Some(managed));
             assert_eq!(
                 (told.identity, told.port, told.follows_application),
                 (ours.identity, 7531, Some(true))
             );
         }
+    }
+
+    fn identity(pid: u32, start_micros: u64) -> ProcessIdentity {
+        ProcessIdentity {
+            pid: ProcessId(pid),
+            start_micros,
+        }
+    }
+
+    /// An identity no process has: this process's pid, started at another time.
+    fn gone_identity(offset: u64) -> ProcessIdentity {
+        let this = own_identity().expect("this process's start time");
+        identity(this.pid.0, this.start_micros.wrapping_add(offset))
+    }
+
+    /// The unit and predecessor tokens come after everything else, read back whatever else the
+    /// record says, in every combination, and each daemon removes its own record.
+    #[test]
+    fn the_unit_and_predecessor_tokens_read_back_with_everything_else() {
+        let dir = ScratchDir::new("owner-record-succession");
+        let path = dir.join("daemon.owner");
+        let predecessors = [
+            Predecessor::Unsaid,
+            Predecessor::None,
+            Predecessor::Daemon(identity(9, 77)),
+        ];
+        for follows_application in [Some(true), Some(false), None] {
+            for managed in [None, Some(true), Some(false)] {
+                for takes_owner_key in [false, true] {
+                    for unit in [None, Some("octoboard.service".to_owned())] {
+                        for predecessor in predecessors {
+                            let ours = Owner {
+                                follows_application,
+                                service_managed: managed,
+                                takes_owner_key,
+                                unit: unit.clone(),
+                                predecessor,
+                                ..owner(10, 7531)
+                            };
+                            ours.write_to(&path).unwrap();
+                            let content = std::fs::read_to_string(&path).unwrap();
+                            assert_eq!(Owner::read_from(&path), Some(ours.clone()), "{content:?}");
+                            ours.remove_from(&path).unwrap();
+                            assert!(!path.exists(), "{content:?}");
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_unit_and_predecessor_are_written_as_tokens_after_the_others() {
+        let dir = ScratchDir::new("owner-record-succession-text");
+        let path = dir.join("daemon.owner");
+        let cases = [
+            (
+                owner(10, 7531)
+                    .with_service_manager(true)
+                    .with_owner_key(true)
+                    .with_unit(Some("octoboard.service".to_owned()))
+                    .with_predecessor(Predecessor::Daemon(identity(9, 77))),
+                "10:123456 7531 alone service owner-key unit=octoboard.service after=9:77\n",
+            ),
+            (
+                owner(10, 7531).with_predecessor(Predecessor::None),
+                "10:123456 7531 alone after=none\n",
+            ),
+            (
+                owner(10, 7531).with_unit(Some("a@b.service".to_owned())),
+                "10:123456 7531 alone unit=a@b.service\n",
+            ),
+            (owner(10, 7531), "10:123456 7531 alone\n"),
+        ];
+        for (ours, expected) in cases {
+            ours.write_to(&path).unwrap();
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), expected);
+        }
+    }
+
+    /// The tokens are read wherever they stand after the port, in either order, and with no third
+    /// token they stand third.
+    #[test]
+    fn the_unit_and_predecessor_are_read_wherever_they_stand_after_the_port() {
+        let dir = ScratchDir::new("owner-record-succession-order");
+        let path = dir.join("daemon.owner");
+        let cases = [
+            (
+                "10:123456 7531 after=9:77 unit=u.service alone",
+                Some(false),
+            ),
+            (
+                "10:123456 7531 alone after=9:77 service unit=u.service",
+                Some(false),
+            ),
+            ("10:123456 7531 unit=u.service after=9:77", None),
+            ("10:123456 7531 after=9:77 unit=u.service\n", None),
+        ];
+        for (content, follows_application) in cases {
+            std::fs::write(&path, content).unwrap();
+            let read = Owner::read_from(&path).expect("the record reads");
+            assert_eq!(read.unit.as_deref(), Some("u.service"), "{content:?}");
+            assert_eq!(
+                read.predecessor,
+                Predecessor::Daemon(identity(9, 77)),
+                "{content:?}"
+            );
+            assert_eq!(read.follows_application, follows_application, "{content:?}");
+            assert_eq!((read.identity, read.port), (identity(10, 123_456), 7531));
+        }
+        std::fs::write(&path, "10:123456 7531 after=none").unwrap();
+        let read = Owner::read_from(&path).unwrap();
+        assert_eq!(
+            (read.follows_application, read.predecessor, read.unit),
+            (None, Predecessor::None, None)
+        );
+    }
+
+    /// A record written without the tokens, in any earlier format, has no unit and does not say
+    /// which daemon it followed.
+    #[test]
+    fn a_record_without_the_tokens_has_no_unit_and_an_unsaid_predecessor() {
+        let dir = ScratchDir::new("owner-record-succession-old");
+        let path = dir.join("daemon.owner");
+        for content in [
+            "10:123456 7531\n",
+            "10:123456 7531 elsewhere\n",
+            "10:123456 7531 alone\n",
+            "10:123456 7531 application no-service\n",
+            "10:123456 7531 alone service owner-key\n",
+            "10:123456 7531 service\n",
+        ] {
+            std::fs::write(&path, content).unwrap();
+            let read = Owner::read_from(&path).expect("the record reads");
+            assert_eq!(read.unit, None, "{content:?}");
+            assert_eq!(read.predecessor, Predecessor::Unsaid, "{content:?}");
+        }
+    }
+
+    /// An earlier build reads the identity, the port and the third token alone, so neither token
+    /// changes what it reads, whether it stands fourth or, with no third token, third.
+    #[test]
+    fn an_earlier_build_reads_a_record_with_the_unit_and_predecessor_as_one_without_them() {
+        let dir = ScratchDir::new("owner-record-succession-earlier");
+        let path = dir.join("daemon.owner");
+        let predecessors = [
+            Predecessor::Unsaid,
+            Predecessor::None,
+            Predecessor::Daemon(identity(9, 77)),
+        ];
+        for follows_application in [Some(true), Some(false), None] {
+            for managed in [None, Some(true), Some(false)] {
+                for takes_owner_key in [false, true] {
+                    for unit in [None, Some("octoboard.service".to_owned())] {
+                        for predecessor in predecessors {
+                            let ours = Owner {
+                                follows_application,
+                                service_managed: managed,
+                                takes_owner_key,
+                                unit: unit.clone(),
+                                predecessor,
+                                ..owner(10, 7531)
+                            };
+                            ours.write_to(&path).unwrap();
+                            let content = std::fs::read_to_string(&path).unwrap();
+                            assert_eq!(
+                                read_as_an_earlier_build(&content),
+                                Some((ours.identity, 7531, follows_application)),
+                                "{content:?}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// A unit name that is not one is dropped, on write and on read, and the rest of the record is
+    /// kept.
+    #[test]
+    fn a_unit_name_that_is_not_one_is_dropped_on_write_and_on_read() {
+        let dir = ScratchDir::new("owner-record-unit-name");
+        let path = dir.join("daemon.owner");
+        let longest = "a".repeat(256);
+        let too_long = "a".repeat(257);
+        for unit in [
+            "",
+            "has/slash",
+            "has$dollar",
+            "has=equals",
+            "ünit.service",
+            too_long.as_str(),
+        ] {
+            let ours = owner(10, 7531).with_unit(Some(unit.to_owned()));
+            assert_eq!(ours.unit, None, "{unit:?}");
+            ours.write_to(&path).unwrap();
+            assert_eq!(
+                std::fs::read_to_string(&path).unwrap(),
+                "10:123456 7531 alone\n",
+                "{unit:?}"
+            );
+
+            std::fs::write(
+                &path,
+                format!("10:123456 7531 alone service unit={unit} after=none\n"),
+            )
+            .unwrap();
+            let read = Owner::read_from(&path).expect("the rest of the record reads");
+            assert_eq!(read.unit, None, "{unit:?}");
+            assert_eq!(read.service_managed, Some(true), "{unit:?}");
+            assert_eq!(read.predecessor, Predecessor::None, "{unit:?}");
+        }
+        for unit in ["octoboard.service", "a:b-c_d.e\\f@g", longest.as_str()] {
+            let ours = owner(10, 7531).with_unit(Some(unit.to_owned()));
+            assert_eq!(ours.unit.as_deref(), Some(unit));
+            ours.write_to(&path).unwrap();
+            assert_eq!(Owner::read_from(&path), Some(ours), "{unit:?}");
+        }
+        assert_eq!(owner(10, 7531).with_unit(None).unit, None);
+    }
+
+    /// A predecessor value that is neither `none` nor an identity reads as not said, and the rest
+    /// of the record is kept.
+    #[test]
+    fn a_malformed_predecessor_reads_as_unsaid() {
+        let dir = ScratchDir::new("owner-record-after-malformed");
+        let path = dir.join("daemon.owner");
+        for value in [
+            "", "garbage", "NONE", "0:5", "9", "9:", "9:x", ":5", "-1:5", "9:77:3",
+        ] {
+            std::fs::write(
+                &path,
+                format!("10:123456 7531 alone unit=u.service after={value}\n"),
+            )
+            .unwrap();
+            let read = Owner::read_from(&path).expect("the rest of the record reads");
+            assert_eq!(read.predecessor, Predecessor::Unsaid, "{value:?}");
+            assert_eq!(read.unit.as_deref(), Some("u.service"), "{value:?}");
+            assert_eq!(read.follows_application, Some(false), "{value:?}");
+        }
+    }
+
+    #[test]
+    fn a_predecessor_is_set_without_changing_the_rest() {
+        let ours = owner(10, 7531).with_service_manager(true);
+        let followed = ours
+            .clone()
+            .with_predecessor(Predecessor::Daemon(identity(9, 77)));
+        assert_eq!(followed.predecessor, Predecessor::Daemon(identity(9, 77)));
+        assert_eq!(
+            Owner {
+                predecessor: Predecessor::Unsaid,
+                ..followed
+            },
+            ours
+        );
+    }
+
+    #[test]
+    fn this_process_has_an_identity_that_runs() {
+        let ours = own_identity().expect("this process's start time");
+        assert_eq!(ours.pid.0, std::process::id());
+        assert!(ours.is_running());
+    }
+
+    /// A daemon is taken over from in a service only if it was service-managed, has ended, and, where
+    /// both name a unit, ran in the same one.
+    #[test]
+    fn a_service_restarts_only_a_service_managed_daemon_that_has_ended_in_its_unit() {
+        let managed = owner(10, 7531).with_service_manager(true);
+        let unmanaged = owner(10, 7531).with_service_manager(false);
+        let unsaid = owner(10, 7531);
+        let in_unit = |owner: &Owner, unit: &str| owner.clone().with_unit(Some(unit.to_owned()));
+        assert!(restarted_in_service(&managed, None, false));
+        assert!(restarted_in_service(&managed, Some("a.service"), false));
+        assert!(restarted_in_service(
+            &in_unit(&managed, "a.service"),
+            None,
+            false
+        ));
+        assert!(restarted_in_service(
+            &in_unit(&managed, "a.service"),
+            Some("a.service"),
+            false
+        ));
+        assert!(!restarted_in_service(
+            &in_unit(&managed, "a.service"),
+            Some("b.service"),
+            false
+        ));
+        assert!(!restarted_in_service(&managed, None, true));
+        assert!(!restarted_in_service(
+            &in_unit(&managed, "a.service"),
+            Some("a.service"),
+            true
+        ));
+        assert!(!restarted_in_service(&unmanaged, None, false));
+        assert!(!restarted_in_service(&unsaid, None, false));
+    }
+
+    /// A data directory holding the note of a handover and the owner record, as given.
+    fn data_with(note: Option<&Owner>, record: Option<&Owner>) -> (ScratchDir, PathBuf) {
+        let dir = ScratchDir::new("service-predecessor");
+        let data = dir.join(".octoboard");
+        std::fs::create_dir_all(&data).unwrap();
+        if let Some(note) = note {
+            note.note_handover_in(&data).unwrap();
+        }
+        if let Some(record) = record {
+            record.write_to(&record_path_in(&data)).unwrap();
+        }
+        (dir, data)
+    }
+
+    fn serviced(identity: ProcessIdentity) -> Owner {
+        Owner {
+            identity,
+            ..owner(10, 7531)
+        }
+        .with_service_manager(true)
+    }
+
+    /// The daemon a note names, which handed over and has ended, is the predecessor of the daemon
+    /// a service manager starts.
+    #[test]
+    fn a_service_managed_daemon_that_handed_over_and_ended_is_the_predecessor() {
+        let gone = serviced(gone_identity(1));
+        let (_dir, data) = data_with(Some(&gone), None);
+        assert_eq!(
+            Owner::service_predecessor_in(&data, Some("a.service")),
+            Predecessor::Daemon(gone.identity)
+        );
+        assert_eq!(
+            Owner::service_predecessor_in(&data, None),
+            Predecessor::Daemon(gone.identity)
+        );
+    }
+
+    /// A daemon that crashed leaves its record and no note: it is the predecessor all the same.
+    #[test]
+    fn a_service_managed_daemon_that_left_its_record_is_the_predecessor() {
+        let crashed = serviced(gone_identity(1));
+        let (_dir, data) = data_with(None, Some(&crashed));
+        assert_eq!(
+            Owner::service_predecessor_in(&data, None),
+            Predecessor::Daemon(crashed.identity)
+        );
+    }
+
+    #[test]
+    fn with_nothing_recorded_a_service_managed_daemon_does_not_say() {
+        let (_dir, data) = data_with(None, None);
+        assert_eq!(
+            Owner::service_predecessor_in(&data, Some("a.service")),
+            Predecessor::Unsaid
+        );
+        // Not even a data directory.
+        let dir = ScratchDir::new("service-predecessor-none");
+        assert_eq!(
+            Owner::service_predecessor_in(&dir.join("absent"), None),
+            Predecessor::Unsaid
+        );
+    }
+
+    /// A daemon still running, one that was not service-managed (or does not say), and one of
+    /// another unit do not qualify, whether the note or the record names them.
+    #[test]
+    fn a_daemon_that_still_runs_or_is_not_service_managed_or_is_of_another_unit_is_not_named() {
+        let own = own_identity().expect("this process's start time");
+        let in_unit = |owner: Owner, unit: &str| owner.with_unit(Some(unit.to_owned()));
+        let disqualified = [
+            ("running", serviced(own)),
+            (
+                "not service-managed",
+                serviced(gone_identity(1)).with_service_manager(false),
+            ),
+            (
+                "unsaid",
+                Owner {
+                    service_managed: None,
+                    ..serviced(gone_identity(1))
+                },
+            ),
+            (
+                "another unit",
+                in_unit(serviced(gone_identity(1)), "other.service"),
+            ),
+        ];
+        for (why, from) in disqualified {
+            let (_dir, data) = data_with(Some(&from), None);
+            assert_eq!(
+                Owner::service_predecessor_in(&data, Some("a.service")),
+                Predecessor::Unsaid,
+                "note: {why}"
+            );
+            let (_dir, data) = data_with(None, Some(&from));
+            assert_eq!(
+                Owner::service_predecessor_in(&data, Some("a.service")),
+                Predecessor::Unsaid,
+                "record: {why}"
+            );
+        }
+    }
+
+    /// Where only one of the two names a unit, or both name the same, the unit does not disqualify.
+    #[test]
+    fn a_unit_disqualifies_only_where_both_name_one_and_they_differ() {
+        let gone = serviced(gone_identity(1));
+        let in_unit = gone.clone().with_unit(Some("a.service".to_owned()));
+        for (from, unit) in [
+            (&in_unit, Some("a.service")),
+            (&in_unit, None),
+            (&gone, Some("a.service")),
+        ] {
+            let (_dir, data) = data_with(Some(from), None);
+            assert_eq!(
+                Owner::service_predecessor_in(&data, unit),
+                Predecessor::Daemon(gone.identity),
+                "{from:?} {unit:?}"
+            );
+        }
+    }
+
+    /// The note is preferred over the record: both name an ended service-managed daemon, and the
+    /// note's is the predecessor.
+    #[test]
+    fn the_note_is_preferred_over_the_record() {
+        let noted = serviced(gone_identity(1));
+        let recorded = serviced(gone_identity(2));
+        let (_dir, data) = data_with(Some(&noted), Some(&recorded));
+        assert_eq!(
+            Owner::service_predecessor_in(&data, None),
+            Predecessor::Daemon(noted.identity)
+        );
+    }
+
+    /// A note that does not qualify falls through to the record, which does.
+    #[test]
+    fn a_note_that_does_not_qualify_falls_through_to_the_record() {
+        let own = own_identity().expect("this process's start time");
+        let recorded = serviced(gone_identity(2));
+        let unqualified = [
+            serviced(own),
+            serviced(gone_identity(1)).with_service_manager(false),
+            serviced(gone_identity(1)).with_unit(Some("other.service".to_owned())),
+        ];
+        for noted in unqualified {
+            let (_dir, data) = data_with(Some(&noted), Some(&recorded));
+            assert_eq!(
+                Owner::service_predecessor_in(&data, Some("a.service")),
+                Predecessor::Daemon(recorded.identity),
+                "{noted:?}"
+            );
+        }
+        // And when neither qualifies, it does not say.
+        let (_dir, data) = data_with(Some(&serviced(own)), Some(&serviced(own)));
+        assert_eq!(
+            Owner::service_predecessor_in(&data, None),
+            Predecessor::Unsaid
+        );
     }
 }

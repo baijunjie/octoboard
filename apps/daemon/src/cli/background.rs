@@ -1,13 +1,16 @@
-//! `start`, `stop`, `restart`, `status` and `address`: running the daemon in the background from
-//! the command line. A running daemon is found through the instance lock
+//! `start`, `stop`, `restart` and `status`: running the daemon in the background from the command
+//! line (`address` is in `address.rs`). A running daemon is found through the instance lock
 //! ([`instance_lock::is_running`]), which is authoritative; what it records beside the lock
 //! ([`Owner`]) says which process to stop, where it listens and what key it requires, and each
 //! command waits for a planned restart caught half-way to settle before it judges
 //! ([`find_daemon`]). Each returns the exit status. The daemon itself starts its successor after a
-//! planned restart the way `start` starts it ([`start_successor`]). `stop` and `restart` signal the
-//! daemon where the host has a signal for it; where it has none (Windows), they ask over loopback,
-//! with the key the daemon recorded ([`request_over_loopback`]), which `address --rotate` uses on
-//! every host to ask the daemon to replace its owner key.
+//! planned restart the way `start` starts it ([`start_successor`]). `stop` signals the daemon where
+//! the host has a signal for it, and where it has none (Windows) asks over loopback, with the key
+//! the daemon recorded ([`request_over_loopback`]); `restart` asks over loopback on every host
+//! wherever the key is recorded, so that a refusal comes back with its reason, and signals (outside
+//! Windows) only a daemon whose key is not recorded. `address --rotate` asks over loopback too, for
+//! the daemon to replace its owner key. Which daemon took over from which is
+//! told by the predecessor each records ([`succession`]).
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::Path;
@@ -23,14 +26,15 @@ use crate::loopback;
 use crate::owner_record::Owner;
 use crate::platform::proc::{self, Polite, Sent, Signal};
 
+use super::lock_holder::holder_of;
+use super::service_unit;
 use super::succession::{
-    abandoned, awaits_end, find_daemon, gone_since_after, grace_elapsed, handed_over_to, handover,
-    judge_after, recorded_after, took_over, Found, Handover, HandoverWatch, Judged, Standing,
-    TookOver, POLL, SERVICE_RESTART_GRACE,
+    find_daemon, handover_input, next_may_come, recorded_after, succession, Awaited, EndWatch,
+    Found, Succession, POLL, SERVICE_RESTART_GRACE,
 };
 
 /// Exit status of `status` and `address` when no daemon runs.
-const NOT_RUNNING: i32 = 3;
+pub(super) const NOT_RUNNING: i32 = 3;
 
 /// How long `start` waits for the daemon's handshake line: opening the store and sweeping what the
 /// previous run left come first.
@@ -41,7 +45,8 @@ const STOP_WAIT: Duration = Duration::from_secs(60);
 
 /// How long `restart` waits for the next daemon to hold the lock: the planned stop, then the next
 /// daemon's start, each within what `stop` and `start` wait for.
-const RESTART_WAIT: Duration = Duration::from_secs(STOP_WAIT.as_secs() + START_WAIT.as_secs());
+pub(super) const RESTART_WAIT: Duration =
+    Duration::from_secs(STOP_WAIT.as_secs() + START_WAIT.as_secs());
 
 /// How long the request to stop or restart waits for the daemon's answer, which it gives before
 /// doing either.
@@ -60,7 +65,7 @@ fn address(port: u16) -> String {
     format!("http://127.0.0.1:{port}")
 }
 
-fn not_running() -> String {
+pub(super) fn not_running() -> String {
     format!("{} is not running", crate::APP_NAME)
 }
 
@@ -78,14 +83,22 @@ fn running_state(owner: Option<&Owner>) -> String {
 }
 
 /// Why a command does not act on a daemon that holds the lock but has recorded nothing, after
-/// waiting `waited` for it to.
-fn no_record(what: &str, waited: Duration) -> String {
+/// waiting `waited` for it to, naming the process that holds the lock where the host says
+/// (`holder`, see [`lock_holder`]).
+fn no_record(what: &str, waited: Duration, holder: Option<u32>) -> String {
+    let holder = holder.map_or_else(String::new, |pid| format!(" (pid {pid} holds the lock)"));
     format!(
-        "{} is running, but after {} seconds still no record says which process it is (it may be \
-         starting or stopping, or could not write the record); not {what} it",
+        "{} is running{holder}, but after {} seconds still no record says which process it is (it \
+         may be starting or stopping, or could not write the record); not {what} it",
         crate::APP_NAME,
         waited.as_secs()
     )
+}
+
+/// The process holding the instance lock, where the host says.
+fn lock_holder() -> Option<u32> {
+    // The lock's file, as `instance_lock` names it.
+    holder_of(&crate::paths::data_dir().join("daemon.lock"))
 }
 
 pub(super) fn status() -> Result<i32> {
@@ -101,192 +114,33 @@ pub(super) fn status() -> Result<i32> {
     Ok(0)
 }
 
-/// Prints the address to open the running daemon at in a browser, its key included, as one line on
-/// stdout: `http://localhost:<port>/?key=<key>`, `localhost` being what a browser treats as a
-/// secure context and what an SSH port forward gives on the owner's machine. Exits 3 when no
-/// daemon runs. The key is the owner key when the daemon's record says it accepts one and
-/// `owner.key` holds one, which outlives the daemon, else the launch key from the daemon's
-/// owner-only record. Only the daemon's own user obtains either.
-///
-/// With `rotate`, the owner key is replaced first (see [`rotate_owner_key`]) and the address
-/// printed is the new one's, except where the daemon does not take an owner key: it is the launch
-/// key's, and the new owner key is for the next daemon started on its own.
-pub(super) fn print_address(rotate: bool) -> Result<i32> {
-    print_address_of(rotate, false)
-}
-
-/// [`print_address`], waiting through a daemon that holds the lock but has not recorded itself when
-/// `through_unrecorded`: it is a daemon this command saw start, whose record is yet to come.
-fn print_address_of(rotate: bool, through_unrecorded: bool) -> Result<i32> {
-    let owner = match find_daemon(RESTART_WAIT, through_unrecorded)? {
-        Found::NotRunning { .. } => {
-            if rotate {
-                return match rotate_without_daemon(
-                    &crate::paths::data_dir(),
-                    instance_lock::is_running,
-                )? {
-                    Some(status) => Ok(status),
-                    // A daemon started while the file was being replaced, and may have read the
-                    // earlier key before it was: rotate through the daemon, which keeps the file
-                    // and its memory alike. It has only just started, so its record may be still
-                    // to come: wait through a daemon that has not recorded itself yet.
-                    None => print_address_of(true, true),
-                };
-            }
-            eprintln!("{}", not_running());
-            return Ok(NOT_RUNNING);
-        }
-        Found::Running { owner, .. } => owner,
-        Found::Unrecorded => {
-            eprintln!(
-                "{} is running, but its address is not known (it may still be starting or \
-                 stopping)",
-                crate::APP_NAME
-            );
-            return Ok(1);
-        }
-    };
-    let data = crate::paths::data_dir();
-    let Some(key) = owner.recorded_key() else {
-        eprintln!("{}", address_key_not_recorded(&owner));
-        return Ok(1);
-    };
-    if rotate && owner.takes_owner_key {
-        return rotate_owner_key(&owner, &key, &data);
-    }
-    if rotate {
-        return rotate_for_daemon_without_owner_key(&owner, &key, &data);
-    }
-    let (address, lasting) = address_to_print(&owner, &key, &data);
-    if !lasting {
-        eprintln!(
-            "the address printed lasts only until {} restarts, as owner.key is missing or holds no \
-             usable key; `{} address --rotate` makes a lasting one",
-            crate::APP_NAME,
-            crate::APP_NAME
-        );
-    }
-    println!("{address}");
-    Ok(0)
-}
-
-/// The address `address` prints for `owner`, and whether it is one that outlives the daemon: with
-/// the owner key when the daemon accepts one and `data` holds one, else with the launch key `key`.
-/// A daemon that takes no owner key has no lasting address to lose, so it counts as one.
-fn address_to_print(owner: &Owner, key: &str, data: &Path) -> (String, bool) {
-    let owner_key = owner
-        .takes_owner_key
-        .then(|| crate::owner_key::read_in(data))
-        .flatten();
-    let lasting = owner_key.is_some() || !owner.takes_owner_key;
-    (
-        browser_address(owner.port, owner_key.as_deref().unwrap_or(key)),
-        lasting,
-    )
-}
-
-/// `address --rotate` for a running daemon that takes no owner key: replaces the owner key in
-/// `data` for the next daemon started on its own, says so on stderr, and prints the launch-key
-/// address of the running one.
-fn rotate_for_daemon_without_owner_key(owner: &Owner, key: &str, data: &Path) -> Result<i32> {
-    crate::owner_key::replace_in(data).context("replacing the owner key")?;
-    eprintln!(
-        "the running {} does not take the owner key (it follows the desktop application or is an \
-         earlier build, or could not read or write owner.key at its start); the next daemon \
-         started on its own takes the new one",
-        crate::APP_NAME
-    );
-    println!("{}", browser_address(owner.port, key));
-    Ok(0)
-}
-
-/// Why `address` cannot print the address of a daemon whose launch key is not recorded.
-fn address_key_not_recorded(owner: &Owner) -> String {
-    format!(
-        "{} is running (pid {}, port {}), but its key is not recorded: it may be an earlier \
-         build, which a restart with this build replaces, or one that could not record it, \
-         as its log says",
-        crate::APP_NAME,
-        owner.identity.pid.0,
-        owner.port
-    )
-}
-
-/// Asks the running daemon `owner` names to replace its owner key, presenting its launch key
-/// `key`, and prints the address with the new one. A refusal or a failure is said on stderr, with
-/// status 1 and nothing on stdout.
-fn rotate_owner_key(owner: &Owner, key: &str, data: &Path) -> Result<i32> {
-    let failed = |what: String| {
-        eprintln!("the owner key was not rotated: {what}");
-        Ok(1)
-    };
-    match request_over_loopback(owner, key, "/owner-key/rotate") {
-        Ok(Asked::Accepted) => {}
-        Ok(Asked::Refused(message)) => return failed(format!("the daemon refused: {message}")),
-        Ok(Asked::Gone) => return failed("the daemon no longer accepts connections".to_owned()),
-        Err(err) => return failed(format!("{err:#}")),
-    }
-    match crate::owner_key::read_in(data) {
-        Some(new) => {
-            println!("{}", browser_address(owner.port, &new));
-            Ok(0)
-        }
-        None => failed("the daemon took the request, but owner.key holds no key".to_owned()),
-    }
-}
-
-/// `address --rotate` with no daemon running: replaces the owner key in the data directory `data`
-/// for the next daemon started on its own, unless there is no data directory, which it does not
-/// create. Prints nothing on stdout, and exits 3 as `address` does.
-///
-/// The instance lock cannot be held while the file is written (it is the daemon's for its
-/// lifetime, and a probe holds it for a moment), so `running` is asked again afterwards: `None`
-/// when a daemon holds the lock by then, which the caller rotates through instead.
-fn rotate_without_daemon(data: &Path, running: impl Fn() -> Result<bool>) -> Result<Option<i32>> {
-    if !data.is_dir() {
-        eprintln!("{}", not_running());
-        return Ok(Some(NOT_RUNNING));
-    }
-    crate::owner_key::replace_in(data).context("replacing the owner key")?;
-    if running()? {
-        return Ok(None);
-    }
-    eprintln!(
-        "{} is not running; the next daemon started on its own takes the new owner key",
-        crate::APP_NAME
-    );
-    Ok(Some(NOT_RUNNING))
-}
-
-fn browser_address(port: u16, key: &str) -> String {
-    format!("http://localhost:{port}/?key={key}")
-}
-
 pub(super) fn stop() -> Result<i32> {
     let began = Instant::now();
     let outcome = match find_daemon(RESTART_WAIT, true)? {
-        // Judged once the daemon whose handover the stop waited through has ended, where its
-        // successor starts only after that. One that is not its successor is left running, as a
-        // daemon that took over from none the stop followed would be.
+        // The daemon found once the handover the stop waited through was over is stopped only if
+        // it took over from the daemon that handed over; any other is left running, and reported
+        // once that daemon has ended.
         Found::Running {
             owner,
             after: Some(from),
         } => {
-            // A daemon found holding the lock while a service-managed `from` still ran is not its
-            // successor, which the service manager starts only after `from` has exited.
-            let found_before_end = awaits_end(&from, !from.identity.is_running());
-            let ended = ended_by(&from, began + RESTART_WAIT);
-            match judge_after(found_before_end, ended, handed_over_to(&from, &owner)) {
-                Judged::Waiting => StopOutcome::StillStopping {
-                    pid: from.identity.pid.0,
-                    waited: began.elapsed(),
-                    other: found_before_end.then_some(owner),
-                },
-                Judged::Successor => stop_and_wait(&owner, began)?,
-                Judged::Other => StopOutcome::Superseded {
-                    ended: from.identity.pid.0,
-                    other: owner,
-                },
+            let key = owner.recorded_key();
+            match succession(&from, None, &owner, key.as_deref()) {
+                Succession::Successor => stop_following(&owner, key, began, None)?,
+                Succession::Other | Succession::Unproven => {
+                    if ended_by(&from, began + RESTART_WAIT) {
+                        StopOutcome::Superseded {
+                            ended: from.identity.pid.0,
+                            other: owner,
+                        }
+                    } else {
+                        StopOutcome::StillStopping {
+                            pid: from.identity.pid.0,
+                            waited: began.elapsed(),
+                            other: Some(owner),
+                        }
+                    }
+                }
             }
         }
         Found::Running { owner, .. } => stop_and_wait(&owner, began)?,
@@ -297,7 +151,7 @@ pub(super) fn stop() -> Result<i32> {
         // What held the lock, or was handing over, has gone with no daemon after it.
         Found::NotRunning { waited: true } => StopOutcome::EndedUnfollowed,
         Found::Unrecorded => {
-            eprintln!("{}", no_record("stopping", RESTART_WAIT));
+            eprintln!("{}", no_record("stopping", RESTART_WAIT, lock_holder()));
             return Ok(1);
         }
     };
@@ -347,10 +201,9 @@ pub(super) fn stop() -> Result<i32> {
 }
 
 /// Waits until `deadline` for the daemon `from`, whose handover `stop` waited through, to have
-/// ended where [`awaits_end`] says it must before the daemon found can be judged its successor.
-/// Whether it has.
+/// ended. Whether it has.
 fn ended_by(from: &Owner, deadline: Instant) -> bool {
-    while awaits_end(from, !from.identity.is_running()) {
+    while from.identity.is_running() {
         if Instant::now() >= deadline {
             return false;
         }
@@ -368,7 +221,7 @@ pub(super) fn restart() -> Result<i32> {
             return Ok(1);
         }
         Found::Unrecorded => {
-            eprintln!("{}", no_record("restarting", RESTART_WAIT));
+            eprintln!("{}", no_record("restarting", RESTART_WAIT, lock_holder()));
             return Ok(1);
         }
     };
@@ -395,22 +248,25 @@ pub(super) fn restart() -> Result<i32> {
             return Ok(1);
         }
     }
-    // Read before the request, since a daemon removes its record as it ends: the successor it
-    // starts itself shows itself by this key.
+    // Read before the request, since a daemon removes its record as it ends: a successor of an
+    // earlier build, which records no predecessor, shows itself by this key.
     let key = owner.recorded_key();
-    let asked = match proc::request_restart(&owner.identity) {
-        Sent::Delivered => Asked::Accepted,
-        Sent::Gone => Asked::Gone,
-        Sent::Failed(err) if err.kind() == std::io::ErrorKind::Unsupported => {
-            let Some(key) = key.as_deref() else {
+    // Asked over loopback wherever the key is recorded, so that a refusal (a holder inside the
+    // daemon's own service, say) comes back with its reason at once; the signal, which carries no
+    // answer, only for a daemon whose key is not recorded, as an earlier build's is not.
+    let asked = match key.as_deref() {
+        Some(key) => request_over_loopback(&owner, key, "/restart")?,
+        None => match proc::request_restart(&owner.identity) {
+            Sent::Delivered => Asked::Accepted,
+            Sent::Gone => Asked::Gone,
+            Sent::Failed(err) if err.kind() == std::io::ErrorKind::Unsupported => {
                 eprintln!("{}", key_not_recorded(&owner, "restart"));
                 return Ok(1);
-            };
-            request_over_loopback(&owner, key, "/restart")?
-        }
-        Sent::Failed(err) => {
-            return Err(err).context(format!("signalling pid {}", owner.identity.pid.0))
-        }
+            }
+            Sent::Failed(err) => {
+                return Err(err).context(format!("signalling pid {}", owner.identity.pid.0))
+            }
+        },
     };
     // A daemon that no longer accepts connections is not necessarily gone: one in a planned stop
     // of its own resets the request while it ends, and its successor follows. One that has ended
@@ -425,49 +281,54 @@ pub(super) fn restart() -> Result<i32> {
         }
     };
     let deadline = began + RESTART_WAIT;
-    let mut watch = HandoverWatch::default();
-    // Since when the lock has been seen free with the daemon's process ended.
-    let mut gone_since: Option<Instant> = None;
+    let mut watch = EndWatch::found_running(owner.identity);
     loop {
-        let lock_held = instance_lock::is_running()?;
-        match took_over(&owner, key.as_deref(), lock_held, recorded_after(&owner)) {
-            Some(TookOver::Successor(next)) => {
-                println!(
-                    "{} restarted: pid {}, {}",
-                    crate::APP_NAME,
-                    next.identity.pid.0,
-                    address(next.port)
-                );
-                return Ok(0);
-            }
-            Some(TookOver::Other(other)) => {
-                eprintln!(
-                    "{}, but another daemon has started since and is left running: pid {}, {}; \
-                     nothing shows that the restarted one handed over to it",
-                    stopped_phrase(owner.identity.pid.0, not_accepting),
-                    other.identity.pid.0,
-                    address(other.port)
-                );
-                return Ok(1);
-            }
-            None => {}
-        }
         let ended = !owner.identity.is_running();
-        // The lock looked at again after the note: a successor that took it and recorded itself
-        // since it was seen free has removed the note.
-        let noted = Owner::handover_noted().filter(|noted| noted.from.identity == owner.identity);
-        let now = Instant::now();
-        let handing_over = watch.pending(noted.as_ref(), now, SystemTime::now());
-        gone_since = gone_since_after(gone_since, now, !lock_held && ended);
-        let grace_over = grace_elapsed(gone_since, now, SERVICE_RESTART_GRACE);
-        if restart_abandoned(
-            &owner,
-            lock_held,
-            ended,
-            handing_over,
-            grace_over,
-            not_accepting,
-        ) && !instance_lock::is_running()?
+        let awaited = awaited(&owner, ended, &mut watch);
+        let lock_held = instance_lock::is_running()?;
+        if let Some((next, next_key)) = recorded_after(&owner).filter(|_| lock_held) {
+            let verdict = succession(&owner, key.as_deref(), &next, next_key.as_deref());
+            match verdict {
+                // Where nothing shows either way, the daemon holding the lock once the restarted
+                // one has ended is taken for its successor, as nothing better is known: the
+                // record of an earlier build does not say, and the key proves nothing when one
+                // could not be read. A proven successor is taken at once, even while the
+                // restarted daemon waits for it to report listening.
+                Succession::Successor | Succession::Unproven
+                    if ended || verdict == Succession::Successor =>
+                {
+                    println!(
+                        "{} restarted: pid {}, {}",
+                        crate::APP_NAME,
+                        next.identity.pid.0,
+                        address(next.port)
+                    );
+                    return Ok(0);
+                }
+                Succession::Other if ended => {
+                    eprintln!(
+                        "{}, but another daemon has started since and is left running: pid {}, \
+                         {}; nothing shows that the restarted one handed over to it",
+                        stopped_phrase(owner.identity.pid.0, not_accepting),
+                        next.identity.pid.0,
+                        address(next.port)
+                    );
+                    return Ok(1);
+                }
+                _ => {}
+            }
+        } else if !lock_held
+            && ended
+            && !next_may_come(
+                &awaited,
+                Instant::now(),
+                SystemTime::now(),
+                service_unit::state,
+            )
+            && !earlier_build_may_be_restarted(&owner, &awaited, Instant::now())
+            // Looked at again: a successor that took the lock since it was seen free, and
+            // recorded itself, has removed the note.
+            && !instance_lock::is_running()?
         {
             eprintln!(
                 "{}, and no daemon runs in its place: it crashed or was stopped, a stop asked for \
@@ -500,6 +361,38 @@ pub(super) fn restart() -> Result<i32> {
     Ok(1)
 }
 
+/// What `stop` and `restart` know of the daemon `owner` names, which they asked, for
+/// [`next_may_come`], given whether it has `ended`, which is read first: a daemon writes its note
+/// of a handover before it ends, and its successor removes the note only once it holds the lock
+/// and has recorded itself, so a command that then finds the lock free with no note has seen all
+/// there is.
+fn awaited<'a>(owner: &'a Owner, ended: bool, watch: &mut EndWatch) -> Awaited<'a> {
+    let noted_at = Owner::handover_noted()
+        .filter(|noted| noted.from.identity == owner.identity)
+        .map(|noted| noted.noted);
+    let crashed =
+        ended && Owner::last_recorded().is_some_and(|last| last.identity == owner.identity);
+    let gone_since = watch.observe(owner.identity, !ended, Instant::now());
+    Awaited {
+        from: owner,
+        ended,
+        noted_at,
+        crashed,
+        gone_since,
+    }
+}
+
+/// Whether `restart` still gives a service manager [`SERVICE_RESTART_GRACE`] to start a daemon
+/// after `owner`, whose record does not say whether one restarts it: an earlier build's, which
+/// may run under systemd with `--service-managed` and exits for it to start the next daemon,
+/// leaving neither a note nor its record behind. Counted from when this command saw it end.
+fn earlier_build_may_be_restarted(owner: &Owner, awaited: &Awaited<'_>, now: Instant) -> bool {
+    owner.service_managed.is_none()
+        && awaited
+            .gone_since
+            .is_some_and(|since| now.saturating_duration_since(since) < SERVICE_RESTART_GRACE)
+}
+
 /// What `restart` says of the daemon with pid `pid` that has ended: that it stopped to restart,
 /// or, where it no longer accepted the request (`not_accepting`), that it had stopped or was
 /// stopping already, which the command cannot tell apart.
@@ -512,25 +405,6 @@ fn stopped_phrase(pid: u32, not_accepting: bool) -> String {
     } else {
         format!("{} stopped (pid {pid}) to restart", crate::APP_NAME)
     }
-}
-
-/// Whether `restart` has seen the daemon `owner` names end with no successor on its way
-/// ([`abandoned`]), with `grace_over` saying that a service manager has had its time to start one
-/// ([`SERVICE_RESTART_GRACE`]): a daemon the manager restarts has no note of a handover when it
-/// ended before it was asked, so the grace is waited out for it before judging. A daemon that did
-/// not accept the request (`not_accepting`), whose record may not say how its successor starts, is
-/// judged ended once the lock is free and no handover is noted.
-fn restart_abandoned(
-    owner: &Owner,
-    lock_held: bool,
-    ended: bool,
-    handing_over: bool,
-    grace_over: bool,
-    not_accepting: bool,
-) -> bool {
-    let judged = abandoned(owner, lock_held, ended, handing_over)
-        || (not_accepting && !lock_held && ended && !handing_over);
-    judged && (owner.service_managed != Some(true) || grace_over)
 }
 
 pub(super) fn start(port: u16) -> Result<i32> {
@@ -617,12 +491,14 @@ impl From<anyhow::Error> for StartFailure {
 
 /// Starts the daemon that takes over from this one after a planned restart: on `port`, in the
 /// background as `start` starts it, with `key`, handed over on its stdin, so that its clients find
-/// it at the same address with the same key. `exe` is [`launch_path`]'s answer, taken at this
+/// it at the same address with the same key, and this daemon's identity after it, which it records
+/// as its predecessor. `exe` is [`launch_path`]'s answer, taken at this
 /// daemon's start (see `installation.rs` for what it follows). Called once this daemon has
 /// released the instance lock and the port. Logs how it went; whether it came up. **Blocks** until
 /// it reports listening, or for at most [`START_WAIT`].
 pub(crate) fn start_successor(port: u16, key: &str, exe: &Path) -> bool {
-    match spawn_and_await_handshake(exe, port, Some(key)) {
+    let handover = handover_input(key, crate::owner_record::own_identity());
+    match spawn_and_await_handshake(exe, port, Some(&handover)) {
         Ok(started) => {
             tracing::info!(pid = started.pid, port, "the next daemon is listening");
             if started.in_starter_job {
@@ -650,12 +526,13 @@ pub(crate) fn start_successor(port: u16, key: &str, exe: &Path) -> bool {
 }
 
 /// Starts the daemon `exe` on `port` in the background and waits for its handshake line, killing it
-/// when none comes in time. With `key`, the daemon is told to read its key from its stdin, where it
-/// is written; otherwise it makes one.
+/// when none comes in time. With `handover` (the key and the identity of the daemon handing over,
+/// [`handover_input`]), the daemon is told to read its key from its stdin, where that is written;
+/// otherwise it makes one.
 fn spawn_and_await_handshake(
     exe: &Path,
     port: u16,
-    key: Option<&str>,
+    handover: Option<&str>,
 ) -> Result<Started, StartFailure> {
     // Its working directory is the data directory, not wherever the starter was, so that it pins
     // no mount that is then busy at unmount.
@@ -666,7 +543,7 @@ fn spawn_and_await_handshake(
     command
         .args(["--port", &port.to_string()])
         .current_dir(&data_dir);
-    if key.is_some() {
+    if handover.is_some() {
         command.arg("--key-stdin");
     }
     // The pipes on stdout and stderr carry the handshake and what a failed start wrote, and the one
@@ -675,13 +552,14 @@ fn spawn_and_await_handshake(
     // daemon starts must set its own stdio, or one that inherited the dead stderr would be killed
     // by SIGPIPE.
     let (mut child, in_starter_job): (proc::BackgroundChild, bool) =
-        proc::spawn_in_background(&mut command, key.is_some()).context("starting the daemon")?;
+        proc::spawn_in_background(&mut command, handover.is_some())
+            .context("starting the daemon")?;
     let pid = child.id();
-    if let Some(key) = key {
-        // A line, well within what a pipe holds, so the write does not wait for the daemon to read
-        // it; the pipe is closed once it is written.
+    if let Some(handover) = handover {
+        // Two lines, well within what a pipe holds, so the write does not wait for the daemon to
+        // read them; the pipe is closed once they are written.
         let mut stdin = child.stdin.take().expect("stdin was piped");
-        if let Err(err) = writeln!(stdin, "{key}") {
+        if let Err(err) = write!(stdin, "{handover}") {
             child.kill().ok();
             child.wait().ok();
             return Err(anyhow::Error::new(err)
@@ -812,7 +690,7 @@ enum StopOutcome {
 /// Asks the daemon `owner` names to end, and waits for it and any successor it hands over to, all
 /// within [`RESTART_WAIT`] of `began`, when the command started.
 fn stop_and_wait(owner: &Owner, began: Instant) -> Result<StopOutcome> {
-    stop_following(owner, owner.recorded_key(), true, began, None)
+    stop_following(owner, owner.recorded_key(), began, None)
 }
 
 /// Asks the daemon `owner` names to end — by the termination signal where the host has one, else
@@ -820,18 +698,20 @@ fn stop_and_wait(owner: &Owner, began: Instant) -> Result<StopOutcome> {
 /// so that the stop leaves no daemon of its line running, as an ordinary stop would. A daemon in a
 /// planned restart no longer accepts connections, and one that has already settled on its
 /// successor ignores the signal; either way its successor takes the lock, and is then asked in its
-/// place (see [`handover`] for which daemon counts as one). `key` is the key recorded for `owner`,
-/// read before it is asked, since a daemon removes its record as it ends. `follow_service` says
-/// whether a successor a service manager starts may still be followed. Until [`STOP_WAIT`] after a
-/// daemon takes the request, and in any case [`RESTART_WAIT`] after `began`, when the command
-/// started, which the wait for the daemon to be found counts in too; a daemon that has ended with
-/// the lock free by then is gone, whatever grace a service manager had left. `taken_at` says
-/// when a daemon this stop asked before `owner`, on its way to it, took the request over
-/// loopback, which is when the bound of [`STOP_WAIT`] counts from for `owner` too.
+/// place, where it shows itself that daemon's successor ([`succession`]): one that does not, which
+/// a user, the desktop application or a service manager restarting after every exit started, is
+/// reported and left running once the stopped daemon has ended. `key` is the key recorded for
+/// `owner`, read before it is asked, since a daemon removes its record as it ends. A daemon that
+/// has ended with the lock free is gone once no daemon may still take over from it
+/// ([`next_may_come`]). Until [`STOP_WAIT`] after a daemon takes the request, and in any case
+/// [`RESTART_WAIT`] after `began`, when the command started, which the wait for the daemon to be
+/// found counts in too; a daemon that has ended with the lock free by then is gone, whatever a
+/// service manager may still start. `taken_at` says when a daemon this stop asked before `owner`,
+/// on its way to it, took the request over loopback, which is when the bound of [`STOP_WAIT`]
+/// counts from for `owner` too.
 fn stop_following(
     owner: &Owner,
     key: Option<String>,
-    follow_service: bool,
     began: Instant,
     taken_at: Option<Instant>,
 ) -> Result<StopOutcome> {
@@ -841,7 +721,7 @@ fn stop_following(
         Sent::Gone => Asked::Gone,
         Sent::Failed(err) if err.kind() == std::io::ErrorKind::Unsupported => {
             let Some(key) = key.as_deref() else {
-                return Ok(StopOutcome::NoKey(*owner));
+                return Ok(StopOutcome::NoKey(owner.clone()));
             };
             over_loopback = true;
             request_over_loopback(owner, key, "/shutdown")?
@@ -859,51 +739,36 @@ fn stop_following(
     };
     let asked_at = Instant::now();
     let deadline = wait_deadline(taken_at, took.then_some(asked_at), began + RESTART_WAIT);
-    // Since when the lock has been seen free with the daemon's process ended, for the grace a
-    // service manager has to start the successor.
-    let mut gone_since: Option<Instant> = None;
-    // Whether a note has named `owner` as handing over. It is read before the record below, since
-    // the next daemon removes it only once it has recorded itself.
-    let mut handing_over = false;
+    let mut watch = EndWatch::found_running(owner.identity);
     loop {
-        let lock_held = instance_lock::is_running()?;
         let ended = !owner.identity.is_running();
-        handing_over |=
-            Owner::handover_noted().is_some_and(|noted| noted.from.identity == owner.identity);
+        let awaited = awaited(owner, ended, &mut watch);
+        let lock_held = instance_lock::is_running()?;
         let now = Instant::now();
-        gone_since = gone_since_after(gone_since, now, !lock_held && ended);
-        let grace_over = now >= deadline || grace_elapsed(gone_since, now, SERVICE_RESTART_GRACE);
-        match handover(
-            owner,
-            key.as_deref(),
-            lock_held,
-            ended,
-            recorded_after(owner),
-            Standing {
-                follow_service,
-                grace_over,
-                handing_over,
-            },
-        ) {
-            Some(Handover::Gone) => return Ok(outcome_once_gone(taken_at.is_some(), took)),
-            Some(Handover::Successor {
-                next,
-                key,
-                by_service,
-            }) => {
-                let follow_service = follow_service && !by_service;
-                let taken_at = carried_on(taken_at, took && over_loopback, asked_at);
-                return stop_following(&next, key, follow_service, began, taken_at);
+        if let Some((next, next_key)) = recorded_after(owner).filter(|_| lock_held) {
+            match succession(owner, key.as_deref(), &next, next_key.as_deref()) {
+                Succession::Successor => {
+                    let taken_at = carried_on(taken_at, took && over_loopback, asked_at);
+                    return stop_following(&next, next_key, began, taken_at);
+                }
+                // Judged only once the stopped daemon has ended: until then it may still be
+                // ending, with the lock released before its teardown and its exit.
+                _ if ended => {
+                    return Ok(StopOutcome::Superseded {
+                        ended: owner.identity.pid.0,
+                        other: next,
+                    })
+                }
+                _ => {}
             }
-            Some(Handover::Other(other)) => {
-                return Ok(StopOutcome::Superseded {
-                    ended: owner.identity.pid.0,
-                    other,
-                })
-            }
-            None => {}
+        } else if !lock_held
+            && ended
+            && (now >= deadline
+                || !next_may_come(&awaited, now, SystemTime::now(), service_unit::state))
+        {
+            return Ok(outcome_once_gone(taken_at.is_some(), took));
         }
-        if Instant::now() >= deadline {
+        if now >= deadline {
             return Ok(StopOutcome::StillStopping {
                 pid: owner.identity.pid.0,
                 waited: began.elapsed(),
@@ -965,7 +830,7 @@ fn key_not_recorded(owner: &Owner, what: &str) -> String {
 
 /// What the daemon answered a request over loopback with.
 #[derive(Debug)]
-enum Asked {
+pub(super) enum Asked {
     /// It took the request.
     Accepted,
     /// It was not listening: it is gone, or going.
@@ -977,22 +842,33 @@ enum Asked {
 /// Asks the daemon `owner` names to do what `path` (`/shutdown`, `/restart` or
 /// `/owner-key/rotate`) says, presenting `key`, which goes over the loopback connection only, never
 /// in a command line or an environment. What a refusal says is the daemon's own message. Any other
-/// failure is an error.
-fn request_over_loopback(owner: &Owner, key: &str, path: &str) -> Result<Asked> {
+/// failure is an error, which carries the daemon's message where its answer has one, as a failure
+/// to write the new owner key does.
+pub(super) fn request_over_loopback(owner: &Owner, key: &str, path: &str) -> Result<Asked> {
     match loopback::post(owner.port, key, path, b"{}", REQUEST_WAIT) {
         Ok(_) => Ok(Asked::Accepted),
         Err(err) if loopback::error_status(&err) == Some(409) => Ok(Asked::Refused(
-            loopback::error_body(&err)
-                .and_then(|body| serde_json::from_slice::<serde_json::Value>(body).ok())
-                .and_then(|body| body["message"].as_str().map(str::to_owned))
-                .unwrap_or_else(|| "no reason given".to_owned()),
+            error_message(&err).unwrap_or_else(|| "no reason given".to_owned()),
         )),
         Err(err) if no_longer_accepting(&err) => Ok(Asked::Gone),
-        Err(err) => Err(err).context(format!(
-            "asking pid {} on port {} ({path})",
-            owner.identity.pid.0, owner.port
-        )),
+        Err(err) => {
+            let err = match error_message(&err) {
+                Some(message) => anyhow::anyhow!("{err}: {message}"),
+                None => anyhow::Error::new(err),
+            };
+            Err(err.context(format!(
+                "asking pid {} on port {} ({path})",
+                owner.identity.pid.0, owner.port
+            )))
+        }
     }
+}
+
+/// The `message` of the JSON body of the daemon's error answer, when `err` is one and has it.
+fn error_message(err: &std::io::Error) -> Option<String> {
+    loopback::error_body(err)
+        .and_then(|body| serde_json::from_slice::<serde_json::Value>(body).ok())
+        .and_then(|body| body["message"].as_str().map(str::to_owned))
 }
 
 /// Whether `err`, from a request over loopback, says the daemon no longer accepts connections: it
@@ -1025,17 +901,19 @@ fn drain_kept(mut pipe: impl Read, kept: &Mutex<Vec<u8>>) {
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use super::*;
 
     use std::net::TcpListener;
 
+    use crate::owner_record::Predecessor;
     use crate::platform::proc::{ProcessId, ProcessIdentity};
     use crate::test_support::PATIENCE;
 
-    const KEY: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    pub(in crate::cli) const KEY: &str =
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
-    fn owner_on(port: u16) -> Owner {
+    pub(in crate::cli) fn owner_on(port: u16) -> Owner {
         Owner {
             identity: ProcessIdentity {
                 pid: ProcessId(std::process::id()),
@@ -1045,12 +923,16 @@ mod tests {
             follows_application: Some(false),
             service_managed: Some(false),
             takes_owner_key: false,
+            unit: None,
+            predecessor: Predecessor::None,
         }
     }
 
     /// Answers one request with `response`, and gives its request line (through the first line
     /// of the head) back through the handle.
-    fn answer_once(response: impl Into<String>) -> (u16, std::thread::JoinHandle<String>) {
+    pub(in crate::cli) fn answer_once(
+        response: impl Into<String>,
+    ) -> (u16, std::thread::JoinHandle<String>) {
         let response = response.into();
         let listener = TcpListener::bind("127.0.0.1:0").expect("a loopback port");
         let port = listener.local_addr().unwrap().port();
@@ -1084,140 +966,6 @@ mod tests {
             request_line
         });
         (port, served)
-    }
-
-    #[test]
-    fn the_browser_address_is_localhost_at_the_port_with_the_key() {
-        assert_eq!(
-            browser_address(7531, KEY),
-            format!("http://localhost:7531/?key={KEY}")
-        );
-    }
-
-    const OWNER_KEY: &str = "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210";
-
-    fn owner_taking_key_on(port: u16) -> Owner {
-        owner_on(port).with_owner_key(true)
-    }
-
-    /// The owner key is printed only for a daemon that accepts one and only when the file holds a
-    /// key; every other case gets the launch key.
-    #[test]
-    fn the_address_has_the_owner_key_only_where_the_daemon_takes_it() {
-        let dir = crate::test_support::ScratchDir::new("address-owner-key");
-        let launch = format!("http://localhost:7531/?key={KEY}");
-        let owner = format!("http://localhost:7531/?key={OWNER_KEY}");
-        // No file.
-        assert_eq!(
-            address_to_print(&owner_taking_key_on(7531), KEY, &dir),
-            (launch.clone(), false)
-        );
-        std::fs::write(crate::owner_key::path_in(&dir), format!("{OWNER_KEY}\n")).unwrap();
-        assert_eq!(
-            address_to_print(&owner_taking_key_on(7531), KEY, &dir),
-            (owner, true)
-        );
-        // A daemon without the token (desktop application, earlier build).
-        assert_eq!(
-            address_to_print(&owner_on(7531), KEY, &dir),
-            (launch.clone(), true)
-        );
-        // A file that holds no key.
-        std::fs::write(crate::owner_key::path_in(&dir), "nonsense\n").unwrap();
-        assert_eq!(
-            address_to_print(&owner_taking_key_on(7531), KEY, &dir),
-            (launch, false)
-        );
-    }
-
-    /// The rotation goes to `/owner-key/rotate` with the launch key, and on a `204` the address
-    /// printed is of the key the daemon wrote.
-    #[test]
-    fn a_rotation_asks_with_the_launch_key_and_reads_the_new_key() {
-        let dir = crate::test_support::ScratchDir::new("rotate-asked");
-        std::fs::write(crate::owner_key::path_in(&dir), format!("{OWNER_KEY}\n")).unwrap();
-        let (port, served) = answer_once("HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n");
-        let status = rotate_owner_key(&owner_taking_key_on(port), KEY, &dir).unwrap();
-        assert_eq!(status, 0);
-        assert_eq!(
-            served.join().unwrap(),
-            format!("POST /owner-key/rotate?key={KEY} HTTP/1.1\r\n")
-        );
-    }
-
-    /// A refusal or a failed request is status 1, and the owner key is not read.
-    #[test]
-    fn a_refused_or_failed_rotation_is_status_1() {
-        let dir = crate::test_support::ScratchDir::new("rotate-refused");
-        std::fs::write(crate::owner_key::path_in(&dir), format!("{OWNER_KEY}\n")).unwrap();
-        let refusal = r#"{"message":"this daemon holds no owner key"}"#;
-        for response in [
-            "HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n".to_owned(),
-            "HTTP/1.1 500 Internal Server Error\r\nConnection: close\r\n\r\n".to_owned(),
-            format!(
-                "HTTP/1.1 409 Conflict\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{refusal}",
-                refusal.len()
-            ),
-        ] {
-            let (port, served) = answer_once(response.clone());
-            assert_eq!(
-                rotate_owner_key(&owner_taking_key_on(port), KEY, &dir).unwrap(),
-                1,
-                "{response}"
-            );
-            served.join().unwrap();
-        }
-        // A daemon that took the request but left no key behind.
-        std::fs::remove_file(crate::owner_key::path_in(&dir)).unwrap();
-        let (port, served) = answer_once("HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n");
-        assert_eq!(
-            rotate_owner_key(&owner_taking_key_on(port), KEY, &dir).unwrap(),
-            1
-        );
-        served.join().unwrap();
-    }
-
-    /// With no daemon, a rotation replaces the file when the data directory exists and creates
-    /// nothing when it does not; both are status 3.
-    #[test]
-    fn a_rotation_with_no_daemon_replaces_the_file_only_in_an_existing_data_directory() {
-        let dir = crate::test_support::ScratchDir::new("rotate-no-daemon");
-        std::fs::write(crate::owner_key::path_in(&dir), format!("{OWNER_KEY}\n")).unwrap();
-        assert_eq!(
-            rotate_without_daemon(&dir, || Ok(false)).unwrap(),
-            Some(NOT_RUNNING)
-        );
-        let new = crate::owner_key::read_in(&dir).expect("a key");
-        assert_ne!(new, OWNER_KEY);
-
-        let missing = dir.join("no-such-data-directory");
-        assert_eq!(
-            rotate_without_daemon(&missing, || Ok(false)).unwrap(),
-            Some(NOT_RUNNING)
-        );
-        assert!(!missing.exists());
-    }
-
-    /// A daemon that takes no owner key is told so and the file is replaced for the next one; the
-    /// address is its launch key's.
-    #[test]
-    fn a_rotation_for_a_daemon_without_an_owner_key_replaces_the_file_and_exits_0() {
-        let dir = crate::test_support::ScratchDir::new("rotate-daemon-without");
-        std::fs::write(crate::owner_key::path_in(&dir), format!("{OWNER_KEY}\n")).unwrap();
-        assert_eq!(
-            rotate_for_daemon_without_owner_key(&owner_on(7531), KEY, &dir).unwrap(),
-            0
-        );
-        let new = crate::owner_key::read_in(&dir).expect("a key");
-        assert_ne!(new, OWNER_KEY);
-    }
-
-    /// A daemon that holds the lock once the file is written is not told the next one takes the
-    /// key: the caller rotates through it.
-    #[test]
-    fn a_daemon_that_started_during_a_rotation_without_one_is_rotated_through() {
-        let dir = crate::test_support::ScratchDir::new("rotate-raced");
-        assert_eq!(rotate_without_daemon(&dir, || Ok(true)).unwrap(), None);
     }
 
     /// The request goes to the path asked for, with the key as its `key` query, and a `202` is
@@ -1351,28 +1099,6 @@ mod tests {
         );
     }
 
-    /// A daemon that ended without being asked, which a service manager restarts, is not judged
-    /// abandoned before the manager has had its grace; one without a record of how its successor
-    /// starts, which cannot be waited for, is judged at once; a handover noted or a held lock
-    /// holds the judgement back.
-    #[test]
-    fn a_restart_gives_a_service_manager_its_grace_before_judging_a_gone_daemon() {
-        let mut owner = owner_on(1);
-        owner.service_managed = Some(true);
-        assert!(!restart_abandoned(&owner, false, true, false, false, true));
-        assert!(restart_abandoned(&owner, false, true, false, true, true));
-        assert!(!restart_abandoned(&owner, false, true, true, true, true));
-        assert!(!restart_abandoned(&owner, true, true, false, true, true));
-        // One that accepted the request and ended without a note waits out the grace as well.
-        assert!(!restart_abandoned(&owner, false, true, false, false, false));
-        assert!(restart_abandoned(&owner, false, true, false, true, false));
-        owner.service_managed = None;
-        assert!(restart_abandoned(&owner, false, true, false, false, true));
-        assert!(!restart_abandoned(&owner, false, true, false, false, false));
-        owner.service_managed = Some(false);
-        assert!(restart_abandoned(&owner, false, true, false, false, false));
-    }
-
     /// A daemon that listens no more is gone, which the wait for the lock then settles.
     #[test]
     fn a_daemon_that_does_not_listen_is_gone() {
@@ -1429,5 +1155,157 @@ mod tests {
         ] {
             assert!(!no_longer_accepting(&Error::from(kind)), "{kind:?}");
         }
+    }
+
+    fn json_response(status: &str, body: &str) -> String {
+        format!(
+            "HTTP/1.1 {status}\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{body}",
+            body.len()
+        )
+    }
+
+    /// An error answer whose JSON body has a `message` ends the error with it, so that the cause
+    /// the daemon gave (a failed write of the new owner key, say) reaches the user.
+    #[test]
+    fn an_error_answer_over_loopback_ends_with_the_daemons_message() {
+        let body = r#"{"reason":"write_failed","message":"writing owner.key failed"}"#;
+        for status in [
+            "500 Internal Server Error",
+            "400 Bad Request",
+            "401 Unauthorized",
+        ] {
+            let (port, served) = answer_once(json_response(status, body));
+            let err = request_over_loopback(&owner_on(port), KEY, "/owner-key/rotate").unwrap_err();
+            served.join().unwrap();
+            let said = format!("{err:#}");
+            assert!(
+                said.ends_with(": writing owner.key failed"),
+                "{status}: {said}"
+            );
+            let code = status.split(' ').next().unwrap();
+            assert!(
+                said.contains("/owner-key/rotate") && said.contains(&format!("HTTP {code}")),
+                "{status}: {said}"
+            );
+        }
+    }
+
+    /// Without a `message` string to give, the error is what it was: the call and the status.
+    #[test]
+    fn an_error_answer_over_loopback_without_a_message_is_unchanged() {
+        let bodies = [
+            "",
+            "not json",
+            r#"{"reason":"write_failed"}"#,
+            r#"{"message":42}"#,
+            r#"{"message":null}"#,
+            "[]",
+        ];
+        for body in bodies {
+            let (port, served) = answer_once(json_response("500 Internal Server Error", body));
+            let err = request_over_loopback(&owner_on(port), KEY, "/shutdown").unwrap_err();
+            served.join().unwrap();
+            let said = format!("{err:#}");
+            assert!(said.ends_with("(HTTP 500)"), "{body:?}: {said}");
+            assert!(said.contains("/shutdown"), "{body:?}: {said}");
+        }
+    }
+
+    /// A `409` stays a refusal, with no reason given where its body has no message.
+    #[test]
+    fn a_refusal_over_loopback_without_a_message_gives_no_reason() {
+        let (port, served) = answer_once(json_response("409 Conflict", r#"{"reason":"x"}"#));
+        let asked = request_over_loopback(&owner_on(port), KEY, "/restart").unwrap();
+        served.join().unwrap();
+        assert!(matches!(&asked, Asked::Refused(message) if message == "no reason given"));
+    }
+
+    /// A daemon that holds the lock without a record is named by the process the host says holds
+    /// the lock, where it does.
+    #[test]
+    fn the_account_of_a_daemon_with_no_record_names_the_lock_holder_where_known() {
+        let waited = Duration::from_secs(90);
+        let named = no_record("stopping", waited, Some(4242));
+        assert!(
+            named.contains("is running (pid 4242 holds the lock), but"),
+            "{named}"
+        );
+        assert!(
+            named.contains("90 seconds") && named.contains("not stopping it"),
+            "{named}"
+        );
+        let unnamed = no_record("stopping", waited, None);
+        assert!(!unnamed.contains("holds the lock"), "{unnamed}");
+        assert!(unnamed.contains("is running, but"), "{unnamed}");
+        assert!(unnamed.contains("90 seconds"), "{unnamed}");
+    }
+
+    fn awaited_gone_since<'a>(from: &'a Owner, gone_since: Option<Instant>) -> Awaited<'a> {
+        Awaited {
+            from,
+            ended: true,
+            noted_at: None,
+            crashed: false,
+            gone_since,
+        }
+    }
+
+    /// A record that does not say whether a service manager restarts its daemon is an earlier
+    /// build's, which may run under systemd and leaves neither note nor record: `restart` waits
+    /// out the grace period counted from when it saw that daemon end, and no longer.
+    #[test]
+    fn an_earlier_build_may_be_restarted_until_the_grace_after_it_was_seen_to_end() {
+        let mut owner = owner_on(1);
+        owner.service_managed = None;
+        let seen_ending = Instant::now();
+        let awaited = awaited_gone_since(&owner, Some(seen_ending));
+        let may_be_restarted =
+            |after: Duration| earlier_build_may_be_restarted(&owner, &awaited, seen_ending + after);
+        assert!(may_be_restarted(Duration::ZERO));
+        assert!(may_be_restarted(
+            SERVICE_RESTART_GRACE - Duration::from_millis(1)
+        ));
+        assert!(!may_be_restarted(SERVICE_RESTART_GRACE));
+        assert!(!may_be_restarted(SERVICE_RESTART_GRACE * 10));
+    }
+
+    /// A daemon this command never saw running and then ended has no moment to count from.
+    #[test]
+    fn an_earlier_build_not_seen_to_end_is_not_waited_for() {
+        let mut owner = owner_on(1);
+        owner.service_managed = None;
+        let awaited = awaited_gone_since(&owner, None);
+        assert!(!earlier_build_may_be_restarted(
+            &owner,
+            &awaited,
+            Instant::now()
+        ));
+    }
+
+    /// A record that says whether a service manager restarts its daemon, either way, is a later
+    /// build's, which leaves a note or a record where one does: nothing is waited for here.
+    #[test]
+    fn a_build_that_says_whether_a_service_manager_restarts_it_is_not_waited_for() {
+        let seen_ending = Instant::now();
+        for managed in [true, false] {
+            let mut owner = owner_on(1);
+            owner.service_managed = Some(managed);
+            let awaited = awaited_gone_since(&owner, Some(seen_ending));
+            assert!(
+                !earlier_build_may_be_restarted(&owner, &awaited, seen_ending),
+                "{managed}"
+            );
+        }
+    }
+
+    /// A clock reading before the moment the daemon was seen to end (as `Instant`s are compared
+    /// saturating) counts as no time passed, not as a panic.
+    #[test]
+    fn an_earlier_build_is_waited_for_when_now_is_before_it_was_seen_to_end() {
+        let mut owner = owner_on(1);
+        owner.service_managed = None;
+        let now = Instant::now();
+        let awaited = awaited_gone_since(&owner, Some(now + Duration::from_secs(1)));
+        assert!(earlier_build_may_be_restarted(&owner, &awaited, now));
     }
 }

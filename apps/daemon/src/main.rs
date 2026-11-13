@@ -88,10 +88,11 @@ fn main() -> Result<()> {
 
     // While this is still the only thread.
     processes::ledger::forget_inherited_tag();
-    let key = if cli.key_stdin {
-        Some(read_key_from_stdin()?)
+    let (key, handed_over_from) = if cli.key_stdin {
+        let (key, from) = read_key_from_stdin()?;
+        (Some(key), Some(from))
     } else {
-        None
+        (None, None)
     };
     let log_file = init_logging();
     platform::proc::crash::install();
@@ -103,6 +104,7 @@ fn main() -> Result<()> {
             cli.parent_pid,
             cli.port,
             key,
+            handed_over_from,
             cli.service_managed,
             log_file,
         ))?;
@@ -114,15 +116,18 @@ fn main() -> Result<()> {
 }
 
 /// The key the daemon a planned restart stopped hands its successor (`--key-stdin`): the first
-/// line of stdin, which has to have the form of a key.
-fn read_key_from_stdin() -> Result<String> {
+/// line of stdin, which has to have the form of a key; and the daemon that handed it over, which
+/// the line after it names (see `cli::handed_over_from`), or not, from an earlier build.
+fn read_key_from_stdin() -> Result<(String, owner_record::Predecessor)> {
+    let mut stdin = std::io::stdin().lock();
     let mut line = String::new();
-    std::io::stdin()
-        .read_line(&mut line)
-        .context("reading the key from stdin")?;
+    std::io::BufRead::read_line(&mut stdin, &mut line).context("reading the key from stdin")?;
     let key = line.trim();
     anyhow::ensure!(request_guard::is_key(key), "what stdin gave is not a key");
-    Ok(key.to_string())
+    // The daemon that wrote the key has closed the pipe, so this ends there at the latest.
+    let mut from = String::new();
+    std::io::BufRead::read_line(&mut stdin, &mut from).ok();
+    Ok((key.to_string(), cli::handed_over_from(&from)))
 }
 
 /// Sends the daemon's log, at `INFO` and above, to stderr and to `daemon.log` (`log_file`). Never
@@ -167,12 +172,14 @@ fn init_logging() -> log_file::LogFile {
 }
 
 /// Runs the daemon on `port` when one is given, else on a port the system assigns, with `key` when
-/// one is given, else a key of its own. `service_managed` is `--service-managed`. Returns the
-/// status to exit with, when it is not 0.
+/// one is given, else a key of its own; `handed_over_from` is the daemon that handed `key` over,
+/// as far as it said. `service_managed` is `--service-managed`. Returns the status to exit with,
+/// when it is not 0.
 async fn run_daemon(
     parent_pid: Option<u32>,
     port: Option<u16>,
     key: Option<String>,
+    handed_over_from: Option<owner_record::Predecessor>,
     service_managed: bool,
     log_file: log_file::LogFile,
 ) -> Result<Option<i32>> {
@@ -355,12 +362,28 @@ async fn run_daemon(
 
     // Before the line below, which is what a caller waits for, so that whoever sees the line can
     // find the daemon through this record. The record says whether a service manager starts the
-    // successor, which makes a key of its own, rather than this daemon, which hands over its key.
+    // successor, which makes a key of its own, rather than this daemon, which hands over its key;
+    // the systemd unit it runs as, which a command asks systemd about; and which daemon it took
+    // over from, as the daemon that started it said, or as the note or the record a daemon before
+    // it in its service left, read before this record replaces it and the note is settled below.
+    let unit = state
+        .service_managed()
+        .then(platform::proc::user_service_unit)
+        .flatten();
+    let predecessor = match handed_over_from {
+        Some(from) => from,
+        None if state.service_managed() => {
+            owner_record::Owner::service_predecessor(unit.as_deref())
+        }
+        None => owner_record::Predecessor::None,
+    };
     let owner =
         owner_record::Owner::current(port, parent_pid.is_some(), takes_restart).map(|owner| {
             owner
                 .with_service_manager(state.service_managed())
                 .with_owner_key(state.owner_key.is_held())
+                .with_unit(unit)
+                .with_predecessor(predecessor)
         });
     match &owner {
         Some(owner) => {
@@ -492,7 +515,7 @@ async fn run_daemon(
         },
     };
     remove_port_file(&port_file, port);
-    if let Some(owner) = owner {
+    if let Some(owner) = &owner {
         // Ahead of the record going: from then until the next daemon has recorded itself, the
         // note is what shows a command that one is on its way.
         if successor {

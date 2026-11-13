@@ -13,28 +13,46 @@ releases the lock, and the next daemon records itself only once it holds the loc
 no record, and for another it is free. Before it removes the record, the restarting daemon writes `daemon.handover`,
 which the next daemon removes once it has recorded itself. So before judging, every command waits while the lock is free
 and `daemon.handover` names a daemon whose next one may still take the lock: as long as that daemon's process still
-runs, since one that starts its next daemon itself waits for that one to report listening, and, for one whose next
-daemon a service manager starts, for **3 seconds** after it ended, counted from the later of when the command saw it end
-and when the file was written. `start`, `stop` and `restart` also wait while a daemon holds the lock without a usable
-`daemon.owner` naming it; `status` and `address` do so only once they have seen a handover pending, and only while its
+runs, since one that starts its next daemon itself waits for that one to report listening, and, once it has ended, for
+as long as a service manager may still start its next daemon (see "Whether a service manager may still start the next
+daemon" below). `start`, `stop` and `restart` also wait while a daemon holds the lock without a usable `daemon.owner`
+naming it; `status` and `address` do so only once they have seen a handover pending, and only while its
 `daemon.handover` is still there, for the next daemon to record itself: the file is removed after the record is written,
 so a daemon that holds the lock with no record and no file will not record, and they never wait on one that cannot
 record itself. The wait lasts up to **90 seconds**. The daemon that then holds the lock and has recorded itself is the
-one the command acts on, with one exception for `stop`: where the wait went through the handover of a daemon whose
-`daemon.owner` (as `daemon.handover` repeats it) said a service manager starts its next daemon, a daemon not recorded as
-service-managed is not that next daemon, and neither is one that follows the desktop application, since the restarting
-daemon starts its next one without it — one `start`, a user or the desktop application started in the free lock — and
-neither is any daemon that holds the lock before the handing-over daemon has ended, which a service manager waits for;
-`stop` waits for that daemon to end, within the 90 seconds, so that its pid is the one it reports stopped, and then
-treats the daemon it found as not the next one whatever its record says; if that daemon never ends within the wait,
-`stop` says it is still stopping, adds that another daemon holds the lock and is left running, with its pid and address,
-and exits with status 1. `stop` leaves the daemon that is not the next one running, saying, as below, that the daemon
-stopped but another one has started since, and exits with status 1. After the handover of a daemon that starts its next
-daemon itself, whatever daemon holds the lock next, but one that follows the desktop application, is taken for that next
-daemon: the key that would show it is removed with the restarting daemon's records, and that daemon starts its next one
-as soon as it releases the lock, so that only a start racing it could come first. A daemon that starts its next daemon
-itself and could not tell its own start time writes neither record nor `daemon.handover`, so the free lock of its
-restart cannot be told apart from no daemon at all.
+one the command acts on, with one exception for `stop`: where the wait went through a handover, a daemon whose
+`daemon.owner` does not name the handing-over daemon as the one it took over from (see "Which daemon took over" below)
+is not that daemon's next one — one `start`, a user or the desktop application started in the free lock, say, or one
+whose record does not say. `stop` waits for the handing-over daemon to end, within the 90 seconds, so that its pid is
+the one it reports stopped; if it never ends within the wait, `stop` says it is still stopping, adds that another daemon
+holds the lock and is left running, with its pid and address, and exits with status 1. Otherwise `stop` leaves the
+daemon that is not the next one running, saying, as below, that the daemon stopped but another one has started since,
+and exits with status 1. A daemon that starts its next daemon itself and could not tell its own start time writes
+neither record nor `daemon.handover`, so the free lock of its restart cannot be told apart from no daemon at all.
+
+**Which daemon took over.** Every daemon records in `daemon.owner` which daemon it took over from, or that it took over
+from none, or does not say (for which it names, and when it does not say, see `daemon.owner` in
+`docs/product/files-octoboard-owns.md`). `stop` and `restart` recognise the next daemon of the daemon they asked by its
+record naming that daemon. Where the next daemon's record does not say, they compare keys instead, both read from
+`daemon.key`, the asked daemon's before it was asked: a daemon that starts its next daemon itself hands it its key, and
+every other start makes a key of its own, so the same key shows the next daemon and another key shows another daemon.
+Where a key could not be read, for either daemon, nothing shows either way: `restart` then takes that daemon for the
+next one once the restarted daemon has ended, and `stop` never follows it.
+
+**Whether a service manager may still start the next daemon.** A daemon not recorded as service-managed that has ended
+with the lock free has no next daemon on its way: one that starts its next daemon itself has seen that one report
+listening, which it does only once it has recorded itself. For a daemon recorded as service-managed that has ended with
+the lock free, a command asks systemd about the unit its `daemon.owner` names (`systemctl --user show`), whether or not
+the daemon noted a handover: while the unit is activating or deactivating, or active with a main process, a daemon may
+still come, and the command goes on waiting, whatever `RestartSec=` the unit sets or however slow the host is; once the
+unit is inactive or failed, asked twice 100 milliseconds apart, none will, and the command judges at once. Only where
+systemd cannot be asked — the record names no unit (the daemon runs in a system unit, under a systemd older than 248 or
+under another service manager), or `systemctl` is missing, fails, does not know the unit, or takes more than **2
+seconds** to answer, and one that could not be started or did not answer in time is not asked again by that command —
+does a fixed wait stand in: a daemon that noted a handover, or that ended leaving its `daemon.owner` behind as a daemon
+that crashed or was killed does, may still be followed for **3 seconds**, counted from the later of when the note was
+written and when the command, having seen the daemon running, saw it end; any other daemon that has ended with the lock
+free is gone at once.
 
 - **`octoboardd start [--port <port>]`** starts the daemon in the background on that port, with the same range as the
   foreground daemon's `--port`, or, without `--port`, on the default server port (see "Choosing the port" in
@@ -72,96 +90,92 @@ restart cannot be told apart from no daemon at all.
   not write the record — is not stopped there: `stop` says so, with its pid and port, and exits with status 1. On every
   host `stop` reads that key before it asks, to recognise the daemon's successor below. Once a daemon has taken the
   request (the signal reached it, or it answered the request), `stop` waits up to **60 seconds** for it to be gone — the
-  lock free and its process ended — and exits with status 0, but within **90 seconds** of the command's start, the wait
-  above for a daemon to be found included; on Windows the daemons it goes on to follow share the first 60 seconds,
-  counted from the first request a daemon took, while on Unix each daemon it follows gets 60 seconds of its own, counted
-  from its own request, within the 90 seconds overall. A daemon still running when the wait ends makes it say so, with
-  the pid, and exit with status 1, while the stop goes on. A daemon that is already gone when signalled, or no longer
-  accepts the connection (refuses it, or resets it unanswered), has ended, or is ending, or is in a planned stop or
-  restart (see "An ordinary stop during a planned stop" in `docs/product/planned-restart-and-planned-stop.md`): `stop`
-  then watches `daemon.lock` and `daemon.owner` for up to **90 seconds** from its start, the wait above for a daemon to
-  be found included, so that a stop that waited then takes the request has what is left of them. Either way, once
-  another daemon holds the lock and shows itself the next daemon of a planned restart, `stop` asks that one instead, the
-  same way, and follows it in turn; one that does not take the request is waited for within the same 90 seconds. A
-  daemon that starts the next daemon itself hands it its key, so that one shows itself by having recorded the very key
-  `stop` read for the daemon it asked (a daemon that has already settled on starting it ignores the signal). The next
-  daemon a service manager starts makes a new key instead, so where `daemon.owner` recorded the daemon asked as one
-  whose next daemon a service manager starts, a daemon recorded as service-managed shows itself the next daemon once the
-  one asked has ended. For such a daemon `stop` goes on watching for **3 seconds** once the lock is free and the daemon
-  has ended, the time for the service manager to start the next one (systemd starts it 100 milliseconds after the exit
-  unless the unit says otherwise), so stopping it is reported that much later; a next daemon started later than that is
-  neither stopped nor reported. One `stop` follows at most one next daemon a service manager starts: a second is
-  reported and left running as below, since a unit that restarts the daemon after every exit starts one after each stop
-  too (with `Restart=always`, `stop` therefore follows one plain systemd restart and stops it, then reports the next one
-  as started since; the shipped unit uses `Restart=on-failure` and is not affected). Where the key could not be read but
-  `daemon.handover` names a daemon asked that starts its next daemon itself as handing over, its key went with its
-  records, and `stop` follows the daemon that holds the lock next as after a handover it waited through (see above), but
-  not one that follows the desktop application. Any other daemon that holds the lock once the daemon asked has ended is
-  not stopped: one the desktop application or a user started since, or any daemon when neither the key nor a
-  service-manager succession can be shown — the key could not be read, and the record does not say whether a service
-  manager starts its next daemon, as a record an earlier build wrote does not. `stop` then says that the daemon stopped
-  but another one has started since and is left running, with its pid and address, and exits with status 1. A daemon not
-  followed is reported only if it already holds the lock when `stop` looks. On Windows the request sent to a daemon in a
-  planned restart can reach its next daemon instead, which listens on the same port with the same key once the first has
-  let go of them; that one then no longer accepts the request `stop` sends it on following it, and `stop` still reports
-  it stopped. Once the lock is free and the process the record named has ended with no daemon recorded after it, where
-  no daemon this `stop` asked took the request (on Unix a delivered signal counts only for the daemon it reached, not
-  for one followed after it), nothing is left to stop: `stop` says that the daemon was already stopping, and that if
-  that was a planned stop, it left its sessions and shell terminals running in their holders for the next daemon to take
-  over, and exits with status 0. A daemon that has come to none of these by then makes `stop` say that it is still
-  stopping after the seconds it waited in all, with the pid of the last daemon it followed, and exit with status 1. Any
-  other failure of the request is reported as an error and nothing is waited for. A running daemon that no usable
-  `daemon.owner` names by the end of the wait above — it is still starting or stopping, or could not write the record —
-  is not stopped: `stop` says so, with the seconds it waited, and exits with status 1. A desktop application whose
-  daemon is stopped this way does not start it again and says the daemon exited, as for any daemon that ends with status
-  0 (see "Starting up" in `docs/product/application-lifecycle.md`).
+  lock free, its process ended, and no next daemon on its way (see "Whether a service manager may still start the next
+  daemon" above) — and exits with status 0, but within **90 seconds** of the command's start, the wait above for a
+  daemon to be found included; a daemon that has ended with the lock free when the wait runs out is gone, whatever a
+  service manager may still start. On Windows the daemons it goes on to follow share the first 60 seconds, counted from
+  the first request a daemon took, while on Unix each daemon it follows gets 60 seconds of its own, counted from its own
+  request, within the 90 seconds overall. A daemon still running when the wait ends makes it say so, with the pid, and
+  exit with status 1, while the stop goes on. A daemon that is already gone when signalled, or no longer accepts the
+  connection (refuses it, or resets it unanswered), has ended, or is ending, or is in a planned stop or restart (see "An
+  ordinary stop during a planned stop" in `docs/product/planned-restart-and-planned-stop.md`): `stop` then watches
+  `daemon.lock` and `daemon.owner` for up to **90 seconds** from its start, the wait above for a daemon to be found
+  included, so that a stop that waited then takes the request has what is left of them. Either way, once another daemon
+  holds the lock and shows itself the next daemon of the one asked (see "Which daemon took over" above), `stop` asks that
+  one instead, the same way, at once, and follows it in turn; one that does not take the request is waited for within
+  the same 90 seconds. A daemon that has already settled on starting its next daemon ignores the signal, and that next
+  daemon is then stopped instead. So is the daemon a service manager starts after a service-managed daemon that crashed or was killed,
+  which names that daemon in its record. Any other daemon that holds the lock once the daemon asked has ended is not
+  stopped: one the desktop application or a user started since; one a service manager started after a stop, as a unit
+  that restarts the daemon after every exit (`Restart=always`) starts one after an ordinary stop too, and a unit with
+  `Restart=on-failure` after a daemon that removed its record and exited with a failure status; or one for which
+  nothing shows either way. `stop` then says that the daemon stopped but another one has started since and is left
+  running, with its pid and address, that nothing shows the stopped one handed over to it, and exits with status 1. A
+  daemon not followed is reported only if it already holds the lock when `stop` looks, while it is still waiting for the
+  daemon asked to be gone. On Windows the request sent to a daemon in a planned restart can reach its next daemon
+  instead, which listens on the same port with the same key once the first has let go of them; that one then no longer
+  accepts the request `stop` sends it on following it, and `stop` still reports it stopped. Once the lock is free and
+  the process the record named has ended with no daemon recorded after it and none on its way, where no daemon this
+  `stop` asked took the request (on Unix a delivered signal counts only for the daemon it reached, not for one followed
+  after it), nothing is left to stop: `stop` says that the daemon was already stopping, and that if that was a planned
+  stop, it left its sessions and shell terminals running in their holders for the next daemon to take over, and exits
+  with status 0. A daemon that has come to none of these by then makes `stop` say that it is still stopping after the
+  seconds it waited in all, with the pid of the last daemon it followed, and exit with status 1. Any other failure of the
+  request is reported as an error and nothing is waited for. A running daemon that no usable `daemon.owner` names by the
+  end of the wait above — it is still starting or stopping, or could not write the record — is not stopped: `stop` says
+  so, with the seconds it waited and, on Linux, the pid of the process that holds the lock where exactly one does, and
+  exits with status 1. A desktop application whose daemon is stopped this way does not start it again and says the
+  daemon exited, as for any daemon that ends with status 0 (see "Starting up" in
+  `docs/product/application-lifecycle.md`).
 - **`octoboardd restart`** asks the daemon for a planned restart (see
   `docs/product/planned-restart-and-planned-stop.md`) and takes no option. With no daemon running by the end of the wait
   above it says so and exits with status 1. It also exits with status 1, restarting nothing, for a running daemon that
   no usable `daemon.owner` names by then (as `stop` does); for one that follows the desktop application, saying that the
   application restarts it itself; for one that could not install its handler for the request, whose record does not say
   whether it follows an application and which the request would end rather than restart, saying to stop and start it
-  instead. Otherwise it sends the request to the process `daemon.owner` names, checked by its start time as `stop`
-  checks it, as the signal `SIGUSR1`, so that the command line never holds the daemon's key; a daemon that follows an
-  application refuses the signal too, and logs that it did. On Windows, which has no signal for it, it sends the
-  planned-restart request (`POST /restart`) over loopback instead, with the key from `daemon.key`, as `stop` does: a
-  daemon whose key is not recorded is not restarted (status 1, saying so as `stop` does), and a daemon that refuses the
-  request makes `restart` say that it refused the restart, with the daemon's own reason, and exit with status 1. A
-  daemon that no longer accepts the connection (refuses it, or resets it unanswered), or is gone when signalled, is not
-  reported stopped at once: one in a planned stop of its own resets the request while it ends, and a service manager may
-  be restarting one that has ended, so `restart` goes on waiting for the next daemon as below, and judges the daemon as
-  below once it has ended with the lock free. On every host `restart` reads that key before it asks, to recognise the
-  next daemon. It then waits for the next daemon, up to **90 seconds** from the start of the command, the wait above
+  instead. Otherwise, wherever `daemon.key` holds the daemon's key, on every host, it sends the planned-restart request
+  (`POST /restart`) over loopback to the port `daemon.owner` records, with that key, which goes only into that loopback
+  request, as `stop` sends it on Windows, so that a refusal comes back at once: a daemon that refuses the request (see
+  `docs/product/planned-restart-and-planned-stop.md` for when it does) makes `restart` say that it refused the restart,
+  with the daemon's own reason, and exit with status 1, and any other failure of the request is reported as an error.
+  Only for a daemon whose key `daemon.key` does not hold, as one of an earlier build, does it send the request as the
+  signal `SIGUSR1` instead, to the process `daemon.owner` names, checked by its start time as `stop` checks it; a
+  daemon that follows an application refuses the signal too, and logs that it did. On Windows, which has no signal for
+  it, such a daemon is not restarted: `restart` says that its key is not recorded, as `stop` does, and exits with
+  status 1. A daemon that no longer accepts the connection (refuses it, or resets it unanswered), or is gone when
+  signalled, is not reported stopped at once: one in a planned stop of its own resets the request while it ends, and a
+  service manager may be restarting one that has ended, so `restart` goes on waiting for the next daemon as below, and
+  judges the daemon as below once it has ended with the lock free. The key `restart` reads before it asks also serves to
+  recognise the next daemon. It then waits for the next daemon, up to **90 seconds** from the start of the command, the wait above
   included, to hold `daemon.lock` and record itself in `daemon.owner`, prints a line with the new daemon's pid and its
-  address, `http://127.0.0.1:<port>`, and exits with status 0. The next daemon is recognised as `stop` recognises the
-  one it follows: where `daemon.owner` recorded the daemon as one that starts the next daemon itself, only a daemon that
-  recorded its key, even while the restarted daemon still waits for it to report listening; where it recorded a service
-  manager starting it, a daemon recorded as service-managed, once the restarted daemon has ended. Where the record does
-  not say, any daemon that holds the lock and has recorded itself is taken for the next one, as is any such daemon where
-  the record says the restarted daemon starts the next one itself and the key proves nothing because it could not be
-  read, for the restarted daemon or for the next one. Any other daemon that holds the lock once the restarted daemon has
-  ended makes `restart` say that the daemon stopped to restart but another one has started since and is left running,
-  with its pid and address, that nothing shows the restarted daemon handed over to it, and exit with status 1. It prints
-  no key: the next daemon keeps the launch key where the daemon starts it itself, and a successor under systemd makes a
-  new one (see `docs/product/planned-restart-and-planned-stop.md`), while the owner key stays the same either way, so an
-  address `octoboardd address` printed with it opens the new daemon as it did the old (see "The UI the daemon serves" in
-  `docs/product/server-form.md`). Once the restarted daemon has ended, the lock is free and the `daemon.handover` it
-  writes as it hands over is not pending, no daemon is on its way: a stop asked for meanwhile cut the restart short, or
-  the next daemon did not start, or it has been stopped again since, or the daemon exited for a service manager and none
-  started the next one within the 3 seconds above. `restart` then says that the daemon stopped to restart, with its pid,
-  and that no daemon runs in its place, for one of those reasons, which the log tells apart, and exits with status 1. It
-  says so at once, except for a daemon recorded as service-managed that ended without a note of a handover, which it
-  waits 3 seconds for before judging, so that the service manager has its time to start the next one. When no daemon has
-  taken over within the 90 seconds, it says that the daemon is still stopping, with its pid, or that it stopped but no
-  daemon took over, that the daemon's log says why and that the sessions are kept for the next start, and exits with
-  status 1. A daemon that was gone before the request reached it, because it had crashed or been stopped, is judged
-  without waiting for the 90 seconds, and without a `daemon.handover` to wait for: once the lock is free and the daemon
-  has ended, or after 3 seconds for a service-managed one, `restart` says that it was no longer accepting the restart
-  and has stopped, with no daemon in its place, and exits with status 1. A daemon that took over from such a daemon is
-  judged as for any other: the successor (a daemon that a service manager started after a service-managed one, or any
-  daemon that holds the lock where the record proves nothing) is reported as restarted, with its pid and address, and
-  exit status 0; any other daemon that holds the lock is reported as another daemon that has started since, left
-  running, and exit status 1.
+  address, `http://127.0.0.1:<port>`, and exits with status 0. The next daemon is recognised as "Which daemon took
+  over" above has it: one that shows itself the next daemon is taken at once, even while the restarted daemon still
+  waits for it to report listening; one for which nothing shows either way, once the restarted daemon has ended. Any
+  other daemon that holds the lock once the restarted daemon has ended makes `restart` say that the daemon stopped to
+  restart but another one has started since and is left running, with its pid and address, that nothing shows the
+  restarted daemon handed over to it, and exit with status 1. It prints no key: the next daemon keeps the launch key
+  where the daemon starts it itself, and a successor under systemd makes a new one (see
+  `docs/product/planned-restart-and-planned-stop.md`), while the owner key stays the same either way, so an address
+  `octoboardd address` printed with it opens the new daemon as it did the old (see "The UI the daemon serves" in
+  `docs/product/server-form.md`). Once the restarted daemon has ended with the lock free and no next daemon on its way
+  (see "Whether a service manager may still start the next daemon" above), no daemon will take over: it crashed or was
+  stopped, a stop asked for meanwhile cut the restart short, or the next daemon did not start. `restart` then says that
+  the daemon stopped to restart, with its pid, and that no daemon runs in its place, for one of those reasons, which the
+  log tells apart, and exits with status 1. For a daemon whose record does not say whether a service manager starts its
+  next daemon, as an earlier build's does not — such a daemon may run under a service manager and exit for it to start
+  the next one, leaving neither `daemon.handover` nor its record — `restart` says so only once **3 seconds** have passed
+  since it saw the daemon end. When no daemon has taken over within the 90 seconds, it says that the daemon is still
+  stopping, with its pid, or that it stopped but no daemon took over, that the daemon's log says why and that the
+  sessions are kept for the next start, and exits with status 1. A daemon that was gone before the request reached it,
+  because it had crashed or been stopped, is judged the same way, without waiting for the 90 seconds: once the lock is
+  free, the daemon has ended and no next daemon is on its way, `restart` says that it was no longer accepting the
+  restart and has stopped, with no daemon in its place, and exits with status 1. A daemon that took over from such a
+  daemon is judged as for any other: one that shows itself its successor — as the daemon a service manager starts after
+  a service-managed daemon that crashed does, since it names that daemon in its record — or for which nothing shows
+  either way is reported as restarted, with its pid and address, and exit status 0; any other daemon that holds the lock
+  is reported as another daemon that has started since, left running, and exit status 1. Where no usable `daemon.owner`
+  names the running daemon by the end of the wait above, `restart` names, on Linux, the pid of the process that holds
+  the lock where exactly one does, as `stop` does.
 - **`octoboardd status`** says that the daemon is running, with its pid and its address, `http://127.0.0.1:<port>`, or,
   when no usable `daemon.owner` names it, that it is running at an address not known, and exits with status 0; with none
   running it says so and exits with status **3**. With the lock free in the middle of a planned restart it waits as
