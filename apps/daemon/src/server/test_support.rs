@@ -4,7 +4,7 @@
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
 
-use super::{router, router_serving, ui};
+use super::{browser_router, port_files, router, router_serving, ui};
 use crate::state::AppState;
 use crate::test_support::{app_state, PATIENCE, TEST_KEY};
 
@@ -15,7 +15,7 @@ pub(super) async fn serve(name: &str) -> u16 {
 
 /// `serve`, also handing back the directory the daemon keeps saved session output in.
 pub(super) async fn serve_with_output_dir(name: &str) -> (u16, std::path::PathBuf) {
-    serve_files(name, ui::EMBEDDED).await
+    serve_files(name, port_files(), false).await
 }
 
 /// Serves the real router over `state` on an ephemeral loopback port and returns the port.
@@ -28,12 +28,28 @@ pub(super) async fn serve_state(state: std::sync::Arc<AppState>) -> u16 {
     port
 }
 
-/// `serve` with `files` as the browser UI the router serves in place of the build's own.
-pub(super) async fn serve_ui(name: &str, files: ui::Files) -> u16 {
-    serve_files(name, files).await.0
+/// Serves the browser socket's router over `state` on an ephemeral loopback port, standing in for
+/// the socket, and returns the port: the guard is the router's, whatever carries its connections.
+pub(super) async fn serve_browser_state(state: std::sync::Arc<AppState>) -> u16 {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("a loopback port");
+    let port = listener.local_addr().expect("a bound address").port();
+    tokio::spawn(async move { axum::serve(listener, browser_router(state)).await });
+    port
 }
 
-async fn serve_files(name: &str, files: ui::Files) -> (u16, std::path::PathBuf) {
+/// The browser socket's router with `files` as the browser UI in place of the build's own, on an
+/// ephemeral loopback port standing in for the socket.
+pub(super) async fn serve_ui(name: &str, files: ui::Files) -> u16 {
+    serve_files(name, files, true).await.0
+}
+
+async fn serve_files(
+    name: &str,
+    files: ui::Files,
+    takes_owner_key: bool,
+) -> (u16, std::path::PathBuf) {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .expect("a loopback port");
@@ -42,7 +58,7 @@ async fn serve_files(name: &str, files: ui::Files) -> (u16, std::path::PathBuf) 
     let output_dir = dir.join("output");
     tokio::spawn(async move {
         let _dir = dir;
-        axum::serve(listener, router_serving(state, files)).await
+        axum::serve(listener, router_serving(state, files, takes_owner_key)).await
     });
     (port, output_dir)
 }

@@ -581,3 +581,25 @@ fn a_staged_file_is_new_and_never_follows_what_is_at_its_name() {
         assert_eq!(std::fs::read_to_string(&elsewhere).unwrap(), "kept");
     }
 }
+
+/// A file the daemon wrote private is read back whole, and one that is not there is `NotFound`
+/// rather than empty or absent content: a caller tells a file to make from a file it cannot trust.
+#[test]
+fn a_private_file_is_read_back_and_a_missing_one_is_not_found() {
+    use std::io::Write;
+
+    let dir = ScratchDir::new("fs-read-private");
+    let file = dir.join("key");
+    let mut written =
+        create_private(&file, OpenOptions::new().write(true).create(true)).expect("created");
+    written.write_all(b"secret\n").unwrap();
+    drop(written);
+    assert_eq!(
+        read_private_file(&file).unwrap().as_deref(),
+        Some(&b"secret\n"[..])
+    );
+    assert_eq!(
+        read_private_file(&dir.join("missing")).unwrap_err().kind(),
+        std::io::ErrorKind::NotFound
+    );
+}

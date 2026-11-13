@@ -270,7 +270,7 @@
   "workspaceSeoSummary": "在開源的 macOS 與 Windows 工作區及 Linux 伺服器中管理 Claude Code、Codex 和 Grok Build 的多個帳號，追蹤用量、切換帳號，並協調程式開發代理跨專案協作。",
   "faqRemoteHostsAnswer": "部分可以。在 Linux 上，{appName} 連同代理一起執行於伺服器上，你用自己電腦的瀏覽器使用它。從一個桌面工作區在其他主機上執行代理仍在規劃中，尚未提供。",
   "privacyRemoteHostsBody": "{appName} 也可以執行於你自己設定和管理的 Linux 伺服器上。此時資料儲存在該伺服器上，代理也在該伺服器上執行，而不在 {operatorName} 營運的伺服器上。你透過自己電腦的瀏覽器使用它：介面在你的 SSH 連線內，經網路在伺服器與你的電腦之間傳輸。從一個桌面工作區在其他主機上執行代理仍在規劃中，尚未提供。本政策不涵蓋此功能。",
-  "downloadServerRun": "接著在伺服器上執行 {start}（預設連接埠為 {defaultPort}，用 {port} 指定其他連接埠）。在自己的電腦上用相同的連接埠執行 {forward}，再開啟 {address} 輸出的位址。",
+  "downloadServerReach": "接著在伺服器上執行 {start}（預設連接埠為 {defaultPort}，用 {port} 指定其他連接埠），並在伺服器上執行 {address}：它會輸出位址，以及轉送該位址的 SSH 指令，例如 {forward}。在自己的電腦上執行該指令，再在這台電腦的瀏覽器中開啟該位址。",
   "downloadServiceSteps": "若要安裝為立即啟動的 systemd 使用者服務，請把最後的 {plain} 換成 {option}；使用其他連接埠時再加上 {port}。腳本接著會開啟 lingering，讓服務在登出後繼續執行並隨開機啟動；若它提示無法開啟，請執行一次 {linger}（可能需要 sudo）。",
   "downloadUpgrade": "升級時，再次執行安裝指令，然後執行 {restart}。",
   "downloadPathNote": "若安裝時提示 {binDir} 不在 PATH 中，請用它印出的完整路徑執行 {start}，或把 {binDir} 加入 PATH。",

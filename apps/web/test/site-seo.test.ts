@@ -239,7 +239,9 @@ test("agent documents follow the pages and carry the download and install inform
   assert.ok(page.includes("curl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh | sh"));
   assert.ok(page.includes("`sh -s -- --service`"));
   assert.ok(page.includes("`octoboardd start`"));
-  assert.ok(page.includes(`\`ssh -L ${port}:127.0.0.1:${port} <server>\``));
+  assert.ok(
+    page.includes(`\`ssh -o ExitOnForwardFailure=yes -L 127.0.0.1:${port}:/home/<you>/.octoboard/browser.sock <you>@<server>\``),
+  );
   assert.ok(page.includes('`loginctl enable-linger "$USER"`'));
   // The script turns lingering on itself; the command is for when it says it could not.
   assert.match(page, /The script then turns on lingering[^\n]*if it says it could not, run `loginctl enable-linger "\$USER"` once/);

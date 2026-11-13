@@ -1,7 +1,8 @@
 //! The browser UI the daemon serves itself in the server form: the build of `packages/ui`, embedded
 //! in the binary at build time (the `embedded-ui` feature, see `build.rs`) and served same-origin
-//! with the protocol routes, so a browser reaching the daemon's port loads the UI and the UI finds
-//! the daemon at its own origin.
+//! with the protocol routes, so a browser reaching the daemon loads the UI and the UI finds the
+//! daemon at its own origin. It is served on the browser socket ([`crate::browser_socket`]), and on
+//! the TCP port only on a host that has no such sockets.
 //!
 //! A build without the feature, the desktop form's sidecar among them, embeds nothing and serves
 //! nothing here.
@@ -54,6 +55,10 @@ pub(super) async fn serve(files: Files, request: Request) -> Response {
             (header::CONTENT_TYPE, content_type(name)),
             (header::CACHE_CONTROL, cache_control(name)),
             (header::X_CONTENT_TYPE_OPTIONS, "nosniff"),
+            // The page's address carries its key: it is sent as nobody's referrer, whatever the
+            // page itself says, and the page is shown in no frame another site could draw it in.
+            (header::REFERRER_POLICY, "no-referrer"),
+            (header::CONTENT_SECURITY_POLICY, "frame-ancestors 'none'"),
         ],
         contents,
     )
@@ -78,10 +83,15 @@ fn content_type(name: &str) -> &'static str {
 }
 
 /// The bundler names what it writes under `assets/` after a hash of its contents, so such a file
-/// never changes; the page itself names the current ones and is checked again on every load.
+/// never changes. The page itself names the current ones and is never stored: it is fetched afresh
+/// on every load, a reload after an update included, so it is never stale, and a browser keeps no
+/// copy on disk filed under its address, which carries the key. The other files are checked again
+/// on every load.
 fn cache_control(name: &str) -> &'static str {
     if name.starts_with("assets/") {
         "public, max-age=31536000, immutable"
+    } else if name == "index.html" {
+        "no-store"
     } else {
         "no-cache"
     }
@@ -224,6 +234,24 @@ mod tests {
         assert_eq!(answer(&[], Method::GET, "/").await.0, StatusCode::NOT_FOUND);
     }
 
+    /// Every file, the page above all, is sent as nobody's referrer and drawn in no frame.
+    #[tokio::test]
+    async fn every_file_refuses_referrers_and_frames() {
+        for path in ["/", "/index.html", "/assets/index-1a2b.js"] {
+            let (_, headers, _) = answer(FILES, Method::GET, path).await;
+            assert_eq!(
+                header_of(&headers, header::REFERRER_POLICY),
+                "no-referrer",
+                "{path}"
+            );
+            assert_eq!(
+                header_of(&headers, header::CONTENT_SECURITY_POLICY),
+                "frame-ancestors 'none'",
+                "{path}"
+            );
+        }
+    }
+
     #[tokio::test]
     async fn head_gets_the_headers_of_get() {
         let (get_status, get_headers, _) = answer(FILES, Method::GET, "/assets/font.woff2").await;
@@ -234,7 +262,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn hashed_assets_are_cached_for_good_and_the_rest_is_revalidated() {
+    async fn hashed_assets_are_cached_for_good_the_page_never_and_the_rest_is_revalidated() {
         const FILES: Files = &[
             ("index.html", b""),
             ("assets/index-1a2b.js", b""),
@@ -244,8 +272,8 @@ mod tests {
             ("other/assets/x.js", b""),
         ];
         for (path, expected) in [
-            ("/", "no-cache"),
-            ("/index.html", "no-cache"),
+            ("/", "no-store"),
+            ("/index.html", "no-store"),
             ("/favicon.ico", "no-cache"),
             ("/assets.js", "no-cache"),
             ("/other/assets/x.js", "no-cache"),

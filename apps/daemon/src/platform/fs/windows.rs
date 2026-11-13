@@ -448,6 +448,12 @@ pub fn keep_private_below(dir: &Path) -> io::Result<()> {
     restrict_to_owner(dir)
 }
 
+/// The contents of the file at `path`. A file takes its permissions from the data directory's
+/// access control list here ([`keep_private_below`]), so there is nothing of its own to judge.
+pub fn read_private_file(path: &Path) -> io::Result<Option<Vec<u8>>> {
+    std::fs::read(path).map(Some)
+}
+
 /// Creates `staged`, which must not exist, to be renamed over `target`; a file already at `staged`
 /// is refused. A file takes its permissions from its directory here.
 pub fn create_new_like(staged: &Path, _target: &Path) -> io::Result<File> {
@@ -929,6 +935,11 @@ impl DirReader {
 /// `USERPROFILE`, where Windows keeps the user's home, as it is set, if it is.
 pub fn env_home() -> Option<OsString> {
     std::env::var_os("USERPROFILE")
+}
+
+/// The name of the user the daemon runs as, as Windows sets it in the environment.
+pub fn account_name() -> Option<OsString> {
+    std::env::var_os("USERNAME")
 }
 
 /// The profile directory Windows records for the user the daemon runs as.

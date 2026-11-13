@@ -7,6 +7,7 @@ use std::sync::Arc;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::State;
 use axum::response::IntoResponse;
+use axum::Extension;
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::{broadcast, mpsc};
 
@@ -14,6 +15,7 @@ use crate::browse::budget;
 use crate::browse::lane::{Frame, Lane};
 use crate::coordinator::Followup;
 use crate::protocol::{BrowseRequest, Event, Request, BROWSE_REQUEST_TYPES};
+use crate::server::access::Admission;
 use crate::state::{AppState, Stamp};
 
 /// Events queued for one control client before its writer is considered the bottleneck. Small:
@@ -45,11 +47,20 @@ impl Heartbeat {
 pub(super) async fn control_ws(
     ws: WebSocketUpgrade,
     State(state): State<Arc<AppState>>,
+    Extension(admission): Extension<Admission>,
 ) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_control(socket, state, Heartbeat::STANDARD))
+    ws.on_upgrade(move |socket| handle_control(socket, state, Heartbeat::STANDARD, admission))
 }
 
-async fn handle_control(socket: WebSocket, state: Arc<AppState>, heartbeat: Heartbeat) {
+/// Serves one control client until it goes, its heartbeat times out, or the owner key that
+/// admitted it (`admission`) is rotated away, which drops it at once, writer and all: a page
+/// holding a key the owner has revoked gets nothing more.
+async fn handle_control(
+    socket: WebSocket,
+    state: Arc<AppState>,
+    heartbeat: Heartbeat,
+    mut admission: Admission,
+) {
     // One writer, many producers. Requests are handled in their own tasks rather than inline,
     // because some of them are long: `add_project` with a `git` source runs a `git clone`, which
     // is minutes on a large repository. Handled inline, that would stall every status event for
@@ -141,6 +152,12 @@ async fn handle_control(socket: WebSocket, state: Arc<AppState>, heartbeat: Hear
                 }
             },
             _ = &mut writer => {
+                writer_done = true;
+                break;
+            }
+            () = admission.revoked() => {
+                tracing::info!("a control client's owner key was rotated; it is disconnected");
+                writer.abort();
                 writer_done = true;
                 break;
             }
@@ -538,7 +555,11 @@ mod tests {
             "/ws/control",
             axum::routing::get(move |ws: WebSocketUpgrade| {
                 let state = served.clone();
-                async move { ws.on_upgrade(move |socket| handle_control(socket, state, heartbeat)) }
+                async move {
+                    ws.on_upgrade(move |socket| {
+                        handle_control(socket, state, heartbeat, Admission::default())
+                    })
+                }
             }),
         );
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

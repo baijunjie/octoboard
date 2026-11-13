@@ -30,11 +30,13 @@ export const serverDownloads = targetsOfKind("server");
 export const defaultServerPort: number = appConfig.defaultServerPort;
 
 // The commands the Linux copy quotes, keyed by the placeholder that names each in the catalogs. They are not
-// translated; `install.sh` prints the same ones.
+// translated.
 export const linuxCommandParts = {
   start: "octoboardd start",
   binDir: "~/.local/bin",
-  forward: `ssh -L ${defaultServerPort}:127.0.0.1:${defaultServerPort} <server>`,
+  // The daemon serves the browser on an owner-only socket in its data directory, not on its port; `octoboardd
+  // address` prints this command with the real path and user.
+  forward: `ssh -o ExitOnForwardFailure=yes -L 127.0.0.1:${defaultServerPort}:/home/<you>/.octoboard/browser.sock <you>@<server>`,
   address: "octoboardd address",
   plain: "sh",
   option: "sh -s -- --service",

@@ -966,7 +966,7 @@ test("the next steps say octoboardd where the PATH finds the installed binary, a
   let result = run(world, []);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, new RegExp(`Start it with \`${installed(world)} start\``));
-  assert.match(result.stdout, new RegExp(`then open the address \`${installed(world)} address\` prints`));
+  assert.match(result.stdout, new RegExp(`then run \`${installed(world)} address\`: it prints the address`));
   assert.match(result.stdout, /is not on your PATH/);
 
   // First on the PATH (with the shim, which the script needs): the name.
@@ -975,7 +975,7 @@ test("the next steps say octoboardd where the PATH finds the installed binary, a
   result = run(world, [], { PATH: `${world.binDir}:${world.shim}` });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Start it with `octoboardd start`/);
-  assert.match(result.stdout, /then open the address `octoboardd address` prints/);
+  assert.match(result.stdout, /then run `octoboardd address`: it prints the address/);
   assert.doesNotMatch(result.stdout, /is not on your PATH/);
 
   // Another octoboardd ahead of it on the PATH is not the one installed: the full path again.

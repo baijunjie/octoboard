@@ -270,7 +270,7 @@
   "workspaceSeoSummary": "在开源的 macOS 和 Windows 工作台以及 Linux 服务器中管理 Claude Code、Codex 和 Grok Build 多个账号，监控用量、切换账号，并协调编程智能体跨项目协作。",
   "faqRemoteHostsAnswer": "部分可以。在 Linux 上，{appName} 连同智能体一起运行在服务器上，你用自己电脑的浏览器使用它。从一个桌面工作台在其他主机上运行智能体仍在规划中，尚未提供。",
   "privacyRemoteHostsBody": "{appName} 也可以运行在你自己设置和管理的 Linux 服务器上。此时数据存储在该服务器上，智能体也在该服务器上运行，而不在 {operatorName} 运营的服务器上。你通过自己电脑的浏览器使用它：界面在你的 SSH 连接内，经网络在服务器与你的电脑之间传输。从一个桌面工作台在其他主机上运行智能体仍在规划中，尚未提供。本政策不涉及该功能。",
-  "downloadServerRun": "然后在服务器上运行 {start}（默认端口为 {defaultPort}，用 {port} 指定其他端口）。在自己的电脑上用相同的端口运行 {forward}，再打开 {address} 输出的地址。",
+  "downloadServerReach": "然后在服务器上运行 {start}（默认端口为 {defaultPort}，用 {port} 指定其他端口），并在服务器上运行 {address}：它会输出地址，以及转发该地址的 SSH 命令，例如 {forward}。在自己的电脑上运行该命令，再在这台电脑的浏览器中打开该地址。",
   "downloadServiceSteps": "若要安装为立即启动的 systemd 用户服务，请把最后的 {plain} 换成 {option}；使用其他端口时再加上 {port}。脚本随后会开启 lingering，让服务在退出登录后继续运行并随开机启动；如果它提示无法开启，请运行一次 {linger}（可能需要 sudo）。",
   "downloadUpgrade": "升级时，再次运行安装命令，然后运行 {restart}。",
   "downloadPathNote": "如果安装时提示 {binDir} 不在 PATH 中，请用它打印的完整路径运行 {start}，或把 {binDir} 加入 PATH。",

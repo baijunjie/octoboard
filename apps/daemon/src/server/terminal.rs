@@ -8,9 +8,11 @@ use std::sync::Arc;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path, Query, State};
 use axum::response::IntoResponse;
+use axum::Extension;
 
 use crate::messaging::outbox::HoldKind;
 use crate::protocol::{error_code, CodedError, Event, TermControl, TermEvent};
+use crate::server::access::Admission;
 use crate::session::LiveSession;
 use crate::state::AppState;
 use crate::terminal::display::DisplayFacts;
@@ -32,8 +34,9 @@ pub(super) async fn term_ws(
     Path(session_id): Path<String>,
     Query(request): Query<AttachRequest>,
     State(state): State<Arc<AppState>>,
+    Extension(admission): Extension<Admission>,
 ) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_term(socket, state, session_id, request.history))
+    ws.on_upgrade(move |socket| handle_term(socket, state, session_id, request.history, admission))
 }
 
 /// What a terminal socket is attached to: an agent session's process, or a shell terminal's.
@@ -371,7 +374,15 @@ fn write_task_failed(
     deferred.write_task_failed(carried, error)
 }
 
-async fn handle_term(mut socket: WebSocket, state: Arc<AppState>, id: String, history: usize) {
+/// Serves one terminal client until it goes, the terminal's output is over, or the owner key that
+/// admitted it (`admission`) is rotated away, which ends it as a close of the client's would.
+async fn handle_term(
+    mut socket: WebSocket,
+    state: Arc<AppState>,
+    id: String,
+    history: usize,
+    mut admission: Admission,
+) {
     let terminal = if let Some(session) = state.live_session(&id) {
         Terminal::Session(session)
     } else if let Some(shell) = state.shell_terminals.process(&id) {
@@ -572,6 +583,14 @@ async fn handle_term(mut socket: WebSocket, state: Arc<AppState>, id: String, hi
                 if !forward_output(&mut socket, pty, client).await {
                     break;
                 }
+            }
+            () = admission.revoked() => {
+                tracing::info!(
+                    terminal = %id,
+                    "a terminal client's owner key was rotated; it is disconnected"
+                );
+                let _ = socket.send(Message::Close(None)).await;
+                break;
             }
         }
     }

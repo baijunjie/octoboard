@@ -12,6 +12,7 @@ pub(crate) mod build_files;
 pub(crate) mod descriptors;
 pub(crate) mod fs;
 pub(crate) mod ipc;
+pub(crate) mod local_socket;
 pub(crate) mod names;
 pub(crate) mod open;
 pub(crate) mod policy;

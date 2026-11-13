@@ -165,8 +165,9 @@ status 1:
    `octoboardd update`) from replacing the executable at the same time: do not run the script while one is under way.
 5. **Says what next**, unless `--service` was given (below): with a daemon of this user running, that `octoboardd
    restart` moves it to the new version and that its sessions keep running; otherwise, to start it with `octoboardd
-   start` (on the default server port, `--port N` picking another) and to open the address `octoboardd address` prints
-   through an SSH forward, `ssh -L 3369:127.0.0.1:3369 <this server>`. In these messages, and in those of `--service`,
+   start` (on the default server port, `--port N` picking another) and then to run `octoboardd address`, which prints
+   the address to open and the SSH forward to open it through (see "The browser socket" in
+   `docs/product/server-form.md`). In these messages, and in those of `--service`,
    `octoboardd` stands for the command as the script names it: `octoboardd` when that is the installed file on the
    `PATH`, its full path otherwise.
 6. **Checks the `PATH`**: when the install directory is not on it, says to add it to run `octoboardd` by name.
@@ -188,8 +189,9 @@ With `--service`, after installing the binary, the script:
     and the new binary (see "Planned restart and planned stop" in `docs/product/planned-restart-and-planned-stop.md`);
   - **a daemon of this user running outside the service**: enables the service without starting it, and says to stop
     that daemon (`octoboardd stop`) and start the service (`systemctl --user start octoboardd`);
-  - **otherwise**: starts the service, says it started on its port and to open the address `octoboardd address` prints
-    through an SSH forward; a service that does not start is an error pointing at `journalctl --user -u octoboardd`;
+  - **otherwise**: starts the service, says it started on its port and to run `octoboardd address`, which prints the
+    address to open and the SSH forward to open it through; a service that does not start is an error pointing at
+    `journalctl --user -u octoboardd`;
 - finally, when lingering is not on for the user, turns it on with `loginctl enable-linger <user>`, never asking for a
   password (polkit lets users turn it on for themselves by default), and says it did, so that the service starts at boot
   and keeps running after logout. Only when that is refused does it say that user services stop at logout and do not
@@ -228,4 +230,4 @@ across a database migration (see "Rolling back across a database migration" in `
 The restart is a planned restart: every session and shell terminal keeps running and the next daemon, started from the
 new binary, takes them over, on the same port for a daemon started with `octoboardd start`, and on the unit's port for
 one the service runs. The owner key stays the same, so an address `octoboardd address` printed before still opens the
-daemon (see "The UI the daemon serves" in `docs/product/server-form.md`).
+daemon, through the forward it prints (see "The UI the daemon serves" in `docs/product/server-form.md`).

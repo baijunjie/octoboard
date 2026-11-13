@@ -67,18 +67,19 @@ octoboardd stop                     # Stop it, which leaves every session interr
 octoboardd --port 3369              # Run it in the foreground on that port, as a service does.
 ```
 
-`start` refuses while a daemon already runs against the same `~/.octoboard`. Reach the daemon from your own machine
-through an SSH port forward, which puts it at `localhost:3369` there:
+`start` refuses while a daemon already runs against the same `~/.octoboard`. A browser reaches the daemon through a
+socket only its user can open, `~/.octoboard/browser.sock`, not through its port. Forward that socket from your own
+machine, which puts the daemon at `127.0.0.1:3369` there (`octoboardd address` prints this command with the real path):
 
 ```sh
-ssh -L 3369:127.0.0.1:3369 server
+ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:3369:/home/you/.octoboard/browser.sock you@server
 ```
 
-and open the address `octoboardd address` prints on the server, `http://localhost:3369/?key=<key>`. On a server the
+and open the address `octoboardd address` prints on the server, `http://127.0.0.1:3369/?key=<key>`. On a server the
 key is the owner key, which stays the same across restarts, so the address can be bookmarked; `octoboardd address
---rotate` replaces it. The command works however the daemon was started, and only as the daemon's own user: the key
-comes from an owner-only file in `~/.octoboard`. A program can run it over SSH and read the port and key from that one
-line.
+--rotate` replaces it and disconnects every page that used the old one. The command works however the daemon was
+started, and only as the daemon's own user: the key comes from an owner-only file in `~/.octoboard`. A program can run
+it over SSH and read the port and key from the one line it prints on standard output.
 
 To start it at boot instead, install the example systemd user unit
 [`dist/systemd/octoboardd.service`](dist/systemd/octoboardd.service), which the install script's `--service` does for

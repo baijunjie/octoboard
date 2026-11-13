@@ -128,7 +128,7 @@ function linuxParts(copy: AgentCopy, text: Text, headings: boolean): Array<strin
     text("downloadLinuxDescription"),
     text("downloadLinuxRange"),
     `\`\`\`sh\n${installCommand(copy.siteUrl)}\n\`\`\``,
-    text("downloadServerRun", commands),
+    text("downloadServerReach", commands),
     text("downloadPathNote", commands),
     text("downloadServiceSteps", commands),
     text("downloadUpgrade", commands),

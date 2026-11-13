@@ -128,7 +128,8 @@ octoboardd start      # Listens on port 3369; add --port <port> for another one.
 octoboardd address
 ```
 
-From your own machine, forward the port with `ssh -L 3369:127.0.0.1:3369 <server>` and open that address in a browser.
+`octoboardd address` also prints the `ssh -L` command that forwards the daemon's owner-only socket
+(`~/.octoboard/browser.sock`) to port 3369 on your own machine; run it there and open that address in a browser.
 To have the daemon start at boot as a systemd user service instead, install with `--service`, which needs systemd:
 
 ```sh

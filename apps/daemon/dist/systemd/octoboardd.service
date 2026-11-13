@@ -14,8 +14,8 @@
 #   loginctl enable-linger <user>
 #
 # The daemon runs as that user, so its sessions use that user's ~/.octoboard, agent accounts and
-# keys. It listens on 127.0.0.1 only; reach it with an SSH port forward
-# (ssh -L 3369:127.0.0.1:3369 server) at the address `octoboardd address` prints.
+# keys. It listens on 127.0.0.1 only, and serves the browser on ~/.octoboard/browser.sock; reach it
+# with the SSH forward `octoboardd address` prints, at the address it prints.
 
 [Unit]
 Description=Octoboard daemon

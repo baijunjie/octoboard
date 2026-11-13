@@ -123,13 +123,13 @@ pub(crate) enum Command {
         signature: std::path::PathBuf,
     },
     /// Print the address to open the running daemon at in a browser, its key included:
-    /// `http://localhost:<port>/?key=<key>`, for an SSH port forward of that port. Exits 3 when
-    /// none runs. The key is the owner key, which stays the same across launches, when the daemon
-    /// accepts one (a daemon that runs on its own), else the launch key.
+    /// `http://127.0.0.1:<port>/?key=<key>`, and on stderr the SSH forward that reaches it. Exits
+    /// 3 when none runs. The key is the owner key, which stays the same across launches, when the
+    /// daemon accepts one (a daemon that serves the browser on its socket), else the launch key.
     Address {
         /// Replace the owner key first, so the address printed is the new one's and an earlier
         /// address stops working. Where no daemon runs, or the running one takes no owner key,
-        /// the file alone is replaced, for the next daemon started on its own.
+        /// the file alone is replaced, for the next daemon that serves the browser.
         #[arg(long)]
         rotate: bool,
     },

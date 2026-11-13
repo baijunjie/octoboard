@@ -3141,6 +3141,8 @@ dependencies = [
  "clap",
  "flate2",
  "futures-util",
+ "hyper",
+ "hyper-util",
  "libc",
  "minisign-verify",
  "notify",

@@ -12,15 +12,15 @@ use super::background::{not_running, request_over_loopback, Asked, NOT_RUNNING, 
 use super::succession::{find_daemon, Found};
 
 /// Prints the address to open the running daemon at in a browser, its key included, as one line on
-/// stdout: `http://localhost:<port>/?key=<key>`, `localhost` being what a browser treats as a
-/// secure context and what an SSH port forward gives on the owner's machine. Exits 3 when no
-/// daemon runs. The key is the owner key when the daemon's record says it accepts one and
-/// `owner.key` holds one, which outlives the daemon, else the launch key from the daemon's
-/// owner-only record. Only the daemon's own user obtains either.
+/// stdout: `http://127.0.0.1:<port>/?key=<key>`, a loopback address a browser treats as a secure
+/// context, and the one address the forward `octoboardd address` prints binds on the owner's
+/// machine. Exits 3 when no daemon runs. The key is the owner key when the daemon's record says it
+/// accepts one and `owner.key` holds one, which outlives the daemon, else the launch key from the
+/// daemon's owner-only record. Only the daemon's own user obtains either.
 ///
 /// With `rotate`, the owner key is replaced first (see [`rotate_owner_key`]) and the address
 /// printed is the new one's, except where the daemon does not take an owner key: it is the launch
-/// key's, and the new owner key is for the next daemon started on its own.
+/// key's, and the new owner key is for the next daemon that serves the browser.
 pub(super) fn print_address(rotate: bool) -> Result<i32> {
     print_address_of(rotate, false)
 }
@@ -77,7 +77,21 @@ fn print_address_of(rotate: bool, through_unrecorded: bool) -> Result<i32> {
         );
     }
     println!("{address}");
+    if owner.takes_owner_key {
+        let shown = crate::owner_key::read_in(&data).unwrap_or_else(|| key.clone());
+        note_browser_forward(&owner, &data, &shown);
+    } else if crate::browser_socket::AVAILABLE {
+        eprintln!("{}", crate::browser_socket::no_browser_note());
+    }
     Ok(0)
+}
+
+/// Says on stderr how the address of `owner`, a daemon that serves the browser on its socket, is
+/// reached from the owner's machine, and whether the daemon accepts `key` there.
+fn note_browser_forward(owner: &Owner, data: &Path, key: &str) {
+    for note in crate::browser_socket::address_notes(owner.port, data, key) {
+        eprintln!("{note}");
+    }
 }
 
 /// The address `address` prints for `owner`, and whether it is one that outlives the daemon: with
@@ -96,14 +110,14 @@ fn address_to_print(owner: &Owner, key: &str, data: &Path) -> (String, bool) {
 }
 
 /// `address --rotate` for a running daemon that takes no owner key: replaces the owner key in
-/// `data` for the next daemon started on its own, says so on stderr, and prints the launch-key
+/// `data` for the next daemon that serves the browser, says so on stderr, and prints the launch-key
 /// address of the running one.
 fn rotate_for_daemon_without_owner_key(owner: &Owner, key: &str, data: &Path) -> Result<i32> {
     crate::owner_key::replace_in(data).context("replacing the owner key")?;
     eprintln!(
-        "the running {} does not take the owner key (it follows the desktop application or is an \
-         earlier build, or could not read or write owner.key at its start); the next daemon \
-         started on its own takes the new one",
+        "the running {} does not take the owner key (it follows the desktop application, is an \
+         earlier build, serves no browser, or could not read or write owner.key at its start); the \
+         next daemon that serves the browser takes the new one",
         crate::APP_NAME
     );
     println!("{}", browser_address(owner.port, key));
@@ -139,6 +153,7 @@ fn rotate_owner_key(owner: &Owner, key: &str, data: &Path) -> Result<i32> {
     match crate::owner_key::read_in(data) {
         Some(new) => {
             println!("{}", browser_address(owner.port, &new));
+            note_browser_forward(owner, data, &new);
             Ok(0)
         }
         None => failed("the daemon took the request, but owner.key holds no key".to_owned()),
@@ -146,8 +161,8 @@ fn rotate_owner_key(owner: &Owner, key: &str, data: &Path) -> Result<i32> {
 }
 
 /// `address --rotate` with no daemon running: replaces the owner key in the data directory `data`
-/// for the next daemon started on its own, unless there is no data directory, which it does not
-/// create. Prints nothing on stdout, and exits 3 as `address` does.
+/// for the next daemon that serves the browser, unless there is no data directory, which it does
+/// not create. Prints nothing on stdout, and exits 3 as `address` does.
 ///
 /// The instance lock cannot be held while the file is written (it is the daemon's for its
 /// lifetime, and a probe holds it for a moment), so `running` is asked again afterwards: `None`
@@ -162,14 +177,14 @@ fn rotate_without_daemon(data: &Path, running: impl Fn() -> Result<bool>) -> Res
         return Ok(None);
     }
     eprintln!(
-        "{} is not running; the next daemon started on its own takes the new owner key",
+        "{} is not running; the next daemon that serves the browser takes the new owner key",
         crate::APP_NAME
     );
     Ok(Some(NOT_RUNNING))
 }
 
 fn browser_address(port: u16, key: &str) -> String {
-    format!("http://localhost:{port}/?key={key}")
+    format!("http://127.0.0.1:{port}/?key={key}")
 }
 
 #[cfg(test)]
@@ -179,10 +194,10 @@ mod tests {
     use crate::cli::background::tests::{answer_once, owner_on, KEY};
 
     #[test]
-    fn the_browser_address_is_localhost_at_the_port_with_the_key() {
+    fn the_browser_address_is_the_loopback_address_at_the_port_with_the_key() {
         assert_eq!(
             browser_address(7531, KEY),
-            format!("http://localhost:7531/?key={KEY}")
+            format!("http://127.0.0.1:7531/?key={KEY}")
         );
     }
 
@@ -197,14 +212,14 @@ mod tests {
     #[test]
     fn the_address_has_the_owner_key_only_where_the_daemon_takes_it() {
         let dir = crate::test_support::ScratchDir::new("address-owner-key");
-        let launch = format!("http://localhost:7531/?key={KEY}");
-        let owner = format!("http://localhost:7531/?key={OWNER_KEY}");
+        let launch = format!("http://127.0.0.1:7531/?key={KEY}");
+        let owner = format!("http://127.0.0.1:7531/?key={OWNER_KEY}");
         // No file.
         assert_eq!(
             address_to_print(&owner_taking_key_on(7531), KEY, &dir),
             (launch.clone(), false)
         );
-        std::fs::write(crate::owner_key::path_in(&dir), format!("{OWNER_KEY}\n")).unwrap();
+        crate::owner_key::write_in(&dir, OWNER_KEY);
         assert_eq!(
             address_to_print(&owner_taking_key_on(7531), KEY, &dir),
             (owner, true)
@@ -227,7 +242,7 @@ mod tests {
     #[test]
     fn a_rotation_asks_with_the_launch_key_and_reads_the_new_key() {
         let dir = crate::test_support::ScratchDir::new("rotate-asked");
-        std::fs::write(crate::owner_key::path_in(&dir), format!("{OWNER_KEY}\n")).unwrap();
+        crate::owner_key::write_in(&dir, OWNER_KEY);
         let (port, served) = answer_once("HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n");
         let status = rotate_owner_key(&owner_taking_key_on(port), KEY, &dir).unwrap();
         assert_eq!(status, 0);
@@ -241,7 +256,7 @@ mod tests {
     #[test]
     fn a_refused_or_failed_rotation_is_status_1() {
         let dir = crate::test_support::ScratchDir::new("rotate-refused");
-        std::fs::write(crate::owner_key::path_in(&dir), format!("{OWNER_KEY}\n")).unwrap();
+        crate::owner_key::write_in(&dir, OWNER_KEY);
         let refusal = r#"{"message":"this daemon holds no owner key"}"#;
         for response in [
             "HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n".to_owned(),
@@ -274,7 +289,7 @@ mod tests {
     #[test]
     fn a_rotation_with_no_daemon_replaces_the_file_only_in_an_existing_data_directory() {
         let dir = crate::test_support::ScratchDir::new("rotate-no-daemon");
-        std::fs::write(crate::owner_key::path_in(&dir), format!("{OWNER_KEY}\n")).unwrap();
+        crate::owner_key::write_in(&dir, OWNER_KEY);
         assert_eq!(
             rotate_without_daemon(&dir, || Ok(false)).unwrap(),
             Some(NOT_RUNNING)
@@ -295,7 +310,7 @@ mod tests {
     #[test]
     fn a_rotation_for_a_daemon_without_an_owner_key_replaces_the_file_and_exits_0() {
         let dir = crate::test_support::ScratchDir::new("rotate-daemon-without");
-        std::fs::write(crate::owner_key::path_in(&dir), format!("{OWNER_KEY}\n")).unwrap();
+        crate::owner_key::write_in(&dir, OWNER_KEY);
         assert_eq!(
             rotate_for_daemon_without_owner_key(&owner_on(7531), KEY, &dir).unwrap(),
             0
@@ -317,7 +332,7 @@ mod tests {
     #[test]
     fn a_failed_rotation_with_the_daemons_message_is_status_1() {
         let dir = crate::test_support::ScratchDir::new("rotate-failed-message");
-        std::fs::write(crate::owner_key::path_in(&dir), format!("{OWNER_KEY}\n")).unwrap();
+        crate::owner_key::write_in(&dir, OWNER_KEY);
         let body = r#"{"reason":"write_failed","message":"writing owner.key failed"}"#;
         let response = format!(
             "HTTP/1.1 500 Internal Server Error\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{body}",

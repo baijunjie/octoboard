@@ -25,7 +25,7 @@ Octoboard is deployed in one of two forms, and the other documents name them as 
   one person, and the daemon starts and stops with the application.
 - **The server form**: the daemon alone, on a machine without a display — a Linux server, Ubuntu say — started and kept
   running there, listening on the server's loopback on a fixed port, and reached by its owner from another machine over
-  SSH: from a browser through the owner's own SSH port forward, or from the macOS or Windows application through an SSH
+  SSH: from a browser through the owner's own SSH forward of the daemon's browser socket, or from the macOS or Windows application through an SSH
   tunnel the application builds itself. The machine showing the window and the machine holding the daemon and the
   projects are two different ones. This is what Linux is for: there is no Linux desktop application.
 
@@ -127,8 +127,9 @@ secure context**: the Notifications API, which the raised hand's notification go
 API. A page over plain `http` is a secure context only at a loopback address (`localhost`, `127.0.0.1`); at any other
 address it is not, so a browser reaching a server over bare `http` never tells anyone that an agent is waiting — and
 the whole point of the orchestration is that an agent raises its hand and a person answers. This is one more reason the
-daemon stays on loopback: through an SSH port forward the browser opens `http://localhost:<port>`, a secure context with
-no TLS, and the daemon serves the UI from that same origin as its WebSocket endpoints.
+daemon stays on loopback: through an SSH forward of the owner-only Unix socket the daemon serves the browser on, the
+browser opens `http://127.0.0.1:<port>`, a secure context with no TLS, and the daemon serves the UI from that same
+origin as its WebSocket endpoints.
 
 ## Why the daemon is split out
 
@@ -215,8 +216,8 @@ client implements".
 **Constraint: access from another machine goes through SSH.** Anyone who reaches the daemon can start agents and type
 into their terminals, or open a shell terminal and run any command, as the daemon's own user. It therefore binds to
 loopback only, in both forms, and the access guard (`access.rs`) with the per-launch key keeps out web pages on other
-sites and pages served from `localhost`. Another machine reaches it only through SSH — the owner's port forward for a
-browser, the application's own tunnel for the application — so SSH does the authentication and encryption, and the
+sites and pages served from `localhost`. Another machine reaches it only through SSH — the owner's forward of the
+browser socket for a browser, the application's own tunnel for the application — so SSH does the authentication and encryption, and the
 daemon gains no external surface, TLS or device credential of its own. A device is let in by its SSH key and revoked by
 removing that key (a connection already open lasts until it drops); such a key identifies a device of the owner's, never
 a person: the daemon stays one user's, and every client is that user. What the daemon must still provide is a way for

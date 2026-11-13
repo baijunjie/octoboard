@@ -234,10 +234,55 @@ pub fn restrict_to_owner(dir: &Path) -> io::Result<()> {
 }
 
 /// Makes everything the daemon creates below the data directory `dir` private to the user. On Unix
-/// each file is made private as it is created ([`create_private`], [`create_replacement`]), so the
-/// directory itself is left as it is.
-pub fn keep_private_below(_dir: &Path) -> io::Result<()> {
+/// each file is made private as it is created ([`create_private`], [`create_replacement`]); the
+/// directory itself is closed to everyone else as well, as one created by an earlier build under a
+/// permissive umask may not be, since the owner-only socket the browser reaches the daemon by lives
+/// in it and is only as private as the directory. A directory another user owns is left as it is:
+/// changing its mode is not this user's to do, and the error says so.
+pub fn keep_private_below(dir: &Path) -> io::Result<()> {
+    let metadata = std::fs::metadata(dir)?;
+    // SAFETY: `geteuid` takes no arguments and cannot fail.
+    let me = unsafe { libc::geteuid() };
+    if metadata.uid() != me {
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            format!(
+                "{} belongs to another user ({})",
+                dir.display(),
+                metadata.uid()
+            ),
+        ));
+    }
+    if metadata.mode() & 0o077 != 0 {
+        restrict_to_owner(dir)?;
+    }
     Ok(())
+}
+
+/// The contents of the file at `path`, or `None` when it is not a private file of this user's: a
+/// symlink (never followed), something other than a regular file, a file another user owns, or one
+/// anyone else may read or write. Never waits on a FIFO.
+pub fn read_private_file(path: &Path) -> io::Result<Option<Vec<u8>>> {
+    use std::io::Read;
+
+    let mut file = match OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(path)
+    {
+        Ok(file) => file,
+        Err(err) if is_symlink_loop(&err) => return Ok(None),
+        Err(err) => return Err(err),
+    };
+    let metadata = file.metadata()?;
+    // SAFETY: `geteuid` takes no arguments and cannot fail.
+    let me = unsafe { libc::geteuid() };
+    if !metadata.is_file() || metadata.uid() != me || metadata.mode() & 0o077 != 0 {
+        return Ok(None);
+    }
+    let mut content = Vec::new();
+    file.read_to_end(&mut content)?;
+    Ok(Some(content))
 }
 
 /// Whether `path` leads to a regular file the system would run.
@@ -499,6 +544,12 @@ pub fn account_home() -> Option<PathBuf> {
     account_field(|entry| entry.pw_dir).map(PathBuf::from)
 }
 
+/// The login name the system user database records for the effective user, or `None` where it
+/// records none.
+pub fn account_name() -> Option<OsString> {
+    account_field(|entry| entry.pw_name)
+}
+
 /// The login shell the system user database records for the effective user, as it is written
 /// there, or `None` where it records none.
 pub fn account_shell() -> Option<PathBuf> {
@@ -542,6 +593,106 @@ fn account_field(field: fn(&libc::passwd) -> *mut libc::c_char) -> Option<OsStri
 
 #[cfg(test)]
 mod tests {
+    use std::os::unix::fs::PermissionsExt;
+
+    /// A scratch directory of the test's own, removed when it is dropped, a failed test's included.
+    fn scratch(label: &str) -> crate::test_support::ScratchDir {
+        crate::test_support::ScratchDir::new(&format!("fs-{label}"))
+    }
+
+    fn mode_of(path: &std::path::Path) -> u32 {
+        std::fs::metadata(path).unwrap().permissions().mode() & 0o7777
+    }
+
+    /// A data directory left open to others by an earlier build is closed to them; a private one
+    /// is left as it is; a new one is private from the start.
+    #[test]
+    fn the_data_directory_is_made_private() {
+        let dir = scratch("keep-private");
+        let data = dir.join("data");
+        std::fs::create_dir(&data).unwrap();
+        for mode in [0o775, 0o755, 0o750, 0o700] {
+            std::fs::set_permissions(&data, std::fs::Permissions::from_mode(mode)).unwrap();
+            super::keep_private_below(&data).unwrap();
+            assert_eq!(mode_of(&data), 0o700, "{mode:o}");
+        }
+        let fresh = dir.join("fresh").join("data");
+        super::create_private_dir(&fresh).unwrap();
+        assert_eq!(mode_of(&fresh), 0o700);
+    }
+
+    /// A directory another user owns is an error, which the daemon only warns of: its mode is not
+    /// this user's to change, so it is left as it is. A directory that is not there is an error
+    /// too. And a directory made private from the start is not tightened or loosened by being made
+    /// again.
+    #[test]
+    fn a_data_directory_of_another_user_is_refused_and_left_as_it_is() {
+        // SAFETY: `geteuid` takes no arguments and cannot fail.
+        if unsafe { libc::geteuid() } != 0 {
+            let root_owned = std::path::Path::new("/usr");
+            let before = mode_of(root_owned);
+            let refused = super::keep_private_below(root_owned).unwrap_err();
+            assert_eq!(refused.kind(), std::io::ErrorKind::PermissionDenied);
+            assert_eq!(mode_of(root_owned), before);
+        }
+
+        let dir = scratch("keep-private-missing");
+        assert!(super::keep_private_below(&dir.join("missing")).is_err());
+        let open = dir.join("open");
+        std::fs::create_dir(&open).unwrap();
+        std::fs::set_permissions(&open, std::fs::Permissions::from_mode(0o755)).unwrap();
+        super::create_private_dir(&open).unwrap();
+        assert_eq!(
+            mode_of(&open),
+            0o755,
+            "an existing directory is left as it is"
+        );
+    }
+
+    /// A file that cannot be read is an error, not "no key": the caller must be able to tell a file
+    /// to replace from one to leave alone. A process that ignores modes (root) reads it.
+    #[test]
+    fn an_unreadable_private_file_is_an_error_not_none() {
+        let dir = scratch("read-private-denied");
+        let file = dir.join("key");
+        std::fs::write(&file, "secret").unwrap();
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o000)).unwrap();
+        if std::fs::read(&file).is_err() {
+            let err = super::read_private_file(&file).unwrap_err();
+            assert_eq!(err.kind(), std::io::ErrorKind::PermissionDenied);
+        }
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600)).unwrap();
+    }
+
+    /// Only a regular file of this user's that nobody else may read or write is read: a symlink
+    /// is not followed, and a FIFO is not waited on.
+    #[test]
+    fn only_a_private_regular_file_is_read() {
+        let dir = scratch("read-private");
+        let file = dir.join("key");
+        std::fs::write(&file, "secret").unwrap();
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600)).unwrap();
+        assert_eq!(
+            super::read_private_file(&file).unwrap().as_deref(),
+            Some(&b"secret"[..])
+        );
+        for mode in [0o644, 0o640, 0o604, 0o620, 0o602] {
+            std::fs::set_permissions(&file, std::fs::Permissions::from_mode(mode)).unwrap();
+            assert_eq!(super::read_private_file(&file).unwrap(), None, "{mode:o}");
+        }
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o600)).unwrap();
+        let link = dir.join("link");
+        std::os::unix::fs::symlink(&file, &link).unwrap();
+        assert_eq!(super::read_private_file(&link).unwrap(), None);
+
+        let fifo = dir.join("fifo");
+        let path = std::ffi::CString::new(fifo.as_os_str().as_encoded_bytes()).unwrap();
+        // SAFETY: `path` is a NUL-terminated string that outlives the call.
+        assert_eq!(unsafe { libc::mkfifo(path.as_ptr(), 0o600) }, 0);
+        assert_eq!(super::read_private_file(&fifo).unwrap(), None);
+        assert!(super::read_private_file(&dir.join("missing")).is_err());
+    }
+
     /// The effective user has an entry with an absolute home on any machine the tests run on.
     #[test]
     fn the_user_database_records_an_absolute_home() {

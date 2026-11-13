@@ -245,8 +245,8 @@ Where to start, by question:
   daemon and restarting one that dies, losing the daemon connection, a daemon of another version, closing, quitting
   and restarting, crashes and forced termination.
 - [The server form](product/server-form.md) — the daemon alone on a Linux server, reached from a browser over SSH: how
-  it starts and stops, the UI a server build serves and the page whose key is refused, `--port`, and the example
-  systemd user unit.
+  it starts and stops, the owner-only browser socket and the SSH forward to it, the UI a server build serves and the
+  page whose key is refused, `--port`, and the example systemd user unit.
 - [Running in the background from the command line](product/daemon-command-line.md) — the
   `octoboardd start/stop/restart/status/address` commands (on Windows too, and against the desktop app's daemon) and
   `address --rotate`: how they find the daemon, waiting out a planned restart caught half-way, exit statuses, and how a
@@ -258,8 +258,9 @@ Where to start, by question:
   release holds for Linux (archives, `.sha256`, `.sig`, the Linux manifests), the install script with `--service`, and
   the ways to upgrade.
 - [Who can reach the daemon](product/who-can-reach-the-daemon.md) — the daemon's access model in both forms: loopback
-  only, the launch key and where helpers keep it, the owner key a browser address carries and its trade-off, SSH as
-  the only remote path, other users of the machine, and the origin and key checks.
+  only, the launch key and where helpers keep it, the owner key a browser address carries (on the browser socket alone)
+  and its trade-off, SSH as the only remote path, other users of the machine and port takeover, and the origin and key
+  checks.
 - [Files Octoboard owns](product/files-octoboard-owns.md) — every file Octoboard writes under `~/.octoboard` and the
   desktop app's own state files, and the database's schema version check.
 - [Process holders](product/process-holders.md) — the processes that run sessions and shell terminals so they outlive

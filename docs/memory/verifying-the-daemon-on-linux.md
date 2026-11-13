@@ -77,13 +77,21 @@ container (`docker run --init`) has neither a service manager nor a login sessio
   `docker exec <container> machinectl shell -q <user>@.host /bin/sh <script>`; when the check involves an SSH forward,
   log in as `ssh <user>@<server>` from a second container on the same Docker network. `loginctl enable-linger <user>`
   keeps the user manager, and its units, past the login.
-- Open an SSH forward (`ssh -N -L <port>:127.0.0.1:<port>`) from anywhere but the server itself, where its listener
-  collides with the daemon's own on the same loopback port: from that second container for a client inside Docker, or,
-  for a real browser on the macOS host, from the host. For the latter publish only the server container's SSH port, and
-  only to the host's loopback (`-p 127.0.0.1:2222:22`), log in with a key the image authorizes, and open
-  `http://localhost:<port>/?key=…` there; leave the daemon's port unpublished.
+- A browser takes the owner key only on the browser socket: forward the socket with the exact command under
+  "Forwarding it" in `docs/product/server-form.md` "The browser socket" (bind address included) and open
+  `http://127.0.0.1:<port>/?key=…`. A forward of the daemon's TCP port (`ssh -N -L 127.0.0.1:<port>:127.0.0.1:<port>`)
+  serves only a client holding the launch key, and works from anywhere but the server itself, where its listener
+  collides with the daemon's own on the same loopback port. Forward from that second container for a client inside
+  Docker or, for a real browser on the macOS host, from the host: publish only the server container's SSH port, and
+  only to the host's loopback (`-p 127.0.0.1:2222:22`), log in with a key the image authorizes, and leave the daemon's
+  port unpublished.
+- What the kernel and `sshd` allow on the browser socket — the forward reaching it with the browser's `Host` kept,
+  another user being refused connecting to it, refused forwarding it through their own SSH login, and unable to
+  rename the directory holding it — needs no daemon built for Linux: a container running `sshd` with two users and a
+  Python `AF_UNIX` server in a 0700 directory standing in for the daemon shows it. What the daemon itself does there
+  (the modes it creates, its check of the directories above) still needs the real daemon.
 - Debian trixie makes home directories 0700, and an SSH login there has umask 0002, so what the daemon creates without
-  an explicit mode comes out group-writable (`~/.octoboard` as 0775).
+  an explicit mode comes out group-writable.
 - To exercise a host shutdown, `docker restart -t 120 <container>` (or `docker stop -t 120`): systemd shuts down
   fully on the `STOPSIGNAL`, but Docker's default 10-second timeout SIGKILLs it partway, well inside the daemon unit's
   stop allowance, and the result says nothing about the real order. To stop only one user's manager and its units,
@@ -97,9 +105,9 @@ by hand is enough; systemd is needed only when what you check is something a sys
 
 - Give A umask 0002 and a 0755 home. Debian makes homes 0700, which keeps B out of everything and proves nothing about
   the modes inside it.
-- As root, collect every secret first (`~/.octoboard/daemon.key`, `run/*/key`, the secret in `holders/*.json`), so the
-  scan has exact strings to look for. Make the harness refuse an empty secret: one collected before what holds it
-  exists comes out empty and "matches" every process. Where a secret only appears after a process that could leak it
+- As root, collect every secret first (`~/.octoboard/daemon.key`, `~/.octoboard/owner.key`, `run/*/key`, the secret in
+  `holders/*.json`), so the scan has exact strings to look for. Make the harness refuse an empty secret: one collected
+  before what holds it exists comes out empty and "matches" every process. Where a secret only appears after a process that could leak it
   has already come and gone (a holder started through `systemd-run`, whose command line lives a moment), have B record
   every distinct `cmdline` and `environ` it sees, and check that record against the secrets collected afterwards.
 - As B, look in all three places: every `/proc/*/cmdline`, read in a tight loop while the helpers run; every

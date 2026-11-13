@@ -9,14 +9,21 @@
 //! itself by its having recorded the very launch key of the daemon it took over from, and the
 //! launch key goes into what the daemon's helpers read, which a key kept for good must not.
 //!
-//! Only a daemon that runs on its own holds one ([`OwnerKey::start`]): the desktop application
-//! hands its daemon's launch key to its own window and has no address to keep. The owner key is
-//! the browser's alone. It is never written to `daemon.key`, a helper's key file or a holder's
-//! record, and never handed to anything the daemon starts, so what holds the launch key gains no
-//! more by it.
+//! Only a daemon that serves the browser on its owner-only socket holds one ([`OwnerKey::start`],
+//! [`crate::browser_socket`]): the desktop application hands its daemon's launch key to its own
+//! window and has no address to keep, and a build that embeds no UI has no page to open. The owner
+//! key is the browser's alone, and accepted only on that socket. It is never written to
+//! `daemon.key`, a helper's key file or a holder's record, and never handed to anything the daemon
+//! starts, so what holds the launch key gains no more by it.
+//!
+//! Each rotation moves a generation on, which every connection admitted by the owner key watches
+//! ([`OwnerKey::admit`]): a rotation alone closes them, so a page holding the old key is cut off
+//! at once rather than at its next connection.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, RwLock};
+
+use tokio::sync::watch;
 
 use crate::hostfs::replace::{replace_beside, Permissions};
 use crate::request_guard::{generate_key, is_key, key_matches};
@@ -24,12 +31,39 @@ use crate::request_guard::{generate_key, is_key, key_matches};
 /// What the daemon holds of its owner key: the key and the file it is kept in, or nothing, as a
 /// daemon that follows the desktop application, or could not read or write the file, does. Shared
 /// by the guard, which accepts it, and the route that rotates it.
-#[derive(Default)]
 pub struct OwnerKey {
     held: RwLock<Option<Held>>,
     /// Serializes rotations, so the file is written outside `held` and a request's read of the
     /// key never waits for the disk.
     rotating: Mutex<()>,
+    /// Moved on by every rotation, under `held`'s write lock, so a connection that subscribed
+    /// while `held` accepted its key sees every rotation after that one and none before it.
+    generation: watch::Sender<u64>,
+}
+
+impl Default for OwnerKey {
+    fn default() -> Self {
+        Self {
+            held: RwLock::default(),
+            rotating: Mutex::default(),
+            generation: watch::Sender::new(0),
+        }
+    }
+}
+
+/// What a connection the owner key admitted watches: it resolves once the key that admitted it has
+/// been rotated away. A clone watches from where the original stands.
+#[derive(Clone)]
+pub struct Revocation(watch::Receiver<u64>);
+
+impl Revocation {
+    /// Resolves when the owner key has been rotated since this connection was admitted, and never
+    /// otherwise: the key's holder outlives every connection, so its end is no rotation.
+    pub async fn revoked(&mut self) {
+        if self.0.changed().await.is_err() {
+            std::future::pending::<()>().await;
+        }
+    }
 }
 
 struct Held {
@@ -80,16 +114,21 @@ impl OwnerKey {
         Ok(())
     }
 
-    /// Starts to hold the owner key of the data directory `data`, unless the daemon follows the
-    /// desktop application, which hands its launch key to its own window and has no browser to
-    /// keep an address for: that daemon never reads, makes or accepts one. A failure to read or
-    /// write the key is logged, and the daemon then accepts none.
-    pub fn start(&self, follows_application: bool, data: &Path) {
-        if follows_application {
-            return;
+    /// Starts to hold the owner key of the data directory `data` where the daemon serves the
+    /// browser (`serves_browser`): a daemon that follows the desktop application, or embeds no UI,
+    /// or could not open its browser socket, has no page to keep an address for, and never reads,
+    /// makes or accepts one. Whether it holds one afterwards: a failure to read or write the key is
+    /// logged, and the daemon then accepts none.
+    pub fn start(&self, serves_browser: bool, data: &Path) -> bool {
+        if !serves_browser {
+            return false;
         }
-        if let Err(err) = self.enable(&path_in(data)) {
-            tracing::warn!(%err, "reading or writing the owner key failed; no owner key is accepted");
+        match self.enable(&path_in(data)) {
+            Ok(()) => true,
+            Err(err) => {
+                tracing::warn!(%err, "reading or writing the owner key failed; no owner key is accepted");
+                false
+            }
         }
     }
 
@@ -100,18 +139,26 @@ impl OwnerKey {
 
     /// Whether the query string carries the owner key as its first `key` parameter. Never, for a
     /// daemon that holds none.
+    #[cfg(test)]
     pub fn accepts(&self, query: Option<&str>) -> bool {
-        self.held
-            .read()
-            .unwrap()
-            .as_ref()
+        self.admit(query).is_some()
+    }
+
+    /// The watch on the key's rotation, when the query string carries the owner key as its first
+    /// `key` parameter; `None` otherwise, and always for a daemon that holds none. The key is
+    /// compared and the watch taken under one read of it, so no rotation falls between the two.
+    pub fn admit(&self, query: Option<&str>) -> Option<Revocation> {
+        let held = self.held.read().unwrap();
+        held.as_ref()
             .is_some_and(|held| key_matches(query, &held.key))
+            .then(|| Revocation(self.generation.subscribe()))
     }
 
     /// Replaces the owner key with a new one, in its file and in memory. The old key is refused
-    /// from then on; a connection made with it stays. Blocking. One rotation at a time, so two
-    /// cannot leave the file and the memory with different keys; the key itself is locked only for
-    /// the swap in memory, after the file is written.
+    /// from then on, and every connection it admitted is told to close ([`Revocation`]).
+    /// Blocking. One rotation at a time, so two cannot leave the file and the memory with
+    /// different keys; the key itself is locked only for the swap in memory, after the file is
+    /// written.
     pub fn rotate(&self) -> Result<(), RotateError> {
         let _rotation = self.rotating.lock().unwrap();
         let path = match self.held.read().unwrap().as_ref() {
@@ -119,9 +166,11 @@ impl OwnerKey {
             None => return Err(RotateError::NotHeld),
         };
         let key = replace_at(&path).map_err(RotateError::Write)?;
-        if let Some(held) = self.held.write().unwrap().as_mut() {
+        let mut held = self.held.write().unwrap();
+        if let Some(held) = held.as_mut() {
             held.key = key;
         }
+        self.generation.send_modify(|generation| *generation += 1);
         Ok(())
     }
 }
@@ -143,19 +192,37 @@ pub fn replace_in(data: &Path) -> std::io::Result<String> {
     replace_at(&path_in(data))
 }
 
+/// Writes `key` into the data directory `data` as the daemon would, owner-only, for a test that
+/// needs a known owner key.
+#[cfg(test)]
+pub fn write_in(data: &Path, key: &str) {
+    replace_beside(
+        &path_in(data),
+        format!("{key}\n").as_bytes(),
+        Permissions::Private,
+    )
+    .expect("writing the owner key");
+}
+
 fn read_from(path: &Path) -> Option<String> {
     read_existing(path).ok().flatten()
 }
 
 /// The key kept in `path`: `None` when the file is missing or does not hold a key, an error when
-/// it exists but cannot be read.
+/// it exists but cannot be read. On Unix a file that is not one the daemon's user alone could have
+/// written holds no key either, whatever it says: a symlink (not followed), a file another user
+/// owns, or one whose mode lets anyone else read or write it. Such a file is replaced with a new
+/// key, as a malformed one is, since a key another user could have read or chosen is no secret.
 fn read_existing(path: &Path) -> std::io::Result<Option<String>> {
-    let content = match std::fs::read_to_string(path) {
-        Ok(content) => content,
+    let content = match crate::platform::fs::read_private_file(path) {
+        Ok(Some(content)) => content,
+        Ok(None) => return Ok(None),
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        // A file that is not UTF-8 is not a key either.
-        Err(err) if err.kind() == std::io::ErrorKind::InvalidData => return Ok(None),
         Err(err) => return Err(err),
+    };
+    // A file that is not UTF-8 is not a key either.
+    let Ok(content) = String::from_utf8(content) else {
+        return Ok(None);
     };
     let key = content.trim();
     Ok(is_key(key).then(|| key.to_owned()))
@@ -177,23 +244,24 @@ mod tests {
         Some(format!("key={key}"))
     }
 
-    /// The desktop application's daemon neither makes nor reads an owner key, so even the key the
-    /// file holds opens nothing there; a daemon on its own over the same directory holds it.
+    /// A daemon that does not serve the browser (it follows the desktop application, embeds no UI
+    /// or has no browser socket) neither makes nor reads an owner key, so even the key the file
+    /// holds opens nothing there; a daemon that serves it over the same directory holds it.
     #[test]
-    fn a_daemon_that_follows_the_application_takes_no_owner_key() {
+    fn only_a_daemon_that_serves_the_browser_takes_an_owner_key() {
         let dir = ScratchDir::new("owner-key-desktop");
         let desktop = OwnerKey::default();
-        desktop.start(true, &dir);
+        assert!(!desktop.start(false, &dir));
         assert!(!desktop.is_held());
         assert_eq!(read_in(&dir), None, "no owner key was made");
 
-        let alone = OwnerKey::default();
-        alone.start(false, &dir);
-        assert!(alone.is_held());
-        let key = read_in(&dir).expect("a daemon on its own made the key");
+        let serving = OwnerKey::default();
+        assert!(serving.start(true, &dir));
+        assert!(serving.is_held());
+        let key = read_in(&dir).expect("a daemon serving the browser made the key");
 
         let desktop = OwnerKey::default();
-        desktop.start(true, &dir);
+        desktop.start(false, &dir);
         assert!(!desktop.accepts(query(&key).as_deref()));
         assert_eq!(
             read_in(&dir).as_deref(),
@@ -263,7 +331,7 @@ mod tests {
             return;
         }
         let held = OwnerKey::default();
-        held.start(false, &dir);
+        assert!(!held.start(true, &dir));
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
         assert!(!held.is_held());
         assert!(!held.accepts(query(&key).as_deref()));
@@ -280,6 +348,12 @@ mod tests {
         let dir = ScratchDir::new("owner-key-not-utf8");
         let path = path_in(&dir);
         std::fs::write(&path, [0xff, 0xfe, 0x00, 0x80]).unwrap();
+        // Private, so that only its content is what is wrong with it.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+        }
         assert!(matches!(read_existing(&path), Ok(None)));
         let held = OwnerKey::default();
         held.enable(&path).unwrap();
@@ -330,6 +404,7 @@ mod tests {
         let held = OwnerKey::default();
         held.enable(&path_in(&dir)).unwrap();
         let old = read_in(&dir).unwrap();
+        let admitted = held.admit(query(&old).as_deref()).expect("admitted");
 
         // A directory that takes no new file; a process that bypasses the mode (root) would write.
         std::fs::set_permissions(&*dir, std::fs::Permissions::from_mode(0o500)).unwrap();
@@ -341,6 +416,10 @@ mod tests {
         assert!(matches!(result, Err(RotateError::Write(_))));
         assert_eq!(read_in(&dir).as_deref(), Some(old.as_str()));
         assert!(held.accepts(query(&old).as_deref()));
+        assert!(
+            !admitted.0.has_changed().unwrap(),
+            "a rotation that did not happen revokes nothing"
+        );
     }
 
     #[test]
@@ -351,5 +430,133 @@ mod tests {
         let second = replace_in(&dir).unwrap();
         assert_ne!(first, second);
         assert_eq!(read_in(&dir).as_deref(), Some(second.as_str()));
+    }
+
+    /// A file that is not the daemon's user's own private file holds no key, whatever it says: a
+    /// symlink, even to a private file holding a key, is not followed, and a file anyone else may
+    /// read or write is not trusted. Each is replaced with a new private file holding a new key.
+    #[cfg(unix)]
+    #[test]
+    fn a_key_file_that_is_not_private_is_replaced() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = ScratchDir::new("owner-key-not-private");
+        let path = path_in(&dir);
+        let planted = "a".repeat(64);
+
+        for mode in [0o644, 0o640, 0o606, 0o620] {
+            std::fs::write(&path, format!("{planted}\n")).unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).unwrap();
+            assert_eq!(read_in(&dir), None, "mode {mode:o}");
+            let held = OwnerKey::default();
+            held.enable(&path).unwrap();
+            assert!(!held.accepts(query(&planted).as_deref()), "mode {mode:o}");
+            let new = read_in(&dir).expect("a new key");
+            assert_ne!(new, planted);
+            assert!(held.accepts(query(&new).as_deref()));
+            let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+            assert_eq!(mode & 0o777, 0o600);
+        }
+
+        let elsewhere = dir.join("elsewhere.key");
+        std::fs::write(&elsewhere, format!("{planted}\n")).unwrap();
+        std::fs::set_permissions(&elsewhere, std::fs::Permissions::from_mode(0o600)).unwrap();
+        std::fs::remove_file(&path).unwrap();
+        std::os::unix::fs::symlink(&elsewhere, &path).unwrap();
+        assert_eq!(read_in(&dir), None, "a symlink is not followed");
+        let held = OwnerKey::default();
+        held.enable(&path).unwrap();
+        assert!(!held.accepts(query(&planted).as_deref()));
+        assert!(
+            !std::fs::symlink_metadata(&path)
+                .unwrap()
+                .file_type()
+                .is_symlink(),
+            "the symlink itself was replaced"
+        );
+        assert_eq!(
+            std::fs::read_to_string(&elsewhere).unwrap().trim(),
+            planted,
+            "the file the symlink led to is untouched"
+        );
+    }
+
+    /// A connection admitted by the owner key learns of a rotation; one admitted before an earlier
+    /// rotation is not admitted by the old key afterwards at all.
+    #[tokio::test]
+    async fn a_rotation_revokes_what_the_old_key_admitted() {
+        let dir = ScratchDir::new("owner-key-revoke");
+        let held = OwnerKey::default();
+        held.enable(&path_in(&dir)).unwrap();
+        let old = read_in(&dir).unwrap();
+        let mut admitted = held.admit(query(&old).as_deref()).expect("admitted");
+        assert!(held.admit(query(&"0".repeat(64)).as_deref()).is_none());
+
+        assert!(
+            !admitted.0.has_changed().unwrap(),
+            "nothing was rotated yet"
+        );
+
+        held.rotate().unwrap();
+        tokio::time::timeout(crate::test_support::PATIENCE, admitted.revoked())
+            .await
+            .expect("the rotation revokes the connection");
+        assert!(held.admit(query(&old).as_deref()).is_none());
+
+        let new = read_in(&dir).unwrap();
+        let later = held.admit(query(&new).as_deref()).expect("admitted");
+        assert!(
+            !later.0.has_changed().unwrap(),
+            "an earlier rotation does not revoke a later admission"
+        );
+    }
+
+    /// A connection is cut off by a rotation of the key, and by nothing else: the end of the key's
+    /// holder, which outlives every connection, is no rotation. The clock is paused, so the wait
+    /// that never ends runs out at once.
+    #[tokio::test(start_paused = true)]
+    async fn the_end_of_the_key_is_no_rotation() {
+        let dir = ScratchDir::new("owner-key-dropped");
+        let held = OwnerKey::default();
+        held.enable(&path_in(&dir)).unwrap();
+        let old = read_in(&dir).unwrap();
+        let mut admitted = held.admit(query(&old).as_deref()).expect("admitted");
+        drop(held);
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_secs(60), admitted.revoked())
+                .await
+                .is_err(),
+            "the key being dropped revoked the connection"
+        );
+    }
+
+    /// Every connection one key admitted learns of the rotation, whichever clone of the watch it
+    /// holds, and a second rotation does not need a second look.
+    #[tokio::test]
+    async fn every_connection_the_key_admitted_learns_of_a_rotation() {
+        let dir = ScratchDir::new("owner-key-many");
+        let held = OwnerKey::default();
+        held.enable(&path_in(&dir)).unwrap();
+        let old = read_in(&dir).unwrap();
+        let mut first = held.admit(query(&old).as_deref()).expect("admitted");
+        let mut second = held.admit(query(&old).as_deref()).expect("admitted");
+        let mut cloned = first.clone();
+
+        held.rotate().unwrap();
+        for watch in [&mut first, &mut second, &mut cloned] {
+            tokio::time::timeout(crate::test_support::PATIENCE, watch.revoked())
+                .await
+                .expect("the rotation revokes every connection");
+        }
+    }
+
+    /// A daemon that serves the browser but cannot write its key (no data directory) holds none,
+    /// and says so.
+    #[test]
+    fn a_daemon_that_cannot_write_its_key_holds_none() {
+        let dir = ScratchDir::new("owner-key-no-dir");
+        let held = OwnerKey::default();
+        assert!(!held.start(true, &dir.join("missing")));
+        assert!(!held.is_held());
     }
 }

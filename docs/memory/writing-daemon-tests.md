@@ -181,7 +181,7 @@ the override around the call in the test, clear it after, and assert what happen
 thread, so it reaches only code running on the test's own thread: the browse fixtures' `serve` calls in directly,
 while anything moved onto another thread (`spawn_blocking`, a request through the coordinator) reads the real figure.
 
-## A test that needs a permission to refuse something returns early when it is not refused
+## A test whose outcome depends on permissions checks what the machine allows before asserting it
 
 Applies to daemon tests that make a file or directory unwritable or unreadable (`set_permissions` to `0o555`, `0o000`)
 and expect the operation under test to fail. A Linux container runs the suite as root unless told otherwise (the
@@ -190,6 +190,14 @@ nothing shows it. Before
 asserting the refusal, return when it cannot happen: check `libc::geteuid() == 0` (`apps/daemon/src/path_links/tests.rs`)
 or try the write and return if it succeeds (`apps/daemon/src/accounts/relocate/tests.rs`). A test that fails only when
 run as root is missing this early return; it is not a regression in the change being verified.
+
+The opposite holds for tests whose code under test checks the directories above its scratch directory (the browser
+socket's check that every ancestor of the data directory is closed to writes by others): do not assume the temporary
+directory's ancestors pass it. `TMPDIR` can point into a volume whose directories others may write to, where such a
+test fails although `/tmp` on Linux and macOS's default temporary directory pass. Run the check on the scratch
+directory first and, where it already refuses, assert the refusal instead (`a_private_data_directory_gets_an_owner_only_socket`
+in `apps/daemon/src/browser_socket.rs`); to test what is served over the socket, serve its router on a loopback port
+or bind the listener on a scratch path directly, past the check.
 
 ## A test that returns early for want of a cgroup says so through `test_support::cgroups::skip`
 

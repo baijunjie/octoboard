@@ -1,5 +1,10 @@
 //! The HTTP and WebSocket surface described in `apps/daemon/PROTOCOL.md`, bound to localhost only.
 //!
+//! The same routes are served on two listeners, each behind a guard of its own: the loopback TCP
+//! port ([`router`]), which takes the launch key alone, and, where the daemon serves the browser,
+//! its owner-only socket ([`browser_router`], [`crate::browser_socket`]), which takes the owner
+//! key too and serves the embedded UI. On a host that has such sockets the TCP port serves no UI.
+//!
 //! This file holds the route table and the guard around it; each route's handler lives beside the
 //! protocol it speaks:
 //!
@@ -29,18 +34,42 @@ use axum::Router;
 
 use crate::state::AppState;
 
+/// The router of the loopback TCP port: the launch key alone, and the embedded UI only on a host
+/// with no browser socket.
 pub fn router(state: Arc<AppState>) -> Router {
-    router_serving(state, ui::EMBEDDED)
+    router_serving(state, port_files(), false)
 }
 
-/// The router, serving `files` as the browser UI.
-fn router_serving(state: Arc<AppState>, files: ui::Files) -> Router {
+/// The router of the browser socket: the launch key or the owner key, and the embedded UI.
+pub fn browser_router(state: Arc<AppState>) -> Router {
+    router_serving(state, ui::EMBEDDED, true)
+}
+
+/// The UI files the TCP port serves: none where the browser has a socket of its own, so that no
+/// page that would carry a key is ever opened at the port.
+fn port_files() -> ui::Files {
+    if crate::browser_socket::AVAILABLE {
+        &[]
+    } else {
+        ui::EMBEDDED
+    }
+}
+
+/// The router, serving `files` as the browser UI and taking the owner key where `takes_owner_key`.
+fn router_serving(state: Arc<AppState>, files: ui::Files, takes_owner_key: bool) -> Router {
     // The guard wraps the finished router, fallback included, so a route added to `routes` later
     // cannot end up outside it. A refused request never reaches a handler or a WebSocket upgrade.
     let access = access::Access {
         key: state.key.as_str().into(),
-        owner_key: state.owner_key.clone(),
+        owner_key: takes_owner_key.then(|| state.owner_key.clone()),
         ui: files,
+        // The owner key is held exactly where the browser socket is served, and is settled before
+        // either router is built.
+        refusal: if !takes_owner_key && state.owner_key.is_held() {
+            access::REFUSED_AT_PORT
+        } else {
+            access::REFUSED
+        },
     };
     routes(state)
         .fallback(move |request| ui::serve(files, request))
@@ -413,6 +442,17 @@ mod tests {
         .expect("the checks ran");
     }
 
+    /// Where the browser has a socket of its own, the TCP port serves no UI file, so no page that
+    /// would carry a key is ever opened at the port.
+    #[test]
+    fn the_port_serves_no_ui_where_the_browser_has_a_socket() {
+        if crate::browser_socket::AVAILABLE {
+            assert!(port_files().is_empty());
+        } else {
+            assert_eq!(port_files().len(), ui::EMBEDDED.len());
+        }
+    }
+
     /// A build without the `embedded-ui` feature embeds nothing, and then answers exactly as a
     /// daemon without a UI does: every path needs the key, and none has a file behind it.
     #[tokio::test]
@@ -614,6 +654,136 @@ mod tests {
         })
         .await;
         assert!(ended.is_ok(), "the terminal socket outlived its terminal");
+        server.abort();
+        drop(dir);
+    }
+
+    /// A rotation of the owner key ends a terminal socket the old key opened, without the client
+    /// doing anything, and leaves one the launch key opened on the same terminal attached.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_rotation_ends_the_terminal_sockets_the_old_owner_key_opened() {
+        use futures_util::{SinkExt, StreamExt};
+        use tokio_tungstenite::tungstenite::Message as Frame;
+
+        let (state, dir) = app_state("server-term-revoke");
+        state.host_tools.replace(crate::host_tools::Tools {
+            shell: crate::test_support::posix_shell,
+            ..state.host_tools.get()
+        });
+        state
+            .store
+            .insert_console(&crate::test_support::console(&dir))
+            .unwrap();
+        let project = crate::test_support::ScratchDir::new("server-term-revoke-project");
+        crate::test_support::insert_project(&state, &project);
+        state
+            .owner_key
+            .enable(&crate::owner_key::path_in(&dir))
+            .expect("the owner key");
+        let owner = crate::owner_key::read_in(&dir).expect("the owner key");
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let served = state.clone();
+        let server =
+            tokio::spawn(async move { axum::serve(listener, browser_router(served)).await });
+
+        let (control, _) = tokio_tungstenite::connect_async(format!(
+            "ws://127.0.0.1:{port}/ws/control?key={TEST_KEY}"
+        ))
+        .await
+        .unwrap();
+        let (mut requests, mut events) = control.split();
+        async fn next_event<S>(events: &mut S) -> serde_json::Value
+        where
+            S: futures_util::Stream<Item = Result<Frame, tokio_tungstenite::tungstenite::Error>>
+                + Unpin,
+        {
+            let frame = tokio::time::timeout(PATIENCE, events.next())
+                .await
+                .expect("an event in time")
+                .unwrap()
+                .unwrap();
+            let Frame::Text(text) = frame else {
+                panic!("a control frame that is not text: {frame:?}");
+            };
+            serde_json::from_str(&text).unwrap()
+        }
+        let create = r#"{"type":"create_shell_terminal","id":"create","project":"p1"}"#;
+        requests.send(Frame::Text(create.into())).await.unwrap();
+        let terminal = loop {
+            let event = next_event(&mut events).await;
+            if event["type"] == "shell_terminal_created" && event["id"] == "create" {
+                break event["shell_terminal"]["id"].as_str().unwrap().to_string();
+            }
+        };
+
+        let url = |key: &str| format!("ws://127.0.0.1:{port}/ws/term/{terminal}?key={key}");
+        let (mut owners, _) = tokio_tungstenite::connect_async(url(&owner)).await.unwrap();
+        let (mut launch, _) = tokio_tungstenite::connect_async(url(TEST_KEY))
+            .await
+            .unwrap();
+        // Each is attached once the replay's mark, a text frame, has come.
+        for term in [&mut owners, &mut launch] {
+            loop {
+                let frame = tokio::time::timeout(PATIENCE, term.next())
+                    .await
+                    .expect("the replay's mark in time")
+                    .unwrap()
+                    .unwrap();
+                if matches!(frame, Frame::Text(_)) {
+                    break;
+                }
+            }
+        }
+
+        tokio::task::spawn_blocking(move || {
+            let host = format!("Host: 127.0.0.1:{port}");
+            assert_eq!(
+                status_of(port, &keyed("POST /owner-key/rotate"), &[&host]),
+                204
+            );
+        })
+        .await
+        .expect("the rotation ran");
+
+        // Output the terminal had already sent may come first; then the socket ends.
+        tokio::time::timeout(PATIENCE, async {
+            loop {
+                match owners.next().await {
+                    None | Some(Err(_)) | Some(Ok(Frame::Close(_))) => break,
+                    Some(Ok(_)) => {}
+                }
+            }
+        })
+        .await
+        .expect("the owner key's terminal socket was ended");
+
+        // The launch key's socket still drives the terminal.
+        launch
+            .send(Frame::Binary(b"echo $((6*7))\r".to_vec()))
+            .await
+            .unwrap();
+        let mut seen = String::new();
+        while !seen.contains("42") {
+            let frame = tokio::time::timeout(PATIENCE, launch.next())
+                .await
+                .unwrap_or_else(|_| panic!("\"42\" never arrived in {seen:?}"));
+            match frame {
+                Some(Ok(Frame::Binary(bytes))) => seen.push_str(&String::from_utf8_lossy(&bytes)),
+                Some(Ok(Frame::Text(_))) => {}
+                other => panic!("the launch key's socket ended: {other:?} after {seen:?}"),
+            }
+        }
+
+        let close = format!(
+            r#"{{"type":"close_shell_terminal","id":"close","shell_terminal":"{terminal}"}}"#
+        );
+        requests.send(Frame::Text(close)).await.unwrap();
+        loop {
+            if next_event(&mut events).await["id"] == "close" {
+                break;
+            }
+        }
         server.abort();
         drop(dir);
     }

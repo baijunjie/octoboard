@@ -41,9 +41,11 @@ anyway" passes; and that later versions arrive through the app's own updates.
   `docs/product/installing-the-server-form.md`), in a horizontally scrollable, focusable block with a Copy button. A
   successful copy turns the button's label to Copied for 2 seconds and announces it to screen readers; a copy the
   browser refuses changes nothing, the command staying selectable;
-- the next steps: run `octoboardd start` on the server, which listens on port 3369 (`--port <port>` picks another); on
-  the visitor's own machine run `ssh -L 3369:127.0.0.1:3369 <server>` with the same port, and open the address
-  `octoboardd address` prints;
+- the next steps: run `octoboardd start` on the server, which listens on port 3369 (`--port <port>` picks another),
+  and run `octoboardd address` there, which prints the address and the SSH command that forwards it, such as
+  `ssh -o ExitOnForwardFailure=yes -L 127.0.0.1:3369:/home/<you>/.octoboard/browser.sock <you>@<server>` (see "The
+  browser socket" in `docs/product/server-form.md`); run that command on the visitor's own machine, then open the
+  address in a browser there;
 - the PATH caveat: when the install says `~/.local/bin` is not on the PATH, run `octoboardd start` by the full path it
   prints, or add the directory to the PATH;
 - the service: replacing the command's final `sh` with `sh -s -- --service` installs it as a systemd user service that
@@ -60,12 +62,14 @@ repository's releases page, listing every release.
 ### The terminal demonstration
 
 An animation of the Linux steps: a terminal on the server runs the install command, prints the download and
-installation, starts the daemon with `octoboardd start` and prints its address with `octoboardd address`;
-then a terminal on the visitor's own machine appears and forwards the port with `ssh -L`; then a browser window appears,
-open at that address and showing a picture of the Octoboard interface. Each terminal carries a translated caption of
-its step; the commands and output are in English. The output lines are ones the real tools print, with an example
-version, key and process id; the install script's are kept the same as the script's own messages for a first install,
-leaving out the warning it prints on the error output when it cannot check the signature. Commands are typed at an uneven, human pace.
+installation, starts the daemon with `octoboardd start` and prints its address with `octoboardd address`, followed by
+the line saying to forward it with the SSH command it names; then a terminal on the visitor's own machine appears and
+runs that forward of the daemon's socket (without `-N`, so that the SSH session opens a shell on the server); then a
+browser window appears, open at that address and showing a picture of the Octoboard interface. Each terminal carries a
+translated caption of its step; the commands and output are in English. The output lines are ones the real tools print,
+with an example version, key and process id; the install script's are kept the same as the script's own messages for a
+first install, leaving out the warning it prints on the error output when it cannot check the signature. Commands are
+typed at an uneven, human pace.
 
 It plays once, from the start, when the page loads, and runs only while it is on screen and the page is visible,
 resuming where it was. A replay button on the server terminal plays it again from the start. With a reduced-motion

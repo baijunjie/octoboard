@@ -182,42 +182,55 @@ free is gone at once.
   above and reports the next daemon rather than none. A user for whom no daemon has ever run has no data directory, and
   `status` creates none.
 - **`octoboardd address`** prints the address to open the running daemon at in a browser, its key included, as a single
-  line on standard output and nothing else there, `http://localhost:<port>/?key=<key>`, and exits with status 0; the
-  output is meant to be read by a program as well, such as one run over SSH. The host is `localhost`, which a browser
-  treats as a secure context and which the owner's SSH port forward opens on their own machine (see
-  `docs/product/who-can-reach-the-daemon.md`). The key is the owner key where the running daemon's `daemon.owner` says
-  it accepts one and `owner.key` holds a key; otherwise it is the daemon's launch key, as for a daemon that follows the
-  desktop application or is of an earlier build (see "The owner key" in `docs/product/who-can-reach-the-daemon.md`).
-  Where the record says the daemon accepts an owner key but `owner.key` is missing, cannot be read or holds no key, it
-  prints the launch key's address and adds on its error output that this address lasts only until the daemon restarts,
-  and that `address --rotate` makes a lasting one. Its one option is `--rotate` (below). With no daemon running it says
-  so on its error output and exits with status **3**, creating no data directory, and waits through a planned restart,
-  as `status` does. A running daemon that no usable `daemon.owner` names — it is still starting or already stopping, or
-  could not write the record — makes it say that the address is not known, and exit with status 1. So does a daemon
-  whose launch key `daemon.key` does not hold, whether or not it accepts an owner key, naming its pid and port: one of
-  an earlier build, which records no key until a daemon of this build takes its place, or one that could not write the
-  record, as its log says. Both keys are read from files only the daemon's user can read, so another user of the
-  machine cannot obtain them this way: their own `address` looks at their own data directory, where no daemon of that
-  owner's runs.
+  line on standard output and nothing else there, `http://127.0.0.1:<port>/?key=<key>`, `<port>` being the daemon's
+  port, and exits with status 0; the output is meant to be read by a program as well, such as one run over SSH. The host
+  is `127.0.0.1`, a loopback address, which a browser treats as a secure context and which the SSH forward below binds
+  on the owner's own machine. The key is the owner key where the running daemon's `daemon.owner` says it accepts one
+  and `owner.key` holds a key it trusts; otherwise it is the daemon's launch key, as for a daemon that serves no browser
+  or is of an earlier build (see "The owner key" in `docs/product/who-can-reach-the-daemon.md`). Where the record says
+  the daemon accepts an owner key but `owner.key` is missing, cannot be read or holds no key it trusts, it prints the
+  launch key's address and adds on its error output that this address lasts only until the daemon restarts, and that
+  `address --rotate` makes a lasting one. Its one option is `--rotate` (below).
+
+  On its error output it also says how the address is opened. For a daemon that accepts the owner key, so serves the
+  browser on its socket (see "The browser socket" in `docs/product/server-form.md`), it prints the SSH command that
+  forwards the socket to the owner's machine, with the daemon's port, the socket's real path and `<user>@<server>`,
+  `<user>` being the login name the system records for the user (just `<server>` where it records none) and `<server>`
+  left for the owner to fill in, and says to run it there and open the address there. Before that, it asks the daemon on
+  its socket whether it accepts the key in the address, allowing it **5 seconds**, and adds a warning when the daemon
+  refuses it — `owner.key` changed since the daemon started, say, for which `address --rotate` makes an address it
+  accepts — or when the socket cannot be asked, naming the socket and why. For a daemon that does not accept the owner
+  key, on Linux and macOS, it says instead that the daemon serves no browser page — it follows the desktop application,
+  its build carries no UI, or its data directory is not private to its user or its socket could not be opened, as its
+  log says — and that the address is for programs that take its launch key. Neither changes the status.
+
+  With no daemon running it says so on its error output and exits with status **3**, creating no data directory, and
+  waits through a planned restart, as `status` does. A running daemon that no usable `daemon.owner` names — it is still
+  starting or already stopping, or could not write the record — makes it say that the address is not known, and exit
+  with status 1. So does a daemon whose launch key `daemon.key` does not hold, whether or not it accepts an owner key,
+  naming its pid and port: one of an earlier build, which records no key until a daemon of this build takes its place,
+  or one that could not write the record, as its log says. Both keys are read from files only the daemon's user can
+  read, so another user of the machine cannot obtain them this way: their own `address` looks at their own data
+  directory, where no daemon of that owner's runs.
 - **`octoboardd address --rotate`** replaces the owner key, so that every address carrying the old one stops opening
   the daemon, and prints the address with the new one where the running daemon accepts it. It finds the daemon as
   `address` does, waiting through a planned restart, and like it exits with status 1, rotating nothing, for a running
   daemon that no usable `daemon.owner` names or whose launch key `daemon.key` does not hold. Otherwise:
   - **A running daemon that accepts the owner key** is asked to replace it, by a request over loopback (`POST
     /owner-key/rotate`) carrying the launch key from `daemon.key`, which goes only into that request, as `stop` sends it
-    on Windows. The daemon writes the new key to `owner.key` and refuses the old one from its next request on; `address
-    --rotate` prints the address with the new key and exits with status 0. A page already open with the old key stays
-    connected until its connection drops (see "The UI the daemon serves" in `docs/product/server-form.md`); to cut such
-    pages off at once, run `octoboardd restart` after rotating, which drops every page's connection while the sessions
-    keep running. A daemon that refuses the request, fails to write the new key (the old one then stands, on disk and in
-    the daemon) or no longer accepts the connection makes it say on its error output that the owner key was not rotated,
-    and why, and exit with status 1, with nothing on standard output.
+    on Windows. The daemon writes the new key to `owner.key`, refuses the old one from its next request on, and at once
+    closes every connection the old one opened, while those the launch key opened stay (see "The owner key" in
+    `docs/product/who-can-reach-the-daemon.md`); `address --rotate` prints the address with the new key, with the same
+    notes on its error output as `address`, and exits with status 0. A daemon that refuses the request, fails to write
+    the new key (the old one then stands, on disk and in the daemon) or no longer accepts the connection makes it say on
+    its error output that the owner key was not rotated, and why, and exit with status 1, with nothing on standard
+    output.
   - **A running daemon that does not accept the owner key** — it follows the desktop application, is of an earlier
-    build, or could not read or write `owner.key` as it started — is left as it is: `owner.key` is replaced directly,
-    for the next daemon started without the desktop application, and the address printed is the running daemon's
+    build, serves no browser, or could not read or write `owner.key` as it started — is left as it is: `owner.key` is
+    replaced directly, for the next daemon that serves the browser, and the address printed is the running daemon's
     launch key's, with a note on the error output saying so; status 0.
-  - **With no daemon running**, `owner.key` is replaced where the data directory exists, for the next daemon started
-    without the desktop application, and the error output says so; where there is no data directory, nothing is
+  - **With no daemon running**, `owner.key` is replaced where the data directory exists, for the next daemon that
+    serves the browser, and the error output says so; where there is no data directory, nothing is
     created and it says only that no daemon runs. Either way it exits with status **3**, with nothing on standard
     output. A daemon that starts while the file is being replaced is waited for until it has recorded itself, and the
     key is then rotated through it as above.

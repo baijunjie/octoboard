@@ -370,7 +370,7 @@ main() {
   elif [ "$running" = true ]; then
     say "A daemon is running from the file this replaced. Run \`$run_as restart\` to move it to $version; its sessions keep running."
   else
-    say "Start it with \`$run_as start\` (port $port; \`--port N\` picks another), then open the address \`$run_as address\` prints through an SSH forward (ssh -L $port:127.0.0.1:$port <this server>)."
+    say "Start it with \`$run_as start\` (port $port; \`--port N\` picks another), then run \`$run_as address\`: it prints the address to open and the SSH forward to open it through."
   fi
 
   case ":${PATH:-}:" in
@@ -419,7 +419,7 @@ install_service() {
     say "Installed and enabled the service, but did not start it: a daemon started outside it is running. Stop that one (\`$run_as stop\`) and run \`systemctl --user start octoboardd\`."
   else
     systemctl --user start octoboardd.service || fail "the service did not start; see \`journalctl --user -u octoboardd\`."
-    say "Started the service on port $port. Open the address \`$run_as address\` prints through an SSH forward (ssh -L $port:127.0.0.1:$port <this server>)."
+    say "Started the service on port $port. Run \`$run_as address\`: it prints the address to open and the SSH forward to open it through."
   fi
   # Lingering keeps the user's services running after logout and starts them at boot. polkit lets users turn it on for
   # themselves by default, so it is tried here (never asking for a password) and only advised when that is refused.

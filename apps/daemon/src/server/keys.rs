@@ -18,11 +18,11 @@ pub(super) async fn key_check() -> StatusCode {
     StatusCode::NO_CONTENT
 }
 
-/// The request to rotate the owner key: a new one replaces it in its file and in memory, and the
-/// old one is refused from then on, though a connection made with it stays. Answers `204`. Needs
+/// The request to rotate the owner key: a new one replaces it in its file and in memory, the old
+/// one is refused from then on, and every connection it admitted is closed. Answers `204`. Needs
 /// the launch key, which the guard has not told from the owner key: a page that holds only the
 /// owner key cannot replace it, so a request that carries any other is `401`. A daemon that holds
-/// no owner key (it follows the desktop application, or could not read or write the file) answers
+/// no owner key (it serves no browser, or could not read or write the file) answers
 /// `409`, and a key that cannot be written `500`, the old key standing; both carry a JSON body
 /// with the `reason` and the `message`.
 pub(super) async fn rotate_owner_key(
@@ -64,11 +64,13 @@ fn refused(status: StatusCode, error: &RotateError) -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::server::test_support::{keyed, response_of, serve, serve_state, status_of};
+    use crate::server::test_support::{
+        keyed, response_of, serve, serve_browser_state, serve_state, status_of,
+    };
     use crate::test_support::{app_state, app_state_with_key, PATIENCE, TEST_KEY};
 
-    /// Serves the router over a state that holds an owner key kept in its scratch directory, and
-    /// gives back the port, the state and the directory.
+    /// Serves the browser socket's router over a state that holds an owner key kept in its
+    /// scratch directory, and gives back the port, the state and the directory.
     async fn serve_with_owner_key(
         label: &str,
     ) -> (u16, Arc<AppState>, crate::test_support::ScratchDir) {
@@ -77,8 +79,70 @@ mod tests {
             .owner_key
             .enable(&crate::owner_key::path_in(&dir))
             .expect("the owner key");
-        let port = serve_state(state.clone()).await;
+        let port = serve_browser_state(state.clone()).await;
         (port, state, dir)
+    }
+
+    /// The TCP port never takes the owner key, on any route, a WebSocket upgrade included, while
+    /// the browser socket's router does; the launch key opens both.
+    #[tokio::test]
+    async fn the_owner_key_is_refused_on_the_port_and_accepted_on_the_socket() {
+        let (browser, state, dir) = serve_with_owner_key("server-owner-key-port").await;
+        let port = serve_state(state.clone()).await;
+        let owner = crate::owner_key::read_in(&dir).expect("the owner key");
+        tokio::task::spawn_blocking(move || {
+            for (listener, takes_owner_key) in [(port, false), (browser, true)] {
+                let host = format!("Host: 127.0.0.1:{listener}");
+                let status = |line: &str| status_of(listener, line, &[&host]);
+                let owner_status = if takes_owner_key { 204 } else { 401 };
+                assert_eq!(
+                    status(&owner_request(&owner, "GET /key-check")),
+                    owner_status,
+                    "{listener}"
+                );
+                assert_eq!(status(&keyed("GET /key-check")), 204, "{listener}");
+                for route in ["GET /ws/control", "GET /ws/term/s", "POST /mcp/x"] {
+                    let refused = status(&owner_request(&owner, route)) == 401;
+                    assert_eq!(refused, !takes_owner_key, "{route} on {listener}");
+                }
+            }
+        })
+        .await
+        .expect("the checks ran");
+    }
+
+    /// A real WebSocket handshake with the owner key is refused with 401 by the TCP port, on the
+    /// control and the terminal route alike, and upgraded by the browser socket's router on the
+    /// control route.
+    #[tokio::test]
+    async fn the_owner_key_cannot_open_a_websocket_on_the_port() {
+        use tokio_tungstenite::tungstenite::Error;
+
+        let (browser, state, dir) = serve_with_owner_key("server-owner-key-ws").await;
+        let port = serve_state(state.clone()).await;
+        let owner = crate::owner_key::read_in(&dir).expect("the owner key");
+
+        for route in ["/ws/control", "/ws/term/s"] {
+            let refused = tokio_tungstenite::connect_async(format!(
+                "ws://127.0.0.1:{port}{route}?key={owner}"
+            ))
+            .await
+            .expect_err("the port refuses the owner key");
+            match refused {
+                Error::Http(response) => assert_eq!(response.status().as_u16(), 401, "{route}"),
+                other => panic!("{route}: not an HTTP refusal: {other:?}"),
+            }
+        }
+        let launch = tokio_tungstenite::connect_async(format!(
+            "ws://127.0.0.1:{port}/ws/control?key={TEST_KEY}"
+        ))
+        .await;
+        assert!(launch.is_ok(), "the port takes the launch key");
+        let accepted = tokio_tungstenite::connect_async(format!(
+            "ws://127.0.0.1:{browser}/ws/control?key={owner}"
+        ))
+        .await;
+        assert!(accepted.is_ok(), "the socket's router takes the owner key");
     }
 
     fn owner_request(owner: &str, request_line: &str) -> String {
@@ -169,7 +233,7 @@ mod tests {
             .owner_key
             .enable(&crate::owner_key::path_in(&data))
             .expect("the owner key");
-        let port = serve_state(second_state.clone()).await;
+        let port = serve_browser_state(second_state.clone()).await;
 
         tokio::task::spawn_blocking(move || {
             let host = format!("Host: 127.0.0.1:{port}");
@@ -215,19 +279,24 @@ mod tests {
         .expect("the checks ran");
     }
 
-    /// A connection opened with the owner key is not closed by the rotation: it still answers a
-    /// ping afterwards.
+    /// A rotation closes every connection the old owner key opened, at once and without the
+    /// client doing anything, while one the launch key opened stays open.
     #[tokio::test]
-    async fn a_rotation_leaves_an_open_connection_open() {
+    async fn a_rotation_closes_the_connections_the_old_key_opened() {
         use futures_util::{SinkExt, StreamExt};
         use tokio_tungstenite::tungstenite::Message as Frame;
 
         let (port, _state, dir) = serve_with_owner_key("server-rotate-open").await;
         let old = crate::owner_key::read_in(&dir).expect("the owner key");
-        let (mut socket, _) =
+        let (mut owners, _) =
             tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/ws/control?key={old}"))
                 .await
                 .expect("a control socket on the owner key");
+        let (mut launch, _) = tokio_tungstenite::connect_async(format!(
+            "ws://127.0.0.1:{port}/ws/control?key={TEST_KEY}"
+        ))
+        .await
+        .expect("a control socket on the launch key");
 
         tokio::task::spawn_blocking(move || {
             let host = format!("Host: 127.0.0.1:{port}");
@@ -243,16 +312,28 @@ mod tests {
         .await
         .expect("the checks ran");
 
-        socket.send(Frame::Ping(vec![1])).await.unwrap();
+        // Whatever the daemon had already sent may come first; then the connection ends.
+        tokio::time::timeout(PATIENCE, async {
+            loop {
+                match owners.next().await {
+                    None | Some(Err(_)) | Some(Ok(Frame::Close(_))) => break,
+                    Some(Ok(_)) => {}
+                }
+            }
+        })
+        .await
+        .expect("the owner key's connection was closed");
+
+        launch.send(Frame::Ping(vec![1])).await.unwrap();
         loop {
-            let frame = tokio::time::timeout(PATIENCE, socket.next())
+            let frame = tokio::time::timeout(PATIENCE, launch.next())
                 .await
                 .expect("an answer in time")
-                .expect("the connection is still open")
+                .expect("the launch key's connection is still open")
                 .unwrap();
             match frame {
                 Frame::Pong(_) => break,
-                Frame::Close(_) => panic!("the daemon closed the connection"),
+                Frame::Close(_) => panic!("the daemon closed the launch key's connection"),
                 _ => {}
             }
         }

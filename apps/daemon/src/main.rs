@@ -10,6 +10,7 @@ mod blocking_pass;
 mod branch_cleanup;
 mod branch_origin;
 mod browse;
+mod browser_socket;
 mod cli;
 mod config_document;
 mod coordinator;
@@ -223,10 +224,34 @@ async fn run_daemon(
         paths::handoff_dir(),
         processes::ledger::ProcessLedger::new(&paths::data_dir()),
     ));
+    // The browser's own socket, where this daemon serves the browser: it runs without the desktop
+    // application and embeds the UI, on a host with such sockets. Bound under the instance lock,
+    // which a stale socket file's removal needs. A daemon that cannot bind it, or cannot hold the
+    // owner key the socket is for, serves no browser and runs on for everything else.
+    let browser_listener =
+        if parent_pid.is_none() && !server::ui::EMBEDDED.is_empty() && browser_socket::AVAILABLE {
+            match browser_socket::bind(&paths::data_dir()) {
+                Ok(listener) => Some(listener),
+                Err(err) => {
+                    tracing::warn!(
+                        "the browser socket could not be opened; no browser is served: {err:#}"
+                    );
+                    None
+                }
+            }
+        } else {
+            None
+        };
     // Read or made before the owner record, which says whether the daemon accepts one, is written.
-    state
+    // The socket is for the owner key: without one held, it is let go and no browser is served.
+    let holds_owner_key = state
         .owner_key
-        .start(parent_pid.is_some(), &paths::data_dir());
+        .start(browser_listener.is_some(), &paths::data_dir());
+    let browser_listener = if holds_owner_key {
+        browser_listener
+    } else {
+        None
+    };
     if parent_pid.is_some() {
         state.set_follows_application();
         // Before anything the application could write is lost to nobody reading it.
@@ -439,9 +464,17 @@ async fn run_daemon(
     project_git::remote::reconcile_remote_urls(&state);
     project_git::watch::start(&state);
 
+    let browser = browser_listener.map(|listener| {
+        tracing::info!(
+            path = %browser_socket::path_in(&paths::data_dir()).display(),
+            "serving the browser on its socket"
+        );
+        browser_socket::serve(listener, server::browser_router(state.clone()))
+    });
     let serve = axum::serve(listener, server::router(state.clone()));
-    // The listener goes with `serve` once this ends: the daemon accepts no more connections, and
-    // the port is free for a successor.
+    // The listener goes with `serve` once this ends, and the browser socket's with `browser`
+    // below: the daemon accepts no more connections, and the port and the socket are free for a
+    // successor.
     let stop = tokio::select! {
         result = serve => {
             if let Err(err) = result {
@@ -464,6 +497,7 @@ async fn run_daemon(
             StopKind::Ordinary
         }
     };
+    drop(browser);
 
     let successor = match stop {
         StopKind::Ordinary => {

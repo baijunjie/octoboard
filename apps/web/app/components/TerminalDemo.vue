@@ -29,7 +29,12 @@ const windows = [
   { title: "you@server: ~", prompt: "you@server:~$", caption: "downloadDemoServerCaption" },
   { title: "you@laptop: ~", prompt: "you@laptop:~$", caption: "downloadDemoLocalCaption" },
 ] as const;
-const address = `localhost:${port}/?key=3f9c…`;
+const address = `127.0.0.1:${port}/?key=3f9c…`;
+// The forward `octoboardd address` prints for a user `you`, and the one the laptop window types: the same with the
+// server named and without `-N`, so the session opens the shell the demo shows.
+const socket = "/home/you/.octoboard/browser.sock";
+const printedForward = `ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:${port}:${socket} you@<server>`;
+const forward = `ssh -o ExitOnForwardFailure=yes -L 127.0.0.1:${port}:${socket} you@server`;
 const lines: Line[] = [
   { window: 0, kind: "cmd", text: installCommand(config.public.siteUrl) },
   { window: 0, kind: "out", text: "Downloading octoboardd 0.1.0 for x86_64..." },
@@ -37,15 +42,20 @@ const lines: Line[] = [
   {
     window: 0,
     kind: "out",
-    text: `Start it with \`octoboardd start\` (port ${port}; \`--port N\` picks another), then open the address \`octoboardd address\` prints through an SSH forward (ssh -L ${port}:127.0.0.1:${port} <this server>).`,
+    text: `Start it with \`octoboardd start\` (port ${port}; \`--port N\` picks another), then run \`octoboardd address\`: it prints the address to open and the SSH forward to open it through.`,
   },
   { window: 0, kind: "cmd", text: linuxCommandParts.start },
   { window: 0, kind: "out", text: `octoboardd listening on 127.0.0.1:${port} with key 3f9c…` },
   { window: 0, kind: "out", text: `Octoboard started: pid 4242, http://127.0.0.1:${port}` },
   { window: 0, kind: "cmd", text: linuxCommandParts.address },
-  { window: 0, kind: "out", text: `http://localhost:${port}/?key=3f9c…` },
+  { window: 0, kind: "out", text: `http://127.0.0.1:${port}/?key=3f9c…` },
+  {
+    window: 0,
+    kind: "out",
+    text: `forward it to your own machine with \`${printedForward}\`, then open the address there`,
+  },
   { window: 0, kind: "prompt", text: "" },
-  { window: 1, kind: "cmd", text: `ssh -L ${port}:127.0.0.1:${port} you@server` },
+  { window: 1, kind: "cmd", text: forward },
   // The shell the SSH session opens on the server.
   { window: 1, kind: "prompt", text: "", prompt: "you@server:~$" },
 ];
@@ -63,15 +73,15 @@ const steps: Step[] = [
   { kind: "wait", n: 18 },
   { kind: "type", line: 7 },
   { kind: "wait", n: 10 },
-  { kind: "print", lines: [8, 9] },
-  { kind: "cursor", line: 9 },
+  { kind: "print", lines: [8, 9, 10] },
+  { kind: "cursor", line: 10 },
   { kind: "wait", n: 30 },
   { kind: "show", win: 1 },
   { kind: "wait", n: 14 },
-  { kind: "type", line: 10 },
+  { kind: "type", line: 11 },
   { kind: "wait", n: 20 },
-  { kind: "print", lines: [11] },
-  { kind: "cursor", line: 11 },
+  { kind: "print", lines: [12] },
+  { kind: "cursor", line: 12 },
   { kind: "wait", n: 24 },
   { kind: "show", win: 2 },
 ];
