@@ -517,7 +517,7 @@ async fn run_daemon(
     }
     let key = state.key.clone();
     let started =
-        tokio::task::spawn_blocking(move || cli::start_successor(port, &key, &launch_exe))
+        tokio::task::spawn_blocking(move || self_update::start_successor(port, &key, &launch_exe))
             .await
             .unwrap_or(false);
     if !started {

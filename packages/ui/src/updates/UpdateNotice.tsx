@@ -9,7 +9,6 @@ import { useBottomStrip } from "../components/panel/useBottomStrip";
 import { isolate } from "../i18n/isolate";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { useHost } from "../platform/react";
-import { DAEMON_INSTALL_COMMAND } from "./daemonInstallCommand";
 import { installedMessageKey } from "./installedMessageKey";
 import { reloadPage } from "./reloadPage";
 import { releaseUrl } from "../components/text/releaseUrl";
@@ -116,8 +115,8 @@ export function UpdateNotice({ focusTerminal }: { focusTerminal: () => void }): 
                 {t("updates.notice.notes")}
               </ExternalLink>
             )}
-            {kind === "manual" && (
-              <CopyButton text={DAEMON_INSTALL_COMMAND} failedText={t("updates.notice.copyCommandFailed")} size="xs" variant="outline" className={BUTTON_CLASS} focusOnPress={false}>
+            {kind === "manual" && state.manual && (
+              <CopyButton text={state.manual.command} failedText={t("updates.notice.copyCommandFailed")} size="xs" variant="outline" className={BUTTON_CLASS} focusOnPress={false}>
                 {t("updates.notice.copyCommand")}
               </CopyButton>
             )}

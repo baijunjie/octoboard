@@ -32,8 +32,9 @@ export interface UpdateState {
   /** Whether the application looks for updates by itself; off, only a check the user asks for runs. */
   autoCheck: boolean;
   /** Set while the update found cannot be installed from here, the daemon's executable being a file it cannot replace
-   * (`path`): it is upgraded by hand, and no download is offered. */
-  manual?: { path: string };
+   * (`path`): it is upgraded by hand, by whoever may write to its folder, with `command` (the install script told that
+   * folder and the channel), and no download is offered. */
+  manual?: { path: string; command: string };
   /** A check the user asked for of the daemon that it may have answered with the last one (it looks again at most every
    * 30 seconds): `pending` while nothing shows that it started, `unchanged` for a moment once it is clear it did not, so
    * the button can say that it was heard and the last check stands. */

@@ -211,3 +211,10 @@ restart cannot be told apart from no daemon at all.
 `octoboardd update` acts on the installed executable rather than on the running daemon: it checks for, downloads and
 puts in place a newer release, or puts the previous one back, and leaves the restart to `octoboardd restart` (see "The
 `octoboardd update` command" in `docs/product/server-form-updates.md`).
+
+## Printing the version
+
+`octoboardd --version`, or `-V`, prints one line on standard output, `octoboardd <version>`, and exits with status 0. It
+touches nothing: it creates no data directory, takes no lock and makes no request, whatever daemon runs. It is an
+option of `octoboardd` alone: none of the commands above takes it. The server form's update runs a new build this way
+before putting it in place (see "Downloading and replacing the executable" in `docs/product/server-form-updates.md`).

@@ -1,6 +1,7 @@
+import { appConfig } from "../../appConfig";
 import type { AvailableUpdate } from "../../platform";
 import type { Step } from "../../fixtures/interact";
-import { PROTOCOL_GENERATION, type DaemonUpdateAvailable, type DaemonUpdateCheck } from "../../protocol";
+import { PROTOCOL_GENERATION, type DaemonUpdateAvailable, type DaemonUpdateCheck, type DaemonUpdateManual } from "../../protocol";
 import type { Scenario } from "../scenario";
 import { SAMPLE, daemonUpdateOf, minutesAgo, sessionOf, shellTerminalOf, snapshotState } from "../../fixtures/builders";
 
@@ -37,8 +38,13 @@ const newer: AvailableUpdate = { version: "0.2.0", notes: NOTES };
 // daemon's status holds it.
 const daemonOffer: DaemonUpdateAvailable = { version: newer.version, notes: NOTES, holder_floor: "0.1.0", channel: "stable" };
 const foundOffer: DaemonUpdateCheck = { outcome: "available", at: minutesAgo(25), error: null, detail: null };
-// Where a daemon that cannot write to its own folder would have put the new executable.
-const NOT_WRITABLE = { reason: "not_writable", path: "/usr/local/bin/octoboardd" } as const;
+// Where a daemon that cannot write to its own folder would have put the new executable, and the command it hands over
+// for installing by hand: the install script from the site the daemon was built with, told that folder.
+const NOT_WRITABLE: DaemonUpdateManual = {
+  reason: "not_writable",
+  path: "/usr/local/bin/octoboardd",
+  command: `curl --proto '=https' --tlsv1.2 -fsSL ${appConfig.websiteUrl}/install.sh | sh -s -- --bin-dir /usr/local/bin`,
+};
 const browserQuiet = (daemonUpdate: ReturnType<typeof daemonUpdateOf>) => snapshotState({ consoles: [console_], projects: [web], sessions: idle, daemonUpdate });
 const REPLACE_FAILED = "rename /usr/local/bin/.octoboardd.update-4242 to /usr/local/bin/octoboardd: Permission denied (os error 13)";
 
@@ -215,7 +221,7 @@ export const updateScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Update notice, the daemon cannot replace itself",
-    description: "The strip names the version and says the application cannot replace the executable at its path, so the upgrade is by hand with the install script. It has What is new, Copy install command and the Later icon, and no Download and install. Choose Phone (390px) to see the sentence and the three controls wrap.",
+    description: "The strip names the version and says the application cannot replace its own file and that the owner of that file's folder has to run the install command on the machine the application runs on. It has What is new, Copy install command and the Later icon, and no Download and install; Copy install command copies the command with the executable's folder after --bin-dir. Choose Phone (390px) to see the sentence and the three controls wrap.",
     state: browserQuiet(daemonUpdateOf({ available: daemonOffer, manual: NOT_WRITABLE, last_check: foundOffer })),
     steps: [openSession],
   },
@@ -224,7 +230,7 @@ export const updateScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Updates section, the daemon cannot replace itself",
-    description: "The notice was put off with its Later icon. The Version row says the newer version is available but that the application cannot replace the executable at its path, with What is new beside it and no Download and install button, and Check for updates in its place. Under the row, the Install command label and the one-line command in its own block, which carries a copy button.",
+    description: "The notice was put off with its Later icon. The Version row says the newer version is available but that the application cannot replace the executable at its path, with What is new beside it and no Download and install button, and Check for updates in its place. The row also says the owner of the executable's folder has to run the install command on that machine. Under the row, the Install command label and the command (ending in --bin-dir and the folder) in its own block, which carries a copy button; the command is long enough to wrap in a narrow window, and it wraps without being cut off.",
     state: browserQuiet(daemonUpdateOf({ available: daemonOffer, manual: NOT_WRITABLE, last_check: foundOffer })),
     steps: [(ui) => ui.press(ui.t("updates.notice.dismiss")), openSettings],
   },

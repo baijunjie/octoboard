@@ -10,13 +10,11 @@
 //! archive verifies and 1, saying why on stderr, when it does not; clap's own status 2 is a
 //! command line it does not take, or a daemon from before this command.
 
-use std::io::Read;
 use std::path::Path;
 
 use minisign_verify::PublicKey;
-use sha2::{Digest, Sha256};
 
-use crate::self_update::verify::{release_key, verify_archive};
+use crate::self_update::verify::{release_key, verify_signature};
 
 /// Runs the command against the release key, returning the exit status.
 pub(super) fn run(archive: &Path, signature: &Path) -> i32 {
@@ -39,31 +37,11 @@ fn check(archive: &Path, signature: &Path, key: &PublicKey) -> Result<(), String
         .ok_or_else(|| "the archive has no file name".to_owned())?;
     let signature = std::fs::read_to_string(signature)
         .map_err(|err| format!("the signature could not be read: {err}"))?;
-    // `verify_archive` also compares a SHA-256, which the script has checked already against the
-    // manifest's; the archive's own is passed so that only the signature and the name decide here.
-    let sha256 = sha256_of(archive)?;
-    verify_archive(archive, &sha256, &signature, name, key)
-}
-
-fn sha256_of(file: &Path) -> Result<String, String> {
-    let mut file =
-        std::fs::File::open(file).map_err(|err| format!("the archive could not be read: {err}"))?;
-    let mut hash = Sha256::new();
-    let mut chunk = vec![0u8; 64 * 1024];
-    loop {
-        let read = file
-            .read(&mut chunk)
-            .map_err(|err| format!("the archive could not be read: {err}"))?;
-        if read == 0 {
-            break;
-        }
-        hash.update(&chunk[..read]);
-    }
-    Ok(hash
-        .finalize()
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect())
+    // The script has checked the SHA-256 against the manifest's already: only the signature and
+    // the name decide here.
+    let mut file = std::fs::File::open(archive)
+        .map_err(|err| format!("the archive could not be read: {err}"))?;
+    verify_signature(&mut file, &signature, name, key)
 }
 
 #[cfg(test)]

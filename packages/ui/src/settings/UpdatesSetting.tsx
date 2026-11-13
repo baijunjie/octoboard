@@ -17,7 +17,6 @@ import type { HostFacts } from "../platform/host";
 import { releaseUrl } from "../components/text/releaseUrl";
 import { useHost } from "../platform/react";
 import { installedMessageKey } from "../updates/installedMessageKey";
-import { DAEMON_INSTALL_COMMAND } from "../updates/daemonInstallCommand";
 import { reloadPage } from "../updates/reloadPage";
 import type { UpdateState } from "../updates/updateStore";
 import { useUpdates } from "../updates/UpdatesProvider";
@@ -170,10 +169,10 @@ export function UpdatesSetting(): React.ReactElement {
         }
         below={
           <>
-            {manual && (
+            {manual && state.manual && (
               <div role="group" aria-labelledby={commandId} className="flex flex-col gap-1.5">
                 <p id={commandId} className="text-sm text-app-muted">{t("settings.updates.manual.command")}</p>
-                <CopyCommand text={DAEMON_INSTALL_COMMAND} copyText={t("updates.notice.copyCommand")} failedText={t("updates.notice.copyCommandFailed")} />
+                <CopyCommand text={state.manual.command} copyText={t("updates.notice.copyCommand")} failedText={t("updates.notice.copyCommandFailed")} />
               </div>
             )}
           </>

@@ -9,7 +9,6 @@
 //! signer sign` writes, which is the base64 of the minisign signature file.
 
 use std::io::Read;
-use std::path::Path;
 
 use base64::Engine;
 use minisign_verify::{PublicKey, Signature};
@@ -48,15 +47,62 @@ fn signed_file(signature: &Signature) -> Option<&str> {
 }
 
 /// Checks the archive at `archive` against `sha256` (lowercase hex) and `signature` made with
-/// `key`, and that the signature names `expected_name`. The error says which check failed, in
-/// English, for the failure's detail. Blocking: it reads the archive once.
+/// `key`, and that the signature names `expected_name`; see [`verify_reader`]. Blocking. For the
+/// tests: the installation verifies the open file it then unpacks.
+#[cfg(test)]
 pub fn verify_archive(
-    archive: &Path,
+    archive: &std::path::Path,
     sha256: &str,
     signature: &str,
     expected_name: &str,
     key: &PublicKey,
 ) -> Result<(), String> {
+    let mut file = std::fs::File::open(archive)
+        .map_err(|err| format!("the archive could not be read back: {err}"))?;
+    verify_reader(&mut file, sha256, signature, expected_name, key)
+}
+
+/// Checks the archive `archive` reads, from where it stands to its end, against `sha256`
+/// (lowercase hex) and `signature` made with `key`, and that the signature names `expected_name`.
+/// The error says which check failed, in English, for the failure's detail. Blocking: it reads
+/// the archive once.
+pub fn verify_reader(
+    archive: &mut impl Read,
+    sha256: &str,
+    signature: &str,
+    expected_name: &str,
+    key: &PublicKey,
+) -> Result<(), String> {
+    let (found, signed) = read_signed(archive, signature, expected_name, key)?;
+    if found != sha256 {
+        return Err(format!(
+            "the archive's SHA-256 is {found}, not the {sha256} the manifest names"
+        ));
+    }
+    signed
+}
+
+/// [`verify_reader`] without a SHA-256 to compare: only the signature made with `key`, and that
+/// it names `expected_name`, decide. For a caller that has checked the digest itself, or has
+/// none (`octoboardd verify-archive`). Blocking: it reads the archive once.
+pub fn verify_signature(
+    archive: &mut impl Read,
+    signature: &str,
+    expected_name: &str,
+    key: &PublicKey,
+) -> Result<(), String> {
+    read_signed(archive, signature, expected_name, key)?.1
+}
+
+/// Reads `archive` to its end through the signature `signature` made with `key`, once the
+/// signature is found to name `expected_name`: the archive's SHA-256 (lowercase hex), and whether
+/// the signature holds. The error is what stopped the reading.
+fn read_signed(
+    archive: &mut impl Read,
+    signature: &str,
+    expected_name: &str,
+    key: &PublicKey,
+) -> Result<(String, Result<(), String>), String> {
     let signature = decode_signature(signature)?;
     match signed_file(&signature) {
         Some(name) if name == expected_name => {}
@@ -71,11 +117,9 @@ pub fn verify_archive(
         .verify_stream(&signature)
         .map_err(|err| format!("the signature does not fit the release key: {err}"))?;
     let mut hash = Sha256::new();
-    let mut file = std::fs::File::open(archive)
-        .map_err(|err| format!("the archive could not be read back: {err}"))?;
     let mut chunk = vec![0u8; 64 * 1024];
     loop {
-        let read = file
+        let read = archive
             .read(&mut chunk)
             .map_err(|err| format!("the archive could not be read back: {err}"))?;
         if read == 0 {
@@ -89,12 +133,8 @@ pub fn verify_archive(
         .iter()
         .map(|byte| format!("{byte:02x}"))
         .collect();
-    if found != sha256 {
-        return Err(format!(
-            "the archive's SHA-256 is {found}, not the {sha256} the manifest names"
-        ));
-    }
-    stream
+    let signed = stream
         .finalize()
-        .map_err(|_| "the archive's signature is not the release key's".to_owned())
+        .map_err(|_| "the archive's signature is not the release key's".to_owned());
+    Ok((found, signed))
 }

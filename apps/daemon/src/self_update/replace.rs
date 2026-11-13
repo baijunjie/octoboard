@@ -1,12 +1,13 @@
 //! Putting a new executable where the running one is, and taking it back.
 //!
 //! The new file is written beside the old one under a name of its own (made new, never over what
-//! is at that name), with the old one's permissions, and flushed; then the old file is kept as
-//! `<name>.previous` (for `octoboardd update --rollback`) and the new one renamed over the path,
-//! and the directory flushed. A process running the old file keeps its inode, so nothing
-//! running is disturbed, and each rename is atomic: a path is never seen half written, and never
-//! without a file, since the old file is kept by a link, not by a rename away from the path, and
-//! the one rename at the path is the new file's.
+//! is at that name), with the old one's permissions, flushed, and vetted where it lies (the update
+//! runs it with `--version`, so that a build that cannot start never reaches the path); then the
+//! old file is kept as `<name>.previous` (for `octoboardd update --rollback`) and the new one
+//! renamed over the path, and the directory flushed. A process running the old file keeps its
+//! inode, so nothing running is disturbed, and each rename is atomic: a path is never seen half
+//! written, and never without a file, since the old file is kept by a link, not by a rename away
+//! from the path, and the one rename at the path is the new file's.
 
 use std::fs::File;
 use std::io;
@@ -21,6 +22,8 @@ pub enum ReplaceError {
     NotWritable(PathBuf),
     /// The file `fill` was to write could not be completed: its own error.
     Filling(String),
+    /// The file was written and `vet` refused it: its own error. Nothing at the path changed.
+    Refused(String),
     /// A step on the disk failed; the file at the path is as it was.
     Failed(String),
 }
@@ -42,12 +45,13 @@ fn failed(what: &str, err: io::Error) -> ReplaceError {
     ReplaceError::Failed(format!("{what}: {err}"))
 }
 
-/// Replaces the file `target` with what `fill` writes, keeping the old one as `<name>.previous`.
-/// `target` is a file, not a link (the caller resolves it), in a directory the user may write to.
-/// Blocking.
+/// Replaces the file `target` with what `fill` writes, once `vet` has accepted the written file at
+/// the path it is given, keeping the old one as `<name>.previous`. `target` is a file, not a link
+/// (the caller resolves it), in a directory the user may write to. Blocking.
 pub fn replace(
     target: &Path,
     fill: impl FnOnce(&mut File) -> Result<(), String>,
+    vet: impl FnOnce(&Path) -> Result<(), String>,
 ) -> Result<(), ReplaceError> {
     let (Some(dir), Some(staged), Some(previous)) = (
         target.parent(),
@@ -78,7 +82,8 @@ pub fn replace(
         file.sync_all()
             .map_err(|err| failed("the new file could not be written to the disk", err))
     })();
-    if let Err(err) = written {
+    // The file is closed by now (dropped in the closure), so it can be run.
+    if let Err(err) = written.and_then(|()| vet(&staged).map_err(ReplaceError::Refused)) {
         std::fs::remove_file(&staged).ok();
         return Err(err);
     }

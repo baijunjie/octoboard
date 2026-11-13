@@ -16,7 +16,14 @@
 //! - `verify.rs`, `unpack.rs`, `replace.rs`, `install.rs`: the download, the checks that make the
 //!   archive the release it claims to be, and the replacement of the executable, which
 //!   `octoboardd update` shares (`crate::cli::update`).
+//! - `probe.rs`: running a build with `--version`, which a new build has to answer before it
+//!   replaces the executable.
 //! - `record.rs`: the files the update leaves in the data directory.
+//! - `rollback.rs`: what going back to the previous build checks first (its version, and that it
+//!   reads the database).
+//! - `successor.rs`: the next daemon of a planned restart without a service manager, which falls
+//!   back to the build that ran when an update does not start.
+//! - `helpers.rs`: the executable the helpers of a launch in the daemon itself run.
 //! - `task.rs`: the daemon's own part: the scheduled check and the work a request starts.
 //!
 //! The status is runtime state held in [`DaemonUpdates`] on `AppState`, never stored. A daemon
@@ -25,16 +32,21 @@
 
 pub(crate) mod check;
 pub(crate) mod fetch;
+pub(crate) mod helpers;
 pub(crate) mod install;
 pub(crate) mod manifest;
+pub(crate) mod probe;
 pub(crate) mod record;
 pub(crate) mod replace;
+pub(crate) mod rollback;
+mod successor;
 mod task;
 #[cfg(test)]
 mod tests;
 pub(crate) mod unpack;
 pub(crate) mod verify;
 
+pub(crate) use successor::start_successor;
 pub(crate) use task::{check_requested, restart_requested, start, update_requested};
 
 use std::path::PathBuf;
@@ -78,6 +90,8 @@ pub(crate) struct Setup {
     /// The path the planned restart starts the successor from (`AppState::install_exe`).
     pub launch: PathBuf,
     pub is_running_image: fn(&std::path::Path) -> bool,
+    /// How a new build is run to see that it starts (`install::Sources::probe`).
+    pub probe: fn(&std::path::Path, &str) -> Result<(), String>,
 }
 
 /// The update's status and what is running, held on `AppState`.
@@ -243,7 +257,7 @@ impl DaemonUpdates {
     }
 
     /// Records how a check taken under `claim` ended and announces it. `manual` says the update
-    /// found is one the user has to install by hand, at that path. False, with nothing recorded,
+    /// found is one the user has to install by hand, and how. False, with nothing recorded,
     /// where the channel changed since the check began (or since the last time it was told so):
     /// what it read is of the old channel, the claim now stands for the new one, and the check is
     /// made again. True where it ended, recorded or not.
@@ -251,7 +265,7 @@ impl DaemonUpdates {
         &self,
         claim: &Claim,
         found: Result<Option<Release>, String>,
-        manual: Option<PathBuf>,
+        manual: Option<DaemonUpdateManual>,
     ) -> bool {
         use std::sync::atomic::Ordering::SeqCst;
         let mut inner = self.lock();
@@ -275,10 +289,7 @@ impl DaemonUpdates {
                     holder_floor: release.holder_floor.clone(),
                     channel: release.channel,
                 });
-                inner.status.manual = manual.map(|path| DaemonUpdateManual {
-                    reason: DaemonUpdateManualReason::NotWritable,
-                    path: path.to_string_lossy().into_owned(),
-                });
+                inner.status.manual = manual;
                 inner.release = Some(release);
                 (DaemonUpdateCheckOutcome::Available, None, None)
             }
@@ -378,13 +389,10 @@ impl DaemonUpdates {
         self.announce(&claim.state, &inner);
     }
 
-    /// Notes that the update is one the user has to install by hand, at `path`, and announces it.
-    pub(crate) fn record_manual(&self, state: &AppState, path: &str) {
+    /// Notes that the update is one the user has to install by hand, as `manual` says, and
+    /// announces it.
+    pub(crate) fn record_manual(&self, state: &AppState, manual: DaemonUpdateManual) {
         let mut inner = self.lock();
-        let manual = DaemonUpdateManual {
-            reason: DaemonUpdateManualReason::NotWritable,
-            path: path.to_owned(),
-        };
         if inner.status.manual.as_ref() == Some(&manual) {
             return;
         }
@@ -533,6 +541,19 @@ pub(crate) enum InstallRefusal {
     Installed,
     Running,
     NothingToInstall,
+}
+
+/// The update of `channel` the user has to install by hand over `exe`, which the daemon's user may
+/// not replace.
+pub(crate) fn not_writable(
+    exe: &std::path::Path,
+    channel: crate::protocol::DaemonUpdateChannel,
+) -> DaemonUpdateManual {
+    DaemonUpdateManual {
+        reason: DaemonUpdateManualReason::NotWritable,
+        path: exe.to_string_lossy().into_owned(),
+        command: manifest::install_command_for(exe, channel),
+    }
 }
 
 /// `text` trimmed and cut to [`DETAIL_LIMIT`] characters.

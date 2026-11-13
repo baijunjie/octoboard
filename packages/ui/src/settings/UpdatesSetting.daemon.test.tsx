@@ -10,7 +10,6 @@ import { DaemonProvider } from "../store";
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 import { BROWSER_HOST } from "../test/hosts";
 import { testDaemon } from "../test/testDaemon";
-import { DAEMON_INSTALL_COMMAND } from "../updates/daemonInstallCommand";
 import { UpdateNotice } from "../updates/UpdateNotice";
 import { UpdatesProvider } from "../updates/UpdatesProvider";
 import { reloadPage } from "../updates/reloadPage";
@@ -33,6 +32,8 @@ beforeEach(() => {
 });
 afterEach(() => localStorage.clear());
 
+/** The command the daemon hands over for an upgrade by hand: its own, not one the application makes up. */
+const MANUAL_COMMAND = "curl -fsSL https://example.test/install.sh | sh -s -- --bin-dir /opt/octoboard --beta";
 const IDLE: DaemonUpdateStatus = { phase: "idle", available: null, progress: null, installed: null, last_check: null, install: null, manual: null, updated_from: null };
 const AVAILABLE = { version: "0.2.0", notes: null, holder_floor: null, channel: "stable" } as const;
 
@@ -94,10 +95,10 @@ it("offers the restart of an installed update through the exit flow", async () =
 });
 
 it("says the executable cannot be replaced, gives the install command to copy, and offers no download", () => {
-  const { container } = mount({ ...IDLE, available: AVAILABLE, manual: { reason: "not_writable", path: "/opt/octoboard/octoboardd" } });
+  const { container } = mount({ ...IDLE, available: AVAILABLE, manual: { reason: "not_writable", path: "/opt/octoboard/octoboardd", command: MANUAL_COMMAND } });
   const text = textOf(container);
   expect(text).toContain("cannot replace /opt/octoboard/octoboardd");
-  expect(text).toContain(DAEMON_INSTALL_COMMAND);
+  expect(text).toContain(MANUAL_COMMAND);
   expect(button(container, "Download and install")).toBeUndefined();
   expect(button(container, "Copy install command")).toBeDefined();
 });

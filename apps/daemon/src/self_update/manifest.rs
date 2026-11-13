@@ -15,13 +15,49 @@ use crate::protocol::DaemonUpdateChannel;
 /// The repository releases are published in, from `config/app.json` (see `build.rs`).
 const REPOSITORY_URL: &str = env!("OCTOBOARD_REPOSITORY_URL");
 
-/// The website, from `config/app.json`, which serves the install script.
-const WEBSITE_URL: &str = env!("OCTOBOARD_WEBSITE_URL");
+/// The download of the install script (served by the website of `config/app.json`, see
+/// `build.rs`) that every install command pipes into `sh`: HTTPS only, TLS 1.2 or later, the same
+/// as the install instructions give it.
+const INSTALL_PIPE: &str = concat!(
+    "curl --proto '=https' --tlsv1.2 -fsSL ",
+    env!("OCTOBOARD_WEBSITE_URL"),
+    "/install.sh"
+);
 
-/// The command that installs the latest release over an installation by hand, which the user is
-/// told where the daemon cannot replace its own executable.
+/// The command that installs the latest stable release into the install script's default
+/// directory (`~/.local/bin`), for a build that does not update itself at all.
 pub fn install_command() -> String {
-    format!("curl -fsSL {WEBSITE_URL}/install.sh | sh")
+    format!("{INSTALL_PIPE} | sh")
+}
+
+/// The command that installs the latest release of `channel` over the executable `exe` by hand,
+/// which the user is told where the daemon cannot replace it: the install script, told the
+/// executable's directory (`--bin-dir`, which it would otherwise not install into) and, for the
+/// beta channel, `--beta`. The directory is quoted for a POSIX shell.
+pub fn install_command_for(exe: &std::path::Path, channel: DaemonUpdateChannel) -> String {
+    let mut command = format!("{INSTALL_PIPE} | sh -s --");
+    if let Some(dir) = exe.parent().filter(|dir| !dir.as_os_str().is_empty()) {
+        command.push_str(" --bin-dir ");
+        command.push_str(&shell_quote(&dir.to_string_lossy()));
+    }
+    if channel == DaemonUpdateChannel::Beta {
+        command.push_str(" --beta");
+    }
+    command
+}
+
+/// `text` as one word of a POSIX shell: as it is when it holds nothing the shell treats
+/// specially, else in single quotes, each single quote in it written as `'\''`.
+fn shell_quote(text: &str) -> String {
+    let plain = !text.is_empty()
+        && text
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b"/._-+:@%,=".contains(&byte));
+    if plain {
+        text.to_owned()
+    } else {
+        format!("'{}'", text.replace('\'', "'\\''"))
+    }
 }
 
 /// The address of the manifest of `channel`.

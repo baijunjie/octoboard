@@ -70,8 +70,8 @@ describe("the state", () => {
     const { updates, send } = setup();
     send({ ...IDLE, phase: "installed", installed: { version: null, holder_floor: null } });
     expect(updates.getState()).toMatchObject({ phase: "installed", installedVersion: undefined, installedHolderFloor: null });
-    send({ ...IDLE, available: AVAILABLE, manual: { reason: "not_writable", path: "/usr/bin/octoboardd" } });
-    expect(updates.getState().manual).toEqual({ path: "/usr/bin/octoboardd" });
+    send({ ...IDLE, available: AVAILABLE, manual: { reason: "not_writable", path: "/usr/bin/octoboardd", command: "curl -fsSL https://example.test/install.sh | sh -s -- --bin-dir /usr/bin" } });
+    expect(updates.getState().manual).toEqual({ path: "/usr/bin/octoboardd", command: "curl -fsSL https://example.test/install.sh | sh -s -- --bin-dir /usr/bin" });
   });
 
   it("asks for a reload once the daemon runs another version than the page was loaded for", () => {
@@ -113,7 +113,7 @@ describe("requests", () => {
   it("installs nothing it was not offered, nor where the daemon cannot replace itself", async () => {
     const none = setup();
     await none.updates.install();
-    const manual = setup({ ...IDLE, available: AVAILABLE, manual: { reason: "not_writable", path: "/x" } });
+    const manual = setup({ ...IDLE, available: AVAILABLE, manual: { reason: "not_writable", path: "/x", command: "install /x" } });
     await manual.updates.install();
     expect(none.requests).toEqual([]);
     expect(manual.requests).toEqual([]);

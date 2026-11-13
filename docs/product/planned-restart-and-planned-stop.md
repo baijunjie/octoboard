@@ -40,7 +40,10 @@ starts its daemon from such a path too. So a symbolic link pointed at a newer bu
 at the same path, restarts into that build, and a path that no longer leads to an executable fails the restart. A next
 daemon that has not reported listening within **30 seconds** is killed; whenever the next daemon does not come up, the
 old one logs why and exits with status 1, leaving the sessions and shell terminals running in their holders for the next
-start.
+start. A daemon that updates itself first falls back, where it can, when the next daemon was of another build put at the
+path — by an update, or a rollback made under it — and its own build is kept beside it as `octoboardd.previous`: it puts
+its own build back and starts that instead (see "When the update does not start" in
+`docs/product/server-form-updates.md`).
 
 A daemon leaves the next start to a service manager only on evidence, decided once as it starts: the option
 `--service-managed`, which the example systemd unit passes, or systemd naming the daemon's own process as the one it

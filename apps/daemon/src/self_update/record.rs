@@ -33,6 +33,10 @@ pub struct Installed {
     pub holder_floor: Option<String>,
     /// The version that was replaced.
     pub from_version: String,
+    /// The schema version of the database the replaced build reads (`Store::SCHEMA_VERSION`);
+    /// `None` in a record written before it was recorded. A rollback to that build checks it.
+    #[serde(default)]
+    pub from_schema: Option<i64>,
     /// The executable that was replaced.
     pub path: String,
 }

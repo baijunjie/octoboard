@@ -487,6 +487,54 @@ pub(super) fn settle_existing_file(path: &Path) -> Result<()> {
     }
 }
 
+impl super::Store {
+    /// The schema version this build reads and creates ([`SCHEMA_VERSION`]), which an update
+    /// records for the build it replaces (`crate::self_update::record`).
+    pub const SCHEMA_VERSION: i64 = SCHEMA_VERSION;
+
+    /// The schema version of the database at `path`, read without changing it, while a daemon may
+    /// hold it: what a rollback checks the previous build against. `None` where there is no
+    /// database there or it cannot be read.
+    pub fn peek_schema_version(path: &Path) -> Option<i64> {
+        if !path.is_file() {
+            return None;
+        }
+        let conn = Connection::open_with_flags(
+            path,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )
+        .ok()?;
+        conn.busy_timeout(std::time::Duration::from_secs(1)).ok()?;
+        user_version(&conn).ok()
+    }
+
+    /// The copies [`migrate`] made of the database at `path` before migrating it from schema
+    /// version `version`, newest first: what a build that reads `version` can be given back.
+    pub fn migration_backups(path: &Path, version: i64) -> Vec<PathBuf> {
+        let name = format!("{}.pre-v{version}", file_name(path));
+        let Ok(entries) = path.parent().unwrap_or_else(|| Path::new(".")).read_dir() else {
+            return Vec::new();
+        };
+        let mut found: Vec<(std::time::SystemTime, PathBuf)> = entries
+            .flatten()
+            .filter_map(|entry| {
+                let file_name = entry.file_name().to_string_lossy().into_owned();
+                let is_backup = is_backup_named(&name, &file_name)
+                    && !SIDECARS.iter().any(|suffix| file_name.ends_with(suffix));
+                let meta = entry.metadata().ok().filter(|meta| meta.is_file())?;
+                is_backup.then(|| {
+                    (
+                        meta.modified().unwrap_or(std::time::UNIX_EPOCH),
+                        entry.path(),
+                    )
+                })
+            })
+            .collect();
+        found.sort_by(|a, b| b.cmp(a));
+        found.into_iter().map(|(_, path)| path).collect()
+    }
+}
+
 /// The files SQLite keeps beside a database while it is in use, by the suffix added to its name:
 /// the write-ahead log, its index, and the rollback journal.
 const SIDECARS: [&str; 3] = ["-wal", "-shm", "-journal"];
@@ -644,13 +692,7 @@ fn identical_backup(path: &Path, version: i64) -> Result<Option<PathBuf>> {
     for entry in path.parent().unwrap_or_else(|| Path::new(".")).read_dir()? {
         let candidate = entry?.path();
         let candidate_name = candidate.file_name().and_then(|n| n.to_str()).unwrap_or("");
-        // A `.partial` file is a copy that may never have finished, whatever its bytes.
-        let is_backup = !candidate_name.ends_with(".partial")
-            && (candidate_name == name
-                || candidate_name
-                    .strip_prefix(&name)
-                    .is_some_and(|rest| rest.starts_with('-')));
-        if is_backup
+        if is_backup_named(&name, candidate_name)
             && candidate.metadata().is_ok_and(|m| m.len() == size)
             && std::fs::read(&candidate).is_ok_and(|bytes| bytes == current)
         {
@@ -658,6 +700,17 @@ fn identical_backup(path: &Path, version: i64) -> Result<Option<PathBuf>> {
         }
     }
     Ok(None)
+}
+
+/// Whether `candidate` is the name of a backup called `name` (`<db>.pre-v<N>`): that name, or one
+/// of its timestamped siblings (`<name>-<n>`). Not a `.partial` file, a copy that may never have
+/// finished, whatever its bytes.
+fn is_backup_named(name: &str, candidate: &str) -> bool {
+    !candidate.ends_with(".partial")
+        && (candidate == name
+            || candidate
+                .strip_prefix(name)
+                .is_some_and(|rest| rest.starts_with('-')))
 }
 
 /// Copies `path` to `backup` so that `backup` is either absent or complete: the copy is written
@@ -1408,5 +1461,140 @@ mod tests {
 
         assert_eq!(moved_aside(&path).len(), 2);
         assert_eq!(std::fs::read(&first).unwrap(), first_bytes);
+    }
+
+    /// The version an update records for the build it replaces is the one the store creates.
+    #[test]
+    fn the_schema_version_an_update_records_is_the_one_a_new_database_is_stamped_with() {
+        let path = temp_db("public-version");
+        let store = Store::open(&path).expect("store");
+        assert_eq!(user_version(&store.lock()).unwrap(), Store::SCHEMA_VERSION);
+        assert_eq!(
+            Store::peek_schema_version(&path),
+            Some(Store::SCHEMA_VERSION)
+        );
+    }
+
+    #[test]
+    fn peeking_at_a_database_that_is_not_there_finds_no_version_and_makes_none() {
+        let path = temp_db("peek-missing");
+        assert_eq!(Store::peek_schema_version(&path), None);
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn peeking_gives_the_stamped_version_whatever_it_is() {
+        let path = temp_db("peek-versions");
+        for version in [1, SCHEMA_VERSION, SCHEMA_VERSION + 3] {
+            let conn = Connection::open(&path).expect("database");
+            conn.pragma_update(None, "user_version", version).unwrap();
+            drop(conn);
+            assert_eq!(Store::peek_schema_version(&path), Some(version));
+        }
+    }
+
+    /// A rollback looks while the daemon holds the database: it reads, and changes nothing.
+    #[test]
+    fn peeking_while_a_store_holds_the_database_reads_it_and_changes_nothing() {
+        let path = temp_db("peek-open");
+        let store = Store::open(&path).expect("store");
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console");
+        let modified = path.metadata().unwrap().modified().unwrap();
+        assert_eq!(Store::peek_schema_version(&path), Some(SCHEMA_VERSION));
+        assert_eq!(path.metadata().unwrap().modified().unwrap(), modified);
+        // The store goes on working.
+        store
+            .insert_console(&console(None, None, None))
+            .expect("console again");
+    }
+
+    #[test]
+    fn peeking_at_a_file_that_is_no_database_finds_no_version() {
+        let path = temp_db("peek-garbage");
+        std::fs::write(
+            &path,
+            b"this is not a database, and is long enough to be read as one",
+        )
+        .unwrap();
+        assert_eq!(Store::peek_schema_version(&path), None);
+        assert_eq!(
+            std::fs::read(&path).unwrap(),
+            b"this is not a database, and is long enough to be read as one"
+        );
+    }
+
+    /// Writes a file beside `path`, last changed `seconds` after the epoch.
+    fn write_at(path: &Path, name: &str, seconds: u64) -> PathBuf {
+        let file = path.with_file_name(name);
+        std::fs::write(&file, b"a copy").unwrap();
+        std::fs::File::options()
+            .write(true)
+            .open(&file)
+            .unwrap()
+            .set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(seconds))
+            .unwrap();
+        file
+    }
+
+    #[test]
+    fn the_copies_before_a_migration_are_listed_newest_first() {
+        let path = temp_db("copies-listed");
+        let oldest = write_at(&path, "octoboard.db.pre-v2", 1_000);
+        let middle = write_at(&path, "octoboard.db.pre-v2-1700000000", 2_000);
+        let newest = write_at(&path, "octoboard.db.pre-v2-1800000000", 3_000);
+        assert_eq!(
+            Store::migration_backups(&path, 2),
+            vec![newest, middle, oldest]
+        );
+    }
+
+    #[test]
+    fn what_is_not_a_finished_copy_of_that_version_is_not_listed() {
+        let path = temp_db("copies-others");
+        let copy = write_at(&path, "octoboard.db.pre-v2", 1_000);
+        std::fs::write(&path, b"the database itself").unwrap();
+        for name in [
+            // Another version, one that only starts like this one, a copy never finished, and what
+            // SQLite keeps beside a database.
+            "octoboard.db.pre-v1",
+            "octoboard.db.pre-v3",
+            "octoboard.db.pre-v20",
+            "octoboard.db.pre-v2.partial",
+            "octoboard.db.pre-v2-1700000000.partial",
+            "octoboard.db.pre-v2-wal",
+            "octoboard.db.pre-v2-shm",
+            "octoboard.db.pre-v2-journal",
+            "octoboard.db.pre-v2-1700000000-wal",
+            "octoboard.db-wal",
+            "other.db.pre-v2",
+        ] {
+            write_at(&path, name, 5_000);
+        }
+        // A directory of that name is no copy either.
+        std::fs::create_dir(path.with_file_name("octoboard.db.pre-v2-1900000000")).unwrap();
+        assert_eq!(Store::migration_backups(&path, 2), vec![copy]);
+    }
+
+    #[test]
+    fn with_no_copies_or_no_directory_none_are_listed() {
+        let path = temp_db("copies-none");
+        assert!(Store::migration_backups(&path, 2).is_empty());
+        let gone = path.with_file_name("not-there").join("octoboard.db");
+        assert!(Store::migration_backups(&gone, 2).is_empty());
+    }
+
+    /// The copies that a migration really makes are the ones listed for the version it left.
+    #[test]
+    fn the_copy_a_migration_makes_is_found_by_the_version_it_started_from() {
+        let path = temp_db("copies-made");
+        write_version_1_database(&path);
+        drop(Store::open(&path).expect("migrated"));
+        let made = backups(&path);
+        assert_eq!(made.len(), 1);
+        assert_eq!(Store::migration_backups(&path, 1), made);
+        assert!(Store::migration_backups(&path, 2).is_empty());
+        assert_eq!(Store::peek_schema_version(&path), Some(SCHEMA_VERSION));
     }
 }

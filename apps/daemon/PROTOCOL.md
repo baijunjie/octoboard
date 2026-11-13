@@ -2168,7 +2168,7 @@ announced as `daemon_update_status_updated` with the whole of it.
 | `installed` | Once `phase` is `installed`: the `version` and `holder_floor` of what replaced the executable, both null when something else replaced it (an install script run meanwhile) and the daemon did not write it |
 | `last_check` | The last check that ended: `outcome` (`up_to_date`, `available` or `failed`), `at` (milliseconds since the epoch), `error` (`daemon_update_check_failed` for a failed one) and `detail` (the English text of the failure, cut to 300 characters); null until one has ended |
 | `install` | The last download and replacement: `state` (`running`, `succeeded`, `failed`), `started_at`, `finished_at`, `error` and `detail` for a failed one; null until one ran |
-| `manual` | Set when an update is available that the daemon cannot install itself: `reason` `not_writable` and the `path` of the executable. The user upgrades by hand, with `curl -fsSL https://octoboard.dev/install.sh \| sh` |
+| `manual` | Set when an update is available that the daemon cannot install itself: `reason` `not_writable`, the `path` of the executable, and the `command` that installs it by hand, built by the daemon: `curl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh \| sh -s -- --bin-dir <the executable's directory, links resolved, POSIX-quoted when needed>`, with ` --beta` on the beta channel. It is run on the daemon's host by whoever may write to that directory; a client shows and copies it as given |
 | `updated_from` | The version this daemon replaced when it started, as an update left it (the version recorded in `daemon.version` by the daemon before it was older than this one); null otherwise. It holds until the daemon stops, so a window that opens later is told too; a client shows "Updated to vX" once per version |
 
 **Checking.** The check reads `<repository>/releases/download/updater/<channel>-linux.json`, the release manifest of the
@@ -2181,7 +2181,7 @@ status, a network failure, a manifest that does not read or one without this mac
 read through the proxy the login-shell environment names and the system's certificate store, as the registry is for an
 agent's CLI. With `daemon_update_check` on (the default) the daemon checks once 30 seconds after it starts, so that the
 shell environment is in hand, then every six hours (counted on the wall clock, looked at hourly), and at once when the
-setting is turned on or the channel changes; with it off only `check_daemon_update` checks. No check is made once an update
+setting is turned on or the channel changes; with it off only `check_daemon_update` checks. A check runs on a thread of its own, so one that waits on the network never holds up a stop or a planned restart. No check is made once an update
 is installed, until the daemon has restarted (an installed update is forgotten, and checks resume, if the launch path leads to the running build again, as after `octoboardd update --rollback`). A check asked for at once (the channel changed, the check turned on) while one runs is made when that one ends, and a change of channel forgets what the old channel offered (`available`, `manual`) at once, with the automatic check off too. The settings `daemon_update_check` and `daemon_update_channel` are part of
 `Settings` and of the agents' settings tools, and are not part of a configuration export.
 
@@ -2195,7 +2195,10 @@ holds the update lock, and by the next download), and refused as
 into the daemon (the update key of the desktop application) and the file the signature names is this release's archive
 for this architecture (so that an older release, which the key signed too, cannot stand in). Only then is the one file
 `octoboardd_<version>_linux_<arch>/octoboardd` unpacked (at most 256 MiB), written beside the old executable with its
-permissions, flushed, and renamed over it. The old one is first kept as `octoboardd.previous` (by a link, or a copy
+permissions, flushed, and run where it lies with `--version` (for at most 15 seconds, its process group killed past
+them): unless it answers with exactly the release's version, nothing is replaced or recorded and the installation fails
+as `daemon_update_replace_failed`, `detail` "the new build did not start, so it was not installed: …", so a build that
+cannot start on the host never reaches the path. Then it is renamed over the executable. The old one is first kept as `octoboardd.previous` (by a link, or a copy
 where the file system makes none; for `octoboardd update --rollback`) and only then is the new file renamed over the
 path, so that the path is never without a file: a failure of that last rename leaves the executable as it was, with
 `octoboardd.previous` holding it too. A running process keeps the file it runs. A failure before the rename touches
@@ -2203,7 +2206,7 @@ nothing; the codes of what failed are `daemon_update_download_failed` (the archi
 `daemon_update_unverified` and `daemon_update_replace_failed`, in `install.error`. A stop that begins meanwhile (an
 ordinary or planned stop, a termination signal) ends the download (`daemon_update_download_failed`, `detail` "the daemon
 is stopping") and, once the archive is checked, keeps the executable from being replaced
-(`daemon_update_replace_failed`); the path is looked at once more just before the replacement, and one that is no longer
+(`daemon_update_replace_failed`), also when it began while the new file was run; the path is looked at once more just before the replacement, and one that is no longer
 the running build's file is left alone, the update then being `installed` with no version. A download is also given up,
 as `daemon_update_download_failed`, when no byte arrives for 60 seconds (and a connection that is not made in 20
 seconds, or an answer that does not start in 60); the read that waits cannot be interrupted, so its thread is left to
@@ -2212,14 +2215,18 @@ once with "an earlier download is still being given up" (`daemon_update_download
 `daemon_update_check_failed` for a check). Progress is announced every 256 KiB of the archive and at most about four
 times a second. The daemon holds `~/.octoboard/update.lock` while it does this, which
 `octoboardd update` takes too, so that the two never replace the file together (`daemon_update_running`). After a
-replacement the daemon writes `~/.octoboard/update-installed.json` (`version`, `holder_floor`, `from_version`, `path`), by
+replacement the daemon writes `~/.octoboard/update-installed.json` (`version`, `holder_floor`, `from_version`, `from_schema`, the database schema version the replaced build reads, `path`), by
 which a daemon learns, at its next check or `update_daemon`, of an update `octoboardd update` made under it: it then says
 `installed`.
 
 **Restarting.** `restart_daemon` asks for the planned restart `POST /restart` and `octoboardd restart` make, so every
 session keeps running, with its screen, under the successor. Under a service manager the daemon exits with status 75 and
 the manager starts the replaced file (the unit file is never touched); otherwise the daemon starts the successor from its
-launch path. Before it, a client asks `handover_check` with `installed.holder_floor` and `installed.version` as the
+launch path. If that successor does not start, and the file at the launch path is another build than the running one
+while the running build is the one kept as `octoboardd.previous`, the daemon swaps the two back (as `octoboardd update
+--rollback` does, forgetting `update-installed.json`) and starts the running build instead, unless the database is at a
+schema version above the running build's or the update lock is held; otherwise it exits with the error and the sessions
+are kept for the next start. Under a service manager nothing falls back. Before it, a client asks `handover_check` with `installed.holder_floor` and `installed.version` as the
 `holder_floor` and `target_version`, to list the sessions and terminals the restart would interrupt, and asks the user.
 The window that asked reloads itself once the daemon is back with `hello.daemon_version` equal to the installed version;
 other windows offer a reload.
@@ -2228,16 +2235,22 @@ other windows offer a reload.
 `update` downloads, checks and replaces now and says to run `octoboardd restart`, warning when the release's
 `holder_floor` is above the running version, which means the restart interrupts sessions started by older builds;
 `--check` only checks (exit 0 up to date, 10 an update is available, 1 failure); `--rollback` swaps `octoboardd.previous`
-and the current executable, which keeps the current one as the previous. The channel is read from the daemon's database,
+and the current executable, which keeps the current one as the previous, and names the version it goes back to (from
+`update-installed.json`, else by running the previous build with `--version`); it refuses (exit 1, nothing changed) when
+the database is at a schema version above the one the previous build reads (`from_schema`), naming the newest copy
+`<db>.pre-v<N>` kept before the migration and how to restore it by hand, and goes ahead with a note when that cannot be
+told. The channel is read from the daemon's database,
 opened read-only and never migrated, and `--channel` overrides it. It refuses while the running daemon follows the desktop
-application, and where the directory is not writable it prints the install command.
+application, and where the directory is not writable it prints the install command for that directory and channel, for
+the directory's owner to run. A build that does not update itself prints `curl --proto '=https' --tlsv1.2 -fsSL
+https://octoboard.dev/install.sh | sh`.
 
 | Code | Where | Params | Meaning |
 |---|---|---|---|
 | `daemon_update_check_failed` | `last_check.error` | — | The check could not read the manifest; the text is in `last_check.detail` |
 | `daemon_update_download_failed` | `install.error` | — | The archive could not be downloaded or stored; the executable was not touched |
 | `daemon_update_unverified` | `install.error` | — | The archive is not what the release published (SHA-256, signature, the file it names, or no daemon in it); the executable was not touched |
-| `daemon_update_replace_failed` | `install.error` | — | The new executable could not be put in place; the file at the path is as it was |
+| `daemon_update_replace_failed` | `install.error` | — | The new executable could not be put in place, or did not answer `--version` with the release's version; the file at the path is as it was |
 
 `DaemonUpdateStatus`, `snapshot.daemon_update`, `daemon_update_status_updated`, the three requests and the settings were
 added within the current protocol generation: a client that does not know them ignores them.

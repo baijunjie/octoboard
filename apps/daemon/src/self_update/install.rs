@@ -7,8 +7,11 @@
 //! 3. Its SHA-256 and signature are checked (`verify`), against the release key and the name of
 //!    this release's archive.
 //! 4. Only then, with the path looked at once more (it must still be the running build, and no
-//!    stop may have begun), is the daemon unpacked, straight into the file that is renamed over
-//!    the executable (`replace`), and the replacement recorded (`record`).
+//!    stop may have begun), is the daemon unpacked from the same open file, straight into the file
+//!    that is renamed over the executable (`replace`). That file is run with `--version` where it
+//!    lies first (`probe`), and has to answer with the release's version: a build that cannot start
+//!    on this machine never reaches the path. The replacement is recorded (`record`) with the
+//!    schema version of the database this build reads, which a rollback checks.
 //!
 //! A failure before step 4 touches nothing of the installation; one in step 4 puts back what the
 //! step changed.
@@ -22,8 +25,8 @@ use super::fetch::{FetchError, Fetcher};
 use super::manifest::{archive_name, Release};
 use super::record::{Files, Installed};
 use super::replace::{self, ReplaceError};
-use super::unpack::{daemon_entry, unpack_entry, UnpackError, DAEMON_LIMIT};
-use super::verify::verify_archive;
+use super::unpack::{daemon_entry, unpack_reader, UnpackError, DAEMON_LIMIT};
+use super::verify::verify_reader;
 use crate::platform::fs;
 use crate::protocol::{daemon_update_code, Code};
 
@@ -106,16 +109,19 @@ pub fn replaceable(launch: &Path) -> Result<PathBuf, InstallError> {
 }
 
 /// What an installation reaches beyond the disk it works on: where the archive comes from, the key
-/// its signature is checked against, the architecture it is for, and how it tells that a path is
-/// still the build that runs, and whether the process is stopping, which ends the download and
-/// keeps the executable from being replaced. A seam, so that a test makes no request and signs
-/// with a key of its own.
+/// its signature is checked against, the architecture it is for, how it tells that a path is
+/// still the build that runs, whether the process is stopping, which ends the download and
+/// keeps the executable from being replaced, and how a new build is run to see that it starts
+/// (`probe::expect_version`). A seam, so that a test makes no request, signs with a key of its
+/// own and unpacks a stand-in that is no daemon.
 pub struct Sources<'a> {
     pub fetcher: &'a dyn Fetcher,
     pub key: &'a PublicKey,
     pub arch: &'a str,
     pub is_running_image: fn(&Path) -> bool,
     pub stopping: &'a dyn Fn() -> bool,
+    /// Runs the build at the path and checks that it reports the version; the error says why not.
+    pub probe: fn(&Path, &str) -> Result<(), String>,
 }
 
 /// Installs `release` over the executable `launch` names, which must still be the running build.
@@ -153,6 +159,7 @@ pub fn install(
         version: release.version.clone(),
         holder_floor: release.holder_floor.clone(),
         from_version: env!("CARGO_PKG_VERSION").to_owned(),
+        from_schema: Some(crate::store::Store::SCHEMA_VERSION),
         path: real.to_string_lossy().into_owned(),
     }) {
         tracing::warn!(%err, "recording the update failed");
@@ -225,14 +232,22 @@ fn put_in_place(
     real: &Path,
     name: &str,
 ) -> Result<bool, InstallError> {
-    verify_archive(
-        archive,
+    // One open file, verified and then unpacked: what is unpacked is what was verified, whatever
+    // happens to the name meanwhile.
+    let mut file = std::fs::File::open(archive).map_err(|err| {
+        InstallError::Unverified(format!("the archive could not be read back: {err}"))
+    })?;
+    verify_reader(
+        &mut file,
         &release.sha256,
         &release.signature,
         name,
         sources.key,
     )
     .map_err(InstallError::Unverified)?;
+    std::io::Seek::rewind(&mut file).map_err(|err| {
+        InstallError::Unverified(format!("the archive could not be read back: {err}"))
+    })?;
     // The last look before the file is touched: the download took time.
     if (sources.stopping)() {
         return Err(InstallError::Replace(
@@ -244,8 +259,9 @@ fn put_in_place(
     }
     let entry = daemon_entry(&release.version, sources.arch);
     let mut unpacking = None;
-    let replaced = replace::replace(real, |file| {
-        match unpack_entry(archive, &entry, file, DAEMON_LIMIT) {
+    let replaced = replace::replace(
+        real,
+        |out| match unpack_reader(&mut file, &entry, out, DAEMON_LIMIT) {
             Ok(_) => Ok(()),
             Err(err) => {
                 let text = match &err {
@@ -254,8 +270,18 @@ fn put_in_place(
                 unpacking = Some(err);
                 Err(text)
             }
-        }
-    });
+        },
+        |staged| {
+            (sources.probe)(staged, &release.version).map_err(|why| {
+                format!("the new build did not start, so it was not installed: {why}")
+            })?;
+            // The probe took time, and the rename cannot be undone.
+            if (sources.stopping)() {
+                return Err("the daemon began to stop, so the update was not installed".to_owned());
+            }
+            Ok(())
+        },
+    );
     match replaced {
         Ok(()) => Ok(true),
         Err(ReplaceError::NotWritable(path)) => Err(InstallError::NotWritable(path)),
@@ -263,6 +289,8 @@ fn put_in_place(
             Some(UnpackError::Archive(_)) => InstallError::Unverified(text),
             _ => InstallError::Replace(text),
         }),
-        Err(ReplaceError::Failed(text)) => Err(InstallError::Replace(text)),
+        Err(ReplaceError::Failed(text) | ReplaceError::Refused(text)) => {
+            Err(InstallError::Replace(text))
+        }
     }
 }

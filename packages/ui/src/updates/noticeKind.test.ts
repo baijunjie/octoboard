@@ -13,12 +13,12 @@ it("shows no notice while nothing is found", () => {
 
 it("offers an update found, and offers it by hand where the daemon cannot replace its executable", () => {
   expect(updateNoticeKind({ ...IDLE, update: FOUND })).toBe("available");
-  expect(updateNoticeKind({ ...IDLE, update: FOUND, manual: { path: "/opt/octoboardd" } })).toBe("manual");
+  expect(updateNoticeKind({ ...IDLE, update: FOUND, manual: { path: "/opt/octoboardd", command: "install" } })).toBe("manual");
 });
 
 it("hides a dismissed notice, the manual one included", () => {
   expect(updateNoticeKind({ ...IDLE, update: FOUND, noticeDismissed: true })).toBeUndefined();
-  expect(updateNoticeKind({ ...IDLE, update: FOUND, manual: { path: "/x" }, noticeDismissed: true })).toBeUndefined();
+  expect(updateNoticeKind({ ...IDLE, update: FOUND, manual: { path: "/x", command: "install" }, noticeDismissed: true })).toBeUndefined();
 });
 
 it("shows a download under way, which cannot be dismissed", () => {
@@ -35,5 +35,5 @@ it("asks for a reload before anything else, and nothing dismissed or hidden with
   expect(updateNoticeKind(reload)).toBe("reload");
   expect(updateNoticeKind({ ...reload, phase: "installed" })).toBe("reload");
   expect(updateNoticeKind({ ...reload, phase: "downloading", update: FOUND })).toBe("reload");
-  expect(updateNoticeKind({ ...reload, update: FOUND, manual: { path: "/x" } })).toBe("reload");
+  expect(updateNoticeKind({ ...reload, update: FOUND, manual: { path: "/x", command: "install" } })).toBe("reload");
 });

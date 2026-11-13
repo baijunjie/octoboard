@@ -87,7 +87,7 @@ export function createDaemonUpdateStore({
       lastCheck: last && { outcome: last.outcome === "up_to_date" ? "upToDate" : last.outcome, at: last.at },
       channel: held.settings.daemon_update_channel,
       autoCheck: held.settings.daemon_update_check,
-      manual: status?.manual ? { path: status.manual.path } : undefined,
+      manual: status?.manual ? { path: status.manual.path, command: status.manual.command } : undefined,
       checkAsked,
       reloadNeeded: version !== undefined && loadedVersion !== undefined && version !== loadedVersion,
       noticeDismissed: available !== undefined && dismissedVersion === available.version,

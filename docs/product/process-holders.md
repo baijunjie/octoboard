@@ -378,3 +378,11 @@ git command waits on it, and a Windows update renames a file in use aside as it 
 Where the daemon cannot set up holders at all, its terminals run inside the daemon itself. The daemon then ends them
 on its way out, an internal failure included, and the next start has nothing to take over: a session whose process
 survived anyway is marked interrupted. A planned stop there ends every session as an ordinary stop does.
+
+The helpers of a launch there — its hooks, its MCP server and Claude Code's status line, not a project session's git
+hooks — run the daemon's own executable, except where the daemon updates itself (see
+`docs/product/server-form-updates.md`) or its path no longer leads to the build it runs: they then run from a copy of
+the running build in `~/.octoboard/builds/<build>/`, made as a holder's is (see "The copy of the build holders run
+from" above), so that an update replacing the installed executable under the daemon does not have them run the new
+build against the old daemon. Where the copy cannot be made, they run the daemon's own executable. Such a copy is not
+removed while holders cannot be set up (see `docs/product/files-octoboard-owns.md`).

@@ -1,8 +1,10 @@
 //! The daemon's own part of the update: the scheduled check, and the work each request starts.
 //!
-//! A request answers once its work has begun and the work runs on a blocking task, announcing its
-//! progress and end as the status; the claim it holds (`Claim`) is released when the task ends, or
-//! when it panics.
+//! A request answers once its work has begun and the work runs on a thread of its own, announcing
+//! its progress and end as the status; the claim it holds (`Claim`) is released when the thread
+//! ends, or when it panics. Not on the runtime's blocking pool, whose tasks the runtime waits for
+//! when it shuts down: a check or a download that waits on the network must not hold a stop or a
+//! planned restart.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -54,6 +56,7 @@ pub(crate) fn start(state: &Arc<AppState>, follows_application: bool, data_dir: 
         arch: std::env::consts::ARCH.to_owned(),
         launch: std::path::PathBuf::from(&state.install_exe),
         is_running_image: proc::names_running_image,
+        probe: super::probe::expect_version,
     });
     state
         .daemon_update
@@ -82,13 +85,24 @@ pub(crate) fn check_requested(state: &Arc<AppState>) -> Result<()> {
     let setup = setup_of(state)?;
     let state = state.clone();
     // Blocking all the way, the look at the disk before the check included.
-    tokio::task::spawn_blocking(move || {
+    spawn_check(move || {
         forget_rolled_back(&state, &setup);
         if let Some(claim) = state.daemon_update.begin_check(&state, false) {
             run_check(&state, &setup, claim);
         }
     });
     Ok(())
+}
+
+/// Runs `check` (blocking: it reads the disk and the manifest) on a thread of its own, which the
+/// runtime does not wait for at its end; see the module.
+fn spawn_check(check: impl FnOnce() + Send + 'static) {
+    let spawned = std::thread::Builder::new()
+        .name("daemon-update-check".to_owned())
+        .spawn(check);
+    if let Err(err) = spawned {
+        tracing::warn!(%err, "the update check could not be started");
+    }
 }
 
 /// `update_daemon`: starts the download and replacement of the release the last check found, and
@@ -123,9 +137,12 @@ pub(crate) async fn update_requested(state: &Arc<AppState>) -> Result<()> {
             return Err(anyhow::Error::new(err).context("taking the update's lock"))
         }
     };
-    if let Err(InstallError::NotWritable(path)) = looking.1 {
-        let path = path.to_string_lossy().into_owned();
-        state.daemon_update.record_manual(state, &path);
+    if let Err(InstallError::NotWritable(exe)) = looking.1 {
+        let channel = state.store.daemon_update_channel().unwrap_or_default();
+        state
+            .daemon_update
+            .record_manual(state, super::not_writable(&exe, channel));
+        let path = exe.to_string_lossy().into_owned();
         return Err(CodedError::raised(
             error_code::DAEMON_UPDATE_NOT_WRITABLE,
             format!("the daemon cannot replace {path}: the user it runs as may not write there"),
@@ -199,7 +216,7 @@ fn run_check(state: &Arc<AppState>, setup: &Setup, claim: Claim) {
             Ok(Checked::Available(release)) => {
                 // An update the user would have to install by hand is shown as such from the check on.
                 let manual = match install::replaceable(&setup.launch) {
-                    Err(InstallError::NotWritable(path)) => Some(path),
+                    Err(InstallError::NotWritable(exe)) => Some(super::not_writable(&exe, channel)),
                     _ => None,
                 };
                 (Ok(Some(release)), manual)
@@ -229,6 +246,7 @@ fn run_install(
         arch: &setup.arch,
         is_running_image: setup.is_running_image,
         stopping: &stopping,
+        probe: setup.probe,
     };
     let mut throttle = Throttle::default();
     let outcome = install::install(
@@ -317,8 +335,10 @@ pub(super) async fn scheduled_check(state: &Arc<AppState>, forced: bool) {
         return;
     };
     let state = state.clone();
+    let (done, ended) = tokio::sync::oneshot::channel::<()>();
     // Blocking all the way: the look at the disk and the store's reads come before the check.
-    tokio::task::spawn_blocking(move || {
+    spawn_check(move || {
+        let _done = done;
         let updates = &state.daemon_update;
         forget_rolled_back(&state, &setup);
         if updates.installed() || !state.store.daemon_update_check().unwrap_or(false) {
@@ -330,9 +350,9 @@ pub(super) async fn scheduled_check(state: &Arc<AppState>, forced: bool) {
         if let Some(claim) = updates.begin_check(&state, forced) {
             run_check(&state, &setup, claim);
         }
-    })
-    .await
-    .ok();
+    });
+    // Ended, or the thread is gone: either way the check has run, or never will.
+    ended.await.ok();
 }
 
 /// Tells when the progress of the archive is worth announcing: [`PROGRESS_STEP`] bytes more than

@@ -2,7 +2,6 @@
 //! of the caller's with a cap on its size, and nothing else of the archive written anywhere.
 
 use std::io::{self, Read, Write};
-use std::path::Path;
 
 use flate2::read::GzDecoder;
 
@@ -23,11 +22,11 @@ pub fn daemon_entry(version: &str, arch: &str) -> String {
     format!("octoboardd_{version}_linux_{arch}/octoboardd")
 }
 
-/// Copies the regular file `entry` of the gzip tarball at `archive` into `out`, which takes at
-/// most `limit` bytes; the number of bytes copied. An error says, in English, that the archive has
-/// no such file, holds more than `limit`, or is not a tarball. Blocking.
+/// Copies the regular file `entry` of the gzip tarball at `archive` into `out`; see
+/// [`unpack_reader`]. Blocking. For the tests: the installation unpacks the open file it verified.
+#[cfg(test)]
 pub fn unpack_entry(
-    archive: &Path,
+    archive: &std::path::Path,
     entry: &str,
     out: &mut impl Write,
     limit: u64,
@@ -35,13 +34,26 @@ pub fn unpack_entry(
     let file = std::fs::File::open(archive).map_err(|err| {
         UnpackError::Archive(format!("the archive could not be read back: {err}"))
     })?;
-    let mut tarball = tar::Archive::new(GzDecoder::new(io::BufReader::new(file)));
+    unpack_reader(file, entry, out, limit)
+}
+
+/// Copies the regular file `entry` of the gzip tarball `archive` reads into `out`, which takes at
+/// most `limit` bytes; the number of bytes copied. An error says, in English, that the archive has
+/// no such file, holds more than `limit`, or is not a tarball. Blocking.
+pub fn unpack_reader(
+    archive: impl Read,
+    entry: &str,
+    out: &mut impl Write,
+    limit: u64,
+) -> Result<u64, UnpackError> {
+    let mut tarball = tar::Archive::new(GzDecoder::new(io::BufReader::new(archive)));
     let unreadable =
         |err: io::Error| UnpackError::Archive(format!("the archive is not readable: {err}"));
     for member in tarball.entries().map_err(unreadable)? {
         let member = member.map_err(unreadable)?;
         let named = member.path().map_err(unreadable)?;
-        if named.as_ref() != Path::new(entry) || !member.header().entry_type().is_file() {
+        if named.as_ref() != std::path::Path::new(entry) || !member.header().entry_type().is_file()
+        {
             continue;
         }
         let mut member = member.take(limit + 1);

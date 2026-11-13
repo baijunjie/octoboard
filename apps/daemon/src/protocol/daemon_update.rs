@@ -153,6 +153,10 @@ pub struct DaemonUpdateManual {
     pub reason: DaemonUpdateManualReason,
     /// The executable that would be replaced, as a path on the daemon's host.
     pub path: String,
+    /// The shell command that installs the update over it by hand: the install script, told the
+    /// executable's directory and the channel the daemon follows. For `not_writable`, it has to be
+    /// run by a user who may write to that directory (its owner).
+    pub command: String,
 }
 
 /// The daemon's own update as it stands. Runtime state: never stored, and `null` in the snapshot

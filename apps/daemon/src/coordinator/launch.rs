@@ -598,7 +598,9 @@ pub(super) async fn start_process(
         preresolved_shell_env: None,
         daemon_port: state.port,
         daemon_key: state.key.clone(),
-        self_exe: state.self_exe.clone(),
+        // A copy of the running build where the daemon updates itself: an update replaces its own
+        // path with the new build, which helpers would run against this one.
+        self_exe: crate::self_update::helpers::helper_exe(state).await,
         install_exe: state.install_exe.clone(),
         // Issued per launch: the previous process is gone, and a token outliving it would let a
         // stale child act on this session.

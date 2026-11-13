@@ -43,7 +43,7 @@ in `main.rs`, `Holders::wait_endings`); the record's lifecycle is in [`src/holde
 stop hands every terminal over to its holder with its screen saved and ends nothing
 (`coordinator::planned_stop`, behind the barrier of `state::handover_barrier`): the `planned_stop` control request and `POST /planned-stop`; a planned
 restart, `POST /restart` or the host's restart request (`SIGUSR1`, which `restart` sends), also brings the successor up
-on the same port: started by `main` (`cli::start_successor`, from the installation entry point `cli::launch_path` in
+on the same port: started by `main` (`self_update::start_successor`, which starts it through `cli::start_successor` and, for a server-form daemon whose update does not start, goes back to the build that ran; from the installation entry point `cli::launch_path` in
 `src/cli/installation.rs`, its final symlink left unresolved), with the same key, which is kept only in that case, or,
 under a systemd service (the environment shows the daemon to be the unit's main process, or `--service-managed` says
 so), by the unit on the daemon's exit status 75, when the successor makes a new key. A user runs the modes `start` (on the port of `--port`, else `defaultServerPort` of `config/app.json`, which `build.rs` passes in as `OCTOBOARD_DEFAULT_SERVER_PORT`), `stop`, `restart`, `status` and `address` to keep a daemon in
@@ -161,7 +161,7 @@ installs with `--service`).
   the `pattern` of a text field compiled with `regress`), `chart.rs` the chart kind's allow-listed ECharts subset, and
   `submission.rs` what a submission may carry; `PageContent::parse` and `PageContent::check_submission` in `mod.rs` are
   the entry points.
-- `src/cli/` — the command line and the modes above; `hook.rs` is the `hook` mode and `background.rs` the user's `start`, `stop`, `restart`, `status` and `address`, and the start of a planned restart's successor, `update.rs` the user's `update [--check] [--rollback] [--channel]` (the server form's update from the command line, over `self_update/`, refused for a daemon that follows the application), `succession.rs` how those commands find the daemon through a planned restart caught half-way and tell the daemon that took over from it, and `installation.rs` the path the daemon launches a successor, or `start` its daemon, from.
+- `src/cli/` — the command line and the modes above; `hook.rs` is the `hook` mode and `background.rs` the user's `start`, `stop`, `restart`, `status` and `address`, and the start of a planned restart's successor, `update.rs` the user's `update [--check] [--rollback] [--channel]` (the server form's update from the command line, over `self_update/`, refused for a daemon that follows the application), `succession.rs` how those commands find the daemon through a planned restart caught half-way and tell the daemon that took over from it, and `installation.rs` the path the daemon launches a successor, or `start` its daemon, from. `octoboardd --version` (clap's, no mode) answers `octoboardd <version>` and touches nothing: it is how an update runs a build to see that it starts.
 
 ### Coordinator role
 
@@ -231,7 +231,7 @@ installs with `--service`).
 ### Storage and state
 
 - `src/store/` — the coordinator's SQLite `Store`: `schema.rs` (the current schema, the `MIGRATIONS` that bring an older
-  database up to it and the checks on a file before it is opened; `schema/v{N}.sql` keeps each released past version's
+  database up to it and the checks on a file before it is opened, `Store::SCHEMA_VERSION` and the reads of a file's schema version and of the copies a migration kept (`Store::peek_schema_version`, `Store::migration_backups`) that the self-update's rollback checks use; `schema/v{N}.sql` keeps each released past version's
   schema for the migration tests once there is one), `rows.rs`, one file per table family (`settings.rs` the application
   settings, `provider_settings.rs` the user's explicit choices of each provider's settings and the value in effect of
   every one, `held_terminals.rs` which holder runs each session's launch and each shell terminal, and the names users
@@ -327,7 +327,13 @@ installs with `--service`).
   `update_daemon`, `restart_daemon`), `check.rs` and `manifest.rs` the release manifest, `fetch.rs` the HTTP behind the
   `Fetcher` seam, `verify.rs` (SHA-256, minisign signature, the file the signature names), `unpack.rs`, `replace.rs`
   (the atomic replacement keeping `<name>.previous`) and `install.rs` (the order of those), which `cli/update.rs`
-  (`octoboardd update`) shares, and `record.rs` (`update.lock`, `update-installed.json`, `daemon.version`, `updates/`,
+  (`octoboardd update`) shares; `probe.rs` runs a build with `--version` through `processes::subprocess::run_bounded` (a new
+  build has to answer it before it replaces the executable; `rollback.rs` uses it for the previous build's version);
+  `rollback.rs` what going back to `<name>.previous` checks first (its version, and whether it reads the database's schema
+  version, from `Store::peek_schema_version` and `Store::migration_backups`), for `update --rollback` and the fallback below;
+  `successor.rs` the next daemon of a planned restart where no service manager starts it, which falls back to the build that ran
+  when the updated one does not start; `helpers.rs` the executable that the helpers of a launch run when its terminal lives in
+  the daemon itself (a copy of the running build, from `holder::build::Builds`, for a daemon that updates itself); and `record.rs` (`update.lock`, `update-installed.json`, `daemon.version`, `updates/`,
   which a starting daemon clears of what a stop left in it). The cargo feature `self-update` (turned on by
   `release-linux.mjs` only) decides at start whether a daemon that follows no application on Linux offers updates at
   all; the code is compiled either way, so its tests run in every build.
@@ -783,6 +789,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Deliver a session's message through a provider's own server instead of its terminal | `MessageTransport` and `PrivateServer` (`src/session/term/mod.rs`); `send_message_with_id` tries the transport first and, while the session's conversation is not yet known, falls back to the terminal write, and returns the `Route` taken; starting its queue gives a `QueueStart`; a message the agent's queue refuses is `RefusedByAgent` and one the server holds is `HeldByServer`; Codex's is `src/adapter/codex/transport/` |
 | Whether a delivery error may still have reached the agent's own queue | `acceptance_uncertain` (`src/messaging/delivery.rs`; the coded error `message_acceptance_unconfirmed`) |
 | Codex's thread state database (its location, repointing rows, carrying or forgetting threads) | `src/adapter/codex/threads.rs` (through `ThreadRegistry`, `src/accounts/thread_registry.rs`) |
+| The executable a launch's helpers (hook, MCP server, status line) run | `self_update::helpers::helper_exe` (`src/self_update/helpers.rs`), used by `coordinator::launch`: the holder's copy of the build under a holder, else a copy of the running build rather than the daemon's own path, which an update replaces |
 | Look up a known record or fail with its `unknown_*` error | `Store::require_project`, `require_console`, `require_account`, `require_session` |
 | Whether an agent is on the added list (every agent is while the list is undecided) | `Store::agent_is_added` (`src/store/agents.rs`); refusing a request for an agent that is not: `refuse_unless_agent_added` (opening a session) and `refuse_unless_agent_added_to` (any other purpose), `src/accounts/choice/refusals.rs` |
 | Clean a project's or an agent's tag list before storing it | `normalise_tags` (`src/coordinator/validate.rs`) |

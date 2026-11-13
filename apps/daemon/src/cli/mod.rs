@@ -29,7 +29,7 @@ use crate::protocol::AgentId;
 use crate::{adapter, cross_project_guard, mcp, protocol, revert_gate, session_git_hooks};
 
 #[derive(Parser)]
-#[command(name = "octoboardd", args_conflicts_with_subcommands = true)]
+#[command(name = "octoboardd", version, args_conflicts_with_subcommands = true)]
 pub(crate) struct Cli {
     #[command(subcommand)]
     pub(crate) command: Option<Command>,

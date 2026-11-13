@@ -20,7 +20,8 @@ Only a daemon for which all of these hold:
 
 Any other daemon has none of this: a browser on it shows no update notice, no Updates section in Settings and no
 version in About, and `octoboardd update` says that this build does not update itself, prints the install command to
-upgrade by hand with, and exits with status 1.
+upgrade by hand with, `curl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh | sh`, and exits with
+status 1.
 
 ## Channels
 
@@ -56,7 +57,8 @@ and checks resume, when the executable at the daemon's path is the running build
 --rollback`.
 
 The daemon reads the channel's manifest over HTTPS, through the proxy the user's login shell environment names and with
-the system's certificates, and waits at most **30 seconds** for it. A check ends in one of three ways:
+the system's certificates, and waits at most **30 seconds** for it. A check under way never holds up a stop or a planned
+restart: the daemon does not wait for it to end. A check ends in one of three ways:
 
 - **Up to date**: the manifest names no newer version. Only an HTTP `404` for the manifest means there is no release.
 - **A newer version is available**: offered in every browser open on the daemon (see "What the browser shows" below).
@@ -74,10 +76,10 @@ The update notice is the desktop application's strip along the bottom of the win
 
 - **A newer version is available**: as on the desktop, with **What is new**, **Download and install** and **Later**.
 - **A newer version the daemon cannot install itself** — the user the daemon runs as may not write to the directory of
-  its executable (see "Downloading and replacing the executable" below): the notice names the version, says that
-  Octoboard cannot replace its own file and to update by hand with the install command, and offers **What is new**,
-  **Copy install command**, which copies `curl -fsSL https://octoboard.dev/install.sh | sh`, and **Later**; there is no
-  download.
+  its executable (see "Downloading and replacing the executable" below, which gives the install command): the notice
+  names the version, says that Octoboard cannot replace its own file, so the owner of that file's folder has to run the
+  install command on the machine Octoboard runs on, and offers **What is new**, **Copy install command**, which copies
+  the install command the daemon gives for that directory, and **Later**; there is no download.
 - **Downloading**: as on the desktop.
 - **Installed**: says the version is installed and takes effect after Octoboard restarts, with **Restart now** and
   **Later**; an update the daemon learned of without its version (see below) is named as an update.
@@ -107,8 +109,18 @@ percentage when the archive's size is known. `octoboardd update` does the same i
 - **What is replaced** is the executable at the path a planned restart starts the next daemon from (see "Who starts the
   next daemon" in `docs/product/planned-restart-and-planned-stop.md`), its links followed to the file itself.
 - **Not writable**: when the user the daemon runs as may not write to that file's directory, nothing is downloaded; the
-  update is offered for installing by hand instead (see "What the browser shows" above). A check that finds an update
-  says so already.
+  update is offered for installing by hand instead (see "What the browser shows" above), by someone who may write to
+  that directory — its owner — on the daemon's machine. A check that finds an update says so already. The daemon gives
+  the command to run, the install script told that directory and the channel the daemon follows:
+
+  ```sh
+  curl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh | sh -s -- --bin-dir <directory> [--beta]
+  ```
+
+  `<directory>` is the directory of the executable, its links followed, written as it is when it holds only letters,
+  digits and `/ . _ - + : @ % , =`, and otherwise in single quotes, a single quote in it written as `'\''`; `--beta` is
+  there only on the Beta channel. `octoboardd update` gives the same command (see "The `octoboardd update` command"
+  below).
 - **Replaced by something else**: when the file at that path is no longer the one the daemon runs — the install script
   put a new one there meanwhile — nothing is downloaded or changed, and the update counts as installed, of a version not
   known.
@@ -120,15 +132,26 @@ percentage when the archive's size is known. `octoboardd update` does the same i
   with the release key built into the daemon (the update key of the desktop application), and the file the signature
   names is this release's archive for this architecture, so an older release's archive, signed with the same key, cannot
   stand in for it. Only then is the one executable in it unpacked (at most **256 MiB**).
-- **The replacement**: the new executable is written beside the old one, with its permissions; the old one is kept
-  beside it as `octoboardd.previous`, replacing any earlier one; then the new file is renamed over the path in one step.
-  The path never lacks a file and is never half written: a failure before the last step leaves the executable as it was,
-  and a failure of that step too, with `octoboardd.previous` holding the same file.
-- **What keeps running**: the daemon, its sessions and its shell terminals run on unchanged, the daemon from the file it
-  started as and the process holders from their copy of the running build (see "The copy of the build holders run from"
-  in `docs/product/process-holders.md`), until the restart.
+- **Trying the new build**: the new executable is written beside the old one, with its permissions, and run there as
+  `octoboardd --version` (see "Printing the version" in `docs/product/daemon-command-line.md`). It has to answer
+  within **15 seconds** — past that its whole process group is killed — with exactly the release's version. Otherwise
+  the path is not touched, the written file is removed, nothing is recorded, and the update fails as one whose new
+  executable could not be put in place, its detail saying that the new build did not start, so it was not installed,
+  and why (it could not be run, did not answer in time, failed, or named another version). A build that runs
+  `--version` may still fail as a daemon; see "When the update does not start" below.
+- **The replacement**: the old executable is kept beside the path as `octoboardd.previous`, replacing any earlier one; then
+  the new file is renamed over the path in one step. The path never lacks a file and is never half written: a failure
+  before the last step leaves the executable as it was, and a failure of that step too, with `octoboardd.previous`
+  holding the same file.
+- **What keeps running**: the daemon, its sessions and its shell terminals run on unchanged until the restart: the
+  daemon from the file it started as, the process holders and the helpers of the launches they run from their copy of
+  the running build (see "The copy of the build holders run from" in `docs/product/process-holders.md`), and the helpers
+  of a launch whose terminal runs in the daemon itself from a copy of the running build too (see "When holders cannot
+  be set up" in `docs/product/process-holders.md`). A project session's git hooks are the exception: they run the
+  installation's own executable, so from the replacement on they run the new build.
 - **A stop meanwhile**: a stop of any kind that begins during the download — an ordinary or planned stop, a termination
-  signal — ends it, and keeps the executable from being replaced.
+  signal — ends it; one that begins before the new file is renamed over the path, while the new build is being tried
+  included, keeps the executable from being replaced.
 - **One at a time**: the daemon and `octoboardd update` never replace the executable together; whichever comes second is
   refused as busy. The install script takes the same lock where it can, and is refused the same way (see step 4 of "The
   install script" in `docs/product/installing-the-server-form.md`). A daemon learns of an update `octoboardd update` installed under it at its next check or download
@@ -161,6 +184,52 @@ under way (a restart would end it) and while the daemon is already stopping or r
 which takes a second request as the first. A page whose connection to the daemon is not open sends nothing and says that
 the connection is closed. `octoboardd restart` on the server restarts into the update just the same.
 
+## When the update does not start
+
+A new build that answered `--version` (see "Downloading and replacing the executable" above) can still fail to come up
+as a daemon.
+
+**Without a service manager**, the daemon of the planned restart falls back to its own build. When the next daemon does
+not come up (see "Who starts the next daemon" in `docs/product/planned-restart-and-planned-stop.md`), the file at the
+launch path is another build than the one the daemon runs (put there by an update, or by a rollback made under it),
+and the one it runs is the one kept beside it as `octoboardd.previous`, the daemon swaps the two back as `octoboardd
+update --rollback` does — the build that did not start becomes `octoboardd.previous`, and `update-installed.json` is
+removed — logs a warning saying so, and starts the next daemon again, now of the build that ran. The restart then ends with a daemon of the version that ran before, every
+session taken over; nothing records the update as installed any more, so checks resume and offer it again. It does not
+fall back, and exits as any restart whose next daemon does not come up, with the sessions kept for the next start:
+
+- when the database is at a schema version above the one the running build reads (the build that did not start may
+  have migrated it, and the running build would not start on it either; see "Rolling back across a database migration"
+  below);
+- while another process holds `update.lock` (an `octoboardd update` under way);
+- when the file at the path is the running build, or the running build is not the one kept as `octoboardd.previous`;
+- when the swap fails, or the build that ran does not come up either.
+
+**Under a service manager** nothing falls back: the daemon exits with status 75 and the unit starts whatever file is
+at its path. The example unit restarts the daemon after each failure (`Restart=on-failure`), so a new build that keeps
+failing as it starts is started again until systemd's start limit stops it and leaves the service failed; the unit sets
+no limit of its own.
+
+**Going back by hand.** `octoboardd update --rollback` runs the build at the path, the one that does not start, so it
+may not work either. Put the previous build back with a rename in the executable's directory instead, for an
+installation in the default place
+
+```sh
+mv ~/.local/bin/octoboardd.previous ~/.local/bin/octoboardd
+```
+
+then start the daemon again (`octoboardd start`, or the service). This leaves no `octoboardd.previous`, and takes the
+database as it is: where the update migrated it, the previous build does not start on it either, as below.
+
+## Rolling back across a database migration
+
+A build reads the database up to its own schema version and refuses to start on a newer one (see "The database's
+schema version" in `docs/product/files-octoboard-owns.md`). When a newer build migrated the database, it kept a copy
+from before the migration beside it, `octoboard.db.pre-v<N>`, `<N>` being the version migrated from. Going back to an
+older build across that migration means putting that copy back by hand, which loses everything changed since the
+update; nothing restores it automatically. `octoboardd update --rollback` refuses the rollback in that case and names
+the copy and the steps (see "The `octoboardd update` command" below).
+
 ## When something fails
 
 As on the desktop (see "When something fails" in `docs/product/in-app-updates.md`), only the page where the user started
@@ -172,8 +241,9 @@ report:
   be downloaded and nothing was changed, and to check the internet connection and the free disk space, then try again.
 - One whose archive is not what the release published: the same title, saying that the downloaded update is not what was
   published, so it was discarded, and nothing was changed.
-- One whose new executable could not be put in place: the same title, saying that the update could not be put in place
-  and the installed daemon was not changed.
+- One whose new executable could not be put in place — a new build that did not answer `--version` with the release's
+  version included: the same title, saying that the update could not be put in place and the installed daemon was not
+  changed.
 - A request the daemon refuses (see the refusals above): the same title, or "Could not check for updates" for a check,
   with the refusal's own sentence. When the daemon no longer holds the update the page offered, the alert is the
   desktop's for that case and the offer is withdrawn.
@@ -199,16 +269,35 @@ running from the executable it replaces runs on as the build it started as until
   to run `octoboardd restart`, which keeps every session running; when the release's holder floor is above the version
   the running daemon runs (or, with none running, this build's), it adds that the sessions started by builds older than
   the floor cannot be handed over and the restart interrupts them. It exits with status 0, also when there is nothing
-  newer, which it says. It exits with status 1, saying why on its error output, when the check fails, the update fails,
-  the file at the path is no longer the build it runs, or the directory is not writable, in which case it prints the
-  install command to upgrade by hand with.
+  newer, which it says. It exits with status 1, saying why on its error output, when the check fails, the update fails
+  (a new build that did not answer `--version` with the release's version included), the file at the path is no longer
+  the build it runs, or the directory is not writable, in which case it says to have the owner of that directory upgrade
+  it with the install command for that directory and the channel (see "Downloading and replacing the executable"
+  above).
 - **`--check`** only checks, printing what it found: exit status **0** when up to date, **10** when a newer version is
   available, **1** when the check failed.
 - **`--rollback`** puts `octoboardd.previous` (kept by the last update, rollback or run of the install script) back at
-  the executable's path in one step and keeps what was there as
-  `octoboardd.previous`, so a rollback can itself be rolled back, then says to run `octoboardd restart`. A daemon that
-  had an update installed forgets it once its path leads to the running build again. A directory that is not writable,
-  or a failure, makes it say so and exit with status 1.
+  the executable's path in one step and keeps what was there as `octoboardd.previous`, so a rollback can itself be
+  rolled back, removes `update-installed.json`, says which version it rolled back to and that the build it replaced is
+  kept as `octoboardd.previous`, then says to run `octoboardd restart`.
+  The version is the one `update-installed.json` records as replaced, when it records the replacement of this file,
+  else the one `octoboardd.previous --version` answers within **10 seconds**; when neither tells, it says it rolled back
+  to the previous build, whose version is not known. A daemon that had an update installed forgets it once its path
+  leads to the running build again. A directory that is not writable, or a failure, makes it say so and exit with status
+  1.
+
+  Before it changes anything it checks that the previous build reads the database, `~/.octoboard/octoboard.db`, by the
+  schema version `update-installed.json` records for the build the update replaced. When the database is at a newer
+  version (see "Rolling back across a database migration" above), it refuses, changing nothing, and exits with status
+  1, saying the database's version and the one the previous build reads. Where a copy from before the migration,
+  `octoboard.db.pre-v<the version the previous build reads>` (or one of its timestamped siblings), is beside the
+  database, it names the newest and the steps to go back to it, which lose what changed since the update: `octoboardd stop`, move the database and
+  any `-wal` and `-shm` file beside it aside, copy that copy into the database's place, run `octoboardd update
+  --rollback` again, then `octoboardd start`. Where there is none, it says no such copy was found. When it cannot tell —
+  `update-installed.json` records no replacement of this file, or one made by a build that did not record the schema
+  version, or the database cannot be read — it rolls back anyway, with a note that if the build does not start after
+  the restart, an update replaced it since and migrated the database, pointing at the `.pre-v<N>` copies. With no
+  database yet there is nothing to check.
 - **`--channel stable|beta`** chooses the channel; without it the command takes the daemon's setting, reading the
   daemon's database read-only and never upgrading it, and Stable where there is none. `--check` and `--rollback` cannot
   be given together, `--rollback` takes no `--channel`, any other channel name is a usage error, and the daemon's own

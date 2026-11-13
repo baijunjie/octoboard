@@ -2572,11 +2572,16 @@
         "path": {
           "type": "string",
           "description": "The executable that would be replaced, as a path on the daemon's host."
+        },
+        "command": {
+          "type": "string",
+          "description": "The shell command that installs the update over it by hand: the install script, told the\nexecutable's directory and the channel the daemon follows. For `not_writable`, it has to be\nrun by a user who may write to that directory (its owner)."
         }
       },
       "required": [
         "reason",
-        "path"
+        "path",
+        "command"
       ],
       "description": "An update the daemon found and cannot install itself."
     },

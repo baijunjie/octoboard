@@ -140,6 +140,16 @@ impl Fetcher for Host {
     }
 }
 
+/// A vetting that takes every new file.
+fn vet_ok(_: &Path) -> Result<(), String> {
+    Ok(())
+}
+
+/// A probe that takes every build for one that starts: the archive's stand-in is no daemon.
+fn accept(_: &Path, _: &str) -> Result<(), String> {
+    Ok(())
+}
+
 fn is_running(_: &Path) -> bool {
     true
 }
@@ -189,6 +199,7 @@ impl Installation {
             arch: ARCH,
             is_running_image: running,
             stopping: &|| false,
+            probe: accept,
         }
     }
 
@@ -256,6 +267,75 @@ mod verifying {
             &test_key(),
         )
         .unwrap();
+    }
+
+    #[test]
+    fn a_reader_is_checked_the_way_a_path_is() {
+        let verify = |bytes: &[u8], sha256: &str| {
+            super::super::verify::verify_reader(
+                &mut std::io::Cursor::new(bytes.to_vec()),
+                sha256,
+                SIGNATURE,
+                &name(),
+                &test_key(),
+            )
+        };
+        verify(ARCHIVE, &sha256_of(ARCHIVE)).unwrap();
+        assert!(verify(ARCHIVE, &sha256_of(b"other"))
+            .unwrap_err()
+            .contains("SHA-256"));
+        // Bytes that are not the signed ones fail the signature even under their own SHA-256.
+        let mut altered = ARCHIVE.to_vec();
+        *altered.last_mut().unwrap() ^= 0xff;
+        assert!(verify(&altered, &sha256_of(&altered)).is_err());
+    }
+
+    /// Without a SHA-256 to compare, the signature and the name it signs still decide.
+    #[test]
+    fn a_signature_alone_decides_where_no_digest_is_given() {
+        let verify = |bytes: &[u8], expected: &str| {
+            super::super::verify::verify_signature(
+                &mut std::io::Cursor::new(bytes.to_vec()),
+                SIGNATURE,
+                expected,
+                &test_key(),
+            )
+        };
+        verify(ARCHIVE, &name()).unwrap();
+        let mut altered = ARCHIVE.to_vec();
+        *altered.last_mut().unwrap() ^= 0xff;
+        assert!(verify(&altered, &name())
+            .unwrap_err()
+            .contains("not the release key's"));
+        assert!(verify(ARCHIVE, "octoboardd_1.0.0_linux_x86_64.tar.gz")
+            .unwrap_err()
+            .contains("not of"));
+    }
+
+    /// The installation verifies and then unpacks the one open file, so that what is unpacked is
+    /// what was verified: a rewind between the two is all it takes.
+    #[test]
+    fn one_open_file_is_verified_and_then_unpacked_after_a_rewind() {
+        let dir = ScratchDir::new("verify-one-handle");
+        let mut file = std::fs::File::open(archive_in(&dir, ARCHIVE)).unwrap();
+        super::super::verify::verify_reader(
+            &mut file,
+            &sha256_of(ARCHIVE),
+            SIGNATURE,
+            &name(),
+            &test_key(),
+        )
+        .unwrap();
+        std::io::Seek::rewind(&mut file).unwrap();
+        let mut out = Vec::new();
+        super::super::unpack::unpack_reader(
+            &mut file,
+            &daemon_entry(VERSION, ARCH),
+            &mut out,
+            1024,
+        )
+        .unwrap();
+        assert_eq!(out, NEW_DAEMON);
     }
 
     #[test]
@@ -359,6 +439,75 @@ mod manifests {
         assert!(manifest_url(DaemonUpdateChannel::Stable).starts_with("https://"));
         assert_eq!(platform_key(), format!("linux-{}", std::env::consts::ARCH));
         assert!(manifest::install_command().contains("/install.sh | sh"));
+    }
+
+    #[test]
+    fn the_manual_install_command_names_the_executables_directory_and_the_beta_channel() {
+        let exe = Path::new("/opt/octoboard/bin/octoboardd");
+        assert_eq!(
+            manifest::install_command_for(exe, DaemonUpdateChannel::Stable),
+            format!(
+                "{} -s -- --bin-dir /opt/octoboard/bin",
+                manifest::install_command()
+            )
+        );
+        assert_eq!(
+            manifest::install_command_for(exe, DaemonUpdateChannel::Beta),
+            format!(
+                "{} -s -- --bin-dir /opt/octoboard/bin --beta",
+                manifest::install_command()
+            )
+        );
+    }
+
+    /// The directory is one word of the command, whatever characters its name has.
+    #[test]
+    fn a_directory_the_shell_would_split_or_expand_is_quoted_in_the_manual_command() {
+        let command = |dir: &str| {
+            manifest::install_command_for(
+                &Path::new(dir).join("octoboardd"),
+                DaemonUpdateChannel::Stable,
+            )
+        };
+        let prefix = format!("{} -s -- --bin-dir ", manifest::install_command());
+        assert_eq!(
+            command("/home/me/my apps/bin"),
+            format!("{prefix}'/home/me/my apps/bin'")
+        );
+        assert_eq!(
+            command("/home/o'brien/bin"),
+            format!("{prefix}'/home/o'\\''brien/bin'")
+        );
+        for dir in [
+            "/home/$USER/bin",
+            "/srv/a;b/bin",
+            "/srv/a&b/bin",
+            "/srv/a|b/bin",
+            "/srv/`id`/bin",
+            "/srv/\"quoted\"/bin",
+            "/srv/star*/bin",
+            "/srv/new\nline/bin",
+            "/srv/back\\slash/bin",
+            "/srv/(group)/bin",
+        ] {
+            assert_eq!(command(dir), format!("{prefix}'{dir}'"), "{dir}");
+        }
+        // A name of plain characters is left as it is.
+        assert_eq!(
+            command("/opt/my-app_1.2/bin"),
+            format!("{prefix}/opt/my-app_1.2/bin")
+        );
+    }
+
+    #[test]
+    fn a_manual_update_carries_the_path_and_the_command_for_the_channel() {
+        let exe = Path::new("/opt/octoboard/bin/octoboardd");
+        for channel in [DaemonUpdateChannel::Stable, DaemonUpdateChannel::Beta] {
+            let manual = super::super::not_writable(exe, channel);
+            assert_eq!(manual.reason, DaemonUpdateManualReason::NotWritable);
+            assert_eq!(manual.path, "/opt/octoboard/bin/octoboardd");
+            assert_eq!(manual.command, manifest::install_command_for(exe, channel));
+        }
     }
 
     #[test]
@@ -496,6 +645,28 @@ mod unpacking {
     }
 
     #[test]
+    fn the_daemon_is_taken_out_of_any_reader_not_only_a_path() {
+        let mut out = Vec::new();
+        let copied = super::super::unpack::unpack_reader(
+            std::io::Cursor::new(ARCHIVE),
+            &daemon_entry(VERSION, ARCH),
+            &mut out,
+            1024,
+        )
+        .unwrap();
+        assert_eq!(out, NEW_DAEMON);
+        assert_eq!(copied, NEW_DAEMON.len() as u64);
+        let err = super::super::unpack::unpack_reader(
+            std::io::Cursor::new(b"not a tarball at all, not even gzip".to_vec()),
+            "x",
+            &mut Vec::new(),
+            1024,
+        )
+        .unwrap_err();
+        assert!(matches!(err, UnpackError::Archive(_)));
+    }
+
+    #[test]
     fn an_entry_the_archive_does_not_hold_is_refused() {
         let dir = ScratchDir::new("unpack-missing");
         let err = unpack_entry(
@@ -598,9 +769,11 @@ mod replacing {
         let installation = Installation::new("replace-ok");
         std::fs::set_permissions(&installation.exe, std::fs::Permissions::from_mode(0o750))
             .unwrap();
-        replace(&installation.exe, |file| {
-            std::io::Write::write_all(file, b"new").map_err(|err| err.to_string())
-        })
+        replace(
+            &installation.exe,
+            |file| std::io::Write::write_all(file, b"new").map_err(|err| err.to_string()),
+            vet_ok,
+        )
         .unwrap();
         assert_eq!(std::fs::read(&installation.exe).unwrap(), b"new");
         assert_eq!(mode_of(&installation.exe), 0o750);
@@ -618,9 +791,11 @@ mod replacing {
         use std::io::Read;
         let installation = Installation::new("replace-open");
         let mut held = std::fs::File::open(&installation.exe).unwrap();
-        replace(&installation.exe, |file| {
-            std::io::Write::write_all(file, b"new").map_err(|err| err.to_string())
-        })
+        replace(
+            &installation.exe,
+            |file| std::io::Write::write_all(file, b"new").map_err(|err| err.to_string()),
+            vet_ok,
+        )
         .unwrap();
         let mut content = Vec::new();
         held.read_to_end(&mut content).unwrap();
@@ -630,10 +805,103 @@ mod replacing {
     #[test]
     fn a_file_that_cannot_be_filled_leaves_the_installation_as_it_was() {
         let installation = Installation::new("replace-fill");
-        let err = replace(&installation.exe, |_| Err("cut short".to_owned())).unwrap_err();
+        let err = replace(&installation.exe, |_| Err("cut short".to_owned()), vet_ok).unwrap_err();
         assert_eq!(err, ReplaceError::Filling("cut short".to_owned()));
         assert_eq!(std::fs::read(&installation.exe).unwrap(), OLD_DAEMON);
         assert_eq!(names_in(installation.exe.parent().unwrap()), ["octoboardd"]);
+    }
+
+    /// The new file is looked at where it lies, written whole and beside the target, before any
+    /// rename: the old file is still at the path and nothing is kept as the previous one yet.
+    #[test]
+    fn the_new_file_is_vetted_whole_and_beside_the_target_before_anything_moves() {
+        let installation = Installation::new("replace-vet-sees");
+        let target = installation.exe.clone();
+        let dir = target.parent().unwrap().to_path_buf();
+        let mut vetted = None;
+        replace(
+            &target,
+            |file| std::io::Write::write_all(file, b"new").map_err(|err| err.to_string()),
+            |staged| {
+                vetted = Some((
+                    staged.to_path_buf(),
+                    std::fs::read(staged).unwrap(),
+                    std::fs::read(&target).unwrap(),
+                    names_in(&dir),
+                ));
+                Ok(())
+            },
+        )
+        .unwrap();
+        let (staged, staged_content, target_content, names) =
+            vetted.expect("the new file was vetted");
+        assert_ne!(staged, target);
+        assert_eq!(staged.parent(), Some(dir.as_path()));
+        assert_eq!(staged_content, b"new");
+        assert_eq!(
+            target_content, OLD_DAEMON,
+            "the path still held the old file"
+        );
+        assert_eq!(
+            names.len(),
+            2,
+            "only the target and the new file: {names:?}"
+        );
+        assert!(names.contains(&"octoboardd".to_owned()));
+        assert_eq!(std::fs::read(&target).unwrap(), b"new");
+    }
+
+    #[test]
+    fn a_new_file_the_vetting_refuses_is_removed_and_the_installation_is_as_it_was() {
+        let installation = Installation::new("replace-vet-refuses");
+        let dir = installation.exe.parent().unwrap().to_path_buf();
+        let err = replace(
+            &installation.exe,
+            |file| std::io::Write::write_all(file, b"new").map_err(|err| err.to_string()),
+            |_| Err("it does not start".to_owned()),
+        )
+        .unwrap_err();
+        assert_eq!(err, ReplaceError::Refused("it does not start".to_owned()));
+        assert_eq!(std::fs::read(&installation.exe).unwrap(), OLD_DAEMON);
+        assert_eq!(names_in(&dir), ["octoboardd"]);
+    }
+
+    #[test]
+    fn a_refused_replacement_leaves_the_previous_file_kept_by_an_earlier_one_alone() {
+        let installation = Installation::new("replace-vet-previous");
+        replace(
+            &installation.exe,
+            |file| std::io::Write::write_all(file, b"first").map_err(|err| err.to_string()),
+            vet_ok,
+        )
+        .unwrap();
+        let previous = installation.exe.with_file_name("octoboardd.previous");
+        assert_eq!(std::fs::read(&previous).unwrap(), OLD_DAEMON);
+        let err = replace(
+            &installation.exe,
+            |file| std::io::Write::write_all(file, b"second").map_err(|err| err.to_string()),
+            |_| Err("refused".to_owned()),
+        )
+        .unwrap_err();
+        assert!(matches!(err, ReplaceError::Refused(_)));
+        assert_eq!(std::fs::read(&installation.exe).unwrap(), b"first");
+        assert_eq!(std::fs::read(&previous).unwrap(), OLD_DAEMON);
+        assert_eq!(
+            names_in(installation.exe.parent().unwrap()),
+            ["octoboardd", "octoboardd.previous"]
+        );
+    }
+
+    #[test]
+    fn a_file_that_cannot_be_filled_is_not_vetted() {
+        let installation = Installation::new("replace-vet-skipped");
+        let err = replace(
+            &installation.exe,
+            |_| Err("cut short".to_owned()),
+            |_| panic!("nothing was written to vet"),
+        )
+        .unwrap_err();
+        assert_eq!(err, ReplaceError::Filling("cut short".to_owned()));
     }
 
     #[test]
@@ -644,7 +912,7 @@ mod replacing {
         let installation = Installation::new("replace-readonly");
         let dir = installation.exe.parent().unwrap().to_path_buf();
         std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o555)).unwrap();
-        let err = replace(&installation.exe, |_| panic!("nothing to write")).unwrap_err();
+        let err = replace(&installation.exe, |_| panic!("nothing to write"), vet_ok).unwrap_err();
         let replaceable = replaceable(&installation.exe);
         std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
         assert!(matches!(err, ReplaceError::NotWritable(path) if path == installation.exe));
@@ -654,9 +922,11 @@ mod replacing {
     #[test]
     fn a_rollback_puts_the_previous_file_back_and_keeps_what_was_there() {
         let installation = Installation::new("replace-rollback");
-        replace(&installation.exe, |file| {
-            std::io::Write::write_all(file, b"new").map_err(|err| err.to_string())
-        })
+        replace(
+            &installation.exe,
+            |file| std::io::Write::write_all(file, b"new").map_err(|err| err.to_string()),
+            vet_ok,
+        )
         .unwrap();
         swap_with_previous(&installation.exe).unwrap();
         assert_eq!(std::fs::read(&installation.exe).unwrap(), OLD_DAEMON);
@@ -884,6 +1154,152 @@ mod installing {
         assert!(matches!(err, InstallError::NotWritable(path) if path == installation.exe));
         assert!(host.asked().is_empty());
     }
+
+    /// What a rollback to the replaced build checks against the database: the schema version
+    /// this build reads, written with the replacement.
+    #[test]
+    fn the_record_names_the_schema_version_of_the_build_that_was_replaced() {
+        let installation = Installation::new("install-schema");
+        let host = Host::serving("");
+        let key = test_key();
+        install(
+            &Installation::sources(&host, &key, is_running),
+            &installation.release(),
+            &installation.exe,
+            &installation.files,
+            &mut |_| {},
+        )
+        .unwrap();
+        let record = installation.files.read_installed().unwrap();
+        assert_eq!(
+            record.from_schema,
+            Some(crate::store::Store::SCHEMA_VERSION)
+        );
+    }
+
+    /// A probe that refuses, saying what it was given: whether the file is the unpacked daemon,
+    /// the version it was told to expect, and whether the file is the installed path itself.
+    fn refusing_probe(path: &Path, version: &str) -> Result<(), String> {
+        let unpacked = std::fs::read(path).ok().as_deref() == Some(NEW_DAEMON);
+        let installed = path.file_name().is_some_and(|name| name == "octoboardd");
+        Err(format!("{unpacked} {version} {installed}"))
+    }
+
+    #[test]
+    fn a_build_that_does_not_start_is_not_installed() {
+        let installation = Installation::new("install-probe-refuses");
+        let host = Host::serving("");
+        let key = test_key();
+        let sources = Sources {
+            probe: refusing_probe,
+            ..Installation::sources(&host, &key, is_running)
+        };
+        let err = install(
+            &sources,
+            &installation.release(),
+            &installation.exe,
+            &installation.files,
+            &mut |_| {},
+        )
+        .unwrap_err();
+        assert!(matches!(err, InstallError::Replace(_)), "{err:?}");
+        assert_eq!(err.code(), daemon_update_code::REPLACE_FAILED);
+        let detail = err.detail();
+        assert!(
+            detail.starts_with("the new build did not start"),
+            "{detail}"
+        );
+        // It was run where it was staged, as unpacked, and was told the release's version.
+        assert!(detail.ends_with("true 9.9.9 false"), "{detail}");
+        // Nothing was replaced, kept or recorded, and nothing of the staging is left.
+        assert_eq!(std::fs::read(&installation.exe).unwrap(), OLD_DAEMON);
+        assert_eq!(
+            std::fs::read_dir(installation.exe.parent().unwrap())
+                .unwrap()
+                .count(),
+            1
+        );
+        assert!(installation.files.read_installed().is_none());
+        assert_eq!(
+            std::fs::read_dir(installation.files.updates_dir())
+                .unwrap()
+                .count(),
+            0
+        );
+    }
+
+    /// The probe takes time, and the rename cannot be undone: a stop that began meanwhile keeps the
+    /// build from being put in place.
+    #[test]
+    fn a_stop_that_begins_while_the_new_build_is_probed_keeps_it_from_being_installed() {
+        static PROBED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        fn probe_then_stop(_: &Path, _: &str) -> Result<(), String> {
+            PROBED.store(true, std::sync::atomic::Ordering::SeqCst);
+            Ok(())
+        }
+        let installation = Installation::new("install-stop-after-probe");
+        let host = Host::serving("");
+        let key = test_key();
+        let stopping = || PROBED.load(std::sync::atomic::Ordering::SeqCst);
+        let sources = Sources {
+            probe: probe_then_stop,
+            stopping: &stopping,
+            ..Installation::sources(&host, &key, is_running)
+        };
+        let err = install(
+            &sources,
+            &installation.release(),
+            &installation.exe,
+            &installation.files,
+            &mut |_| {},
+        )
+        .unwrap_err();
+        assert!(matches!(&err, InstallError::Replace(_)), "{err:?}");
+        assert!(err.detail().contains("began to stop"), "{}", err.detail());
+        assert_eq!(std::fs::read(&installation.exe).unwrap(), OLD_DAEMON);
+        assert_eq!(
+            std::fs::read_dir(installation.exe.parent().unwrap())
+                .unwrap()
+                .count(),
+            1,
+            "no previous file was kept and no staged file is left"
+        );
+        assert!(installation.files.read_installed().is_none());
+    }
+
+    /// The real probe against the archive's stand-in, which prints no version: the build is
+    /// refused for naming none, and the installation is as it was.
+    #[cfg(unix)]
+    #[test]
+    fn the_real_probe_refuses_a_build_that_names_no_version() {
+        let installation = Installation::new("install-real-probe");
+        let host = Host::serving("");
+        let key = test_key();
+        let sources = Sources {
+            probe: super::super::probe::expect_version,
+            ..Installation::sources(&host, &key, is_running)
+        };
+        let err = install(
+            &sources,
+            &installation.release(),
+            &installation.exe,
+            &installation.files,
+            &mut |_| {},
+        )
+        .unwrap_err();
+        assert!(matches!(err, InstallError::Replace(_)), "{err:?}");
+        let detail = err.detail();
+        assert!(
+            detail.starts_with("the new build did not start") && detail.contains("no version"),
+            "{detail}"
+        );
+        assert_eq!(std::fs::read(&installation.exe).unwrap(), OLD_DAEMON);
+        assert!(!installation
+            .exe
+            .with_file_name("octoboardd.previous")
+            .exists());
+        assert!(installation.files.read_installed().is_none());
+    }
 }
 
 mod records {
@@ -930,6 +1346,7 @@ mod records {
             version: "0.2.0".into(),
             holder_floor: None,
             from_version: "0.1.0".into(),
+            from_schema: None,
             path: "/opt/octoboardd".into(),
         };
         installation.files.write_installed(&record).unwrap();
@@ -938,6 +1355,44 @@ mod records {
         assert!(installation.files.read_installed().is_none());
         std::fs::write(installation.data.join("update-installed.json"), "{").unwrap();
         assert!(installation.files.read_installed().is_none());
+    }
+
+    #[test]
+    fn the_schema_version_a_build_read_is_recorded_and_read_back() {
+        let installation = Installation::new("record-schema");
+        let record = super::super::record::Installed {
+            version: "0.2.0".into(),
+            holder_floor: None,
+            from_version: "0.1.0".into(),
+            from_schema: Some(3),
+            path: "/opt/octoboardd".into(),
+        };
+        installation.files.write_installed(&record).unwrap();
+        assert_eq!(installation.files.read_installed(), Some(record));
+    }
+
+    /// A record an earlier build wrote names no schema version, and is still read.
+    #[test]
+    fn a_record_written_before_the_schema_version_was_recorded_still_reads() {
+        let installation = Installation::new("record-old");
+        std::fs::write(
+            installation.data.join("update-installed.json"),
+            r#"{
+                "version": "0.2.0",
+                "holder_floor": "0.1.0",
+                "from_version": "0.1.0",
+                "path": "/opt/octoboardd"
+            }"#,
+        )
+        .unwrap();
+        let record = installation
+            .files
+            .read_installed()
+            .expect("the old record reads");
+        assert_eq!(record.version, "0.2.0");
+        assert_eq!(record.from_version, "0.1.0");
+        assert_eq!(record.from_schema, None);
+        assert_eq!(record.path, "/opt/octoboardd");
     }
 }
 
@@ -988,6 +1443,7 @@ fn enabled_running(
         arch: ARCH.to_owned(),
         launch: installation.exe.clone(),
         is_running_image: running,
+        probe: accept,
     });
     (state, installation, dir)
 }
@@ -1273,6 +1729,14 @@ mod requests {
             PathBuf::from(&manual.path),
             crate::hostfs::canonical(&installation.exe).unwrap()
         );
+        assert_eq!(
+            manual.command,
+            manifest::install_command_for(
+                &crate::hostfs::canonical(&installation.exe).unwrap(),
+                DaemonUpdateChannel::Stable
+            )
+        );
+        assert!(!manual.command.contains("--beta"));
         assert!(status.available.is_some());
 
         let err = super::super::update_requested(&state).await.unwrap_err();
@@ -1280,6 +1744,51 @@ mod requests {
         assert_eq!(code_of(&err), error_code::DAEMON_UPDATE_NOT_WRITABLE);
         assert_eq!(param_of(&err, "path"), manual.path);
         assert_eq!(host.asked().len(), 1, "no download was made");
+    }
+
+    /// The command to run by hand follows the channel the daemon is on, at the check and at the
+    /// refusal of an update (which reads the channel again).
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn the_command_to_upgrade_by_hand_follows_the_channel_of_the_daemon() {
+        use std::os::unix::fs::PermissionsExt;
+        if ignores_modes() {
+            return;
+        }
+        let (state, installation, _dir) = enabled("update-manual-beta", newer_host());
+        let real = crate::hostfs::canonical(&installation.exe).unwrap();
+        let dir = installation.exe.parent().unwrap().to_path_buf();
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+        state
+            .store
+            .set_daemon_update_channel(DaemonUpdateChannel::Beta)
+            .unwrap();
+        super::super::check_requested(&state).unwrap();
+        until(&state, |updates| {
+            updates.status().unwrap().last_check.is_some()
+        })
+        .await;
+        let checked = state.daemon_update.status().unwrap().manual.unwrap();
+        assert_eq!(
+            checked.command,
+            manifest::install_command_for(&real, DaemonUpdateChannel::Beta)
+        );
+        assert!(checked.command.ends_with(" --beta"), "{}", checked.command);
+
+        // The channel the store names when the update is asked for is the one the command is for.
+        state
+            .store
+            .set_daemon_update_channel(DaemonUpdateChannel::Stable)
+            .unwrap();
+        let err = super::super::update_requested(&state).await.unwrap_err();
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(code_of(&err), error_code::DAEMON_UPDATE_NOT_WRITABLE);
+        let refused = state.daemon_update.status().unwrap().manual.unwrap();
+        assert_eq!(
+            refused.command,
+            manifest::install_command_for(&real, DaemonUpdateChannel::Stable)
+        );
+        assert!(!refused.command.contains("--beta"));
     }
 
     /// What `octoboardd update` left (its record names this daemon's file and a newer version) is
@@ -1293,6 +1802,7 @@ mod requests {
                 version: VERSION.into(),
                 holder_floor: Some("0.1.0".into()),
                 from_version: env!("CARGO_PKG_VERSION").into(),
+                from_schema: None,
                 path: crate::hostfs::canonical(&installation.exe)
                     .unwrap()
                     .to_string_lossy()
@@ -1325,6 +1835,7 @@ mod requests {
                     version: version.into(),
                     holder_floor: None,
                     from_version: "0.0.0".into(),
+                    from_schema: None,
                     path,
                 })
                 .unwrap();
@@ -1348,6 +1859,7 @@ mod requests {
             arch: ARCH.to_owned(),
             launch: installation.exe.clone(),
             is_running_image: is_not_running,
+            probe: accept,
         });
         super::super::check_requested(&state).unwrap();
         until(&state, |updates| {
@@ -1379,6 +1891,7 @@ mod requests {
                 version: VERSION.into(),
                 holder_floor: Some("0.1.0".into()),
                 from_version: env!("CARGO_PKG_VERSION").into(),
+                from_schema: None,
                 path: crate::hostfs::canonical(&installation.exe)
                     .unwrap()
                     .to_string_lossy()
@@ -1590,6 +2103,7 @@ mod hardening {
             arch: ARCH,
             is_running_image: still_running,
             stopping: &|| false,
+            probe: accept,
         };
         let outcome = install(
             &sources,
@@ -1628,6 +2142,7 @@ mod hardening {
             arch: ARCH,
             is_running_image: is_running,
             stopping: &stopping,
+            probe: accept,
         };
         let err = install(
             &sources,
@@ -1651,6 +2166,7 @@ mod hardening {
             arch: ARCH,
             is_running_image: is_running,
             stopping: &stopping,
+            probe: accept,
         };
         let err = install(
             &sources,
@@ -1764,6 +2280,7 @@ mod hardening {
                 version: VERSION.into(),
                 holder_floor: None,
                 from_version: env!("CARGO_PKG_VERSION").into(),
+                from_schema: None,
                 path: crate::hostfs::canonical(&installation.exe)
                     .unwrap()
                     .to_string_lossy()
@@ -1807,6 +2324,7 @@ mod hardening {
                 version: VERSION.into(),
                 holder_floor: None,
                 from_version: env!("CARGO_PKG_VERSION").into(),
+                from_schema: None,
                 path: crate::hostfs::canonical(&installation.exe)
                     .unwrap()
                     .to_string_lossy()
@@ -1861,9 +2379,11 @@ mod hardening {
             .exe
             .with_file_name(format!(".octoboardd.update-{}", std::process::id()));
         crate::test_support::symlink(&victim, &staged).unwrap();
-        replace(&installation.exe, |file| {
-            std::io::Write::write_all(file, b"new").map_err(|err| err.to_string())
-        })
+        replace(
+            &installation.exe,
+            |file| std::io::Write::write_all(file, b"new").map_err(|err| err.to_string()),
+            vet_ok,
+        )
         .unwrap();
         assert_eq!(std::fs::read_to_string(&victim).unwrap(), "kept");
         assert_eq!(std::fs::read(&installation.exe).unwrap(), b"new");
@@ -2084,10 +2604,14 @@ mod hardening {
                 })
             };
             for round in 0..200u32 {
-                replace(&target, |file| {
-                    std::io::Write::write_all(file, &round.to_le_bytes())
-                        .map_err(|err| err.to_string())
-                })
+                replace(
+                    &target,
+                    |file| {
+                        std::io::Write::write_all(file, &round.to_le_bytes())
+                            .map_err(|err| err.to_string())
+                    },
+                    vet_ok,
+                )
                 .unwrap();
                 swap_with_previous(&target).unwrap();
             }
@@ -2121,9 +2645,11 @@ mod hardening {
                 std::fs::create_dir(dir.join(".octoboardd.prev-5")).unwrap();
             };
             plant(&dir);
-            replace(&installation.exe, |file| {
-                std::io::Write::write_all(file, b"new").map_err(|err| err.to_string())
-            })
+            replace(
+                &installation.exe,
+                |file| std::io::Write::write_all(file, b"new").map_err(|err| err.to_string()),
+                vet_ok,
+            )
             .unwrap();
             let expected = [
                 ".octoboardd.prev-5",
@@ -2181,9 +2707,11 @@ mod hardening {
             let previous = installation.exe.with_file_name("octoboardd.previous");
             std::fs::create_dir(&previous).unwrap();
             std::fs::write(previous.join("keeps it a directory"), "x").unwrap();
-            let err = replace(&installation.exe, |file| {
-                std::io::Write::write_all(file, b"new").map_err(|err| err.to_string())
-            })
+            let err = replace(
+                &installation.exe,
+                |file| std::io::Write::write_all(file, b"new").map_err(|err| err.to_string()),
+                vet_ok,
+            )
             .unwrap_err();
             assert!(matches!(err, ReplaceError::Failed(_)), "{err:?}");
             assert_eq!(std::fs::read(&installation.exe).unwrap(), OLD_DAEMON);
@@ -2222,5 +2750,939 @@ mod hardening {
         assert!(installation.files.sweep_updates());
         std::fs::remove_dir(&dir).unwrap();
         assert!(installation.files.sweep_updates());
+    }
+}
+
+mod reading_answers {
+    use super::super::probe::parse_answer;
+
+    #[test]
+    fn the_version_is_the_last_word_of_the_first_line() {
+        for (answer, version) in [
+            ("octoboardd 9.9.9\n", "9.9.9"),
+            ("octoboardd 9.9.9", "9.9.9"),
+            ("octoboardd 9.9.9\r\n", "9.9.9"),
+            ("octoboardd 0.1.0-beta.2\n", "0.1.0-beta.2"),
+            ("9.9.9\n", "9.9.9"),
+            ("octoboardd 1.2.3\nsomething 4.5.6\n", "1.2.3"),
+        ] {
+            assert_eq!(parse_answer(answer).as_deref(), Some(version), "{answer:?}");
+        }
+    }
+
+    #[test]
+    fn an_answer_that_names_no_version_gives_none() {
+        for answer in [
+            "",
+            "\n",
+            "\n9.9.9\n",
+            "octoboardd\n",
+            "octoboardd nine\n",
+            "usage: octoboardd [OPTIONS]\n",
+            "error: unexpected argument '--version' found\n",
+            "octoboardd 9.9\n",
+        ] {
+            assert_eq!(parse_answer(answer), None, "{answer:?}");
+        }
+    }
+}
+
+/// The real probe, against stand-in builds: shell scripts that behave as a build does, or does
+/// not, when run with `--version`.
+#[cfg(unix)]
+mod probing {
+    use super::super::probe::{expect_version, reported_version};
+    use super::*;
+
+    /// A build at `dir/<name>` that runs `body` (see `fake_agent`: one dispatcher, a body of its
+    /// own per build).
+    fn build(dir: &ScratchDir, name: &str, body: &str) -> PathBuf {
+        crate::test_support::fake_agent(dir, name, body);
+        dir.join(name)
+    }
+
+    /// Reads the version of `exe`, given all the time a slow machine may need.
+    fn version_of(exe: &Path) -> Result<String, String> {
+        reported_version(exe, PATIENCE)
+    }
+
+    /// Exits 3, 4 or 5 unless it was run as the update runs it: `--version` and nothing else, from
+    /// the root directory, with nothing on stdin.
+    const AS_RUN_BY_THE_UPDATE: &str = r#"
+[ "$#" = 1 ] && [ "$1" = "--version" ] || exit 3
+[ "$(pwd -P)" = / ] || exit 4
+if read -r _line; then exit 5; fi
+echo "noise on stderr" >&2
+echo "octoboardd 9.9.9"
+"#;
+
+    #[test]
+    fn a_build_run_with_dash_dash_version_reports_the_version_it_prints() {
+        let dir = ScratchDir::new("probe-ok");
+        let exe = build(&dir, "octoboardd", AS_RUN_BY_THE_UPDATE);
+        assert_eq!(version_of(&exe), Ok("9.9.9".to_owned()));
+    }
+
+    #[test]
+    fn only_the_first_line_of_the_answer_counts() {
+        let dir = ScratchDir::new("probe-first-line");
+        let exe = build(
+            &dir,
+            "octoboardd",
+            "echo 'octoboardd 1.2.3'\necho 'octoboardd 4.5.6'\n",
+        );
+        assert_eq!(version_of(&exe), Ok("1.2.3".to_owned()));
+    }
+
+    #[test]
+    fn a_build_that_fails_is_not_taken_at_the_version_it_printed() {
+        let dir = ScratchDir::new("probe-fails");
+        let exe = build(&dir, "octoboardd", "echo 'octoboardd 9.9.9'\nexit 1\n");
+        let err = version_of(&exe).unwrap_err();
+        assert!(err.contains("failed"), "{err}");
+    }
+
+    /// A build older than the flag rejects it as an unknown argument.
+    #[test]
+    fn a_build_that_rejects_the_flag_does_not_start_as_far_as_the_update_can_tell() {
+        let dir = ScratchDir::new("probe-rejects");
+        let exe = build(
+            &dir,
+            "octoboardd",
+            "echo \"error: unexpected argument '--version' found\" >&2\nexit 2\n",
+        );
+        assert!(version_of(&exe).unwrap_err().contains("failed"));
+    }
+
+    /// The answer is read to 4096 bytes: a build that says more is not one that answers `--version`.
+    #[test]
+    fn a_build_that_says_far_more_than_a_version_is_refused() {
+        let dir = ScratchDir::new("probe-flood");
+        let exe = build(
+            &dir,
+            "octoboardd",
+            "echo 'octoboardd 9.9.9'\ni=0\nwhile [ $i -lt 600 ]; do echo 0123456789; i=$((i+1)); done\n",
+        );
+        let err = version_of(&exe).unwrap_err();
+        assert!(err.contains("failed"), "{err}");
+    }
+
+    #[test]
+    fn a_build_that_names_no_version_is_refused() {
+        let dir = ScratchDir::new("probe-silent");
+        let silent = build(&dir, "silent", "exit 0\n");
+        let err = version_of(&silent).unwrap_err();
+        assert!(err.contains("no version"), "{err}");
+        let nonsense = build(&dir, "nonsense", "echo 'octoboardd nine'\n");
+        assert!(version_of(&nonsense).unwrap_err().contains("no version"));
+    }
+
+    #[test]
+    fn a_build_that_does_not_answer_in_time_is_stopped_and_refused() {
+        let dir = ScratchDir::new("probe-timeout");
+        // `exec`, so that the sleep is the process the probe stops.
+        let exe = build(&dir, "octoboardd", "exec sleep 600\n");
+        let err = reported_version(&exe, Duration::from_millis(300)).unwrap_err();
+        assert!(err.contains("did not answer"), "{err}");
+    }
+
+    #[test]
+    fn a_file_that_cannot_be_run_is_refused() {
+        let dir = ScratchDir::new("probe-missing");
+        let err = version_of(&dir.join("not-there")).unwrap_err();
+        assert!(err.contains("could not be run"), "{err}");
+        let plain = dir.join("plain");
+        std::fs::write(&plain, "octoboardd 9.9.9\n").unwrap();
+        let err = version_of(&plain).unwrap_err();
+        assert!(err.contains("could not be run"), "{err}");
+    }
+
+    #[test]
+    fn the_version_a_build_reports_has_to_be_the_one_the_release_names() {
+        let dir = ScratchDir::new("probe-expect");
+        let exe = build(&dir, "octoboardd", "echo 'octoboardd 9.9.9'\n");
+        assert_eq!(expect_version(&exe, "9.9.9"), Ok(()));
+        let err = expect_version(&exe, "1.0.0").unwrap_err();
+        assert!(err.contains("9.9.9") && err.contains("1.0.0"), "{err}");
+        let silent = build(&dir, "silent", "exit 0\n");
+        assert!(expect_version(&silent, "9.9.9").is_err());
+        assert!(expect_version(&dir.join("not-there"), "9.9.9").is_err());
+    }
+}
+
+/// A database file that says it is at schema version `version`.
+fn database_at(path: &Path, version: i64) {
+    let conn = rusqlite::Connection::open(path).expect("database");
+    conn.pragma_update(None, "user_version", version)
+        .expect("version");
+}
+
+/// A copy of the database at `database` from before a migration from schema version `from`,
+/// last changed `seconds` after the epoch; `suffix` follows `.pre-v<from>` in its name.
+fn migration_backup(database: &Path, from: i64, suffix: &str, seconds: u64) -> PathBuf {
+    let path = database.with_file_name(format!("octoboard.db.pre-v{from}{suffix}"));
+    std::fs::write(&path, b"a copy").unwrap();
+    std::fs::File::options()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_modified(std::time::UNIX_EPOCH + Duration::from_secs(seconds))
+        .unwrap();
+    path
+}
+
+/// What an update that replaced the file at `installation.exe` recorded, naming the schema
+/// version of the replaced build as `from_schema`.
+fn record_update(installation: &Installation, from_schema: Option<i64>) {
+    installation
+        .files
+        .write_installed(&super::record::Installed {
+            version: VERSION.into(),
+            holder_floor: None,
+            from_version: "0.1.0".into(),
+            from_schema,
+            path: crate::hostfs::canonical(&installation.exe)
+                .unwrap()
+                .to_string_lossy()
+                .into_owned(),
+        })
+        .unwrap();
+}
+
+mod rolling_back {
+    use super::super::rollback::{previous_fits_database, previous_version, DatabaseFit};
+    use super::*;
+
+    fn database_of(installation: &Installation) -> PathBuf {
+        installation.data.join("octoboard.db")
+    }
+
+    fn real_of(installation: &Installation) -> PathBuf {
+        crate::hostfs::canonical(&installation.exe).unwrap()
+    }
+
+    fn fit(installation: &Installation) -> DatabaseFit {
+        previous_fits_database(
+            &installation.files,
+            &real_of(installation),
+            &database_of(installation),
+        )
+    }
+
+    #[test]
+    fn with_no_database_yet_any_build_reads_it() {
+        let installation = Installation::new("rollback-no-database");
+        assert_eq!(fit(&installation), DatabaseFit::Reads);
+        record_update(&installation, Some(1));
+        assert_eq!(fit(&installation), DatabaseFit::Reads);
+    }
+
+    #[test]
+    fn nothing_says_what_the_previous_build_reads_without_a_record_naming_that_file_and_a_version()
+    {
+        let installation = Installation::new("rollback-unknown");
+        database_at(&database_of(&installation), 4);
+        // No record at all.
+        assert_eq!(fit(&installation), DatabaseFit::Unknown);
+        // A record from before the schema version was recorded.
+        record_update(&installation, None);
+        assert_eq!(fit(&installation), DatabaseFit::Unknown);
+        // A record of the replacement of another file.
+        installation
+            .files
+            .write_installed(&super::super::record::Installed {
+                version: VERSION.into(),
+                holder_floor: None,
+                from_version: "0.1.0".into(),
+                from_schema: Some(4),
+                path: "/somewhere/else/octoboardd".into(),
+            })
+            .unwrap();
+        assert_eq!(fit(&installation), DatabaseFit::Unknown);
+    }
+
+    /// A file is there, but the version it is at cannot be read: nothing can be said of it.
+    #[test]
+    fn a_database_that_cannot_be_read_is_not_known_to_be_read() {
+        let installation = Installation::new("rollback-unreadable");
+        std::fs::write(
+            database_of(&installation),
+            b"this is not a database, and is long enough to be read as one",
+        )
+        .unwrap();
+        record_update(&installation, Some(3));
+        assert_eq!(fit(&installation), DatabaseFit::Unknown);
+    }
+
+    #[test]
+    fn a_database_at_or_below_what_the_previous_build_reads_is_read() {
+        let installation = Installation::new("rollback-reads");
+        record_update(&installation, Some(3));
+        for version in [1, 3] {
+            database_at(&database_of(&installation), version);
+            assert_eq!(fit(&installation), DatabaseFit::Reads, "version {version}");
+        }
+    }
+
+    #[test]
+    fn a_database_above_what_the_previous_build_reads_is_too_new_and_the_copies_are_listed() {
+        let installation = Installation::new("rollback-too-new");
+        let database = database_of(&installation);
+        database_at(&database, 4);
+        record_update(&installation, Some(3));
+        assert_eq!(
+            fit(&installation),
+            DatabaseFit::TooNew {
+                database: 4,
+                reads: 3,
+                backups: Vec::new()
+            }
+        );
+
+        let older = migration_backup(&database, 3, "", 1_000);
+        let newer = migration_backup(&database, 3, "-1700000000", 2_000);
+        // Not copies of this migration: another version, a copy never finished, a log.
+        migration_backup(&database, 2, "", 3_000);
+        migration_backup(&database, 3, ".partial", 3_000);
+        migration_backup(&database, 3, "-wal", 3_000);
+        assert_eq!(
+            fit(&installation),
+            DatabaseFit::TooNew {
+                database: 4,
+                reads: 3,
+                backups: vec![newer, older]
+            }
+        );
+    }
+
+    #[test]
+    fn the_version_of_the_previous_build_is_the_one_the_record_names() {
+        let installation = Installation::new("rollback-version-record");
+        // No `.previous` file is run, or even there.
+        record_update(&installation, Some(3));
+        assert_eq!(
+            previous_version(&installation.files, &real_of(&installation)),
+            Some("0.1.0".to_owned())
+        );
+    }
+
+    #[test]
+    fn without_a_record_the_version_is_what_the_previous_build_says() {
+        let installation = Installation::new("rollback-version-asked");
+        let real = real_of(&installation);
+        assert_eq!(
+            previous_version(&installation.files, &real),
+            None,
+            "no previous file"
+        );
+
+        // A record of another file names nothing of this one.
+        installation
+            .files
+            .write_installed(&super::super::record::Installed {
+                version: VERSION.into(),
+                holder_floor: None,
+                from_version: "7.7.7".into(),
+                from_schema: Some(3),
+                path: "/somewhere/else/octoboardd".into(),
+            })
+            .unwrap();
+        // A previous file that cannot be run names no version.
+        let previous = installation.exe.with_file_name("octoboardd.previous");
+        std::fs::write(&previous, OLD_DAEMON).unwrap();
+        assert_eq!(previous_version(&installation.files, &real), None);
+
+        #[cfg(unix)]
+        {
+            std::fs::remove_file(&previous).unwrap();
+            crate::test_support::fake_agent(
+                installation.exe.parent().unwrap(),
+                "octoboardd.previous",
+                "echo 'octoboardd 8.8.8'\n",
+            );
+            assert_eq!(
+                previous_version(&installation.files, &real),
+                Some("8.8.8".to_owned())
+            );
+        }
+    }
+}
+
+/// The next daemon that does not start after an update: whether the build that ran is put back.
+mod falling_back {
+    use super::super::successor::fall_back;
+    use super::*;
+
+    /// An installation whose file at the path is not the build that runs: it holds what an update
+    /// put there ([`replace`] kept the build that runs as the previous file, [`OLD_DAEMON`]), and
+    /// the update was recorded.
+    fn updated(label: &str) -> Installation {
+        let installation = Installation::new(label);
+        replace(
+            &installation.exe,
+            |file| std::io::Write::write_all(file, b"new").map_err(|err| err.to_string()),
+            vet_ok,
+        )
+        .unwrap();
+        record_update(&installation, Some(crate::store::Store::SCHEMA_VERSION));
+        installation
+    }
+
+    fn database_of(installation: &Installation) -> PathBuf {
+        installation.data.join("octoboard.db")
+    }
+
+    fn previous_of(installation: &Installation) -> PathBuf {
+        installation.exe.with_file_name("octoboardd.previous")
+    }
+
+    fn fall_back_over(installation: &Installation, is_running_image: fn(&Path) -> bool) -> bool {
+        fall_back(
+            &installation.exe,
+            &installation.files,
+            &database_of(installation),
+            is_running_image,
+        )
+    }
+
+    /// The installation as it stands: the file at the path, the previous one and the record.
+    fn stands(installation: &Installation) -> (Vec<u8>, Option<Vec<u8>>, bool) {
+        (
+            std::fs::read(&installation.exe).unwrap(),
+            std::fs::read(previous_of(installation)).ok(),
+            installation.files.read_installed().is_some(),
+        )
+    }
+
+    #[test]
+    fn the_build_that_ran_is_put_back_and_the_update_kept_as_the_previous_one() {
+        let installation = updated("fall-back-ok");
+        assert!(fall_back_over(&installation, is_running_old));
+        assert_eq!(std::fs::read(&installation.exe).unwrap(), OLD_DAEMON);
+        assert_eq!(std::fs::read(previous_of(&installation)).unwrap(), b"new");
+        assert!(
+            installation.files.read_installed().is_none(),
+            "the record no longer describes the file"
+        );
+        // The update lock was let go again.
+        assert!(crate::platform::fs::try_lock_file(&installation.files.lock()).is_ok());
+    }
+
+    #[test]
+    fn a_database_the_previous_build_reads_does_not_stop_the_fall_back() {
+        let installation = updated("fall-back-reads");
+        database_at(
+            &database_of(&installation),
+            crate::store::Store::SCHEMA_VERSION,
+        );
+        assert!(fall_back_over(&installation, is_running_old));
+        assert_eq!(std::fs::read(&installation.exe).unwrap(), OLD_DAEMON);
+    }
+
+    /// The build to go back to is the one that runs, whose schema version is its own: no record of
+    /// the update is needed, and none is consulted.
+    #[test]
+    fn what_the_update_recorded_does_not_matter_to_the_fall_back() {
+        let installation = updated("fall-back-no-record");
+        installation.files.forget_installed().unwrap();
+        database_at(
+            &database_of(&installation),
+            crate::store::Store::SCHEMA_VERSION,
+        );
+        assert!(fall_back_over(&installation, is_running_old));
+        assert_eq!(std::fs::read(&installation.exe).unwrap(), OLD_DAEMON);
+
+        // Even a record that says the previous build read a newer schema than the database is at.
+        let installation = updated("fall-back-odd-record");
+        record_update(&installation, Some(crate::store::Store::SCHEMA_VERSION + 5));
+        assert!(fall_back_over(&installation, is_running_old));
+    }
+
+    #[test]
+    fn a_database_that_cannot_be_read_does_not_stop_the_fall_back() {
+        let installation = updated("fall-back-unreadable");
+        std::fs::write(
+            database_of(&installation),
+            b"this is not a database, and is long enough to be read as one",
+        )
+        .unwrap();
+        assert!(fall_back_over(&installation, is_running_old));
+        assert_eq!(std::fs::read(&installation.exe).unwrap(), OLD_DAEMON);
+    }
+
+    /// Without a record to say so, a database above what this build reads still stops the fall
+    /// back.
+    #[test]
+    fn a_database_above_what_the_build_that_ran_reads_stops_it_with_or_without_a_record() {
+        let installation = updated("fall-back-too-new-no-record");
+        installation.files.forget_installed().unwrap();
+        database_at(
+            &database_of(&installation),
+            crate::store::Store::SCHEMA_VERSION + 1,
+        );
+        let before = stands(&installation);
+        assert!(!fall_back_over(&installation, is_running_old));
+        assert_eq!(stands(&installation), before);
+        assert_eq!(before.0, b"new");
+    }
+
+    #[test]
+    fn a_database_migrated_beyond_what_the_previous_build_reads_is_not_gone_back_to() {
+        let installation = updated("fall-back-too-new");
+        database_at(
+            &database_of(&installation),
+            crate::store::Store::SCHEMA_VERSION + 1,
+        );
+        let before = stands(&installation);
+        assert!(!fall_back_over(&installation, is_running_old));
+        assert_eq!(stands(&installation), before);
+        assert_eq!(before.0, b"new");
+    }
+
+    #[test]
+    fn the_file_at_the_path_being_the_build_that_ran_leaves_nothing_to_go_back_to() {
+        let installation = updated("fall-back-is-running");
+        // Whatever is kept beside it, the build that ran is the one that did not start.
+        std::fs::write(previous_of(&installation), OLD_DAEMON).unwrap();
+        std::fs::write(&installation.exe, OLD_DAEMON).unwrap();
+        let before = stands(&installation);
+        assert!(!fall_back_over(&installation, is_running_old));
+        assert_eq!(stands(&installation), before);
+    }
+
+    #[test]
+    fn a_previous_file_that_is_not_the_build_that_ran_is_not_put_back() {
+        let installation = updated("fall-back-other-previous");
+        std::fs::write(previous_of(&installation), b"some other build").unwrap();
+        let before = stands(&installation);
+        assert!(!fall_back_over(&installation, is_running_old));
+        assert_eq!(stands(&installation), before);
+    }
+
+    #[test]
+    fn with_no_previous_file_there_is_nothing_to_put_back() {
+        let installation = updated("fall-back-no-previous");
+        std::fs::remove_file(previous_of(&installation)).unwrap();
+        let before = stands(&installation);
+        assert!(!fall_back_over(&installation, is_running_old));
+        assert_eq!(stands(&installation), before);
+    }
+
+    #[test]
+    fn a_launch_path_that_leads_nowhere_is_not_gone_back_over() {
+        let installation = updated("fall-back-no-launch");
+        std::fs::remove_file(&installation.exe).unwrap();
+        assert!(!fall_back_over(&installation, is_running_old));
+        assert_eq!(
+            std::fs::read(previous_of(&installation)).unwrap(),
+            OLD_DAEMON
+        );
+    }
+
+    #[test]
+    fn nothing_is_put_back_while_another_process_holds_the_update_lock() {
+        let installation = updated("fall-back-locked");
+        let held = crate::platform::fs::try_lock_file(&installation.files.lock()).unwrap();
+        let before = stands(&installation);
+        assert!(!fall_back_over(&installation, is_running_old));
+        assert_eq!(stands(&installation), before);
+        drop(held);
+        // The lock is an `flock`, held by the open file description: a child another test forks
+        // in the meantime shares it until that child execs, so it can outlive `held` for a moment
+        // under the suite's load. A fall back refused meanwhile changes nothing, so it is asked
+        // again until the lock is free.
+        let deadline = std::time::Instant::now() + PATIENCE;
+        while !fall_back_over(&installation, is_running_old) {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "nothing was put back once the lock was let go"
+            );
+            assert_eq!(stands(&installation), before);
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_swap_that_fails_leaves_the_record_and_the_files_and_reports_it() {
+        use std::os::unix::fs::PermissionsExt;
+        if ignores_modes() {
+            return;
+        }
+        let installation = updated("fall-back-readonly");
+        let dir = installation.exe.parent().unwrap().to_path_buf();
+        let before = stands(&installation);
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o555)).unwrap();
+        let fell_back = fall_back_over(&installation, is_running_old);
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(!fell_back);
+        assert_eq!(stands(&installation), before);
+    }
+}
+
+/// The executable the helpers of a launch run.
+mod helper_executable {
+    use super::super::helpers::local_helper_exe;
+    use super::*;
+    use crate::holder::build::Builds;
+
+    #[test]
+    fn a_daemon_that_does_not_update_itself_is_given_its_own_path_while_it_is_the_running_build() {
+        let installation = Installation::new("helper-running");
+        let builds_dir = installation.data.join("builds");
+        let exe = installation.exe.to_string_lossy().into_owned();
+        let helper = local_helper_exe(&exe, false, is_running, &Builds::new(builds_dir.clone()));
+        assert_eq!(helper, exe);
+        assert!(!builds_dir.exists(), "no copy was made");
+    }
+
+    #[test]
+    fn a_daemon_that_does_not_update_itself_is_given_a_copy_once_the_path_leads_to_another_build() {
+        let installation = Installation::new("helper-copy");
+        let builds_dir = installation.data.join("builds");
+        let exe = installation.exe.to_string_lossy().into_owned();
+        let helper = PathBuf::from(local_helper_exe(
+            &exe,
+            false,
+            is_not_running,
+            &Builds::new(builds_dir.clone()),
+        ));
+        assert_ne!(helper, installation.exe);
+        assert!(helper.starts_with(&builds_dir), "{}", helper.display());
+        assert_eq!(std::fs::read(&helper).unwrap(), OLD_DAEMON);
+        assert_eq!(helper.file_name(), installation.exe.file_name());
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::metadata(&helper).unwrap().permissions().mode();
+            assert_ne!(mode & 0o111, 0, "the copy can be run");
+        }
+    }
+
+    /// A daemon that updates itself is given a copy from the first launch on, since the file at its
+    /// path may be replaced at any time, even before the path is looked at.
+    #[test]
+    fn a_daemon_that_updates_itself_is_always_given_a_copy() {
+        let installation = Installation::new("helper-updates");
+        let builds_dir = installation.data.join("builds");
+        let exe = installation.exe.to_string_lossy().into_owned();
+        let helper = PathBuf::from(local_helper_exe(
+            &exe,
+            true,
+            is_running,
+            &Builds::new(builds_dir.clone()),
+        ));
+        assert_ne!(helper, installation.exe);
+        assert!(helper.starts_with(&builds_dir), "{}", helper.display());
+        assert_eq!(std::fs::read(&helper).unwrap(), OLD_DAEMON);
+    }
+
+    /// An update then replaces the file at the path: the helpers go on with the copy.
+    #[test]
+    fn the_copy_is_reused_and_does_not_follow_the_file_at_the_path() {
+        let installation = Installation::new("helper-reuse");
+        let builds = Builds::new(installation.data.join("builds"));
+        let exe = installation.exe.to_string_lossy().into_owned();
+        let first = local_helper_exe(&exe, true, is_running, &builds);
+        std::fs::write(&installation.exe, NEW_DAEMON).unwrap();
+        let second = local_helper_exe(&exe, true, is_running, &builds);
+        assert_eq!(first, second);
+        assert_eq!(std::fs::read(&second).unwrap(), OLD_DAEMON);
+    }
+
+    #[test]
+    fn where_no_copy_can_be_made_the_path_stays() {
+        let installation = Installation::new("helper-no-copy");
+        // A file where the directory of copies should be.
+        let builds_dir = installation.data.join("builds");
+        std::fs::write(&builds_dir, b"in the way").unwrap();
+        let exe = installation.exe.to_string_lossy().into_owned();
+        for updates in [false, true] {
+            assert_eq!(
+                local_helper_exe(
+                    &exe,
+                    updates,
+                    is_not_running,
+                    &Builds::new(builds_dir.clone())
+                ),
+                exe
+            );
+        }
+    }
+}
+
+/// The real fetcher, as far as it can be driven without a TLS server (none is made here):
+/// that it is held to HTTPS and tells an unreachable host. What the stand-in `Host` of the other
+/// tests replaces, and these do not reach: the status of an answer, the limit on its size, a
+/// redirect to plain HTTP and the stall of a body over a real connection.
+mod real_fetcher {
+    use super::*;
+    use std::net::TcpListener;
+
+    fn get(url: &str) -> (Result<(), FetchError>, Vec<u8>) {
+        let mut body = Vec::new();
+        let result = super::super::fetch::UreqFetcher::command_line().get(
+            url,
+            1024,
+            Duration::from_secs(10),
+            &mut |chunk, _| {
+                body.extend_from_slice(chunk);
+                Ok(())
+            },
+        );
+        (result, body)
+    }
+
+    #[test]
+    fn a_plain_http_address_is_refused_before_any_connection_is_made() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let url = format!("http://{}/manifest.json", listener.local_addr().unwrap());
+        let (result, body) = get(&url);
+        let err = result.unwrap_err();
+        assert!(
+            matches!(&err, FetchError::Failed(text) if text.contains("https")),
+            "{err:?}"
+        );
+        assert!(body.is_empty());
+        let accepted = listener.accept();
+        assert!(
+            matches!(&accepted, Err(err) if err.kind() == std::io::ErrorKind::WouldBlock),
+            "something connected: {accepted:?}"
+        );
+    }
+
+    #[test]
+    fn a_host_that_cannot_be_reached_is_a_failure_to_reach_it_not_a_status() {
+        let closed = crate::test_support::ClosedPort::new();
+        let (result, body) = get(&format!("https://127.0.0.1:{}/manifest.json", closed.port));
+        assert!(matches!(result, Err(FetchError::Failed(_))), "{result:?}");
+        assert!(body.is_empty());
+    }
+}
+
+/// The claim to work on the update, which a thread that panics lets go of.
+mod claims {
+    use super::*;
+
+    /// A state whose last check found a release, with no claim held.
+    fn found(label: &str) -> (Arc<AppState>, Installation, ScratchDir) {
+        let (state, installation, dir) = enabled(label, newer_host());
+        let claim = state.daemon_update.begin_check(&state, true).unwrap();
+        assert!(state
+            .daemon_update
+            .record_check(&claim, Ok(Some(installation.release())), None));
+        drop(claim);
+        (state, installation, dir)
+    }
+
+    fn assert_failed_as_an_internal_error(state: &AppState) {
+        let status = state.daemon_update.status().unwrap();
+        assert_eq!(status.phase, DaemonUpdatePhase::Idle);
+        assert_eq!(status.progress, None);
+        let install = status.install.unwrap();
+        assert_eq!(install.state, DaemonUpdateInstallState::Failed);
+        assert_eq!(install.error, Some(daemon_update_code::REPLACE_FAILED));
+        assert_eq!(install.detail.as_deref(), Some("internal error"));
+        assert!(install.finished_at.is_some());
+    }
+
+    #[tokio::test]
+    async fn a_claim_dropped_while_downloading_ends_the_install_as_failed_and_frees_the_update() {
+        let (state, _installation, _dir) = found("claim-drop-download");
+        let (claim, _) = state.daemon_update.begin_install(&state).unwrap();
+        assert_eq!(phase(&state.daemon_update), DaemonUpdatePhase::Downloading);
+        drop(claim);
+        assert_failed_as_an_internal_error(&state);
+        // Nothing is held: the user may check, and install again.
+        assert!(state.daemon_update.begin_install(&state).is_ok());
+    }
+
+    /// The download runs on a thread that can panic: its claim goes with it.
+    #[tokio::test]
+    async fn a_download_that_panics_ends_the_install_as_failed() {
+        let (state, _installation, _dir) = found("claim-panic-download");
+        let (claim, _) = state.daemon_update.begin_install(&state).unwrap();
+        let ended = std::thread::spawn(move || {
+            let _claim = claim;
+            panic!("the download went wrong");
+        })
+        .join();
+        assert!(ended.is_err());
+        assert_failed_as_an_internal_error(&state);
+        assert!(state.daemon_update.begin_check(&state, true).is_some());
+    }
+
+    #[tokio::test]
+    async fn a_claim_dropped_while_checking_goes_back_to_idle() {
+        let (state, _installation, _dir) = enabled("claim-drop-check", newer_host());
+        let claim = state.daemon_update.begin_check(&state, true).unwrap();
+        assert_eq!(phase(&state.daemon_update), DaemonUpdatePhase::Checking);
+        drop(claim);
+        let status = state.daemon_update.status().unwrap();
+        assert_eq!(status.phase, DaemonUpdatePhase::Idle);
+        assert_eq!(status.install, None, "a check leaves no install behind");
+    }
+
+    #[tokio::test]
+    async fn a_claim_dropped_after_the_install_ended_does_not_undo_it() {
+        let (state, installation, _dir) = found("claim-drop-after-end");
+        let (claim, release) = state.daemon_update.begin_install(&state).unwrap();
+        assert_eq!(release.version, installation.release().version);
+        state
+            .daemon_update
+            .record_installed(&claim, &release, Ok(true));
+        drop(claim);
+        let status = state.daemon_update.status().unwrap();
+        assert_eq!(status.phase, DaemonUpdatePhase::Installed);
+        assert_eq!(
+            status.install.unwrap().state,
+            DaemonUpdateInstallState::Succeeded
+        );
+    }
+}
+
+/// A fetcher that waits to be released, telling when a request has reached it.
+struct Stuck {
+    entered: Mutex<std::sync::mpsc::Sender<()>>,
+    release: Mutex<std::sync::mpsc::Receiver<()>>,
+}
+
+impl Fetcher for Stuck {
+    fn get(&self, _: &str, _: u64, _: Duration, _: &mut Sink<'_>) -> Result<(), FetchError> {
+        self.entered.lock().unwrap().send(()).ok();
+        // Released by a message or by the sender's end.
+        let _ = self.release.lock().unwrap().recv();
+        Err(FetchError::Failed("released".to_owned()))
+    }
+}
+
+/// A fetcher that panics, as a check does that finds the world gone wrong, telling that a request
+/// has reached it.
+struct Panicking(Mutex<std::sync::mpsc::Sender<()>>);
+
+impl Panicking {
+    fn new() -> (Arc<Self>, std::sync::mpsc::Receiver<()>) {
+        let (entered, reached) = std::sync::mpsc::channel();
+        (Arc::new(Self(Mutex::new(entered))), reached)
+    }
+}
+
+impl Fetcher for Panicking {
+    fn get(&self, _: &str, _: u64, _: Duration, _: &mut Sink<'_>) -> Result<(), FetchError> {
+        self.0.lock().unwrap().send(()).ok();
+        panic!("the check went wrong");
+    }
+}
+
+/// The check runs on a thread of its own, not on the runtime's blocking pool.
+mod check_thread {
+    use super::*;
+
+    /// Lets the stuck fetcher go when it is dropped, so that a test that fails leaves nothing
+    /// waiting.
+    struct Release(std::sync::mpsc::Sender<()>);
+
+    impl Drop for Release {
+        fn drop(&mut self) {
+            self.0.send(()).ok();
+        }
+    }
+
+    /// A runtime whose blocking pool is one thread, and what the tests below put in it.
+    fn runtime() -> tokio::runtime::Runtime {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .max_blocking_threads(1)
+            .build()
+            .unwrap()
+    }
+
+    /// A daemon at the end of its life must not wait for a check that waits on the network.
+    #[test]
+    fn a_check_stuck_on_the_network_does_not_hold_the_runtime_at_its_end() {
+        let (entered_tx, entered_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let _release = Release(release_tx);
+        let stuck = Arc::new(Stuck {
+            entered: Mutex::new(entered_tx),
+            release: Mutex::new(release_rx),
+        });
+        let rt = runtime();
+        let _state_and_dir = rt.block_on(async {
+            let (state, _installation, dir) =
+                enabled_running("check-thread-stuck", stuck, is_running_old);
+            super::super::check_requested(&state).unwrap();
+            entered_rx
+                .recv_timeout(PATIENCE)
+                .expect("the check reached the fetcher");
+            (state, dir)
+        });
+        let (ended_tx, ended_rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            drop(rt);
+            ended_tx.send(()).ok();
+        });
+        ended_rx
+            .recv_timeout(PATIENCE)
+            .expect("the runtime ended without waiting for the check");
+    }
+
+    /// Where the blocking pool has no thread to spare, the checks still run.
+    #[test]
+    fn checks_run_while_the_runtime_has_no_blocking_thread_to_spare() {
+        let rt = runtime();
+        rt.block_on(async {
+            let host = newer_host();
+            let (state, _installation, _dir) = enabled("check-thread-pool", host.clone());
+            let (hold_tx, hold_rx) = std::sync::mpsc::channel::<()>();
+            let held = tokio::task::spawn_blocking(move || hold_rx.recv().ok());
+
+            super::super::check_requested(&state).unwrap();
+            until(&state, |updates| {
+                updates.status().unwrap().last_check.is_some()
+            })
+            .await;
+            assert_eq!(host.asked().len(), 1);
+
+            // The schedule's look returns once its check has run.
+            scheduled_check(&state, true).await;
+            assert_eq!(host.asked().len(), 2);
+
+            hold_tx.send(()).unwrap();
+            held.await.unwrap();
+        });
+    }
+
+    #[tokio::test]
+    async fn a_scheduled_check_that_panics_still_ends_and_lets_go_of_its_claim() {
+        let (fetcher, _reached) = Panicking::new();
+        let (state, _installation, _dir) =
+            enabled_running("check-thread-panic", fetcher, is_running_old);
+        scheduled_check(&state, true).await;
+        assert_eq!(phase(&state.daemon_update), DaemonUpdatePhase::Idle);
+        assert_eq!(state.daemon_update.status().unwrap().last_check, None);
+        assert!(state.daemon_update.begin_check(&state, true).is_some());
+    }
+
+    #[tokio::test]
+    async fn a_requested_check_that_panics_lets_go_of_its_claim() {
+        let (fetcher, reached) = Panicking::new();
+        let (state, _installation, _dir) =
+            enabled_running("check-thread-requested-panic", fetcher, is_running_old);
+        super::super::check_requested(&state).unwrap();
+        reached
+            .recv_timeout(PATIENCE)
+            .expect("the check reached the fetcher");
+        // Another check can be claimed once the thread has unwound.
+        let deadline = std::time::Instant::now() + PATIENCE;
+        while state.daemon_update.begin_check(&state, true).is_none() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the claim was never let go of"
+            );
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        assert_eq!(state.daemon_update.status().unwrap().last_check, None);
     }
 }

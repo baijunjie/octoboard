@@ -23,7 +23,7 @@ differ, it is said below.
 3. a version being downloaded;
 4. a check under way;
 5. in a browser, a newer version available that the daemon cannot install itself: naming that version and the file the
-   daemon cannot replace, and saying to update by hand with the install command;
+   daemon cannot replace, and saying that the owner of its folder has to run the install command on that machine;
 6. a newer version available, with the version running;
 7. the version running being the latest on the channel;
 8. otherwise — before any check, or after a check that did not finish — only the version running.
@@ -47,8 +47,10 @@ Beside the row one button moves the update on:
   longer and then says, to assistive technology too, when the last check ended.
 
 **Installing by hand.** While the daemon cannot install the update itself (case 5), a block under the row, labelled
-**Install command**, shows `curl -fsSL https://octoboard.dev/install.sh | sh` with a button that copies it; the row's
-button stays **Check for updates**, and there is no download.
+**Install command**, shows the install command the daemon gives for its executable's directory and channel (see
+"Downloading and replacing the executable" in `docs/product/server-form-updates.md`), such as
+`curl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh | sh -s -- --bin-dir /usr/local/bin`, with a
+button that copies it; the row's button stays **Check for updates**, and there is no download.
 
 Before the button, a **What is new** link, drawn as a button, opens in the browser the GitHub release page of the
 version the row's sentence is about, `https://github.com/baijunjie/octoboard/releases/tag/desktop-v<version>` (see

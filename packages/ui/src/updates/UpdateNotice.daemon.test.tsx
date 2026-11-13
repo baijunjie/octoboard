@@ -10,7 +10,6 @@ import type { DaemonUpdateStatus } from "../protocol";
 import { DaemonProvider } from "../store";
 import { BROWSER_HOST } from "../test/hosts";
 import { testDaemon } from "../test/testDaemon";
-import { DAEMON_INSTALL_COMMAND } from "./daemonInstallCommand";
 import { reloadPage } from "./reloadPage";
 import { UpdateNotice } from "./UpdateNotice";
 import { UpdatesProvider } from "./UpdatesProvider";
@@ -35,6 +34,8 @@ afterEach(() => {
   vi.mocked(reloadPage).mockClear();
 });
 
+/** The command the daemon hands over for an upgrade by hand: its own, not one the application makes up. */
+const MANUAL_COMMAND = "curl -fsSL https://example.test/install.sh | sh -s -- --bin-dir /opt/octoboard --beta";
 const IDLE: DaemonUpdateStatus = { phase: "idle", available: null, progress: null, installed: null, last_check: null, install: null, manual: null, updated_from: null };
 const AVAILABLE = { version: "0.2.0", notes: null, holder_floor: null, channel: "stable" } as const;
 
@@ -76,14 +77,14 @@ it("offers an update the daemon found, and asks the daemon to install it on the 
 
 it("says which file the daemon cannot replace, offers the install command to copy and no download, and can be dismissed", async () => {
   const writeText = vi.fn(async (_text: string) => {});
-  const { container } = mount({ ...IDLE, available: AVAILABLE, manual: { reason: "not_writable", path: "/opt/octoboard/octoboardd" } }, { writeText, readText: async () => "" });
+  const { container } = mount({ ...IDLE, available: AVAILABLE, manual: { reason: "not_writable", path: "/opt/octoboard/octoboardd", command: MANUAL_COMMAND } }, { writeText, readText: async () => "" });
   expect(textOf(container)).toContain("Version 0.2.0 is available.");
   expect(textOf(container)).toContain("cannot replace its own file");
   expect(textOf(container)).not.toContain("/opt/octoboard/octoboardd");
   expect(button(container, "Download and install")).toBeUndefined();
   expect(container.textContent).toContain("What is new");
   await act(async () => void button(container, "Copy install command")!.click());
-  expect(writeText).toHaveBeenCalledExactlyOnceWith(DAEMON_INSTALL_COMMAND);
+  expect(writeText).toHaveBeenCalledExactlyOnceWith(MANUAL_COMMAND);
   await act(async () => void container.querySelector<HTMLButtonElement>("button[aria-label=Later]")!.click());
   expect(container.textContent).not.toContain("Version 0.2.0");
 });

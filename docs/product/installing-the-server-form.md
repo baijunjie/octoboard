@@ -214,12 +214,16 @@ A newer version is installed in any of three ways, each followed by a restart:
   now** (see `docs/product/server-form-updates.md`). This needs the official release build, which the install script
   installs, and an install directory the daemon's user may write to.
 - **With `octoboardd update`** on the server, then `octoboardd restart` (see "The `octoboardd update` command" in
-  `docs/product/server-form-updates.md`).
+  `docs/product/server-form-updates.md`). Both of these first run the new build with `--version`, and replace nothing
+  unless it answers with the release's version.
 - **By running the install script again**, then `octoboardd restart` (see "Running in the background from the command
   line" in `docs/product/daemon-command-line.md`). This is the way for a daemon that does not update itself or cannot
-  replace its own executable; for the latter the browser offers the script's command to copy.
+  replace its own executable; for the latter the browser offers the script's command to copy, told the executable's
+  directory and the daemon's channel, for the owner of that directory to run on the server (see "Downloading and
+  replacing the executable" in `docs/product/server-form-updates.md`).
 
-All three keep the replaced executable as `octoboardd.previous`, which `octoboardd update --rollback` puts back.
+All three keep the replaced executable as `octoboardd.previous`, which `octoboardd update --rollback` puts back, except
+across a database migration (see "Rolling back across a database migration" in `docs/product/server-form-updates.md`).
 
 The restart is a planned restart: every session and shell terminal keeps running and the next daemon, started from the
 new binary, takes them over, on the same port for a daemon started with `octoboardd start`, and on the unit's port for
