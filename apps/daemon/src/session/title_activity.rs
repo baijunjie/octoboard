@@ -151,6 +151,20 @@ impl TitleActivity {
             .then_some(self.stopped_at)
             .flatten()
     }
+
+    /// Whether the title went back to the prompt after `armed`, the count of stops taken earlier,
+    /// and has stayed there for `settle` by `now`.
+    pub fn settled_at_prompt(&self, armed: u64, now: Instant, settle: Duration) -> bool {
+        self.at_prompt_since(armed)
+            .is_some_and(|at| now.saturating_duration_since(at) >= settle)
+    }
+
+    /// Whether the program's status reports have taken over from the title
+    /// ([`Self::note_report`]).
+    #[cfg(test)]
+    pub fn reported(&self) -> bool {
+        self.reported
+    }
 }
 
 #[cfg(test)]
@@ -330,5 +344,118 @@ mod tests {
         activity.note(IDLE, start + FRESH * 12);
         assert_eq!(activity.stops(), 2);
         assert!(!activity.shows_running(start + FRESH * 12));
+    }
+
+    /// A turn running by the last title or report that said anything stays "last said running" for
+    /// as long as nothing says otherwise, however long ago the title was sent, where
+    /// `shows_running` lets a title lapse after [`FRESH`].
+    #[test]
+    fn the_last_thing_said_stays_running_after_the_title_has_lapsed() {
+        let start = Instant::now();
+        let mut activity = TitleActivity::default();
+        assert!(!activity.last_said_running());
+        activity.note(WORKING, start);
+        assert!(activity.last_said_running());
+        assert!(!activity.shows_running(start + FRESH * 10));
+        assert!(activity.last_said_running(), "no freshness");
+
+        // A title that says nothing leaves what was said.
+        activity.note(None, start + FRESH * 11);
+        assert!(activity.last_said_running());
+
+        activity.note(IDLE, start + FRESH * 12);
+        assert!(!activity.last_said_running());
+        activity.note(None, start + FRESH * 13);
+        assert!(!activity.last_said_running());
+
+        let mut reported = TitleActivity::default();
+        reported.note_report(WORKING_REPORT, start);
+        assert!(reported.last_said_running());
+        reported.note_report(IDLE_REPORT, start);
+        assert!(!reported.last_said_running());
+    }
+
+    /// The title has settled at the prompt once it went back there after the stops counted when
+    /// the watch was armed, with no turn running since, and has stayed for the settle.
+    #[test]
+    fn a_title_settles_at_the_prompt_after_the_wait_it_stayed_there() {
+        let start = Instant::now();
+        let settle = Duration::from_secs(2);
+        let mut activity = TitleActivity::default();
+        assert!(
+            !activity.settled_at_prompt(0, start + settle * 10, Duration::ZERO),
+            "no turn has run"
+        );
+
+        activity.note(WORKING, start);
+        assert!(
+            !activity.settled_at_prompt(0, start + settle * 10, settle),
+            "still running"
+        );
+
+        let stopped = start + Duration::from_secs(5);
+        activity.note(IDLE, stopped);
+        assert!(!activity.settled_at_prompt(0, stopped, settle));
+        assert!(!activity.settled_at_prompt(
+            0,
+            stopped + settle - Duration::from_millis(1),
+            settle
+        ));
+        assert!(activity.settled_at_prompt(0, stopped + settle, settle));
+        assert!(activity.settled_at_prompt(0, stopped + settle * 10, settle));
+        assert!(activity.settled_at_prompt(0, stopped, Duration::ZERO));
+        assert!(
+            !activity.settled_at_prompt(1, stopped + settle * 10, settle),
+            "no stop since the first"
+        );
+
+        // A turn running again unsettles it, and its end is a stop of its own.
+        let again = stopped + settle * 11;
+        activity.note(WORKING, again);
+        assert!(!activity.settled_at_prompt(0, again + settle * 10, settle));
+        activity.note(IDLE, again + settle);
+        assert!(!activity.settled_at_prompt(1, again + settle, settle));
+        assert!(activity.settled_at_prompt(1, again + settle * 2, settle));
+    }
+
+    /// Reports settle a turn at the prompt the way titles do.
+    #[test]
+    fn a_report_back_at_the_prompt_settles_after_the_wait_too() {
+        let start = Instant::now();
+        let settle = Duration::from_secs(2);
+        let mut activity = TitleActivity::default();
+        activity.note_report(WORKING_REPORT, start);
+        assert!(!activity.settled_at_prompt(0, start + settle * 10, settle));
+        activity.note_report(IDLE_REPORT, start + settle);
+        assert!(!activity.settled_at_prompt(
+            0,
+            start + settle * 2 - Duration::from_millis(1),
+            settle
+        ));
+        assert!(activity.settled_at_prompt(0, start + settle * 2, settle));
+    }
+
+    /// The program's reports take over from the first one on, whatever it says, and the titles
+    /// before it change nothing about that.
+    #[test]
+    fn the_activity_reads_as_reported_from_the_first_report_on() {
+        let start = Instant::now();
+        for first in [
+            WORKING_REPORT,
+            IDLE_REPORT,
+            None,
+            Some(ReportedState::Blocked),
+        ] {
+            let mut activity = TitleActivity::default();
+            assert!(!activity.reported());
+            activity.note(WORKING, start);
+            activity.note(IDLE, start);
+            assert!(!activity.reported(), "titles are no reports");
+            activity.note_report(first, start);
+            assert!(activity.reported(), "{first:?}");
+            activity.note_report(WORKING_REPORT, start);
+            activity.note(IDLE, start);
+            assert!(activity.reported(), "{first:?}");
+        }
     }
 }

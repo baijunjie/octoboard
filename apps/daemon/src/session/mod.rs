@@ -3,18 +3,22 @@
 //!
 //! The submodules are the parts of that: `term/` launches the agent in a PTY and writes messages
 //! into it, `interrupt/` interrupts its turn, `title_activity` reads what its terminal title, or
-//! the status the agent reports, says about its turns and `title_interrupt` a cancel that left no
-//! other trace off that reading, `dialogs` finds the dialogs only a person can answer, `trust/`
-//! presses the folder-trust confirmation, `input_box` reads what the agent's input box holds off
-//! its screen, `draft` mirrors the input to match the prompts that were submitted, `output_pace`
-//! tells whether its parsed screen shows a whole frame, `swap` handles the native composer stashes
-//! that keep editor state inside the CLI while a message uses the input, and `paste_apart`
-//! submits a message whose Enter has to wait until the agent has taken its paste, and
-//! `usage_limit` holds where the process stands with the hold on Octoboard's writes
-//! after a turn stopped on its account's usage limit.
+//! the status the agent reports, says about its turns, `program_status` takes the session's status
+//! from those reports for an agent with no status of its own, `turn_reading` reads in one go
+//! whether a turn is running for everything that acts on it, and `title_interrupt` a cancel that
+//! left no other trace off that reading, `dialogs` finds the dialogs only a person can answer,
+//! `trust/` presses the folder-trust confirmation, `input_box` reads what the agent's input box
+//! holds off its screen, `draft` mirrors the input to match the prompts that were submitted and
+//! times the keys typed, `draft_hold` ends the hold those keys keep on Octoboard's messages once
+//! the box is drawn empty, `output_pace` tells whether its parsed screen shows a whole frame,
+//! `swap` handles the native composer stashes that keep editor state inside the CLI while a message
+//! uses the input, and `paste_apart` submits a message whose Enter has to wait until the agent has
+//! taken its paste, and `usage_limit` holds where the process stands with the hold on Octoboard's
+//! writes after a turn stopped on its account's usage limit.
 
 pub(crate) mod dialogs;
 mod draft;
+mod draft_hold;
 pub(crate) mod input_box;
 pub(crate) mod interrupt;
 mod output_pace;
@@ -26,6 +30,7 @@ pub(crate) mod term;
 pub(crate) mod title_activity;
 pub(crate) mod title_interrupt;
 pub(crate) mod trust;
+mod turn_reading;
 pub(crate) mod usage_limit;
 pub(crate) mod wait;
 
@@ -48,7 +53,6 @@ use crate::terminal::input_class::is_terminal_protocol;
 use crate::terminal::pty::{NewPty, PtyCore, PtyOwner};
 use crate::terminal::title::names_an_executable;
 use dialogs::{Dialog, Sighting};
-use output_pace::OutputPace;
 use title_activity::TitleActivity;
 
 pub use crate::terminal::pty::spawn_reader_thread;
@@ -134,14 +138,9 @@ pub struct LiveSession {
     /// or held back by the write ([`NotSubmitted`]), is released by an acknowledgement alone.
     unsent_at: Mutex<Option<(u64, Instant, bool)>>,
     unsent_retry_scheduled: AtomicBool,
-    /// Set while a [`Self::schedule_draft_release`] task is under way.
-    draft_release_scheduled: AtomicBool,
-    /// The output total and the count of typed bytes at the latest reading of a whole frame that
-    /// left the hold in place: until either moves, another reading would read the same.
-    draft_release_tried: Mutex<Option<(u64, u64)>>,
-    /// When the agent last printed something, and whether a synchronized update is open: whether
-    /// the parsed screen shows a whole frame ([`OutputPace::whole_frame`]).
-    output_pace: Mutex<OutputPace>,
+    /// What the release of the hold the user's keys keep on Octoboard's messages works from; see
+    /// [`draft_hold`].
+    draft_hold: draft_hold::DraftHold,
     /// The acknowledgement count of the unconfirmed message the user was told was not sent, until a
     /// prompt reported after it withdraws that ([`Self::note_prompt_sent`]). Taken before
     /// `unsent_at` where both are.
@@ -268,9 +267,7 @@ impl LiveSession {
             prompts_sent: AtomicU64::new(0),
             unsent_at: Mutex::new(None),
             unsent_retry_scheduled: AtomicBool::new(false),
-            draft_release_scheduled: AtomicBool::new(false),
-            draft_release_tried: Mutex::new(None),
-            output_pace: Mutex::new(OutputPace::default()),
+            draft_hold: draft_hold::DraftHold::default(),
             unsent_notice: Mutex::new(None),
             uncertain_at: Mutex::new(None),
             agent_error_at: Mutex::new(None),
@@ -330,37 +327,6 @@ impl LiveSession {
             // Isolated sessions have no observer; a formerly bound session fails closed.
             None => state.ptr_eq(&Weak::new()),
         }
-    }
-
-    /// Moves the latest key and the latest output back as far as the empty-box release and the
-    /// writes past the draft's grace wait on them: as if the agent had been still since well
-    /// after it drew what the key did.
-    #[cfg(test)]
-    pub(crate) fn settle_input(&self) {
-        self.draft
-            .lock()
-            .expect("draft lock poisoned")
-            .settle_typing();
-        self.output_pace
-            .lock()
-            .expect("output pace lock poisoned")
-            .quieten();
-    }
-
-    /// Whether the agent's hooks last reported a turn running, as the session's status reads; not
-    /// for a session bound to no state.
-    fn hooks_say_working(&self) -> bool {
-        let state = self
-            .title
-            .lock()
-            .expect("title observer lock poisoned")
-            .state
-            .clone();
-        state.upgrade().is_some_and(|state| {
-            state.session_record(&self.id).is_ok_and(|record| {
-                state.agent_status(&record) == crate::protocol::SessionStatus::Working
-            })
-        })
     }
 
     /// What the agent's terminal title, or the status it reports, has said about its turns so far.
@@ -452,10 +418,7 @@ impl LiveSession {
         let mut titled = !rendered && self.observe_title(|parser| parser.feed(data));
         // Before the screen takes the chunk in, so that a reading which finds the chunk on the
         // screen also finds it noted (`Self::composer_for_draft`).
-        self.output_pace
-            .lock()
-            .expect("output pace lock poisoned")
-            .note(data, Instant::now());
+        self.note_output_pace(data);
         self.pty.push_output(data, |total, mut titles| {
             if rendered {
                 // The host's own title naming the agent's executable is not the agent's.
@@ -596,10 +559,8 @@ impl LiveSession {
             self.input_writes.fetch_add(1, Ordering::AcqRel);
             if track_draft {
                 // An Esc on its own is the one key that reading as typed at the prompt changes
-                // anything for, and it needs the hooks' status too: right after a submit the
-                // title can still show the prompt.
-                let mid_turn = self.title_activity().last_said_running()
-                    || (data == b"\x1b" && self.hooks_say_working());
+                // anything for ([`turn_reading::TurnReading::escape_mid_turn`]).
+                let mid_turn = data == b"\x1b" && self.turn_reading().escape_mid_turn();
                 let mut draft = self.draft.lock().expect("draft lock poisoned");
                 draft.typed(data, self.output_total(), Instant::now());
                 if mid_turn {
@@ -651,28 +612,8 @@ impl LiveSession {
                 ),
             });
         }
-        // Past the draft's grace a message may join what the box holds, but only text that shows.
-        // It waits, the watch's retry coming back to it, while the box cannot be read after a key
-        // that may have brought back text the mirror cannot know, such as a prompt from history;
-        // while the latest key may have put text in the box that is not drawn yet; and while a box
-        // read empty comes from a frame read in part. Once the text shows, the stash takes it where
-        // the agent has one (`Self::write_message_input`).
         if self.checks_composer && allow_mixed {
-            let now = Instant::now();
-            let output = self.output_total();
-            let whole = self.shows_whole_frame(now);
-            let composer = self.input_box(&self.screen_text_undimmed());
-            let whole = whole && self.output_total() == output;
-            let refusal = if composer.is_none() && draft.may_hold_unknown_text() {
-                Some("the session's input box cannot be read after keys that may have put text in it")
-            } else if draft.text_may_be_undrawn(now) {
-                Some("keys just typed into the session may not be drawn in its input box yet")
-            } else if composer.as_deref() == Some("") && !whole {
-                Some("the session's input box was read empty off a frame not yet drawn whole")
-            } else {
-                None
-            };
-            if let Some(refusal) = refusal {
+            if let Some(refusal) = self.past_grace_refusal(&draft) {
                 return Err(swap::blocked(refusal));
             }
         }
@@ -682,6 +623,7 @@ impl LiveSession {
         let written = self.pty.write_input_locked(&input, now);
         if written.is_ok() {
             draft.message_written(Instant::now());
+            self.end_torn_run();
             self.note_message_written();
         }
         drop(draft);
@@ -689,108 +631,6 @@ impl LiveSession {
         written?;
         // Only a box found empty above has to show the message alone.
         self.submit_rest(now, rest, self.checks_composer && !allow_mixed)
-    }
-
-    /// Whether the parsed screen can be taken to show a whole frame at `now`
-    /// ([`OutputPace::whole_frame`]).
-    fn shows_whole_frame(&self, now: Instant) -> bool {
-        self.output_pace
-            .lock()
-            .expect("output pace lock poisoned")
-            .whole_frame(now)
-    }
-
-    /// The text in the agent's input box as the screen shows it now, read with the input lock
-    /// held and `draft` locked, and the output total the screen was read at where it showed a
-    /// whole frame. A box read empty off a whole frame that can no longer predate the keys typed
-    /// last ends the hold they keep on Octoboard's messages ([`Draft::shown_empty`]): the user
-    /// typed something that left it empty — an Esc, text cleared again, a prompt sent that no hook
-    /// matched — and with the lock held no key can come in between. A frame read in part can show
-    /// the box cleared and not yet drawn again, so it ends nothing.
-    fn composer_for_draft(&self, draft: &mut Draft) -> (Option<String>, Option<u64>) {
-        // The total first, the pace next: a chunk counted in the total has been noted in the pace
-        // already, and one taken in after the total was read changes the total read again below.
-        let output = self.output_total();
-        let now = Instant::now();
-        let whole = self.shows_whole_frame(now);
-        let composer = self.input_box(&self.screen_text_undimmed());
-        let whole = (whole && self.output_total() == output).then_some(output);
-        if composer.as_deref() == Some("") && whole.is_some() {
-            draft.shown_empty(output, now);
-        }
-        (composer, whole)
-    }
-
-    /// Ends the hold the keys typed into the session keep on Octoboard's messages where the
-    /// agent's input box shows that nothing typed is left in it ([`Self::composer_for_draft`]),
-    /// and says whether it did. **Blocks** on the input lock, which a write holds while the agent
-    /// is slow to read.
-    pub(crate) fn release_draft_hold(&self) -> bool {
-        if !self.checks_composer {
-            return false;
-        }
-        let _input = self.pty.lock_input();
-        let mut draft = self.draft.lock().expect("draft lock poisoned");
-        if !draft.holds() || self.input_swap_active() || self.stash_shown() {
-            return false;
-        }
-        let (_, whole) = self.composer_for_draft(&mut draft);
-        let released = !draft.holds();
-        if let (false, Some(output)) = (released, whole) {
-            *self
-                .draft_release_tried
-                .lock()
-                .expect("draft release lock poisoned") = Some((output, draft.edits()));
-        }
-        released
-    }
-
-    /// Runs [`Self::release_draft_hold`] off the runtime once the keys typed last can have been
-    /// drawn ([`Draft::settled`]) and the screen shows a whole frame, and writes the session's
-    /// queue out when it ends the hold: a message held for what the user typed goes in once the
-    /// box is drawn empty, as no hook comes for keys that sent nothing. Not again while neither the
-    /// output nor the keys have moved since a whole frame left the hold in place. For the
-    /// session's watch, while something is queued.
-    pub(crate) fn schedule_draft_release(&self) {
-        let output = self.output_total();
-        let now = Instant::now();
-        let whole = self.shows_whole_frame(now);
-        let tried = *self
-            .draft_release_tried
-            .lock()
-            .expect("draft release lock poisoned");
-        // Without waiting: a write holds the draft's lock while the agent is slow to read.
-        let due = whole
-            && self.draft.try_lock().is_ok_and(|draft| {
-                draft.holds()
-                    && draft.settled(output, now)
-                    && tried != Some((output, draft.edits()))
-            });
-        if !due || self.draft_release_scheduled.swap(true, Ordering::AcqRel) {
-            return;
-        }
-        let observer = self.title.lock().expect("title observer lock poisoned");
-        let state = observer.state.upgrade();
-        let runtime = observer.runtime.clone();
-        drop(observer);
-        let (Some(state), Some(runtime)) = (state, runtime) else {
-            self.draft_release_scheduled.store(false, Ordering::Release);
-            return;
-        };
-        let (id, launch) = (self.id.clone(), self.launch_id.clone());
-        runtime.spawn_blocking(move || {
-            let Some(live) = state
-                .live_session(&id)
-                .filter(|live| live.launch_id == launch)
-            else {
-                return;
-            };
-            let released = live.release_draft_hold();
-            live.draft_release_scheduled.store(false, Ordering::Release);
-            if released {
-                state.retry_pending_outbox(&id);
-            }
-        });
     }
 
     pub(crate) fn note_launch_prompt(&self, prompt: String) {
@@ -1434,400 +1274,6 @@ mod tests {
             assert!(live
                 .write_message_input(&[Input::Text("draft".into())], "draft", false)
                 .is_err());
-            assert_eq!(live.input_writes(), before);
-        }
-    }
-
-    /// Moves the latest key and the latest output back as far as the empty-box release waits on
-    /// them: as if the agent had been still since well after it drew what the key did.
-    fn settle(live: &super::LiveSession) {
-        live.settle_input();
-    }
-
-    /// Draws `screen` as the whole of the agent's screen.
-    fn draw(live: &super::LiveSession, screen: &[u8]) {
-        let mut bytes = b"\x1b[2J\x1b[H".to_vec();
-        bytes.extend_from_slice(screen);
-        live.on_output(&bytes);
-    }
-
-    /// A capture's text as the bytes that draw it.
-    fn drawn(capture: &str) -> Vec<u8> {
-        capture.trim_end().replace('\n', "\r\n").into_bytes()
-    }
-
-    /// The screen of `agent` with its input box empty, as measured.
-    fn empty_box(agent: crate::protocol::AgentId) -> Vec<u8> {
-        use super::input_box::captures::{CLEARED, GROK_CLEARED};
-        use crate::protocol::AgentId;
-        match agent {
-            AgentId::CLAUDE => drawn(CLEARED),
-            AgentId::GROK => drawn(GROK_CLEARED),
-            _ => include_bytes!("../../testdata/codex_fresh_empty.bin").to_vec(),
-        }
-    }
-
-    /// Keys that leave the input box empty — a lone Esc, text typed and cleared again, text moved
-    /// through and cut, a prompt sent whose hook named no text it was typed as — hold no
-    /// message once the agent has drawn the box empty after them, for every agent.
-    #[test]
-    fn keys_that_leave_the_box_empty_hold_no_message_once_it_is_drawn_empty() {
-        use crate::protocol::AgentId;
-        for agent in [AgentId::CLAUDE, AgentId::GROK, AgentId::CODEX] {
-            for keys in [&b"\x1b"[..], b"abc\x15", b"abc\x1b[D\x17", b"typed\r"] {
-                let live = crate::test_support::fake_live_session(
-                    "typed-then-empty",
-                    agent,
-                    140,
-                    45,
-                    "sleep 30",
-                )
-                .with_composer();
-                draw(&live, &empty_box(agent));
-                live.write_terminal_input(keys).unwrap();
-                draw(&live, &empty_box(agent));
-                assert_eq!(
-                    live.input_box(&live.screen_text_undimmed()).as_deref(),
-                    Some("")
-                );
-                settle(&live);
-                let before = live.input_writes();
-                live.write_message_input(&[Input::Text("peer".into())], "peer", false)
-                    .unwrap_or_else(|error| panic!("{agent:?} after {keys:?}: {}", error.error));
-                assert_eq!(live.input_writes(), before + 1);
-            }
-        }
-    }
-
-    /// The prompt Claude Code puts back in its box when the user's Esc cancels a turn holds a
-    /// message as a draft does, until the user clears it and the box is drawn empty.
-    #[test]
-    fn a_prompt_an_escape_put_back_holds_a_message_until_it_is_cleared() {
-        use crate::protocol::AgentId;
-        let live = crate::test_support::fake_live_session(
-            "restored-then-cleared",
-            AgentId::CLAUDE,
-            140,
-            45,
-            "sleep 30",
-        )
-        .with_composer();
-        draw(&live, &empty_box(AgentId::CLAUDE));
-        live.write_terminal_input(b"\x1b").unwrap();
-        draw(
-            &live,
-            include_bytes!("../../testdata/claude_input_restored.bin"),
-        );
-        settle(&live);
-        let before = live.input_writes();
-        let error = live
-            .write_message_input(&[Input::Text("peer".into())], "peer", false)
-            .unwrap_err();
-        assert_eq!(error.written, 0);
-        assert_eq!(live.input_writes(), before);
-        live.write_terminal_input(b"\x15").unwrap();
-        draw(&live, &empty_box(AgentId::CLAUDE));
-        settle(&live);
-        let before = live.input_writes();
-        live.write_message_input(&[Input::Text("peer".into())], "peer", false)
-            .unwrap();
-        assert_eq!(live.input_writes(), before + 1);
-    }
-
-    /// A message queued while the user's keys hold the session is written by the session's watch
-    /// at its next look once the box is drawn empty after them, not at its retry two seconds on.
-    /// The clock is paused, so the watch's looks come in a few milliseconds of real time, while the
-    /// retry waits two seconds of it.
-    #[tokio::test(start_paused = true)]
-    async fn the_watch_writes_a_message_held_for_typing_once_the_box_is_drawn_empty() {
-        use super::input_box::captures::DRAFT;
-        use crate::protocol::{AgentId, SessionStatus};
-        let (state, dir) = crate::test_support::app_state("draft-release-watch");
-        crate::state::test_support::insert_record(&state, &dir, "s", SessionStatus::Working);
-        let live =
-            crate::test_support::fake_live_session("s", AgentId::CLAUDE, 140, 45, "sleep 30")
-                .with_composer();
-        state.register_live(live.clone());
-        draw(&live, &empty_box(AgentId::CLAUDE));
-        live.write_terminal_input(b"draft text").unwrap();
-        draw(&live, &drawn(DRAFT));
-        assert_ne!(
-            live.input_box(&live.screen_text_undimmed()).as_deref(),
-            Some("")
-        );
-        state.queue_message("s", "peer message");
-        crate::session::dialogs::watch(&state, &live);
-        live.write_terminal_input(b"\x15").unwrap();
-        draw(&live, &empty_box(AgentId::CLAUDE));
-        settle(&live);
-        // The release and the write it starts run in blocking tasks, which hold the clock still
-        // until they are done, so each look the watch makes is over by the next one.
-        for _ in 0..4 {
-            tokio::time::sleep(std::time::Duration::from_millis(250)).await;
-            if state.outbox.len("s") == 0 {
-                break;
-            }
-        }
-        assert_eq!(
-            state.outbox.len("s"),
-            0,
-            "the box drawn empty did not release the message at the watch's next look"
-        );
-        assert!(!live.draft.lock().unwrap().holds());
-    }
-
-    /// A frame read in part can show the box cleared and not yet drawn again: inside an open
-    /// synchronized update an empty box holds a message over a draft whose text the mirror cannot
-    /// know, and once the update ends the box as drawn decides.
-    #[test]
-    fn an_empty_box_inside_a_frame_still_being_drawn_holds_a_message() {
-        use super::input_box::captures::{CLEARED, DRAFT};
-        use crate::protocol::AgentId;
-        for ends_empty in [false, true] {
-            let live = crate::test_support::fake_live_session(
-                "torn-frame",
-                AgentId::CLAUDE,
-                140,
-                45,
-                "sleep 30",
-            )
-            .with_composer();
-            draw(&live, &empty_box(AgentId::CLAUDE));
-            // Text typed, then moved through: the mirror no longer knows what the box holds.
-            live.write_terminal_input(b"draft text\x1b[D").unwrap();
-            draw(&live, &drawn(DRAFT));
-            let mut cleared = b"\x1b[?2026h\x1b[2J\x1b[H".to_vec();
-            cleared.extend(drawn(CLEARED));
-            live.on_output(&cleared);
-            settle(&live);
-            assert_eq!(
-                live.input_box(&live.screen_text_undimmed()).as_deref(),
-                Some("")
-            );
-            let before = live.input_writes();
-            let error = live
-                .write_message_input(&[Input::Text("peer".into())], "peer", false)
-                .unwrap_err();
-            assert_eq!(error.written, 0);
-            assert_eq!(live.input_writes(), before);
-            let mut rest = b"\x1b[2J\x1b[H".to_vec();
-            rest.extend(drawn(if ends_empty { CLEARED } else { DRAFT }));
-            rest.extend(b"\x1b[?2026l");
-            live.on_output(&rest);
-            settle(&live);
-            let written = live.write_message_input(&[Input::Text("peer".into())], "peer", false);
-            assert_eq!(written.is_ok(), ends_empty, "{written:?}");
-        }
-    }
-
-    /// A key that may put text in the box the mirror cannot know — a prompt from history, a
-    /// completion — holds a message over an empty box drawn after it, for every agent: the text it
-    /// brings may be drawn later still.
-    #[test]
-    fn a_history_or_completion_key_holds_a_message_over_an_empty_box() {
-        use crate::protocol::AgentId;
-        for agent in [AgentId::CLAUDE, AgentId::GROK, AgentId::CODEX] {
-            for keys in [&b"\x1b[A"[..], b"\t", b"\x1b[A\x15"] {
-                let live = crate::test_support::fake_live_session(
-                    "inserting-key",
-                    agent,
-                    140,
-                    45,
-                    "sleep 30",
-                )
-                .with_composer();
-                draw(&live, &empty_box(agent));
-                live.write_terminal_input(keys).unwrap();
-                draw(&live, &empty_box(agent));
-                settle(&live);
-                let before = live.input_writes();
-                let error = live
-                    .write_message_input(&[Input::Text("peer".into())], "peer", false)
-                    .unwrap_err();
-                assert_eq!(error.written, 0, "{agent:?} after {keys:?}");
-                assert!(
-                    live.draft.lock().unwrap().holds(),
-                    "{agent:?} after {keys:?}"
-                );
-                assert_eq!(live.input_writes(), before);
-            }
-        }
-    }
-
-    /// After Up and Ctrl-U a first message waits for the grace, and once it is written a second one
-    /// on the same empty box goes in at once.
-    #[test]
-    fn a_message_written_after_a_history_key_frees_the_next_one() {
-        use crate::protocol::AgentId;
-        let live = crate::test_support::fake_live_session(
-            "after-up-message",
-            AgentId::CLAUDE,
-            140,
-            45,
-            "sleep 30",
-        )
-        .with_composer();
-        draw(&live, &empty_box(AgentId::CLAUDE));
-        live.write_terminal_input(b"\x1b[A").unwrap();
-        live.write_terminal_input(b"\x15").unwrap();
-        draw(&live, &empty_box(AgentId::CLAUDE));
-        settle(&live);
-        let before = live.input_writes();
-        assert!(live
-            .write_message_input(&[Input::Text("first".into())], "first", false)
-            .is_err());
-        live.write_message_input(&[Input::Text("first".into())], "first", true)
-            .unwrap();
-        draw(&live, &empty_box(AgentId::CLAUDE));
-        settle(&live);
-        live.write_message_input(&[Input::Text("second".into())], "second", false)
-            .unwrap();
-        assert_eq!(live.input_writes(), before + 2);
-    }
-
-    /// An Esc typed while the hooks report a turn running is no Esc at the prompt, though the title
-    /// still shows the prompt, as right after a submit: it waits for output like any other key.
-    #[test]
-    fn a_lone_escape_while_the_hooks_report_a_turn_waits_for_output() {
-        use crate::protocol::{AgentId, SessionStatus};
-        let (state, dir) = crate::test_support::app_state("escape-hooks-working");
-        crate::state::test_support::insert_record(&state, &dir, "s", SessionStatus::Working);
-        let live =
-            crate::test_support::fake_live_session("s", AgentId::CLAUDE, 140, 45, "sleep 30")
-                .with_composer();
-        state.register_live(live.clone());
-        draw(&live, &empty_box(AgentId::CLAUDE));
-        live.write_terminal_input(b"\x1b").unwrap();
-        settle(&live);
-        let before = live.input_writes();
-        assert!(live
-            .write_message_input(&[Input::Text("peer".into())], "peer", false)
-            .is_err());
-        assert_eq!(live.input_writes(), before);
-        draw(&live, &empty_box(AgentId::CLAUDE));
-        settle(&live);
-        live.write_message_input(&[Input::Text("peer".into())], "peer", false)
-            .unwrap();
-    }
-
-    /// Past the draft's grace a box read empty off a frame still being drawn holds a message, and
-    /// one read off the whole frame takes it.
-    #[test]
-    fn past_the_grace_an_empty_box_inside_a_frame_still_being_drawn_holds_a_message() {
-        use super::input_box::captures::CLEARED;
-        use crate::protocol::AgentId;
-        let live = crate::test_support::fake_live_session(
-            "grace-torn-frame",
-            AgentId::CLAUDE,
-            140,
-            45,
-            "sleep 30",
-        )
-        .with_composer();
-        let mut cleared = b"\x1b[?2026h\x1b[2J\x1b[H".to_vec();
-        cleared.extend(drawn(CLEARED));
-        live.on_output(&cleared);
-        settle(&live);
-        let before = live.input_writes();
-        assert!(live
-            .write_message_input(&[Input::Text("peer".into())], "peer", true)
-            .is_err());
-        assert_eq!(live.input_writes(), before);
-        live.on_output(b"\x1b[?2026l");
-        settle(&live);
-        live.write_message_input(&[Input::Text("peer".into())], "peer", true)
-            .unwrap();
-        assert_eq!(live.input_writes(), before + 1);
-    }
-
-    /// Past the draft's grace a message still waits while the box cannot be read after a key that
-    /// may have brought back text the mirror cannot know, and goes in once the box can be read.
-    #[test]
-    fn past_the_grace_an_unreadable_box_after_a_history_key_holds_a_message() {
-        use crate::protocol::AgentId;
-        let live = crate::test_support::fake_live_session(
-            "unreadable-after-up",
-            AgentId::CLAUDE,
-            140,
-            45,
-            "sleep 30",
-        )
-        .with_composer();
-        draw(&live, &empty_box(AgentId::CLAUDE));
-        live.write_terminal_input(b"\x1b[A").unwrap();
-        draw(&live, b"a screen with no input box on it");
-        settle(&live);
-        let before = live.input_writes();
-        let error = live
-            .write_message_input(&[Input::Text("peer".into())], "peer", true)
-            .unwrap_err();
-        assert_eq!(error.written, 0);
-        assert_eq!(live.input_writes(), before);
-        draw(&live, &empty_box(AgentId::CLAUDE));
-        settle(&live);
-        live.write_message_input(&[Input::Text("peer".into())], "peer", true)
-            .unwrap();
-        assert_eq!(live.input_writes(), before + 1);
-    }
-
-    /// A lone Esc at an empty box that Claude Code answers by printing nothing, as 2.1.322 at times
-    /// does, holds no message once the Esc has settled; one typed while the title showed a turn
-    /// running still waits for output, since the prompt the cancel puts back can come later.
-    #[test]
-    fn a_lone_escape_the_agent_printed_nothing_for_holds_no_message_at_the_prompt() {
-        use crate::protocol::AgentId;
-        for running in [false, true] {
-            let live = crate::test_support::fake_live_session(
-                "silent-escape",
-                AgentId::CLAUDE,
-                140,
-                45,
-                "sleep 30",
-            )
-            .with_composer();
-            if running {
-                live.on_output("\x1b]0;\u{25D0} Working\x07".as_bytes());
-            }
-            draw(&live, &empty_box(AgentId::CLAUDE));
-            live.write_terminal_input(b"\x1b").unwrap();
-            settle(&live);
-            let before = live.input_writes();
-            let written = live.write_message_input(&[Input::Text("peer".into())], "peer", false);
-            assert_eq!(written.is_ok(), !running, "{written:?}");
-            assert_eq!(live.input_writes(), before + u64::from(!running));
-            if running {
-                assert!(live.draft.lock().unwrap().holds());
-            }
-        }
-    }
-
-    /// An empty box read off a screen the agent has not drawn since the user's last key does not
-    /// show what the key did, and one drawn empty although the user typed text and nothing that
-    /// could have removed it may be a screen drawn before the text was: either holds a message.
-    #[test]
-    fn an_empty_box_that_may_predate_the_keys_holds_a_message() {
-        use crate::protocol::AgentId;
-        for (keys, redrawn) in [(&b"ab\x1b[D"[..], false), (b"draft", true)] {
-            let live = crate::test_support::fake_live_session(
-                "stale-empty-box",
-                AgentId::CLAUDE,
-                140,
-                45,
-                "sleep 30",
-            )
-            .with_composer();
-            draw(&live, &empty_box(AgentId::CLAUDE));
-            live.write_terminal_input(keys).unwrap();
-            if redrawn {
-                draw(&live, &empty_box(AgentId::CLAUDE));
-            }
-            settle(&live);
-            let before = live.input_writes();
-            let error = live
-                .write_message_input(&[Input::Text("peer".into())], "peer", false)
-                .unwrap_err();
-            assert_eq!(error.written, 0, "{keys:?}");
-            assert!(live.draft.lock().unwrap().holds(), "{keys:?}");
             assert_eq!(live.input_writes(), before);
         }
     }

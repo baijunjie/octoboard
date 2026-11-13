@@ -130,7 +130,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, Result};
 use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
@@ -166,6 +166,10 @@ const WATCHED_ANSWER_BYTES: u64 = 128 * 1024;
 
 /// How often a session's held messages are looked at while its watch runs.
 const RELEASE_POLL: Duration = Duration::from_millis(250);
+
+/// How often the adopted session's screen is looked at for its input box while nothing has been
+/// printed since the last look ([`release_when_the_adopted_agent_reads_input`]).
+const ADOPTED_RECHECK: Duration = Duration::from_secs(2);
 
 /// How long after its launch a session whose provider's hook cannot be relied on may go without a
 /// hook before the messages held for it are let through anyway ([`Screen::hook_fallback`]): Grok
@@ -508,24 +512,36 @@ fn release_when_paste_mode_comes(state: &Arc<AppState>, live: &Arc<LiveSession>)
 
 /// Releases the messages held for a session adopted from a holder the previous daemon left running
 /// ([`TrustState::note_adopted`]), whose agent ran its start hook, if it ever did, before this
-/// daemon was there to see it, and will not run it again: without this, an idle Claude Code
-/// session would hold them for as long as it runs. Its input box on the parsed screen, with no
-/// trust screen up, stands in for that hook ([`TrustState::stand_in_for_start`]); looked at
-/// straight away, for a restored screen that nothing will redraw, and then after each poll, for one the
-/// program draws again after the adoption. A hook or a sighted screen leaves the hold to the
-/// launch's own rules.
+/// daemon was there to see it, and will not run it again: without this, an idle Claude Code session
+/// would hold them for as long as it runs. Its input box on the parsed screen, with no trust screen
+/// up, stands in for that hook ([`TrustState::stand_in_for_start`]); looked at straight away, for a
+/// restored screen that nothing will redraw, and then at each poll that finds output printed since
+/// the last look, for one the program draws again after the adoption, and every [`ADOPTED_RECHECK`]
+/// regardless. A session that never draws its box costs a look every so often, not a rendering of
+/// its screen at every poll. A hook or a sighted screen leaves the hold to the launch's own rules.
 fn release_when_the_adopted_agent_reads_input(state: &Arc<AppState>, live: &Arc<LiveSession>) {
     let state = state.clone();
     let live = Arc::downgrade(live);
     tokio::spawn(async move {
+        // The output total and the time of the latest look. The screen changes with the output, so
+        // a poll that finds the total where the last look left it renders nothing; the screen is
+        // still looked at every `ADOPTED_RECHECK`, for a change of size the program did not redraw.
+        let mut looked: Option<(u64, Instant)> = None;
         loop {
             let Some(live) = live.upgrade() else { break };
             if !live.trust.awaits_adopted_start() {
                 break;
             }
-            if stand_in_for_start(&live) {
-                release_held(&state, &live.id);
-                break;
+            let (output, now) = (live.output_total(), Instant::now());
+            let unchanged = looked.is_some_and(|(total, at)| {
+                total == output && now.saturating_duration_since(at) < ADOPTED_RECHECK
+            });
+            if !unchanged {
+                looked = Some((output, now));
+                if stand_in_for_start(&live) {
+                    release_held(&state, &live.id);
+                    break;
+                }
             }
             drop(live);
             tokio::time::sleep(RELEASE_POLL).await;

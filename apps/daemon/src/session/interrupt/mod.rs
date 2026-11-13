@@ -642,9 +642,7 @@ fn press(
         match input_before.as_deref() {
             Some(text) if !text.is_empty() => {
                 let (cleared, presses, changed) =
-                    clear_input_box(live, &mut writes, shown, allowance, || {
-                        turn_running(state, live)
-                    });
+                    clear_input_box(live, &mut writes, shown, allowance, || turn_running(live));
                 match cleared {
                     // Gone before the first press, sent or cleared by someone else: nothing of
                     // it was this call's to clear.
@@ -674,13 +672,13 @@ fn press(
                 }
                 input_before = Some(String::new());
             }
-            _ => match key(state, live, writes, CTRL_U)? {
+            _ => match key(live, writes, CTRL_U)? {
                 Some(next) => writes = next,
                 None => return Ok(Pressed::Nothing(held(writes))),
             },
         }
         std::thread::sleep(BETWEEN_KEYS);
-        match key(state, live, writes, CTRL_C)? {
+        match key(live, writes, CTRL_C)? {
             Some(next) => writes = next,
             None => {
                 return Ok(Pressed::OnlyCtrlU {
@@ -690,7 +688,7 @@ fn press(
             }
         }
     } else {
-        match key(state, live, writes, ESC)? {
+        match key(live, writes, ESC)? {
             Some(next) => writes = next,
             None => return Ok(Pressed::Nothing(held(writes))),
         }
@@ -773,13 +771,8 @@ fn press(
 
 /// Writes one interrupt key while the turn is still running and nobody has written since the count
 /// read `writes`, and returns the count past it, or `None` when nothing was written.
-fn key(
-    state: &Arc<AppState>,
-    live: &Arc<LiveSession>,
-    writes: u64,
-    keys: &[Input],
-) -> Result<Option<u64>> {
-    match live.write_keys_if(writes, || turn_running(state, live), keys) {
+fn key(live: &Arc<LiveSession>, writes: u64, keys: &[Input]) -> Result<Option<u64>> {
+    match live.write_keys_if(writes, || turn_running(live), keys) {
         Ok(true) => Ok(Some(writes + 1)),
         Ok(false) => Ok(None),
         Err(err) => Err(anyhow!(
@@ -796,14 +789,8 @@ fn key(
 /// The status a hook reported is held only in the store, so the record is read here, under the
 /// lock: that is what makes the check and the key one step against a hook applied in between. It
 /// is a read of one row of a local database, and only the session's other writers wait on it.
-fn turn_running(state: &AppState, live: &LiveSession) -> bool {
-    live.title_activity().shows_running(Instant::now())
-        && live.agent_dialog().is_none()
-        && !live.needs_user_action()
-        && state.session_record(&live.id).is_ok_and(|session| {
-            session.status == SessionStatus::Working
-                && state.agent_status(&session) == SessionStatus::Working
-        })
+fn turn_running(live: &LiveSession) -> bool {
+    live.turn_reading().interrupt_may_press()
 }
 
 /// The counts read before the interrupt key, which what follows it is told from.

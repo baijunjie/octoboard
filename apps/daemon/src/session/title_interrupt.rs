@@ -46,10 +46,9 @@
 //! Codex reports its own cancels (`Interrupt`), so its title is not watched for one.
 
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use super::screen::TitleCancel;
-use super::title_activity::TitleActivity;
 use crate::protocol::SessionStatus;
 use crate::records::watch::back_at_prompt;
 use crate::state::AppState;
@@ -94,24 +93,6 @@ pub(crate) async fn polls_settled() {
     crate::test_support::runtime_advanced(POLL * 2).await;
 }
 
-/// Whether `activity` went back to the prompt after `armed`, the count when the watch was armed,
-/// and has stayed there for [`SETTLE`] by `now`.
-#[cfg(test)]
-fn settled_at_prompt(activity: &TitleActivity, armed: u64, now: Instant) -> bool {
-    settled_at_prompt_after(activity, armed, now, SETTLE)
-}
-
-fn settled_at_prompt_after(
-    activity: &TitleActivity,
-    armed: u64,
-    now: Instant,
-    settle: Duration,
-) -> bool {
-    activity
-        .at_prompt_since(armed)
-        .is_some_and(|at| now.saturating_duration_since(at) >= settle)
-}
-
 /// Starts watching the terminal title of `session_id`, a session a hook has just moved into
 /// `Working` whose provider leaves some cancels in the title alone
 /// ([`crate::session::screen::ScreenReader::title_cancel`]), for its turn ending with no hook.
@@ -132,12 +113,6 @@ pub fn watch(state: &Arc<AppState>, session_id: &str, generation: u64) {
     let state = state.clone();
     let session_id = session_id.to_string();
     tokio::spawn(async move {
-        let at_prompt = || {
-            live.upgrade().map(|live| {
-                settled_at_prompt_after(&live.title_activity(), armed, Instant::now(), settle)
-                    && live.agent_dialog().is_none()
-            })
-        };
         loop {
             tokio::time::sleep(POLL).await;
             if !state.record_watch_current(&session_id, generation) {
@@ -147,23 +122,31 @@ pub fn watch(state: &Arc<AppState>, session_id: &str, generation: u64) {
             // another watch, so this one waits it out; one raised by a hook comes down with a hook
             // that retires this watch and arms another, which counts only what the title shows
             // from then on. Anything else ends the turn.
-            match state.session_record(&session_id) {
-                Ok(record) => match state.agent_status(&record) {
-                    SessionStatus::Working => {}
-                    SessionStatus::WaitingUser => continue,
-                    _ => return,
-                },
-                Err(_) => continue,
+            let Some(live_now) = live.upgrade() else {
+                return; // The process is gone.
+            };
+            let reading = live_now.turn_reading();
+            match reading.hooks() {
+                Some(SessionStatus::Working) => {}
+                Some(SessionStatus::WaitingUser) | None => continue,
+                Some(_) => return,
             }
-            match at_prompt() {
-                None => return, // The process is gone.
-                Some(false) => continue,
-                Some(true) => {}
+            // Whether the title has held at the prompt for the settle with no dialog up. The
+            // reading and the session are let go before the wait below, which they cannot be held
+            // across.
+            let settled = reading.settled_at_prompt(armed, settle);
+            drop(reading);
+            drop(live_now);
+            if !settled {
+                continue;
             }
             // A hook posted with the title may still be waiting to be applied; whatever it says
             // about the session wins over the title.
             state.hook_queues.settled(&session_id).await;
-            if at_prompt() != Some(true) {
+            let still = live
+                .upgrade()
+                .is_some_and(|live| live.turn_reading().settled_at_prompt(armed, settle));
+            if !still {
                 continue;
             }
             // Conditional on the session still reading `Working`: one a hook moved on, the turn
@@ -229,12 +212,20 @@ mod tests {
     use crate::protocol::AgentId;
     use crate::protocol::Session;
     use crate::session::title_activity::Shown;
+    use crate::session::title_activity::TitleActivity;
     use crate::session::LiveSession;
     use crate::state::TurnClose;
     use crate::test_support::{
         app_state, console, console_session, idle_stand_in, idle_stand_in_of, output_containing,
         within, ScratchDir, StandIn,
     };
+    use std::time::Instant;
+
+    /// Whether `activity` went back to the prompt after `armed`, the count when the watch was
+    /// armed, and has stayed there for [`SETTLE`] by `now`.
+    fn settled_at_prompt(activity: &TitleActivity, armed: u64, now: Instant) -> bool {
+        activity.settled_at_prompt(armed, now, SETTLE)
+    }
 
     const WORKING: Option<Shown> = Some(Shown::Running);
     const TURNING: Option<Shown> = Some(Shown::Running);
@@ -551,8 +542,9 @@ mod tests {
     }
 
     /// Ctrl-C before Grok Build's first token, the user's own or `interrupt_session`'s, fires no
-    /// hook: the title alone puts the session at its prompt and closes the turn as cancelled, so the
-    /// `idle_prompt` backstop a minute later owes no report, and a message held meanwhile goes in.
+    /// hook: the title alone puts the session at its prompt and closes the turn as cancelled, so
+    /// the `idle_prompt` backstop a minute later owes no report, and a message held meanwhile goes
+    /// in.
     #[tokio::test]
     async fn a_grok_cancel_before_the_first_token_closes_the_turn_with_no_report() {
         let fixture = grok_fixture("grok-cancel");

@@ -3404,3 +3404,77 @@ fn codex_and_grok_are_released_by_the_first_hook_without_bracketed_paste() {
     assert!(grok.note_hook().released);
     assert!(!grok.holds_writes());
 }
+
+/// The input box of an agent's screen as the bytes that draw it over a cleared screen.
+fn drawn_input_box() -> Vec<u8> {
+    use crate::session::input_box::captures::CLEARED;
+    let mut bytes = b"\x1b[2J\x1b[H".to_vec();
+    bytes.extend(CLEARED.trim_end().replace('\n', "\r\n").into_bytes());
+    bytes
+}
+
+/// A Claude session adopted from a holder, whose record is `s`, with a message queued for it.
+fn adopted_with_a_message(name: &str) -> (Arc<AppState>, ScratchDir, StandIn) {
+    let (state, dir) = crate::test_support::app_state(name);
+    crate::state::test_support::insert_record(&state, &dir, "s", SessionStatus::Working);
+    let live = watched_live_session("s", AgentId::CLAUDE, 140, 45, "sleep 30", None);
+    live.trust.note_adopted();
+    state.register_live(live.clone());
+    state.queue_message("s", "peer message");
+    (state, dir, live)
+}
+
+/// An adopted agent that draws its input box only after the adoption, as one the daemon found
+/// running does, has what is held for it released by a poll that finds the box on the screen. The
+/// screen is looked at once output has moved, so output that shows no box keeps the hold, and the
+/// box drawn after it ends it, within a poll. The clock is paused, so the polls come in a few
+/// milliseconds of real time.
+#[tokio::test(start_paused = true)]
+async fn an_adopted_agent_that_draws_its_input_box_later_has_its_held_messages_released() {
+    let (state, _dir, live) = adopted_with_a_message("trust-adopted-later");
+    release_when_the_adopted_agent_reads_input(&state, &live);
+
+    live.on_output(b"\x1b[2J\x1b[HStarting up...\r\n");
+    tokio::time::sleep(RELEASE_POLL * 3).await;
+    assert!(live.trust.awaits_adopted_start());
+    assert!(live.trust.holds_writes());
+    assert_eq!(state.outbox.len("s"), 1, "no input box is on the screen");
+
+    live.on_output(&drawn_input_box());
+    tokio::time::sleep(RELEASE_POLL * 2).await;
+    assert!(!live.trust.awaits_adopted_start(), "the box was seen");
+    assert!(!live.trust.holds_writes());
+    // The release's write runs in a blocking task, which holds the clock still until it is done.
+    for _ in 0..4 {
+        if state.outbox.len("s") == 0 {
+            break;
+        }
+        tokio::time::sleep(RELEASE_POLL).await;
+    }
+    assert_eq!(
+        state.outbox.len("s"),
+        0,
+        "the box drawn after the adoption did not release the held message"
+    );
+}
+
+/// A box already on the screen when the session is adopted, as one restored from a saved screen
+/// that nothing will redraw, is looked at straight away and releases what is held, before the
+/// first poll comes.
+#[tokio::test(start_paused = true)]
+async fn an_adopted_session_whose_box_is_already_drawn_is_released_at_the_first_look() {
+    let (state, _dir, live) = adopted_with_a_message("trust-adopted-restored");
+    live.on_output(&drawn_input_box());
+    release_when_the_adopted_agent_reads_input(&state, &live);
+
+    tokio::time::sleep(Duration::from_millis(1)).await;
+    assert!(!live.trust.awaits_adopted_start());
+    assert!(!live.trust.holds_writes());
+    for _ in 0..4 {
+        if state.outbox.len("s") == 0 {
+            break;
+        }
+        tokio::time::sleep(RELEASE_POLL).await;
+    }
+    assert_eq!(state.outbox.len("s"), 0);
+}

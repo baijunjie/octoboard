@@ -399,13 +399,20 @@ installs with `--service`).
   the agent's own queue refused outright, which fails that message to its sender, coded `message_refused`, while the
   queue behind it goes on, and `HeldByServer`, that of a message the server holds back for now; `AfterExit`, the work a launch leaves for once its process has exited: `LaunchPlan::after_exit`;
   `before_scratch_removal`, what a launch and an adopted session both do once the process is reaped: stop the transport and run
-  `AfterExit`), `draft.rs`,
+  `AfterExit`), `draft.rs` (a mirror of the keys typed into the input, matching the prompts the agent reports
+  submitted, with `KeyTiming`, when and what kind of keys went in, kept apart from it), `draft_hold.rs` (the release of the hold typed
+  keys keep on Octoboard's messages, and the checks a message written past the draft's grace waits on: `settle_input`,
+  `release_draft_hold`, `schedule_draft_release` on `LiveSession`), `output_pace.rs` (whether the parsed screen shows a
+  whole frame, from the agent's recent output), `paste_apart.rs` (submitting a message whose Enter has to wait until the
+  agent has taken its paste; `NotSubmitted`),
   `swap.rs`, `input_box.rs`, `dialogs.rs`, `trust/` folder-trust confirmations (`carry.rs` the `TrustCarrier` interface of a provider that records the trust in
   a per-session home; `screen.rs` reads a provider's screen off the recent output, or off the parsed screen where
   `TermFacts::host_renders` says the output is the host's repaint, `TrustState::reads_screen`; there Codex's watch ends
   at its composer rather than its title, and Claude Code's readiness, otherwise its bracketed paste after the first
   hook, also comes with its input box drawn after `SessionStart`, `on_session_start`), `interrupt/`, `title_activity.rs` (what
-  a terminal title says about a turn), `title_interrupt.rs` (a cancel that left no other trace, read off the title),
+  a terminal title says about a turn), `turn_reading.rs` (one reading of whether the agent is in a turn, from its title or
+  reported status, the dialog sighting and the hooks' status, which the interrupt key, the title's cancel watch and the
+  draft's lone-Esc timing each combine their own way: `LiveSession::turn_reading`, `TurnReading`), `title_interrupt.rs` (a cancel that left no other trace, read off the title),
   `usage_limit.rs` (where the process stands with the hold on Octoboard's writes after a usage-limit stop: judging, held or free; per process, so a new process starts free), `wait.rs` (polling a condition, `wait_for`, and waiting for a session's output to go quiet, `wait_quiet`),
   `program_status.rs` (the session's status, turns and pause taken from the root status record the program reports
   through OSC 7501, only for an agent whose provider has no status integration).
@@ -756,6 +763,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Listen on a private channel for a child process, and connect to it | `platform::ipc` (`PrivateListen`, `Address`, `Connection`); the caller owns what travels over it (Codex's is `src/adapter/codex/transport/`); a provider's private server for a launch goes through `terminal::server_host`, which makes the `PrivateListen` where the daemon runs the server |
 | Run a provider's private server for a launch (in the daemon, or in the holder that outlives it) | `ServerHost` (`src/terminal/server_host.rs`), given by `terminal::backend::Helpers::server_host` to `PrivateServer::start`; the holder side is its companions ([README](../../apps/daemon/src/holder/README.md)); a provider links to the server a holder kept through `AgentProvider::rebuild_launch` |
 | Start a terminal and its program for the daemon (it lives in a holder, or in this process where none is installed) | `terminal::backend::start` with `Helpers::issue` for the launch's helper credentials (`src/terminal/backend.rs`); the lifecycle around it is `terminal::pty::PtyCore`. `platform::term::spawn` is what the local backend and the holder itself call |
+| Whether a session's agent is in a turn, before acting on it | `LiveSession::turn_reading` and `TurnReading` (`src/session/turn_reading.rs`): a new consumer adds a method there that says which way it errs, rather than combining the title's activity, the dialog sighting and the hooks' status itself |
 | Write the daemon's own paste or key into a terminal | `platform::term` (`Pty::write_input` with `Input`), which a held terminal answers over the link (`holder::client::HeldTerminal`) |
 | Give a helper process the launch key | never in its arguments: a file for the `octoboardd` helpers that take `--key-file` (`src/key_file.rs`: `write` makes it owner-only, `read` reads it), the same file for the git hook helpers, whose path the `OCTOBOARD_DAEMON_CREDENTIAL_PATH` variable carries (`src/session_git_hooks/`; no variable the git hooks need has `KEY`, `SECRET` or `TOKEN` in its name, which an agent's filter strips where its default excludes are on); the key itself is never in an environment, which agents write into files; Claude Code's own HTTP hook URL carries it inside the owner-only settings file (`src/adapter/claude/`) |
 | Check a request's Origin and Host, compare a key, make a key | `src/request_guard.rs` (`headers_allowed`, `key_matches`, `same_secret`, `generate_key`); the daemon's guard is `src/server/access.rs`, and a holder's helper routes use it too |

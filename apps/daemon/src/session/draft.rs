@@ -26,21 +26,31 @@ pub(super) struct Draft {
     /// a prompt the agent reports sending later may still be: the submissions still pending then
     /// and [`Self::recently_sent`] as it stood.
     before_fragment: Option<Vec<String>>,
-    /// When the latest key went in ([`Self::typed`]), and how many bytes the agent had printed
+    /// When the keys went in and what kind they were, what an empty box read off the screen is
+    /// judged against.
+    keys: KeyTiming,
+}
+
+/// When the keys typed into the session went in and what kind they were: what an empty input box
+/// read off the screen is judged against ([`Draft::settled`]), kept apart from the mirror of the
+/// text the keys typed, which the prompts the agent reports sending are matched against.
+#[derive(Default)]
+struct KeyTiming {
+    /// When the latest key went in ([`Draft::typed`]), and how many bytes the agent had printed
     /// by then.
     typed_at: Option<(Instant, u64)>,
-    /// Whether every key since the last moment nothing typed was held ([`Self::holds`]) is an Esc
+    /// Whether every key since the last moment nothing typed was held ([`Draft::holds`]) is an Esc
     /// written on its own: the keys an agent may answer by printing nothing.
     escapes_only: bool,
     /// The edit count at the latest key that may put text in the box the mirror cannot know
     /// ([`may_insert`]): an empty box read off the screen proves nothing until a submission at or
     /// past it is acknowledged, or a message of Octoboard's has gone in after it
-    /// ([`Self::message_written`]).
+    /// ([`Draft::message_written`]).
     inserted_at: Option<u64>,
     /// When that key was typed.
     inserted_when: Option<Instant>,
     /// When the latest write was an Esc on its own, so that a second one soon after is told apart
-    /// ([`DOUBLE_ESCAPE`]); forgotten once Octoboard writes a message ([`Self::message_written`]),
+    /// ([`DOUBLE_ESCAPE`]); forgotten once Octoboard writes a message ([`Draft::message_written`]),
     /// which the agent's own double-press window does not outlast, but not when Octoboard only
     /// reads the box.
     lone_escape_at: Option<Instant>,
@@ -69,28 +79,29 @@ impl Draft {
     /// bytes in all.
     pub(super) fn typed(&mut self, data: &[u8], output: u64, at: Instant) {
         let lone_escape = data == b"\x1b";
-        let escapes_only = lone_escape && (!self.holds() || self.escapes_only);
+        let escapes_only = lone_escape && (!self.holds() || self.keys.escapes_only);
         // An Esc left waiting from an earlier write is the Esc key once it has settled, not the
         // start of a sequence this write would finish; what it did to the box is not known.
         if self.lone_escape_settled(at) {
             self.escape.clear();
             self.text = None;
         }
-        let inserted_before = self.inserted_at;
+        let inserted_before = self.keys.inserted_at;
         self.input(data);
         if lone_escape
             && self
+                .keys
                 .lone_escape_at
                 .is_some_and(|first| at.saturating_duration_since(first) < DOUBLE_ESCAPE)
         {
-            self.inserted_at = Some(self.edited);
+            self.keys.inserted_at = Some(self.edited);
         }
-        if self.inserted_at != inserted_before {
-            self.inserted_when = Some(at);
+        if self.keys.inserted_at != inserted_before {
+            self.keys.inserted_when = Some(at);
         }
-        self.lone_escape_at = lone_escape.then_some(at);
-        self.typed_at = Some((at, output));
-        self.escapes_only = escapes_only;
+        self.keys.lone_escape_at = lone_escape.then_some(at);
+        self.keys.typed_at = Some((at, output));
+        self.keys.escapes_only = escapes_only;
     }
 
     fn input(&mut self, data: &[u8]) {
@@ -127,7 +138,7 @@ impl Draft {
                     }
                     sequence => {
                         if may_insert(sequence) {
-                            self.inserted_at = Some(self.edited);
+                            self.keys.inserted_at = Some(self.edited);
                         }
                         self.text = None;
                     }
@@ -147,7 +158,7 @@ impl Draft {
                         .as_ref()
                         .is_some_and(|text| text.first() == Some(&b'/') || text.contains(&b'@'))
                     {
-                        self.inserted_at = Some(self.edited);
+                        self.keys.inserted_at = Some(self.edited);
                     }
                     if let Some(text) = self
                         .text
@@ -179,7 +190,7 @@ impl Draft {
                 b'\n' | 0x20..=0xff => self.append(byte),
                 byte => {
                     if may_insert(&[byte]) {
-                        self.inserted_at = Some(self.edited);
+                        self.keys.inserted_at = Some(self.edited);
                     }
                     self.text = None;
                 }
@@ -298,16 +309,26 @@ impl Draft {
     }
 
     fn lone_escape_settled(&self, now: Instant) -> bool {
-        self.escape == [0x1b]
-            && self
-                .typed_at
-                .is_some_and(|(at, _)| now.saturating_duration_since(at) >= KEY_SETTLE)
+        self.escape == [0x1b] && self.keys.latest_settled(now)
     }
 
     pub(super) fn holds(&self) -> bool {
         self.overflowed || self.edited > self.submitted
     }
 
+    /// Whether the mirror knows of text typed into the box that nothing since removed.
+    fn knows_text(&self) -> bool {
+        self.escape.is_empty() && self.text.as_ref().is_some_and(|text| !text.is_empty())
+    }
+
+    /// How many bytes have been typed in all, a mark that moves with every key.
+    pub(super) fn edits(&self) -> u64 {
+        self.edited
+    }
+}
+
+/// Reading an empty input box against the keys typed ([`KeyTiming`]) and the text they typed.
+impl Draft {
     /// Whether an empty input box read at `now`, off a screen parsed from more than `output` bytes
     /// of the agent's output, shows what the keys typed so far did: the agent printed something
     /// after the last key went in, the key is [`KEY_SETTLE`] old, no key is still waiting for the
@@ -319,14 +340,14 @@ impl Draft {
     /// ([`Self::typed_mid_turn`]), nothing need have been printed after them: Claude Code at an
     /// idle empty box at times prints nothing for one (2.1.322), and an Esc there types no text.
     pub(super) fn settled(&self, output: u64, now: Instant) -> bool {
-        let Some((at, before)) = self.typed_at else {
+        let Some((_, before)) = self.keys.typed_at else {
             return false;
         };
         self.at_input_boundary(now)
             && !self.knows_text()
-            && self.inserted_at.is_none_or(|at| at <= self.submitted)
-            && (output > before || self.escapes_only)
-            && now.saturating_duration_since(at) >= KEY_SETTLE
+            && !self.keys.inserted_past(self.submitted)
+            && (output > before || self.keys.escapes_only)
+            && self.keys.latest_settled(now)
     }
 
     /// Takes the agent's input box, read empty at `now` off a screen parsed from more than
@@ -355,18 +376,7 @@ impl Draft {
     /// Ctrl-V, a prompt loaded from history), so it still holds. Nor is an Esc after the message
     /// a second press.
     pub(super) fn message_written(&mut self, now: Instant) {
-        if self
-            .inserted_when
-            .is_none_or(|at| now.saturating_duration_since(at) >= KEY_SETTLE)
-        {
-            self.inserted_at = None;
-        }
-        self.lone_escape_at = None;
-    }
-
-    /// Whether the mirror knows of text typed into the box that nothing since removed.
-    fn knows_text(&self) -> bool {
-        self.escape.is_empty() && self.text.as_ref().is_some_and(|text| !text.is_empty())
+        self.keys.message_written(now);
     }
 
     /// Whether the latest key, typed less than [`KEY_SETTLE`] before `now`, may have left text in
@@ -376,33 +386,71 @@ impl Draft {
     /// typed are not recorded at all.
     pub(super) fn text_may_be_undrawn(&self, now: Instant) -> bool {
         let text_unknown = self.text.is_none() || !self.escape.is_empty();
-        self.typed_at
-            .is_some_and(|(at, _)| now.saturating_duration_since(at) < KEY_SETTLE)
+        self.keys.latest_young(now)
             && (self.knows_text() || self.may_hold_unknown_text() || text_unknown)
     }
 
     /// Whether a key that may have put text the mirror cannot know in the box
     /// ([`may_insert`]) has been typed since the last acknowledged submission.
     pub(super) fn may_hold_unknown_text(&self) -> bool {
-        self.inserted_at.is_some_and(|at| at > self.submitted)
+        self.keys.inserted_past(self.submitted)
     }
 
     /// Marks the key just typed as written while the agent's title showed a turn running, or at a
     /// time that is not known: an Esc then cancels the turn, and the prompt the agent puts back in
     /// the box can come later than any output, so the key waits for output like any other.
     pub(super) fn typed_mid_turn(&mut self) {
-        self.escapes_only = false;
+        self.keys.escapes_only = false;
     }
 
-    /// How many bytes have been typed in all, a mark that moves with every key.
-    pub(super) fn edits(&self) -> u64 {
-        self.edited
+    /// [`KeyTiming::settle_typing`].
+    #[cfg(test)]
+    pub(super) fn settle_typing(&mut self) {
+        self.keys.settle_typing();
+    }
+
+    /// [`KeyTiming::fresh_typing`].
+    #[cfg(test)]
+    pub(super) fn fresh_typing(&mut self) {
+        self.keys.fresh_typing();
+    }
+}
+
+impl KeyTiming {
+    /// Whether the latest key went in at least [`KEY_SETTLE`] before `now`.
+    fn latest_settled(&self, now: Instant) -> bool {
+        self.typed_at
+            .is_some_and(|(at, _)| now.saturating_duration_since(at) >= KEY_SETTLE)
+    }
+
+    /// Whether the latest key went in less than [`KEY_SETTLE`] before `now`.
+    fn latest_young(&self, now: Instant) -> bool {
+        self.typed_at
+            .is_some_and(|(at, _)| now.saturating_duration_since(at) < KEY_SETTLE)
+    }
+
+    /// Whether a key that may put text the mirror cannot know in the box ([`may_insert`]) went in
+    /// past edit `submitted`.
+    fn inserted_past(&self, submitted: u64) -> bool {
+        self.inserted_at.is_some_and(|at| at > submitted)
+    }
+
+    /// [`Draft::message_written`]'s part: the key that may insert is forgotten unless it is younger
+    /// than [`KEY_SETTLE`], and the next Esc is no second press.
+    fn message_written(&mut self, now: Instant) {
+        if self
+            .inserted_when
+            .is_none_or(|at| now.saturating_duration_since(at) >= KEY_SETTLE)
+        {
+            self.inserted_at = None;
+        }
+        self.lone_escape_at = None;
     }
 
     /// Moves the time of the latest key, and of the latest key that may insert, to [`KEY_SETTLE`]
     /// ago at the latest, as if they had been typed that much earlier.
     #[cfg(test)]
-    pub(super) fn settle_typing(&mut self) {
+    fn settle_typing(&mut self) {
         let settled = Instant::now() - KEY_SETTLE;
         if let Some((at, _)) = &mut self.typed_at {
             *at = (*at).min(settled);
@@ -416,7 +464,7 @@ impl Draft {
     /// that no check the test makes finds them [`KEY_SETTLE`] old, however slowly it runs, until
     /// [`Self::settle_typing`].
     #[cfg(test)]
-    pub(super) fn fresh_typing(&mut self) {
+    fn fresh_typing(&mut self) {
         let fresh = Instant::now() + Duration::from_secs(3600);
         if let Some((at, _)) = &mut self.typed_at {
             *at = fresh;

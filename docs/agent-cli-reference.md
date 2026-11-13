@@ -235,7 +235,10 @@ about 80 ms after an Esc cancels a turn, before output or after it; `state=done`
 `state=clear` three times at exit, followed by an empty title. A report is made only when the state changes, never
 repeated. Without the answer the title keeps its glyphs: `✳ Claude Code` at the prompt, `◐`/`◑` alternating about once
 a second while a turn runs, and `✳` again at its end. Whether it reports `blocked` at a permission prompt or a question
-was not measured.
+was not measured. Read from the 2.1.323 executable's bundled code, not measured: the root state is `working` while a turn
+runs and also while the program is idle with a message queued, so a turn carried on from a queued message after an Esc
+reports no `idle` in between; and `blocked` while it waits on a permission prompt, a sandbox request, a worker request or
+a goal proposal (`kind=permission`), on input it needs (`kind=question`), or on an open dialog (no kind).
 
 **The markers are also replayed.** `api-request-blob` entries written into the main transcript while a session works
 carry the conversation so far in their `message.content`, earlier interrupt markers included (once with a trailing

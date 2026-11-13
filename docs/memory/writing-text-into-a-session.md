@@ -31,9 +31,10 @@ an idle Claude Code or Grok Build arms its "press again to exit" (the measuremen
 interrupt a turn" in `docs/agent-cli-reference.md`). So:
 
 - Write it through `LiveSession::write_keys_if`, with a gate that re-checks, under the input lock and right before
-  each key, the state the key is meant for — for a key meant for a running turn, the hook status read from the store
-  being `Working` and `title_activity().shows_running(..)` both. A check made before taking the lock is stale by the
-  time the key lands. The bytes are constants; no text from a model or a message reaches such a write.
+  each key, the state the key is meant for. Whether a turn is running is read through `LiveSession::turn_reading()`
+  (`apps/daemon/src/session/turn_reading.rs`): the interrupt key's gate is its `interrupt_may_press()`, and a new kind
+  of key gets a method of its own there, saying which way it errs, rather than combining the title, the dialog
+  sighting and the hook status itself. A check made before taking the lock is stale by the time the key lands. The bytes are constants; no text from a model or a message reaches such a write.
 - One key per write, never joined to a message or to another key: an Esc written together with a bracketed paste
   breaks the paste in Codex, whose text then lands behind a literal `[200~`.
 - Never repeat a key blind to make sure the first took: read what it did, on the screen or in the daemon's state, before

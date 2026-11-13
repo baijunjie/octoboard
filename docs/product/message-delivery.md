@@ -85,15 +85,22 @@ existing stash, an unrecognised composer, unconfirmed edits or an incomplete inp
 temporarily; an Esc typed on its own counts as a complete key once it is 500 ms old, so it holds nothing as an
 incomplete sequence after that, and does not keep the native stash from being used. Once the grace period has elapsed,
 the next delivery attempt no longer waits for edits to be confirmed: a composer that reads empty takes the message
-directly, once the user's last key is half a second old and the screen shows a whole frame, and one that shows text has
-it stashed around the message where the agent's native stash can be used. Only where it cannot — an agent without one,
-such as Codex, a stash already shown, an unfinished key, an unreadable composer, or a stash the agent did not confirm —
-is the message written into the current input and submitted with whatever unfinished user text is there. Draft
-protection therefore does not wait indefinitely for an ordinary prompt or a new process. The one exception is a composer
-that cannot be read at all after a key that can put unknown text into it (see below): the message then waits past the
-grace period, with no bound, until the composer can be read again or a typed prompt is matched, since a view that hides
-the composer, such as a picker, would take the message's keys. Claude Code's composer is read while it shows a prompt
-recalled from history under its `History` rule. This grace period does not raise the session's hand.
+directly, and one that shows text has it stashed around the message where the agent's native stash can be used. Only
+where it cannot — an agent without one, such as Codex, a stash already shown, an unfinished key, an unreadable composer,
+or a stash the agent did not confirm — is the message written into the current input and submitted with whatever
+unfinished user text is there. Such a write still waits while a key the user typed less than half a second ago may have
+put text into the composer that is not drawn yet. A composer read empty off a frame not drawn whole (see the first
+condition under "Keys that leave the composer empty are confirmed by the screen" below) holds the message for 2 seconds
+of retries in all, since an agent that keeps redrawing, as one mid-turn can, may never show a whole frame: the retries
+refused for that reason form a run, which goes on while each comes within 10 seconds of the one before, and ends once a
+message is written or the composer is read off a whole frame. Once the run has lasted 2 seconds, the message is written
+on such a reading. A retry held for another reason — a key typed less than half a second ago, or the unreadable composer
+below — neither starts the run nor ends it. Draft protection therefore does not wait indefinitely for an ordinary prompt
+or a new process. The one exception is a composer that cannot be read at all after a key that can put unknown text into
+it (see below): the message then waits past the grace period, with no bound, until the composer can be read again or a
+typed prompt is matched, since a view that hides the composer, such as a picker, would take the message's keys. Claude
+Code's composer is read while it shows a prompt recalled from history under its `History` rule. This grace period does
+not raise the session's hand.
 
 **Keys that leave the composer empty are confirmed by the screen.** User edits are confirmed by the agent reporting a
 prompt sent that they account for, or, for keys no submitted prompt accounts for — an Esc, Ctrl-U, Ctrl-C, text typed
@@ -101,13 +108,16 @@ and cleared again, a prompt sent that no hook matched — by the composer readin
 
 - the empty composer is read off a whole frame: no synchronized-output update (`ESC[?2026h` to `ESC[?2026l`, which
   Codex and Grok Build wrap each frame in) is open, the agent's output has been quiet for 50 ms, and nothing arrives
-  while the screen is read;
+  while the screen is read. An update open for 1 second or more counts as over, so an agent that never closes one
+  does not keep the screen from showing a whole frame; an update opened again before it is closed keeps the time it
+  was first opened;
 - the agent has printed output since the user's last key. A single Esc typed at the prompt while no other key held
   the session is the exception: it needs no output after it, since an agent can print nothing for an Esc at an empty
   prompt and such an Esc types no text. It counts as typed at the prompt only while neither the title nor the agent's
-  reported status last showed a turn running; an Esc typed during a turn cancels it, and the prompt the agent puts
-  back can come after any output, so it waits for output like any other key. So does retained typing replayed after a
-  native stash (see above), whose timing is not known;
+  reported status last showed a turn running, and the agent's hooks do not report one running either, as they can
+  right after a prompt is sent, while the title still shows the prompt; an Esc typed during a turn cancels it, and the
+  prompt the agent puts back can come after any output, so it waits for output like any other key. So does retained
+  typing replayed after a native stash (see above), whose timing is not known;
 - that key is at least 500 ms old;
 - no input sequence the user typed is still incomplete; a single Esc counts as a complete key once it is 500 ms old,
   as above, and a key typed after that is a key of its own, not the rest of a sequence;
