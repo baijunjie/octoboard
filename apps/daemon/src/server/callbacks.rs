@@ -17,7 +17,7 @@ use bytes::Bytes;
 use crate::holder::protocol::RelayRoute;
 use crate::hooks;
 use crate::hooks::queue::Push;
-use crate::state::AppState;
+use crate::state::{AppState, RestartRefusal};
 
 /// What a helper route answers: a status, and a body that is JSON or empty.
 pub(super) struct Reply {
@@ -271,31 +271,43 @@ pub(super) async fn shutdown(State(state): State<Arc<AppState>>) -> impl IntoRes
 
 /// The request to make a planned restart: `main` hands every terminal over to its holder, and the
 /// next daemon comes up on the same address and adopts them. It answers `202` at once and does not
-/// wait for that; a refusal (`AppState::planned_restart_refusal`) is `409` with a JSON body naming
+/// wait for that; a refusal (`RestartRefusal`) is `409` with a JSON body naming
 /// the reason, and stops nothing.
 pub(super) async fn restart(State(state): State<Arc<AppState>>) -> Reply {
     match state.request_planned_restart() {
         Ok(()) => Reply::status(StatusCode::ACCEPTED),
         Err(refusal) => {
             tracing::info!(reason = refusal.code(), "a planned restart was refused");
-            Reply {
-                status: StatusCode::CONFLICT,
-                body: serde_json::json!({
-                    "reason": refusal.code(),
-                    "message": refusal.message(),
-                })
-                .to_string(),
-            }
+            refusal_reply(refusal)
         }
     }
 }
 
 /// The request to make a planned stop with no successor: `main` hands every terminal over to its
 /// holder and exits, leaving the sessions to whichever daemon starts next. It answers `202` at once
-/// and is never refused.
+/// and does not wait for that; the one refusal, as `restart` answers it, is `holders_in_service`,
+/// for a service-managed daemon with a holder running programs inside its own service, which the
+/// service's stop after the daemon's exit would end.
 pub(super) async fn planned_stop(State(state): State<Arc<AppState>>) -> Reply {
-    state.request_planned_stop();
-    Reply::status(StatusCode::ACCEPTED)
+    match state.request_planned_stop_unless_holders_in_service() {
+        Ok(()) => Reply::status(StatusCode::ACCEPTED),
+        Err(refusal) => {
+            tracing::info!(reason = refusal.code(), "a planned stop was refused");
+            refusal_reply(refusal)
+        }
+    }
+}
+
+/// The `409` a refused planned restart or stop answers: a JSON body naming the reason.
+fn refusal_reply(refusal: RestartRefusal) -> Reply {
+    Reply {
+        status: StatusCode::CONFLICT,
+        body: serde_json::json!({
+            "reason": refusal.code(),
+            "message": refusal.message(),
+        })
+        .to_string(),
+    }
 }
 
 #[cfg(test)]

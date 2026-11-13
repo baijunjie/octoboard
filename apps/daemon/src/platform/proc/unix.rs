@@ -5,7 +5,7 @@ use std::process::{Command, Stdio};
 use std::sync::{Arc, OnceLock};
 
 use super::cgroup::{Group, Subtree};
-pub(crate) use super::systemd::{start_in_user_unit, user_service_unit};
+pub(crate) use super::systemd::{in_systemd_service, start_in_user_unit, user_service_unit};
 
 use super::{
     tag_value, Polite, ProcessId, ProcessIdentity, Sent, SetEnv, Signal, Swept, Unreaped,

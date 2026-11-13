@@ -204,6 +204,7 @@ const CORE_CODES = {
   // remedy as the archive's failure is, from the failure it carries.
   handoff_move_failed: { origin: "daemon", unexpected: "shown as the failure its `reason_code` names", nested: "failure", alertTitle: true, recordIds: ["receiving_session"], nameParams: ["receiving_session"] },
   handoff_to_same_agent: { origin: "daemon", unexpected: "the handoff dialog never offers the session's own agent" },
+  holders_in_service: { origin: "daemon", recovery: "none", codeParams: ["command"], uiParams: { command: "systemctl" } },
   // The console dialog draws a picked image into a data URL scaled down to the limit, so only an imported
   // configuration carries an avatar that is not an image or is too large.
   icon_not_an_image: { origin: "daemon", recovery: "avatarImage", variants: { import: { nameParams: ["console_name"] } }, variantOf: (params) => params.console_name ? "import" : undefined },

@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 
-use super::{ClientConfig, Holders, OnResolved, RelayHandler, RelayReply, RelayRequest};
+use super::{ClientConfig, Holders, OnResolved, Placement, RelayHandler, RelayReply, RelayRequest};
 use crate::holder::compat::Range;
 
 /// Holders that run in this process, registering in `registry_dir`: what the tests of the held
@@ -59,6 +59,23 @@ pub(crate) fn in_process_with(
     holder_version: &str,
     range: Range,
 ) -> Result<Holders> {
+    in_process_placed(
+        registry_dir,
+        relay,
+        holder_version,
+        range,
+        Placement::Detached,
+    )
+}
+
+/// [`in_process_with`], with each holder reported as started in `placement`.
+pub(crate) fn in_process_placed(
+    registry_dir: PathBuf,
+    relay: Arc<dyn RelayHandler>,
+    holder_version: &str,
+    range: Range,
+    placement: Placement,
+) -> Result<Holders> {
     let holder_version = holder_version.to_string();
     Holders::new(ClientConfig {
         registry_dir,
@@ -86,7 +103,7 @@ pub(crate) fn in_process_with(
                     tracing::warn!(%err, "the test holder failed");
                 }
             });
-            Ok(())
+            Ok(placement)
         }),
     })
 }

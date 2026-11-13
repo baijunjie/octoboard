@@ -3453,7 +3453,7 @@
           "required": [
             "type"
           ],
-          "description": "Stops the daemon with every terminal handed over to its holder, the sessions left running\nfor the next daemon to adopt with their screens exact; starts no successor. Answered with\n`ack`; never refused."
+          "description": "Stops the daemon with every terminal handed over to its holder, the sessions left running\nfor the next daemon to adopt with their screens exact; starts no successor. Answered with\n`ack`; refused with `holders_in_service` where a service manager runs the daemon and a\nholder running programs is inside the daemon's own systemd service."
         },
         {
           "type": "object",

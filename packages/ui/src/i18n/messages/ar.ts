@@ -632,6 +632,8 @@ export const ar: Translation<"zero" | "one" | "two" | "few" | "many" | "other"> 
   "daemon.agent_not_available": "{agent} غير متاح: لم يُعثر على ملفه التنفيذي في {pathVar} لصدفة تسجيل الدخول. لفتح جلسة، تأكد من توفر أحد الوكلاء المدعومين التاليين في {pathVar}: {agents}.",
   "daemon.account_disabled": "الحساب {account} ({agent}) معطل، لذا لا يمكن فتح جلسة عليه.",
   "daemon.daemon_shutting_down": "يجري إيقاف الخدمة الخلفية. أعد المحاولة بعد إعادة تشغيلها.",
+  "daemon.holders_in_service":
+    "تعمل الجلسات والوحدات الطرفية داخل وحدة systemd الخاصة بالخدمة الخلفية، لذا فإن إيقاف الخدمة الخلفية أو إعادة تشغيلها سينهي هذه الجلسات والوحدات الطرفية. للمتابعة على أي حال، أوقف الوحدة أو أعد تشغيلها باستخدام {command} على الخادم.",
   "daemon.account_not_signed_in": "الحساب {account} ({agent}) لم يسجّل الدخول، لذا لا يمكن فتح جلسة عليه.",
   "daemon.account_quota_exhausted": "لا يمكن للحساب {account} ({agent}) تشغيل جلسة لأنه بلغ {quota}.",
   "daemon.account_quota_exhausted.resets": "لا يمكن للحساب {account} ({agent}) تشغيل جلسة لأنه بلغ {quota}. يُعاد تعيينه خلال {time}.",

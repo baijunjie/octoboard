@@ -300,6 +300,10 @@ holder and what it starts as the daemon's own; see [`../processes/ledger/README.
 - `quit_targets::reconcile`, `quit_targets::QuitTargets`, `quit_targets::Target`, `Holders::end_quit_targets`,
   `Holders::wait_endings`, `client::ENDINGS_WAIT` — the application's quit record read at start, the endings of the
   holders it names (`HeldTerminal::end` tells whether one is confirmed), and the bounded wait for them.
+- `client::Placement` (`launch_holder`'s answer: where a holder started, which of them ends with the daemon's own
+  systemd unit) and `Holders::claim_planned_stop` (called from `state/stop.rs`) — a planned stop or restart is claimed
+  from the holders, which refuse it while a holder in the daemon's own unit runs a program, and after it admit no new
+  program in one.
 - `Holders::pending_holders` — the holders that could not be linked to and are tried again.
 - `Holders::versions` — the version each linked or pending holder reports, by holder id, which
   `coordinator::handover_check` judges against the next daemon's floor.

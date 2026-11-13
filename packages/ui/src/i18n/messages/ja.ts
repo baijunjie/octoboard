@@ -645,6 +645,8 @@ export const ja: Translation<"other"> = {
   "daemon.agent_not_available": "{agent} を使用できません。ログインシェルの {pathVar} に実行ファイルが見つかりません。セッションを開くには、次の対応エージェントのいずれかを {pathVar} から実行できるようにしてください: {agents}。",
   "daemon.account_disabled": "{account}（{agent}）は無効になっているため、このアカウントでセッションを開けません。",
   "daemon.daemon_shutting_down": "デーモンを停止しています。再起動後に再試行してください。",
+  "daemon.holders_in_service":
+    "セッションとターミナルはデーモンの systemd ユニット内で実行されているため、デーモンを停止または再起動すると終了します。それでも行う場合は、サーバーで {command} を使ってユニットを停止または再起動してください。",
   "daemon.account_not_signed_in": "{account}（{agent}）はログインしていないため、このアカウントでセッションを開けません。",
   "daemon.account_quota_exhausted": "{account}（{agent}）は {quota} に達しているため、セッションを実行できません。",
   "daemon.account_quota_exhausted.resets": "{account}（{agent}）は {quota} に達しているため、セッションを実行できません。{time} 後にリセットされます。",

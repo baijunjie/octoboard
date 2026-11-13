@@ -1306,7 +1306,8 @@ pub enum RequestBody {
     Shutdown,
     /// Stops the daemon with every terminal handed over to its holder, the sessions left running
     /// for the next daemon to adopt with their screens exact; starts no successor. Answered with
-    /// `ack`; never refused.
+    /// `ack`; refused with `holders_in_service` where a service manager runs the daemon and a
+    /// holder running programs is inside the daemon's own systemd service.
     PlannedStop,
     /// Asks which running sessions and shell terminals a planned stop followed by a daemon that
     /// adopts holders from `holder_floor` up to `target_version` (the next daemon's own, both

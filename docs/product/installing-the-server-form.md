@@ -9,7 +9,9 @@ The desktop application's own installation is in `docs/product/installing-the-de
 - **Linux on x86_64 or aarch64, any distribution.** Each build is statically linked (against musl), so it needs no C
   library or other package from the system, and carries the UI inside the binary (see "The UI the daemon serves" in
   `docs/product/server-form.md`).
-- **Running it as a service needs systemd** (a user manager for the installing user); everything else runs without it.
+- **Running it as a service needs systemd** (a user manager for the installing user), version 236 or later for the
+  sessions to outlive a restart of the service (see "Running as a systemd user service" in
+  `docs/product/server-form.md`); everything else runs without it.
 - **No root.** It is installed for one user, under that user's home directory, and runs as that user.
 - It is installed only by the install script below, or by hand from a release's archive. There is no Homebrew formula,
   `.deb` or `.rpm` package, npm package or `cargo install`.

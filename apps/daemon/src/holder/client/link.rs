@@ -27,7 +27,7 @@ use std::path::PathBuf;
 #[cfg(test)]
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{mpsc as std_mpsc, Arc, Condvar, Mutex, MutexGuard};
+use std::sync::{mpsc as std_mpsc, Arc, Condvar, Mutex, MutexGuard, OnceLock};
 use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -38,6 +38,7 @@ use tokio_tungstenite::tungstenite::Message;
 use super::companion::HeldCompanion;
 use super::held::HeldTerminal;
 use super::relay::{RelayHandler, RelayRequest, Relaying};
+use super::InService;
 use crate::holder::protocol::{
     decode_bulk, BulkKind, CompanionEndpoint, ContainmentSpec, EndpointKind, FromHolder,
     HandoverTail, LastParting, OfflineAnswer, Ready, RelayRoute, SignalKind, SpawnSpec,
@@ -309,6 +310,9 @@ pub(super) struct Link {
     handed_over: Mutex<HashSet<String>>,
     /// The companions of this link's terminals and launches, by terminal id.
     companions: Mutex<HashMap<String, Arc<CompanionRoute>>>,
+    /// Where the holder runs inside the daemon's own systemd service, the record that refuses
+    /// its programs once a restart is claimed ([`Self::admit`]).
+    in_service: OnceLock<Arc<Mutex<InService>>>,
     welcome: Welcome,
 }
 
@@ -443,6 +447,7 @@ impl Link {
             tail_arrived: Condvar::new(),
             handed_over: Mutex::new(HashSet::new()),
             companions: Mutex::new(companions),
+            in_service: OnceLock::new(),
             welcome,
         });
         link.serve(wire_out, wire_in);
@@ -754,9 +759,41 @@ impl Link {
         self.pending.load(Ordering::Acquire)
     }
 
-    #[cfg(test)]
+    /// Whether the holder is gone for good: the link is down, not on its way back, and not tried
+    /// again.
     pub(super) fn lost(&self) -> bool {
         !self.alive() && !self.recovering.load(Ordering::Acquire) && !self.pending()
+    }
+
+    /// Whether the holder runs a program of this daemon: a terminal or a companion that has not
+    /// exited, or is not released yet.
+    pub(super) fn runs_programs(&self) -> bool {
+        let terminal = locked(&self.terminals)
+            .values()
+            .any(|routed| !routed.exited.load(Ordering::Acquire));
+        terminal
+            || locked(&self.companions)
+                .values()
+                .any(|route| !route.exited.load(Ordering::Acquire))
+    }
+
+    /// Marks the holder as running inside the daemon's own systemd service, whose `service`
+    /// record then refuses its programs once a stop or restart is claimed.
+    pub(super) fn place_in_service(&self, service: Arc<Mutex<InService>>) {
+        let _ = self.in_service.set(service);
+    }
+
+    /// Admits a program to the holder: refused, coded as the daemon shutting down, once a stop or
+    /// restart is claimed where the holder runs in the daemon's service. The guard is the
+    /// record's lock, held by the caller until the program is recorded on the link, so that a
+    /// claim sees it.
+    fn admit(&self) -> Result<Option<MutexGuard<'_, InService>>> {
+        let Some(service) = self.in_service.get() else {
+            return Ok(None);
+        };
+        let service = locked(service);
+        service.admit()?;
+        Ok(Some(service))
     }
 
     /// Gives the holder no more terminals: it is told to drain now if it is linked, or once it is
@@ -1294,7 +1331,9 @@ impl Link {
         // Routed before the request goes out: the companion's end may arrive before the answer is
         // read.
         let route = Arc::new(CompanionRoute::default());
+        let admitted = self.admit()?;
         locked(&self.companions).insert(id.to_string(), route.clone());
+        drop(admitted);
         let started = self.request(None, |req| ToHolder::StartCompanion {
             id: id.to_string(),
             req,
@@ -1379,6 +1418,8 @@ impl Link {
         // A connection that dropped is dealt with first, so that the terminal is routed on the
         // connection the request goes out on, and not cleared with the one that is gone.
         self.settled();
+        // Held until the terminal is routed, so that a restart claimed meanwhile sees it.
+        let admitted = self.admit()?;
         let id = spec.id.clone();
         let binds_companion = spec.companion;
         if binds_companion {
@@ -1397,6 +1438,7 @@ impl Link {
         // Routed before the request goes out: the program's first output can arrive before the
         // holder's reply does.
         locked(&self.terminals).insert(id.clone(), routed.clone());
+        drop(admitted);
         let (reply, replied) = std_mpsc::channel();
         locked(&self.spawns).insert(id.clone(), reply);
         let forgotten = |link: &Self| {

@@ -16,7 +16,7 @@ use crate::platform::proc::Containment;
 use crate::platform::term::Command;
 #[cfg(target_os = "linux")]
 use crate::test_support::cgroups::ChildCgroup;
-use crate::test_support::{ScratchDir, PATIENCE};
+use crate::test_support::{code_of, ScratchDir, PATIENCE};
 
 /// What the scripted holder does once it has been asked to start a program.
 #[derive(Clone, Copy)]
@@ -117,6 +117,11 @@ fn holders_over(dir: &ScratchDir, port: u16) -> Holders {
 
 /// [`holders_over`], with the holder's registry file naming `started` as its process.
 fn holders_over_process(dir: &ScratchDir, port: u16, started: String) -> Holders {
+    holders_placed(dir, port, started, Placement::Detached)
+}
+
+/// [`holders_over_process`], with each holder started in `placement`.
+fn holders_placed(dir: &ScratchDir, port: u16, started: String, placement: Placement) -> Holders {
     Holders::new(ClientConfig {
         registry_dir: dir.join("holders"),
         exe: PathBuf::from("/x"),
@@ -137,6 +142,7 @@ fn holders_over_process(dir: &ScratchDir, port: u16, started: String) -> Holders
                     exe: "/x".to_string(),
                 },
             )
+            .map(|()| placement)
         }),
     })
     .expect("holders")
@@ -182,7 +188,7 @@ fn holders_of_current_build(registry_dir: PathBuf) -> Holders {
                     .block_on(crate::holder::server::run(config))
                     .expect("the holder runs");
             });
-            Ok(())
+            Ok(Placement::Detached)
         }),
     })
     .expect("holders")
@@ -1530,12 +1536,15 @@ fn welcome_text_running_companions() -> String {
 /// A holder that welcomes the daemon with `welcome` and answers a launch's key, a companion's
 /// start and a spawn. With `hangs_up_on_spawn`, once it has answered the spawn it removes its
 /// registry files from `registry_dir`, when given, and hangs up, as a holder that ends on its own
-/// does (one that leaves its files is a holder that cannot be reached for now). Returns the port
-/// it listens on and every frame it received.
+/// does (one that leaves its files is a holder that cannot be reached for now). With
+/// `ends_companion_on_spawn`, it also tells, over the link it keeps, that the terminal the spawn
+/// started has exited and so has the companion bound to it. Returns the port it listens on and
+/// every frame it received.
 async fn launch_holder(
     welcome: String,
     registry_dir: Option<PathBuf>,
     hangs_up_on_spawn: bool,
+    ends_companion_on_spawn: bool,
 ) -> (u16, Arc<std::sync::Mutex<Vec<String>>>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("a port");
     let port = listener.local_addr().unwrap().port();
@@ -1553,6 +1562,7 @@ async fn launch_holder(
             .expect("the welcome");
         while let Some(Ok(Message::Text(text))) = socket.next().await {
             seen.lock().unwrap().push(text.clone());
+            let mut ended = Vec::new();
             let (reply, vanishes) = match serde_json::from_str::<ToHolder>(&text) {
                 Ok(ToHolder::IssueLaunch { req, .. }) => (
                     Some(FromHolder::LaunchIssued {
@@ -1571,17 +1581,28 @@ async fn launch_holder(
                     }),
                     false,
                 ),
-                Ok(ToHolder::Spawn(spec)) => (
-                    Some(FromHolder::Spawned {
-                        id: spec.id,
-                        pid: 4343,
-                        identity: None,
-                    }),
-                    hangs_up_on_spawn,
-                ),
+                Ok(ToHolder::Spawn(spec)) => {
+                    if ends_companion_on_spawn {
+                        ended.push(FromHolder::Exited {
+                            id: spec.id.clone(),
+                            output_open: false,
+                        });
+                        ended.push(FromHolder::CompanionEnded {
+                            id: spec.id.clone(),
+                        });
+                    }
+                    (
+                        Some(FromHolder::Spawned {
+                            id: spec.id,
+                            pid: 4343,
+                            identity: None,
+                        }),
+                        hangs_up_on_spawn,
+                    )
+                }
                 _ => (None, false),
             };
-            if let Some(reply) = reply {
+            for reply in reply.into_iter().chain(ended) {
                 socket
                     .send(Message::Text(serde_json::to_string(&reply).unwrap()))
                     .await
@@ -1607,7 +1628,7 @@ async fn launch_holder(
 #[tokio::test(flavor = "multi_thread")]
 async fn a_launch_in_a_holder_that_runs_no_companions_is_told_so_and_sends_none() {
     let dir = ScratchDir::new("client-no-companions");
-    let (port, received) = launch_holder(welcome_text(), None, false).await;
+    let (port, received) = launch_holder(welcome_text(), None, false, false).await;
     tokio::task::spawn_blocking(move || {
         let holders = holders_over(&dir, port);
         let issued = holders
@@ -1687,8 +1708,13 @@ fn wait_for(what: &str, done: impl FnMut() -> bool) {
 async fn a_bound_companion_reads_as_exited_once_the_link_to_its_holder_is_lost_for_good() {
     let dir = ScratchDir::new("client-companion-lost");
     let registry_dir = dir.join("holders");
-    let (port, _) =
-        launch_holder(welcome_text_running_companions(), Some(registry_dir), true).await;
+    let (port, _) = launch_holder(
+        welcome_text_running_companions(),
+        Some(registry_dir),
+        true,
+        false,
+    )
+    .await;
     tokio::task::spawn_blocking(move || {
         let holders = holders_over(&dir, port);
         let link = holders.link().expect("linked");
@@ -1709,7 +1735,7 @@ async fn a_bound_companion_reads_as_exited_once_the_link_to_its_holder_is_lost_f
 #[tokio::test(flavor = "multi_thread")]
 async fn a_bound_companion_stays_while_the_link_is_pending_and_exits_once_the_holder_is_gone() {
     let dir = ScratchDir::new("client-companion-pending");
-    let (port, _) = launch_holder(welcome_text_running_companions(), None, true).await;
+    let (port, _) = launch_holder(welcome_text_running_companions(), None, true, false).await;
     let stand_in = StandIn::start();
     let entry = stand_in.entry("dropped", port);
     registry::write(&dir.join("holders"), &entry).unwrap();
@@ -1739,7 +1765,7 @@ async fn a_bound_companion_stays_while_the_link_is_pending_and_exits_once_the_ho
 #[tokio::test(flavor = "multi_thread")]
 async fn a_planned_parting_leaves_a_bound_companion_not_exited() {
     let dir = ScratchDir::new("client-companion-parting");
-    let (port, _) = launch_holder(welcome_text_running_companions(), None, false).await;
+    let (port, _) = launch_holder(welcome_text_running_companions(), None, false, false).await;
     tokio::task::spawn_blocking(move || {
         let holders = holders_over(&dir, port);
         let link = holders.link().expect("linked");
@@ -1860,4 +1886,282 @@ async fn linking_to_a_holder_has_the_groups_below_its_cgroup_found_again() {
         .await
         .unwrap();
     drop((dir, cgroup));
+}
+
+/// A holder started inside the daemon's own systemd service counts from the moment its launch
+/// returns, while its registry file is waited for, and no longer once its start has failed.
+#[cfg(unix)]
+#[test]
+fn a_holder_started_in_the_daemons_service_counts_while_it_starts_and_not_once_its_start_failed() {
+    let dir = ScratchDir::new("client-in-service-starting");
+    let registry = dir.join("holders");
+    // The launch registers nothing: the start waits for the registry file.
+    let holders = Arc::new(
+        Holders::new(ClientConfig {
+            registry_dir: registry.clone(),
+            exe: PathBuf::from("/x"),
+            builds: None,
+            range: Range::current(),
+            relay: Arc::new(Unavailable),
+            launch: Box::new(|_, _, _| Ok(Placement::InDaemonService)),
+        })
+        .expect("holders"),
+    );
+    assert!(!holders.any_in_daemon_service(), "nothing is started yet");
+
+    let starting = holders.clone();
+    let start = std::thread::spawn(move || starting.link().map(|_| ()));
+    let deadline = Instant::now() + PATIENCE;
+    let holder_id = loop {
+        if let Some(holder_id) = locked(&holders.shared.in_service)
+            .holders
+            .keys()
+            .next()
+            .cloned()
+        {
+            break holder_id;
+        }
+        assert!(Instant::now() < deadline, "the launch was not reached");
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    assert!(
+        holders.any_in_daemon_service(),
+        "a holder whose start is waiting for its registry file counts"
+    );
+
+    // Its file names a port nothing listens on, so that linking to it fails.
+    let closed = crate::test_support::ClosedPort::new();
+    registry::write(
+        &registry,
+        &RegistryEntry {
+            holder_id,
+            pid: std::process::id(),
+            started: String::new(),
+            port: closed.port,
+            secret: "secret".to_string(),
+            version: "test".to_string(),
+            build_id: "test".to_string(),
+            exe: "/x".to_string(),
+        },
+    )
+    .expect("the registry file");
+    assert!(start.join().unwrap().is_err(), "the link was refused");
+    assert!(
+        !holders.any_in_daemon_service(),
+        "a holder whose start failed counts"
+    );
+}
+
+/// A holder started inside the daemon's own systemd service counts only while it runs a terminal
+/// of this daemon: one with nothing to run, which the service's stop would end for nothing, does
+/// not. One started in a unit of its own, or detached outside the service, never counts.
+#[cfg(unix)]
+#[test]
+fn a_linked_holder_in_the_daemons_service_counts_while_it_runs_a_terminal() {
+    for (placement, counts) in [
+        (Placement::OwnUnit, false),
+        (Placement::Detached, false),
+        (Placement::InDaemonService, true),
+    ] {
+        let dir = ScratchDir::new("client-in-service-terminal");
+        let holders = test_holders::in_process_placed(
+            dir.join("holders"),
+            Arc::new(Unavailable),
+            env!("CARGO_PKG_VERSION"),
+            Range::current(),
+            placement,
+        )
+        .expect("holders");
+        holders.link().expect("the holder starts");
+        assert!(
+            !holders.any_in_daemon_service(),
+            "a holder started as {placement:?} with no terminal counts"
+        );
+
+        let terminal = holders.spawn(sleeping_spec()).expect("the terminal starts");
+        assert_eq!(
+            holders.any_in_daemon_service(),
+            counts,
+            "a holder started as {placement:?} that runs a terminal counts as in the daemon's service"
+        );
+
+        terminal.end();
+        drop(terminal);
+        let deadline = Instant::now() + PATIENCE;
+        while holders.any_in_daemon_service() {
+            assert!(
+                Instant::now() < deadline,
+                "a holder that runs no terminal any more still counts"
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        drop(holders);
+        drop(dir);
+    }
+}
+
+/// A sleeping terminal's spec.
+#[cfg(unix)]
+fn sleeping_spec() -> SpawnSpec {
+    let mut sleeping = spec();
+    sleeping.command = crate::test_support::programs::sleep(60).term_command();
+    sleeping
+}
+
+/// A restart is claimed only where no holder in the daemon's service runs a program, and a claim
+/// refused changes nothing: a program is still admitted after it.
+#[cfg(unix)]
+#[test]
+fn a_restart_claim_is_refused_while_a_holder_in_the_daemons_service_runs_a_program() {
+    let dir = ScratchDir::new("client-claim-refused");
+    let holders = test_holders::in_process_placed(
+        dir.join("holders"),
+        Arc::new(Unavailable),
+        env!("CARGO_PKG_VERSION"),
+        Range::current(),
+        Placement::InDaemonService,
+    )
+    .expect("holders");
+    let terminal = holders.spawn(sleeping_spec()).expect("the terminal starts");
+    assert!(
+        !holders.claim_planned_stop(),
+        "a running terminal was claimed over"
+    );
+    assert!(
+        !locked(&holders.shared.in_service).stop_claimed,
+        "a refused claim was kept"
+    );
+    let second = holders
+        .spawn(sleeping_spec())
+        .expect("a program is admitted after a refused claim");
+
+    for terminal in [terminal, second] {
+        terminal.end();
+        drop(terminal);
+    }
+    let deadline = Instant::now() + PATIENCE;
+    while holders.any_in_daemon_service() {
+        assert!(Instant::now() < deadline, "the terminals still count");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert!(
+        holders.claim_planned_stop(),
+        "nothing runs, yet the claim is refused"
+    );
+}
+
+/// Once a stop or restart is claimed, a holder in the daemon's service is not linked to or used
+/// and takes no program: not a terminal, and not a companion. The refusal is coded as the daemon
+/// shutting down.
+#[cfg(unix)]
+#[test]
+fn nothing_is_linked_or_used_in_the_daemons_service_once_a_stop_is_claimed() {
+    // No holder is linked to yet: a holder process may be launched, but the start is refused and
+    // records nothing.
+    let dir = ScratchDir::new("client-claim-start");
+    let holders = Holders::new(ClientConfig {
+        registry_dir: dir.join("holders"),
+        exe: PathBuf::from("/x"),
+        builds: None,
+        range: Range::current(),
+        relay: Arc::new(Unavailable),
+        launch: Box::new(|_, _, _| Ok(Placement::InDaemonService)),
+    })
+    .expect("holders");
+    assert!(holders.claim_planned_stop());
+    let err = holders.link().err().expect("the start is refused");
+    assert_eq!(code_of(&err), error_code::DAEMON_SHUTTING_DOWN, "{err:#}");
+    assert!(locked(&holders.shared.in_service).holders.is_empty());
+    drop((holders, dir));
+
+    // A holder linked to before the claim takes no program after it.
+    let dir = ScratchDir::new("client-claim-spawn");
+    let holders = test_holders::in_process_placed(
+        dir.join("holders"),
+        Arc::new(Unavailable),
+        env!("CARGO_PKG_VERSION"),
+        Range::current(),
+        Placement::InDaemonService,
+    )
+    .expect("holders");
+    holders.link().expect("the holder starts");
+    assert!(
+        holders.claim_planned_stop(),
+        "a holder with nothing to run was claimed over"
+    );
+    let err = holders
+        .spawn(sleeping_spec())
+        .err()
+        .expect("the terminal is refused");
+    assert_eq!(code_of(&err), error_code::DAEMON_SHUTTING_DOWN, "{err:#}");
+    assert!(
+        !holders.any_in_daemon_service(),
+        "a refused terminal was recorded"
+    );
+}
+
+/// A holder in a unit of its own, or detached outside the service, is not the claim's concern: it
+/// takes programs after a claim.
+#[cfg(unix)]
+#[test]
+fn a_restart_claim_leaves_holders_outside_the_daemons_service_alone() {
+    for placement in [Placement::OwnUnit, Placement::Detached] {
+        let dir = ScratchDir::new("client-claim-outside");
+        let holders = test_holders::in_process_placed(
+            dir.join("holders"),
+            Arc::new(Unavailable),
+            env!("CARGO_PKG_VERSION"),
+            Range::current(),
+            placement,
+        )
+        .expect("holders");
+        let first = holders.spawn(sleeping_spec()).expect("the terminal starts");
+        assert!(
+            holders.claim_planned_stop(),
+            "a holder started as {placement:?} was counted"
+        );
+        let second = holders
+            .spawn(sleeping_spec())
+            .expect("a holder started outside the service admits a program after the claim");
+        for terminal in [first, second] {
+            terminal.end();
+            drop(terminal);
+        }
+        drop((holders, dir));
+    }
+}
+
+/// A companion counts as a program of its holder only while it has not exited, as a terminal does.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_companion_runs_a_program_only_until_it_exits() {
+    let dir = ScratchDir::new("client-companion-program");
+    let (port, _) = launch_holder(welcome_text_running_companions(), None, false, true).await;
+    tokio::task::spawn_blocking(move || {
+        let holders = holders_over(&dir, port);
+        let link = holders.link().expect("linked");
+        assert!(!link.runs_programs());
+        let (companion, _) = link
+            .start_companion(
+                "t1",
+                Command::new("/bin/true"),
+                Ready::SocketExists,
+                PATIENCE,
+                None,
+            )
+            .expect("the holder starts the companion");
+        assert!(link.runs_programs(), "a running companion was not counted");
+        // The holder answers the spawn, then tells over the live link that the terminal and the
+        // companion bound to it have ended.
+        let terminal = link
+            .spawn(SpawnSpec {
+                companion: true,
+                ..spec()
+            })
+            .expect("the holder starts the terminal");
+        wait_for("the companion reads as exited", || companion.exited());
+        wait_for("an exited companion counts", || !link.runs_programs());
+        drop((terminal, companion, link, holders));
+    })
+    .await
+    .unwrap();
 }

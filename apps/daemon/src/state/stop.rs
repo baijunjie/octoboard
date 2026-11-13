@@ -1,7 +1,13 @@
 //! How the daemon's run is asked to end: an ordinary stop, which ends every session as interrupted,
 //! or a planned stop, which leaves every terminal running in its holder for the next daemon to
 //! adopt exactly (`crate::coordinator::planned_stop`). A planned stop whose daemon also starts the
-//! next one is a planned restart, which a daemon that follows an application refuses.
+//! next one is a planned restart, which a daemon that follows an application refuses, and so does
+//! a service-managed daemon while a holder with a program to run is inside its own systemd service
+//! (`holder::client::Holders::claim_planned_stop`), which is decided atomically with the
+//! admission of new programs there: once a restart is accepted, a session or terminal that would
+//! run inside the service is refused until the restart completes. A planned stop with no
+//! successor that a client asks for ([`AppState::request_planned_stop_unless_holders_in_service`])
+//! is refused in that same case, since the service's stop ends those holders after it too.
 //!
 //! The stop asked for only ever moves from none to one, or from planned to ordinary, never back:
 //! an ordinary stop takes the place of a planned one, and a planned stop never takes the place of
@@ -31,7 +37,7 @@ pub enum StopKind {
     Planned { successor: bool },
 }
 
-/// Why a planned restart is refused.
+/// Why a planned restart, or a planned stop a client asks for, is refused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RestartRefusal {
     /// The daemon follows an application (`--parent-pid`), which starts the daemon it talks to
@@ -41,14 +47,19 @@ pub enum RestartRefusal {
     /// [`AppState::request_planned_restart_unless_stopping`] refuses with it; `POST /restart` and
     /// the restart signal take a second request as the first.
     StopInProgress,
+    /// A service manager runs the daemon, and a holder with a program to run is inside the
+    /// daemon's own systemd service, having no unit of its own (`holder::client::launch_holder`):
+    /// the service's stop would end it with every terminal it runs.
+    HoldersInService,
 }
 
 impl RestartRefusal {
-    /// The refusal's name, as `POST /restart` answers it.
+    /// The refusal's name, as `POST /restart` and `POST /planned-stop` answer it.
     pub fn code(self) -> &'static str {
         match self {
             Self::FollowsApplication => "follows_application",
             Self::StopInProgress => "stop_in_progress",
+            Self::HoldersInService => "holders_in_service",
         }
     }
 
@@ -59,8 +70,33 @@ impl RestartRefusal {
                 "the daemon follows an application, which restarts the daemon it talks to itself"
             }
             Self::StopInProgress => "the daemon is already stopping or restarting",
+            Self::HoldersInService => {
+                "sessions and terminals run inside the daemon's systemd unit, so stopping or \
+                 restarting the daemon would end them; to do it anyway, stop or restart the unit \
+                 with systemctl on the server"
+            }
         }
     }
+}
+
+/// Why a planned restart is refused, given whether the daemon follows an application, whether a
+/// service manager restarts it, and `claim_holders`, which claims the restart where no holder
+/// with a program to run is inside the daemon's own service and tells whether it did. The claim
+/// is made only where it matters (a service manager restarts the daemon: elsewhere the stop is the
+/// daemon's own) and after the other refusals, as it makes the restart one that no new program in
+/// the service is admitted to.
+fn restart_refusal(
+    follows_application: bool,
+    service_managed: bool,
+    claim_holders: impl FnOnce() -> bool,
+) -> Option<RestartRefusal> {
+    if follows_application {
+        return Some(RestartRefusal::FollowsApplication);
+    }
+    if service_managed && !claim_holders() {
+        return Some(RestartRefusal::HoldersInService);
+    }
+    None
 }
 
 impl AppState {
@@ -71,18 +107,28 @@ impl AppState {
         self.stop.send_replace(Some(StopKind::Ordinary));
     }
 
-    /// Asks for a planned stop with no successor. A stop asked for already, of either kind, stays
-    /// the one made, and one asked for after the application said it is quitting is ordinary.
+    /// Asks for a planned stop with no successor, never refused: what the daemon asks for itself
+    /// (`super::application_note`). A stop asked for already, of either kind, stays the one made,
+    /// and one asked for after the application said it is quitting is ordinary.
     pub fn request_planned_stop(&self) {
         self.ask_planned(false);
     }
 
-    /// Asks for a planned restart, which is refused as [`Self::planned_restart_refusal`] says. A
-    /// stop asked for already, of either kind, stays the one made.
+    /// [`Self::request_planned_stop`] for a client's request, which is refused where a service
+    /// manager runs the daemon and a holder with a program to run is inside its own service: the
+    /// daemon exits 0 after the stop, the unit stops, and the service's stop ends that holder. The
+    /// claim is the restart's ([`Self::claim_restart`]), so no new program is admitted in the
+    /// service from then on either.
+    pub fn request_planned_stop_unless_holders_in_service(&self) -> Result<(), RestartRefusal> {
+        self.claim_planned_stop()?;
+        self.ask_planned(false);
+        Ok(())
+    }
+
+    /// Asks for a planned restart, which is refused as [`RestartRefusal`] says. A stop asked for
+    /// already, of either kind, stays the one made.
     pub fn request_planned_restart(&self) -> Result<(), RestartRefusal> {
-        if let Some(refusal) = self.planned_restart_refusal() {
-            return Err(refusal);
-        }
+        self.claim_restart()?;
         self.ask_planned(true);
         Ok(())
     }
@@ -91,9 +137,7 @@ impl AppState {
     /// for already, instead of leaving that one as the stop made: what a client that is told
     /// "restarting" must not be given when the daemon is stopping for another reason.
     pub fn request_planned_restart_unless_stopping(&self) -> Result<(), RestartRefusal> {
-        if let Some(refusal) = self.planned_restart_refusal() {
-            return Err(refusal);
-        }
+        self.claim_restart()?;
         if self.ask_planned(true) {
             Ok(())
         } else {
@@ -122,12 +166,29 @@ impl AppState {
         })
     }
 
-    /// Why a planned restart would be refused now, if it would.
-    pub fn planned_restart_refusal(&self) -> Option<RestartRefusal> {
-        if self.follows_application() {
-            return Some(RestartRefusal::FollowsApplication);
-        }
-        None
+    /// Refuses a planned restart as [`RestartRefusal`] says; where it is not refused, claims the
+    /// restart from the holders, which admit no new program inside the daemon's service from then
+    /// on ([`crate::holder::client::Holders::claim_planned_stop`]). A claim stays when the stop
+    /// that follows is not made because another was asked for first: the daemon is stopping then.
+    fn claim_restart(&self) -> Result<(), RestartRefusal> {
+        restart_refusal(
+            self.follows_application(),
+            self.service_managed(),
+            Self::claim_holders,
+        )
+        .map_or(Ok(()), Err)
+    }
+
+    /// [`Self::claim_restart`] without the refusal for following an application, which a
+    /// planned stop has no use for: the stop a following daemon makes is its own.
+    fn claim_planned_stop(&self) -> Result<(), RestartRefusal> {
+        restart_refusal(false, self.service_managed(), Self::claim_holders).map_or(Ok(()), Err)
+    }
+
+    /// Claims the stop or restart from the holders, true where none has a program to run inside
+    /// the daemon's own service.
+    fn claim_holders() -> bool {
+        crate::holder::client::current().is_none_or(|holders| holders.claim_planned_stop())
     }
 
     /// Waits until a stop is asked for, and says which. A stop asked for before the wait began is
@@ -318,6 +379,43 @@ mod tests {
         );
     }
 
+    /// A planned stop a client asks for is refused only where a service manager runs the daemon
+    /// and a holder in its service has a program to run; an internal planned stop is never
+    /// refused.
+    #[tokio::test]
+    async fn a_planned_stop_asked_by_a_client_is_refused_only_for_holders_in_the_service() {
+        // With no holders there is nothing in the service to end.
+        let (managed, _dir) = app_state("stop-planned-managed");
+        managed.set_service_managed(true);
+        assert_eq!(
+            managed.request_planned_stop_unless_holders_in_service(),
+            Ok(())
+        );
+        assert_eq!(
+            managed.await_stop().await,
+            StopKind::Planned { successor: false }
+        );
+
+        let (alone, _alone_dir) = app_state("stop-planned-alone");
+        assert_eq!(
+            alone.request_planned_stop_unless_holders_in_service(),
+            Ok(())
+        );
+        assert_eq!(
+            alone.await_stop().await,
+            StopKind::Planned { successor: false }
+        );
+
+        // A daemon that follows an application takes it too: its own stop is the internal one.
+        let (following, _following_dir) = app_state("stop-planned-follows");
+        following.set_follows_application();
+        following.set_service_managed(true);
+        assert_eq!(
+            following.request_planned_stop_unless_holders_in_service(),
+            Ok(())
+        );
+    }
+
     /// A planned stop or restart asked for after an ordinary stop leaves it ordinary, so nothing
     /// is handed over.
     #[tokio::test]
@@ -377,7 +475,6 @@ mod tests {
     #[tokio::test]
     async fn a_daemon_on_its_own_takes_a_planned_restart() {
         let (state, _dir) = app_state("stop-restart-successor");
-        assert_eq!(state.planned_restart_refusal(), None);
         assert_eq!(state.request_planned_restart(), Ok(()));
         assert_eq!(
             state.await_stop().await,
@@ -390,12 +487,68 @@ mod tests {
     async fn a_service_managed_daemon_takes_a_planned_restart() {
         let (state, _dir) = app_state("stop-restart-managed");
         state.set_service_managed(true);
-        assert_eq!(state.planned_restart_refusal(), None);
         assert_eq!(state.request_planned_restart(), Ok(()));
         assert_eq!(
             state.await_stop().await,
             StopKind::Planned { successor: true }
         );
+    }
+
+    /// Every refusal tells a client why in a code and a message of its own.
+    #[test]
+    fn every_restart_refusal_has_a_code_and_a_message_of_its_own() {
+        // A `match` with no wildcard, so that a new refusal cannot be left out of the list.
+        fn listed(refusal: RestartRefusal) -> RestartRefusal {
+            match refusal {
+                RestartRefusal::FollowsApplication
+                | RestartRefusal::StopInProgress
+                | RestartRefusal::HoldersInService => refusal,
+            }
+        }
+        let all = [
+            listed(RestartRefusal::FollowsApplication),
+            listed(RestartRefusal::StopInProgress),
+            listed(RestartRefusal::HoldersInService),
+        ];
+        let codes: std::collections::HashSet<_> =
+            all.iter().map(|refusal| refusal.code()).collect();
+        let messages: std::collections::HashSet<_> =
+            all.iter().map(|refusal| refusal.message()).collect();
+        assert_eq!(codes.len(), all.len(), "two refusals share a code");
+        assert_eq!(messages.len(), all.len(), "two refusals share a message");
+        assert!(all.iter().all(|refusal| !refusal.message().is_empty()));
+    }
+
+    /// A holder in the daemon's own service refuses a restart only where a service manager
+    /// restarts the daemon, following an application is refused first, and the claim is made only
+    /// when nothing else refuses.
+    #[test]
+    fn a_holder_in_the_daemons_service_refuses_a_restart_only_under_a_service_manager() {
+        use std::cell::Cell;
+        let claimed = Cell::new(0);
+        let claim = |granted: bool| {
+            let claimed = &claimed;
+            move || {
+                claimed.set(claimed.get() + 1);
+                granted
+            }
+        };
+        assert_eq!(restart_refusal(false, false, claim(false)), None);
+        assert_eq!(restart_refusal(false, true, claim(true)), None);
+        assert_eq!(
+            restart_refusal(false, true, claim(false)),
+            Some(RestartRefusal::HoldersInService)
+        );
+        assert_eq!(claimed.get(), 2, "only a service-managed restart claims");
+        assert_eq!(
+            restart_refusal(true, false, claim(false)),
+            Some(RestartRefusal::FollowsApplication)
+        );
+        assert_eq!(
+            restart_refusal(true, true, claim(false)),
+            Some(RestartRefusal::FollowsApplication)
+        );
+        assert_eq!(claimed.get(), 2, "a refused restart claims nothing");
     }
 
     /// Once a planned stop has raised its handover barrier, no launch or switch is claimed, and no

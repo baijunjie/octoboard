@@ -8,20 +8,55 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 use super::cgroup::unified_path;
-use super::restarted_by_service_manager;
 
 /// How long `systemd-run` has to start a unit before whether it started counts as unknown.
 const UNIT_START_DEADLINE: Duration = Duration::from_secs(15);
 
 /// The name of the systemd user service this daemon is the main process of, when a systemd user
-/// manager runs it: its cgroup is that service's, below the calling user's manager, and the
-/// environment shows it to be the process systemd started for the service (as
-/// [`restarted_by_service_manager`] reads it, without `--service-managed`). `None` otherwise, as
-/// for a daemon started by hand, and on a host without cgroup v2.
-pub(crate) fn user_service_unit() -> Option<String> {
-    restarted_by_service_manager(false)
-        .then(user_service)
-        .flatten()
+/// manager runs it: `managed` says the daemon is a service's main process
+/// ([`super::restarted_by_service_manager`]: the environment systemd 248 and later gives it, or
+/// `--service-managed`, which the unit passes on any version), and its cgroup is that of a service
+/// below the calling user's manager, read from systemd's own hierarchy on cgroup v1 and from the
+/// unified one on v2. `None` otherwise, as for a daemon started by hand, or by a system service.
+pub(crate) fn user_service_unit(managed: bool) -> Option<String> {
+    managed.then(user_service).flatten()
+}
+
+/// Whether the calling process's cgroup is that of a systemd service, a user's or the system's:
+/// whatever it starts without a unit of its own is in that service, and ends when the service
+/// stops.
+pub(crate) fn in_systemd_service() -> bool {
+    fs::read_to_string("/proc/self/cgroup")
+        .ok()
+        .and_then(|own| systemd_path(&own).map(is_service))
+        .unwrap_or(false)
+}
+
+/// The path of the calling process in the hierarchy systemd tracks units in, from a
+/// `/proc/<pid>/cgroup` content: the unified hierarchy's (`0::`) where it is listed with a path
+/// other than `/`, which is where systemd tracks units on cgroup v2 and in its hybrid layout; the
+/// `name=systemd` hierarchy's otherwise, which is where it does on cgroup v1. A `name=systemd` line
+/// beside a unified one that names a path is no more than a stray hierarchy (container tooling
+/// leaves them), so the unified line wins.
+fn systemd_path(cgroup_file: &str) -> Option<&str> {
+    unified_path(cgroup_file)
+        .filter(|path| *path != "/")
+        .or_else(|| {
+            cgroup_file
+                .lines()
+                .find_map(|line| {
+                    let (_, rest) = line.split_once(':')?;
+                    rest.strip_prefix("name=systemd:")
+                })
+                .filter(|path| path.starts_with('/'))
+        })
+}
+
+/// Whether the cgroup path `path` is that of a service: its last part is `<name>.service`.
+fn is_service(path: &str) -> bool {
+    path.rsplit('/')
+        .next()
+        .is_some_and(|last| last.len() > ".service".len() && last.ends_with(".service"))
 }
 
 /// Starts `command` as a transient systemd user service named `<unit>.service`
@@ -33,9 +68,11 @@ pub(crate) fn user_service_unit() -> Option<String> {
 /// it; its output is discarded, as a detached process's is; and it is removed once it has ended,
 /// whether or not it failed. Only the program, the arguments and the working directory of
 /// `command` are used: the unit runs in the user manager's environment, so nothing the daemon's
-/// environment holds reaches it, nor anything systemd records of it. **Blocks** until
-/// `systemd-run` returns. An error of kind `TimedOut` means it did not return within
-/// [`UNIT_START_DEADLINE`], so whether the unit started is unknown; any other means it did not.
+/// environment holds reaches it, nor anything systemd records of it. Only options that
+/// `systemd-run --collect` (systemd 236) comes with are used (the working directory is a property,
+/// not `--working-directory`, which came with 240). **Blocks** until `systemd-run` returns. An
+/// error of kind `TimedOut` means it did not return within [`UNIT_START_DEADLINE`], so whether the
+/// unit started is unknown; any other means it did not.
 pub(crate) fn start_in_user_unit(
     command: &Command,
     unit: &str,
@@ -67,7 +104,7 @@ fn start_in_user_unit_within(
         ])
         .arg(format!("--property=Before={daemon}"));
     if let Some(dir) = command.get_current_dir() {
-        let mut option = std::ffi::OsString::from("--working-directory=");
+        let mut option = std::ffi::OsString::from("--property=WorkingDirectory=");
         option.push(dir);
         run.arg(option);
     }
@@ -115,7 +152,7 @@ fn start_in_user_unit_within(
 /// whether the process is that service's main process.
 fn user_service() -> Option<String> {
     let own = fs::read_to_string("/proc/self/cgroup").ok()?;
-    service_of(unified_path(&own)?, uid())
+    service_of(systemd_path(&own)?, uid())
 }
 
 /// The real user id of the calling process.
@@ -145,7 +182,8 @@ mod tests {
     use std::time::{Duration, Instant};
 
     use super::{
-        service_of, start_in_user_unit, start_in_user_unit_within, user_service, user_service_unit,
+        is_service, service_of, start_in_user_unit, start_in_user_unit_within, systemd_path,
+        user_service, user_service_unit,
     };
     use crate::platform::test_helper;
     use crate::test_support::{
@@ -153,6 +191,10 @@ mod tests {
     };
 
     const MANAGER: &str = "/user.slice/user-1001.slice/user@1001.service";
+
+    /// The path of a user service of uid 1001 in the hierarchy systemd tracks units in.
+    const SERVICE_PATH: &str =
+        "/user.slice/user-1001.slice/user@1001.service/app.slice/octoboardd.service";
 
     fn service(path: &str) -> Option<String> {
         service_of(path, 1001)
@@ -206,6 +248,136 @@ mod tests {
         assert_eq!(service("/"), None);
         // A bare suffix is no name.
         assert_eq!(service(&format!("{MANAGER}/app.slice/.service")), None);
+    }
+
+    /// A pure cgroup v1 host (systemd before 248 on a distribution without the unified
+    /// hierarchy) has no `0::` line: systemd's own hierarchy, `name=systemd`, holds the unit.
+    #[test]
+    fn the_systemd_hierarchy_of_a_cgroup_v1_file_is_the_one_units_are_tracked_in() {
+        let legacy = format!(
+            "12:cpu,cpuacct:/user.slice\n7:memory:/user.slice\n1:name=systemd:{SERVICE_PATH}\n"
+        );
+        assert_eq!(systemd_path(&legacy), Some(SERVICE_PATH));
+        // Wherever the line is.
+        let first = format!("1:name=systemd:{SERVICE_PATH}\n12:cpu:/user.slice\n");
+        assert_eq!(systemd_path(&first), Some(SERVICE_PATH));
+    }
+
+    /// The hybrid layout lists both, the unified line naming no path (`/`), so the systemd
+    /// hierarchy's line is the one that says where the unit is; where both name one, systemd
+    /// tracks the same path in both.
+    #[test]
+    fn the_systemd_hierarchy_is_read_where_the_unified_line_names_no_path() {
+        let hybrid = format!("12:cpu:/user.slice\n1:name=systemd:{SERVICE_PATH}\n0::/\n");
+        assert_eq!(systemd_path(&hybrid), Some(SERVICE_PATH));
+        let same = format!("1:name=systemd:{SERVICE_PATH}\n0::{SERVICE_PATH}\n");
+        assert_eq!(systemd_path(&same), Some(SERVICE_PATH));
+    }
+
+    /// A cgroup v2 host can list a stray named hierarchy (container tooling makes one), whose
+    /// path is `/` or stale: the unified line is where systemd tracks the unit.
+    #[test]
+    fn a_stray_systemd_named_hierarchy_does_not_hide_the_unified_line_of_a_cgroup_v2_file() {
+        let stray_root = format!("1:name=systemd:/\n0::{SERVICE_PATH}\n");
+        assert_eq!(systemd_path(&stray_root), Some(SERVICE_PATH));
+        let stray_stale = format!("0::{SERVICE_PATH}\n1:name=systemd:/lxc/old/init.scope\n");
+        assert_eq!(systemd_path(&stray_stale), Some(SERVICE_PATH));
+        // With nothing else listed, the root is all there is, and no service.
+        assert_eq!(systemd_path("1:name=systemd:/\n0::/\n"), Some("/"));
+    }
+
+    #[test]
+    fn the_unified_line_of_a_cgroup_v2_file_is_the_path_where_there_is_no_systemd_hierarchy() {
+        let unified = format!("0::{SERVICE_PATH}\n");
+        assert_eq!(systemd_path(&unified), Some(SERVICE_PATH));
+    }
+
+    #[test]
+    fn a_cgroup_file_with_no_usable_line_names_no_path() {
+        assert_eq!(systemd_path(""), None);
+        assert_eq!(systemd_path("\n"), None);
+        // Controllers only.
+        assert_eq!(
+            systemd_path("12:cpu:/user.slice\n7:memory:/user.slice\n"),
+            None
+        );
+        // Another named hierarchy is not systemd's.
+        assert_eq!(systemd_path("5:name=systemd-other:/x/a.service\n"), None);
+        assert_eq!(systemd_path("5:name=openrc:/x/a.service\n"), None);
+        // A line with no path at all.
+        assert_eq!(systemd_path("1:name=systemd:\n"), None);
+        assert_eq!(systemd_path("0::\n"), None);
+    }
+
+    #[test]
+    fn a_path_that_is_not_absolute_is_no_path() {
+        assert_eq!(systemd_path("1:name=systemd:user.slice/a.service\n"), None);
+        assert_eq!(systemd_path("0::user.slice/a.service\n"), None);
+    }
+
+    #[test]
+    fn a_path_with_a_colon_in_it_is_kept_whole() {
+        assert_eq!(
+            systemd_path("1:name=systemd:/a:b/c.service\n"),
+            Some("/a:b/c.service")
+        );
+    }
+
+    /// The user service is found from a cgroup v1 file as it is from the unified line.
+    #[test]
+    fn a_user_service_is_found_in_a_cgroup_v1_file() {
+        let legacy = format!("12:cpu:/user.slice\n1:name=systemd:{SERVICE_PATH}\n");
+        let found = systemd_path(&legacy).and_then(service);
+        assert_eq!(found.as_deref(), Some("octoboardd.service"));
+
+        let hybrid = format!("1:name=systemd:{SERVICE_PATH}\n0::/\n");
+        let found = systemd_path(&hybrid).and_then(service);
+        assert_eq!(found.as_deref(), Some("octoboardd.service"));
+
+        let unified = format!("0::{SERVICE_PATH}\n");
+        let found = systemd_path(&unified).and_then(service);
+        assert_eq!(found.as_deref(), Some("octoboardd.service"));
+    }
+
+    /// A v1 file of a process that is no user service names none.
+    #[test]
+    fn a_cgroup_v1_file_of_a_system_service_or_a_session_names_no_user_service() {
+        for path in [
+            "/system.slice/octoboardd.service",
+            "/user.slice/user-1001.slice/session-3.scope",
+        ] {
+            let legacy = format!("1:name=systemd:{path}\n");
+            assert_eq!(systemd_path(&legacy).and_then(service), None, "{path}");
+        }
+    }
+
+    /// Any service counts, the system's as well as a user's: it is the service's stop that ends
+    /// what the process started without a unit of its own.
+    #[test]
+    fn a_path_is_a_service_when_its_last_part_is_a_service_unit() {
+        assert!(is_service(SERVICE_PATH));
+        assert!(is_service("/system.slice/ssh.service"));
+        assert!(is_service("/octoboardd.service"));
+        assert!(is_service("/system.slice/foo.bar.service"));
+        assert!(is_service("/system.slice/a@b.service"));
+    }
+
+    #[test]
+    fn a_path_is_no_service_when_its_last_part_is_not_a_service_unit() {
+        assert!(!is_service(""));
+        assert!(!is_service("/"));
+        assert!(!is_service("/user.slice/user-1001.slice/session-3.scope"));
+        assert!(!is_service(
+            "/user.slice/user-1001.slice/user@1001.service/app.slice"
+        ));
+        assert!(!is_service("/system.slice/ssh.service.d"));
+        assert!(!is_service("/system.slice/ssh.services"));
+        // A bare suffix is no name.
+        assert!(!is_service("/system.slice/.service"));
+        assert!(!is_service(".service"));
+        // A group made inside a service is not the service's own.
+        assert!(!is_service("/system.slice/ssh.service/sub"));
+        assert!(!is_service("/system.slice/ssh.service/"));
     }
 
     // `start_in_user_unit` runs `systemd-run`, found on the PATH of the process that calls it, so
@@ -263,7 +435,8 @@ mod tests {
         std::fs::rename(partial, result).expect("the answer is in place");
     }
 
-    /// The helper: writes what [`user_service_unit`] says of the process it runs in.
+    /// The helper: writes what [`user_service_unit`] says of the process it runs in, given the
+    /// service-managed answer the environment gives.
     #[test]
     fn a_service_unit_probe() {
         let Some(result) = std::env::var_os(RESULT) else {
@@ -271,7 +444,8 @@ mod tests {
         };
         let result = PathBuf::from(result);
         let partial = result.with_extension("partial");
-        std::fs::write(&partial, format!("{:?}", user_service_unit())).expect("written");
+        let managed = crate::platform::proc::restarted_by_service_manager(false);
+        std::fs::write(&partial, format!("{:?}", user_service_unit(managed))).expect("written");
         std::fs::rename(partial, result).expect("in place");
     }
 
@@ -440,7 +614,7 @@ exit \"${FAKE_EXIT:-0}\"
             "--property=StandardOutput=null".to_string(),
             "--property=StandardError=null".to_string(),
             format!("--property=Before={DAEMON}"),
-            format!("--working-directory={}", dir.display()),
+            format!("--property=WorkingDirectory={}", dir.display()),
         ];
         expected.sort();
         assert_eq!(options, expected);
@@ -456,7 +630,8 @@ exit \"${FAKE_EXIT:-0}\"
         assert!(
             !arguments
                 .iter()
-                .any(|argument| argument.starts_with("--working-directory")),
+                .any(|argument| argument.contains("WorkingDirectory")
+                    || argument.starts_with("--working-directory")),
             "{arguments:?}"
         );
         assert!(
@@ -554,9 +729,9 @@ exit \"${FAKE_EXIT:-0}\"
         std::fs::read_to_string(&result).expect("the probe answered")
     }
 
-    /// The daemon is a user service only when its environment shows it to be the process systemd
-    /// started and its cgroup is a user service's: with the environment right, the answer is the
-    /// cgroup's alone, which is none in a process that no user manager runs.
+    /// A process the environment shows to be the one systemd started is a user service exactly
+    /// where its cgroup is a user service's: the answer is the cgroup's alone, which is none in a
+    /// process that no user manager runs.
     #[test]
     fn the_environment_alone_does_not_make_a_user_service() {
         let answer = probed("unit-probe-env", true, &[]);
@@ -574,5 +749,11 @@ exit \"${FAKE_EXIT:-0}\"
             &[("INVOCATION_ID", "0123abcd"), ("SYSTEMD_EXEC_PID", "1")],
         );
         assert_eq!(answer, "None");
+    }
+
+    /// A daemon that is not service-managed is no user service.
+    #[test]
+    fn a_daemon_that_is_not_service_managed_is_no_user_service() {
+        assert_eq!(user_service_unit(false), None);
     }
 }

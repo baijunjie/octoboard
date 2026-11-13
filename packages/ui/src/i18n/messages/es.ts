@@ -632,6 +632,8 @@ export const es: Translation<"one" | "many" | "other"> = {
   "daemon.agent_not_available": "{agent} no está disponible: su ejecutable no se encuentra en el {pathVar} de tu shell de inicio de sesión. Para abrir una sesión, comprueba que uno de estos agentes compatibles esté en tu {pathVar}: {agents}.",
   "daemon.account_disabled": "{account} ({agent}) está desactivada, por lo que no se puede abrir una sesión con ella.",
   "daemon.daemon_shutting_down": "El servicio en segundo plano se está deteniendo. Vuelve a intentarlo cuando se reinicie.",
+  "daemon.holders_in_service":
+    "Las sesiones y los terminales se ejecutan dentro de la unidad de systemd del servicio en segundo plano, así que, si detienes o reinicias el servicio, esas sesiones y terminales terminarán. Para hacerlo de todos modos, detén o reinicia la unidad con {command} en el servidor.",
   "daemon.account_not_signed_in": "{account} ({agent}) no ha iniciado sesión, por lo que no se puede abrir una sesión con ella.",
   "daemon.account_quota_exhausted": "{account} ({agent}) no puede ejecutar una sesión porque ha alcanzado su {quota}.",
   "daemon.account_quota_exhausted.resets": "{account} ({agent}) no puede ejecutar una sesión porque ha alcanzado su {quota}. Se restablece en {time}.",

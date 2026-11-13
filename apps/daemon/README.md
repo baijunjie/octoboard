@@ -86,9 +86,10 @@ To start it at boot instead, install the example systemd user unit
 you and every release archive carries; its comments say how, and why the user needs lingering enabled. After upgrading
 the installed file, `octoboardd restart` moves a running daemon to it, under the unit or not. Use the unit as well on a
 host where logind kills a user's processes at logout (`KillUserProcesses=yes`), which would end a daemon started by
-`start` with the login. Under the unit, the sessions
-run in user units of their own (`octoboard-holder-*.service`), so `restart`, and a restart of the unit after a crash,
-keep them running.
+`start` with the login. Under the unit, on systemd 236 or later, the sessions run in user units of their own
+(`octoboard-holder-*.service`), so `restart`, and a restart of the unit after a crash, keep them running; where a holder
+could not be started as a unit of its own, the daemon refuses `restart` while it runs a session, since the restart would
+end it, and a restart it accepts refuses a new session there until it completes.
 
 ## Read next
 

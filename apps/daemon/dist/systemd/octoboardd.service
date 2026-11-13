@@ -8,6 +8,10 @@
 #   cp octoboardd.service ~/.config/systemd/user/
 #   systemctl --user daemon-reload && systemctl --user enable --now octoboardd
 #
+# Needs systemd 236 or later (`systemd-run --collect`), checked with 247 and 257, so that the daemon
+# can start its process holders as user units of their own; cgroup v1, v2 and the hybrid layout all
+# work.
+#
 # A user service runs only while its user has a login session, and nobody logs in on a server, so
 # enable lingering once for the user the daemon runs as, or the service stops at logout and does
 # not start at boot:
@@ -23,13 +27,16 @@ Description=Octoboard daemon
 [Service]
 Type=simple
 # --service-managed makes a planned restart exit with 75 (see RestartForceExitStatus below)
-# instead of starting the next daemon itself; pass it only with that restart.
+# instead of starting the next daemon itself; pass it only with that restart. It also tells the
+# daemon it is this service's main process, which systemd before 248 does not show it otherwise.
 ExecStart=%h/.local/bin/octoboardd --port 3369 --service-managed
 Restart=on-failure
 # A planned restart (`octoboardd restart`, or POST /restart) hands every session over to the
 # holders and exits with 75, so that the next daemon runs in this unit: restart on that status
 # even though it is not a failure, and do not record it as one. The holders run as user units of
-# their own (octoboard-holder-*.service), which outlive this one, so the sessions survive.
+# their own (octoboard-holder-*.service), which outlive this one, so the sessions survive. A holder
+# that could not be started as a unit runs in this one and would end with it: while one runs, the
+# daemon refuses a planned restart, and says so in the journal.
 RestartForceExitStatus=75
 SuccessExitStatus=75
 # The handshake line the daemon prints carries its per-launch key, and journald would keep it

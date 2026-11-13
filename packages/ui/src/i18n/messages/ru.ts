@@ -632,6 +632,8 @@ export const ru: Translation<"one" | "few" | "many" | "other"> = {
   "daemon.agent_not_available": "{agent} недоступен: его исполняемый файл не найден в {pathVar} вашей оболочки входа. Чтобы открыть сеанс, убедитесь, что один из поддерживаемых агентов доступен в вашем {pathVar}: {agents}.",
   "daemon.account_disabled": "{account} ({agent}) отключена, поэтому открыть с ней сеанс нельзя.",
   "daemon.daemon_shutting_down": "Фоновая служба останавливается. Повторите попытку после её перезапуска.",
+  "daemon.holders_in_service":
+    "Сеансы и терминалы работают внутри юнита systemd фоновой службы, поэтому остановка или перезапуск службы завершит их. Чтобы всё равно это сделать, остановите или перезапустите юнит командой {command} на сервере.",
   "daemon.account_not_signed_in": "Вход в {account} ({agent}) не выполнен, поэтому открыть с ней сеанс нельзя.",
   "daemon.account_quota_exhausted": "{account} ({agent}) не может запустить сеанс, поскольку достигнут {quota}.",
   "daemon.account_quota_exhausted.resets": "{account} ({agent}) не может запустить сеанс, поскольку достигнут {quota}. Сброс через {time}.",

@@ -631,6 +631,8 @@ export const pt: Translation<"one" | "many" | "other"> = {
   "daemon.agent_not_available": "{agent} não está disponível: seu executável não foi encontrado no {pathVar} do shell de login. Para abrir uma sessão, verifique se um destes agentes compatíveis está no seu {pathVar}: {agents}.",
   "daemon.account_disabled": "{account} ({agent}) está desativada, portanto não é possível abrir uma sessão nela.",
   "daemon.daemon_shutting_down": "O daemon está sendo encerrado. Tente novamente depois que ele reiniciar.",
+  "daemon.holders_in_service":
+    "As sessões e os terminais são executados dentro da unidade systemd do daemon, então parar ou reiniciar o daemon os encerraria. Para fazer isso mesmo assim, pare ou reinicie a unidade com {command} no servidor.",
   "daemon.account_not_signed_in": "{account} ({agent}) não está conectada, portanto não é possível abrir uma sessão nela.",
   "daemon.account_quota_exhausted": "{account} ({agent}) não pode executar uma sessão porque atingiu seu {quota}.",
   "daemon.account_quota_exhausted.resets": "{account} ({agent}) não pode executar uma sessão porque atingiu seu {quota}. Ele será redefinido em {time}.",

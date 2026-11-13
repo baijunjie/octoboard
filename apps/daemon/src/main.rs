@@ -391,10 +391,7 @@ async fn run_daemon(
     // the systemd unit it runs as, which a command asks systemd about; and which daemon it took
     // over from, as the daemon that started it said, or as the note or the record a daemon before
     // it in its service left, read before this record replaces it and the note is settled below.
-    let unit = state
-        .service_managed()
-        .then(platform::proc::user_service_unit)
-        .flatten();
+    let unit = platform::proc::user_service_unit(state.service_managed());
     let predecessor = match handed_over_from {
         Some(from) => from,
         None if state.service_managed() => {
@@ -711,7 +708,7 @@ fn install_holders(state: &Arc<AppState>, application: Option<u32>) {
                 exe,
                 builds: Some(Arc::new(holder::build::Builds::new(paths::builds_dir()))),
                 range: holder::compat::Range::current(),
-                launch: holder::client::launch_holder(application),
+                launch: holder::client::launch_holder(application, state.service_managed()),
                 relay: Arc::new(server::relay::DaemonRelay::new(state.clone())),
             })
         });

@@ -631,6 +631,8 @@ export const vi: Translation<"other"> = {
   "daemon.agent_not_available": "{agent} không khả dụng: không tìm thấy tệp thực thi trong {pathVar} của shell đăng nhập. Để mở phiên, đảm bảo một trong các tác tử được hỗ trợ sau có trong {pathVar}: {agents}.",
   "daemon.account_disabled": "{account} ({agent}) đang bị tắt nên không thể mở phiên bằng tài khoản này.",
   "daemon.daemon_shutting_down": "Daemon đang dừng. Thử lại sau khi daemon khởi động lại.",
+  "daemon.holders_in_service":
+    "Các phiên và terminal chạy bên trong unit systemd của daemon, nên dừng hoặc khởi động lại daemon sẽ kết thúc chúng. Nếu vẫn muốn thực hiện, hãy dừng hoặc khởi động lại unit đó bằng {command} trên máy chủ.",
   "daemon.account_not_signed_in": "{account} ({agent}) chưa đăng nhập nên không thể mở phiên bằng tài khoản này.",
   "daemon.account_quota_exhausted": "{account} ({agent}) không thể chạy phiên vì đã đạt {quota}.",
   "daemon.account_quota_exhausted.resets": "{account} ({agent}) không thể chạy phiên vì đã đạt {quota}. Giới hạn sẽ đặt lại sau {time}.",

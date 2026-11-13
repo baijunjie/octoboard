@@ -6,8 +6,13 @@ use std::io;
 use std::process::Command;
 
 /// No systemd user manager runs a daemon here.
-pub(crate) fn user_service_unit() -> Option<String> {
+pub(crate) fn user_service_unit(_managed: bool) -> Option<String> {
     None
+}
+
+/// No systemd service runs the daemon here.
+pub(crate) fn in_systemd_service() -> bool {
+    false
 }
 
 /// Never called here, where [`user_service_unit`] names no service.

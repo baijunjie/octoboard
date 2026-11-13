@@ -50,6 +50,7 @@ use super::quit_targets::QuitTargets;
 use super::registry::{self, RegistryEntry};
 use crate::platform::proc::{self, Polite, ProcessIdentity, Sent, Signal};
 use crate::platform::term::{Command, Size};
+use crate::protocol::{error_code, CodedError};
 
 /// How long a started holder has to leave its registry file.
 const START_DEADLINE: Duration = Duration::from_secs(10);
@@ -80,8 +81,21 @@ const LOSS_SWEEP_TRIES: u32 = 20;
 const LOSS_SWEEP_INTERVAL: Duration = Duration::from_millis(500);
 
 /// Starts the holder `exe` runs as, named `holder_id`, that leaves its registry file in
-/// `registry_dir`. It returns once the holder is started, not once it is ready.
-pub type Launch = Box<dyn Fn(&Path, &str, &Path) -> std::io::Result<()> + Send + Sync>;
+/// `registry_dir`, and says where it was placed. It returns once the holder is started, not once
+/// it is ready.
+pub type Launch = Box<dyn Fn(&Path, &str, &Path) -> std::io::Result<Placement> + Send + Sync>;
+
+/// Where a started holder runs, which says whether the daemon's own stop would end it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Placement {
+    /// In a systemd user unit of its own, which the daemon's stop leaves running.
+    OwnUnit,
+    /// Detached from the daemon, outside any systemd service it runs in.
+    Detached,
+    /// Detached from the daemon, but in the cgroup of the systemd service the daemon runs in: it
+    /// ends when that service stops.
+    InDaemonService,
+}
 
 /// Where the holders are and how one is started.
 pub struct ClientConfig {
@@ -98,16 +112,30 @@ pub struct ClientConfig {
 }
 
 /// A [`Launch`] that runs `exe holder` apart from this process, so that it outlives it. Where a
-/// systemd user manager runs the daemon it is started as a user unit of its own
+/// systemd user manager runs the daemon (`service_managed`, as `main` resolves it, and its cgroup
+/// a user service's: `platform::proc::user_service_unit`) it is started as a user unit of its own
 /// (`platform::proc::start_in_user_unit`), which a stop or a planned restart of the daemon's unit
 /// leaves running, falling back to the detached start when that fails; elsewhere, and on that
-/// fallback, it is started detached (`platform::proc::start_detached`). `application` is the
-/// desktop application's pid, which a holder is started under where the daemon's own job would
-/// end it.
-pub fn launch_holder(application: Option<u32>) -> Launch {
-    let service = proc::user_service_unit();
-    if let Some(service) = &service {
-        tracing::info!(%service, "holders run as systemd user units of their own");
+/// fallback, it is started detached (`platform::proc::start_detached`). A holder started detached
+/// while the daemon runs in a systemd service stays in that service and ends when it stops, which
+/// is reported as [`Placement::InDaemonService`], so that a planned restart that would stop it is
+/// refused instead ([`Holders::claim_planned_stop`]). `application` is the desktop
+/// application's pid, which a holder is started under where the daemon's own job would end it.
+pub fn launch_holder(application: Option<u32>, service_managed: bool) -> Launch {
+    let service = proc::user_service_unit(service_managed);
+    let daemon_in_service = proc::in_systemd_service();
+    match &service {
+        Some(service) => {
+            tracing::info!(%service, "holders run as systemd user units of their own");
+        }
+        None if daemon_in_service && service_managed => tracing::warn!(
+            "the daemon runs in a systemd service that is not a user service of its user's \
+             manager (or not as its main process), so its holders cannot run as user units of \
+             their own: they run in the daemon's service and end when it stops, and a planned \
+             restart is refused while one runs; run the daemon as a systemd user service \
+             (`systemctl --user`), not as a system service"
+        ),
+        None => {}
     }
     Box::new(move |exe, holder_id, registry_dir| {
         // Started in the registry's directory: a holder outlives the daemon, and one whose
@@ -129,15 +157,26 @@ pub fn launch_holder(application: Option<u32>) -> Launch {
                 &format!("{} process holder", crate::APP_NAME),
                 service,
             ) {
-                Ok(()) => return Ok(()),
+                Ok(()) => return Ok(Placement::OwnUnit),
                 // It may have started: a second start under the same id would run two holders.
                 Err(err) if err.kind() == std::io::ErrorKind::TimedOut => return Err(err),
                 Err(err) => {
-                    tracing::warn!(%err, "starting the holder as a systemd user unit failed; it is started detached, and stops with the daemon's unit");
+                    tracing::warn!(
+                        %err,
+                        "starting the holder as a systemd user unit failed; it is started \
+                         detached, and stops with the daemon's unit, which refuses planned \
+                         restarts while it runs"
+                    );
                 }
             }
         }
-        crate::platform::proc::start_detached(command, application)
+        crate::platform::proc::start_detached(command, application).map(|()| {
+            if daemon_in_service {
+                Placement::InDaemonService
+            } else {
+                Placement::Detached
+            }
+        })
     })
 }
 
@@ -380,6 +419,51 @@ impl Drop for HeldRelays {
     }
 }
 
+/// The holders started inside the daemon's own systemd service ([`Placement::InDaemonService`])
+/// and whether a planned stop or restart has been claimed, which the service's stop would end
+/// them for.
+#[derive(Default)]
+struct InService {
+    /// The holders that still run, by id: `None` while the start has not linked to it yet, then
+    /// the link that was made, which `current` or `adopted` keeps alive: a link dropped is lost.
+    /// Pruned as a holder is lost or its start fails.
+    holders: HashMap<String, Option<Weak<Link>>>,
+    /// A planned stop or restart was accepted: no program is admitted to a holder in the service,
+    /// and no holder is linked to or used in it, until the restart completes. A holder process
+    /// may still be started then, as the launch comes before the refusal, and ends with the
+    /// service.
+    stop_claimed: bool,
+}
+
+impl InService {
+    /// Whether a holder in the service has, or may have, a program of this daemon to end: one
+    /// being started, or linked to and running a terminal or a companion. Forgets those lost.
+    fn runs_programs(&mut self) -> bool {
+        self.holders.retain(|_, link| match link {
+            Some(link) => link.upgrade().is_some_and(|link| !link.lost()),
+            None => true,
+        });
+        self.holders.values().any(|link| match link {
+            Some(link) => link.upgrade().is_some_and(|link| link.runs_programs()),
+            None => true,
+        })
+    }
+
+    /// The refusal of a program, or a holder in the service, once a stop or restart is claimed:
+    /// coded as the daemon shutting down, so that it does not read as an unexpected failure.
+    fn admit(&self) -> Result<()> {
+        if self.stop_claimed {
+            return Err(CodedError::raised(
+                error_code::DAEMON_SHUTTING_DOWN,
+                "the daemon is stopping or restarting, and what runs in its systemd unit ends \
+                 with it: the program is not started",
+                &[],
+            ));
+        }
+        Ok(())
+    }
+}
+
 /// What `Holders` shares with the threads that try again the holders it could not link to.
 struct Shared {
     registry_dir: PathBuf,
@@ -422,6 +506,14 @@ struct Shared {
     /// their registry file names when it can be read ([`Holders::part_planned`]). Locked after
     /// [`Self::pending`] where both are.
     parted: Mutex<Vec<(String, Option<ProcessIdentity>)>>,
+    /// The holders started inside the daemon's own systemd service ([`Placement::InDaemonService`])
+    /// that still run, and whether a planned stop or restart has been claimed
+    /// ([`Holders::claim_planned_stop`]). Locked after [`Holders::current`] and the build copies'
+    /// lock where those are held (a start
+    /// holds both while it records its holder); a link's `terminals`, then its `companions`, are
+    /// locked under it, so that a program is admitted, or a restart claimed, with nothing between
+    /// the check and the record.
+    in_service: Arc<Mutex<InService>>,
 }
 
 pub struct Holders {
@@ -511,6 +603,7 @@ impl Holders {
             endings: Mutex::new(Vec::new()),
             handed_over: Mutex::new(HashSet::new()),
             parted: Mutex::new(Vec::new()),
+            in_service: Arc::new(Mutex::new(InService::default())),
         });
         Ok(Self {
             config,
@@ -733,10 +826,36 @@ impl Holders {
     fn start_holder(&self) -> Result<Arc<Link>> {
         let holder_id = uuid::Uuid::new_v4().to_string();
         let start = |exe: &Path| -> Result<Arc<Link>> {
-            (self.config.launch)(exe, &holder_id, &self.config.registry_dir)
+            let placement = (self.config.launch)(exe, &holder_id, &self.config.registry_dir)
                 .context("starting the holder")?;
-            let entry = self.wait_for_registry(&holder_id)?;
-            self.connect(&entry)
+            let in_daemon_service = placement == Placement::InDaemonService;
+            if in_daemon_service {
+                // From here until the start fails or the link is lost, a planned restart is
+                // refused: the holder is in no other list while it is waited for. A claim made
+                // already leaves the holder process, launched before this refusal, unlinked and
+                // unused, to end with the service.
+                let mut service = locked(&self.shared.in_service);
+                service.admit().context("starting the holder")?;
+                service.holders.insert(holder_id.clone(), None);
+            }
+            let linked = self
+                .wait_for_registry(&holder_id)
+                .and_then(|entry| self.connect(&entry));
+            if in_daemon_service {
+                let mut service = locked(&self.shared.in_service);
+                match &linked {
+                    Ok(link) => {
+                        link.place_in_service(self.shared.in_service.clone());
+                        service
+                            .holders
+                            .insert(holder_id.clone(), Some(Arc::downgrade(link)));
+                    }
+                    Err(_) => {
+                        service.holders.remove(&holder_id);
+                    }
+                }
+            }
+            linked
         };
         match &self.config.builds {
             Some(builds) => builds.run_from(super::build_id(), &self.config.exe, start),
@@ -830,6 +949,31 @@ impl Holders {
                 })
             })
             .collect()
+    }
+
+    /// Whether the daemon's own systemd service has a holder to end ([`launch_holder`]): one
+    /// started inside it that is being started, or is linked to and runs a terminal or a companion
+    /// of this daemon, so that the service's stop would end what they run. A linked holder with
+    /// nothing to run does not count, nor does one that is lost or whose start failed, which are
+    /// forgotten.
+    #[cfg(test)]
+    pub(super) fn any_in_daemon_service(&self) -> bool {
+        locked(&self.shared.in_service).runs_programs()
+    }
+
+    /// Claims a planned stop or restart: false, with nothing claimed, where the service has a
+    /// holder to end (a holder being started, or linked to and running a terminal or a companion
+    /// of this daemon), and otherwise true, after which a holder is not linked to or used in the
+    /// service (one may still be launched, and ends with it) and no program is admitted to one in
+    /// it. Decided under the lock the programs are admitted under, so that none slips in between
+    /// the check and the stop.
+    pub fn claim_planned_stop(&self) -> bool {
+        let mut service = locked(&self.shared.in_service);
+        if service.runs_programs() {
+            return false;
+        }
+        service.stop_claimed = true;
+        true
     }
 
     /// The version each holder known to this daemon reports, by holder id: the holders linked to

@@ -632,6 +632,8 @@ export const id: Translation<"other"> = {
   "daemon.agent_not_available": "{agent} tidak tersedia: binarinya tidak ditemukan di {pathVar} shell login Anda. Untuk membuka sesi, pastikan salah satu agen yang didukung berikut tersedia di {pathVar} Anda: {agents}.",
   "daemon.account_disabled": "{account} ({agent}) dinonaktifkan, sehingga tidak dapat digunakan untuk membuka sesi.",
   "daemon.daemon_shutting_down": "Daemon sedang dihentikan. Coba lagi setelah daemon dimulai ulang.",
+  "daemon.holders_in_service":
+    "Sesi dan terminal berjalan di dalam unit systemd milik daemon, sehingga menghentikan atau memulai ulang daemon akan mengakhiri sesi dan terminal tersebut. Untuk tetap melakukannya, hentikan atau mulai ulang unit dengan {command} di server.",
   "daemon.account_not_signed_in": "{account} ({agent}) belum login, sehingga tidak dapat digunakan untuk membuka sesi.",
   "daemon.account_quota_exhausted": "{account} ({agent}) tidak dapat menjalankan sesi karena sudah mencapai {quota}.",
   "daemon.account_quota_exhausted.resets": "{account} ({agent}) tidak dapat menjalankan sesi karena sudah mencapai {quota}. Batas direset dalam {time}.",

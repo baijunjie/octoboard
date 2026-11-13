@@ -631,6 +631,8 @@ export const hi: Translation<"one" | "other"> = {
   "daemon.agent_not_available": "{agent} उपलब्ध नहीं है: उसकी बाइनरी आपके लॉगिन शेल के {pathVar} में नहीं मिल रही है। सेशन खोलने के लिए जाँचें कि सपोर्ट किए जाने वाले इन एजेंट में से कोई आपके {pathVar} में है: {agents}।",
   "daemon.account_disabled": "{account} ({agent}) बंद है, इसलिए इस पर सेशन नहीं खोल सकते।",
   "daemon.daemon_shutting_down": "डेमन बंद हो रहा है। उसके फिर से शुरू होने के बाद दोबारा कोशिश करें।",
+  "daemon.holders_in_service":
+    "सेशन और टर्मिनल डेमन की systemd यूनिट के भीतर चलते हैं, इसलिए डेमन को रोकने या फिर से शुरू करने पर वे खत्म हो जाएँगे। फिर भी ऐसा करने के लिए सर्वर पर {command} से यूनिट को रोकें या फिर से शुरू करें।",
   "daemon.account_not_signed_in": "{account} ({agent}) लॉगिन नहीं है, इसलिए इस पर सेशन नहीं खोल सकते।",
   "daemon.account_quota_exhausted": "{account} ({agent}) की {quota} पूरी हो गई है, इसलिए वह सेशन नहीं चला सकता।",
   "daemon.account_quota_exhausted.resets": "{account} ({agent}) की {quota} पूरी हो गई है, इसलिए वह सेशन नहीं चला सकता। यह {time} में रीसेट होगी।",

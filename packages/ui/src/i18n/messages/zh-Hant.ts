@@ -646,6 +646,8 @@ export const zhHant: Translation<"other"> = {
   "daemon.agent_not_available": "{agent} 不可用：其程式未能在登入 shell 的 {pathVar} 中找到。要開啟工作階段，請確保以下支援的代理程式之一已設定到 {pathVar} 中：{agents}。",
   "daemon.account_disabled": "{account}（{agent}）已停用，無法在其上開啟工作階段。",
   "daemon.daemon_shutting_down": "背景服務正在停止，請在它重新啟動後再試一次。",
+  "daemon.holders_in_service":
+    "工作階段和終端機在背景服務的 systemd 單元中執行，停止或重新啟動背景服務會結束這些工作階段和終端機。若仍要執行，請在伺服器上用 {command} 停止或重新啟動此單元。",
   "daemon.account_not_signed_in": "{account}（{agent}）未登入，無法在其上開啟工作階段。",
   "daemon.account_quota_exhausted": "{account}（{agent}）無法執行工作階段：已達到 {quota}。",
   "daemon.account_quota_exhausted.resets": "{account}（{agent}）無法執行工作階段：已達到 {quota}，將在 {time} 後重置。",

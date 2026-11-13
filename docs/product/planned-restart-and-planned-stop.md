@@ -13,17 +13,32 @@ and which `octoboardd restart` sends wherever the daemon's key is recorded, or b
 outside Windows to a daemon whose key is not. A page served by a daemon that
 updates itself asks for one with **Restart now** once an update is installed, which, unlike the others, is refused while
 a download of the update runs or while any stop or restart is already asked for (see "Restarting into the update" in
-`docs/product/server-form-updates.md`). A planned stop is asked for by the control route
-`POST /planned-stop` or the WebSocket request `planned_stop`; both answer at once and neither is ever refused. The
+`docs/product/server-form-updates.md`). A planned stop is asked for by the control route `POST /planned-stop` or the
+WebSocket request `planned_stop`; both answer at once. They are refused, and nothing is stopped, only for a daemon a
+service manager runs (see below) while a process holder it started runs inside the systemd unit the daemon itself runs
+in, on the same terms as a planned restart: the daemon exits with status 0 after the stop, the unit stops, and that
+holder ends with every session and shell terminal it runs, which a planned stop promises to keep (`POST /planned-stop`
+answers `409` with the reason `holders_in_service`, and the `planned_stop` request fails with that code); a caller that
+wants those sessions ended uses the ordinary stop. No new program is admitted in the unit from then on either, as with a
+planned restart. The daemon's own planned stop, made when the application it follows is gone, is never refused. The
 desktop application asks for one to restart into an update (see "Restarting" in
 `docs/product/application-lifecycle.md`), and a daemon that follows the application makes one itself when it finds the
 application gone with no quit note (see "Crashes and forced termination" in `docs/product/application-lifecycle.md`). A
 planned restart is refused, and nothing is stopped, for a daemon that follows the desktop application, which starts the
-daemon it talks to itself (`POST /restart` answers `409` with the reason `follows_application`). A planned stop or
-restart asked for while an ordinary stop (the shutdown request, a termination signal) is already asked for does not
-replace it, and a planned stop asked for after the desktop application's quit note is made ordinary (see "The quit note"
-in `docs/product/application-lifecycle.md`); an ordinary stop asked for before a planned one has begun replaces it, and
-one asked for once it has begun cuts it short (see "An ordinary stop during a planned stop" below).
+daemon it talks to itself (`POST /restart` answers `409` with the reason `follows_application`). It is refused as well,
+and nothing is stopped, for a daemon a service manager restarts (see below) while a process holder it started runs
+inside the systemd unit the daemon itself runs in, having no unit of its own (see "How a holder is detached" in
+`docs/product/process-holders.md`): the unit's stop at the restart would end that holder, and every session and shell
+terminal it runs, so such a holder counts from its start, and then while it runs a session or shell terminal of the
+daemon, until it is lost or its start fails (`POST /restart` answers `409` with the reason `holders_in_service`, whose
+message says that sessions and terminals run inside the daemon's systemd unit, so stopping or restarting the daemon
+would end them, and to stop or restart the unit with `systemctl` on the server to do it anyway). That decision is made
+together with admitting new programs there: once the restart is accepted, a session or terminal that would run inside
+the unit (a holder started there, or a program added to a holder already there) is refused until the restart completes.
+A planned stop or restart asked for while an ordinary stop (the shutdown request, a termination signal) is already asked
+for does not replace it, and a planned stop asked for after the desktop application's quit note is made ordinary (see
+"The quit note" in `docs/product/application-lifecycle.md`); an ordinary stop asked for before a planned one has begun
+replaces it, and one asked for once it has begun cuts it short (see "An ordinary stop during a planned stop" below).
 
 **Who starts the next daemon.** A daemon no service manager restarts starts the next one itself once it has handed
 everything over and let go of `daemon.lock`: in the background, as `octoboardd start` does, on the same port and with
@@ -50,10 +65,11 @@ its own build back and starts that instead (see "When the update does not start"
 
 A daemon leaves the next start to a service manager only on evidence, decided once as it starts: the option
 `--service-managed`, which the example systemd unit passes, or systemd naming the daemon's own process as the one it
-started for a unit (`SYSTEMD_EXEC_PID` equal to the daemon's pid, with an `INVOCATION_ID`). A daemon started by hand
-from a terminal that itself runs under systemd has neither. Such a daemon starts no next daemon: it exits with status
-**75** after its planned stop, and the service is to start the next one (see "Running as a systemd user service"
-in `docs/product/server-form.md`), which makes a new launch key. A service that passes `--service-managed` must restart
+started for a unit (`SYSTEMD_EXEC_PID` equal to the daemon's pid, with an `INVOCATION_ID`), which systemd sets from
+version 248, so that on an earlier systemd the option is the only evidence. A daemon started by hand from a terminal
+that itself runs under systemd has neither. Such a daemon starts no next daemon: it exits with status **75** after its
+planned stop, and the service is to start the next one (see "Running as a systemd user service" in
+`docs/product/server-form.md`), which makes a new launch key. A service that passes `--service-managed` must restart
 the daemon on status 75. On Windows `--service-managed` is accepted and ignored.
 
 **What a planned stop keeps.** No session is marked *interrupted* and no session record changes; no shell terminal is

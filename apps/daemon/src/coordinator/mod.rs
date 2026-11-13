@@ -91,11 +91,11 @@ use crate::host_open;
 use crate::host_tools::Pace;
 use crate::hostfs;
 use crate::project_git;
-use crate::protocol::{Event, ModelChangeOutcome, Origin, RequestBody};
+use crate::protocol::{error_code, CodedError, Event, ModelChangeOutcome, Origin, RequestBody};
 use crate::records;
 use crate::records::history;
 use crate::session::trust;
-use crate::state::AppState;
+use crate::state::{AppState, RestartRefusal};
 
 use crate::accounts::choice::{
     agent_is_available, checked_account_reference, refuse_if_agent_unavailable,
@@ -1283,10 +1283,21 @@ async fn handle_inner(
             Ok(None)
         }
 
-        RequestBody::PlannedStop => {
-            state.request_planned_stop();
-            Ok(None)
-        }
+        RequestBody::PlannedStop => match state.request_planned_stop_unless_holders_in_service() {
+            Ok(()) => Ok(None),
+            Err(RestartRefusal::HoldersInService) => Err(CodedError::raised(
+                error_code::HOLDERS_IN_SERVICE,
+                RestartRefusal::HoldersInService.message(),
+                &[],
+            )),
+            // Not what this request is refused for: a planned stop follows no application and
+            // takes a stop asked for already as its own.
+            Err(refusal) => Err(anyhow::anyhow!(
+                "a planned stop was refused as {}: {}",
+                refusal.code(),
+                refusal.message()
+            )),
+        },
 
         RequestBody::HandoverCheck {
             holder_floor,

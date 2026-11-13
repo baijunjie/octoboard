@@ -212,8 +212,10 @@ it as a service" in `docs/product/installing-the-server-form.md`). What it sets:
   `octoboardd stop` and `octoboardd status` work on a daemon the unit runs as on any other, and the unit does not start
   a daemon stopped that way again; a `stop` that meets a planned restart follows the next daemon the unit starts (see
   `octoboardd stop` in "Running in the background from the command line" in `docs/product/daemon-command-line.md`).
-- **The process holders run as systemd user units of their own**, outside the daemon's unit, as the holders of any
-  daemon a systemd user manager runs as a service do (see "How a holder is detached" in
+- **The process holders run as systemd user units of their own**, outside the daemon's unit, on systemd **236** or
+  later, as the holders of any daemon a systemd user manager runs as a service do: the unit's `--service-managed`,
+  together with the daemon's cgroup being that of a user service of its user's manager, on cgroup v2, cgroup v1 or the
+  hybrid layout, is what makes the daemon start them that way (see "How a holder is detached" in
   `docs/product/process-holders.md`). Nothing that ends the daemon's unit ends them, so the sessions survive what leaves
   the programs running elsewhere: a planned restart, after which the unit starts the next daemon and it takes every
   session and shell terminal over with its screen as it was, and a daemon that crashes or is killed outright, which
@@ -223,11 +225,16 @@ it as a service" in `docs/product/installing-the-server-form.md`). What it sets:
   units, so the daemon makes its ordinary stop while the programs still run: every session is left *interrupted* with
   its preview frozen, every shell terminal ends, and the holders, left with nothing to run, exit. The stop of the
   user's manager then ends whatever is left, kept processes included.
-- **Where a holder cannot be started as a unit of its own** (see "How a holder is detached" in
-  `docs/product/process-holders.md`), it runs in the daemon's unit and ends with it, with the programs it keeps: a
-  daemon that crashes or is killed outright then takes those sessions' processes with it, and so does a planned
-  restart, since systemd ends whatever is in the unit when the daemon exits, before it starts the next daemon, which
-  finds nothing of theirs to take over.
+- **Where a holder cannot be started as a unit of its own** — on a systemd older than 236, where `systemd-run` fails for
+  it, or for every holder where a copy of the unit runs as a system service rather than a user one, which the daemon
+  warns of in the journal as it starts (see "How a holder is detached" in `docs/product/process-holders.md`) — it runs
+  in the daemon's unit and ends with it, with the programs it keeps: a daemon that crashes or is killed outright then
+  takes those sessions' processes with it. A planned restart would too, since systemd ends whatever is in the unit when
+  the daemon exits, before it starts the next daemon, so while such a holder runs a session or shell terminal the daemon
+  refuses a planned restart, with the reason `holders_in_service` (see
+  `docs/product/planned-restart-and-planned-stop.md`); restarting the unit with `systemctl` still restarts it, and ends
+  those sessions. The refusal is decided together with admitting new programs there: once a restart is accepted, a new
+  session or terminal that would run inside the service is refused until the restart completes.
 - **`Delegate=yes`** gives the daemon a cgroup subtree it may write. Each agent launch is held in a group of its own
   below the cgroup of the holder that runs it (see "Which processes belong to a launch" in
   `docs/product/background-processes.md`), which for a holder unit is that unit's own cgroup; the daemon's subtree

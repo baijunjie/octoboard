@@ -347,13 +347,17 @@ git command waits on it, and a Windows update renames a file in use aside as it 
 - **Linux, under a systemd user manager**: a daemon that a user's systemd manager runs as a service starts each holder
   as a transient systemd user unit of its own instead, which nothing that ends the daemon's service ends (the example
   unit is one such service; see "Running as a systemd user service" in `docs/product/server-form.md`). The
-  daemon counts as run by one only on both of these, decided once as it starts: systemd names the daemon's own process
-  as the one it started for a unit (`SYSTEMD_EXEC_PID` equal to the daemon's pid, with an `INVOCATION_ID`, which
-  systemd sets from version 248), and the daemon's cgroup is that of a service, `<name>.service`, directly below its
-  user's manager (`user@<uid>.service`) or below slices in it. A daemon started by hand, from a login's terminal or by
-  `octoboardd start`, has its holders run in a session of its own as above. The holder's unit:
+  daemon counts as run by one only on both of these, decided once as it starts: it is service-managed, on the evidence
+  that leaves the next start of a planned restart to a service manager (the option `--service-managed`, which the
+  example unit passes, or systemd naming the daemon's own process as the one it started for a unit, which systemd does
+  from version 248 only; see `docs/product/planned-restart-and-planned-stop.md`), and the daemon's cgroup is that of a
+  service, `<name>.service`, directly below its user's manager (`user@<uid>.service`) or below slices in it, read where
+  systemd tracks its units on cgroup v2, on cgroup v1 (systemd's `name=systemd` hierarchy) and in the hybrid layout
+  alike. A daemon started by hand, from a login's terminal or by `octoboardd start`, has its holders run in a session of
+  its own as above. The holder's unit:
   - is named `octoboard-holder-<holder id>.service`, described as the application's name followed by "process holder",
-    started with `systemd-run --user`, and removed once it has ended, whether or not it failed;
+    started with `systemd-run --user --collect`, which needs systemd **236** or later, and removed once it has ended,
+    whether or not it failed;
   - when stopped, has only the holder signalled (`KillMode=process`), which ends its programs itself;
   - delegates its cgroup (`Delegate=yes`), in which the groups of the agent launches the holder runs are made (see
     "Which processes belong to a launch" in `docs/product/background-processes.md`);
@@ -364,10 +368,19 @@ git command waits on it, and a Windows update renames a file in use aside as it 
     daemon's being passed, and has a command line naming only the holder's id and the registry directory: no key is in
     its arguments, its properties or the journal.
 
-  When `systemd-run` fails, the holder is started in a session of its own as above, with a warning in the daemon's log,
-  and so stays in the daemon's service and ends with it. When `systemd-run` has not returned within **15 seconds**, the
-  holder's start fails, and with it the start of the terminal it was for, with no such fallback, since the unit may
-  have started and a second holder with the same id must not.
+  When `systemd-run` fails, as it does on a systemd older than 236, the holder is started in a session of its own as
+  above, with a warning in the daemon's log, and so stays in the daemon's service and ends with it. When `systemd-run`
+  has not returned within **15 seconds**, the holder's start fails, and with it the start of the terminal it was for,
+  with no such fallback, since the unit may have started and a second holder with the same id must not.
+- **Linux, holders inside the daemon's service**: a holder started in a session of its own while the daemon runs in a
+  systemd service, a user's or the system's, stays in that service and ends when the service stops, with every terminal
+  it runs. That is so for every holder of a service-managed daemon whose cgroup is a service's but not a user service of
+  its own user's manager — one run as a system service, say — which logs a warning saying so as it starts, and for each
+  holder whose `systemd-run` failed above. While a service-managed daemon has such a holder running a session or shell
+  terminal, it refuses a planned restart (see `docs/product/planned-restart-and-planned-stop.md`); an ordinary stop ends
+  the sessions anyway and is not affected. The refusal is decided together with admitting new programs there: once a
+  restart is accepted, a new session or terminal that would run inside the service is refused until the restart
+  completes.
 - **Windows**: a holder runs detached, with no console, outside the jobs the daemon is in. Where a job does not let it
   break away, it is started as a child of the desktop application instead; that keeps it running only while the
   application is not in the same job. Where neither is possible it starts inside the daemon's job, and its terminals
