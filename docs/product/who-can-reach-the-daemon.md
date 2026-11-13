@@ -32,8 +32,8 @@ revoked by removing that key — a connection already open lasts until it drops 
 password.
 
 - **A browser** reaches the server form's daemon through the owner's own SSH port forward,
-  `ssh -L <port>:127.0.0.1:<port> <server>`, and opens `http://localhost:<port>` (with the daemon's port fixed by
-  `--port`, see "Choosing the port" in `docs/product/server-form.md`). That is a loopback address, which the checks
+  `ssh -L <port>:127.0.0.1:<port> <server>`, and opens `http://localhost:<port>` (with the daemon's port fixed, by
+  `--port` or as the default server port, see "Choosing the port" in `docs/product/server-form.md`). That is a loopback address, which the checks
   below admit once the page carries a key the daemon accepts, and which a browser treats as a secure
   context, so notifications and the clipboard work through it with no TLS. The owner gets that address with the key by
   running `octoboardd address` on the server as the daemon's user, however the daemon was started (see "Running in the

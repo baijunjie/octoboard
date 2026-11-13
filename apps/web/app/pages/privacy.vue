@@ -21,10 +21,10 @@ useSeoMeta({
     <NuxtLink class="text-link privacy-back" :to="localePath('/')"
     ><span aria-hidden="true">←</span> {{ t("privacyBack") }}</NuxtLink
     >
-    <header class="privacy-heading">
+    <header class="page-heading">
       <p class="eyebrow">{{ t("privacyEyebrow") }}</p>
       <h1>{{ t("privacyTitle") }}</h1>
-      <p class="privacy-intro">{{ t("privacyIntro") }}</p>
+      <p class="page-intro">{{ t("privacyIntro") }}</p>
       <p class="privacy-updated">{{ t("privacyUpdated", { date: updatedDate }) }}</p>
     </header>
     <div class="privacy-sections">

@@ -1,11 +1,12 @@
 # Website
 
-The official website presents Octoboard, its developer's motivation, and its privacy policy. It is a static public
+The official website presents Octoboard, its developer's motivation, its downloads, and its privacy policy. It is a static public
 site, separate from the application: visiting it does not connect to a local daemon, open a real agent session, or
 require an account.
 
 Its search indexing and agent-readable copies are described in `docs/product/website-search-indexing.md`, its
-product preview in `docs/product/website-product-preview.md`, and its privacy disclosures and analytics consent in
+product preview in `docs/product/website-product-preview.md`, its download page and download links in
+`docs/product/website-download-page.md`, and its privacy disclosures and analytics consent in
 `docs/product/website-privacy.md`.
 
 ## Publishing
@@ -16,7 +17,9 @@ app ships), `scripts/` other than `scripts/lib/`, the Rust workspace files, docu
 files, the other CI definitions and hooks, the brand assets and the license. A file outside those lists publishes, so
 an input added outside those areas is never missed. Pushes to other branches publish nothing. The same publication can
 be started manually, and a manual run publishes the selected revision to that same site; start one after changing the
-repository's Pages settings or after a failed publication, which no push then retries by itself.
+repository's Pages settings or after a failed publication, which no push then retries by itself. Every published
+release also starts a publication of `main`, so that the download links point at the new version (see
+`docs/product/website-download-page.md`, "Where download links point").
 
 Publication uses the origin and base path configured for the repository's GitHub Pages site, passed to generation
 as `NUXT_PUBLIC_SITE_ORIGIN` and `NUXT_APP_BASE_URL`. An origin reported as `http` is changed to `https` before
@@ -29,17 +32,17 @@ both names exist, GitHub Pages redirects `www.octoboard.dev` to `octoboard.dev`.
 
 ## Pages and languages
 
-The site has a homepage and a privacy page. Paths below are relative to the site's deployment root:
+The site has a homepage, a download page and a privacy page. Paths below are relative to the site's deployment root:
 
-- English: `/` and `/privacy/`, without an `en` prefix.
-- Other languages: `/<locale>/` and `/<locale>/privacy/`.
+- English: `/`, `/download/` and `/privacy/`, without an `en` prefix.
+- Other languages: `/<locale>/`, `/<locale>/download/` and `/<locale>/privacy/`.
 - Simplified Chinese uses the route prefix `zh`, with the language identified as `zh-Hans` in page metadata.
   Traditional Chinese uses `zh-Hant` for both.
 - Portuguese uses `pt` for both its route prefix and page language.
 
 All 17 languages have complete website translations, including navigation, all 16 feature cards, preview
-controls, the illustrative workflow, the developer's motivation, questions and answers, privacy text, client
-error messages, and page metadata: Arabic, German, English, Spanish, French, Hindi, Indonesian, Italian,
+controls, the illustrative workflow, the developer's motivation, questions and answers, the download page, privacy
+text, client error messages, and page metadata: Arabic, German, English, Spanish, French, Hindi, Indonesian, Italian,
 Japanese, Korean, Portuguese, Russian, Thai, Turkish, Vietnamese, Simplified Chinese, and Traditional
 Chinese. This coverage is specific to the website; the application's translation coverage is described in
 `docs/product/language.md`, "What is translated so far".
@@ -50,8 +53,8 @@ English is the default. On a normal site page that opens in English, the site ch
 the app mounts. If there is no remembered language, it matches the browser's preferred languages to the supported
 languages and opens the matching version of the same page. Unknown language tags and English leave the page on its
 default route. A page opened with a language prefix is not redirected. The language selector names each language in
-that language and opens the corresponding version of the current page: switching from a privacy page stays on a
-privacy page. Arabic uses a right-to-left layout. Page URLs remain usable directly, including after a reload. The
+that language and opens the corresponding version of the current page: switching from a privacy or download page
+stays on that page. Arabic uses a right-to-left layout. Page URLs remain usable directly, including after a reload. The
 site remembers language changes for one year in a same-site cookie.
 The unlocalized static 404 page does not perform language matching.
 
@@ -65,8 +68,8 @@ when the pointer leaves. The fade follows the name's own reading direction. Redu
 The homepage uses Octoboard's original silver mechanical octopus, red eyes, and pixel wordmark on a dark surface.
 The first screen introduces one workspace for existing coding agents and their accounts: retaining a conversation
 when switching accounts of the same agent, handing work to an agent from another provider, and choosing an agent to coordinate
-tasks across projects. The coordinator is a role taken by the chosen agent. The first screen offers links to view
-releases, visit its GitHub repository, and open the preview section.
+tasks across projects. The coordinator is a role taken by the chosen agent. The first screen offers links to the
+download page, its GitHub repository, and the preview section.
 
 The page continues through the grouped feature wall, the product preview, one cross-project coordination
 example, the developer's motivation, local data and open-source information with platform availability, and questions.
@@ -193,16 +196,20 @@ receive a hover background; an expanded question and its answer share a uniform 
 - Requirements and cost: visitors install and configure the agent CLIs themselves. Octoboard is free and open
   source under the MIT License; agents and model services follow the chosen providers' subscriptions or billing
   terms. Self-hosted model configurations remain usable when the chosen agent supports them.
-- Remote hosts: running project agents on another server or computer is planned and unavailable.
+- Remote hosts: partly. On Linux, Octoboard runs on a server, agents included, and is used from a browser on the
+  visitor's own machine; driving agents on other hosts from one desktop workspace is planned and unavailable.
 - Parallel work: sessions share the project directory by default, so simultaneous edits to the same files can
   conflict. Users can ask agents to work in separate Git worktrees, giving changes separate working directories,
   and review those changes before merging.
 - Portability: project files remain in their original folders. Available native conversation records can be resumed
   through the original CLI; an additional account requires using that account's configuration directory.
 
-The primary action in the header, hero, and closing section uses the same localized label for viewing releases and opens
-the repository's GitHub Releases page. It does not link directly to an installer file. The hero identifies macOS on
-Apple silicon and Intel and Windows on x64, and labels the apps as beta. The closing note repeats that status beside the MIT License. Other
+The primary action in the header, hero, and closing section is the same localized Download label and opens the
+localized download page (see `docs/product/website-download-page.md`). The hero identifies macOS on Apple silicon and
+Intel, Windows on x64 and the Linux server on x86_64 and aarch64, all as beta. The closing section, under the slogan's
+meaning, says that the macOS or Windows app can be downloaded or the Linux server installed with one command, shows
+three platform links — macOS, Windows and Linux server, each with its icon — that open the download page at that
+platform's tab, then the Download button, and a closing note that repeats the beta status beside the MIT License. Other
 repository links open GitHub; the footer links to the developer's motivation at the localized homepage's
 `#developer-intent` and to the localized privacy page, explicitly names the MIT License in its license link, provides
 the operator's email address, and ends with the analytics settings button described in
@@ -218,16 +225,16 @@ wordmark, centered on the wordmark. Under that group, centered, is the sentence 
 meanings (see "Brand slogan"). Decorative graphics do not act as slide or pagination controls.
 
 The floating header stays visible while scrolling. Its inline navigation contains only the feature wall
-(`#benefits`) and product preview (`#product-preview`), alongside language selection and the releases action.
-The inline links are hidden at widths of 1200 pixels or less. These links also lead from the privacy page to the
-localized homepage. The header has a glass surface with edge refraction where supported and a sheen that follows
+(`#benefits`) and product preview (`#product-preview`), alongside language selection and the Download action.
+The inline links are hidden at widths of 1200 pixels or less. These links also lead from the privacy and download pages
+to the localized homepage. The header has a glass surface with edge refraction where supported and a sheen that follows
 the pointer. Browsers without refraction support use blurred glass; those without backdrop blur use a more opaque
 surface.
 
 On the homepage, a separate page directory links to the overview (`#overview`), feature wall (`#benefits`), product
 preview (`#product-preview`), coordination explanation (`#how-it-works`), developer motivation (`#developer-intent`),
 local data and open source (`#local-workspace`), platform availability (`#platforms`), questions (`#questions`), and
-closing releases section (`#download`), in that order. Platform availability remains within the fifth numbered
+closing download section (`#download`), in that order. Platform availability remains within the fifth numbered
 section; its separate directory entry does not change the six section numbers. Links leave space for the floating
 header above their destination. Scroll position identifies the active destination, and reaching the page bottom
 identifies the closing section.
@@ -272,24 +279,19 @@ remains localized text rather than part of the wordmark artwork.
 
 Platform availability appears within the local-data and open-source section, before the questions. Its five entries have
 equal visual weight in a desktop row and become a compact list of icons and text on small screens, in the order macOS,
-Windows, Linux, iOS, Android. The macOS and Windows entries use brighter text and identify those apps as beta. The
-section introduction describes the macOS and Windows apps as betas still in development. The site does not give an
-installer date.
+Windows, Linux, iOS, Android. The macOS, Windows and Linux entries use brighter text: macOS and Windows identify those
+apps as beta, and Linux identifies a server in beta. The section introduction describes the macOS and Windows apps and
+the Linux server as betas still in development, the Linux server as accessed from another machine's browser, and the
+iOS and Android apps as planned.
+Linux is the server form (see `docs/product/server-form.md`), not a Linux desktop app. The site does not give an
+availability date.
 
-After the list, a note in the visitor's language tells Windows visitors how to install: download the installer whose
-name ends in `x64-setup.exe` from a release; it needs Windows 10 version 21H2 or later, installs for the user's account
-only, and downloads Microsoft Edge WebView2 when it is missing; on Windows 11 on Arm the x64 app runs under emulation;
-and the Windows app is not code-signed yet, so Microsoft Defender SmartScreen may show "Windows protected your PC",
-which "More info", then "Run anyway" passes. The note is plain text, without links.
+After the list, a note in the visitor's language says that each system's requirements and installation steps are on the
+download page, followed by a Download link to the localized download page.
 
-Status: not implemented — the Linux server and the iOS and Android apps. Each appears with a platform icon and no
-download or availability date.
-
-Linux is a planned server, not another app version beside iOS and Android, and not a Linux desktop app. The platform
-introduction describes it as a server accessed from another machine's browser. It is not available. The Linux row has
-its own server-specific planned status. iOS and Android remain planned and not available, and those rows use the shared
-planned badge. The homepage Markdown includes the same introduction, the same status for each row and the Windows
-install note.
+Status: not implemented — the iOS and Android apps. Each appears with a platform icon, the shared planned badge, and no
+download or availability date. The homepage Markdown includes the same introduction, the same status for each row, the
+note and its link.
 
 ## Motion and accessibility
 
@@ -308,7 +310,7 @@ available while motion is paused.
 
 A reduced-motion preference disables decorative animations and transitions, hides the particles and motion
 control, and leaves the content visible. The header keeps a static blurred glass surface without refraction or a
-moving sheen. Without JavaScript, the pre-rendered homepage and privacy content remain readable, and questions
+moving sheen. Without JavaScript, the pre-rendered homepage, download page and privacy content remain readable, and questions
 can still be expanded and collapsed; section reveals never leave that content hidden. The diagram retains its
 initial selection and, on wide screens, static connections. Selecting another node, the product preview and
 opening the page-directory menu require JavaScript. The header provides a skip link to the main content, and

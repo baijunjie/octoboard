@@ -132,10 +132,11 @@ test("requires one explicit version and one nonempty source of release notes", (
   const { root } = fixture(t);
   writeFileSync(path.join(root, "notes.md"), "## Changes\n\nA fix.\n");
   assert.deepEqual(parseOptions(["0.1.0-beta.2", "--notes-file", "notes.md", "--dry-run"], root), {
-    version: "0.1.0-beta.2", notes: "## Changes\n\nA fix.", platforms: ["macos", "windows"], dryRun: true,
+    version: "0.1.0-beta.2", notes: "## Changes\n\nA fix.", platforms: ["macos", "windows", "linux"], dryRun: true,
   });
   assert.deepEqual(parseOptions(["0.1.0", "--notes", "a", "--platforms", "windows"], root).platforms, ["windows"]);
-  for (const args of [[], ["0.1.0"], ["0.1.0", "--notes", ""], ["0.1.0", "--notes", "a", "--notes-file", "notes.md"], ["0.1.0", "0.2.0", "--notes", "a"], ["0.1.0", "--notes", "a", "--platforms", "linux"]]) {
+  assert.deepEqual(parseOptions(["0.1.0", "--notes", "a", "--platforms", "linux"], root).platforms, ["linux"]);
+  for (const args of [[], ["0.1.0"], ["0.1.0", "--notes", ""], ["0.1.0", "--notes", "a", "--notes-file", "notes.md"], ["0.1.0", "0.2.0", "--notes", "a"], ["0.1.0", "--notes", "a", "--platforms", "freebsd"]]) {
     assert.throws(() => parseOptions(args, root));
   }
 });

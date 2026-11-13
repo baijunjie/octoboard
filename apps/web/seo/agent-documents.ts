@@ -1,5 +1,14 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import {
+  appDownloads,
+  appPanelKeys,
+  installCommand,
+  releasesUrl,
+  linuxCommandParts,
+  serverDownloads,
+  type Downloads,
+} from "./downloads.ts";
 import { formatPrivacyDate } from "./privacy-date.ts";
 import {
   availablePlatforms,
@@ -17,10 +26,12 @@ import {
 } from "./page-outline.ts";
 import {
   languageHomeUrl,
+  localeCodeFromPath,
   locales,
   localizedPath,
   markdownUrl,
   pagePaths,
+  seoKeysFor,
   type SiteLocale,
 } from "./site-seo.ts";
 
@@ -38,6 +49,7 @@ export type AgentCopy = {
   operatorName: string;
   contactEmail: string;
   repositoryUrl: string;
+  downloads: Downloads;
   messages: Record<string, Record<string, string>>;
 };
 
@@ -88,10 +100,6 @@ function message(
   return formatMessage(value, params);
 }
 
-function releasesUrl(repositoryUrl: string): string {
-  return `${repositoryUrl.replace(/\/$/, "")}/releases`;
-}
-
 function licenseUrl(repositoryUrl: string): string {
   return `${repositoryUrl.replace(/\/$/, "")}/blob/main/LICENSE`;
 }
@@ -106,10 +114,66 @@ function catalog(copy: AgentCopy, code: string): Record<string, string> {
   return messages;
 }
 
+type Text = (key: string, values?: Record<string, string>) => string;
+
+// The Linux server's part of the download page: the install command, how to reach and keep the server, how to
+// upgrade and the archives.
+function linuxParts(copy: AgentCopy, text: Text, headings: boolean): Array<string | false> {
+  const code = (value: string) => `\`${value}\``;
+  const commands = Object.fromEntries(
+    Object.entries(linuxCommandParts).map(([name, command]) => [name, code(command)]),
+  );
+  return [
+    headings && heading(2, text("downloadLinuxTitle")),
+    text("downloadLinuxDescription"),
+    text("downloadLinuxRange"),
+    `\`\`\`sh\n${installCommand(copy.siteUrl)}\n\`\`\``,
+    text("downloadServerRun", commands),
+    text("downloadServiceSteps", commands),
+    text("downloadUpgrade", commands),
+    [
+      text("downloadArchivesLabel"),
+      ...serverDownloads.map(
+        (target) =>
+          `- ${link(text("downloadArchive", { architecture: target.architecture }), copy.downloads[target.id])}`,
+      ),
+    ].join("\n"),
+  ];
+}
+
+function appLinks(copy: AgentCopy, text: Text): string {
+  return appDownloads
+    .map(
+      (target) =>
+        `- ${link(text("downloadButton", { platform: target.name }), copy.downloads[target.id])}`,
+    )
+    .join("\n");
+}
+
+function downloadMarkdown(copy: AgentCopy, locale: SiteLocale): string {
+  const messages = catalog(copy, locale.code);
+  const params = valuesFor(copy);
+  const text: Text = (key, values = {}) => message(messages, key, { ...params, ...values });
+  const canonical = copy.siteUrl + localizedPath(locale.code, "download/");
+  return document([
+    heading(1, text("downloadPageTitle")),
+    `Canonical: ${canonical}`,
+    text("downloadPageSummary"),
+    ...appDownloads.flatMap((target) => [
+      heading(2, target.name),
+      link(text("downloadButton", { platform: target.name }), copy.downloads[target.id]),
+      ...appPanelKeys[target.id].map((key) => text(key)),
+    ]),
+    ...linuxParts(copy, text, true),
+    link(text("downloadAllReleases"), releasesUrl(copy.repositoryUrl)),
+  ]);
+}
+
 function homeMarkdown(copy: AgentCopy, locale: SiteLocale): string {
   const messages = catalog(copy, locale.code);
   const params = valuesFor(copy);
-  const text = (key: string) => message(messages, key, params);
+  const text = (key: string, values: Record<string, string> = {}) =>
+    message(messages, key, { ...params, ...values });
   const canonical = languageHomeUrl(copy.siteUrl, locale.code);
   const privacy = markdownUrl(
     copy.siteUrl,
@@ -125,8 +189,7 @@ function homeMarkdown(copy: AgentCopy, locale: SiteLocale): string {
     text("brandSloganMeaning"),
     text("workspaceIntroduction"),
     text("heroStatus"),
-    text("heroPlatformsNote"),
-    link(text("heroCta"), releasesUrl(copy.repositoryUrl)),
+    text("heroAvailability"),
     link(text("heroSecondary"), copy.repositoryUrl),
     text("workspaceAgentLabel"),
     heroAgents.map((agent) => agent.name).join(", "),
@@ -184,20 +247,29 @@ function homeMarkdown(copy: AgentCopy, locale: SiteLocale): string {
     link(text("proofRepository"), copy.repositoryUrl),
     link(text("proofLicense"), licenseUrl(copy.repositoryUrl)),
     heading(3, text("platformsTitle")),
-    text("platformsSupportDescription"),
+    text("platformsIntroduction"),
     [
       ...[...availablePlatforms, ...plannedPlatforms].map(
         (platform) => `- ${platform.name}: ${text(platform.status)}`,
       ),
     ].join("\n"),
-    text("platformsWindowsInstall"),
+    text("platformsDownloadPointer"),
+    link(
+      text("downloadCta"),
+      markdownUrl(copy.siteUrl, `/${localizedPath(locale.code, "download/")}`),
+    ),
     heading(2, text("faqTitle")),
     ...homeQuestions.flatMap((question) => [
       heading(3, text(`faq${question}Question`)),
       text(homeQuestionAnswerKey(question)),
     ]),
+    heading(2, text("downloadCta")),
+    text("downloadTeaser"),
+    link(
+      text("downloadCta"),
+      markdownUrl(copy.siteUrl, `/${localizedPath(locale.code, "download/")}`),
+    ),
     text("ctaNote"),
-    link(text("heroCta"), releasesUrl(copy.repositoryUrl)),
   ]);
 }
 
@@ -227,6 +299,13 @@ function privacyMarkdown(copy: AgentCopy, locale: SiteLocale): string {
   ]);
 }
 
+// The renderer of each page's Markdown copy.
+const pageMarkdown = {
+  "": homeMarkdown,
+  "privacy/": privacyMarkdown,
+  "download/": downloadMarkdown,
+} as const;
+
 function truncate(value: string, max: number): string {
   const flat = flatten(value);
   return flat.length > max ? `${flat.slice(0, max)}...` : flat;
@@ -236,14 +315,18 @@ function llmsTxt(copy: AgentCopy): string {
   const english = catalog(copy, "en");
   const params = valuesFor(copy);
   const text = (key: string) => flatten(message(english, key, params));
+  const plain: Text = (key, values = {}) =>
+    flatten(message(english, key, { ...params, ...values }));
   const notes = [
     text("workspaceIntroduction"),
-    text("heroPlatformsNote"),
+    text("heroAvailability"),
     ...[...availablePlatforms, ...plannedPlatforms].map(
       (platform) => `${platform.name}: ${text(platform.status)}`,
     ),
-    text("platformsWindowsInstall"),
-    link(text("heroCta"), releasesUrl(copy.repositoryUrl)),
+    text("platformsDownloadPointer"),
+    appLinks(copy, plain),
+    ...linuxParts(copy, plain, false).filter((part): part is string => Boolean(part)),
+    link(text("downloadAllReleases"), releasesUrl(copy.repositoryUrl)),
     text("proofFreeCaption"),
     text("localDescription"),
     ...homeFeatures.map((feature) => text(`${feature.key}FeatureDescription`)),
@@ -254,11 +337,9 @@ function llmsTxt(copy: AgentCopy): string {
     `Support: ${copy.contactEmail}`,
     `Repository: ${copy.repositoryUrl}`,
   ];
-  const pageLink = (code: string, page: "" | "privacy/") => {
+  const pageLink = (code: string, page: (typeof pagePaths)[number]) => {
     const messages = catalog(copy, code);
-    const titleKey = page === "" ? "codingAgentsSeoTitle" : "privacySeoTitle";
-    const descriptionKey =
-      page === "" ? "workspaceSeoDescription" : "privacySeoDescription";
+    const { title: titleKey, description: descriptionKey } = seoKeysFor(page);
     const title = flatten(message(messages, titleKey, params));
     const description = truncate(
       message(messages, descriptionKey, params),
@@ -277,11 +358,11 @@ function llmsTxt(copy: AgentCopy): string {
   });
   return document([
     heading(1, copy.appName),
-    `> ${text("workspaceSeoDescription")}`,
+    `> ${text("workspaceSeoSummary")}`,
     `Canonical Origin: ${copy.siteUrl}`,
     ["**Notes:**", ...notes].join("\n\n"),
     ["## Available Languages on Website", "", ...languages].join("\n"),
-    ["## Pages", "", pageLink("en", ""), pageLink("en", "privacy/")].join("\n"),
+    ["## Pages", "", ...pagePaths.map((page) => pageLink("en", page))].join("\n"),
     [
       "## Full content",
       "",
@@ -307,7 +388,7 @@ function llmsFull(
   code = "en",
 ): string {
   const description = flatten(
-    message(catalog(copy, code), "workspaceSeoDescription", valuesFor(copy)),
+    message(catalog(copy, code), "workspaceSeoSummary", valuesFor(copy)),
   );
   const header = document([
     heading(1, copy.appName),
@@ -339,14 +420,15 @@ function sitemapMd(
   for (const entry of [...entries].sort((a, b) =>
     a.route.localeCompare(b.route),
   )) {
-    const key = entry.route.split("/").filter(Boolean)[0] ?? "";
+    const key = localeCodeFromPath(entry.route);
     const group = groups.get(key);
     if (group) group.push(entry);
     else groups.set(key, [entry]);
   }
+  // One section per language, English (the unprefixed pages) first as the root.
   const keys = [...groups.keys()].sort((a, b) => {
-    if (a === "") return -1;
-    if (b === "") return 1;
+    if (a === "en") return -1;
+    if (b === "en") return 1;
     return a.localeCompare(b);
   });
   const parts = [
@@ -355,7 +437,7 @@ function sitemapMd(
     "All pages in Markdown format.",
   ];
   for (const key of keys) {
-    parts.push("", `## ${key || "Root"}`);
+    parts.push("", `## ${key === "en" ? "Root" : key}`);
     for (const entry of groups.get(key) ?? []) {
       parts.push(`- ${link(entry.title, entry.href)}`);
     }
@@ -391,25 +473,14 @@ export function renderAgentFiles(copy: AgentCopy): Record<string, string> {
     ...locales.filter((locale) => locale.code !== "en"),
   ];
   for (const locale of ordered) {
-    for (const page of ["", "privacy/"] as const) {
+    for (const page of pagePaths) {
       const route = `/${localizedPath(locale.code, page)}`;
-      const markdown =
-        page === ""
-          ? homeMarkdown(copy, locale)
-          : privacyMarkdown(copy, locale);
+      const markdown = pageMarkdown[page](copy, locale);
       const title = flatten(
-        message(
-          catalog(copy, locale.code),
-          page === "" ? "codingAgentsSeoTitle" : "privacySeoTitle",
-          params,
-        ),
+        message(catalog(copy, locale.code), seoKeysFor(page).title, params),
       );
       const description = flatten(
-        message(
-          catalog(copy, locale.code),
-          page === "" ? "workspaceSeoDescription" : "privacySeoDescription",
-          params,
-        ),
+        message(catalog(copy, locale.code), seoKeysFor(page).description, params),
       );
       pages.push({
         code: locale.code,

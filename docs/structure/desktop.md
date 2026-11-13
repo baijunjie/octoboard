@@ -45,9 +45,9 @@ its own file, as `languages.rs`, `notification_settings.rs`, `diagnostics.rs` an
 The native-resource generation, sidecar build, local build, local install, version preparation, release, update-signing
 and release-publishing scripts, with their shared `bundle.mjs`, `update-archive.mjs` (packs and signs the update
 archive), the testable `release-manifest.mjs` (which manifests each platform writes, the platform selection and the tag message's `Platforms:` line) and the temporary `actool/` shim. `release.mjs` dispatches on the host to
-`release-macos.mjs` or `release-windows.mjs`; `windows-release.mjs` holds the Windows signing modes, the `signtool`
-checks and the installer inspection, and `sign-file.mjs` is the per-file sign command of the `command` mode. `release-desktop.mjs` owns the
-`release:version` command that prepares and pushes a version for CI (`--platforms` for a version of one platform); `tag-message.mjs` reads a tag message for `.github/release-notes.sh`. `publish-release.mjs` publishes the selected platforms (`--platforms`, both by default). The module README holds the scripts' interfaces,
+`release-macos.mjs`, `release-windows.mjs` or `release-linux.mjs` (which builds the daemon's Linux server archive; the Linux release has no desktop shell in it); `windows-release.mjs` holds the Windows signing modes, the `signtool`
+checks and the installer inspection, `linux-release.mjs` the Linux release's target, static-link check and archive checksum helpers, and `sign-file.mjs` is the per-file sign command of the `command` mode. `release-desktop.mjs` owns the
+`release:version` command that prepares and pushes a version for CI (`--platforms` for a version of some platforms); `tag-message.mjs` reads a tag message for `.github/release-notes.sh`. `publish-release.mjs` publishes the selected platforms (`--platforms`, all three by default). The module README holds the scripts' interfaces,
 the automated and manual release procedures, failure recovery, and the rule that the version lives in two places.
 
 ## IPC surface
@@ -103,6 +103,7 @@ only counterpart of this surface.
 | Paths, `tauri build`, bundle checks in a script | `apps/desktop/scripts/bundle.mjs` |
 | Pack and sign the update archive (or sign the Windows installer) | `apps/desktop/scripts/update-archive.mjs` |
 | Windows code-signing mode, `signtool` checks, installer inspection | `apps/desktop/scripts/windows-release.mjs` |
+| Linux release archive checks (static binary, `.sha256`, files a publish takes) | `apps/desktop/scripts/linux-release.mjs` |
 | Environment files and `git` in a script | `scripts/lib/env.mjs` (`loadEnv`) and `scripts/lib/git.mjs` at the repository root |
 
 Consistency checks that hold structure: `src-tauri/build.rs` (app name, repository, license and the two version values),

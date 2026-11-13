@@ -24,26 +24,26 @@ export function isPrerelease(version) {
   return version.includes("-");
 }
 
-// The platforms a release can carry, in the order they are listed everywhere. A release carries both unless one is
-// asked for.
-export const RELEASE_PLATFORMS = ["macos", "windows"];
+// The platforms a release can carry, in the order they are listed everywhere. A release carries all of them unless
+// some are asked for. `linux` is the daemon on its own (the server form), for both Linux architectures.
+export const RELEASE_PLATFORMS = ["macos", "windows", "linux"];
 
-// The platforms a selection such as `macos` or `macos,windows` names, in the order of `RELEASE_PLATFORMS`; no
-// selection (undefined) is both. Anything else, an empty or a repeated name included, is refused.
+// The platforms a selection such as `macos` or `macos,linux` names, in the order of `RELEASE_PLATFORMS`; no selection
+// (undefined) is all of them. Anything else, an empty or a repeated name included, is refused.
 export function parsePlatforms(selection) {
   if (selection === undefined) return [...RELEASE_PLATFORMS];
   const names = String(selection).split(",");
   const unknown = names.filter((name) => !RELEASE_PLATFORMS.includes(name));
   if (unknown.length > 0 || new Set(names).size !== names.length) {
-    throw new Error(`"${selection}" is not a platform selection; give ${RELEASE_PLATFORMS.join(", ")} or both separated by a comma.`);
+    throw new Error(`"${selection}" is not a platform selection; give one or more of ${RELEASE_PLATFORMS.join(", ")}, separated by commas.`);
   }
   return RELEASE_PLATFORMS.filter((platform) => names.includes(platform));
 }
 
 const PLATFORMS_TRAILER = /^Platforms: (\S+)$/;
 
-// The line that ends an annotated tag's message when the version carries one platform only; null for both, which is
-// what a message without the line means.
+// The line that ends an annotated tag's message when the version carries only some platforms; null for all of them,
+// which is what a message without the line means.
 export function platformsTrailer(platforms) {
   const selected = parsePlatforms(platforms.join(","));
   return selected.length === RELEASE_PLATFORMS.length ? null : `Platforms: ${selected.join(",")}`;
@@ -51,7 +51,7 @@ export function platformsTrailer(platforms) {
 
 // Splits an annotated tag's message into the release notes and the platforms it selects: a last non-blank line
 // `Platforms: <selection>` is the selection and is not part of the notes (a selection that does not parse is an
-// error, not notes); without it the notes are the whole message and the platforms are both.
+// error, not notes); without it the notes are the whole message and the platforms are all of them.
 export function readTagMessage(message) {
   const lines = message.trimEnd().split("\n");
   const match = PLATFORMS_TRAILER.exec(lines.at(-1));
@@ -60,10 +60,13 @@ export function readTagMessage(message) {
 }
 
 // The manifests of each platform's updates: macOS keeps the names the first releases published and the installed
-// applications read, which must go on serving Mac updates; Windows has a pair of its own.
+// applications read, which must go on serving Mac updates; Windows and Linux have a pair each. The Linux ones serve
+// no in-app updater: the install script (`apps/web/public/install.sh`) and the website read them for the newest
+// version and its archives.
 const MANIFEST_NAMES = {
   macos: { beta: "beta.json", stable: "stable.json" },
   windows: { beta: "beta-windows.json", stable: "stable-windows.json" },
+  linux: { beta: "beta-linux.json", stable: "stable-linux.json" },
 };
 
 // A platform's manifests by channel: the beta one, which every release updates, so beta users are offered stable
@@ -150,10 +153,13 @@ export function planManifestWrites(version, platform, current) {
 }
 
 // The macOS release is one universal build, so one archive serves both Mac platforms of the manifest: the keys the
-// updater looks a Mac up by. Windows is the x64 installer.
+// updater looks a Mac up by. Windows is the x64 installer. Linux has one archive per architecture, each under its own
+// key, named after what `uname -m` prints there.
 export const DARWIN_PLATFORMS = ["darwin-aarch64", "darwin-x86_64"];
 export const WINDOWS_PLATFORM = "windows-x86_64";
-const MANIFEST_PLATFORMS = { macos: DARWIN_PLATFORMS, windows: [WINDOWS_PLATFORM] };
+export const LINUX_ARCHES = ["x86_64", "aarch64"];
+export const LINUX_PLATFORMS = LINUX_ARCHES.map((arch) => `linux-${arch}`);
+const MANIFEST_PLATFORMS = { macos: DARWIN_PLATFORMS, windows: [WINDOWS_PLATFORM], linux: LINUX_PLATFORMS };
 
 export function tag(version) {
   return `desktop-v${version}`;
@@ -170,6 +176,19 @@ export function windowsInstallerName(productName, version) {
   return `${productName}_${version}_x64-setup.exe`;
 }
 
+// The name Tauri gives the universal disk image, which is published as it is. The website derives its macOS download
+// from it, so `publish-release.mjs` refuses a disk image under any other name.
+export function dmgName(productName, version) {
+  return `${productName}_${version}_universal.dmg`;
+}
+
+// The archive of the daemon for one Linux architecture (`LINUX_ARCHES`): the binary with the UI inside it, the example
+// systemd user unit and the license. Named after the binary, not the product, since it holds the daemon alone.
+export function linuxArchiveName(version, arch) {
+  if (!LINUX_ARCHES.includes(arch)) throw new Error(`"${arch}" is not a Linux release architecture.`);
+  return `octoboardd_${version}_linux_${arch}.tar.gz`;
+}
+
 export function releaseAssetUrl(repositoryUrl, version, name) {
   return `${repositoryUrl.replace(/\/+$/, "")}/releases/download/${tag(version)}/${name}`;
 }
@@ -182,35 +201,48 @@ export function repositorySlug(repositoryUrl) {
 }
 
 // What the versioned release holds for one platform, by name: `files`, published as they are (the macOS disk image and
-// the update archive, or the Windows installer), `update`, the one of them the manifest points to, and `signature`, the
-// update file's signature. `dmgName` is the disk image's name, which only the macOS build knows. `publish-release.mjs`
-// publishes under these names, and `releaseAssets` tells a release's assets apart by them.
-export function releaseLayout(platform, { productName, version, dmgName }) {
+// the update archive, the Windows installer, or each Linux archive and its `.sha256`), and `updates`, the files the
+// manifest points to, each with the manifest keys it serves (`keys`) and the name its signature is published under
+// (`signature`). `publish-release.mjs` publishes under these names, and `releaseAssets` tells a release's assets apart
+// by them.
+export function releaseLayout(platform, { productName, version }) {
   if (platform === "macos") {
     const archive = archiveName(productName, version);
-    return { files: [dmgName, archive], update: archive, signature: `${archive}.sig` };
+    return {
+      files: [dmgName(productName, version), archive],
+      updates: [{ name: archive, keys: DARWIN_PLATFORMS, signature: `${archive}.sig` }],
+    };
   }
-  const installer = windowsInstallerName(productName, version);
-  return { files: [installer], update: installer, signature: `${installer}.sig` };
+  if (platform === "windows") {
+    const installer = windowsInstallerName(productName, version);
+    return { files: [installer], updates: [{ name: installer, keys: [WINDOWS_PLATFORM], signature: `${installer}.sig` }] };
+  }
+  if (platform === "linux") {
+    const archives = LINUX_ARCHES.map((arch) => linuxArchiveName(version, arch));
+    return {
+      files: archives.flatMap((archive) => [archive, `${archive}.sha256`]),
+      updates: archives.map((name, i) => ({ name, keys: [LINUX_PLATFORMS[i]], signature: `${name}.sig` })),
+    };
+  }
+  throw new Error(`"${platform}" is not a release platform.`);
 }
 
-// Every asset name of one platform in the versioned release: its `releaseLayout` files and the signature.
+// Every asset name of one platform in the versioned release: its `releaseLayout` files and the signatures.
 export function releaseAssets(platform, names) {
-  const { files, signature } = releaseLayout(platform, names);
-  return [...files, signature];
+  const { files, updates } = releaseLayout(platform, names);
+  return [...files, ...updates.map((update) => update.signature)];
 }
 
-// The platform an asset of the versioned release belongs to, null when it is neither platform's.
+// The platform an asset of the versioned release belongs to, null when it is no platform's.
 function assetPlatform(name, productName, version) {
-  if (name.endsWith(".dmg")) return "macos";
-  return RELEASE_PLATFORMS.find((platform) => releaseAssets(platform, { productName, version, dmgName: "" }).includes(name)) ?? null;
+  return RELEASE_PLATFORMS.find((platform) => releaseAssets(platform, { productName, version }).includes(name)) ?? null;
 }
 
 // What publishing does to the versioned release, given the names of the assets it has now (null when there is no
 // such release) and the assets of each selected platform (`assets`, a map from platform). A platform with all its
 // assets there is an earlier run's, and resumes; one with none is added to the release; one with only some, or any
-// asset that is neither platform's, means the release is not what this script made, and `conflict` says how. The
-// platform not selected is not looked at, so a release carrying only the other one is not in the way.
+// asset that is no platform's, means the release is not what this script made, and `conflict` says how. A platform not
+// selected is not looked at, so a release carrying only other platforms is not in the way.
 export function planReleaseAssets({ platforms, assets, existing, productName, version }) {
   if (existing === null) return { create: true, add: [], resume: [], conflict: null };
   const other = existing.filter((name) => assetPlatform(name, productName, version) === null);
@@ -236,23 +268,30 @@ export function readHolderFloor(root) {
 }
 
 // The manifest the updater reads for one platform: the version, its notes and date and, for each platform key the
-// build serves, the update's address and the signature, which is the content of its `.sig` file. `update` is the
-// archive serving both Macs (`macos`) or the installer (`windows`). A manifest carries only its own platform's
-// entries: the other platform's has a manifest of its own, which an entry kept from an older release would
-// contradict. `holderFloor` is the build's holder floor (`readHolderFloor`), which the running application reads from
-// the manifest to tell the sessions an update restart would interrupt: the holders older than it.
-export function buildManifest({ version, notes, pubDate, platform, update, holderFloor }) {
+// build serves, the update's address and the signature, which is the content of its `.sig` file. `entries` maps every
+// key of the platform to its update: the archive serving both Macs (`macos`), the installer (`windows`), or each
+// architecture's archive (`linux`), whose entries carry its SHA-256 (`sha256`, lowercase hex) too, which the install
+// script checks. A manifest carries only its own platform's entries: another platform's has a manifest of its own,
+// which an entry kept from an older release would contradict. `holderFloor` is the build's holder floor
+// (`readHolderFloor`), which the running application reads from the manifest to tell the sessions an update restart
+// would interrupt: the holders older than it.
+export function buildManifest({ version, notes, pubDate, platform, entries, holderFloor }) {
   assertVersion(version);
   assertVersion(holderFloor);
   const keys = MANIFEST_PLATFORMS[platform];
   if (!keys) throw new Error(`"${platform}" is not a release platform.`);
-  if (!update?.url || !update?.signature) throw new Error(`The manifest needs the ${platform} update's address and signature.`);
-  const entry = { signature: update.signature.trim(), url: update.url };
-  return {
-    version,
-    notes,
-    pub_date: pubDate,
-    holder_floor: holderFloor,
-    platforms: Object.fromEntries(keys.map((key) => [key, entry])),
-  };
+  const platforms = {};
+  for (const key of keys) {
+    const update = entries?.[key];
+    if (!update?.url || !update?.signature) throw new Error(`The manifest needs the ${key} update's address and signature.`);
+    const entry = { signature: update.signature.trim(), url: update.url };
+    if (platform === "linux") {
+      if (!/^[0-9a-f]{64}$/.test(update.sha256 ?? "")) throw new Error(`The manifest needs the ${key} archive's SHA-256.`);
+      entry.sha256 = update.sha256;
+    }
+    platforms[key] = entry;
+  }
+  const extra = Object.keys(entries ?? {}).filter((key) => !keys.includes(key));
+  if (extra.length > 0) throw new Error(`${extra.join(", ")} ${extra.length === 1 ? "is" : "are"} not ${platform} platform keys.`);
+  return { version, notes, pub_date: pubDate, holder_floor: holderFloor, platforms };
 }

@@ -1,4 +1,5 @@
 import { defineLink } from "@unhead/vue";
+import { downloadPagePath, downloadTargets } from "../../seo/downloads";
 import {
   homeFeatures,
   homeQuestions,
@@ -14,6 +15,8 @@ import {
   markdownUrl,
   ogLocaleAlternates,
   pageKind,
+  pageSeoKeys,
+  type ContentPageKind,
 } from "../../seo/site-seo";
 
 export function useSiteSeo() {
@@ -26,19 +29,19 @@ export function useSiteSeo() {
   const locale = computed(() => localeByCode(code.value));
   const canonical = computed(() => canonicalUrl(siteUrl, route.path));
   const title = computed(() =>
-    t(kind.value === "privacy" ? "privacySeoTitle" : "codingAgentsSeoTitle"),
+    t(pageSeoKeys[kind.value as ContentPageKind]?.title ?? pageSeoKeys.home.title),
   );
   const description = computed(() =>
-    t(kind.value === "privacy" ? "privacySeoDescription" : "workspaceSeoDescription"),
+    t(pageSeoKeys[kind.value as ContentPageKind]?.description ?? pageSeoKeys.home.description),
   );
-  const siteDescription = computed(() => t("workspaceSeoDescription"));
+  const siteDescription = computed(() => t("workspaceSeoSummary"));
 
   useHead(() => {
-    const contentPage = kind.value === "home" || kind.value === "privacy";
+    const contentPage = kind.value !== "other";
     const graph = contentPage
       ? JSON.stringify(
         buildJsonLd({
-          page: kind.value === "privacy" ? "privacy" : "home",
+          page: kind.value as Exclude<typeof kind.value, "other">,
           canonical: canonical.value,
           websiteUrl: languageHomeUrl(siteUrl, code.value),
           language: locale.value.language,
@@ -53,6 +56,9 @@ export function useSiteSeo() {
           repositoryUrl: config.public.repositoryUrl,
           logoUrl: `${siteUrl}logo.png`,
           licenseUrl: `${config.public.repositoryUrl}/blob/main/LICENSE`,
+          downloadUrls: downloadTargets.map(
+            ({ id }) => `${siteUrl}${downloadPagePath(id)}`,
+          ),
           languages: locales.map((item) => item.language),
           featureTitles: homeFeatures.map((feature) =>
             t(`${feature.key}FeatureTitle`).replaceAll("\n", " "),

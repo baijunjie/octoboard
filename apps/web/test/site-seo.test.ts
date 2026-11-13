@@ -6,6 +6,7 @@ import { LANGUAGES } from "@octoboard/ui/languages";
 import { formatPrivacyDate } from "../seo/privacy-date.ts";
 import { featureGroups, homeFeatures } from "../seo/page-outline.ts";
 import { readLocaleMessages, renderAgentFiles } from "../seo/agent-documents.ts";
+import type { Downloads } from "../seo/downloads.ts";
 import {
   buildJsonLd,
   localeCodeFromPath,
@@ -19,11 +20,23 @@ import {
 
 const siteUrl = "https://octoboard.dev/";
 const appConfig = JSON.parse(readFileSync(new URL("../../../config/app.json", import.meta.url), "utf8"));
+const port = appConfig.defaultServerPort;
+const repositoryUrl = "https://github.com/baijunjie/octoboard";
+const releaseBase = `${repositoryUrl}/releases/download`;
+const downloads: Downloads = {
+  macos: `${releaseBase}/desktop-v1.2.3/Octoboard_1.2.3_universal.dmg`,
+  windows: `${releaseBase}/desktop-v1.2.3/Octoboard_1.2.3_x64-setup.exe`,
+  "linux-x86_64": `${releaseBase}/desktop-v1.2.3/octoboardd_1.2.3_linux_x86_64.tar.gz`,
+  "linux-aarch64": `${releaseBase}/desktop-v1.2.3/octoboardd_1.2.3_linux_aarch64.tar.gz`,
+};
 
-test("page paths keep the English home unprefixed and privacy as a sibling file", () => {
+test("page paths keep the English home unprefixed and the other pages as sibling files", () => {
   assert.equal(pageKind("/"), "home");
   assert.equal(pageKind("/privacy/"), "privacy");
   assert.equal(pageKind("/zh-Hant/privacy/"), "privacy");
+  assert.equal(pageKind("/download/"), "download");
+  assert.equal(pageKind("/zh/download/"), "download");
+  assert.equal(pageKind("/download/macos/"), "other");
   assert.equal(pageKind("/404/"), "other");
   assert.equal(pageKind("/pr/"), "other");
   assert.equal(pageKind("/id/"), "home");
@@ -33,6 +46,8 @@ test("page paths keep the English home unprefixed and privacy as a sibling file"
   assert.equal(markdownFile("/privacy/"), "privacy.md");
   assert.equal(markdownFile("/zh/"), "zh.md");
   assert.equal(markdownFile("/zh-Hant/privacy/"), "zh-Hant/privacy.md");
+  assert.equal(markdownFile("/download/"), "download.md");
+  assert.equal(markdownFile("/zh/download/"), "zh/download.md");
 });
 
 test("robots allows search, retrieval, and training", () => {
@@ -63,6 +78,12 @@ test(
     assert.match(sitemap, /hreflang="x-default" href="https:\/\/octoboard\.dev\/"/);
     assert.equal(sitemap.includes("/zh-Hans/"), false);
     assert.equal(sitemap.includes("/404"), false);
+    assert.match(sitemap, /<loc>https:\/\/octoboard\.dev\/download\/<\/loc>/);
+    assert.match(sitemap, /<loc>https:\/\/octoboard\.dev\/zh\/download\/<\/loc>/);
+    for (const target of ["macos", "windows", "linux-x86_64", "linux-aarch64"]) {
+      assert.equal(sitemap.includes(`/download/${target}/`), false);
+    }
+    assert.equal(sitemap.includes("install.sh"), false);
   },
 );
 
@@ -96,7 +117,7 @@ test("Open Graph locales use a territory, including Simplified Chinese", () => {
   }
 });
 
-test("structured data describes the desktop app without claiming it can be installed", () => {
+test("structured data points at the fixed download addresses without claiming an offer", () => {
   const homeGraph = buildJsonLd({
     page: "home",
     canonical: "https://octoboard.dev/ja/",
@@ -113,6 +134,7 @@ test("structured data describes the desktop app without claiming it can be insta
     repositoryUrl: "https://github.com/baijunjie/octoboard",
     logoUrl: `${siteUrl}logo.png`,
     licenseUrl: "https://github.com/baijunjie/octoboard/blob/main/LICENSE",
+    downloadUrls: [`${siteUrl}download/macos/`, `${siteUrl}download/linux-x86_64/`],
     languages: ["en", "zh-Hans"],
     featureTitles: ["Coordinate"],
     questions: [{ question: "Where?", answer: "Locally." }],
@@ -126,10 +148,39 @@ test("structured data describes the desktop app without claiming it can be insta
   assert.equal(Object.hasOwn(app ?? {}, "description"), false);
   assert.match(home, /"@type":"FAQPage"/);
   assert.match(home, /"@type":"SoftwareApplication"/);
-  assert.match(home, /"operatingSystem":"macOS, Windows"/);
+  assert.match(home, /"operatingSystem":"macOS, Windows, Linux"/);
+  assert.deepEqual(app?.downloadUrl, [`${siteUrl}download/macos/`, `${siteUrl}download/linux-x86_64/`]);
   assert.equal(home.includes("offers"), false);
   assert.equal(home.includes("aggregateRating"), false);
   assert.equal(home.includes("installUrl"), false);
+
+  const downloadPage = JSON.stringify(
+    buildJsonLd({
+      page: "download",
+      canonical: `${siteUrl}download/`,
+      websiteUrl: siteUrl,
+      language: "en",
+      title: "Download",
+      description: "Download",
+      siteName: "Octoboard",
+      siteDescription: "Command center",
+      origin: "https://octoboard.dev",
+      siteUrl,
+      operatorName: appConfig.author.name,
+      contactEmail: "support@octoboard.dev",
+      repositoryUrl: "https://github.com/baijunjie/octoboard",
+      logoUrl: `${siteUrl}logo.png`,
+      licenseUrl: "https://github.com/baijunjie/octoboard/blob/main/LICENSE",
+      downloadUrls: [`${siteUrl}download/windows/`],
+      languages: ["en"],
+      featureTitles: [],
+      questions: [],
+    }),
+  );
+  assert.match(downloadPage, /"@type":"WebPage"/);
+  assert.match(downloadPage, /"@type":"SoftwareApplication"/);
+  assert.match(downloadPage, /"downloadUrl":\["https:\/\/octoboard\.dev\/download\/windows\/"\]/);
+  assert.equal(downloadPage.includes("FAQPage"), false);
 
   const privacy = JSON.stringify(
     buildJsonLd({
@@ -148,6 +199,7 @@ test("structured data describes the desktop app without claiming it can be insta
       repositoryUrl: "https://github.com/baijunjie/octoboard",
       logoUrl: `${siteUrl}logo.png`,
       licenseUrl: "https://github.com/baijunjie/octoboard/blob/main/LICENSE",
+      downloadUrls: [],
       languages: ["en"],
       featureTitles: [],
       questions: [],
@@ -158,7 +210,7 @@ test("structured data describes the desktop app without claiming it can be insta
   assert.equal(privacy.includes("SoftwareApplication"), false);
 });
 
-test("agent documents follow the pages and do not publish a download that does not exist", async () => {
+test("agent documents follow the pages and carry the download and install information", async () => {
   const messages = await readLocaleMessages(
     fileURLToPath(new URL("../i18n/locales/", import.meta.url)),
   );
@@ -167,18 +219,41 @@ test("agent documents follow the pages and do not publish a download that does n
     appName: "Octoboard",
     operatorName: appConfig.author.name,
     contactEmail: "support@octoboard.dev",
-    repositoryUrl: "https://github.com/baijunjie/octoboard",
+    repositoryUrl,
+    downloads,
     messages,
   });
   const home = files["index.md"];
   const llms = files["llms.txt"];
   assert.match(home, /Canonical: https:\/\/octoboard\.dev\//);
-  assert.match(home, /macOS on Apple silicon and Intel · Windows on x64 · Beta/);
+  assert.match(home, /macOS on Apple silicon and Intel · Windows on x64 · Linux server on x86_64 and aarch64 · Beta/);
   assert.match(home, /- macOS: Beta/);
   assert.match(home, /- Windows: Beta/);
+  assert.match(home, /- Linux: Server · Beta/);
   assert.equal(home.includes("Windows: Planned"), false);
-  assert.match(home, /On Windows, download the installer whose name ends in x64-setup\.exe/);
-  assert.match(home, /select “More info”, then “Run anyway”/);
+  assert.ok(home.includes("[Download](https://octoboard.dev/download.md)"));
+  const page = files["download.md"];
+  assert.match(page, /Canonical: https:\/\/octoboard\.dev\/download\//);
+  assert.ok(page.includes(`[Download for macOS](${downloads.macos})`));
+  assert.ok(page.includes(`[Download for Windows](${downloads.windows})`));
+  assert.ok(page.includes("curl -fsSL https://octoboard.dev/install.sh | sh"));
+  assert.ok(page.includes("`sh -s -- --service`"));
+  assert.ok(page.includes("`octoboardd start`"));
+  assert.ok(page.includes(`\`ssh -L ${port}:127.0.0.1:${port} <server>\``));
+  assert.ok(page.includes('`loginctl enable-linger "$USER"`'));
+  assert.ok(page.includes("`octoboardd restart`"));
+  assert.equal(page.includes("your-server"), false);
+  assert.ok(page.includes(`[x86_64 archive](${downloads["linux-x86_64"]})`));
+  assert.ok(page.includes(`[aarch64 archive](${downloads["linux-aarch64"]})`));
+  assert.ok(page.includes("[All releases](https://github.com/baijunjie/octoboard/releases)"));
+  assert.match(page, /macOS 11 or later/);
+  assert.match(page, /Select “More info”, then “Run anyway”/);
+  assert.ok(page.includes("loginctl enable-linger"));
+  assert.match(home, /Requirements and installation steps for each system are on the download page\./);
+  assert.equal(home.includes("x64-setup.exe"), false);
+  assert.match(page, /installs Octoboard for your user account only/);
+  assert.match(page, /Claude Code and Codex also need Git for Windows/);
+  assert.match(page, /Install the coding-agent CLIs you want to use yourself/);
   assert.match(home, /The app is free and open source under the MIT License\./);
   assert.equal(home.includes("Awaiting instructions"), false);
   assert.match(home, /Switch accounts\. Continue the task\./);
@@ -230,17 +305,22 @@ test("agent documents follow the pages and do not publish a download that does n
   assert.match(llms, /Support: support@octoboard\.dev/);
   assert.match(llms, /https:\/\/octoboard\.dev\/index\.md/);
   assert.match(llms, /https:\/\/octoboard\.dev\/ja\.md/);
-  assert.match(llms, /macOS on Apple silicon and Intel · Windows on x64 · Beta/);
+  assert.match(llms, /macOS on Apple silicon and Intel · Windows on x64 · Linux server on x86_64 and aarch64 · Beta/);
   assert.match(llms, /macOS: Beta/);
   assert.match(llms, /Windows: Beta/);
-  assert.match(llms, /x64-setup\.exe/);
-  assert.match(llms, /Linux: Server · Planned/);
+  assert.match(llms, /Requirements and installation steps for each system are on the download page\./);
+  assert.match(llms, /Linux: Server · Beta/);
+  assert.ok(llms.includes("curl -fsSL https://octoboard.dev/install.sh | sh"));
+  assert.ok(llms.includes(downloads["linux-aarch64"]));
   assert.equal(llms.includes("Windows: Planned"), false);
   assert.match(llms, /iOS: Planned/);
   assert.match(llms, /Android: Planned/);
-  assert.match(llms, /\[View releases\]\(https:\/\/github\.com\/baijunjie\/octoboard\/releases\)/);
+  assert.match(llms, /\[All releases\]\(https:\/\/github\.com\/baijunjie\/octoboard\/releases\)/);
   assert.match(llms, /\[all languages\]\(https:\/\/octoboard\.dev\/llms-full\.txt\)/);
   assert.match(files["sitemap.md"], /https:\/\/octoboard\.dev\/zh\/privacy\.md/);
+  const sections = files["sitemap.md"].match(/^## .+$/gm) ?? [];
+  assert.deepEqual(sections, ["## Root", ...locales.filter((locale) => locale.code !== "en").map((locale) => `## ${locale.code}`).sort()]);
+  assert.match(files["sitemap.md"], /## Root\n- \[[^\n]+\]\(https:\/\/octoboard\.dev\/index\.md\)\n- \[[^\n]+\]\(https:\/\/octoboard\.dev\/download\.md\)\n- \[[^\n]+\]\(https:\/\/octoboard\.dev\/privacy\.md\)/);
   assert.match(
     files["llms-full.txt"],
     /\*\*Source:\*\* https:\/\/octoboard\.dev\/privacy\//,
@@ -250,7 +330,7 @@ test("agent documents follow the pages and do not publish a download that does n
   }
 });
 
-test("agent entry links resolve and language bundles contain only their own two pages", async () => {
+test("agent entry links resolve and language bundles contain only their own pages", async () => {
   const messages = await readLocaleMessages(
     fileURLToPath(new URL("../i18n/locales/", import.meta.url)),
   );
@@ -260,27 +340,28 @@ test("agent entry links resolve and language bundles contain only their own two 
       appName: "Octoboard",
       operatorName: appConfig.author.name,
       contactEmail: "support@octoboard.dev",
-      repositoryUrl: "https://github.com/baijunjie/octoboard",
+      repositoryUrl,
+      downloads,
       messages,
     });
-    assert.equal((files["llms-full.txt"].match(/\*\*Source:\*\*/g) ?? []).length, 34);
+    assert.equal((files["llms-full.txt"].match(/\*\*Source:\*\*/g) ?? []).length, locales.length * 3);
     for (const locale of locales) {
       const file = `llms-full-${locale.code}.txt`;
       assert.ok(files["llms.txt"].includes(`${siteUrl}${file}`), file);
       const bundle = files[file];
-      assert.equal((bundle.match(/\*\*Source:\*\*/g) ?? []).length, 2, file);
+      assert.equal((bundle.match(/\*\*Source:\*\*/g) ?? []).length, 3, file);
       const prefix = locale.code === "en" ? "" : `${locale.code}/`;
-      for (const path of ["", "privacy/"]) {
+      for (const path of ["", "privacy/", "download/"]) {
         assert.ok(bundle.includes(`**Source:** ${siteUrl}${prefix}${path}\n`), file);
         assert.ok(bundle.includes(files[markdownFile(`/${prefix}${path}`)].trim()), file);
       }
       const catalog = messages[locale.code];
-      assert.ok(bundle.includes(catalog.workspaceSeoDescription), file);
+      assert.ok(bundle.includes(catalog.workspaceSeoSummary), file);
       for (const name of ["Claude Code", "Codex"]) {
         assert.ok(catalog.codingAgentsSeoTitle.includes(name), `${locale.code}: ${name}`);
       }
       for (const name of ["Claude Code", "Codex", "Grok Build", "macOS", "Windows"]) {
-        assert.ok(catalog.workspaceSeoDescription.includes(name), `${locale.code}: ${name}`);
+        assert.ok(catalog.workspaceSeoSummary.includes(name), `${locale.code}: ${name}`);
       }
     }
     for (const [file, body] of Object.entries(files)) {
@@ -294,13 +375,13 @@ test("agent entry links resolve and language bundles contain only their own two 
   }
 });
 
-test("the policy revision date stays on October 30 across time zones", () => {
+test("the policy revision date stays on November 13 across time zones", () => {
   const previous = process.env.TZ;
   try {
     for (const zone of ["Pacific/Honolulu", "Asia/Tokyo", "UTC"]) {
       process.env.TZ = zone;
-      assert.equal(formatPrivacyDate("en"), "October 30, 2026");
-      assert.equal(formatPrivacyDate("zh-Hans"), "2026年10月30日");
+      assert.equal(formatPrivacyDate("en"), "November 13, 2026");
+      assert.equal(formatPrivacyDate("zh-Hans"), "2026年11月13日");
     }
   } finally {
     if (previous === undefined) delete process.env.TZ;

@@ -8,7 +8,7 @@
     "preview": "node scripts/preview.mjs",
     "check:locales": "node --experimental-strip-types scripts/check-locales.mjs",
     "generate:og-images": "python3 scripts/generate-og-images.py",
-    "test": "node --experimental-strip-types --test test/site-seo.test.ts",
+    "test": "node --experimental-strip-types --test test/site-seo.test.ts test/downloads.test.ts test/install-script.test.ts",
     "typecheck": "nuxt prepare && nuxt typecheck",
     "postinstall": "nuxt prepare"
   },

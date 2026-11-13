@@ -1,7 +1,7 @@
 #!/bin/sh
 # Prints the release notes of the version tag $1, the message of the annotated tag without its signature and its
 # `Platforms:` line, after checking that the tag names the application's version, the one in apps/desktop/package.json.
-# With `--platforms` as $2 it prints the platforms the tag selects instead (`macos,windows` unless the message ends
+# With `--platforms` as $2 it prints the platforms the tag selects instead (`macos,windows,linux` unless the message ends
 # with a `Platforms:` line; see apps/desktop/scripts/README.md's "Releasing by tag").
 set -eu
 tag=$1

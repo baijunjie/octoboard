@@ -14,7 +14,7 @@ Everything revolves around one daemon; every client reaches it only through the 
 | Daemon | Rust (edition 2021, toolchain pinned in `rust-toolchain.toml`), tokio, axum (HTTP and WebSocket), SQLite through rusqlite, `portable-pty` and `alacritty_terminal`, `rmcp` for the MCP server, clap |
 | UI | TypeScript, React 19 with the React Compiler, HeroUI 3 (react-aria), Tailwind 4, Zustand, xterm.js, Vite 8, Vitest |
 | Desktop shell | Tauri 2 (Rust crate plus npm scripts), macOS and Windows |
-| Website | Nuxt 4 (Vue 3, Nuxt i18n, sitemap), generated as static files for GitHub Pages |
+| Website | Nuxt 4 (Vue 3, Nuxt i18n, sitemap), generated as static files for GitHub Pages; serves a POSIX `install.sh` |
 | Tooling | Node scripts (`.mjs`), pnpm 10, ESLint (also formats), rustfmt, GitHub Actions |
 
 ## Workspaces
@@ -46,10 +46,10 @@ code must use.
   which reaches HeroUI and React Aria only through its wrapper layer (`src/primitives/`), with the dev-only state
   gallery, the fixtures runtime and the website preview build.
 - [Desktop shell](structure/desktop.md) — `apps/desktop/` ([README](../apps/desktop/README.md)): the Tauri 2 shell for macOS and Windows
-  with its build, install and release scripts; loads the UI and starts the daemon as a sidecar.
-- [Website](structure/web.md) — `apps/web/` ([README](../apps/web/README.md)): the public Nuxt website.
+  with its build, install and release scripts (which also build the daemon's Linux server archive); loads the UI and starts the daemon as a sidecar.
+- [Website](structure/web.md) — `apps/web/` ([README](../apps/web/README.md)): the public Nuxt website, with the download page and the Linux install script.
 - [Tooling](structure/tooling.md) — `scripts/`, `.githooks/`, `.github/`, `config/`, `patches/`, `eslint.config.mjs`,
-  `rustfmt.toml` and the other repository configuration: verification, hooks, CI, release.
+  `rustfmt.toml` and the other repository configuration: verification, hooks, CI, release (macOS, Windows and Linux).
 
 Placeholders for future native clients, with no content and not workspace packages: [`apps/ios/`](../apps/ios/README.md)
 and [`apps/android/`](../apps/android/README.md).

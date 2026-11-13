@@ -244,6 +244,9 @@ Where to start, by question:
   it starts and stops, the UI a server build serves and the page whose key is refused, `--port`, the
   `octoboardd start/stop/restart/status/address` command line (on Windows too) and `address --rotate`, planned restart
   and planned stop, and the example systemd user unit.
+- [Installing the server form](product/installing-the-server-form.md) — what the Linux server build runs on, what a
+  release holds for Linux (archives, `.sha256`, `.sig`, the Linux manifests), the install script with `--service`, and
+  upgrading.
 - [Who can reach the daemon](product/who-can-reach-the-daemon.md) — the daemon's access model in both forms: loopback
   only, the launch key and where helpers keep it, the owner key a browser address carries and its trade-off, SSH as
   the only remote path, other users of the machine, and the origin and key checks.
@@ -263,6 +266,8 @@ Where to start, by question:
   awake, its menu and hiding it.
 - [Website](product/website.md) — the official site: publishing, pages and languages, the homepage and navigation,
   platform availability, motion and missing pages.
+- [Website download page](product/website-download-page.md) — the download page's tabs and panels, the install command
+  and terminal demo, where each download link points, and the fixed `/download/<target>/` addresses.
 - [Website search indexing](product/website-search-indexing.md) — the sitemap, robots.txt, canonical and language
   alternates, share images, structured data and the Markdown and `llms.txt` copies.
 - [Website product preview](product/website-product-preview.md) — the embedded and standalone product preview: scenes,

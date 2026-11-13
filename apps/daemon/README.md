@@ -41,36 +41,51 @@ installed application's. To point the UI's dev server at it, see [`packages/ui/R
 A workspace-wide `cargo build` or `cargo test` also builds the Tauri crate, which needs the daemon sidecar built once
 first: `pnpm --filter @octoboard/desktop build:daemon`.
 
+The release build for a Linux server, statically linked against musl so that it runs on any distribution, is
+`pnpm --filter @octoboard/desktop release --no-sign-update` on a Linux host of the architecture to build (it needs
+`musl-gcc`, Debian and Ubuntu's `musl-tools`); it writes the archive every release publishes to
+`target/linux-release/`. The [desktop scripts README](../desktop/scripts/README.md) describes it.
+
 ## Running in the background (Linux)
 
 On a headless server the daemon runs on its own, as the owner's user, and listens on `127.0.0.1` only. Install the
-build with the UI inside it (see "Build and run" above):
+released build, which carries the UI inside it, for your user:
 
 ```sh
-octoboardd start --port 7531        # Start it in the background and return.
+curl -fsSL https://octoboard.dev/install.sh | sh                          # Into ~/.local/bin; run again to upgrade.
+curl -fsSL https://octoboard.dev/install.sh | sh -s -- --service  # Also install and start the user unit (port 3369, or --port N).
+```
+
+or put a build of your own on the server (see "Build and run" above). Then:
+
+```sh
+octoboardd start                    # Start it in the background on port 3369 (or --port N) and return.
 octoboardd status                   # Print its pid and address; exits 3 when none runs.
 octoboardd address                  # Print the browser address with its key; exits 3 when none runs.
 octoboardd restart                  # Restart it on the same address, keeping its sessions running.
 octoboardd stop                     # Stop it, which leaves every session interrupted.
-octoboardd --port 7531              # Run it in the foreground on that port, as a service does.
+octoboardd --port 3369              # Run it in the foreground on that port, as a service does.
 ```
 
 `start` refuses while a daemon already runs against the same `~/.octoboard`. Reach the daemon from your own machine
-through an SSH port forward, which puts it at `localhost:7531` there:
+through an SSH port forward, which puts it at `localhost:3369` there:
 
 ```sh
-ssh -L 7531:127.0.0.1:7531 server
+ssh -L 3369:127.0.0.1:3369 server
 ```
 
-and open the address `octoboardd address` prints on the server, `http://localhost:7531/?key=<key>`. The key changes
-whenever the daemon starts afresh, including when systemd starts the next one after a planned restart, so run the
-command again then; it works however the daemon was started, and only as the daemon's own user: the key comes from an
-owner-only file in `~/.octoboard`. A program can run it over SSH and read the port and key from that one line.
+and open the address `octoboardd address` prints on the server, `http://localhost:3369/?key=<key>`. On a server the
+key is the owner key, which stays the same across restarts, so the address can be bookmarked; `octoboardd address
+--rotate` replaces it. The command works however the daemon was started, and only as the daemon's own user: the key
+comes from an owner-only file in `~/.octoboard`. A program can run it over SSH and read the port and key from that one
+line.
 
 To start it at boot instead, install the example systemd user unit
-[`dist/systemd/octoboardd.service`](dist/systemd/octoboardd.service); its comments say how, and why the user needs
-lingering enabled. Use the unit as well on a host where logind kills a user's processes at logout
-(`KillUserProcesses=yes`), which would end a daemon started by `start` with the login. Under the unit, the sessions
+[`dist/systemd/octoboardd.service`](dist/systemd/octoboardd.service), which the install script's `--service` does for
+you and every release archive carries; its comments say how, and why the user needs lingering enabled. After upgrading
+the installed file, `octoboardd restart` moves a running daemon to it, under the unit or not. Use the unit as well on a
+host where logind kills a user's processes at logout (`KillUserProcesses=yes`), which would end a daemon started by
+`start` with the login. Under the unit, the sessions
 run in user units of their own (`octoboard-holder-*.service`), so `restart`, and a restart of the unit after a crash,
 keep them running.
 

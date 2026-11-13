@@ -5,7 +5,7 @@
 The privacy page identifies the project's shared author as the operator, using the same name as the developer's
 statement and footer copyright in every language without translating it, and gives `support@octoboard.dev` for
 privacy questions.
-Its last-updated date is the policy revision date, October 30, 2026, displayed in the page's language; it does not
+Its last-updated date is the policy revision date, November 13, 2026, displayed in the page's language; it does not
 change with the build time, visit time or visitor's time zone. Its disclosures distinguish:
 
 - application configuration and session data stored locally, with no upload of code, conversations, or usage data
@@ -20,7 +20,8 @@ change with the build time, visit time or visitor's time zone. Its disclosures d
   homepage or privacy page footer; withdrawing consent stops further analytics from the current page and removes
   its Google Analytics cookies (see "Analytics consent"); GitHub Pages also logs visitor IP
   addresses for security, with a link to GitHub's privacy statement;
-- information voluntarily supplied through email or GitHub Issues, including the visibility of public issues.
+- information voluntarily supplied through email or GitHub Issues, including the visibility of public issues;
+- the Linux server form, described under "Remote host support" below.
 
 The local-data explanation is not a promise that all workflow data remains on one device. There is no separate
 website terms page; the software's license is linked separately from the privacy policy.
@@ -30,7 +31,7 @@ website terms page; the software's license is linked separately from the privacy
 The site uses Google Analytics only once the visitor allows it. Until the visitor has answered, nothing from Google is
 loaded on any page.
 
-On every homepage and privacy page, in every language, a visitor who has not answered sees a prompt at the bottom of
+On every homepage, download page and privacy page, in every language, a visitor who has not answered sees a prompt at the bottom of
 the window. It asks whether Google Analytics may be used, says that it sets cookies and sends usage data to Google and
 is not loaded unless allowed, links to that language's privacy page in a separate paragraph, and offers Allow and
 Decline as buttons of equal weight. The prompt is a labelled region, not a dialog: the page behind it stays usable,
@@ -45,7 +46,7 @@ The answer is kept for one year in the same-site cookie `octoboard_analytics_con
 
 With no answer kept, including once the cookie has expired, the prompt appears again.
 
-The homepage and privacy page footers end their navigation with an analytics settings button that reopens the prompt,
+The homepage, download page and privacy page footers end their navigation with an analytics settings button that reopens the prompt,
 whatever the earlier answer, and identifies whether the prompt is open. Choosing Allow there loads Google Analytics
 at once. Choosing Decline after allowing stops Google Analytics from sending anything more from that page and removes
 its cookies (`_ga` and `_ga_<measurement ID>`) from the page's host and each of its parent domains.
@@ -67,14 +68,17 @@ A development build of the site never loads Google Analytics, whatever the answe
 
 ## Remote host support
 
-Status: not implemented. The privacy page identifies remote host support as running agents on another server or
-computer, says it is planned and unavailable, and excludes it from the policy's scope.
+The privacy page's last section, titled remote host support, describes two things:
 
-Remote host support runs in one direction only: the daemon the user is talking to reaching a second machine to run
-sessions there. The server form runs the other way — one daemon, on a server, reached over SSH from the user's browser
-or application on another machine — and is not what this section or the privacy page's remote-host disclosure describe.
-The homepage's platform information describes that planned server (see `docs/product/website.md`, "Platform
-availability"). The privacy page does not. The site's local-data statements describe the machine the daemon runs on,
-which in the server form is the server rather than the machine in front of the user, and a privacy page covering that
-form has to say that the interface then travels over the network, inside the user's SSH connection, between the server
-and the user's machine. That addition has not been written.
+- **The Linux server form** (see `docs/product/server-form.md`): Octoboard can run on a Linux server the user sets up
+  and manages. Its data is stored on that server and its agents run there, not on servers operated by the operator. The
+  user works from the browser on their own machine, and the interface travels over the network between the server and
+  that machine, inside the user's SSH connection.
+- **Driving agents on other hosts from one desktop workspace**, which is planned and unavailable, and which the policy
+  excludes from its scope.
+
+The two run in opposite directions. Remote host support proper is the daemon the user is talking to reaching a second
+machine to run sessions there. The server form is one daemon, on a server, reached over SSH from the user's browser
+or application on another machine. The site's other local-data statements describe the machine the daemon runs on, which in the server
+form is the server rather than the machine in front of the user. The homepage's platform information describes the
+server form as the Linux server (see `docs/product/website.md`, "Platform availability").

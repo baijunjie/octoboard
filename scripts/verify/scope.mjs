@@ -80,6 +80,10 @@ export const DESKTOP_READS_NATIVE = ["apps/desktop/src-tauri/localizations/", "a
 // A daemon test (`platform/build_files.rs`) holds the name the Windows installer hooks give a file they move aside to
 // the one the daemon removes.
 export const DAEMON_READS_NATIVE = ["apps/desktop/src-tauri/windows/installer-hooks.nsh"];
+// A website test (`install-script.test.ts`) holds the install script's public key to the updater's.
+export const WEB_READS_NATIVE = ["apps/desktop/src-tauri/tauri.conf.json"];
+// The same test holds the example systemd unit's port to the configured server port.
+export const WEB_READS_DAEMON = ["apps/daemon/dist/systemd/octoboardd.service"];
 // A UI test (`appConfig.test.ts`) holds `config/app.json` to the license.
 export const UI_READS_ELSEWHERE = ["LICENSE"];
 // UI tests (`daemonCodes.test.ts`, `fixtureProviders.test.ts`) read the provider modules' sources, where each provider
@@ -137,6 +141,8 @@ export const RULES = [
   { match: UI_READS_NATIVE, consumers: ["verify", "ui", "native"], why: "a UI test reads it" },
   { match: DESKTOP_READS_NATIVE, consumers: ["verify", "desktop", "native"], why: "desktop script tests read the native permission catalogs, template, the macOS bundle resource mappings, and the Windows installer hooks with the configurations whose files they list" },
   { match: DAEMON_READS_NATIVE, consumers: ["verify", "daemon", "native"], why: "a daemon test reads it" },
+  { match: WEB_READS_NATIVE, consumers: ["verify", "web", "native"], why: "a website test holds the install script's key to the updater's" },
+  { match: WEB_READS_DAEMON, consumers: ["verify", "web", "daemon"], why: "a website test holds the example unit's port to the install script's" },
   { match: UI_READS_ELSEWHERE, consumers: ["verify", "ui"], why: "a UI test reads it" },
   { match: VERIFY_READS_UI, consumers: ["verify", "ui"], why: "a verify test reads it" },
   { match: UI_IMPORTS_NATIVE, consumers: ["verify", "ui", "web"], builds: ["ui"], why: "the UI bundle inlines it, and the website's preview of the app is built from that bundle" },

@@ -18,14 +18,19 @@ So run `cargo test -p octoboardd`, and `cargo clippy --all-targets` for the Linu
 (Docker). Start the container with `docker run --init`: without an init that reaps, orphans reparented to PID 1 (here
 cargo) stay zombies, and every test that waits for a process to be gone (`test_support::assert_gone_by`, which waits for
 `ESRCH`) fails, on `main` as on the change. Give cargo there a target directory of its own (a Docker volume), not the
-worktree's `target/` that the host's builds use, and set `CARGO_PROFILE_DEV_DEBUG=0` (or `line-tables-only`, which
+worktree's `target/` that the host's builds use, and one per architecture when you also run an x86_64 container under
+emulation on an arm64 host (`--platform linux/amd64`, which works at about half the native speed): their build-script
+artifacts share paths and collide. Set `CARGO_PROFILE_DEV_DEBUG=0` (or `line-tables-only`, which
 also fits and keeps line numbers in backtraces): linking the daemon's test binary with full debug info takes several GiB
 of memory, enough for a Docker VM's memory limit to SIGKILL it, and the tests behave the same without it. For the same
 reason run one Linux build at a time, with `CARGO_BUILD_JOBS=2`.
 
 Run the suite as a normal user, not as root, the container's default user: some `accounts::shared_config` tests fail
 as root. Switching to that user with Debian's `su` gives it umask 002, under which the `path_links` tests fail, since
-they require temp paths closed to writes by group and others; set `umask 022` before running cargo.
+they require temp paths closed to writes by group and others; set `umask 022` before running cargo. Install
+`procps` (the suite runs `ps`; slim images lack it) and install the toolchain for that user rather than reusing root's:
+when `ps` is missing and a `/root/...` directory is left on the user's `PATH`, the lookup hits that unsearchable
+directory and about 150 tests fail with `ps ran: PermissionDenied`, which reads as a permission bug in the daemon.
 
 To exercise a fallback for a refused system call (the browse reads' `openat2` refused as `ENOSYS` or `EPERM`), run
 the container with a seccomp profile that returns that errno for the call.
@@ -57,15 +62,18 @@ Applies when a Linux check depends on systemd or on a login session: the example
 `Delegate=yes`, a browser reaching the daemon over an SSH forward. A test-suite
 container (`docker run --init`) has neither a service manager nor a login session.
 
-- Image: Debian with `systemd`, `dbus-user-session`, `libpam-systemd` and `openssh-server`, `CMD ["/sbin/init"]`,
+- Image: Debian with `systemd`, `systemd-sysv`, `systemd-container`, `dbus-user-session`, `libpam-systemd` (and
+  `openssh-server` when the check needs SSH), `CMD ["/sbin/init"]`,
   `STOPSIGNAL SIGRTMIN+3`; run it with `docker run -d --privileged --cgroupns=private --tmpfs /run --tmpfs /run/lock`.
   It boots to `degraded` only because `systemd-modules-load` fails, which is harmless; cgroup v2 is writable and
   `Delegate=yes` works.
 - systemd mounts a tmpfs over `/tmp`, hiding whatever `docker cp` put there, before boot or after: copy binaries and
   files elsewhere, such as `/opt`.
-- Run each user's commands as `ssh <user>@<server>` from a second container on the same Docker network, not through
-  `docker exec … su`: only the SSH login gets a logind session and `XDG_RUNTIME_DIR`, without which `systemctl --user`
-  and `journalctl --user` fail. `loginctl enable-linger <user>` keeps the user manager, and its units, past the login.
+- Run each user's commands through a real login, not `docker exec … su`, which gets no logind session and no
+  `XDG_RUNTIME_DIR`, so `systemctl --user` and `journalctl --user` fail. Without SSH in the check, use
+  `docker exec <container> machinectl shell -q <user>@.host /bin/sh <script>`; when the check involves an SSH forward,
+  log in as `ssh <user>@<server>` from a second container on the same Docker network. `loginctl enable-linger <user>`
+  keeps the user manager, and its units, past the login.
 - Open an SSH forward (`ssh -N -L <port>:127.0.0.1:<port>`) from anywhere but the server itself, where its listener
   collides with the daemon's own on the same loopback port: from that second container for a client inside Docker, or,
   for a real browser on the macOS host, from the host. For the latter publish only the server container's SSH port, and

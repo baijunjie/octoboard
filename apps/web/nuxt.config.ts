@@ -1,9 +1,16 @@
 import { existsSync } from "node:fs";
-import { readFile, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import appConfig from "../../config/app.json";
 import { readLocaleMessages, renderAgentFiles } from "./seo/agent-documents";
+import {
+  fallbackDownloads,
+  renderDownloadPages,
+  resolveDownloads,
+  strictFromEnv,
+  type Downloads,
+} from "./seo/downloads";
 import {
   locales,
   localizedPath,
@@ -31,7 +38,24 @@ for (const { code } of locales) {
 
 export default defineNuxtConfig({
   compatibilityDate: "2026-10-08",
-  modules: ["@nuxtjs/i18n", "@nuxtjs/sitemap", "nuxt-gtag"],
+  modules: [
+    "@nuxtjs/i18n",
+    "@nuxtjs/sitemap",
+    "nuxt-gtag",
+    // The newest versions' download links come from the update manifests, read when the site is generated.
+    // `nuxt prepare` (install and typecheck) builds no pages, so it keeps the fallback and reads nothing.
+    async (_options, nuxt) => {
+      if (nuxt.options._prepare) return;
+      nuxt.options.runtimeConfig.public.downloads = await resolveDownloads({
+        repositoryUrl: appConfig.repositoryUrl,
+        productName: appConfig.name,
+        fetch,
+        // CI must not publish stale or fallback links unnoticed; a local run offline still works.
+        strict: strictFromEnv(process.env.CI),
+        warn: (message) => console.warn(message),
+      });
+    },
+  ],
   gtag: {
     id: "G-9SK49010BJ",
     enabled: process.env.NODE_ENV === "production",
@@ -68,6 +92,7 @@ export default defineNuxtConfig({
       contactEmail: appConfig.support.email,
       operatorName: appConfig.author.name,
       copyrightYear: appConfig.copyrightYear,
+      downloads: fallbackDownloads(appConfig.repositoryUrl),
     },
   },
   nitro: {
@@ -116,12 +141,15 @@ export default defineNuxtConfig({
         const messages = await readLocaleMessages(
           fileURLToPath(new URL("./i18n/locales/", import.meta.url)),
         );
+        const downloads = nitro.options.runtimeConfig.public.downloads as Downloads;
+        const downloadPages = renderDownloadPages({ downloads, baseURL: site.baseURL });
         const agentFiles = renderAgentFiles({
           siteUrl: site.url,
           appName: appConfig.name,
           operatorName: appConfig.author.name,
           contactEmail: appConfig.support.email,
           repositoryUrl: appConfig.repositoryUrl,
+          downloads,
           messages,
         });
         // GitHub Pages serves this document at arbitrary missing URLs. Hydrating
@@ -134,6 +162,14 @@ export default defineNuxtConfig({
         )
           .replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, "")
           .replace(/<link\b[^>]*\brel="(?:modulepreload|preload)"[^>]*>/gi, "");
+        // The fixed download addresses are not routes, so they stay out of the sitemap and the language variants.
+        await Promise.all(
+          Object.entries(downloadPages).map(async ([path, html]) => {
+            const file = resolve(nitro.options.output.publicDir, path);
+            await mkdir(dirname(file), { recursive: true });
+            await writeFile(file, html);
+          }),
+        );
         await Promise.all([
           writeFile(
             resolve(nitro.options.output.publicDir, "404.html"),

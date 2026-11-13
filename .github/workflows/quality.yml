@@ -1,7 +1,8 @@
 name: Code quality
 
-# Optional hosted application checks, including Linux compilation and an unsigned Windows installer build. Release
-# preparation runs application checks locally before tagging; the release workflow does not call this workflow.
+# Optional hosted application checks, including Linux compilation, the daemon's tests on musl and an unsigned Windows
+# installer build. Release preparation runs application checks locally before tagging; the release workflow does not
+# call this workflow.
 on:
   workflow_dispatch:
 
@@ -71,6 +72,26 @@ jobs:
       # `scripts/cargo.mjs` empties the sidecar list `tauri-build` insists on; compiling never starts it.
       - run: /usr/bin/time -v node scripts/cargo.mjs check --locked
       - run: cargo test --locked -p octoboardd
+
+  linux-musl:
+    # The Linux release links the daemon statically against musl (`release.yml`'s `linux` jobs), so its tests run
+    # against musl too: a dependency or a call that behaves differently there would otherwise show only on a server.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # `musl-gcc` compiles the C code of the dependencies for musl.
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+      - run: rustup toolchain install && rustup target add x86_64-unknown-linux-musl
+      - uses: ./.github/actions/rust-cache
+        with:
+          profile: linux-musl
+      - run: /usr/bin/time -v cargo test --locked -p octoboardd --target x86_64-unknown-linux-musl
+        env:
+          CC_x86_64_unknown_linux_musl: musl-gcc
 
   windows-check:
     # The Windows port compiles natively here (the MSVC target is the runner's host, x64). The desktop

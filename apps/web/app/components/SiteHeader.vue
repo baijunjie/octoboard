@@ -8,7 +8,6 @@ const isHome = computed(() => pageKind(route.path) === "home");
 const glass = ref<HTMLElement | null>(null);
 useLiquidGlass(glass);
 useLiquidGlassPointer(glass);
-const releasesUrl = `${config.public.repositoryUrl}/releases`;
 </script>
 
 <template>
@@ -25,7 +24,7 @@ const releasesUrl = `${config.public.repositoryUrl}/releases`;
       <div class="nav-actions">
         <SectionNavigation v-if="isHome" />
         <LanguageSelect />
-        <a :href="releasesUrl" class="button nav-cta"><SiteIcon name="download-simple" />{{ t("heroCta") }}</a>
+        <NuxtLink :to="localePath('/download/')" class="button nav-cta"><SiteIcon name="download-simple" />{{ t("downloadCta") }}</NuxtLink>
       </div>
     </div>
   </header>

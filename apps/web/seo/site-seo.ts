@@ -50,8 +50,17 @@ export const locales: readonly SiteLocale[] = LANGUAGES.map((language) => ({
   ...(textDirection(language) === "rtl" ? { dir: "rtl" as const } : {}),
 }));
 
-export const pagePaths = ["", "privacy/"] as const;
-export type PageKind = "home" | "privacy" | "other";
+export const pagePaths = ["", "privacy/", "download/"] as const;
+export type PageKind = "home" | "privacy" | "download" | "other";
+
+export type ContentPageKind = Exclude<PageKind, "other">;
+
+// The catalog keys of each content page's SEO title and description.
+export const pageSeoKeys: Record<ContentPageKind, { title: string; description: string }> = {
+  home: { title: "codingAgentsSeoTitle", description: "workspaceSeoSummary" },
+  privacy: { title: "privacySeoTitle", description: "privacySeoDescription" },
+  download: { title: "downloadSeoTitle", description: "downloadSeoDescription" },
+};
 
 export function localeByCode(code: string): SiteLocale {
   const locale = locales.find((item) => item.code === code);
@@ -78,8 +87,14 @@ export function pageKind(path: string): PageKind {
   const code = knownLocaleCode(normalized);
   const rest = code ? normalized.slice(code.length + 1) : normalized;
   if (rest === "/privacy/") return "privacy";
+  if (rest === "/download/") return "download";
   if (rest === "/") return "home";
   return "other";
+}
+
+// The SEO keys of one of `pagePaths`.
+export function seoKeysFor(page: (typeof pagePaths)[number]) {
+  return pageSeoKeys[pageKind(`/${page}`) as ContentPageKind];
 }
 
 export function canonicalUrl(siteUrl: string, routePath: string): string {
@@ -97,7 +112,7 @@ export function markdownFile(routePath: string): string {
     throw new Error(`No Markdown version for ${routePath}`);
   const htmlPath = localizedPath(
     localeCodeFromPath(routePath),
-    kind === "privacy" ? "privacy/" : "",
+    kind === "privacy" ? "privacy/" : kind === "download" ? "download/" : "",
   );
   const trimmed = htmlPath.replace(/\/$/, "");
   return trimmed === "" ? "index.md" : `${trimmed}.md`;
@@ -138,7 +153,7 @@ export function robotsTxt(siteUrl: string): string {
 export type JsonLdQuestion = { question: string; answer: string };
 
 export type JsonLdInput = {
-  page: "home" | "privacy";
+  page: "home" | "privacy" | "download";
   canonical: string;
   websiteUrl: string;
   language: string;
@@ -153,6 +168,8 @@ export type JsonLdInput = {
   repositoryUrl: string;
   logoUrl: string;
   licenseUrl: string;
+  // The fixed download addresses of the site, which redirect to the current download of each target.
+  downloadUrls: string[];
   languages: string[];
   featureTitles: string[];
   questions: JsonLdQuestion[];
@@ -191,13 +208,29 @@ export function buildJsonLd(input: JsonLdInput): Record<string, unknown> {
     },
     page,
   ];
-  // The site links to the releases page, not to an installer, so an Offer or
-  // installUrl would point at a file the page does not serve, and there is no
-  // real rating to report.
-  // FAQ rich results are marked on the homepage only; the privacy page repeats
-  // none of these questions.
-  if (input.page === "home") {
+  // The download addresses are the site's own redirects, which never change. An Offer would state a
+  // price and an installUrl an installation the site does not run, and there is no real rating to report.
+  // The application is described on the homepage and the download page. FAQ rich results are marked on the
+  // homepage only; the other pages repeat none of these questions.
+  if (input.page !== "privacy") {
     page.about = { "@id": app };
+    graph.push({
+      "@type": "SoftwareApplication",
+      "@id": app,
+      name: input.siteName,
+      url: input.siteUrl,
+      image: input.logoUrl,
+      applicationCategory: "DeveloperApplication",
+      operatingSystem: "macOS, Windows, Linux",
+      downloadUrl: input.downloadUrls,
+      inLanguage: input.languages,
+      author: { "@id": identity },
+      publisher: { "@id": identity },
+      sameAs: input.repositoryUrl,
+      license: input.licenseUrl,
+    });
+  }
+  if (input.page === "home") {
     page.mainEntity = input.questions.map((item) => ({
       "@type": "Question",
       name: item.question,
@@ -213,20 +246,6 @@ export function buildJsonLd(input: JsonLdInput): Record<string, unknown> {
         name,
       })),
     };
-    graph.push({
-      "@type": "SoftwareApplication",
-      "@id": app,
-      name: input.siteName,
-      url: input.siteUrl,
-      image: input.logoUrl,
-      applicationCategory: "DeveloperApplication",
-      operatingSystem: "macOS, Windows",
-      inLanguage: input.languages,
-      author: { "@id": identity },
-      publisher: { "@id": identity },
-      sameAs: input.repositoryUrl,
-      license: input.licenseUrl,
-    });
   }
   return { "@context": "https://schema.org", "@graph": graph };
 }

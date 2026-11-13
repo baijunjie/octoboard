@@ -11,7 +11,7 @@
       src="https://img.shields.io/github/package-json/v/baijunjie/octoboard?filename=apps%2Fdesktop%2Fpackage.json&amp;style=plastic&amp;label=version&amp;labelColor=0369a1&amp;color=15803d"
       alt="Desktop package version"
     /></a>
-  <a href="#platform-support"><img src="https://img.shields.io/badge/platform-macOS_%7C_Windows-0284c7?style=plastic&amp;labelColor=0369a1" alt="Platform: macOS | Windows" /></a>
+  <a href="#platform-support"><img src="https://img.shields.io/badge/platform-macOS_%7C_Windows_%7C_Linux_server-0284c7?style=plastic&amp;labelColor=0369a1" alt="Platform: macOS | Windows | Linux server" /></a>
   <a href="https://v2.tauri.app/"><img src="https://img.shields.io/badge/built_with-Tauri_2-15803d?style=plastic&amp;labelColor=0369a1" alt="Built with Tauri 2" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-0284c7?style=plastic&amp;labelColor=0369a1" alt="License: MIT" /></a>
 </p>
@@ -67,8 +67,10 @@ to a coordinator, let each project agent work with its own context, and follow t
 **Octoboard is in beta, still in development.** Features and workflows are still being refined.
 
 1. Install and configure the coding-agent CLIs you want to use: Claude Code, Codex, or Grok Build.
-2. Download the app from the [releases](https://github.com/baijunjie/octoboard/releases): the `.dmg` for macOS, or
-   the Windows installer (see [Installing on Windows](#installing-on-windows)). Or use the
+2. Download the newest version of the app for [macOS](https://octoboard.dev/download/macos/) (a `.dmg`) or
+   [Windows](https://octoboard.dev/download/windows/) (an installer; see [Installing on Windows](#installing-on-windows)),
+   or pick one from the [releases](https://github.com/baijunjie/octoboard/releases). On a Linux server, install the
+   daemon instead (see [Installing on a Linux server](#installing-on-a-linux-server)). Or use the
    [development setup](#develop) below to run from source.
 3. Add an existing project folder without moving your code. The default account uses your existing CLI configuration;
    additional accounts use separate configurations with optional sharing of supported settings.
@@ -84,13 +86,14 @@ or billing terms of the providers you choose. If your agent supports a self-host
 |---|---|
 | macOS app (Apple silicon and Intel, macOS 11 or later) | Beta, still in development |
 | Windows app (x64, Windows 10 21H2 or later) | Beta, still in development |
-| Linux server — the daemon on a headless server, the interface in a browser on the network | Planned |
+| Linux server (x86_64 and aarch64, any distribution) — the daemon on a headless server, the interface in a browser over SSH | Beta, still in development |
 | iOS app | Planned |
 | Android app | Planned |
 
-The desktop window, daemon, and projects currently share one machine. Linux is planned as a server for one person
-accessing their own daemon through a browser; there is no Linux desktop app planned. Server deployment and running
-project agents on remote hosts are not available yet. Multiple users sharing one daemon are outside this design.
+The desktop app runs its window, daemon, and projects on one machine. On Linux, Octoboard runs as a server for one
+person reaching their own daemon from a browser on another machine; there is no Linux desktop app planned. Running
+project agents on remote hosts from the desktop app is not available yet. Multiple users sharing one daemon are outside
+this design.
 
 ### Installing on Windows
 
@@ -106,6 +109,40 @@ project agents on remote hosts are not available yet. Multiple users sharing one
 - **Unsigned for now**: the first Windows releases are not code-signed, so Microsoft Defender SmartScreen may show
   "Windows protected your PC" when you run the installer. Select **More info**, then **Run anyway** to install it.
   Code signing is planned for a later release.
+
+### Installing on a Linux server
+
+Install `octoboardd`, the daemon with the interface inside it, for your user (no root needed):
+
+```sh
+curl -fsSL https://octoboard.dev/install.sh | sh
+```
+
+It installs into `~/.local/bin`, checking the download's SHA-256 (and its signature, when `minisign` is installed).
+Then start the daemon and print the address to open:
+
+```sh
+octoboardd start      # Listens on port 3369; add --port <port> for another one.
+octoboardd address
+```
+
+From your own machine, forward the port with `ssh -L 3369:127.0.0.1:3369 <server>` and open that address in a browser.
+To have the daemon start at boot as a systemd user service instead, install with `--service`, which needs systemd:
+
+```sh
+curl -fsSL https://octoboard.dev/install.sh | sh -s -- --service   # Port 3369; add --port <port> for another.
+loginctl enable-linger "$USER"   # Keep the service running after you log out, and start it at boot.
+```
+
+- **Upgrade**: run the install command again, then `octoboardd restart`; the sessions keep running.
+- **Without the script**: download the archive for [x86_64](https://octoboard.dev/download/linux-x86_64/) or
+  [aarch64](https://octoboard.dev/download/linux-aarch64/), check it against its `.sha256` from the
+  [release](https://github.com/baijunjie/octoboard/releases), and put `octoboardd` on your `PATH`. The archive also holds
+  the example systemd unit.
+- **Requirements**: Linux on x86_64 or aarch64; the binary is statically linked and needs no particular distribution or
+  C library. Install the agent CLIs you want to use on the server.
+
+More about the daemon on a server is in [apps/daemon/README.md](apps/daemon/README.md).
 
 ## FAQ
 

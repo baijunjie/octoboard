@@ -24,7 +24,7 @@ export const homeSections = [
   { id: "local-workspace", key: "localEyebrow" },
   { id: "platforms", key: "platformsTitle" },
   { id: "questions", key: "navFaq" },
-  { id: "download", key: "heroCta" },
+  { id: "download", key: "downloadCta" },
 ] as const;
 
 export const homeSteps = ["One", "Two", "Three"] as const;
@@ -38,7 +38,7 @@ export const homeQuestions = [
   "Providers",
   "Participation",
   "SetupCosts",
-  "RemoteExecution",
+  "RemoteHosts",
   "ParallelWork",
   "CliResume",
 ] as const;
@@ -52,10 +52,10 @@ export function homeQuestionAnswerKey(question: typeof homeQuestions[number]): s
 export const availablePlatforms = [
   { name: "macOS", icon: "apple-logo", status: "platformsBetaStatus" },
   { name: "Windows", icon: "windows-logo", status: "platformsBetaStatus" },
+  { name: "Linux", icon: "linux-logo", status: "platformsServerStatus" },
 ] as const;
 
 export const plannedPlatforms = [
-  { name: "Linux", icon: "linux-logo", status: "platformsLinuxStatus" },
   { name: "iOS", icon: "apple-logo", status: "remoteBadge" },
   { name: "Android", icon: "android-logo", status: "remoteBadge" },
 ] as const;
@@ -108,7 +108,7 @@ export const privacySections = [
   "Sharing",
   "Website",
   "Contact",
-  "RemoteExecution",
+  "RemoteHosts",
 ] as const;
 
 export const githubPrivacyUrl =

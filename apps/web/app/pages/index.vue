@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { downloadTabs } from "../../seo/downloads";
 import {
   availablePlatforms,
   developerSections,
@@ -13,13 +14,12 @@ const config = useRuntimeConfig();
 const localePath = useLocalePath();
 const page = ref<HTMLElement | null>(null);
 const paused = ref(false);
-const releasesUrl = `${config.public.repositoryUrl}/releases`;
 useSectionReveal(page);
 useSeoMeta({
   title: () => t("codingAgentsSeoTitle"),
-  description: () => t("workspaceSeoDescription"),
+  description: () => t("workspaceSeoSummary"),
   ogTitle: () => t("codingAgentsSeoTitle"),
-  ogDescription: () => t("workspaceSeoDescription"),
+  ogDescription: () => t("workspaceSeoSummary"),
 });
 </script>
 
@@ -45,8 +45,8 @@ useSeoMeta({
           </h1>
           <p class="hero-description">{{ t("workspaceIntroduction") }}</p>
           <div class="hero-actions">
-            <a :href="releasesUrl" class="button"
-            ><SiteIcon name="download-simple" />{{ t("heroCta") }}</a
+            <NuxtLink :to="localePath('/download/')" class="button"
+            ><SiteIcon name="download-simple" />{{ t("downloadCta") }}</NuxtLink
             >
             <a
               :href="config.public.repositoryUrl"
@@ -60,7 +60,7 @@ useSeoMeta({
             }}<span class="link-arrow" aria-hidden="true"
             /></a>
           </div>
-          <p class="hero-note">{{ t("heroPlatformsNote") }}</p>
+          <p class="hero-note">{{ t("heroAvailability") }}</p>
         </div>
         <div class="hero-art">
           <HeroMascot :paused="paused" />
@@ -194,7 +194,7 @@ useSeoMeta({
       </article>
       <div id="platforms" class="platform-intro">
         <h3>{{ t("platformsTitle") }}</h3>
-        <p>{{ t("platformsSupportDescription") }}</p>
+        <p>{{ t("platformsIntroduction") }}</p>
       </div>
       <ul class="platform-list">
         <li v-for="platform in availablePlatforms" :key="platform.name" class="platform-current">
@@ -212,7 +212,11 @@ useSeoMeta({
           </div>
         </li>
       </ul>
-      <p class="platform-note">{{ t("platformsWindowsInstall") }}</p>
+      <p class="platform-note">
+        {{ t("platformsDownloadPointer") }}
+        <NuxtLink :to="localePath('/download/')" class="text-link platform-note-link"
+        >{{ t("downloadCta") }}<span class="link-arrow" aria-hidden="true" /></NuxtLink>
+      </p>
     </section>
 
     <section id="questions" class="faq-section wrap section-space" data-reveal>
@@ -258,8 +262,17 @@ useSeoMeta({
           </div>
         </div>
         <p class="cta-brand-meaning">{{ t("brandSloganMeaning") }}</p>
-        <a :href="releasesUrl" class="button"
-        ><SiteIcon name="download-simple" />{{ t("heroCta") }}</a
+        <h2 class="sr-only">{{ t("downloadCta") }}</h2>
+        <p class="cta-teaser">{{ t("downloadTeaser") }}</p>
+        <ul class="cta-platforms">
+          <li v-for="tab in downloadTabs" :key="tab.id">
+            <NuxtLink :to="`${localePath('/download/')}#${tab.id}`" class="cta-platform"
+            ><SiteIcon :name="tab.icon" />{{ tab.id === "linux" ? t("downloadLinuxTitle") : tab.name }}</NuxtLink
+            >
+          </li>
+        </ul>
+        <NuxtLink :to="localePath('/download/')" class="button cta-download"
+        ><SiteIcon name="download-simple" />{{ t("downloadCta") }}</NuxtLink
         >
         <p class="cta-note">{{ t("ctaNote") }}</p>
       </div>

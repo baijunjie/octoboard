@@ -15,7 +15,7 @@
 #
 # The daemon runs as that user, so its sessions use that user's ~/.octoboard, agent accounts and
 # keys. It listens on 127.0.0.1 only; reach it with an SSH port forward
-# (ssh -L 7531:127.0.0.1:7531 server) at the address `octoboardd address` prints.
+# (ssh -L 3369:127.0.0.1:3369 server) at the address `octoboardd address` prints.
 
 [Unit]
 Description=Octoboard daemon
@@ -24,7 +24,7 @@ Description=Octoboard daemon
 Type=simple
 # --service-managed makes a planned restart exit with 75 (see RestartForceExitStatus below)
 # instead of starting the next daemon itself; pass it only with that restart.
-ExecStart=%h/.local/bin/octoboardd --port 7531 --service-managed
+ExecStart=%h/.local/bin/octoboardd --port 3369 --service-managed
 Restart=on-failure
 # A planned restart (`octoboardd restart`, or POST /restart) hands every session over to the
 # holders and exits with 75, so that the next daemon runs in this unit: restart on that status

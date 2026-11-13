@@ -1,27 +1,32 @@
 #!/usr/bin/env node
-// Publishes the build `pnpm release` made, for the in-app updates to find: creates the versioned GitHub release
-// `desktop-v<version>` with each platform's files (macOS: the disk image and the signed update archive; Windows: the
-// installer), each update file with its signature, then writes the manifests the application reads to the `updater`
-// release: per platform, `beta.json` and `stable.json` for macOS and `beta-windows.json` and `stable-windows.json`
-// for Windows, the beta one always and the stable one unless the version has a prerelease suffix. Until a platform's
-// first stable release, a prerelease goes to its stable manifest too: the first betas follow Stable by default and
-// read only that one (`stableTakesPrereleases` in `release-manifest.mjs`). Run `pnpm release` first, with a signed
-// build. Outward-facing, so it is a separate, explicit step: nothing else calls it.
+// Publishes the builds `pnpm release` made, for the in-app updates, the install script and the website to find: creates
+// the versioned GitHub release `desktop-v<version>` with each platform's files (macOS: the disk image and the signed
+// update archive; Windows: the installer; Linux: the daemon's archive for each architecture with its `.sha256`), each
+// update file with its signature, then writes the manifests to the `updater` release: per platform, `beta.json` and
+// `stable.json` for macOS, `beta-windows.json` and `stable-windows.json` for Windows and `beta-linux.json` and
+// `stable-linux.json` for Linux, the beta one always and the stable one unless the version has a prerelease suffix.
+// Until a platform's first stable release, a prerelease goes to its stable manifest too: the first betas follow Stable
+// by default and read only that one (`stableTakesPrereleases` in `release-manifest.mjs`). Run `pnpm release` first
+// (on Linux, once on a host of each architecture), with signed builds. Outward-facing, so it is a separate, explicit
+// step: nothing else calls it.
 //
 //   pnpm --filter @octoboard/desktop publish-release (--notes "text" | --notes-file path)
-//     [--platforms macos|windows|macos,windows] [--windows-dir <dir>] [--dry-run]
+//     [--platforms <macos,windows,linux or some of them>] [--windows-dir <dir>] [--linux-dir <dir>] [--dry-run]
 //
-// A release carries both platforms unless `--platforms` selects one, and a platform not selected is neither needed
+// A release carries every platform unless `--platforms` selects some, and a platform not selected is neither needed
 // nor touched: its files are not looked for and its manifests are not read or written. The macOS build is
 // `target/universal-apple-darwin/release/bundle`, checked with macOS tools (`PlistBuddy`, `stapler`), so a macOS
 // publish runs on a Mac. The Windows build comes as `--windows-dir`, required with Windows: a directory holding the
-// installer `Octoboard_<version>_x64-setup.exe` and its `.sig`, as the Windows build made and signed them.
+// installer `Octoboard_<version>_x64-setup.exe` and its `.sig`, as the Windows build made and signed them. The Linux
+// builds come as `--linux-dir`, required with Linux: a directory holding, for each architecture, the archive
+// `octoboardd_<version>_linux_<arch>.tar.gz` with its `.sha256` and `.sig`, as `release-linux.mjs` and `sign-update`
+// made them.
 //
 // The version is the one in `apps/desktop/package.json` (which `tauri.conf.json` reads), which must be the one of
 // the builds. The release's tag is created on the current commit, which has to be pushed. `--dry-run` prints what
 // would be published and calls nothing outside this machine.
 //
-// The versioned release is shared by the platforms: a later run for the other platform adds its missing files to the
+// The versioned release is shared by the platforms: a later run for another platform adds its missing files to the
 // release a first one created, and a published file is never replaced. The release is created or extended before
 // the platform's manifests are written, so a manifest never names a file that is not there yet. A run that failed
 // after creating the release resumes from the manifests when run again (if it is the same build), and a manifest that
@@ -33,8 +38,10 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { gitChecked } from "../../../scripts/lib/git.mjs";
 import { appDir, appVersion, findBundle, repoRoot, universalBundleDir as bundleDir } from "./bundle.mjs";
+import { linuxReleaseFiles } from "./linux-release.mjs";
 import {
   buildManifest,
+  dmgName,
   HOLDER_FLOOR_FILE,
   isPrerelease,
   manifestFiles,
@@ -59,6 +66,7 @@ const { values: options } = parseArgs({
     "notes-file": { type: "string" },
     platforms: { type: "string" },
     "windows-dir": { type: "string" },
+    "linux-dir": { type: "string" },
     "dry-run": { type: "boolean", default: false },
   },
 });
@@ -67,12 +75,14 @@ if ((options.notes === undefined) === (options["notes-file"] === undefined)) {
 }
 const platforms = parsePlatforms(options.platforms);
 const selected = (platform) => platforms.includes(platform);
-if (selected("windows") !== (options["windows-dir"] !== undefined)) {
-  throw new Error(
-    selected("windows")
-      ? "Give the directory of the Windows build as --windows-dir <dir>, or leave Windows out with --platforms macos."
-      : "--windows-dir belongs to the Windows platform, which --platforms leaves out.",
-  );
+for (const [platform, option, name] of [["windows", "windows-dir", "Windows"], ["linux", "linux-dir", "Linux"]]) {
+  if (selected(platform) !== (options[option] !== undefined)) {
+    throw new Error(
+      selected(platform)
+        ? `Give the directory of the ${name} build as --${option} <dir>, or leave ${name} out with --platforms.`
+        : `--${option} belongs to the ${name} platform, which --platforms leaves out.`,
+    );
+  }
 }
 const notes = (options.notes ?? readFileSync(options["notes-file"], "utf8")).trim();
 if (!notes) throw new Error("The release notes are empty.");
@@ -85,9 +95,27 @@ const prerelease = isPrerelease(version);
 const repo = repositorySlug(appConfig.repositoryUrl);
 
 // What each selected platform publishes, under the names `releaseLayout` gives: `files` go out as they are, under
-// `name` (copied there when the file's own name differs), `update` is the file the manifest points to, with its
-// signature, published as `signatureName`, and `assets` all of their names, as `planReleaseAssets` knows them.
+// `name` (copied there when the file's own name differs), `updates` are the files the manifest points to, each with the
+// manifest keys it serves and its signature, published as `signatureName` (and, on Linux, its SHA-256), and `assets`
+// all of their names, as `planReleaseAssets` knows them.
 const publishing = {};
+const names = { productName, version };
+// The platform's `releaseLayout` with each name's source file from `sources` and each update's signature content.
+const describe = (platform, sources, signatures, digests = {}) => {
+  const layout = releaseLayout(platform, names);
+  return {
+    files: layout.files.map((name) => ({ name, file: sources[name] })),
+    updates: layout.updates.map(({ name, keys, signature }) => ({
+      name,
+      keys,
+      file: sources[name],
+      signatureName: signature,
+      signature: signatures[name],
+      sha256: digests[name],
+    })),
+    assets: releaseAssets(platform, names),
+  };
+};
 
 if (selected("macos")) {
   // The files `pnpm release` made, which must be this version's, signed and notarized: the archive's name carries no
@@ -101,8 +129,12 @@ if (selected("macos")) {
   if (appVersion(app) !== version) {
     throw new Error(`${app} is a ${appVersion(app)} build, and ${version} is the version in apps/desktop/package.json. ${rebuild}`);
   }
-  if (!path.basename(dmg).includes(`_${version}_`)) {
-    throw new Error(`${dmg} is not a ${version} build, and ${version} is the version in apps/desktop/package.json. ${rebuild}`);
+  if (path.basename(dmg) !== dmgName(productName, version)) {
+    throw new Error(
+      `${dmg} is not named ${dmgName(productName, version)}: it is not a ${version} build (the version in ` +
+        "apps/desktop/package.json), or the bundler names disk images differently now, which the website's macOS " +
+        `download relies on. ${rebuild}`,
+    );
   }
   for (const file of [archive, signatureFile]) {
     if (statSync(file).mtimeMs < statSync(app).mtimeMs) {
@@ -114,35 +146,34 @@ if (selected("macos")) {
   } catch {
     throw new Error(`${dmg} is not notarized and stapled, which a published disk image has to be. ${rebuild}`);
   }
-  const names = { productName, version, dmgName: path.basename(dmg) };
-  const layout = releaseLayout("macos", names);
-  const sources = { [path.basename(dmg)]: dmg, [layout.update]: archive };
-  publishing.macos = {
-    files: layout.files.map((name) => ({ name, file: sources[name] })),
-    update: {
-      name: layout.update,
-      file: archive,
-      signatureName: layout.signature,
-      signature: readFileSync(signatureFile, "utf8"),
-    },
-    assets: releaseAssets("macos", names),
-  };
+  const [update] = releaseLayout("macos", names).updates;
+  publishing.macos = describe(
+    "macos",
+    { [path.basename(dmg)]: dmg, [update.name]: archive },
+    { [update.name]: readFileSync(signatureFile, "utf8") },
+  );
 }
 if (selected("windows")) {
   const windows = windowsReleaseFiles(path.resolve(options["windows-dir"]), productName, version);
-  const names = { productName, version };
-  const layout = releaseLayout("windows", names);
-  const sources = { [layout.update]: windows.installer };
-  publishing.windows = {
-    files: layout.files.map((name) => ({ name, file: sources[name] })),
-    update: {
-      name: layout.update,
-      file: windows.installer,
-      signatureName: layout.signature,
-      signature: readFileSync(windows.signature, "utf8"),
-    },
-    assets: releaseAssets("windows", names),
-  };
+  const [update] = releaseLayout("windows", names).updates;
+  publishing.windows = describe(
+    "windows",
+    { [update.name]: windows.installer },
+    { [update.name]: readFileSync(windows.signature, "utf8") },
+  );
+}
+if (selected("linux")) {
+  const linux = linuxReleaseFiles(path.resolve(options["linux-dir"]), version);
+  const sources = {};
+  const signatures = {};
+  const digests = {};
+  for (const { archive, sha256File, signature, sha256 } of linux) {
+    sources[path.basename(archive)] = archive;
+    sources[path.basename(sha256File)] = sha256File;
+    signatures[path.basename(archive)] = readFileSync(signature, "utf8");
+    digests[path.basename(archive)] = sha256;
+  }
+  publishing.linux = describe("linux", sources, signatures, digests);
 }
 
 const pubDate = new Date().toISOString();
@@ -150,15 +181,12 @@ const pubDate = new Date().toISOString();
 const holderFloor = readHolderFloor(repoRoot);
 if (holderFloor === undefined) throw new Error(`${HOLDER_FLOOR_FILE} has no FLOOR constant to publish.`);
 for (const platform of platforms) {
-  const { update } = publishing[platform];
-  publishing[platform].manifest = buildManifest({
-    version,
-    notes,
-    pubDate,
-    platform,
-    holderFloor,
-    update: { url: releaseAssetUrl(appConfig.repositoryUrl, version, update.name), signature: update.signature },
-  });
+  const entries = {};
+  for (const update of publishing[platform].updates) {
+    const entry = { url: releaseAssetUrl(appConfig.repositoryUrl, version, update.name), signature: update.signature, sha256: update.sha256 };
+    for (const key of update.keys) entries[key] = entry;
+  }
+  publishing[platform].manifest = buildManifest({ version, notes, pubDate, platform, holderFloor, entries });
   publishing[platform].manifests = manifestFiles(platform);
 }
 const assetsOf = (platform) => publishing[platform].assets;
@@ -239,13 +267,14 @@ if (existing !== null) {
   }
   if (plan.conflict !== null) throw neverReplaced(plan.conflict);
   for (const platform of plan.resume) {
-    const { update } = publishing[platform];
-    const size = existing.assets.find((asset) => asset.name === update.name).size;
-    if (
-      size !== statSync(update.file).size ||
-      downloadAsset(tag(version), update.signatureName)?.trim() !== update.signature.trim()
-    ) {
-      throw neverReplaced(`with a different ${platform} build of this version`);
+    for (const update of publishing[platform].updates) {
+      const size = existing.assets.find((asset) => asset.name === update.name).size;
+      if (
+        size !== statSync(update.file).size ||
+        downloadAsset(tag(version), update.signatureName)?.trim() !== update.signature.trim()
+      ) {
+        throw neverReplaced(`with a different ${platform} build of this version`);
+      }
     }
   }
   if (plan.add.length > 0 && existing.isImmutable) {
@@ -279,16 +308,19 @@ const staging = mkdtempSync(path.join(os.tmpdir(), "octoboard-publish-"));
 try {
   // The files go out under the names the manifests use, the signatures written beside them.
   const stage = (platform) => {
-    const { files, update } = publishing[platform];
+    const { files, updates } = publishing[platform];
     const staged = files.map(({ name, file }) => {
       if (path.basename(file) === name) return file;
       const copy = path.join(staging, name);
       copyFileSync(file, copy);
       return copy;
     });
-    const signature = path.join(staging, update.signatureName);
-    writeFileSync(signature, update.signature);
-    return [...staged, signature];
+    const signatures = updates.map((update) => {
+      const signature = path.join(staging, update.signatureName);
+      writeFileSync(signature, update.signature);
+      return signature;
+    });
+    return [...staged, ...signatures];
   };
   const notesFile = path.join(staging, "notes.md");
   writeFileSync(notesFile, `${notes}\n`);
@@ -316,7 +348,7 @@ try {
     gh(
       "release", "create", MANIFEST_RELEASE_TAG,
       "--title", "Update manifests",
-      "--notes", "What the application's in-app updates read: the manifests name the newest version of each channel, one set per platform. Rewritten by every release.",
+      "--notes", "What the application's in-app updates, the install script and the website read: the manifests name the newest version of each channel, one set per platform. Rewritten by every release.",
       "--prerelease",
     );
   }

@@ -56,13 +56,23 @@ pub(crate) struct Cli {
     pub(crate) service_managed: bool,
 }
 
+/// The port `start` listens on when none is given: `defaultServerPort` in `config/app.json`, which
+/// the install script's service uses too, so that the documented SSH forward works unchanged. The
+/// foreground daemon keeps a port the system assigns: the desktop application and development runs
+/// start it without one.
+pub(crate) const DEFAULT_START_PORT: u16 =
+    match u16::from_str_radix(env!("OCTOBOARD_DEFAULT_SERVER_PORT"), 10) {
+        Ok(port) => port,
+        Err(_) => panic!("OCTOBOARD_DEFAULT_SERVER_PORT is not a port number"),
+    };
+
 #[derive(Subcommand)]
 pub(crate) enum Command {
     /// Start the daemon in the background on a fixed loopback port and return once it is
     /// listening; it keeps running after the terminal closes, until `stop`.
     Start {
         /// The loopback port the daemon listens on, and keeps across restarts.
-        #[arg(long, value_parser = clap::value_parser!(u16).range(1..))]
+        #[arg(long, default_value_t = DEFAULT_START_PORT, value_parser = clap::value_parser!(u16).range(1..))]
         port: u16,
     },
     /// Stop the daemon running against this data directory, which ends every session it runs
@@ -358,8 +368,13 @@ mod tests {
     }
 
     #[test]
-    fn start_needs_a_port_and_stop_and_status_take_none() {
-        assert!(parse(&["start"]).is_err());
+    fn start_takes_the_default_port_unless_given_one_and_stop_and_status_take_none() {
+        assert!(matches!(
+            parse(&["start"]).unwrap().command,
+            Some(Command::Start {
+                port: DEFAULT_START_PORT
+            })
+        ));
         assert!(parse(&["start", "--port", "0"]).is_err());
         assert!(matches!(
             parse(&["start", "--port", "7531"]).unwrap().command,

@@ -99,3 +99,36 @@ jobs:
         env:
           WINDOWS_SIGNING: none
         run: pnpm --filter @octoboard/desktop release --no-sign-update
+
+  # The Linux release (`release.yml`'s `linux` jobs) uses this profile on a runner of each architecture, warmed by the
+  # same unsigned build.
+  linux-release:
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: rustup toolchain install
+      - uses: ./.github/actions/rust-cache
+        with:
+          profile: linux-release
+      - run: pnpm install --frozen-lockfile
+      - name: Compile the unsigned archive
+        run: /usr/bin/time -v pnpm --filter @octoboard/desktop release --arch ${{ matrix.arch }} --no-sign-update

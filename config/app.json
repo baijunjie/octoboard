@@ -3,6 +3,7 @@
   "websiteUrl": "https://octoboard.dev",
   "repositoryUrl": "https://github.com/baijunjie/octoboard",
   "issueUrl": "https://github.com/baijunjie/octoboard/issues/new",
+  "defaultServerPort": 3369,
   "license": "MIT",
   "copyrightYear": 2026,
   "author": {

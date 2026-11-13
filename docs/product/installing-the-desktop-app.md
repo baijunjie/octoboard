@@ -9,9 +9,10 @@ starts and quits is in `docs/product/application-lifecycle.md`, and the files it
 ## Where releases are published
 
 Every version is published as a release of the public GitHub repository, `desktop-v<version>`, holding the macOS disk
-image and the Windows installer; which files a release holds, and how a version can reach one platform before the
-other, is in "Where updates come from" in `docs/product/in-app-updates.md`. Octoboard is installed from there; it is not
-offered through an application store.
+image and the Windows installer, beside the server form's Linux archives; which files a release holds, and how a version
+can reach one platform before another, is in "Where updates come from" in `docs/product/in-app-updates.md`. Octoboard is
+installed from there; it is not offered through an application store. The website's download page links each
+platform's newest file (see `docs/product/website-download-page.md`).
 
 ## macOS
 
@@ -53,7 +54,6 @@ remain for a while after signing begins.
 
 ## The server form
 
-The daemon, `octoboardd`, builds and runs on Linux. A server build carries the UI inside the binary, so that one file,
-put on the server as it is, is the whole of Octoboard there (see "The UI the daemon serves" in
-`docs/product/server-form.md`). How it is distributed is not settled: no release holds a Linux build, and the
-server's requirements are not stated.
+The server form — the daemon `octoboardd` alone, on a Linux server, with the UI inside its binary — is published in the
+same releases as the desktop application, for Linux on x86_64 and aarch64, and installed with a script rather than an
+installer; what it runs on and how it is installed and upgraded is in `docs/product/installing-the-server-form.md`.

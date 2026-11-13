@@ -88,7 +88,7 @@ export function parseOptions(args, cwd = process.cwd()) {
     "dry-run": { type: "boolean", default: false },
   } });
   if (positionals.length !== 1 || (values.notes === undefined) === (values["notes-file"] === undefined)) {
-    throw new Error('Usage: pnpm --filter @octoboard/desktop release:version <version> (--notes "text" | --notes-file path) [--platforms macos|windows|macos,windows] [--dry-run]');
+    throw new Error('Usage: pnpm --filter @octoboard/desktop release:version <version> (--notes "text" | --notes-file path) [--platforms <macos,windows,linux or some of them>] [--dry-run]');
   }
   const notes = (values.notes ?? readFileSync(path.resolve(cwd, values["notes-file"]), "utf8")).trim();
   if (!notes) throw new Error("The release notes are empty.");
@@ -129,7 +129,7 @@ export function releaseDesktop({ root, version, notes, platforms = parsePlatform
     throw new Error(`${branch} or ${worktree} already exists. Inspect the previous attempt before starting another.`);
   }
   if (git("check-ignore", ".worktrees/") !== ".worktrees/") throw new Error("Exclude .worktrees/ in .git/info/exclude before releasing.");
-  // A version for one platform only says so on the last line of its tag's message, which release CI reads.
+  // A version for only some platforms says so on the last line of its tag's message, which release CI reads.
   const trailer = platformsTrailer(platforms);
   const message = trailer === null ? `${notes.trim()}\n` : `${notes.trim()}\n\n${trailer}\n`;
   log(`release: ${current} -> ${version}; annotated tag ${releaseTag}; platforms: ${platforms.join(", ")}`);

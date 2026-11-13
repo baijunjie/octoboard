@@ -34,15 +34,19 @@ defineProps<{
   mask: url("../assets/icons/apple-logo.svg") center / contain no-repeat;
 }
 .icon-github-logo {
+  --icon-pad: 0;
   mask: url("../assets/icons/github-logo.svg") center / contain no-repeat;
 }
 .icon-linux-logo {
+  --icon-pad: 0.0625;
   mask: url("../assets/icons/linux-logo.svg") center / contain no-repeat;
 }
 .icon-windows-logo {
+  --icon-pad: 0.0625;
   mask: url("../assets/icons/windows-logo.svg") center / contain no-repeat;
 }
 .icon-android-logo {
+  --icon-pad: 0;
   mask: url("../assets/icons/android-logo.svg") center / contain no-repeat;
 }
 .icon-download-simple {

@@ -1,8 +1,8 @@
 # The server form
 
 Octoboard comes in two forms. This document describes the **server form**: the daemon alone, on a Linux server
-without a display, reached by its owner from a browser on another machine over SSH. How that form is distributed is not
-settled (see "The server form" in `docs/product/installing-the-desktop-app.md`). The command line described here also
+without a display, reached by its owner from a browser on another machine over SSH. What it runs on, and how it is
+published, installed and upgraded, is in `docs/product/installing-the-server-form.md`. The command line described here also
 acts on the desktop application's daemon, within the limits each command states, and the planned stop is also what the
 desktop form's restart into an update and a crash of the application rely on. The desktop form, and what the server form
 changes in starting up, quitting and crashes, are in `docs/product/application-lifecycle.md`; who can reach the daemon,
@@ -101,9 +101,15 @@ once, saying instead that this address does not open the daemon because it carri
 `octoboardd --port <port>` runs the daemon in the foreground listening on `127.0.0.1:<port>`, the same port on every
 start given that option, so an address can be bookmarked and an SSH port forward
 (`ssh -L <port>:127.0.0.1:<port> <server>`) written once. The port is a number from 1 to 65535; anything else, 0
-included, is a usage error. Without the option the operating system assigns the port, as in the desktop form, which
-never gives one. Either way the startup line and the port file name the port (see "Starting up" in
-`docs/product/application-lifecycle.md`).
+included, is a usage error. Without the option the foreground daemon listens on a port the operating system assigns,
+as in the desktop form, whose application never gives one. Either way the startup line and the port file name the port
+(see "Starting up" in `docs/product/application-lifecycle.md`).
+
+**The default server port** is **3369** (`defaultServerPort` in `config/app.json`, fixed when the daemon is built).
+`octoboardd start` listens on it when given no `--port` (see "Running in the background from the command line"
+below), and the install script's service and the example systemd unit use it unless told otherwise (see
+`docs/product/installing-the-server-form.md` and "Running as a systemd user service" below), so the forward
+`ssh -L 3369:127.0.0.1:3369 <server>` reaches a daemon started any of those ways.
 
 **A port already in use fails the start.** The daemon exits with a non-zero status and an error saying that port is
 already in use, before it touches any session: the sessions of the previous run stay as they were stored. A daemon
@@ -152,8 +158,8 @@ as soon as it releases the lock, so that only a start racing it could come first
 itself and could not tell its own start time writes neither record nor `daemon.handover`, so the free lock of its
 restart cannot be told apart from no daemon at all.
 
-- **`octoboardd start --port <port>`** starts the daemon in the background on that port; `--port` is required, with the
-  same range as above. While a daemon already runs it refuses, saying so with that daemon's pid and address where they
+- **`octoboardd start [--port <port>]`** starts the daemon in the background on that port, with the same range as above,
+  or, without `--port`, on the default server port (see "Choosing the port" above). While a daemon already runs it refuses, saying so with that daemon's pid and address where they
   are known — a daemon still starting or restarting is named once it has recorded itself, and one still not recorded
   after the wait above is said to run at an address not known — and exits with status 1. Otherwise the daemon is started
   with `--port <port>` in a session of its own, with no controlling terminal and the data directory as its working
@@ -452,8 +458,10 @@ manager to start it, and `stop` follows and stops it as on Windows, a daemon a s
 ## Running as a systemd user service
 
 The repository carries an example systemd user unit, `apps/daemon/dist/systemd/octoboardd.service`, for running the
-daemon on a Linux server from boot. Its binary path (`%h/.local/bin/octoboardd`) and port (7531) are examples, and its
-comments say how to install and enable it. What it sets:
+daemon on a Linux server from boot, and every Linux release archive carries it as `octoboardd.service`. Its binary path
+(`%h/.local/bin/octoboardd`) and port (3369, the default server port) are examples, and its comments say how to install
+and enable it by hand; the install script's `--service` installs it with the path and port filled in (see "Installing
+it as a service" in `docs/product/installing-the-server-form.md`). What it sets:
 
 - It runs the daemon **in the foreground** with `--port`, as the user who owns the unit, so that user's `~/.octoboard`,
   agent accounts and keys are the daemon's, and restarts it after a failure but not after a clean stop. It passes

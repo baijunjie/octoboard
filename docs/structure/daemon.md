@@ -46,7 +46,7 @@ restart, `POST /restart` or the host's restart request (`SIGUSR1`, which `restar
 on the same port: started by `main` (`cli::start_successor`, from the installation entry point `cli::launch_path` in
 `src/cli/installation.rs`, its final symlink left unresolved), with the same key, which is kept only in that case, or,
 under a systemd service (the environment shows the daemon to be the unit's main process, or `--service-managed` says
-so), by the unit on the daemon's exit status 75, when the successor makes a new key. A user runs the modes `start --port`, `stop`, `restart`, `status` and `address` to keep a daemon in
+so), by the unit on the daemon's exit status 75, when the successor makes a new key. A user runs the modes `start` (on the port of `--port`, else `defaultServerPort` of `config/app.json`, which `build.rs` passes in as `OCTOBOARD_DEFAULT_SERVER_PORT`), `stop`, `restart`, `status` and `address` to keep a daemon in
 the background and to find it (`src/cli/background.rs`; `start` runs the daemon as a background process of its own, `stop`, `restart`,
 `status` and `address` find it through `instance_lock::is_running` and the owner record, `owner_record::Owner`, waiting
 through a planned restart caught half-way with the handover note the restarting daemon leaves (`Owner::note_handover`);
@@ -121,7 +121,8 @@ UI's (`build` script, a dependency on `@octoboard/ui`); it has no test script. T
 `*_tests.rs`, `test_support/` and `store/test_support.rs`, and the `layering_tests/` directory) sit beside the code they
 test, and `apps/daemon/testdata/` holds the captured agent screens and records tests replay. `apps/daemon/dist/` holds
 hand-written distribution files, not build output (`dist/systemd/octoboardd.service`, an example systemd user unit for
-running the daemon in the background on Linux).
+running the daemon in the background on Linux, which the Linux release archive ships and the website's `install.sh`
+installs with `--service`).
 
 ### Wire and server
 

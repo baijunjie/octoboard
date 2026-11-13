@@ -1,7 +1,7 @@
 # Desktop build, install and release scripts
 
 The Node scripts of `@octoboard/desktop` that generate native resources, build the sidecar and the app, install it
-locally, prepare version tags, produce the signed release and publish it for the in-app updates. They run through the
+locally, prepare version tags, produce the signed release (the desktop applications and the daemon's Linux server archive) and publish it for the in-app updates and the website's downloads. They run through the
 `apps/desktop/package.json` scripts, directly in that directory or with `pnpm --filter @octoboard/desktop` from the
 repository root; the shared build pieces are in `bundle.mjs`. Credentials come from the
 gitignored repo-root `.env.secret` (template `.env.secret.example`), read by `scripts/lib/env.mjs`; a variable already
@@ -32,10 +32,11 @@ in the environment wins.
   while Octoboard runs, refuses to replace a symlink or another application, stages the copy on the destination volume
   and keeps the previous bundle for rollback if the replacement fails.
 - `release.mjs` (`pnpm release`) — picks the host's release build: `release-macos.mjs`, the universal, signed and
-  notarized macOS build, or `release-windows.mjs`, the x64 NSIS installer with its signing modes (below).
+  notarized macOS build, `release-windows.mjs`, the x64 NSIS installer with its signing modes (below), or
+  `release-linux.mjs`, the daemon's Linux server archive for the host's architecture (below).
 - `release-desktop.mjs` (`pnpm release:version`) — prepares a version commit in an isolated worktree, checks it and
-  pushes it with its annotated tag to start release CI (see "Releasing by tag"); `--platforms` makes a version for one
-  platform. It refuses a version while the daemon's holder floor (`FLOOR` in `apps/daemon/src/holder/compat.rs`) is not
+  pushes it with its annotated tag to start release CI (see "Releasing by tag"); `--platforms` makes a version for some
+  of the platforms. It refuses a version while the daemon's holder floor (`FLOOR` in `apps/daemon/src/holder/compat.rs`) is not
   the greatest stable `desktop-v*` tag below it (`0.0.0` while none is tagged). Its version commit also refreshes the
   snapshot of the protocol schema in `contracts/protocol/released/`. Its version-file preparation, argument
   parsing and release orchestration are tested by
@@ -43,15 +44,22 @@ in the environment wins.
 - `tag-message.mjs` — prints the notes or the platforms of a tag message read from standard input, for
   `.github/release-notes.sh`.
 - `sign-update.mjs` (`pnpm sign-update`) — signs the update artifact `pnpm release --no-sign-update` left (the archive on
-  macOS, the installer on Windows) with the update key and checks that a fresh `.sig` came out (below).
-- `publish-release.mjs` (`pnpm publish-release`) — publishes what `pnpm release` built, for both platforms or the one
-  `--platforms` selects: the universal macOS build from the bundle directory, the Windows installer from a directory
-  (below).
-- `release-manifest.mjs` — what publishing decides without GitHub (the platform selection and the tag message's
-  `Platforms:` line, which manifests a version goes to for each platform, asset names and addresses, what an existing
-  release needs, version ordering, the manifest itself with the build's `holder_floor` and its platform entries), and
-  the one read of the tree it makes, the daemon's `FLOOR` at the release commit (`readHolderFloor`); tested by
-  `release-manifest.test.mjs` through `pnpm test`.
+  macOS, the installer on Windows, each architecture's archive in `target/linux-release/` on Linux) with the update key
+  and checks that a fresh `.sig` came out (below).
+- `publish-release.mjs` (`pnpm publish-release`) — publishes what `pnpm release` built, for all three platforms or the
+  ones `--platforms` selects: the universal macOS build from the bundle directory, the Windows installer and the Linux
+  archives from directories (below).
+- `release-manifest.mjs` — what publishing decides without GitHub (the platform selection (`RELEASE_PLATFORMS`: macos,
+  windows, linux) and the tag message's `Platforms:` line, which manifests a version goes to for each platform, the
+  layout of each platform's release files and the manifest keys each serves (`releaseLayout`), asset names and
+  addresses (including `linuxArchiveName` and `dmgName`), what an existing release needs, version ordering, the
+  manifest itself with the build's `holder_floor` and its platform entries), and the one read of the tree it makes, the
+  daemon's `FLOOR` at the release commit (`readHolderFloor`); tested by `release-manifest.test.mjs` through
+  `pnpm test`.
+- `linux-release.mjs` — the Linux release's pieces: the output directory (`target/linux-release/`), the musl target of
+  each architecture, the ELF check that a binary is statically linked, the `.sha256` file helpers and the check of the
+  files `publish-release` takes. Tested by `linux-release.test.mjs`.
+- `release-linux.mjs` — the Linux build `release.mjs` runs on a Linux host (below).
 - `windows-release.mjs` — the Windows release's pieces: the signing mode and stages, the `--config` that makes
   `tauri build` call the sign command, the `signtool` checks, the look inside the installer and the check of the
   files `publish-release` takes. `sign-file.mjs` is what `tauri build` calls per file in `command` mode. Tested by
@@ -177,11 +185,35 @@ What a signed build is expected to do, in either signing mode:
 - The look inside the installer expects exactly one of each of those four files, found by the tail of its path in what
   7-Zip extracts, and fails the release otherwise.
 
+## Linux release builds
+
+The Linux release is the daemon on its own, the server form with the UI embedded, not the desktop shell. `pnpm release`
+on Linux (`release-linux.mjs`) builds for the host's architecture (`--arch x86_64|aarch64`, which must be the host's:
+each architecture builds on a host of its own, and CI uses a runner of each): the UI (`pnpm --filter @octoboard/ui
+build`, or `--prebuilt-ui` to embed the `packages/ui/dist` already there), then `cargo build --release --locked -p
+octoboardd --features embedded-ui` for `<arch>-unknown-linux-musl`, with `musl-gcc` (Debian and Ubuntu's `musl-tools`)
+compiling the dependencies' C code. It checks the binary is statically linked, then packs `octoboardd`,
+`apps/daemon/dist/systemd/octoboardd.service` and `LICENSE` into
+`target/linux-release/octoboardd_<version>_linux_<arch>.tar.gz` (owner root, dated at the commit, `gzip -n`, so the
+archive does not carry the build machine's user or time) and writes its `.sha256` beside it. The update key variables
+are left out of the build's environment as elsewhere; `--no-sign-update` leaves the `<archive>.sig` to
+`pnpm sign-update`, and without it `TAURI_SIGNING_PRIVATE_KEY` is required and the script signs the archive itself.
+Nothing may touch the archive afterwards.
+
+```sh
+# Unsigned archive for this host's architecture (what the warming workflow and `release.yml`'s `linux` job build)
+pnpm --filter @octoboard/desktop release --no-sign-update
+```
+
+The Linux archives serve no in-app updater: the install script (`apps/web/public/install.sh`) and the website read
+the `beta-linux.json` and `stable-linux.json` manifests for the newest version, each architecture's archive URL,
+signature and SHA-256.
+
 ## Publishing a release
 
-`pnpm --filter @octoboard/desktop publish-release (--notes "text" | --notes-file path) [--platforms macos|windows|macos,windows] [--windows-dir <dir>] [--dry-run]`
+`pnpm --filter @octoboard/desktop publish-release (--notes "text" | --notes-file path) [--platforms <macos,windows,linux or some of them>] [--windows-dir <dir>] [--linux-dir <dir>] [--dry-run]`
 publishes what the last signed `pnpm release` built, for the version in `apps/desktop/package.json`. A release carries
-both platforms unless `--platforms` selects one, and a platform that is not selected is neither needed nor touched: its
+every platform unless `--platforms` selects some, and a platform that is not selected is neither needed nor touched: its
 files are not looked for and its manifests are not read or written. The manifest model it writes to (the fixed-tag
 `updater` release, one pair of manifests per platform, the channels, the manifest contents, asset naming, a manifest
 never moving backwards) is described in `docs/product/in-app-updates.md`, section "Where updates come from"; this
@@ -190,8 +222,11 @@ section is the procedure.
 macOS is the universal build in `target/universal-apple-darwin/release/bundle` and is checked with macOS tools, so a
 macOS publish runs on a Mac. Windows comes as `--windows-dir <dir>`, required with Windows (and refused without it): `<dir>` holds
 `Octoboard_<version>_x64-setup.exe` and its `.sig`, as the Windows build and `sign-update` left them (the installer
-named for the version, the `.sig` present and not older than it). A Windows-only publish needs no macOS tool and runs on
-any machine.
+named for the version, the `.sig` present and not older than it). Linux comes as `--linux-dir <dir>`, required with Linux
+(and refused without it): `<dir>` holds, for each of x86_64 and aarch64, `octoboardd_<version>_linux_<arch>.tar.gz` with its
+`.sha256` (which must match the archive) and `.sig` (no older than it), as `pnpm release` on a host of each architecture
+and `sign-update` left them, so both architectures' builds are gathered into one directory first. A publish without macOS
+needs no macOS tool and runs on any machine.
 
 1. It refuses unless `gh` is logged in, the working tree is clean and each selected build is this version's. macOS:
    signed and notarized, the `.app` says it is `<version>`, the `.dmg` is named for it and passes `stapler validate`,
@@ -204,11 +239,12 @@ any machine.
    not compared.
 2. It creates the release `desktop-v<version>` on the current commit (which must be pushed), marked prerelease when the
    version has a suffix, with the selected platforms' files (macOS: the `.dmg` and the update archive; Windows: the
-   installer), each update file with its signature. When the release exists already, it adds the files of the
-   platform that are missing and leaves the rest as it is, so a version can be published for the second platform later.
+   installer; Linux: each architecture's archive and its `.sha256`), each update file with its signature. When the release exists already, it adds the files of the
+   platform that are missing and leaves the rest as it is, so a version can be published for another platform later.
 3. It creates the `updater` release if it is missing (as a prerelease, so it is never the repository's latest), then
    uploads each selected platform's manifests the version goes to with `--clobber`: `beta.json` and `stable.json` for
-   macOS, `beta-windows.json` and `stable-windows.json` for Windows, the beta one always and the stable one unless the
+   macOS, `beta-windows.json` and `stable-windows.json` for Windows, `beta-linux.json` and `stable-linux.json` for Linux
+   (whose entries, one per architecture, also carry the archive's SHA-256), the beta one always and the stable one unless the
    version has a prerelease suffix. Until a platform's first stable release, a prerelease goes to its stable manifest
    too: while that manifest is missing or announces a prerelease, it is written like the beta one, and once it announces
    a stable version it takes stable versions only again (reported when a prerelease leaves it alone). This is a
@@ -230,15 +266,16 @@ the stable manifest as written only while it announces no stable version yet.
 ## Releasing by tag
 
 Pushing a tag `desktop-v<version>` runs `.github/workflows/release.yml`, which validates the tag, builds the macOS
-and Windows releases in parallel on their own runners and publishes them from a job of its own. Application quality
+Windows and Linux releases in parallel on their own runners and publishes them from a job of its own, then starts the
+website's deployment. Application quality
 checks run locally before creating the tag; release CI does not repeat them. The manual `pnpm release` and
 `publish-release` path stays available.
 
-By default a tag releases both platforms. Two things select one: `release:version --platforms macos|windows` ends the
-tag's message with a line `Platforms: macos` (or `windows`), which `validate` reads and `.github/release-notes.sh`
-leaves out of the notes (no such line, or `Platforms: macos,windows`, is both); and running the **Release** workflow
-by hand (**Run workflow**) takes the `tag` of an existing version tag and a `platforms` input (`both`, `macos` or
-`windows`), which wins over the tag's own line. The second is how a platform a version's tag left out is released
+By default a tag releases all three platforms. Two things select some: `release:version --platforms <list>` (such as
+`macos` or `macos,linux`) ends the tag's message with a line `Platforms: macos,linux`, which `validate` reads and
+`.github/release-notes.sh` leaves out of the notes (no such line, or one naming all three, is all of them); and running
+the **Release** workflow by hand (**Run workflow**) takes the `tag` of an existing version tag and a `platforms` input
+(`all`, `macos`, `windows` or `linux`), which wins over the tag's own line. The second is how a platform a version's tag left out is released
 later, from the same tag: the versioned release gets that platform's files added and its manifests written.
 
 ### Prepare and push a version
@@ -256,8 +293,9 @@ Supply exactly one nonempty notes source: `--notes "text"` or `--notes-file path
 from the repository root, even when pnpm runs the command in the desktop package; absolute paths work too. Keep an
 uncommitted notes file outside the tracked tree or in an ignored location so the main checkout stays clean. The tag
 message is the same text shown on the release page and in the application's update notice; Markdown headings are
-preserved. `--platforms macos|windows` releases one platform only: the tag message then ends with a blank line and
-`Platforms: macos` (or `windows`), which is not part of the notes. Without it the version is for both platforms.
+preserved. `--platforms <list>` releases only those platforms: the tag message then ends with a blank line and
+`Platforms: macos,linux` (the selection), which is not part of the notes. Without it the version is for all three
+platforms.
 
 The version must be a semantic version strictly newer than the current one, without build metadata. The command
 refuses an existing local or remote version tag, release branch or release worktree. `.worktrees/` must be ignored
@@ -314,14 +352,14 @@ The workflow:
 1. `validate` runs `.github/release-notes.sh`: the tag must equal `desktop-v<version>` from `apps/desktop/package.json`
    and be an annotated tag with a non-empty message. The message, minus any signature and its `Platforms:` line, is the
    release notes, which the in-app update notice shows too. The platforms are the `platforms` input of a manual run, else
-   the tag message's `Platforms:` line, else both; they are the job's output. It also checks that the tagged commit is
+   the tag message's `Platforms:` line, else all of them; they are the job's output. It also checks that the tagged commit is
    on `main`, that the repository secrets below are set (the update key always; the Apple ones only for macOS), and
    that `Cargo.lock` matches the manifests (`cargo metadata --locked`), which the `--locked` build would otherwise
    find after the build starts. With Windows it checks the signing mode too: the repository variable
    `WINDOWS_SIGNING` (`none`, `command` or `signpath`; unset is `none`) and what that mode needs. A manual run checks
    out the tag it names, and every job builds that tag.
-2. After `validate` passes, the Windows build and `macos` (`macos-26`) run in parallel, each only when its platform is
-   selected; neither waits for the other. The Windows build follows `WINDOWS_SIGNING`, which `validate` hands on as
+2. After `validate` passes, the Windows build, `macos` (`macos-26`) and `linux` run in parallel, each only when its
+   platform is selected; none waits for another. The Windows build follows `WINDOWS_SIGNING`, which `validate` hands on as
    an output:
    - `none` and `command`: the job `windows` (`windows-latest`) is one `release --no-sign-update`.
    - `signpath`: each SignPath request waits for an approval given by hand, and a GitHub-hosted job is ended after
@@ -357,28 +395,38 @@ The workflow:
    reaching a step. It then packs `bundle/macos` and `bundle/dmg` of the universal bundle directory into one tar (which
    keeps symlinks, permissions and modification times that an artifact's zip would drop) and uploads it as the artifact
    `macos-bundle`.
-4. `publish` needs `validate`, `macos`, `windows` and `windows-signpath-finish`, and runs when `validate` succeeded and
+4. `linux` is a matrix of two jobs, `ubuntu-24.04` for x86_64 and `ubuntu-24.04-arm` for aarch64, each installing
+   `musl-tools` and restoring the `linux-release` dependency cache, then building with
+   `pnpm --filter @octoboard/desktop release --arch <arch> --no-sign-update` and signing the archive in a step of its
+   own (`sign-update`), the only one given the update key. It uploads `target/linux-release/*` (archive, `.sha256` and
+   `.sig`) as the artifact `linux-<arch>`.
+5. `publish` needs `validate`, `macos`, `windows`, `windows-signpath-finish` and `linux`, and runs when `validate` succeeded and
    each selected platform's build succeeded (for Windows, the job of the signing mode's route): an unselected
    platform's jobs, or the route not taken, are skipped, which does not stop it, and a selected one that failed or was
    cancelled does. It downloads the selected platforms' artifacts (the macOS tar is unpacked into
-   `target/universal-apple-darwin/release`) and runs
+   `target/universal-apple-darwin/release`; both Linux artifacts are merged into one directory) and runs
    `node apps/desktop/scripts/publish-release.mjs --notes-file ... --platforms <selection>` with `--windows-dir` for
-   Windows. It is the only job whose token may write (`contents: write`, for `gh`; every other job reads, and
+   Windows and `--linux-dir` for Linux. It is the only job whose token may write (`contents: write`, for `gh`; every other job reads, and
    checkouts keep no credential in `.git/config`) and has no update key. It installs nothing (the script uses Node's
    built-in modules only) and runs on
    `macos-26` when macOS is selected, whose tools check the disk image, and on `ubuntu-latest` otherwise.
-5. The whole workflow is in one concurrency group, so releases run one at a time. GitHub keeps one pending run, so a
+6. `website` runs after `publish`, in a job of its own that alone may start a workflow (`actions: write`): it runs
+   `gh workflow run website.yml` on `main`, so the website is generated again and its download links read the manifests
+   the publish just wrote. Its failure leaves the release published; start the website's workflow by hand then.
+7. The whole workflow is in one concurrency group, so releases run one at a time. GitHub keeps one pending run, so a
    third run started while one runs and one waits replaces the waiting one, which must then be re-run.
 
 Before the first release, or after dependency or toolchain changes, run **Warm Rust caches** manually on `main` to
-prepare compatible dependency caches. Warming uses an unsigned universal build and an unsigned Windows installer, with
-no signing credentials, and never publishes an application; its `windows` job fills the `windows-release` profile that
-the Windows jobs of `release.yml` and `windows-bundle` restore. Tag runs restore main's caches; different version tags cannot restore one another's caches.
+prepare compatible dependency caches. Warming uses an unsigned universal build, an unsigned Windows installer and an
+unsigned Linux archive on each architecture, with no signing credentials, and never publishes an application; its
+`windows` job fills the `windows-release` profile that the Windows jobs of `release.yml` and `windows-bundle` restore,
+and its `linux-release` jobs the profile of the same name that the `linux` jobs restore. Tag runs restore main's caches; different version tags cannot restore one another's caches.
 Local release checks still run before tagging. The [Rust cache module](../../../.github/actions/rust-cache/README.md)
 documents the command, profiles, GitHub retention limits and the measurements to inspect before judging a speed change.
 
 The **Code quality** workflow (`.github/workflows/quality.yml`) remains available on request for independent hosted
-frontend, macOS native, Linux compilation and Windows checks; its `windows-bundle` job builds the unsigned Windows
+frontend, macOS native, Linux compilation, Linux musl (the daemon's tests on the Linux release's target) and Windows
+checks; its `windows-bundle` job builds the unsigned Windows
 installer (`WINDOWS_SIGNING=none`, no update key), the way to see `tauri build` pass on Windows without a release. It is not called by release CI and does not block publication.
 The local macOS release checks do not cover Linux compilation; run that workflow when Linux verification is needed.
 
@@ -415,7 +463,7 @@ reuses the artifacts the build jobs already uploaded, so `publish` finds the sam
 the build jobs rebuilds with a different signature, and `publish-release` refuses it. Delete the release but keep the
 tag (`gh release delete desktop-v<version>`, without `--cleanup-tag`) and re-run the failed jobs. When one platform's
 build fails, `publish` does not run and nothing is published: fix the cause and re-run the failed jobs, or release the
-passing platform alone by running the workflow by hand for it and the other one later. The script's own messages still
+passing platforms alone by running the workflow by hand for them and the other one later. The script's own messages still
 describe the manual flow.
 
 Every route above assumes the tag's commit still has the workflow files main has. GitHub refused the run's own token

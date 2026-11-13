@@ -71,7 +71,7 @@ reads it with the update and, with the announced version, tells which sessions a
 interrupt (see "Restarting" in `docs/product/application-lifecycle.md`). A manifest that names none, or names it as anything but text, gives no holder
 floor. The update's address is its file on
 the versioned release (below), fetched over HTTPS as the manifest is, and its signature is checked against the update
-key built into the application, one key for both platforms (see "Downloading and installing" below). Every release is
+key built into the application, one key for both platforms, which signs the server form's archives too (see "Downloading and installing" below). Every release is
 written to a platform's beta manifest, and a release without a prerelease suffix to its stable manifest too, which is
 what puts stable releases on the Beta channel (see "Update channels" above). Until a platform's first stable release, a
 prerelease goes to its stable manifest as well: while that manifest is missing or announces a prerelease, it is written
@@ -81,14 +81,19 @@ published after a newer one leaves a manifest that already announces the newer v
 manifests are judged on their own. The `updater` release is itself marked a prerelease, so it is never
 the repository's latest release.
 
-The platforms share one version, and by default a release publishes both together. A version can be published for one
-platform only (a platform left out of its tag, or run by hand later for the other one): only that platform's manifests
-are written, so the other platform's users are offered nothing for that version until it is published for them. Each
-version is one release `desktop-v<version>` — marked a prerelease when the version has a suffix — which holds, for
-each platform published, the `.dmg` and the update archive `Octoboard_<version>_universal.app.tar.gz`, or the Windows
-installer `Octoboard_<version>_x64-setup.exe`, each update file with its signature beside it as `.sig`. A platform
-published later adds its missing files to the release; a published file is never replaced, and a changed build ships
-as a new version.
+A release has three platforms: macOS, Windows and Linux, the last being the server form, whose manifests,
+`beta-linux.json` and `stable-linux.json`, follow the same rules but are read by no application (see "What a release
+holds" in `docs/product/installing-the-server-form.md`). The platforms share one version, and by default a release
+publishes all three together. A version can be published for some platforms only (a platform left out of its tag, or
+run by hand later for another one): only those platforms' manifests are written, so the other platforms' users are
+offered nothing for that version until it is published for them. Each version is one release `desktop-v<version>` —
+marked a prerelease when the version has a suffix — which holds, for each platform published, the `.dmg`
+(`Octoboard_<version>_universal.dmg`) and the update archive `Octoboard_<version>_universal.app.tar.gz`; the Windows
+installer `Octoboard_<version>_x64-setup.exe`; or the server form's archive of each Linux architecture with its
+`.sha256`; each update file, and each Linux archive, with its signature beside it as `.sig`. A platform published later
+adds its missing files to the release; a published file is never replaced, and a changed build ships as a new version.
+Once a release is published, the website is published again, so that its download links point at the new version (see
+"Where download links point" in `docs/product/website-download-page.md`).
 
 ## When the application checks
 

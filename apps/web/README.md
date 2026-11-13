@@ -16,8 +16,8 @@ Run these commands from the repository root:
 - `pnpm --filter @octoboard/web check:locales` — checks language coverage, message keys and interpolation
   placeholders.
 - `pnpm --filter @octoboard/web typecheck` — prepares Nuxt and checks the website's TypeScript and Vue code.
-- `pnpm --filter @octoboard/web test` — runs the website's Node test; the sitemap check reads the generated output, so
-  it is skipped until `build` has run.
+- `pnpm --filter @octoboard/web test` — runs the website's Node tests (SEO modules, download resolution, the install
+  script); the checks that read the generated output are skipped until `build` has run.
 - `pnpm --filter @octoboard/web build` — builds the React product preview and generates the static website in
   `apps/web/.output/public`; the deployment runs the same command.
 - `pnpm --filter @octoboard/web generate:og-images` — runs `python3 scripts/generate-og-images.py` to draw one share
@@ -31,9 +31,14 @@ default to the `websiteUrl` of `config/app.json` and `/` (`site.config.ts`). Use
 `preview`. Pushes to `main` that change what the site is generated from publish it through
 [`.github/workflows/website.yml`](../../.github/workflows/website.yml).
 
+Generation needs network access to GitHub, to read the newest release's download links. Under `CI` it fails without
+it; elsewhere it warns and links the releases page. Every release publication also starts a deployment, so the links
+stay current.
+
 ## Read next
 
-- [What the website publishes: pages, languages, search indexing, preview and privacy](../../docs/product/website.md)
+- [What the website publishes: pages, languages, search indexing, preview and privacy](../../docs/product/website.md),
+  and [its download page](../../docs/product/website-download-page.md)
 - [The website's structure: directories, its imports from the UI package, where new code
   goes](../../docs/structure/web.md)
 - The [documentation index](../../docs/README.md)

@@ -103,6 +103,7 @@ does not call this workflow or wait for its results:
 | `frontend` | `ubuntu-latest` | `pnpm verify --release --release-group frontend --fresh`: identity, application lint, production UI type check and application UI tests. |
 | `native` | `macos-26` | `pnpm verify --release --release-group native --fresh`: identity, desktop script tests, rustfmt, clippy for the workspace and all targets, and both Rust crates' tests. |
 | `linux-check` | `ubuntu-latest` | `node scripts/cargo.mjs check --locked`: compile both crates with the Linux prerequisites installed. |
+| `linux-musl` | `ubuntu-latest` | `cargo test --locked -p octoboardd --target x86_64-unknown-linux-musl`: the daemon's tests on the target the Linux release links statically. |
 | `windows-check`, `windows-bundle` | `windows-latest` | Native Windows checks and the unsigned installer build (see the [tooling overview](../../docs/structure/tooling.md)); the local release plan's windows group also cross-checks the same crates from the Mac. |
 
 The frontend group does not invoke `rustc`, including when identifying the toolchain for local pass stamps, so it

@@ -11,6 +11,12 @@ fn main() {
         .as_str()
         .expect("config/app.json `name` is a string");
     println!("cargo:rustc-env=OCTOBOARD_APP_NAME={name}");
+    // And the port `octoboardd start` listens on without `--port`, as `OCTOBOARD_DEFAULT_SERVER_PORT`.
+    let port = config["defaultServerPort"]
+        .as_u64()
+        .filter(|port| (1..=u64::from(u16::MAX)).contains(port))
+        .expect("config/app.json `defaultServerPort` is a port number");
+    println!("cargo:rustc-env=OCTOBOARD_DEFAULT_SERVER_PORT={port}");
 
     embed_windows_manifest();
     embed_ui();
