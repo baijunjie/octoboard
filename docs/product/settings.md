@@ -15,9 +15,10 @@ configuration" in `docs/product/agent-accounts.md`, and "Explanations in help ti
 `docs/product/labels-and-tooltips.md`). The sections, in order, are **General**, **App behavior**, **Agent
 behavior**, **Agent accounts**, **Git**, **Trusted folders**, **Permissions**, **Notifications**, **Keyboard shortcuts**,
 **Cleanup**, **Configuration**, **Updates** and **About**; the dialog opens on General unless it was asked to open on
-another section. **Permissions** is there only in the macOS application; the Windows application and a browser leave it
-out. **Updates** is there only where something updates itself: the desktop application, and a browser open on a daemon
-that updates itself (see `docs/product/update-settings.md`). The search field narrows the sections and their rows to
+another section. **Permissions** is there in the macOS application and in a browser running on a Mac, an iPhone or an
+iPad — judged from the platform the browser reports, not from the system the daemon runs on; the desktop application
+on any other system and a browser on any other system leave it out. **Updates** is there only where something updates
+itself: the desktop application, and a browser open on a daemon that updates itself (see `docs/product/update-settings.md`). The search field narrows the sections and their rows to
 the settings that match what is typed (see `docs/product/searching-settings.md`).
 
 A console session can read and change the default clone directory, the automatic pulling of repositories, the
@@ -263,9 +264,10 @@ opening paragraph says, what the list shows and what removing a folder does are 
 
 ## Permissions
 
-In the macOS application only: one row for each of the two macOS privacy permissions the agents can need, Screen
-Recording and Accessibility, to grant it ahead of time. What the section shows and what each row offers are in
-`docs/product/macos-privacy-permissions.md`.
+In the macOS application: one row for each of the two macOS privacy permissions the agents can need, Screen
+Recording and Accessibility, to grant it ahead of time. In a browser that has the section (which clients have it is in
+the list of sections above), it only says that permissions can be managed only in the macOS application. What the
+section shows and what each row offers are in `docs/product/macos-privacy-permissions.md`.
 
 ## Notifications
 

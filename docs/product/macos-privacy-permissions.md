@@ -77,8 +77,10 @@ the grant. Switching to another Settings section and back puts the Grant button 
 back with it — answered by macOS with a silent no for Screen Recording, and with that dialog again for Accessibility,
 which macOS keeps no refusal for.
 
-**Outside the macOS application** — in a browser, or a desktop shell not running on macOS — the section is a single line
-saying that permissions can only be managed in the macOS application. Where a desktop shell is there but the read of the
+**In a browser** running on a Mac, an iPhone or an iPad (judged from the platform the browser reports, not from the
+system the daemon runs on) the section is a single line saying that permissions can only be managed in the macOS
+application, shown at once. A browser on any other system, and the desktop application on any system but macOS, have
+no Permissions section (see "Permissions" in `docs/product/settings.md`). Where the macOS application's read of the
 grants fails, the section is instead a red alert titled that the permissions could not be read, saying that the system
 did not report which have been granted, which opens no error alert (see "Failures shown on the screen" in
 `docs/product/error-alerts.md`). The Settings search finds that alert in place of the rows (see "Some parts of Settings

@@ -62,8 +62,9 @@ const PERMISSIONS = [
 /**
  * The macOS permissions the agents in Octoboard's terminals can need. Their requests are
  * attributed to Octoboard, so asking here, with the reason given first, is what keeps a system
- * prompt from appearing out of nowhere mid-task. Everything is absent where there is no macOS
- * shell to ask. For every state a row can be in see `docs/product/macos-privacy-permissions.md`.
+ * prompt from appearing out of nowhere mid-task. Without the macOS shell to ask (a browser on an
+ * Apple device), the section only says the permissions are managed in the macOS application. For
+ * every state a row can be in see `docs/product/macos-privacy-permissions.md`.
  */
 export function PermissionsSection(): React.ReactElement {
   const t = useT();
