@@ -74,8 +74,18 @@ const escape = () => act(async () => void document.activeElement!.dispatchEvent(
 const pressButton = (name: string) => act(async () => [...inFront().querySelectorAll<HTMLElement>("button")].find((button) => button.textContent === name || button.getAttribute("aria-label") === name)!.click());
 
 const presses = [["a press without a pointer", "virtual"], ["a key press", "keyboard"], ["a pointer press", "pointer"]] as const;
-/** Whether the control focus was handed to shows its ring: the handoff is not one the user aimed. */
+/** Whether the control focus was handed to shows its ring. The handoff is not one the user aimed, so the ring follows
+ * the last input (`ringForAutomaticFocus`): shown after a hardware key, never after a mouse press. */
 const ringShown = () => getInteractionModality() === "keyboard";
+/** Sets the press that opens Settings, as `framesAsTimers` does. A press without a pointer (a screen reader's) leaves
+ * the last input as it was, so a hardware key is sent before it, as a screen reader's user navigates with keys: the
+ * ring then does not depend on what an earlier test left behind. */
+function pressFrom(modality: (typeof presses)[number][1]) {
+  if (modality === "virtual") document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+  framesAsTimers(modality);
+}
+/** Whether the handoff after `modality`'s press shows the ring: only a mouse press turns it off. */
+const ringAfter = (modality: (typeof presses)[number][1]) => modality !== "pointer";
 
 describe("closing the account settings dialog View in Settings opened", () => {
   const sharingSwitch = () => document.querySelector<HTMLElement>('[data-sharing-account="codex-work"] input[role="switch"]');
@@ -84,7 +94,7 @@ describe("closing the account settings dialog View in Settings opened", () => {
       const after = `after ${press}${strict ? ", under StrictMode" : ""}`;
       for (const [how, close] of [["Escape", escape], ["its close button", () => pressButton("Close")]] as const) {
         it(`by ${how} gives focus to the section's tab ${after}`, async () => {
-          framesAsTimers(modality);
+          pressFrom(modality);
           openSettings({ account: "codex-work" }, strict);
           await settleFrames();
           expect(document.activeElement).toBe(sharingSwitch());
@@ -92,14 +102,15 @@ describe("closing the account settings dialog View in Settings opened", () => {
           await settleFrames();
           expect(dialogCount()).toBe(1);
           expect(document.activeElement).toBe(sectionTab());
-          expect(ringShown()).toBe(true);
+          // Escape is a key, the last input then; the close button's `click()` has no pointer behind it.
+          expect(ringShown()).toBe(how === "Escape" || ringAfter(modality));
         });
       }
     }
   }
 
   it("gives focus to the section's tab when it closes by itself, its account removed by another window", async () => {
-    framesAsTimers("virtual");
+    pressFrom("virtual");
     openSettings({ account: "codex-work" }, false);
     await settleFrames();
     updateLater({ settings: { ...daemon.store.getState().settings, accounts: daemon.store.getState().settings.accounts.filter((held) => held.id !== "codex-work") } });
@@ -126,7 +137,7 @@ describe("closing the login dialog of a login found running as Settings opens", 
   for (const [press, modality] of presses) {
     for (const strict of [false, true]) {
       it(`by Cancel login gives focus to the section's tab after ${press}${strict ? ", under StrictMode" : ""}`, async () => {
-        framesAsTimers(modality);
+        pressFrom(modality);
         accountLogins.push({ ...running });
         openSettings({}, strict);
         await settleFrames();
@@ -136,14 +147,14 @@ describe("closing the login dialog of a login found running as Settings opens", 
         await settleFrames();
         expect(dialogCount()).toBe(1);
         expect(document.activeElement).toBe(sectionTab());
-        expect(ringShown()).toBe(true);
+        expect(ringShown()).toBe(ringAfter(modality));
       });
     }
   }
 
   for (const outcome of ["succeeded", "cancelled"] as const) {
-    it(`gives focus to the section's tab when it closes by itself, the login ${outcome} elsewhere`, async () => {
-      framesAsTimers("virtual");
+    it(`gives focus to the section's tab when it closes by itself, the login ${outcome} elsewhere after a key`, async () => {
+      pressFrom("virtual");
       accountLogins.push({ ...running });
       openSettings({}, false);
       await settleFrames();
@@ -161,9 +172,9 @@ describe("closing the Add agent dialog put in front of Settings with no agent ad
   const emptyPanelButton = () => [...document.querySelectorAll<HTMLElement>('[role="tabpanel"] button')].find((button) => button.textContent === "Add agent");
   for (const [press, modality] of presses) {
     for (const strict of [false, true]) {
-      it(`gives focus to the empty panel's Add agent button, with its ring, after ${press}${strict ? ", under StrictMode" : ""}`, async () => {
+      it(`gives focus to the empty panel's Add agent button, its ring following the last input, after ${press}${strict ? ", under StrictMode" : ""}`, async () => {
         settings.added_agents = [];
-        framesAsTimers(modality);
+        pressFrom(modality);
         openSettings({ addAgent: true }, strict);
         await settleFrames();
         expect(inFront().textContent).toContain("Only an installed agent can be added.");
@@ -172,7 +183,7 @@ describe("closing the Add agent dialog put in front of Settings with no agent ad
         expect(dialogCount()).toBe(1);
         expect(emptyPanelButton()).toBeDefined();
         expect(document.activeElement).toBe(emptyPanelButton());
-        expect(ringShown()).toBe(true);
+        expect(ringShown()).toBe(ringAfter(modality));
       });
     }
   }
