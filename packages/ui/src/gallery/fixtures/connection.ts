@@ -91,6 +91,14 @@ export const connectionScenarios: Scenario[] = [
     state: snapshotState({ consoles: [console_], projects: [project], sessions, connectionState: "incompatible", daemon: null }),
   },
   {
+    id: "daemon-key-refused",
+    group: STARTUP_AND_CONNECTION,
+    category: "exceptional",
+    title: "Address whose key the daemon no longer accepts",
+    description: "The whole window is the danger-toned screen, whatever the connection had loaded before, with no sidebar or connection banner: the title, the line saying its key has changed, and the remedy naming octoboardd address as inline code, then the report guidance sentence with Report issue. There is no other button, since reloading meets the same refusal. The address opened with no key at all has its own heading and line; that page is drawn outside the app and is not shown here.",
+    state: snapshotState({ consoles: [console_], projects: [project], sessions, connectionState: "keyRefused" }),
+  },
+  {
     id: "daemon-closed-before-snapshot",
     group: STARTUP_AND_CONNECTION,
     category: "exceptional",

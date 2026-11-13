@@ -4,7 +4,8 @@
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
 
-use super::{router_serving, ui};
+use super::{router, router_serving, ui};
+use crate::state::AppState;
 use crate::test_support::{app_state, PATIENCE, TEST_KEY};
 
 /// Serves the real router on an ephemeral loopback port and returns the port.
@@ -15,6 +16,16 @@ pub(super) async fn serve(name: &str) -> u16 {
 /// `serve`, also handing back the directory the daemon keeps saved session output in.
 pub(super) async fn serve_with_output_dir(name: &str) -> (u16, std::path::PathBuf) {
     serve_files(name, ui::EMBEDDED).await
+}
+
+/// Serves the real router over `state` on an ephemeral loopback port and returns the port.
+pub(super) async fn serve_state(state: std::sync::Arc<AppState>) -> u16 {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("a loopback port");
+    let port = listener.local_addr().expect("a bound address").port();
+    tokio::spawn(async move { axum::serve(listener, router(state)).await });
+    port
 }
 
 /// `serve` with `files` as the browser UI the router serves in place of the build's own.

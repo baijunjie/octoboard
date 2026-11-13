@@ -13,9 +13,11 @@ const client = vi.hoisted(() => ({
   onEvent: undefined as ((event: Event) => void) | undefined,
   onEvents: undefined as ((events: Event[]) => void) | undefined,
   onConnectionChange: undefined as ((state: ConnectionState) => void) | undefined,
+  keyCheck: undefined as (() => Promise<boolean>) | undefined,
 }));
 vi.mock("../daemon-client", () => ({
   DaemonClient: class {
+    constructor(_url: string, keyCheck?: () => Promise<boolean>) { client.keyCheck = keyCheck; }
     onEvent(listener: (event: Event) => void) { client.onEvent = listener; }
     onEvents(listener: (events: Event[]) => void) { client.onEvents = listener; }
     onConnectionChange(listener: (state: ConnectionState) => void) { client.onConnectionChange = listener; }
@@ -60,6 +62,19 @@ it("forgets the daemon its hello described once the connection drops", () => {
   client.onEvents!([{ type: "hello", generation: 1, daemon_version: "1.4.0" }]);
   client.onConnectionChange!("reconnecting");
   expect(daemon.store.getState().daemon).toBeNull();
+});
+
+it("holds the state of a key the daemon refused", () => {
+  const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
+  client.onConnectionChange!("keyRefused");
+  expect(daemon.store.getState().connectionState).toBe("keyRefused");
+});
+
+it("gives the client a key check only for a page the daemon itself served", () => {
+  createDaemon({ origin: "ws://127.0.0.1:1234", key: "k" });
+  expect(client.keyCheck).toBeUndefined();
+  createDaemon({ origin: "ws://localhost:1234", key: "k", servedByDaemon: true });
+  expect(client.keyCheck).toBeTypeOf("function");
 });
 
 it("applies the events of one batch as a single update", () => {

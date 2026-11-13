@@ -416,6 +416,7 @@ mod tests {
             port,
             follows_application: Some(false),
             service_managed: Some(false),
+            takes_owner_key: false,
         }
     }
 

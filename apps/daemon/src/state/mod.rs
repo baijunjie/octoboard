@@ -133,6 +133,9 @@ pub struct AppState {
     /// files of a session's scratch directory (the hook script, Grok's `config.toml`), which go
     /// with that directory.
     pub key: String,
+    /// The owner key the guard accepts beside `key`, held only by a daemon that runs on its own;
+    /// see [`crate::owner_key`]. Never handed to anything the daemon starts.
+    pub owner_key: Arc<crate::owner_key::OwnerKey>,
     pub self_exe: String,
     /// The installation's entry point (`crate::cli::launch_path`), which the session git hook
     /// dispatchers start: unlike `self_exe` or the copy of the build a holder runs from, an update
@@ -413,6 +416,7 @@ impl AppState {
             store,
             port,
             key,
+            owner_key: Arc::default(),
             self_exe,
             install_exe,
             live: RwLock::new(LiveSessions::default()),

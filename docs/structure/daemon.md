@@ -17,14 +17,17 @@ serde. The crate is a member of the root Cargo workspace beside the desktop shel
 
 `src/main.rs` hands a named CLI mode to `cli::run`; otherwise it takes the instance lock, binds `127.0.0.1` (on the
 top-level `--port` when given, else on an OS-assigned port, which is what the desktop shell starts), opens the store,
-generates the per-launch key (or reads the one its predecessor hands it on stdin, `--key-stdin`), loads the screens
+generates the per-launch key (or reads the one its predecessor hands it on stdin, `--key-stdin`), reads or makes, when it
+follows no application (no `--parent-pid`), the owner key that outlives the launch (`owner_key::OwnerKey::start`, the
+owner-only `owner.key` in the data directory, accepted besides the launch key), loads the screens
 a planned stop saved (`state::restart_screens`, kept until each is consumed), the messages it left queued
 (`messaging::restart_outbox`, deleted as read) and the background work each session's agent had left running
 (`state::background_store`, loaded before the adoption and pruned after it to the sessions adopted or claimed), adopts what the holders kept running (`coordinator::adopt`),
 keeps claimed what a holder it cannot link to yet runs (`coordinator::unlinked`), marks the other sessions interrupted,
 clears the run directory but for the adopted and claimed sessions' scratch directories, writes the owner-only key record
 (`daemon.key`) and then the owner record beside the lock (`owner_record::Owner`, the pid identity, the port, whether it
-follows an application and whether a service manager starts its successor; the key stays out of it), prints the
+follows an application, whether a service manager starts its successor and, as the `owner-key` token, whether it holds an
+owner key; no key is in it), prints the
 handshake line (port and key) and runs the server until a stop is asked for (`state::StopKind`). An ordinary stop ends
 every session: the `shutdown` control request, `POST /shutdown` (`src/server/callbacks.rs`), a termination signal or
 the application's pid going away after the application wrote a `quit` line to the daemon's stdin
@@ -48,8 +51,10 @@ the background and to find it (`src/cli/background.rs`; `start` runs the daemon 
 `status` and `address` find it through `instance_lock::is_running` and the owner record, `owner_record::Owner`, waiting
 through a planned restart caught half-way with the handover note the restarting daemon leaves (`Owner::note_handover`);
 `stop` and `restart` tell the daemon that takes over by the key it was handed or, where the owner record says a service
-manager starts the successor, by that daemon's own record saying the same; `address` prints the browser address with the key, which it reads
-from the key record only the daemon's own user can open; where the host has no signal to stop or restart a daemon by (Windows), `stop` and `restart` ask it over loopback instead, with the key the key record (`daemon.key`) holds). The CLI modes other processes start are `hook`, `git-ref`,
+manager starts the successor, by that daemon's own record saying the same; `address` prints the browser address with the owner key when the record
+says the daemon holds one and `owner.key` has it, which outlives the daemon, else with the launch key, which it reads from the key record only the
+daemon's own user can open; `address --rotate` replaces the owner key first, through the running daemon (`POST /owner-key/rotate`) or, with none
+running, in `owner.key` (`owner_key::replace_in`), and prints the new address; where the host has no signal to stop or restart a daemon by (Windows), `stop` and `restart` ask it over loopback instead, with the key the key record (`daemon.key`) holds). The CLI modes other processes start are `hook`, `git-ref`,
 `gate-hook`, `status-line`, `mcp` and `holder`: their dispatch, with the user's modes, is `src/cli/mod.rs`, and their
 code is `src/cli/hook.rs` (`hook`), a provider's `StatusLine`
 (`status-line`; `src/cli/mod.rs` only finds the provider's and hands over, Claude Code's is
@@ -89,8 +94,11 @@ in, mirroring the UI's `i18n/languages.ts`), `key_file.rs` (a session's owner-on
 its path, `write` and `read`), `log_file.rs` (the rotated `daemon.log`, and a holder's own `holder-<id>.log`),
 `loopback.rs` (the std-only HTTP client to a loopback address, the daemon's or a holder's, that the CLI modes, the git
 hook modes and the MCP stdio bridge call with; it names the statuses a holder answers a waiting helper with when it has
-no daemon or lost it), `owner_record.rs` (the owner record beside the lock, which finds the running daemon and says
-whether it follows an application and whether a service manager starts its successor, and the owner-only key record,
+no daemon or lost it), `owner_key.rs` (`OwnerKey`, the owner key of a daemon that runs on its own: `owner.key`
+in the data directory, a second key the guard accepts besides the launch key, kept across launches until rotated, and never
+written to `daemon.key`, a helper's key file or a holder's record or handed to anything the daemon starts; `read_in` and
+`replace_in` are what the `address` mode uses), `owner_record.rs` (the owner record beside the lock, which finds the running daemon and says
+whether it follows an application, whether a service manager starts its successor and whether it holds an owner key, and the owner-only key record,
 `daemon.key`, which four things read: `address`; `stop` and `restart` on every host, to recognise a successor by its key
 where the daemon starts it itself; `stop` and `restart` on Windows, which ask over loopback; and the git hook modes'
 fallback; the `_in` reads take the data directory from their caller), `request_guard.rs` (the
@@ -121,8 +129,9 @@ running the daemon in the background on Linux).
   per-connection `Registration` settles the attach's precedence at its deadline in a task of its own and lets the client
   go however the connection ends; for a held terminal, a call that may resize it runs on a blocking thread),
   `callbacks.rs` the hook, git-ref, revert-gate, context-window and MCP routes, `access.rs` the Host/Origin/key guard
-  (the rules are `request_guard.rs`'s; the key is the daemon's; it lets a GET or HEAD that names an embedded UI file
-  through without the key), `ui.rs` the embedded browser UI, served as the router's fallback on the same origin as the
+  (the rules are `request_guard.rs`'s; the key is the daemon's launch key or its owner key, `AppState::owner_key`; it lets a GET or HEAD that
+  names an embedded UI file through without the key), `keys.rs` the routes about the keys: `GET /key-check`, which a page
+  uses to tell a key the daemon refuses from a daemon it cannot reach, and `POST /owner-key/rotate`, which the launch key alone may call), `ui.rs` the embedded browser UI, served as the router's fallback on the same origin as the
   protocol routes (empty, so serving nothing, without the `embedded-ui` feature), `relay.rs` the handler of the helper requests a holder
   relays (it runs the same `callbacks::handle` the HTTP routes run, once `AppState::end_adoption` says the adopted
   sessions exist: reports that arrive before are held in order, questions wait up to 20 s).
@@ -589,7 +598,7 @@ same scan.
 | foundation | `blocking_pass`, `interface_language`, `loopback`, `platform`, `request_guard`, `text`, `time`, `wire_path` |
 | providers | `providers` |
 | wire | `protocol` |
-| host | `env_shell`, `git`, `holder`, `host_open`, `hostfs`, `instance_lock`, `key_file`, `log_file`, `owner_record`, `paths`, `processes` |
+| host | `env_shell`, `git`, `holder`, `host_open`, `hostfs`, `instance_lock`, `key_file`, `log_file`, `owner_key`, `owner_record`, `paths`, `processes` |
 | storage | `git_workflow`, `store` |
 | state | `state` |
 | workspace | `branch_cleanup`, `branch_origin`, `browse`, `host_tools`, `path_links`, `project_git`, `removal_safety`, `revert_gate`, `terminal` |

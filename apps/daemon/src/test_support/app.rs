@@ -24,12 +24,18 @@ pub(crate) const INSTALL_EXE: &str = "/opt/octoboard/bin/octoboardd";
 /// gone, since the state's exit watchers and blocking tasks can outlive the test and save a
 /// session's output or the ledger into it.
 pub(crate) fn app_state(label: &str) -> (Arc<AppState>, ScratchDir) {
+    app_state_with_key(label, TEST_KEY)
+}
+
+/// [`app_state`] whose daemon requires `key` of every connection, such as the launch key of a
+/// daemon started again over another one's data directory.
+pub(crate) fn app_state_with_key(label: &str, key: &str) -> (Arc<AppState>, ScratchDir) {
     let mut dir = ScratchDir::new(label);
     let store = Store::open(&dir.join("octoboard.db")).expect("store");
     let state = Arc::new(AppState::new(
         store,
         1234,
-        TEST_KEY.to_string(),
+        key.to_string(),
         "/opt/octoboardd".to_string(),
         INSTALL_EXE.to_string(),
         dir.join("output"),

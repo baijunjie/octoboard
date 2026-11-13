@@ -124,7 +124,8 @@ acknowledgement is not queued again: its message, affected session, original dia
 and available daemon code and parameters must all match. Pending errors survive changes between the application's
 screens until acknowledged. They are shown over whichever screen the window is on, so an error nothing caught, or an
 Issue page that could not be opened, still raises one over the screens for a daemon that could not start, for a daemon
-of another version, for a UI that failed and for no daemon address or key being known, which raise none of their own.
+of another version, for an address that does not open the daemon, for a UI that failed and for no daemon address or key
+being known, which raise none of their own.
 
 When the last pending alert is acknowledged and keyboard focus has nowhere to return to — the control that had it is
 gone, as when a dialog closed before the alert appeared, or the dialog under the alert never had it, as when the alert
@@ -201,8 +202,8 @@ where the subject can be read again. The details — further explanation in Octo
 edge rather than centred. Each raw-text block follows the scrolling, height and copying rules in "Names and diagnostic
 details" below. There is no mark beside the heading and no **Details** button. Where the panel fills a pane, a panel or
 a dialog's body and is taller than it, it scrolls in its place (see "Scrolling a surface from the keyboard" in
-`docs/product/scrolling-surfaces.md`). The screens for a daemon that could not start, for a daemon of another version
-and for a UI that failed take this shape too, their row holding the recovery, where there is one, and **Report issue**
+`docs/product/scrolling-surfaces.md`). The screens for a daemon that could not start, for a daemon of another version,
+for an address that does not open the daemon and for a UI that failed take this shape too, their row holding the recovery, where there is one, and **Report issue**
 (see "The window chrome and the content panel" in `docs/product/window-layout.md`).
 
 **A compact alert** is a component-level error shown among other content — one that blocks what the user is doing,
@@ -240,8 +241,8 @@ The places with an empty-state failure:
   `docs/product/report-panel.md`);
 - the Processes panel's list when its first reading failed (see "Loading, refreshing and failures" in
   `docs/product/processes-panel.md`);
-- the screens for a daemon that could not start, for a daemon of another version and for a UI that failed, each the
-  whole page, its heading the page's top-level heading and its raw text — for a daemon of another version, the two
+- the screens for a daemon that could not start, for a daemon of another version, for an address that does not open
+  the daemon and for a UI that failed, each the whole page, its heading the page's top-level heading and its raw text — for a daemon of another version, the two
   versions — on the details surface, with **Report issue** after the recovery or, with none, as the one action (see "The window chrome and the content panel" in `docs/product/window-layout.md`). Unlike the
   others, each is announced as the page opens, although it is there from the start.
 

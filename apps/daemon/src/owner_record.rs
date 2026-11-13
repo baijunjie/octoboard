@@ -28,6 +28,12 @@ use crate::platform::proc_table;
 /// takes a word it does not know in its place as no third token, so this token changes nothing it
 /// reads, whether it comes fourth or, without a third, in its place. It is read wherever it
 /// stands after the port; a record without it, as an earlier build writes, does not say.
+///
+/// A daemon that accepts the owner key ([`crate::owner_key`]) adds `owner-key` after everything
+/// else, and is read wherever it stands after the port. It changes nothing an earlier build reads
+/// for the same reason: it is the third token only in a record that has none of the others, and
+/// that build takes an unknown word there as no third token. A record without it is of a daemon
+/// that takes no owner key, as one that follows the application or an earlier build.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Owner {
     pub identity: ProcessIdentity,
@@ -39,6 +45,9 @@ pub struct Owner {
     /// makes a key of its own, rather than this daemon, which hands over its key; `None` for a
     /// record without the token.
     pub service_managed: Option<bool>,
+    /// Whether the daemon accepts the owner key, which `address` then prints in place of the
+    /// launch key.
+    pub takes_owner_key: bool,
 }
 
 /// A daemon that has released the instance lock, or is about to, to the daemon that takes over
@@ -64,6 +73,9 @@ const SERVICE: &str = "service";
 /// The token of a record of a daemon that starts its successor itself.
 const NO_SERVICE: &str = "no-service";
 
+/// The token of a record of a daemon that accepts the owner key.
+const OWNER_KEY: &str = "owner-key";
+
 impl Owner {
     /// This process, listening on `port`, following an application or not; `None` when the host
     /// cannot tell when it started. Without `takes_restart`, the record has no third token, since
@@ -80,7 +92,16 @@ impl Owner {
             port,
             follows_application: takes_restart.then_some(follows_application),
             service_managed: None,
+            takes_owner_key: false,
         })
+    }
+
+    /// This owner, saying whether the daemon accepts the owner key.
+    pub fn with_owner_key(self, takes: bool) -> Self {
+        Self {
+            takes_owner_key: takes,
+            ..self
+        }
     }
 
     /// This owner, saying whether a service manager starts its successor after a planned restart.
@@ -230,6 +251,9 @@ impl Owner {
             Some(false) => content.push_str(&format!(" {NO_SERVICE}")),
             None => {}
         }
+        if self.takes_owner_key {
+            content.push_str(&format!(" {OWNER_KEY}"));
+        }
         content.push('\n');
         replace_beside(path, content.as_bytes(), Permissions::Private)
     }
@@ -250,11 +274,13 @@ impl Owner {
             NO_SERVICE => Some(false),
             _ => None,
         });
+        let takes_owner_key = rest.contains(&OWNER_KEY);
         Some(Self {
             identity,
             port,
             follows_application,
             service_managed,
+            takes_owner_key,
         })
     }
 
@@ -323,6 +349,7 @@ mod tests {
             port,
             follows_application: Some(false),
             service_managed: None,
+            takes_owner_key: false,
         }
     }
 
@@ -432,6 +459,71 @@ mod tests {
             assert_eq!(read.service_managed, None, "{content:?}");
             assert_eq!(read.follows_application, follows_application, "{content:?}");
             assert_eq!((read.identity.pid.0, read.port), (10, 7531), "{content:?}");
+        }
+    }
+
+    /// The owner-key token comes last, reads back wherever it stands after the port, and a record
+    /// without it is of a daemon that takes no owner key.
+    #[test]
+    fn whether_the_daemon_takes_the_owner_key_reads_back() {
+        let dir = ScratchDir::new("owner-record-owner-key");
+        let path = dir.join("daemon.owner");
+        let cases = [
+            (
+                Some(false),
+                Some(true),
+                "10:123456 7531 alone service owner-key\n",
+            ),
+            (
+                Some(false),
+                Some(false),
+                "10:123456 7531 alone no-service owner-key\n",
+            ),
+            (Some(false), None, "10:123456 7531 alone owner-key\n"),
+            (None, None, "10:123456 7531 owner-key\n"),
+        ];
+        for (follows_application, managed, expected) in cases {
+            let mut ours = Owner {
+                follows_application,
+                ..owner(10, 7531)
+            }
+            .with_owner_key(true);
+            ours.service_managed = managed;
+            ours.write_to(&path).unwrap();
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), expected);
+            assert_eq!(Owner::read_from(&path), Some(ours), "{expected:?}");
+            ours.remove_from(&path).unwrap();
+            assert!(!path.exists(), "{expected:?}");
+        }
+        for content in ["10:123456 7531\n", "10:123456 7531 alone service\n"] {
+            std::fs::write(&path, content).unwrap();
+            assert!(
+                !Owner::read_from(&path).unwrap().takes_owner_key,
+                "{content:?}"
+            );
+        }
+        assert!(!owner(10, 7531).takes_owner_key);
+        assert!(owner(10, 7531).with_owner_key(true).takes_owner_key);
+    }
+
+    /// An earlier build reads the identity, the port and the third token alone, so the token
+    /// changes nothing it reads, even in place of a missing third token.
+    #[test]
+    fn an_earlier_build_reads_a_record_with_the_owner_key_token_as_one_without_it() {
+        let dir = ScratchDir::new("owner-record-owner-key-earlier");
+        let path = dir.join("daemon.owner");
+        for follows_application in [Some(true), Some(false), None] {
+            for managed in [None, Some(true), Some(false)] {
+                let mut ours = Owner {
+                    follows_application,
+                    ..owner(10, 7531)
+                }
+                .with_owner_key(true);
+                ours.service_managed = managed;
+                ours.write_to(&path).unwrap();
+                let read = read_as_an_earlier_build(&std::fs::read_to_string(&path).unwrap());
+                assert_eq!(read, Some((ours.identity, 7531, follows_application)));
+            }
         }
     }
 

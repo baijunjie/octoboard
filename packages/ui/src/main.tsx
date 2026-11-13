@@ -4,10 +4,11 @@ import ReactDOM from "react-dom/client";
 import { App } from "./App";
 import { AppRoot } from "./AppRoot";
 import { suppressNativeContextMenu } from "./input/contextMenuGuard";
-import { resolveDaemonAddress, resolveRecovered, resolveStartupError } from "./daemon";
+import { isKeylessDaemonPage, resolveDaemonAddress, resolveRecovered, resolveStartupError } from "./daemon";
 import { runtimeError } from "./errors/runtimeError";
 import { connectShellSettings } from "./lifecycle/shellSettings";
 import { selectPlatform } from "./platform";
+import { KeyRefusedScreen } from "./shell/KeyRefusedScreen";
 import { DaemonFailedScreen, NoAddressMessage, StartupScreen } from "./StartupScreen";
 import { createDaemon } from "./store";
 import "./input/focusGuard";
@@ -74,6 +75,12 @@ function screen(): React.ReactElement {
     return <DaemonFailedScreen error={startupError} />;
   }
   if (!daemon) {
+    if (isKeylessDaemonPage(platform)) {
+      // The production browser build, opened at an address with no key: the page the daemon serves, without the key
+      // its address carries. Whoever opens it is a user of the server form, not a developer to be told which variables
+      // to set.
+      return <KeyRefusedScreen keyless />;
+    }
     // Neither a `?key=` nor `VITE_DAEMON_KEY` gave a key; or there is no `?port=` or
     // `VITE_DAEMON_PORT` and the page's own origin is not one that can be the daemon — there is
     // nothing to connect to, so say so instead of guessing. Only a page loaded by hand gets here: the

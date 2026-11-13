@@ -6,12 +6,13 @@ no Tauri IPC channel and no shared state between them (see "Why the daemon is sp
 can do is in here.
 
 The daemon binds to `127.0.0.1` on the port it is started with (`--port <port>`, 1–65535), else on an ephemeral port
-the operating system assigns, which is what the application uses, and generates a key for this launch (see "Who may connect"). It
-prints `octoboardd listening on 127.0.0.1:<port> with key <key>` on stdout as its first line, the key being 64
-lower-case hex characters, and writes the port alone to `octoboardd.port` in its data directory
-(`~/.octoboard/octoboardd.port`; a failed write is only logged); the key is not in that file. It lives
-in the daemon's memory, in the owner-only key record `~/.octoboard/daemon.key`, and in the files of the sessions the
-daemon starts (see "Who may connect"). The application reads the stdout line.
+the operating system assigns, which is what the application uses, and generates a key for this launch (see "Who may
+connect"; a daemon that runs on its own also accepts an owner key that persists). It prints `octoboardd listening on
+127.0.0.1:<port> with key <key>` on stdout as its first line, the key being 64 lower-case hex characters, and writes
+the port alone to `octoboardd.port` in its data directory (`~/.octoboard/octoboardd.port`; a failed write is only
+logged); the key is not in that file. It lives in the daemon's memory, in the owner-only key record
+`~/.octoboard/daemon.key`, and in the files of the sessions the daemon starts (see "Who may connect"). The application
+reads the stdout line.
 
 ## Who may connect
 
@@ -36,12 +37,41 @@ gets `403`; one that fails the second gets `401` with a short body.
 
   Anything else, including `null` and a malformed value, is refused.
 
-**The key** keeps out what those rules let through: any page served from `localhost` (an untrusted dev server, say) and
-every Tauri application, which all share `tauri://localhost`. Each launch of the daemon makes a new one from the
-operating system's random source, and every request, on every route, has to carry it as the `key` query parameter
-(`?key=<key>`, the first `key` parameter counting) with exactly the value the daemon made; it is compared in constant
-time, and a missing, wrong or empty one is refused. The `Host` and `Origin` rules are applied first, so a request that
-fails them is told `403` whatever it carries as a key.
+**The key** keeps out what those rules let through: any page served from `localhost` (an untrusted dev server, say)
+and every Tauri application, which all share `tauri://localhost`. Each launch of the daemon makes a new one from the
+operating system's random source (the launch key), and every request, on every route, has to carry it as the `key`
+query parameter (`?key=<key>`, the first `key` parameter counting) with exactly the value the daemon made, or the
+owner key below where the daemon holds one; each is compared in constant time, and a missing, wrong or empty one is
+refused. The `Host` and `Origin` rules are applied first, so a request that fails them is told `403` whatever it
+carries as a key.
+
+**The owner key** is a second key, accepted in addition to the launch key, for the owner's browser, so that an address
+bookmarked in it keeps working across launches: a daemon that runs on its own (started without `--parent-pid`) keeps
+it in the owner-only file `~/.octoboard/owner.key`, one line of 64 lower-case hex characters, written as `daemon.key`
+is. At start such a daemon reads the file, and makes and writes a new key when it is missing or does not hold one; a
+daemon that cannot read the file (which it then leaves as it is) or cannot write it logs a warning and runs without an
+owner key. The key then persists, across launches, planned restarts and a service manager's restarts, until it is
+rotated (`POST /owner-key/rotate` below, or `octoboardd address --rotate`). The daemon the desktop application starts
+(with `--parent-pid`) never reads, creates or accepts it. It is the browser's key only: it is never written to
+`daemon.key`, a helper's key file or a holder's record, never put in any argument, environment, log or the startup
+line, and the launch key keeps every other use it has. A daemon that accepts it says so in its owner record
+`daemon.owner` by a last token, `owner-key`, after the port and the tokens that say whether it follows an application
+(`application` or `alone`) and whether a service manager starts its successor (`service` or `no-service`); it is read
+wherever it stands after the port, and a record without it is of a daemon that accepts none. An earlier build reads
+only the third token of the record and takes a word it does not know there as none, and a build that reads the service
+token anywhere after the port ignores tokens it does not know, so the token changes nothing either reads.
+
+`octoboardd address` prints the browser address with the owner key where the daemon's record carries the `owner-key`
+token and `owner.key` holds a key, and with the launch key otherwise: for a daemon that follows the application or is
+an earlier build, and for one that accepts an owner key but whose file is missing, unreadable or holds no key, where
+it says on stderr that the address lasts only until the daemon restarts and that `--rotate` makes a lasting one.
+`octoboardd address --rotate` replaces the owner key first and prints the address with the new one. For a daemon whose
+record carries the token it asks through `POST /owner-key/rotate` with the launch key from `daemon.key`, and reads the
+new key from `owner.key`; a refusal or failure is said on stderr, with exit 1 and nothing on stdout. For a daemon
+whose record lacks the token it replaces the file directly, for the next daemon started on its own, prints the address
+with the launch key and exits 0, with a note on stderr. With no daemon running it replaces the file when the data
+directory exists, creating nothing otherwise, and exits 3 as `address` does; a daemon found running once the file is
+replaced is rotated through as above.
 
 **The embedded browser UI.** A server build of the daemon carries the UI's build inside its binary and serves it
 same-origin with the routes of this document; the daemon the desktop application starts carries none and serves none.
@@ -61,13 +91,14 @@ stylesheets and fonts carry no key, so a read of one of them is let through with
 The page loaded from `http://localhost:<port>/?key=<key>` (the address `octoboardd address` prints, below) finds the
 daemon at its own origin and takes the key from its own address, adding it to every WebSocket it opens.
 
-The key is handed on only to the daemon's own user and to what the daemon, or the application that started it,
+The launch key is handed on only to the daemon's own user and to what the daemon, or the application that started it,
 starts:
 
 - The daemon records it, after its process identity, in `~/.octoboard/daemon.key`, created owner-only, and removes it
   at stop. `octoboardd address`, run as the daemon's user, prints it in the browser address
   `http://localhost:<port>/?key=<key>`, accepting it only when its identity is the running daemon's, so the owner of a
-  daemon run in the background, or as a service whose standard output is discarded, gets the key there.
+  daemon run in the background, or as a service whose standard output is discarded, gets the key there (where the
+  daemon holds an owner key, `address` prints that one instead; see "The owner key" above).
 
 - The daemon prints it on its startup line (above). The desktop application reads it there and puts it in the window's
   URL beside the port (`?port=<port>&key=<key>`), from which the UI adds it to the URL of every WebSocket it opens
@@ -3920,6 +3951,27 @@ answer. Where a host has signals, they remain a second way to the same end; wher
 planned stop it reaches the daemon only on an already-open connection, where it escalates the planned stop (see
 "`POST /planned-stop`"); the listener is closed once any stop has begun.
 
+## `GET /key-check` — is this key accepted
+
+Answers `204` with an empty body to any request that passes the guard, so a request that carries the launch key or the
+owner key gets `204`, and a wrong or missing key gets the guard's `401` (a foreign origin or host `403`). It changes
+nothing. A page uses it to tell a key the daemon refuses from a daemon it cannot reach.
+
+## `POST /owner-key/rotate` — replacing the owner key
+
+Replaces the owner key with a new one from the operating system's random source, writes it to `owner.key` and keeps it
+in memory, so that the old key is refused from the next request on. A connection already open with the old key,
+a WebSocket included, stays until it drops. It takes no body, is behind the guard like every route, and needs the
+launch key itself: the owner key passes the guard but is answered `401`, so a page that holds only the owner key cannot
+replace it. A caller reads the new key from `owner.key` (`octoboardd address --rotate` does). Answers:
+
+| Status | When |
+|---|---|
+| `204` | The key was replaced; the body is empty |
+| `401` | The request does not carry the launch key (the guard's `401` for a key that is neither) |
+| `409` | The daemon holds no owner key (it follows the desktop application, or could not read or write the file at start); JSON body `{"reason": "no_owner_key", "message": "<English prose>"}`, and nothing changes |
+| `500` | The new key could not be written; the old key stands, in memory and on disk; JSON body `{"reason": "write_failed", "message": "<English prose>"}` |
+
 ## `POST /restart` — a planned restart
 
 Asks for a planned stop (see "`POST /planned-stop`" below) after which the next daemon comes up on the same port, so a
@@ -3932,7 +3984,8 @@ maintained systemd unit passes (a unit that passes it must restart the daemon on
 `RestartForceExitStatus=75` does), or when `SYSTEMD_EXEC_PID` equals its own pid and `INVOCATION_ID` is well formed,
 which says it is a systemd service's main process; this is decided once, at start, and the choice of the next daemon
 reads it. Such a daemon exits with status 75 after its planned stop and the service
-starts the next one, which makes a new key, so a client must read the new key (the handshake line) before it reconnects.
+starts the next one, which makes a new launch key, so a client holding the launch key must read the new one (the
+handshake line) before it reconnects; a browser holding the owner key reconnects with it unchanged.
 Any other daemon starts the next one itself in the background, as `octoboardd start` would, from the path it was invoked
 by (made absolute where it was not, the last symlink left unresolved) when that names the image it runs, else from the
 running image, and hands it its own key over standard input. `--service-managed` is ignored on Windows, where no service

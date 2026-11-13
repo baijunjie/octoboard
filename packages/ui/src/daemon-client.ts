@@ -46,8 +46,9 @@ function unexpectedReply(request: RequestType, reply: Event): CodedError {
 /** `connecting` is the first attempt, before the socket has ever been open — distinct from
  * `reconnecting`, so a window that has never connected does not claim to be re-trying. `open` is a connection whose
  * hello was of this client's generation. `incompatible` is final: the
- * daemon speaks another protocol generation, and the client closed the socket for good. */
-export type ConnectionState = "connecting" | "open" | "reconnecting" | "closed" | "incompatible";
+ * daemon speaks another protocol generation, and the client closed the socket for good. `keyRefused` is final too: the
+ * daemon that served the page no longer accepts its key, so no attempt can succeed. */
+export type ConnectionState = "connecting" | "open" | "reconnecting" | "closed" | "incompatible" | "keyRefused";
 
 /**
  * The `/ws/control` connection for the lifetime of the window. Every mutating action (`request`)
@@ -73,9 +74,14 @@ export type ConnectionState = "connecting" | "open" | "reconnecting" | "closed" 
  * Every connection opens with the daemon's `hello`. A daemon of another protocol generation, or one that sends its
  * `snapshot` with no hello before it (older than the hello), is not read on a guess: the client closes for good and
  * goes `incompatible` (see "Versions and compatibility" in `apps/daemon/PROTOCOL.md`).
+ *
+ * A page the daemon itself served is given `keyCheck`, which says whether the daemon refuses the page's key. It is asked
+ * each time a connection is lost, and a refusal ends the client for good as `keyRefused`, with nothing retried: a daemon
+ * that restarted with another key refuses every attempt, and retrying only hides why.
  */
 export class DaemonClient {
   private readonly url: string;
+  private readonly keyCheck?: () => Promise<boolean>;
   private socket?: WebSocket;
   /** Bumped on every `connect()`, and when a heartbeat timeout disowns its socket; a socket's listeners no-op once
    * their generation is stale. */
@@ -111,8 +117,9 @@ export class DaemonClient {
   /** The last heartbeat id handed out, numbered apart from request ids. */
   private heartbeatSeq = 0;
 
-  constructor(url: string) {
+  constructor(url: string, keyCheck?: () => Promise<boolean>) {
     this.url = url;
+    this.keyCheck = keyCheck;
     this.connect();
   }
 
@@ -196,6 +203,7 @@ export class DaemonClient {
     // flushed on the next connection and run an action the caller was already told had failed.
     for (const queued of this.sendQueue.splice(0)) clearTimeout(queued.timer);
     if (this.closedPermanently) return;
+    this.checkKey();
     if (this.reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
       const delay = RECONNECT_BASE_DELAY_MS * 2 ** this.reconnectAttempts;
       this.reconnectAttempts += 1;
@@ -243,10 +251,25 @@ export class DaemonClient {
   /** Gives up on a daemon of another protocol generation: what it sends next cannot be read, and a reconnect would meet
    * the same daemon, so the socket is closed for good and nothing is retried. */
   private refuse(): void {
+    this.giveUp("incompatible");
+  }
+
+  /** Asks `keyCheck`, alongside the reconnect the loss schedules, whether the daemon refuses the key. An answer that
+   * arrives after another attempt began is dropped: that attempt's own loss asks again. */
+  private checkKey(): void {
+    if (!this.keyCheck) return;
+    const generation = this.generation;
+    void this.keyCheck().then((refused) => {
+      if (refused && generation === this.generation && !this.closedPermanently) this.giveUp("keyRefused");
+    });
+  }
+
+  /** Ends the client for good in the final state `state`, failing what it had outstanding. */
+  private giveUp(state: "incompatible" | "keyRefused"): void {
     this.close();
     this.failPending(t("connection.error.connectionClosed"));
     for (const queued of this.sendQueue.splice(0)) clearTimeout(queued.timer);
-    this.setConnectionState("incompatible");
+    this.setConnectionState(state);
   }
 
   /** Retries right away after the automatic reconnect budget was spent — the user-facing Retry

@@ -5,7 +5,7 @@ import { DaemonClient } from "../daemon-client";
 import type { RequestSender } from "../requests";
 import { CodedError } from "../errors/codedError";
 import { daemonMessage } from "../errors/daemonMessage";
-import { daemonWsUrl, isLocalDaemon, type DaemonAddress } from "../daemon";
+import { daemonRefusedKey, daemonWsUrl, isLocalDaemon, type DaemonAddress } from "../daemon";
 import { currentLanguage } from "../i18n/language";
 import type { Event, ClientRequestBody } from "../protocol";
 import { createImportProgressListeners, type ImportProgressEvent } from "./importProgressListeners";
@@ -58,7 +58,10 @@ export function createDaemon(address: DaemonAddress): Daemon {
   const dispatchEvents = (events: Event[]) =>
     store.setState((state) => events.reduce((current, event) => reducer(current, { kind: "event", event }), state));
 
-  const client = new DaemonClient(daemonWsUrl(address, "/ws/control"));
+  const client = new DaemonClient(
+    daemonWsUrl(address, "/ws/control"),
+    address.servedByDaemon ? () => daemonRefusedKey(address) : undefined,
+  );
   const importProgress = createImportProgressListeners();
   const notificationListeners = new Set<(notification: WindowNotification) => void>();
   const pendingNotifications: WindowNotification[] = [];

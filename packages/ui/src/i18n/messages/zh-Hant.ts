@@ -743,6 +743,11 @@ export const zhHant: Translation<"other"> = {
   "connection.incompatible.remedy.browser": "請重新載入頁面。如果問題仍然出現，請更新 {appName}，使此頁面與背景服務版本一致。",
   "connection.incompatible.quit": "結束 {appName}",
   "connection.incompatible.reload": "重新載入",
+  "connection.keyRefused.title": "此地址已無法存取背景服務",
+  "connection.keyRefused.titleNoKey": "此地址無法存取背景服務",
+  "connection.keyRefused.description": "其金鑰已變更。",
+  "connection.keyRefused.descriptionNoKey": "地址中不含金鑰。",
+  "connection.keyRefused.remedy": "請在伺服器上執行 {command}，然後開啟它印出的地址。",
   "notification.waiting.title": "等你回應",
   "statusItem.section": "{status}（{count}）",
   "statusItem.more": {

@@ -1642,32 +1642,35 @@ the window, so where the panel fills a pane (which does not scroll) or a dialog'
 region named by its heading (see "A scroller nothing else on screen scrolls takes focus itself"). An Alert is for a
 failure shown among other content.
 
-A startup screen whose whole subject failed — the daemon that failed to start, the crash screen, and the screen for a
-daemon of another protocol generation — is a page whose whole subject failed like any other: it takes the empty state's
+A startup screen whose whole subject failed — the daemon that failed to start, the crash screen, the screen for a
+daemon of another protocol generation, and the screen for a page whose key the daemon does not accept — is a page whose whole subject failed like any other: it takes the empty state's
 shape above, its heading the page's `h1`, the line under it in the application's own words and the remedy after that,
 and no error alert dialog opens over it: the page carries everything such a dialog would. It is the failure's only
 presentation, so it announces itself as it opens, the heading and the first line as `role="alert"` (the empty state's
 `announce`), inserted after the first paint by a delay of zero so that it is a change to the page rather than part of
 its first render. Nothing takes focus by itself, there being no dialog to. Tab reaches any region that scrolls, then the
-row's buttons; on the crash screen, and on the incompatible-daemon screen where it replaces a window in use, focus has
+row's buttons; on the crash screen, and on the incompatible-daemon and key-refused screens where they replace a window
+in use, focus has
 fallen to the document, as what held it went with the view it replaced and there is nothing to restore it to.
 
-Every error screen — the daemon that failed to start, the crash screen, the screen with no daemon address and the screen
-for a daemon of another protocol generation — offers Report issue, and only the last has a Quit button. Report issue is
+Every error screen — the daemon that failed to start, the crash screen, the screen with no daemon address, the screen
+for a daemon of another protocol generation and the key-refused screen — offers Report issue, and only the last has a Quit button. Report issue is
 the error alert dialog's own prefilled link (`useIssueReport`), built from the screen's own text: the daemon's message,
-the crash's stack, the no-address screen's sentence, or a fixed English sentence naming both versions and generations.
+the crash's stack, the no-address screen's sentence, a fixed English sentence naming both versions and generations, or
+one saying the daemon refused the page's key, or that the page had none.
 It reads the record names to remove from the daemon in context, so that daemon is provided around the crash boundary
 too. The row holds at most two buttons: the recovery as the primary (Try again, on the crash screen; Quit on the desktop
 or Reload in a browser, on the incompatible-daemon screen) and then Report issue, or Report issue alone where there is
-no recovery (the daemon screen). Where the platform cannot open links the link is left out and a sentence names the
+no recovery (the daemon screen, and the key-refused screen, where reloading meets the same refusal and the way out is a
+new address from the server). Where the platform cannot open links the link is left out and a sentence names the
 address to report at instead.
 
 The crash screen is the one failure that may be a bug: its remedy line already asks for the report, so the sentence
 about it (that this may be a bug) stands, first on the surface above the stack, only where there is no link, and the
 Issue is titled "Unexpected error: " followed by the first line of the error. The daemon that failed to start, the
-missing address and the daemon of another generation are failures the application knows and says what to do about, so
+missing address, the daemon of another generation and the refused key are failures the application knows and says what to do about, so
 none is called a bug: their sentence says to report it if the steps given do not resolve it, stands with the link (first
-on the surface of the daemon screen and of the incompatible-daemon screen, after the instructions on the no-address
+on the surface of the daemon, incompatible-daemon and key-refused screens, after the instructions on the no-address
 screen), and their Issues carry the screen's English heading as the title.
 
 Quit is left out of the other screens because the window still quits through Cmd+Q, the app menu, the menu bar icon's
@@ -1676,15 +1679,18 @@ the close button. Only the crash screen registers for the quit flow, since the a
 crashed and the shell cannot unregister it: it answers a quit at once, with no confirmation, asking about no sessions
 and shutting no daemon down. The incompatible-daemon screen is drawn by the application in place of its window, so it is
 the application's registration that answers, and its Quit and the shell's quit gestures alike quit at once, asking about
-no sessions, since that daemon is not talked to. Its Quit is there because quitting is its recovery: the application
-brings its own daemon up again on the next launch. The other two register nothing, so the shell quits natively. The raw
+no sessions, since that daemon is not talked to; so would a quit while the key-refused screen is drawn there, which only
+a browser shows, where there is no quit. Its Quit is there because quitting is its recovery: the application
+brings its own daemon up again on the next launch. The others register nothing, so the shell quits natively. The raw
 text — the daemon's message or the crash's stack — sits on the surface under the lines, as on any other such page. A
 screen whose only content is an explanation with no raw text in it — the startup screen with no daemon address, and its
 instructions for giving one — is the error's own surface, as the error alert dialog is, kept apart on purpose: it is no
 failure of something loaded but a configuration still to be given, so it is not the empty state's shape, and its heading
 and instructions may stand around the Alert. The heading is centred over the column, as is the Report issue button under
 the instructions; the Alert, the instructions and any list in them are start-aligned, so a list's bullets stay beside
-their text.
+their text. The no-address screen is for where a developer gives the address: a dev server, or the desktop shell. The
+production browser build opened at an address with no key shows the key-refused screen instead, with its own heading
+and line, since whoever opens it was given an address rather than configuring one.
 
 #### On the screen: an Alert when it matters, a mark at its point otherwise
 

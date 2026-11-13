@@ -33,7 +33,8 @@ scripts from this directory.
 
 Start `octoboardd` and read its port and key from the first line it prints on stdout, `octoboardd listening on
 127.0.0.1:<port> with key <key>`. The daemon makes a new key every time it starts and refuses every connection that does
-not carry it, so the UI needs both. Either:
+not carry it (a daemon run on its own also accepts its owner key, which `octoboardd address` prints), so the UI needs
+both. Either:
 
 - open `http://localhost:5174/?port=<port>&key=<key>`, or set `VITE_DAEMON_PORT` and `VITE_DAEMON_KEY`; or
 - run `OCTOBOARD_DAEMON_PORT=<port> pnpm dev` and open `http://localhost:5174/?key=<key>` (or set `VITE_DAEMON_KEY`),

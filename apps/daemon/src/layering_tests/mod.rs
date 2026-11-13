@@ -65,6 +65,7 @@ const LAYERS: &[(&str, &[&str])] = &[
             "instance_lock",
             "key_file",
             "log_file",
+            "owner_key",
             "owner_record",
             "paths",
             "processes",

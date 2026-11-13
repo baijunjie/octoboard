@@ -13,10 +13,11 @@ import { useIssueReport } from "./components/alerts/useIssueReport";
 
 /**
  * The window with no daemon connection behind it: no address known yet, the daemon failed to
- * start, the daemon speaks another protocol generation, or the UI itself crashed. It has no Quit
- * button of its own and registers nothing with the shell's exit flow; whichever caller needs either
- * brings it: the crash screen registers, and the incompatible-daemon screen, drawn inside the
- * application whose registration answers its quits, has a Quit button.
+ * start, the daemon speaks another protocol generation or does not accept the page's key (or the
+ * page has none), or the UI itself crashed. It has no Quit button of its own and registers nothing
+ * with the shell's exit flow; whichever caller needs either brings it: the crash screen registers,
+ * and the incompatible-daemon screen, drawn inside the application whose registration answers its
+ * quits, has a Quit button.
  * `message` is what the screen says: `NoAddressMessage`, or a `StartupFailure`.
  */
 export function StartupScreen({ message }: { message: React.ReactNode }): React.ReactElement {

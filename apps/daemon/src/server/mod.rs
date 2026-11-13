@@ -7,12 +7,15 @@
 //! - [`terminal`]: the terminal socket, `/ws/term/:session`.
 //! - [`callbacks`]: the HTTP routes the agents' hooks and the daemon's own helpers post to, and
 //!   the requests to stop: to shut down, to make a planned restart, and to make a planned stop.
+//! - [`keys`]: the routes about the keys a request carries: the key check and the owner-key
+//!   rotation.
 //! - [`relay`]: the same helper routes, for the requests a holder relays from its helpers.
 //! - [`ui`]: the browser UI embedded in a server-form build, the fallback for every other path.
 
 pub(crate) mod access;
 mod callbacks;
 mod control;
+mod keys;
 pub(crate) mod relay;
 mod terminal;
 #[cfg(test)]
@@ -36,6 +39,7 @@ fn router_serving(state: Arc<AppState>, files: ui::Files) -> Router {
     // cannot end up outside it. A refused request never reaches a handler or a WebSocket upgrade.
     let access = access::Access {
         key: state.key.as_str().into(),
+        owner_key: state.owner_key.clone(),
         ui: files,
     };
     routes(state)
@@ -64,6 +68,8 @@ fn routes(state: Arc<AppState>) -> Router {
         .route("/shutdown", post(callbacks::shutdown))
         .route("/restart", post(callbacks::restart))
         .route("/planned-stop", post(callbacks::planned_stop))
+        .route("/key-check", get(keys::key_check))
+        .route("/owner-key/rotate", post(keys::rotate_owner_key))
         .with_state(state)
 }
 
@@ -92,6 +98,8 @@ mod tests {
                 "POST /shutdown",
                 "POST /restart",
                 "POST /planned-stop",
+                "GET /key-check",
+                "POST /owner-key/rotate",
             ];
             for route in routes {
                 let keyed = keyed(route);

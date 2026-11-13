@@ -7,6 +7,7 @@ import { LazyLinkedFileViewer } from "./project-browser/files/LazyLinkedFileView
 import { OpenShellTerminal } from "./project-browser/RowActions";
 import { ConnectionBanner } from "./shell/ConnectionBanner";
 import { IncompatibleDaemonScreen } from "./shell/IncompatibleDaemonScreen";
+import { KeyRefusedScreen } from "./shell/KeyRefusedScreen";
 import { ContentPanel } from "./shell/ContentPanel";
 import { HandoffOnUnmount } from "./components/focus/HandoffOnUnmount";
 import { PaneResizeHandle } from "./layout/PaneResizeHandle";
@@ -269,9 +270,12 @@ export function App(): React.ReactElement {
 
   // The exit flow's frontend owner: it registers with the shell on mount, which is what makes the
   // window quittable. The main app has no "Quit" control of its own; the screen for a daemon of another
-  // protocol generation does. That daemon is not talked to, and its screen has no room for the quit's
-  // confirmation, so a quit while it is shown asks about nothing.
-  const reachable = () => store.getState().connectionState !== "incompatible";
+  // protocol generation does. That daemon, like one that refused the page's key, is not talked to, and
+  // neither screen has room for the quit's confirmation, so a quit while one is shown asks about nothing.
+  const reachable = () => {
+    const state = store.getState().connectionState;
+    return state !== "incompatible" && state !== "keyRefused";
+  };
   const exit = useAppExit({
     getSessions: () => (reachable() ? allSessions() : []),
     getShellTerminals: () => (reachable() ? Array.from(store.getState().shellTerminals.values()) : []),
@@ -481,6 +485,10 @@ export function App(): React.ReactElement {
 
   // A daemon of another protocol generation: nothing it sent is shown, whatever an earlier connection had loaded.
   if (connectionState === "incompatible") return <IncompatibleDaemonScreen onQuit={() => void exit.requestQuit()} />;
+
+  // The page's key is no longer the daemon's, so nothing can load or be retried: the same, with the way to a working
+  // address.
+  if (connectionState === "keyRefused") return <KeyRefusedScreen />;
 
   // Nothing to show until the first snapshot. The toasts belong here all the same, and so does the
   // banner with the Retry the client offers once it has given up — otherwise this screen would say

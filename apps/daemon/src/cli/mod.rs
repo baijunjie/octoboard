@@ -77,8 +77,15 @@ pub(crate) enum Command {
     Status,
     /// Print the address to open the running daemon at in a browser, its key included:
     /// `http://localhost:<port>/?key=<key>`, for an SSH port forward of that port. Exits 3 when
-    /// none runs.
-    Address,
+    /// none runs. The key is the owner key, which stays the same across launches, when the daemon
+    /// accepts one (a daemon that runs on its own), else the launch key.
+    Address {
+        /// Replace the owner key first, so the address printed is the new one's and an earlier
+        /// address stops working. Where no daemon runs, or the running one takes no owner key,
+        /// the file alone is replaced, for the next daemon started on its own.
+        #[arg(long)]
+        rotate: bool,
+    },
     /// Forward one agent hook payload to the daemon. This is what the per-session hook script
     /// execs; it is not meant to be run by hand.
     Hook {
@@ -203,7 +210,7 @@ pub(crate) fn run(command: Command) -> Result<()> {
         Command::Stop => std::process::exit(background::stop()?),
         Command::Restart => std::process::exit(background::restart()?),
         Command::Status => std::process::exit(background::status()?),
-        Command::Address => std::process::exit(background::print_address()?),
+        Command::Address { rotate } => std::process::exit(background::print_address(rotate)?),
         // The hook path must stay silent and must not pay for a runtime: it is on the agent's
         // turn critical path, several times per turn.
         Command::Hook {
@@ -369,11 +376,17 @@ mod tests {
     }
 
     #[test]
-    fn address_takes_no_option_and_no_daemon_option() {
+    fn address_takes_only_the_rotate_option_and_no_daemon_option() {
         assert!(matches!(
             parse(&["address"]).unwrap().command,
-            Some(Command::Address)
+            Some(Command::Address { rotate: false })
         ));
+        assert!(matches!(
+            parse(&["address", "--rotate"]).unwrap().command,
+            Some(Command::Address { rotate: true })
+        ));
+        assert!(parse(&["status", "--rotate"]).is_err());
+        assert!(parse(&["--rotate"]).is_err());
         assert!(parse(&["address", "--port", "7531"]).is_err());
         assert!(parse(&["--port", "7531", "address"]).is_err());
     }

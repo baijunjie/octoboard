@@ -32,6 +32,7 @@ mod log_file;
 mod loopback;
 mod mcp;
 mod messaging;
+mod owner_key;
 mod owner_record;
 mod path_links;
 mod paths;
@@ -213,6 +214,10 @@ async fn run_daemon(
         paths::handoff_dir(),
         processes::ledger::ProcessLedger::new(&paths::data_dir()),
     ));
+    // Read or made before the owner record, which says whether the daemon accepts one, is written.
+    state
+        .owner_key
+        .start(parent_pid.is_some(), &paths::data_dir());
     if parent_pid.is_some() {
         state.set_follows_application();
         // Before anything the application could write is lost to nobody reading it.
@@ -349,8 +354,12 @@ async fn run_daemon(
     // Before the line below, which is what a caller waits for, so that whoever sees the line can
     // find the daemon through this record. The record says whether a service manager starts the
     // successor, which makes a key of its own, rather than this daemon, which hands over its key.
-    let owner = owner_record::Owner::current(port, parent_pid.is_some(), takes_restart)
-        .map(|owner| owner.with_service_manager(state.service_managed()));
+    let owner =
+        owner_record::Owner::current(port, parent_pid.is_some(), takes_restart).map(|owner| {
+            owner
+                .with_service_manager(state.service_managed())
+                .with_owner_key(state.owner_key.is_held())
+        });
     match &owner {
         Some(owner) => {
             if let Err(err) = owner.record_key(&key) {

@@ -741,6 +741,11 @@ export const th: Translation<"other"> = {
   "connection.incompatible.remedy.browser": "โหลดหน้าใหม่ หากยังเกิดปัญหา ให้อัปเดต {appName} เพื่อให้หน้านี้และดีมอนเป็นเวอร์ชันเดียวกัน",
   "connection.incompatible.quit": "ออกจาก {appName}",
   "connection.incompatible.reload": "โหลดใหม่",
+  "connection.keyRefused.title": "ที่อยู่นี้เปิดดีมอนไม่ได้อีกต่อไป",
+  "connection.keyRefused.titleNoKey": "ที่อยู่นี้เปิดดีมอนไม่ได้",
+  "connection.keyRefused.description": "คีย์เปลี่ยนไปแล้ว",
+  "connection.keyRefused.descriptionNoKey": "ที่อยู่นี้ไม่มีคีย์",
+  "connection.keyRefused.remedy": "บนเซิร์ฟเวอร์ ให้เรียกใช้ {command} แล้วเปิดที่อยู่ที่แสดงขึ้นมา",
   "notification.waiting.title": "รอการตอบกลับ",
   "statusItem.section": "{status} ({count})",
   "statusItem.more": {

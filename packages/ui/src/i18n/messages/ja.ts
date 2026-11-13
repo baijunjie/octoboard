@@ -742,6 +742,11 @@ export const ja: Translation<"other"> = {
   "connection.incompatible.remedy.browser": "ページを再読み込みしてください。問題が続く場合は、{appName} を更新し、このページとデーモンのバージョンを合わせてください。",
   "connection.incompatible.quit": "{appName} を終了",
   "connection.incompatible.reload": "再読み込み",
+  "connection.keyRefused.title": "このアドレスではデーモンを開けなくなりました",
+  "connection.keyRefused.titleNoKey": "このアドレスではデーモンを開けません",
+  "connection.keyRefused.description": "キーが変更されています。",
+  "connection.keyRefused.descriptionNoKey": "アドレスにキーが含まれていません。",
+  "connection.keyRefused.remedy": "サーバーで {command} を実行し、表示されたアドレスを開いてください。",
   "notification.waiting.title": "応答待ち",
   "statusItem.section": "{status}（{count}）",
   "statusItem.more": {

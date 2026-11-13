@@ -107,11 +107,11 @@ or selected fill sits **8 px** from it. In the right pane this holds for every p
 for the file viewer's header, and a report page's content starts at it too.
 
 On the screens shown before there is anything to show — while connecting to the daemon, and the screens for a daemon
-that could not start, for a daemon of another version, for no daemon address or key being known, or for a UI that
-failed — there is no rail: under the top bar, the content panel spans the window.
+that could not start, for a daemon of another version, for an address that does not open the daemon, for no daemon
+address or key being known, or for a UI that failed — there is no rail: under the top bar, the content panel spans the window.
 
-The screens for a daemon that could not start, for a daemon of another version and for a UI that failed are each an
-empty-state failure of the whole page (see "Failures shown on the screen" in `docs/product/error-alerts.md`), centred
+The screens for a daemon that could not start, for a daemon of another version, for an address that does not open the
+daemon and for a UI that failed are each an empty-state failure of the whole page (see "Failures shown on the screen" in `docs/product/error-alerts.md`), centred
 in the content panel: a red circled `!`, a heading that is the page's top-level heading, a line under it in Octoboard's own words and the remedy
 after that, then a surface of its own holding what more there is to say — the failure's raw text, or the versions
 involved — and a centred row of at most two buttons. No error alert opens over any of them: the page is the failure's
@@ -138,24 +138,31 @@ glyph is drawn in the danger colour.
   unknown, and the daemon's is the release version its greeting gave, unknown for a daemon that sent none (see "A
   daemon of another version" in `docs/product/application-lifecycle.md`). Its row holds **Quit Octoboard** in the desktop application, or
   **Reload** in a browser, as the primary button, then **Report issue**.
+- **An address that does not open the daemon**, shown only by a page the server form's daemon served: headed that this
+  address no longer opens the daemon, with the line saying its key has changed, when the daemon refused the page's key
+  (see "The UI the daemon serves" in `docs/product/server-form.md`); headed that this address does not open the daemon,
+  with the line saying it carries no key, for a page opened at the daemon's address with no key. The remedy, the same
+  for both, is to run `octoboardd address` on the server and open the address it prints, the command written as code.
+  The surface holds only the same sentence about **Report issue** as the screen for a daemon that could not start. Its
+  row holds **Report issue** alone: reloading would meet the same refusal.
 
 On the screen for no daemon address or key being known, the heading is centred, and the rest — its alert, the
 explanation and the list in it, then the same sentence about reporting as on the screen for a daemon that could not
 start — starts at the reading edge, with **Report issue** centred under it. Its alert is titled that the daemon could
 not be connected to, with the detail under the title.
 
-**Report issue** on these four screens is a link in the shape of a button, with the external-link glyph, and opens a
+**Report issue** on these five screens is a link in the shape of a button, with the external-link glyph, and opens a
 prefilled Issue as the error alert's does (see `docs/product/issue-reports.md`). Where the desktop application cannot
 open links it is left out, and its sentence names the issue address to open in the browser instead; on the screen for
 a UI that failed, which has no such sentence otherwise, that sentence — that this may be a bug, with the address to
 report it at — comes first on the surface, above the stack trace.
 
-Of the four screens only the one for a daemon of another version has a **Quit** button, and only in the desktop
+Of the five screens only the one for a daemon of another version has a **Quit** button, and only in the desktop
 application: the window still quits through `Cmd+Q`, the application menu's Quit, the menu bar icon's quit entry
 (the notification-area icon's on Windows) and, where closing the window quits, its close button (see "Quitting" in
 `docs/product/application-lifecycle.md`). As
-the screens for a daemon that could not start, for a daemon of another version and for a UI that failed appear,
-assistive technology is told their heading and the line under it, once; nothing on them takes keyboard focus by itself.
+the screens for a daemon that could not start, for a daemon of another version, for an address that does not open the
+daemon and for a UI that failed appear, assistive technology is told their heading and the line under it, once; nothing on them takes keyboard focus by itself.
 
 ## What an open dialog, menu or popover covers
 

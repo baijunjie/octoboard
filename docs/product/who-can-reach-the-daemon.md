@@ -22,7 +22,7 @@ request whose `Host` names it by anything but a loopback address. A reverse prox
 the daemon also refuses a request whose `Origin` — which a browser sends on every WebSocket upgrade — is neither the
 application's, nor loopback, nor the same as `Host`, so a proxy would have to rewrite both headers, and the daemon
 behind it would be open to whatever the proxy lets through with nothing of its own to tell it apart but the key, which
-is one for every client and changes on every start. As in the desktop form, any program running on the server as that
+is one for every client, and which, for the browser, lasts until the owner rotates it (see "The owner key" below). As in the desktop form, any program running on the server as that
 user can do everything too, through the keys and the holder secrets above.
 
 **Another machine reaches the daemon through SSH, and only through SSH.** SSH authenticates and encrypts; the daemon
@@ -34,7 +34,7 @@ password.
 - **A browser** reaches the server form's daemon through the owner's own SSH port forward,
   `ssh -L <port>:127.0.0.1:<port> <server>`, and opens `http://localhost:<port>` (with the daemon's port fixed by
   `--port`, see "Choosing the port" in `docs/product/server-form.md`). That is a loopback address, which the checks
-  below admit once the page carries the key of the daemon's current launch, and which a browser treats as a secure
+  below admit once the page carries a key the daemon accepts, and which a browser treats as a secure
   context, so notifications and the clipboard work through it with no TLS. The owner gets that address with the key by
   running `octoboardd address` on the server as the daemon's user, however the daemon was started (see "Running in the
   background from the command line" in `docs/product/server-form.md`). A server build of the daemon serves the UI at
@@ -103,14 +103,46 @@ first alone (see "The UI the daemon serves" in `docs/product/server-form.md`):
   port. A site that makes its own name resolve to `127.0.0.1` is refused as well. Programs that are not browsers, such
   as scripts, are not subject to this check, and neither is the application's own window.
 - **The key.** A request that passed the first check is answered `401` unless it carries, as its `key` query parameter,
-  the key the daemon made for this launch. This is what keeps out the pages the first check lets through: any page on a
+  the key the daemon made for this launch — its **launch key** — or, for a daemon that runs without the desktop
+  application, the owner key (see "The owner key" below). This is what keeps out the pages the first check lets through: any page on a
   local dev server, and any other Tauri application, all of which share the application window's origin. The desktop
   application hands the key to its own window, and to the window it reloads onto a daemon started again (see "Starting
   up" in `docs/product/application-lifecycle.md`). The helpers of an agent a process holder runs carry a key of their
   own launch, issued by that holder, instead (see "Session helpers and the holder" in
   `docs/product/process-holders.md`); only where the terminals run in the daemon itself does it hand its own key to the
-  agents' helpers, beside the port. A key is good only for the daemon that made it and for a next daemon that the daemon
-  starts itself at a planned restart, which keeps it (see "Planned restart and planned stop" in
-  `docs/product/server-form.md`): after any other daemon start, a page or program holding an earlier key is refused
-  until it is given the new one. A page of the UI carries the key in its own address, and never sends that address as a
+  agents' helpers, beside the port. A launch key is good only for the daemon that made it and for a next daemon that
+  the daemon starts itself at a planned restart, which keeps it (see "Planned restart and planned stop" in
+  `docs/product/server-form.md`): after any other daemon start, a page or program holding an earlier launch key is
+  refused until it is given the new one. A page of the UI carries the key in its own address, and never sends that address as a
   referrer, so the key does not travel with a link it opens or a request it makes.
+
+## The owner key
+
+A daemon that runs without the desktop application — started by hand, by `octoboardd start` or by a service manager —
+accepts a second key beside its launch key: the **owner key**, the key of the address the owner opens in a browser. It
+is kept in `~/.octoboard/owner.key`, which only the daemon's user can read (see `docs/product/files-octoboard-owns.md`).
+Such a daemon reads it as it starts, and makes a new one and writes it there when the file is missing or holds no key;
+one that cannot read the file, or cannot write a new key, logs a warning and accepts no owner key, its launch key alone
+opening it. The daemon the desktop application starts never reads, makes or accepts an owner key.
+
+The owner key is the browser's alone. It is accepted on every request, a WebSocket included, as the launch key is, and
+so opens everything the launch key opens, except replacing the owner key itself, which needs the launch key. It is in no
+helper's key file, settings file or transcript, no holder's record, no command line, environment, log or startup line,
+and not in `daemon.key`: the launch key keeps every other use it has. `octoboardd address` prints the address with the
+owner key wherever the running daemon accepts one (see "Running in the background from the command line" in
+`docs/product/server-form.md`).
+
+**It lasts until the owner rotates it.** The owner key stays the same across every start of a daemon without the
+desktop application, a planned restart and a service manager's restart included, so an address bookmarked in a browser
+keeps opening the daemon; nothing replaces it but `octoboardd address --rotate`. This is a trade-off the server form
+makes for an address that keeps working: the key in the browser's address no longer expires with the daemon, and the
+browser keeps the address, the key with it, in its history, its bookmarks and its open tabs. A browser that syncs those
+across devices carries the key to every other device signed into it, and to the sync provider. The key is still of use
+only to whoever can also reach the daemon's loopback port — through an SSH login as the daemon's user, or as a user of
+the server itself (see "Other users of the same machine" below).
+
+**Revoking it** takes two steps: `octoboardd address --rotate`, after which the daemon refuses the old key on every new
+request and connection, and `octoboardd restart`, which drops the connections already open — a page already connected
+with the old key otherwise stays connected until its connection drops. The restart keeps every session running (see
+"Planned restart and planned stop" in `docs/product/server-form.md`); every page then has to be opened again from the
+new address. A page whose key is refused says so (see "The UI the daemon serves" in `docs/product/server-form.md`).

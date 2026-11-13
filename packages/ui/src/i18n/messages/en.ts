@@ -880,6 +880,11 @@ export const en = {
   "connection.incompatible.remedy.browser": "Reload the page. If this keeps happening, update {appName} so that this page and the daemon are the same version.",
   "connection.incompatible.quit": "Quit {appName}",
   "connection.incompatible.reload": "Reload",
+  "connection.keyRefused.title": "This address no longer opens the daemon",
+  "connection.keyRefused.titleNoKey": "This address does not open the daemon",
+  "connection.keyRefused.description": "Its key has changed.",
+  "connection.keyRefused.descriptionNoKey": "It carries no key.",
+  "connection.keyRefused.remedy": "On the server, run {command} and open the address it prints.",
 
   "notification.waiting.title": "Waiting for you",
 

@@ -749,6 +749,11 @@ export const de: Translation<"one" | "other"> = {
   "connection.incompatible.remedy.browser": "Lade die Seite erneut. Aktualisiere {appName}, falls dies weiterhin auftritt, damit Seite und Hintergrunddienst dieselbe Version haben.",
   "connection.incompatible.quit": "{appName} beenden",
   "connection.incompatible.reload": "Neu laden",
+  "connection.keyRefused.title": "Diese Adresse öffnet den Hintergrunddienst nicht mehr",
+  "connection.keyRefused.titleNoKey": "Diese Adresse öffnet den Hintergrunddienst nicht",
+  "connection.keyRefused.description": "Der Schlüssel dieser Adresse hat sich geändert.",
+  "connection.keyRefused.descriptionNoKey": "Die Adresse enthält keinen Schlüssel.",
+  "connection.keyRefused.remedy": "Führe auf dem Server {command} aus und öffne die Adresse, die der Befehl ausgibt.",
   "notification.waiting.title": "Wartet auf dich",
   "statusItem.section": "{status} ({count})",
   "statusItem.more": {

@@ -42,8 +42,8 @@ let frame: (() => void) | undefined;
 const clients: DaemonClient[] = [];
 
 /** A client that is closed when the test ends, so that no reconnect timer is left to open a socket after the stubs are gone. */
-function newClient(): DaemonClient {
-  const client = new DaemonClient("ws://test");
+function newClient(keyCheck?: () => Promise<boolean>): DaemonClient {
+  const client = new DaemonClient("ws://test", keyCheck);
   clients.push(client);
   return client;
 }
@@ -234,6 +234,68 @@ it("closes for good on a hello of another generation, after handing the hello on
   expect(states.at(-1)).toBe("incompatible");
   const refused = await client.request({ type: "shutdown" }).catch((cause: unknown) => cause);
   expect(refused).toMatchObject({ code: "connection_closed" });
+});
+
+it("ends for good as key refused when a lost connection's key check says the daemon refuses the key", async () => {
+  const keyCheck = vi.fn(() => Promise.resolve(true));
+  const client = newClient(keyCheck);
+  const states: string[] = [];
+  client.onConnectionChange((state) => states.push(state));
+  const reply = client.request({ type: "shutdown" }).catch((cause: unknown) => cause);
+  const socket = FakeSocket.last;
+  drop(socket);
+  expect(keyCheck).toHaveBeenCalledTimes(1);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(states.at(-1)).toBe("keyRefused");
+  expect(await reply).toMatchObject({ code: "connection_closed" });
+  // No attempt follows, automatic or by hand.
+  vi.advanceTimersByTime(PAST_ANY_RETRY_MS);
+  client.reconnect();
+  expect(FakeSocket.all).toHaveLength(1);
+  expect(states.at(-1)).toBe("keyRefused");
+  const refused = await client.request({ type: "shutdown" }).catch((cause: unknown) => cause);
+  expect(refused).toMatchObject({ code: "connection_closed" });
+});
+
+it("keeps reconnecting as before when the key check does not say the key was refused", async () => {
+  const keyCheck = vi.fn(() => Promise.resolve(false));
+  const client = newClient(keyCheck);
+  const states: string[] = [];
+  client.onConnectionChange((state) => states.push(state));
+  for (let attempt = 0; attempt < MAX_RECONNECT_ATTEMPTS; attempt += 1) {
+    drop(FakeSocket.last);
+    await vi.advanceTimersByTimeAsync(backoff(attempt));
+    expect(states.at(-1)).toBe("reconnecting");
+  }
+  drop(FakeSocket.last);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(states.at(-1)).toBe("closed");
+  expect(FakeSocket.all).toHaveLength(MAX_RECONNECT_ATTEMPTS + 1);
+  expect(keyCheck).toHaveBeenCalledTimes(MAX_RECONNECT_ATTEMPTS + 1);
+});
+
+it("drops a key refusal that arrives after the next attempt began", async () => {
+  let answer: (refused: boolean) => void = () => {};
+  const client = newClient(() => new Promise<boolean>((resolve) => (answer = resolve)));
+  const states: string[] = [];
+  client.onConnectionChange((state) => states.push(state));
+  drop(FakeSocket.last);
+  vi.advanceTimersByTime(backoff(0));
+  expect(FakeSocket.all).toHaveLength(2);
+  answer(true);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(states.at(-1)).toBe("reconnecting");
+});
+
+it("never asks a key check of a connection that is up or a client that was closed", async () => {
+  const keyCheck = vi.fn(() => Promise.resolve(true));
+  const client = newClient(keyCheck);
+  open(FakeSocket.last);
+  greet(FakeSocket.last);
+  client.close();
+  drop(FakeSocket.last);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(keyCheck).not.toHaveBeenCalled();
 });
 
 it("takes a snapshot with no hello before it as a daemon of another generation", () => {

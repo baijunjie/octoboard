@@ -34,7 +34,8 @@ Paths in this doc that do not start with `packages/` or `apps/` are relative to 
 in `app/`), `AppRoot.tsx` (the provider tree around `App` — platform, language, error boundary, theme, daemon, native
 sync hooks, updates — shared by `main.tsx`, the gallery frame and the website preview), `StartupScreen.tsx`,
 `ErrorBoundary.tsx`, `WelcomeScreen.tsx`; `daemon.ts` (locating the daemon from the
-page's address), `daemon-client.ts` (the WebSocket client: request correlation, reconnect, event dispatch, and the `hello` check that ends in the final connection state `incompatible` when the daemon speaks another protocol generation);
+page's address, marking a page the daemon itself served, `servedByDaemon`, recognising the production browser build opened with no key,
+`isKeylessDaemonPage`, and the `/key-check` probe, `daemonRefusedKey`), `daemon-client.ts` (the WebSocket client: request correlation, reconnect, event dispatch, and the final connection states: `incompatible`, from the `hello` check, when the daemon speaks another protocol generation, and `keyRefused`, when the daemon that served the page answers its key check with a refusal);
 `requests.ts` (the request-to-reply contract: `REPLY_TYPES` names the reply each request is answered with, `ReplyOf`
 and `RequestSender` type a request's result from it, and `looseRequestSender` adapts a stand-in for the daemon);
 `protocol.ts` (the one door to the wire types: it re-exports `protocol.generated.ts`, which the daemon's
@@ -117,7 +118,8 @@ their cascade order does not depend on which screen opened first.
 - `src/shell/` — the window chrome: `TitleBar`, `Rail` (with its quota and global-processes entries, `RailQuotaEntry`
   with its panels in `src/quota/`, and `RailProcessesEntry`, both on the shared popover wiring of `RailPanelEntry`),
   `NotificationsBell`, `ContentPanel`, `Toasts`, `ConnectionBanner`, `Scrim`, `ErrorAlerts` (the error acknowledgement
-  host), `IncompatibleDaemonScreen` (the whole window while the connection state is `incompatible`).
+  host), `IncompatibleDaemonScreen` (the whole window while the connection state is `incompatible`), `KeyRefusedScreen` (the whole
+  window while it is `keyRefused`, and, as its keyless variant, `main.tsx`'s screen for a browser page opened with no key).
 - `src/app/` — the hooks `App.tsx` is composed of, one concern each (dialog routing, console switching, session
   selection and actions, focus mode, archive view, pane layout and widths, project panels, jumps from the global process
   list to a Processes panel, announcements).

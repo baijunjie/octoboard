@@ -8,8 +8,8 @@ the user submits it on the Issue page, where the prefilled text can be edited fi
 
 The same prefill is used wherever **Report issue** is offered: the error alert, the account login failure dialog
 when its failure is unexpected (see "When a login fails" in `docs/product/logging-accounts-in.md`), and the screens
-for a UI that failed, for a daemon that could not start, for a daemon of another version and for no daemon address or
-key being known (see "The window chrome and the content panel" in `docs/product/window-layout.md`).
+for a UI that failed, for a daemon that could not start, for a daemon of another version, for an address that does not
+open the daemon and for no daemon address or key being known (see "The window chrome and the content panel" in `docs/product/window-layout.md`).
 
 ## Which failures a report describes
 
@@ -18,12 +18,14 @@ no error of its own but shows raw text under **Error details** — a daemon that
 its failure. The login failure dialog's report describes the daemon's own failure, not the sentence the dialog words
 for the user. A startup screen's report describes one failure, by its raw text: the stack trace of a UI that failed, the
 reason a daemon could not start, or a fixed English sentence saying what happened — for no daemon address or key being
-known, that the UI was given none; for a daemon of another version, the window's protocol version and its own version,
+known, that the UI was given none; for an address that does not open the daemon, that the daemon refused the key the
+page was opened with, or that the page was opened from the daemon's address with no key; for a daemon of another version, the window's protocol version and its own version,
 and the daemon's version and the protocol version it speaks, or that it sent no greeting.
 
 The failure an alert stands for as a whole is unexpected; each listed failure keeps its own classification, so a batch
 of failures can mix unexpected and actionable items. Identical entries are listed once. The failures of a daemon that
-could not start, of a daemon of another version and of no daemon address or key being known are **known** ones, which
+could not start, of a daemon of another version, of an address that does not open the daemon and of no daemon address
+or key being known are **known** ones, which
 Octoboard names and says what to do about: they are not called unexpected in their reports (see the title and the body
 below).
 
@@ -42,7 +44,8 @@ A summary from text is sanitized as described in "What is removed from a report"
 ending in an ellipsis when cut. With no summary the title is `Unexpected error` alone.
 
 A report of a known failure is titled with the screen's English heading instead, whatever language the UI is shown
-in: `The daemon failed to start`, `Octoboard and its daemon are different versions`, or `No daemon address or key`.
+in: `The daemon failed to start`, `Octoboard and its daemon are different versions`, `This address no longer opens the
+daemon` (or `This address does not open the daemon`, for a page opened with no key), or `No daemon address or key`.
 
 ## The prefilled body
 

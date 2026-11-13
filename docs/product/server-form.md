@@ -74,15 +74,27 @@ work as in the desktop application, every path, directory and account being the 
 directory browser, which lists the server's directories (see "Browsing directories" in `docs/product/projects.md`).
 What only the desktop application provides is absent, as each feature's own doc says.
 
-**A page holding an earlier key.** A daemon that starts afresh, or the next daemon a planned restart has a service
-manager start (see "Planned restart and planned stop" below), makes a new key, and a page opened from the earlier
-address carries the old one. Every connection it makes is then refused with `401`, so it behaves as a page that lost
-its daemon connection: the connection banner, whose Retry is refused in turn (see "Losing the daemon connection"
-in `docs/product/application-lifecycle.md`), and its open terminals reconnecting as after any dropped connection, every
-attempt refused (see "Reconnecting" in `docs/product/session-terminal.md`). Nothing on the page says that the key
-changed. After a planned restart the sessions keep running meanwhile; the owner runs `octoboardd address` again and
-opens the new address, which finds them there. A next daemon that the stopping daemon starts itself keeps the key, so a
-page open on it reconnects unchanged.
+**How long an address keeps opening the daemon.** The key in the address `octoboardd address` prints is the owner
+key wherever the daemon holds one (see "The owner key" in `docs/product/who-can-reach-the-daemon.md`), and it stays the
+same across a fresh start, a planned restart and a service manager's restart of the daemon, until the owner rotates it
+by hand with `octoboardd address --rotate`; so a bookmarked address keeps opening the daemon, and a page open on it
+reconnects after any of them as after any dropped connection. A page holds the key it was opened with: once the owner
+key is rotated, a page already open with the old one stays connected until its connection drops, and is refused from
+then on. An address that carries a launch key instead — the one `address` prints for a daemon that holds no owner key
+— stops opening the daemon once any daemon other than a next one it started itself has taken its place.
+
+**A page whose key the daemon refuses.** Each time the connection of a page the daemon served is lost, or an attempt
+to connect fails, the page asks the daemon whether it still accepts the page's key (`GET /key-check`), allowing it
+**5 seconds** to answer. Only an answer that the key is refused changes anything: the page then stops reconnecting for
+good, with no Retry, and the whole window shows the screen for an address that does not open the daemon, saying that
+this address no longer opens the daemon, that its key has changed, and to run `octoboardd address` on the server and
+open the address it prints (see "The window chrome and the content panel" in `docs/product/window-layout.md`). Nothing
+the page had shown stays. Reloading the page meets the same refusal; the way back is the address `address` prints. Any
+other outcome — the key accepted, no answer, a daemon of an earlier build that has no such check — leaves the page
+losing its connection as any other does: the connection banner and its Retry (see "Losing the daemon connection" in
+`docs/product/application-lifecycle.md`), and its open terminals reconnecting (see "Reconnecting" in
+`docs/product/session-terminal.md`). A page opened at the daemon's address with no key in it shows the same screen at
+once, saying instead that this address does not open the daemon because it carries no key.
 
 ## Choosing the port
 
@@ -242,9 +254,10 @@ restart cannot be told apart from no daemon at all.
   and the key proves nothing because it could not be read, for the restarted daemon or for the next one. Any other
   daemon that holds the lock once the restarted daemon has ended makes `restart` say that the daemon stopped to restart
   but another one has started since and is left running, with its pid and address, that nothing shows the restarted
-  daemon handed over to it, and exit with status 1. It prints no key: the next daemon keeps the old one where the daemon
-  starts it itself, and a successor under systemd makes a new one (see below); either way `octoboardd address` gives the
-  new daemon's. Once the restarted daemon has ended, the lock is free and the `daemon.handover` it writes as it hands
+  daemon handed over to it, and exit with status 1. It prints no key: the next daemon keeps the launch key where the
+  daemon starts it itself, and a successor under systemd makes a new one (see below), while the owner key stays the same
+  either way, so an address `octoboardd address` printed with it opens the new daemon as it did the old (see "The UI
+  the daemon serves" above). Once the restarted daemon has ended, the lock is free and the `daemon.handover` it writes as it hands
   over is not pending, no daemon is on its way: a stop asked for meanwhile cut the restart short, or the next daemon did
   not start, or it has been stopped again since, or the daemon exited for a service manager and none started the next
   one within the 3 seconds above. `restart` then says that the daemon stopped to restart, with its pid, and that no
@@ -270,14 +283,42 @@ restart cannot be told apart from no daemon at all.
   line on standard output and nothing else there, `http://localhost:<port>/?key=<key>`, and exits with status 0; the
   output is meant to be read by a program as well, such as one run over SSH. The host is `localhost`, which a browser
   treats as a secure context and which the owner's SSH port forward opens on their own machine (see
-  `docs/product/who-can-reach-the-daemon.md`). It takes no option. With no daemon running it says so on its error output
-  and exits with status **3**, creating no data directory, and waits through a planned restart, as `status` does. A
-  running daemon that no usable `daemon.owner` names — it is still starting or already stopping, or could not write the
-  record — makes it say that the address is not known, and exit with status 1. So does a daemon whose key `daemon.key`
-  does not hold, naming its pid and port: one of an earlier build, which records no key until a daemon of this build
-  takes its place, or one that could not write the record, as its log says. The key is read from a record only the
-  daemon's user can read, so another user of the machine cannot obtain it this way: their own `address` looks at their
-  own data directory, where no daemon of that owner's runs.
+  `docs/product/who-can-reach-the-daemon.md`). The key is the owner key where the running daemon's `daemon.owner` says
+  it accepts one and `owner.key` holds a key; otherwise it is the daemon's launch key, as for a daemon that follows the
+  desktop application or is of an earlier build (see "The owner key" in `docs/product/who-can-reach-the-daemon.md`).
+  Where the record says the daemon accepts an owner key but `owner.key` is missing, cannot be read or holds no key, it
+  prints the launch key's address and adds on its error output that this address lasts only until the daemon restarts,
+  and that `address --rotate` makes a lasting one. Its one option is `--rotate` (below). With no daemon running it says
+  so on its error output and exits with status **3**, creating no data directory, and waits through a planned restart,
+  as `status` does. A running daemon that no usable `daemon.owner` names — it is still starting or already stopping, or
+  could not write the record — makes it say that the address is not known, and exit with status 1. So does a daemon
+  whose launch key `daemon.key` does not hold, whether or not it accepts an owner key, naming its pid and port: one of
+  an earlier build, which records no key until a daemon of this build takes its place, or one that could not write the
+  record, as its log says. Both keys are read from files only the daemon's user can read, so another user of the
+  machine cannot obtain them this way: their own `address` looks at their own data directory, where no daemon of that
+  owner's runs.
+- **`octoboardd address --rotate`** replaces the owner key, so that every address carrying the old one stops opening
+  the daemon, and prints the address with the new one where the running daemon accepts it. It finds the daemon as
+  `address` does, waiting through a planned restart, and like it exits with status 1, rotating nothing, for a running
+  daemon that no usable `daemon.owner` names or whose launch key `daemon.key` does not hold. Otherwise:
+  - **A running daemon that accepts the owner key** is asked to replace it, by a request over loopback (`POST
+    /owner-key/rotate`) carrying the launch key from `daemon.key`, which goes only into that request, as `stop` sends it
+    on Windows. The daemon writes the new key to `owner.key` and refuses the old one from its next request on; `address
+    --rotate` prints the address with the new key and exits with status 0. A page already open with the old key stays
+    connected until its connection drops (see "The UI the daemon serves" above); to cut such pages off at once, run
+    `octoboardd restart` after rotating, which drops every page's connection while the sessions keep running. A daemon
+    that refuses the request, fails to write the new key (the old one then stands, on disk and in the daemon) or no
+    longer accepts the connection makes it say on its error output that the owner key was not rotated, and why, and
+    exit with status 1, with nothing on standard output.
+  - **A running daemon that does not accept the owner key** — it follows the desktop application, is of an earlier
+    build, or could not read or write `owner.key` as it started — is left as it is: `owner.key` is replaced directly,
+    for the next daemon started without the desktop application, and the address printed is the running daemon's
+    launch key's, with a note on the error output saying so; status 0.
+  - **With no daemon running**, `owner.key` is replaced where the data directory exists, for the next daemon started
+    without the desktop application, and the error output says so; where there is no data directory, nothing is
+    created and it says only that no daemon runs. Either way it exits with status **3**, with nothing on standard
+    output. A daemon that starts while the file is being replaced is waited for until it has recorded itself, and the
+    key is then rotated through it as above.
 
 ## Planned restart and planned stop
 
@@ -304,7 +345,7 @@ one asked for once it has begun cuts it short (see "An ordinary stop during a pl
 
 **Who starts the next daemon.** A daemon no service manager restarts starts the next one itself once it has handed
 everything over and let go of `daemon.lock`: in the background, as `octoboardd start` does, on the same port and with
-the same key, so a page or program that held the old address and key reaches the new daemon unchanged. The key goes to
+the same launch key, so a page or program that held the old address and key reaches the new daemon unchanged. The key goes to
 the next daemon on its standard input, never on its command line or in its environment, where other users of the
 machine could find it (see `docs/product/who-can-reach-the-daemon.md`). On Windows, where
 the job the daemon runs in does not let a process leave it, the next daemon is started inside that job, as
@@ -325,7 +366,7 @@ A daemon leaves the next start to a service manager only on evidence, decided on
 started for a unit (`SYSTEMD_EXEC_PID` equal to the daemon's pid, with an `INVOCATION_ID`). A daemon started by hand
 from a terminal that itself runs under systemd has neither. Such a daemon starts no next daemon: it exits with status
 **75** after its planned stop, and the service is to start the next one (see "Running as a systemd user service"
-below), which makes a new key. A service that passes `--service-managed` must restart the daemon on status 75. On
+below), which makes a new launch key. A service that passes `--service-managed` must restart the daemon on status 75. On
 Windows `--service-managed` is accepted and ignored.
 
 **What a planned stop keeps.** No session is marked *interrupted* and no session record changes; no shell terminal is
@@ -456,8 +497,8 @@ comments say how to install and enable it. What it sets:
 - A user unit runs only while its user is logged in unless **lingering** is enabled for that user
   (`loginctl enable-linger <user>`); without it the daemon stops at logout and does not start at boot.
 
-**The owner gets the key of a daemon the unit runs from `octoboardd address`**, run on the server as the unit's user
-(see "Running in the background from the command line" above): the startup line that also carries it is discarded. The
-next daemon a planned restart has the unit start makes a new key, which it records in turn, so after such a restart the
-owner runs `address` again for the new address; what a page opened from the old one shows meanwhile is under "The UI
-the daemon serves" above.
+**The owner gets the address of a daemon the unit runs from `octoboardd address`**, run on the server as the unit's
+user (see "Running in the background from the command line" above): the startup line, which carries the launch key, is
+discarded. The address carries the owner key, which the next daemon the unit starts — after a planned restart or a
+failure — accepts as well, so the same address keeps opening the daemon; the new launch key that next daemon makes is
+recorded in turn for the commands (see "The UI the daemon serves" above).

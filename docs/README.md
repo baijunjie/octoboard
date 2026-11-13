@@ -241,11 +241,12 @@ Where to start, by question:
   daemon and restarting one that dies, losing the daemon connection, a daemon of another version, closing, quitting
   and restarting, crashes and forced termination.
 - [The server form](product/server-form.md) — the daemon alone on a Linux server, reached from a browser over SSH: how
-  it starts and stops, the UI a server build serves, `--port`, the `octoboardd start/stop/restart/status/address`
-  command line (on Windows too), planned restart and planned stop, and the example systemd user unit.
+  it starts and stops, the UI a server build serves and the page whose key is refused, `--port`, the
+  `octoboardd start/stop/restart/status/address` command line (on Windows too) and `address --rotate`, planned restart
+  and planned stop, and the example systemd user unit.
 - [Who can reach the daemon](product/who-can-reach-the-daemon.md) — the daemon's access model in both forms: loopback
-  only, the launch key and where helpers keep it, SSH as the only remote path, other users of the machine, and the
-  origin and key checks.
+  only, the launch key and where helpers keep it, the owner key a browser address carries and its trade-off, SSH as
+  the only remote path, other users of the machine, and the origin and key checks.
 - [Files Octoboard owns](product/files-octoboard-owns.md) — every file Octoboard writes under `~/.octoboard` and the
   desktop app's own state files, and the database's schema version check.
 - [Process holders](product/process-holders.md) — the processes that run sessions and shell terminals so they outlive

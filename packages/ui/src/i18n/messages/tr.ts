@@ -749,6 +749,11 @@ export const tr: Translation<"one" | "other"> = {
   "connection.incompatible.remedy.browser": "Sayfayı yeniden yükleyin. Sorun sürerse sayfanın ve arka plan hizmetinin aynı sürümde olması için {appName} uygulamasını güncelleyin.",
   "connection.incompatible.quit": "{appName} uygulamasından çık",
   "connection.incompatible.reload": "Yeniden yükle",
+  "connection.keyRefused.title": "Bu adres artık arka plan hizmetini açmıyor",
+  "connection.keyRefused.titleNoKey": "Bu adres arka plan hizmetini açmıyor",
+  "connection.keyRefused.description": "Anahtarı değişti.",
+  "connection.keyRefused.descriptionNoKey": "Anahtar içermiyor.",
+  "connection.keyRefused.remedy": "Sunucuda {command} komutunu çalıştırın ve yazdırdığı adresi açın.",
   "notification.waiting.title": "Sizi bekliyor",
   "statusItem.section": "{status} ({count})",
   "statusItem.more": {

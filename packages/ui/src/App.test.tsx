@@ -66,3 +66,26 @@ it.each(["sidebar", "terminal"] as const)("opens console session settings from t
     type: "open_session", console_id: console_.id, agent: "claude", account: null, title: "Main session", terminal_appearance: "light",
   });
 });
+
+it("replaces the whole app with the key refused screen, with no retry, once the connection is key refused", async () => {
+  vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: matchesWidthQuery(media, 1440), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
+  onTestFinished(() => void vi.unstubAllGlobals());
+  const daemon = testDaemon({
+    state: snapshotState({ consoles: [consoleOf("c-main", "Main")] }),
+    request: vi.fn(async () => ({ type: "ack", id: null })) as Daemon["request"],
+    reconnect: vi.fn(),
+  });
+  const container = mountForTooltip(
+    <PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}>
+      <ThemeProvider>
+        <DaemonProvider value={daemon}><App /></DaemonProvider>
+      </ThemeProvider>
+    </PlatformProvider>,
+  );
+  expect(container.querySelector("h1")?.textContent).not.toBe("This address no longer opens the daemon");
+  await act(async () => daemon.store.setState({ connectionState: "keyRefused" }));
+  expect(container.querySelector("h1")?.textContent).toBe("This address no longer opens the daemon");
+  expect(container.textContent).toContain("Its key has changed.");
+  expect(container.querySelector('[data-region="sidebar"]')).toBeNull();
+  expect(container.querySelector("button")).toBeNull();
+});

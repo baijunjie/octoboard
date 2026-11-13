@@ -776,6 +776,11 @@ export const zhHans: Translation<"other"> = {
   "connection.incompatible.remedy.browser": "请重新载入页面。如果问题仍然出现，请更新 {appName}，使此页面与守护进程版本一致。",
   "connection.incompatible.quit": "退出 {appName}",
   "connection.incompatible.reload": "重新载入",
+  "connection.keyRefused.title": "此地址已无法访问守护进程",
+  "connection.keyRefused.titleNoKey": "此地址无法访问守护进程",
+  "connection.keyRefused.description": "其密钥已更改。",
+  "connection.keyRefused.descriptionNoKey": "地址中不含密钥。",
+  "connection.keyRefused.remedy": "请在服务器上运行 {command}，然后打开它输出的地址。",
 
   "notification.waiting.title": "等你回应",
 

@@ -16,22 +16,27 @@ installed is in `docs/product/installing-the-desktop-app.md`.
 ## Starting up
 
 In the desktop form the daemon is started as part of the application. Whoever starts it, it listens on `127.0.0.1`
-only, makes a new key for this launch (see `docs/product/who-can-reach-the-daemon.md`), and prints the port and the key
+only, makes a new key for this launch, its launch key (see `docs/product/who-can-reach-the-daemon.md`), and prints the port and the key
 on its standard output as its first line, `octoboardd listening on 127.0.0.1:<port> with key <key>`. The port is one the
 operating system assigns, unless the daemon was started with `--port` (see "Choosing the port" in
 `docs/product/server-form.md`); the desktop application never gives one, reads the port and the key from that line, and
 neither is ever fixed or guessed. The daemon also writes the port, without the key, to a file in its data directory, for
 a developer attaching to a daemon started by hand, who takes the key from that startup line, and records the key in a
-file of its own that only its user can read, from which `octoboardd address` gives it to that user (see "Running in the
-background from the command line" in `docs/product/server-form.md`, and `docs/product/files-octoboard-owns.md`). Nothing
+file of its own that only its user can read, from which `octoboardd address` gives it to that user where the daemon
+holds no owner key (see "Running in the background from the command line" in `docs/product/server-form.md`, and
+`docs/product/files-octoboard-owns.md`). Nothing
 off the machine reaches loopback except through a tunnel that ends on it, such as an SSH port forward; for the server
-form, `--port` keeps the port the same across starts, so an address can be bookmarked and a tunnel command written once.
+form, `--port` keeps the port the same across starts, and the owner key keeps the key the same (see "The owner key" in
+`docs/product/who-can-reach-the-daemon.md`), so an address can be bookmarked and a tunnel command written once.
 
 A page of the UI given no key — or no port, where its own address cannot be the daemon's — connects to nothing and
 shows a screen saying there is no daemon address or key, and how to give them to a page run against a daemon started by hand:
 `?port=<port>&key=<key>` in the page's address, `VITE_DAEMON_PORT` and `VITE_DAEMON_KEY` for the dev server, or
 `OCTOBOARD_DAEMON_PORT` to have the dev server proxy to the daemon, the key still given by `?key=` or `VITE_DAEMON_KEY`.
-The desktop application always gives its window both.
+The desktop application always gives its window both. The page the server form's daemon serves, opened at the daemon's
+address with neither a key nor a port, shows the screen for an address that does not open the daemon instead, which
+tells its user to take the address from `octoboardd address` (see "The UI the daemon serves" in
+`docs/product/server-form.md`); a page on a dev server still shows the screen above.
 
 **At launch, starting the daemon is tried up to 3 times.** An attempt fails when the daemon cannot be started, ends before it has
 reported its port and key, or has not reported them within **10 seconds**, in which case it is stopped. The next attempt
@@ -117,6 +122,12 @@ Pressing Retry turns the banner back at once to saying it is reconnecting, witho
 fails again is retried automatically as before, and Retry is offered again once those attempts are spent. Each new connection re-reads the whole state, so nothing has to be replayed by hand. A request still waiting for its
 reply when the connection closes, or when it is reopened, is never sent again on the new connection: it fails, saying
 that the connection closed, or that it was reopened before the reply arrived.
+
+**A key the daemon refuses.** A page the server form's daemon served asks the daemon, each time its connection is lost
+or an attempt fails, whether it still accepts the page's key. Once the daemon says it does not, the page stops
+reconnecting for good and shows the screen for an address that does not open the daemon in place of the banner, with no
+Retry (see "The UI the daemon serves" in `docs/product/server-form.md`). Any other answer, or none, leaves everything
+here as it is.
 
 **A connection that dies silently.** A connection can die with no close on either side — a network path that drops,
 a machine that sleeps — so each side watches the other for silence. While connected, the window sends the daemon a

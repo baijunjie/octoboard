@@ -80,7 +80,7 @@ product docs name for parts of the window:
 - **A literal to type, and program text**: the query parameter and the environment-variable names the startup screen
   gives when it has no daemon address or key to connect with (`?port=`, `?key=`, `VITE_DAEMON_PORT`, `VITE_DAEMON_KEY`,
   `OCTOBOARD_DAEMON_PORT`) and the
-  command it names, and the stack trace on the screen for a failed UI, which also keeps its left alignment and so its
+  command it names, the command the screen for an address that does not open the daemon names (`octoboardd address`), and the stack trace on the screen for a failed UI, which also keeps its left alignment and so its
   indentation.
 - **The terminal**, which is never mirrored (see "What follows the language" in `docs/product/language.md`).
 - **A report page's own text**: the page is mirrored with the panel around it, but each block of the session's text

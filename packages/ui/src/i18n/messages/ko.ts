@@ -743,6 +743,11 @@ export const ko: Translation<"other"> = {
   "connection.incompatible.remedy.browser": "페이지를 다시 로드해 주세요. 계속 발생하면 {appName}을(를) 업데이트하여 페이지와 데몬의 버전을 맞춰 주세요.",
   "connection.incompatible.quit": "{appName} 종료",
   "connection.incompatible.reload": "다시 로드",
+  "connection.keyRefused.title": "이 주소로는 더 이상 데몬에 접속할 수 없습니다",
+  "connection.keyRefused.titleNoKey": "이 주소로는 데몬에 접속할 수 없습니다",
+  "connection.keyRefused.description": "키가 변경되었습니다.",
+  "connection.keyRefused.descriptionNoKey": "주소에 키가 없습니다.",
+  "connection.keyRefused.remedy": "서버에서 {command}을(를) 실행한 뒤 출력된 주소를 열어 주세요.",
   "notification.waiting.title": "응답 대기 중",
   "statusItem.section": "{status} ({count})",
   "statusItem.more": {
