@@ -42,8 +42,7 @@ pub(super) fn native_text(label: &str) -> Cow<'_, str> {
     Cow::Borrowed(label)
 }
 
-/// Nothing to add to the builder: the menu's opening is heard through the status item's own menu
-/// tracking (`follow_menu_tracking`), not through click events.
+/// The tooltip names the application; the status item's accessible name carries its live state.
 pub(super) fn customize(builder: TrayIconBuilder<Wry>) -> TrayIconBuilder<Wry> {
-    builder
+    builder.tooltip(crate::menu::APP_NAME)
 }

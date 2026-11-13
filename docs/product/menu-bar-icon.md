@@ -54,7 +54,8 @@ the bars ever cover the eyes. Without a readable quota the bars disappear; witho
 kept awake the original octopus returns.
 
 The account, the windows drawn and the hiding rules are the same as "The selected session's quota indicator" in
-`docs/product/account-quotas.md`. On macOS the icon has **no tooltip**. With a quota, its accessible name identifies the
+`docs/product/account-quotas.md`. On macOS, resting the pointer on the icon shows the application name as its tooltip,
+regardless of the quota or keep-awake state. With a quota, its accessible name identifies the
 agent and account and, for each window drawn, the window and its whole remaining percent, in the UI's language; without one it
 names only Octoboard. While the computer is kept awake, it adds that Octoboard is keeping the computer awake — after the
 quota's words, or in place of Octoboard's name alone. Selecting another session updates the indicator even if no

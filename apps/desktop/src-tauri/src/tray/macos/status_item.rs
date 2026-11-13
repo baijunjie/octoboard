@@ -4,7 +4,7 @@
 use super::lines::picture_view;
 use crate::tray::icon;
 
-/// The whole quota phrase is the status button's accessible name; the icon has no tooltip.
+/// The whole quota phrase is the status button's accessible name; its tooltip names the application.
 pub(in crate::tray) fn set_icon_label(tray: &tauri::tray::TrayIcon, label: &str) {
     use objc2::MainThreadMarker;
     use objc2_app_kit::NSAccessibility;

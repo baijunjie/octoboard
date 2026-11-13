@@ -15,7 +15,7 @@
 //! `keep_awake_label` becomes the accessible name. A readable selected-account quota adds a capsule
 //! over the lower tentacles (`icon.rs`), with a thinner one beneath for the weekly window when the
 //! account has a 5-hour one too; the UI supplies the remaining percents and the localized label,
-//! which is the icon's accessible name (the icon has no tooltip). The octopus and capsule are
+//! which is the icon's accessible name; its tooltip names the application. The octopus and capsule are
 //! always one template image, so macOS keeps drawing them for the menu bar's light or dark look; a
 //! template image cannot carry a colour, so the dot and the eyes are views of their own laid over
 //! the button, in place of the octopus's cut-out corner and eyes (`show_layers`). On Windows the
