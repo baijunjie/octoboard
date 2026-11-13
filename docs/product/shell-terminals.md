@@ -23,11 +23,11 @@ Shell terminals are live state: they are held in memory, and only the name the u
 terminal is closed or its project removed. A shell terminal's shell runs in a process holder, not in the daemon (see
 `docs/product/process-holders.md`): an ordinary stop of the daemon ends every shell terminal (see "Closing a shell
 terminal" below), but a daemon that goes down without stopping — a crash, an internal failure, a kill — or makes a
-planned stop (see "Planned restart and planned stop" in `docs/product/server-form.md`) leaves the shells
-running, and the next daemon start restores each terminal whose project is still on record, under "What a daemon start
-takes over" in `docs/product/process-holders.md`. A restored terminal keeps its directory, worktree, place in the order
-and the name the user gave it, and its first paint is rebuilt from the output its holder kept (see "The screen of a
-terminal taken over" in the same document), or, after a planned stop, is the screen it had, restored as the stopping
+planned stop (see "Planned restart and planned stop" in `docs/product/planned-restart-and-planned-stop.md`) leaves the
+shells running, and the next daemon start restores each terminal whose project is still on record, under "What a daemon
+start takes over" in `docs/product/process-holders.md`. A restored terminal keeps its directory, worktree, place in the
+order and the name the user gave it, and its first paint is rebuilt from the output its holder kept (see "The screen of
+a terminal taken over" in the same document), or, after a planned stop, is the screen it had, restored as the stopping
 daemon saved it (see "The screen of a terminal handed over" in the same document). While its holder runs but cannot be connected to, the terminal
 is kept, its shell running unreachable, and its record says so (see "A holder that cannot be connected to" in the same
 document).
@@ -140,8 +140,8 @@ The same ending happens, without anyone being asked, to:
   `docs/product/server-form.md`). A daemon that goes down without stopping, or makes a planned stop, ends none (see "Who
   owns a shell terminal" above); once a planned stop has begun, starting or closing a shell terminal is refused with
   `daemon_shutting_down`, and what is typed into a shell terminal once it is handed over is dropped (see "While the
-  terminals are handed over" in `docs/product/server-form.md`). An ordinary stop asked for during a planned stop ends
-  every shell terminal after all (see "An ordinary stop during a planned stop" in the same document).
+  terminals are handed over" in `docs/product/planned-restart-and-planned-stop.md`). An ordinary stop asked for during a
+  planned stop ends every shell terminal after all (see "An ordinary stop during a planned stop" in the same document).
 
 If the process the shell terminals run in goes down on an internal failure — their holder, or the daemon where they run
 in it (see "When holders cannot be set up" in `docs/product/process-holders.md`) — each shell is killed with its process

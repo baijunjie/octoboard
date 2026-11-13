@@ -666,8 +666,8 @@ no request to report an issue and nothing but its acknowledgement button. It is 
 account that was used up after the confirmation opened (see "Confirming a switch" in
 `docs/product/switching-session-accounts.md`) and for a request the daemon refuses because it is shutting down
 (`daemon_shutting_down`; see "Quitting" in `docs/product/application-lifecycle.md`), as for typing a planned stop
-dropped (see "While the terminals are handed over" in `docs/product/server-form.md`), and for a second push of a project
-whose push is still running (`push_in_progress`; see "Pushing the current branch" in
+dropped (see "While the terminals are handed over" in `docs/product/planned-restart-and-planned-stop.md`), and for a
+second push of a project whose push is still running (`push_in_progress`; see "Pushing the current branch" in
 `docs/product/project-git-actions.md`), and it is the form of every failure modal (see "The failure modal" above). A
 switch confirmed onto an account turned off, or found not logged in, after the confirmation opened is not a plain alert:
 it has the remedy and the **Manage accounts** button above.

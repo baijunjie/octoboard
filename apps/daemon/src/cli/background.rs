@@ -917,8 +917,8 @@ fn stop_following(
 /// Until when a stop waits for the daemon it asks to be gone: [`STOP_WAIT`] after the first daemon
 /// it asked took the request (`taken_at`, or `took_at` for the one asked now), so that a successor
 /// that took the first request is bound by the same 60 seconds, and in any case until `latest`.
-/// For which requests count, see docs/product/server-form.md's "Running in the background from the
-/// command line" section.
+/// For which requests count, see docs/product/daemon-command-line.md's "Running in the background
+/// from the command line" section.
 fn wait_deadline(taken_at: Option<Instant>, took_at: Option<Instant>, latest: Instant) -> Instant {
     taken_at
         .or(took_at)

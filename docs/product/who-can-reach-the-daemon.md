@@ -37,8 +37,8 @@ password.
   below admit once the page carries a key the daemon accepts, and which a browser treats as a secure
   context, so notifications and the clipboard work through it with no TLS. The owner gets that address with the key by
   running `octoboardd address` on the server as the daemon's user, however the daemon was started (see "Running in the
-  background from the command line" in `docs/product/server-form.md`). A server build of the daemon serves the UI at
-  that address itself (see "The UI the daemon serves" in `docs/product/server-form.md`).
+  background from the command line" in `docs/product/daemon-command-line.md`). A server build of the daemon serves the
+  UI at that address itself (see "The UI the daemon serves" in `docs/product/server-form.md`).
 - **The macOS and Windows applications** — Status: not implemented. The application will reach a remote daemon, a
   Linux server's or another of the owner's desktops', through an SSH tunnel it builds itself. Setting a device up is
   helped by a QR code that carries the remote machine's host, SSH port, user and host key fingerprint, and no secret. A
@@ -112,9 +112,9 @@ first alone (see "The UI the daemon serves" in `docs/product/server-form.md`):
   `docs/product/process-holders.md`); only where the terminals run in the daemon itself does it hand its own key to the
   agents' helpers, beside the port. A launch key is good only for the daemon that made it and for a next daemon that
   the daemon starts itself at a planned restart, which keeps it (see "Planned restart and planned stop" in
-  `docs/product/server-form.md`): after any other daemon start, a page or program holding an earlier launch key is
-  refused until it is given the new one. A page of the UI carries the key in its own address, and never sends that address as a
-  referrer, so the key does not travel with a link it opens or a request it makes.
+  `docs/product/planned-restart-and-planned-stop.md`): after any other daemon start, a page or program holding an
+  earlier launch key is refused until it is given the new one. A page of the UI carries the key in its own address, and
+  never sends that address as a referrer, so the key does not travel with a link it opens or a request it makes.
 
 ## The owner key
 
@@ -130,7 +130,7 @@ so opens everything the launch key opens, except replacing the owner key itself,
 helper's key file, settings file or transcript, no holder's record, no command line, environment, log or startup line,
 and not in `daemon.key`: the launch key keeps every other use it has. `octoboardd address` prints the address with the
 owner key wherever the running daemon accepts one (see "Running in the background from the command line" in
-`docs/product/server-form.md`).
+`docs/product/daemon-command-line.md`).
 
 **It lasts until the owner rotates it.** The owner key stays the same across every start of a daemon without the
 desktop application, a planned restart and a service manager's restart included, so an address bookmarked in a browser
@@ -144,5 +144,6 @@ the server itself (see "Other users of the same machine" below).
 **Revoking it** takes two steps: `octoboardd address --rotate`, after which the daemon refuses the old key on every new
 request and connection, and `octoboardd restart`, which drops the connections already open — a page already connected
 with the old key otherwise stays connected until its connection drops. The restart keeps every session running (see
-"Planned restart and planned stop" in `docs/product/server-form.md`); every page then has to be opened again from the
-new address. A page whose key is refused says so (see "The UI the daemon serves" in `docs/product/server-form.md`).
+"Planned restart and planned stop" in `docs/product/planned-restart-and-planned-stop.md`); every page then has to be
+opened again from the new address. A page whose key is refused says so (see "The UI the daemon serves" in
+`docs/product/server-form.md`).

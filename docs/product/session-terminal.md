@@ -255,7 +255,7 @@ program's next copy replaces it.
   typed into it, and telling the user to check the terminal's input line before continuing; `detail` is under Error
   details. The alert is a known failure with no remedy beyond its own text, not an unexpected one. Typing refused whole
   because a planned stop has handed the terminal over is told with `daemon_shutting_down` instead (see "While the
-  terminals are handed over" in `docs/product/server-form.md`).
+  terminals are handed over" in `docs/product/planned-restart-and-planned-stop.md`).
 
 ## While the session's process cannot be reached
 

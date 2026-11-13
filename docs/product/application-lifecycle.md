@@ -23,7 +23,7 @@ operating system assigns, unless the daemon was started with `--port` (see "Choo
 neither is ever fixed or guessed. The daemon also writes the port, without the key, to a file in its data directory, for
 a developer attaching to a daemon started by hand, who takes the key from that startup line, and records the key in a
 file of its own that only its user can read, from which `octoboardd address` gives it to that user where the daemon
-holds no owner key (see "Running in the background from the command line" in `docs/product/server-form.md`, and
+holds no owner key (see "Running in the background from the command line" in `docs/product/daemon-command-line.md`, and
 `docs/product/files-octoboard-owns.md`). Nothing
 off the machine reaches loopback except through a tunnel that ends on it, such as an SSH port forward; for the server
 form, `--port` keeps the port the same across starts, and the owner key keeps the key the same (see "The owner key" in
@@ -274,16 +274,16 @@ another version (see "A daemon of another version" above).
   `docs/product/shell-terminals.md`).
 - **Once the daemon has begun to shut down, nothing new starts.** From then on — a confirmed quit or restart, or a
   termination signal (see "The daemon on its own" in `docs/product/server-form.md`), or a planned stop (see "Planned
-  restart and planned stop" in `docs/product/server-form.md`) — no session is launched, resumed, reopened, switched to
-  another account or handed off, and nothing else that needs a session to itself (a transfer of its branches, a change
-  of its owner) is begun, and no update of an agent's CLI is started (see "Updating" in
+  restart and planned stop" in `docs/product/planned-restart-and-planned-stop.md`) — no session is launched, resumed,
+  reopened, switched to another account or handed off, and nothing else that needs a session to itself (a transfer of
+  its branches, a change of its owner) is begun, and no update of an agent's CLI is started (see "Updating" in
   `docs/product/agent-cli-updates.md`): each is refused with `daemon_shutting_down`. A launch that was already past that check when
   the shutdown began is ended as soon as its process comes up, leaving the session *interrupted* like the rest. Where a
   window still shows such a refusal, it is an error alert saying that the daemon is stopping and to try again after it
   restarts, with no remedy and no **Report issue**; the wording names no operation, since a planned stop refuses more
-  than a launch (see "While the terminals are handed over" in `docs/product/server-form.md`). An automatic account
-  switch, or its restore of the session, that the shutdown cuts short tells nobody (see "When the switch fails" in
-  `docs/product/automatic-account-switch.md`).
+  than a launch (see "While the terminals are handed over" in `docs/product/planned-restart-and-planned-stop.md`). An
+  automatic account switch, or its restore of the session, that the shutdown cuts short tells nobody (see "When the
+  switch fails" in `docs/product/automatic-account-switch.md`).
 - With no session *starting*, *working*, *waiting for the user*, *dormant* or *working in background* — none at all, or
   only ones otherwise at their prompt — and no busy shell terminal, quitting is immediate and asks nothing, and a window
   closed into the background is not brought back for it.
@@ -319,9 +319,9 @@ preview frozen, as a confirmed quit leaves them. A daemon that finds the applica
 stop instead (see "Crashes and forced termination" below). The restart into an update writes neither the record nor the
 note (see "Restarting" below). A note the daemon reads while a planned stop is asked for or under way does not wait for
 the application to be gone: it asks for the ordinary stop at once, which takes the place of the planned stop or cuts it
-short (see "An ordinary stop during a planned stop" in `docs/product/server-form.md`), and a planned stop asked for
-after the note is made ordinary too. It is the one word that reaches a daemon in a planned stop on every host, since the
-daemon accepts no new connection by then.
+short (see "An ordinary stop during a planned stop" in `docs/product/planned-restart-and-planned-stop.md`), and a
+planned stop asked for after the note is made ordinary too. It is the one word that reaches a daemon in a planned stop
+on every host, since the daemon accepts no new connection by then.
 
 **The quit record** is what makes the quit hold whatever became of the note: the file `~/.octoboard/application-quit`,
 written whole, whether or not a daemon is running and whether or not it takes the note. It is left whenever the
@@ -353,10 +353,11 @@ on (see "Resuming the interrupted sessions at start" in `docs/product/archiving-
 - **During a restart into an update** the end of the session wins, and the stop is still ordinary. The application
   leaves the quit record and writes the quit note, which a restart otherwise never does, so the daemon's stop is made
   ordinary whether its planned stop is asked for, under way or still to be asked for (see "An ordinary stop during a
-  planned stop" in `docs/product/server-form.md`). It does not wait for the planned stop: within the same seconds it
-  sends the daemon the termination signal (macOS; on Windows the note is the one notice) and the shutdown request, and
-  kills a daemon still running at the end. Once the end of the session has begun, a restart that has not yet started the
-  update's installer or the new launch starts neither, and nor does a quit installing a downloaded update (Windows).
+  planned stop" in `docs/product/planned-restart-and-planned-stop.md`). It does not wait for the planned stop: within
+  the same seconds it sends the daemon the termination signal (macOS; on Windows the note is the one notice) and the
+  shutdown request, and kills a daemon still running at the end. Once the end of the session has begun, a restart that
+  has not yet started the update's installer or the new launch starts neither, and nor does a quit installing a
+  downloaded update (Windows).
 
 ### Restarting
 
@@ -400,15 +401,15 @@ is interrupted, no preview is frozen, and nothing a session started is stopped.
 - A quit gesture arriving while the restart's confirmation is open, or while the window is still working out whether to
   ask, turns it into the quit's confirmation, or the quit.
 - **Once confirmed, or at once when nothing asks**, the window asks the daemon for a planned stop (see "Planned restart
-  and planned stop" in `docs/product/server-form.md`), and Octoboard starts again; the window's size and position are
-  saved. The daemon is stopped before the new launch, since the new launch's daemon would otherwise refuse to start
-  while the old one holds the data directory (see "Starting up" above): a daemon still running **2 seconds** later is
-  sent the planned-stop request directly, which is sent once more a second later when it could not be sent, and never
-  replaced by a termination signal, which would make an ordinary stop; no such request is sent once the system has begun
-  ending the user's session (see "When the system ends the session" above). A daemon still running **30 seconds** after
-  that is killed; its sessions and shell terminals are then left running in their holders as after a daemon crash, and
-  the new version's daemon takes them over with their screens rebuilt and marked inexact (see "The screen of a terminal
-  taken over" in `docs/product/process-holders.md`).
+  and planned stop" in `docs/product/planned-restart-and-planned-stop.md`), and Octoboard starts again; the window's
+  size and position are saved. The daemon is stopped before the new launch, since the new launch's daemon would
+  otherwise refuse to start while the old one holds the data directory (see "Starting up" above): a daemon still running
+  **2 seconds** later is sent the planned-stop request directly, which is sent once more a second later when it could
+  not be sent, and never replaced by a termination signal, which would make an ordinary stop; no such request is sent
+  once the system has begun ending the user's session (see "When the system ends the session" above). A daemon still
+  running **30 seconds** after that is killed; its sessions and shell terminals are then left running in their holders
+  as after a daemon crash, and the new version's daemon takes them over with their screens rebuilt and marked inexact
+  (see "The screen of a terminal taken over" in `docs/product/process-holders.md`).
 - **The new version's daemon takes everything over.** On macOS the update has already replaced the application, and
   the new application's daemon adopts the holders, those of the previous build included, within its compatible range.
   On Windows the update's installer runs only after the planned stop, while the holders run on from their copy of the
@@ -448,9 +449,9 @@ Windows) or the Dock icon's Quit — twice — is the way out of that state.
 
 **A crash of the application, or killing it outright, leaves every session running.** The application wrote no quit
 note (see "The quit note" above), so the daemon, finding it gone, makes a planned stop (see "Planned restart and planned
-stop" in `docs/product/server-form.md`): every session and shell terminal is handed over to its process holder with its
-screen saved, and the next launch takes every one of them over, with its screen exactly as it was. Until then they run
-on in their holders.
+stop" in `docs/product/planned-restart-and-planned-stop.md`): every session and shell terminal is handed over to its
+process holder with its screen saved, and the next launch takes every one of them over, with its screen exactly as it
+was. Until then they run on in their holders.
 
 - The daemon stops by itself once the application is gone, whether or not it was asked to: with its ordinary stop
   after the quit note, with a planned stop without it. That is a watch the application asks for when it starts the
@@ -462,7 +463,7 @@ on in their holders.
   "What a daemon start takes over" in `docs/product/process-holders.md`). Only an ordinary stop — a quit, the daemon's
   shutdown request, a termination signal, or the daemon finding the application gone after its quit note — ends them,
   as "Quitting" above describes; a planned stop hands them to the next daemon instead (see "Planned restart and planned
-  stop" in `docs/product/server-form.md`).
+  stop" in `docs/product/planned-restart-and-planned-stop.md`).
   Where holders cannot be set up and the terminals run in the daemon itself, the daemon ends them on its way out,
   including when it goes down on an internal failure. An update of an agent's CLI is the exception: it runs on to
   its end however the daemon ends (see "Updating" in `docs/product/agent-cli-updates.md`).

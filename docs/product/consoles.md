@@ -292,10 +292,10 @@ stopped, over the rows of the lists that were read, and leaves the count out.
 Deleting a console is **refused while any of its sessions still has a running process**, or is being launched or
 resumed at that moment — those must be archived (or Octoboard quit, which interrupts them) first. The error names the
 reason. Once a planned stop has begun, deleting a console is refused with `daemon_shutting_down`, with nothing changed
-(see "While the terminals are handed over" in `docs/product/server-form.md`); a deletion still under way when
-the planned stop stops waiting for it deletes the records all the same but ends none of its projects' shell terminals
-and stops none of their processes, leaving them running for the next daemon, which ends the shell terminals of
-projects no longer on record.
+(see "While the terminals are handed over" in `docs/product/planned-restart-and-planned-stop.md`); a deletion still
+under way when the planned stop stops waiting for it deletes the records all the same but ends none of its projects'
+shell terminals and stops none of their processes, leaving them running for the next daemon, which ends the shell
+terminals of projects no longer on record.
 
 When it goes through, deleting a console also deletes every project association under it, every session record belonging
 to it, archived sessions included, with the last output Octoboard kept for each, and every page its sessions pushed to

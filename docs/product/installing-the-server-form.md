@@ -122,7 +122,7 @@ With `--service`, after installing the binary, the script:
   - **the service already running**: does not restart it, and says to run `octoboardd restart` to move it to the new
     version — and, when the unit changed, to the new unit, port included — with its sessions kept running, then to open
     the address `octoboardd address` prints. That planned restart has systemd start the next daemon from the new unit
-    and the new binary (see "Planned restart and planned stop" in `docs/product/server-form.md`);
+    and the new binary (see "Planned restart and planned stop" in `docs/product/planned-restart-and-planned-stop.md`);
   - **a daemon of this user running outside the service**: enables the service without starting it, and says to stop
     that daemon (`octoboardd stop`) and start the service (`systemctl --user start octoboardd`);
   - **otherwise**: starts the service, says it started on its port and to open the address `octoboardd address` prints
@@ -141,8 +141,8 @@ A newer version is installed in any of three ways, each followed by a restart:
   `docs/product/server-form-updates.md`). Both of these keep the replaced executable as `octoboardd.previous`, which
   `octoboardd update --rollback` puts back.
 - **By running the install script again**, then `octoboardd restart` (see "Running in the background from the command
-  line" in `docs/product/server-form.md`). This is the way for a daemon that does not update itself or cannot replace
-  its own executable; for the latter the browser offers the script's command to copy.
+  line" in `docs/product/daemon-command-line.md`). This is the way for a daemon that does not update itself or cannot
+  replace its own executable; for the latter the browser offers the script's command to copy.
 
 The restart is a planned restart: every session and shell terminal keeps running and the next daemon, started from the
 new binary, takes them over, on the same port for a daemon started with `octoboardd start`, and on the unit's port for

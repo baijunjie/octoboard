@@ -209,10 +209,10 @@ crosses an account switch or a model change" below), whose relaunched process ta
 interrupted session, which stays kept for the next resume.
 
 **What is queued crosses a planned restart.** A planned stop (see "Planned restart and planned stop" in
-`docs/product/server-form.md`) leaves every session running, and with it what is queued for it. From the
-moment the stop begins nothing more is written into any session; a message sent meanwhile is queued, as for a session
-that cannot take one. Once the terminals are handed over, what is still queued for a running session — each message
-whole, in its order — is saved for the next daemon (`~/.octoboard/restart-outbox.json`, see
+`docs/product/planned-restart-and-planned-stop.md`) leaves every session running, and with it what is queued for it.
+From the moment the stop begins nothing more is written into any session; a message sent meanwhile is queued, as for a
+session that cannot take one. Once the terminals are handed over, what is still queued for a running session — each
+message whole, in its order — is saved for the next daemon (`~/.octoboard/restart-outbox.json`, see
 `docs/product/files-octoboard-owns.md`), and from then on a message is refused with `daemon_shutting_down`, to be sent
 again once the daemon is back. The next daemon, once it has taken the sessions over, writes the saved messages into
 each session it took over still running the same process they were queued for, in order, each once (for the case

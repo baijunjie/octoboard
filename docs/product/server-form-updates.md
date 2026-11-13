@@ -105,7 +105,7 @@ daemon; the download goes on whether or not the page stays open, and every brows
 percentage when the archive's size is known. `octoboardd update` does the same in its own process.
 
 - **What is replaced** is the executable at the path a planned restart starts the next daemon from (see "Who starts the
-  next daemon" in `docs/product/server-form.md`), its links followed to the file itself.
+  next daemon" in `docs/product/planned-restart-and-planned-stop.md`), its links followed to the file itself.
 - **Not writable**: when the user the daemon runs as may not write to that file's directory, nothing is downloaded; the
   update is offered for installing by hand instead (see "What the browser shows" above). A check that finds an update
   says so already.
@@ -145,9 +145,10 @@ asks the daemon which sessions and shell terminals the new version would not tak
 and version, and asks the user to confirm when the restart would interrupt something. For an update installed without a
 known version or floor the daemon cannot tell, and the page asks as it does with no answer.
 
-The daemon then makes a planned restart (see "Planned restart and planned stop" in `docs/product/server-form.md`): every
-session and shell terminal keeps running and the next daemon, started from the new executable, takes them over. Under a
-service manager the daemon exits with status 75 and the manager starts the new file; the unit file is never changed.
+The daemon then makes a planned restart (see "Planned restart and planned stop" in
+`docs/product/planned-restart-and-planned-stop.md`): every session and shell terminal keeps running and the next daemon,
+started from the new executable, takes them over. Under a service manager the daemon exits with status 75 and the
+manager starts the new file; the unit file is never changed.
 
 The page that pressed **Restart now** reloads itself once the daemon is back on the installed version, or on any other
 version when that one is not known, so that it runs the new version's UI. Every other page, and that one when the daemon

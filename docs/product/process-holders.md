@@ -36,9 +36,9 @@ shell terminal (see "Quitting" in `docs/product/application-lifecycle.md`); the 
 going, and exit.
 
 **A planned stop hands everything over.** A planned restart or a planned stop (see "Planned restart and planned stop"
-in `docs/product/server-form.md`) — among them the desktop application's restart into an update, and the
-daemon finding the desktop application gone with no word of a quit, as after a crash of the application — tells each
-holder that the daemon is handing its terminals over, saves each
+in `docs/product/planned-restart-and-planned-stop.md`) — among them the desktop application's restart into an update,
+and the daemon finding the desktop application gone with no word of a quit, as after a crash of the application — tells
+each holder that the daemon is handing its terminals over, saves each
 terminal's screen once it has read all the output the holder sent it up to that point and answered the queries in it,
 and parts from every holder,
 leaving all of them running, the ones it cannot connect to included. The holder keeps what each program writes from

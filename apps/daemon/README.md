@@ -91,8 +91,10 @@ keep them running.
 
 ## Read next
 
-- [The daemon on its own: its command line, planned restart and running as a
-  service](../../docs/product/server-form.md), [who can reach it](../../docs/product/who-can-reach-the-daemon.md) and
+- [The daemon on its own: its port and running as a service](../../docs/product/server-form.md),
+  [its command line](../../docs/product/daemon-command-line.md),
+  [planned restart and planned stop](../../docs/product/planned-restart-and-planned-stop.md),
+  [who can reach it](../../docs/product/who-can-reach-the-daemon.md) and
   [the files it owns](../../docs/product/files-octoboard-owns.md)
 - [The daemon's structure: modules, CLI modes, layering and shared helpers](../../docs/structure/daemon.md)
 - [Architecture](../../docs/architecture.md) and the [documentation index](../../docs/README.md)

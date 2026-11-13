@@ -243,9 +243,15 @@ Where to start, by question:
   daemon and restarting one that dies, losing the daemon connection, a daemon of another version, closing, quitting
   and restarting, crashes and forced termination.
 - [The server form](product/server-form.md) — the daemon alone on a Linux server, reached from a browser over SSH: how
-  it starts and stops, the UI a server build serves and the page whose key is refused, `--port`, the
-  `octoboardd start/stop/restart/status/address` command line (on Windows too) and `address --rotate`, planned restart
-  and planned stop, and the example systemd user unit.
+  it starts and stops, the UI a server build serves and the page whose key is refused, `--port`, and the example
+  systemd user unit.
+- [Running in the background from the command line](product/daemon-command-line.md) — the
+  `octoboardd start/stop/restart/status/address` commands (on Windows too, and against the desktop app's daemon) and
+  `address --rotate`: how they find the daemon, waiting out a planned restart caught half-way, exit statuses, and how a
+  successor is recognised.
+- [Planned restart and planned stop](product/planned-restart-and-planned-stop.md) — handing sessions and shell
+  terminals over to their holders: how one is asked for, who starts the next daemon, `--service-managed`, what a
+  planned stop keeps, while the terminals are handed over, and an ordinary stop during a planned stop.
 - [Installing the server form](product/installing-the-server-form.md) — what the Linux server build runs on, what a
   release holds for Linux (archives, `.sha256`, `.sig`, the Linux manifests), the install script with `--service`, and
   the ways to upgrade.

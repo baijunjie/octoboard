@@ -135,8 +135,8 @@ and for Codex and Grok Build at the login kept there too. The same goes for a da
 **On Windows the throwaway home keeps only the daemon's own data apart.** There the data directory comes from
 `USERPROFILE`, so a second daemon started with its own `USERPROFILE` and a `--port` of its own leaves the user's board
 alone. `octoboardd start`, `stop` and `restart` act on the daemon of the data directory their own `USERPROFILE` names,
-so run them with the scratch `USERPROFILE` set too (the "Running in the background from the command line" section of
-`docs/product/server-form.md`). But every agent it runs, its quota readings included, gets the real user's
+so run them with the scratch `USERPROFILE` set too (`docs/product/daemon-command-line.md`, "Running in the background
+from the command line"). But every agent it runs, its quota readings included, gets the real user's
 `USERPROFILE`, `APPDATA` and `LOCALAPPDATA` back, since the daemon lays the logon's variables (`HKCU\Volatile
 Environment`) over the environment it inherited, so those agents read and write the user's own `.claude.json`, `.codex`
 and `.grok`. Treat such a run as one on the real configuration and report its residue.
