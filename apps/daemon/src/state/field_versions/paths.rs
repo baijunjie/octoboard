@@ -19,7 +19,7 @@ use crate::providers::AgentId;
 pub(crate) type Paths = BTreeMap<String, Value>;
 
 /// The settings fields `update_settings` takes as a path of their own.
-pub(crate) const SETTINGS_FIELDS: [&str; 17] = [
+pub(crate) const SETTINGS_FIELDS: [&str; 19] = [
     "auto_close_idle_shell_terminals",
     "auto_pull_repositories",
     "auto_delete_unresumable_archives",
@@ -37,6 +37,8 @@ pub(crate) const SETTINGS_FIELDS: [&str; 17] = [
     "auto_start_quota_windows",
     "default_clone_dir",
     "resume_sessions_on_start",
+    "daemon_update_check",
+    "daemon_update_channel",
 ];
 
 /// The launch fields of one agent's pair.

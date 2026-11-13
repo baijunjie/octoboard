@@ -514,3 +514,70 @@ fn a_restricted_directory_is_the_users_and_the_systems_alone() {
         assert_eq!(entries_of(&owned.join(inside)), (2, false), "{inside}");
     }
 }
+
+/// A directory the user may create files in is writable, and a path that is no directory is not.
+#[test]
+fn a_directory_is_writable_where_files_may_be_created_in_it() {
+    let dir = ScratchDir::new("fs-directory-writable");
+    assert!(directory_writable(&dir));
+    assert!(!directory_writable(&dir.join("missing")));
+    std::fs::write(dir.join("file"), b"x").unwrap();
+    assert!(!directory_writable(&dir.join("file")));
+}
+
+/// A directory the mode closes to the user is not writable, which the system answers by itself
+/// (a process that bypasses the mode, root, is told as it is).
+#[cfg(unix)]
+#[test]
+fn a_directory_closed_by_its_mode_is_not_writable() {
+    use std::os::unix::fs::PermissionsExt;
+    // SAFETY: `geteuid` has no preconditions.
+    if unsafe { libc::geteuid() } == 0 {
+        return;
+    }
+    let dir = ScratchDir::new("fs-directory-closed");
+    let closed = dir.join("closed");
+    std::fs::create_dir(&closed).unwrap();
+    std::fs::set_permissions(&closed, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let writable = directory_writable(&closed);
+    std::fs::set_permissions(&closed, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert!(!writable);
+    assert!(directory_writable(&closed));
+}
+
+/// Flushing a directory's entries is allowed for a directory and is no way to say anything of a
+/// missing one, on every host it is asked on.
+#[test]
+fn a_directory_can_be_synced_after_a_rename_in_it() {
+    let dir = ScratchDir::new("fs-sync-directory");
+    std::fs::write(dir.join("from"), b"x").unwrap();
+    std::fs::rename(dir.join("from"), dir.join("to")).unwrap();
+    sync_directory(&dir).unwrap();
+}
+
+/// The file staged for a replacement is made new, never over what is at its name, and takes the
+/// target's permissions where the host has any.
+#[test]
+fn a_staged_file_is_new_and_never_follows_what_is_at_its_name() {
+    let dir = ScratchDir::new("fs-create-new-like");
+    let target = dir.join("target");
+    std::fs::write(&target, "old").unwrap();
+    let staged = dir.join("staged");
+    drop(create_new_like(&staged, &target).expect("staged"));
+    assert!(
+        create_new_like(&staged, &target).is_err(),
+        "a file there is refused"
+    );
+    std::fs::remove_file(&staged).unwrap();
+    #[cfg(unix)]
+    {
+        let elsewhere = dir.join("elsewhere");
+        std::fs::write(&elsewhere, "kept").unwrap();
+        crate::test_support::symlink(&elsewhere, &staged).unwrap();
+        assert!(
+            create_new_like(&staged, &target).is_err(),
+            "a link there is refused"
+        );
+        assert_eq!(std::fs::read_to_string(&elsewhere).unwrap(), "kept");
+    }
+}

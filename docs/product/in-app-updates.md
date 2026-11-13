@@ -1,14 +1,17 @@
 # In-app updates
 
-The desktop application, on macOS and on Windows, updates itself: it looks for a newer version on the release channel the user follows, tells the
-user when it finds one, downloads and installs it only when the user asks, and the new version takes effect the next
-time Octoboard starts. Nothing is ever installed, and Octoboard never restarts, without the user asking. A browser has
-none of this: no checks, no update notice, and no Updates or Update channel rows in Settings (see
-`docs/product/about-octoboard.md`).
+The desktop application, on macOS and on Windows, updates itself: it looks for a newer version on the release channel
+the user follows, tells the user when it finds one, downloads and installs it only when the user asks, and the new
+version takes effect the next time Octoboard starts. Nothing is ever installed, and Octoboard never restarts, without
+the user asking. Settings' Updates section, where its update is followed and its checks and channel chosen, is in
+`docs/product/update-settings.md`. A browser updates nothing itself: a browser open on a daemon of the server form that
+updates itself shows that daemon's update instead, in the same notice and Settings section (see
+`docs/product/server-form-updates.md`), and one open on any other daemon shows none.
 
 ## Update channels
 
-There are two channels, chosen in Settings' About section (see "The Updates and Update channel rows" below):
+There are two channels, chosen in Settings' Updates section (see "Update channel" in
+`docs/product/update-settings.md`):
 
 - **Stable** receives only stable releases (with one exception until the first stable release, below);
 - **Beta** receives every release, stable ones included.
@@ -39,11 +42,12 @@ configuration export (see "Which settings travel" in `docs/product/settings-in-a
 whichever build runs: Stable chosen on a beta build stays Stable. Storage that holds no choice, has been cleared, or
 holds anything but Stable or Beta holds no choice, and the build's default applies.
 
-**Switching the channel** withdraws at once an update found on the other channel, with its notice, and checks the new
-channel straight away. An update already downloading is the exception: it is kept and installs as usual. A check still
-running on the old channel when the channel changes says nothing about the new one: its result is dropped and the new
-channel is checked in its place. The check a switch starts reports a failure the way an automatic check does, without an
-alert (see "When something fails" below).
+**Switching the channel** withdraws at once an update found on the other channel, with its notice, and, while the
+automatic checks are on (see "When the application checks" below), checks the new channel straight away; with them off
+it starts no check. An update already downloading is the exception: it is kept and installs as usual. A check
+still running on the old channel when the channel changes says nothing about the new one: its result is dropped and the
+new channel is checked in its place. The check a switch starts reports a failure the way an automatic check does,
+without an alert (see "When something fails" below).
 
 ## Where updates come from
 
@@ -82,8 +86,9 @@ manifests are judged on their own. The `updater` release is itself marked a prer
 the repository's latest release.
 
 A release has three platforms: macOS, Windows and Linux, the last being the server form, whose manifests,
-`beta-linux.json` and `stable-linux.json`, follow the same rules but are read by no application (see "What a release
-holds" in `docs/product/installing-the-server-form.md`). The platforms share one version, and by default a release
+`beta-linux.json` and `stable-linux.json`, follow the same rules and are read by the server form's daemon rather than by
+an application (see "What a release holds" in `docs/product/installing-the-server-form.md` and
+`docs/product/server-form-updates.md`). The platforms share one version, and by default a release
 publishes all three together. A version can be published for some platforms only (a platform left out of its tag, or
 run by hand later for another one): only those platforms' manifests are written, so the other platforms' users are
 offered nothing for that version until it is published for them. Each version is one release `desktop-v<version>` —
@@ -97,9 +102,11 @@ Once a release is published, the website is published again, so that its downloa
 
 ## When the application checks
 
-- **Automatically**: the first time **30 seconds** after Octoboard starts, so it never competes with the window
-  opening, and then every **6 hours** for as long as it runs, whichever screen the window shows.
-- **On request**: **Check for updates** in Settings' About section or the menu bar icon's menu (see "The menu bar
+- **Automatically**, while **Check for updates automatically** is on, as it is to begin with (see "Check for updates
+  automatically" in `docs/product/update-settings.md`): the first time **30 seconds** after Octoboard starts, so it
+  never competes with the window opening, and then every **6 hours** for as long as it runs, whichever screen the window
+  shows; and at once when the switch is turned on. With the switch off no check is made but on request.
+- **On request**: **Check for updates** in Settings' Updates section or the menu bar icon's menu (see "The menu bar
   update entry" below).
 
 A check does nothing while another check or a download is under way, and nothing once an update is installed and waits
@@ -129,8 +136,8 @@ uses a neutral update label; Settings still shows the pending restart, and no fu
 restarts.
 
 Choosing the entry brings the main window to the front, restoring it from the background or from being minimized,
-and opens Settings on its About section, where the update controls are (see "The Updates and Update channel rows"
-below). Settings already open on another section moves to About. Before the UI is ready, or while another modal or
+and opens Settings on its Updates section (see `docs/product/update-settings.md`). Settings already open on another
+section moves to Updates. Before the UI is ready, or while another modal or
 an action menu is open, only the window is brought back; opening Settings and checking are both skipped rather than
 deferred.
 
@@ -264,61 +271,7 @@ behind **Error details**:
 
 None of these asks for a report or offers **Report issue**.
 
-An automatic check that fails, including the one a channel switch starts, opens no alert: Settings' Updates row shows a
-warning mark saying that the last check did not finish (see "The Updates and Update channel rows" below), and the next
-check tries again. A check or install refused because the application is already busy with one is not a failure and says
-nothing.
-
-## The Updates and Update channel rows
-
-Settings' About section holds two rows for updates, in the desktop application only (see
-`docs/product/about-octoboard.md`).
-
-**Updates** says in a sentence where the application's updates stand, the first that applies of:
-
-1. an update installed, which takes effect after Octoboard restarts — on Windows, an update downloaded, which is
-   installed when Octoboard quits or restarts (see "Installed, waiting for a restart" above) — naming its version where
-   it is known;
-2. a version being downloaded;
-3. a check under way;
-4. a newer version available, with the version running;
-5. the version running being the latest on the channel;
-6. otherwise — before any check, or after a check that did not finish — only the version running.
-
-Beside it one button moves the update on: **Check for updates** until a newer version is found, showing a pending
-spinner while a check runs; then **Download and install**, showing the spinner while a check or the download is under
-way; then **Restart now** once the update is installed, showing the spinner as "Restarting to apply an update" above
-says.
-
-Before that button, a **What is new** link, drawn as a button, opens in the browser the GitHub release page of the
-version the row's sentence is about, `https://github.com/baijunjie/octoboard/releases/tag/desktop-v<version>` (see
-"Where updates come from" above): the newer version while one is available or downloading, the installed version once
-an update is installed, and otherwise the version running. There is no link while the version running is not yet
-known, nor for an installed update whose version is not known.
-When the link goes away while it holds keyboard focus — the row turning to an installed update of unknown version —
-focus moves to the row's button.
-
-The row's controls are, in order: What is new, the warning mark described below when it is shown, and the row's
-button.
-
-**After a check that did not finish**, pressed here or automatic, while no newer version is known and nothing is under
-way, an amber warning mark stands in the row before **Check for updates**, named for the last update check; the row's
-sentence stays the version running. Its popover says that the last check for updates did not finish, that it is not
-known whether a newer version exists, and that pressing **Check for updates** tries again; it has no button of its own,
-the row's button being the retry, and it opens as a row's mark does (see "Failures, warnings and notes marked at their
-point" in `docs/product/error-alerts.md`). The mark goes once a check starts; keyboard focus on the mark or in its
-popover then goes to **Check for updates**.
-
-While Settings is open, once the state of the update changes — through a press here, a check that was already running
-when Settings opened ending, a download started from the notice finishing, or an automatic check — every change of the
-sentence is announced, except the sentence of a check under way, which the button's pending state already says, and
-the sentence after a check that did not finish. That the last check for updates did not finish is announced instead,
-except when the check that did not finish was the one **Check for updates** started here, whose failure its error
-alert says. A failed automatic check is announced even after an earlier check was pressed. What the row said
-when Settings opened is not announced.
-
-**Update channel** chooses between **Stable** and **Beta**, listed in that order (see "Update channels" above), with a
-line saying that Stable gets only stable releases and Beta every release, stable ones included. With nothing chosen it
-shows the channel the running build follows by default (Beta on a prerelease build, Stable otherwise); showing it saves
-nothing, and neither does picking the channel already shown: only switching to the other one saves a choice. So a beta
-user who wants to stay on Beta past a stable release switches to Stable and back.
+An automatic check that fails, including the one a channel switch starts, opens no alert: the Version row of Settings'
+Updates section shows a warning mark saying that the last check did not finish (see "The Version row" in
+`docs/product/update-settings.md`), and the next check tries again. A check or install refused because the application
+is already busy with one is not a failure and says nothing.

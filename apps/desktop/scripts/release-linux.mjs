@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // `pnpm release` on Linux: the daemon on its own (the server form) for the host's architecture, as a release archive.
-// Builds the UI, then the release daemon embedding it for the architecture's musl target, statically linked so that one
+// Builds the UI, then the release daemon embedding it (`embedded-ui`) and able to update itself (`self-update`, which
+// only this build turns on) for the architecture's musl target, statically linked so that one
 // binary runs on any distribution, checks that it is static, and packs it with the example systemd user unit and the
 // license into `target/linux-release/octoboardd_<version>_linux_<arch>.tar.gz`, with a `.sha256` beside it; then signs
 // the archive with the update key, unless `--no-sign-update` leaves that to `sign-update`.
@@ -59,7 +60,7 @@ if (!env[ccVariable]) {
 }
 if (installed("rustup")) run("rustup", ["target", "add", target]);
 if (!options["prebuilt-ui"]) run("pnpm", ["--filter", "@octoboard/ui", "build"]);
-run("cargo", ["build", "--release", "--locked", "-p", "octoboardd", "--features", "embedded-ui", "--target", target]);
+run("cargo", ["build", "--release", "--locked", "-p", "octoboardd", "--features", "embedded-ui,self-update", "--target", target]);
 
 const targetDir = process.env.CARGO_TARGET_DIR ? path.resolve(repoRoot, process.env.CARGO_TARGET_DIR) : path.join(repoRoot, "target");
 const binary = path.join(targetDir, target, "release", "octoboardd");

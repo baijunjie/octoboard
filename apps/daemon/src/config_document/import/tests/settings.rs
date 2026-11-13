@@ -1942,3 +1942,42 @@ async fn a_version_1_and_a_version_2_document_carry_every_section_they_had() {
         );
     }
 }
+
+/// How a daemon updates itself is a matter of the machine it runs on: an export never carries the
+/// update check or its channel, and an import of one leaves them as this machine has them.
+#[tokio::test]
+async fn the_daemons_update_settings_stay_out_of_the_configuration() {
+    let (source, _source_dir) = app_state("import-daemon-update-source");
+    source.store.set_daemon_update_check(false).unwrap();
+    source
+        .store
+        .set_daemon_update_channel(crate::protocol::DaemonUpdateChannel::Beta)
+        .unwrap();
+    let full = export_everything(&source);
+    assert!(
+        !full.to_string().contains("daemon_update"),
+        "the export names an update setting: {full}"
+    );
+    assert!(!full.to_string().contains("\"beta\""));
+
+    let (target, _target_dir) = app_state("import-daemon-update-target");
+    apply(
+        &target,
+        &full,
+        Vec::new(),
+        ApplyOptions {
+            settings: carried_sections(&full),
+            accounts: None,
+            consoles: true,
+            clone_dir: true,
+            agents: None,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(target.store.daemon_update_check().unwrap());
+    assert_eq!(
+        target.store.daemon_update_channel().unwrap(),
+        crate::protocol::DaemonUpdateChannel::Stable
+    );
+}

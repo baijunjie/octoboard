@@ -11,6 +11,15 @@ export const updateChannel = createPersistedPreference<UpdateChannel | undefined
   (value) => value ?? null,
 );
 
+/** Whether the application looks for updates by itself (a first check after launch, then periodically), as the user chose
+ * in Settings; on until switched off. Only the desktop application keeps it here: a daemon that updates itself holds the
+ * same switch as its own setting. Anything stored but `false` is on. */
+export const updateAutoCheck = createPersistedPreference<boolean>(
+  PREFERENCE_KEYS.updateAutoCheck,
+  (raw) => raw !== "false",
+  (value) => (value ? null : "false"),
+);
+
 /** Whether `version` is a prerelease: a version with a prerelease suffix (`0.1.0-beta.3`), build metadata aside. */
 export function isPrerelease(version: string): boolean {
   return version.split("+")[0].includes("-");

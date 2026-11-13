@@ -126,7 +126,7 @@ export function useSettingsDialog({
 
   const requestUpdatesRef = useLatest(() => {
     if (!ready || otherModalOpen || isActionMenuOpen()) return;
-    openSettingsAt("about");
+    openSettingsAt("updates");
     if (!updates?.getState().update) void updates?.check("manual");
   });
   useEffect(() => statusItem?.onUpdatesRequested?.(() => requestUpdatesRef.current()), [statusItem]);

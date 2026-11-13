@@ -7,10 +7,12 @@
 //! - `cache.rs` keeps the last one and decides who may be served it, under one policy for an agent
 //!   launch and another for callers on someone else's schedule.
 //! - `resolve.rs` finds a binary on a snapshot's `PATH`, as what starts it.
+//! - `proxy.rs` reads the proxy a snapshot names for a host.
 //!
 //! This file is the module's face: callers name these functions, not the files.
 
 mod cache;
+mod proxy;
 mod resolve;
 mod snapshot;
 
@@ -20,6 +22,7 @@ use anyhow::Result;
 
 use crate::protocol::{error_code, CodedError};
 
+pub use proxy::proxy_for;
 pub use resolve::{resolve_binary, resolve_program};
 pub use snapshot::is_filtered;
 

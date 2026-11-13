@@ -2,7 +2,7 @@
 //! the app is out of the Dock (`background.rs`). A click on the icon, left or right, opens its menu,
 //! which lists the live sessions the UI hands over (`set_tray_menu`) and its submenus (the agents'
 //! quotas), then Updates, Open and Quit; the window comes back through Open or by choosing a
-//! session, which also tells the UI which one. Updates brings it back at Settings’ About section.
+//! session, which also tells the UI which one. Updates brings it back at Settings’ Updates section.
 //! Quit goes through the same exit flow as Cmd+Q, so it still asks while a session is running.
 //!
 //! The icon itself has two attention looks: the octopus, and the octopus with an orange dot in its

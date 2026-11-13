@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 
 import { useLatest } from "../components/hooks/useLatest";
+import type { CodedError } from "../errors/codedError";
+import { isDaemonRefusal } from "../errors/codes";
 import { usePlatform } from "../platform/react";
 import type { Session, ShellTerminal } from "../protocol";
 import { isLive, sessionIsWorking } from "../sessions/sessionStatus";
-import { reportDaemonExit, reportExitFailure } from "./exitFailure";
+import { reportDaemonExit, reportDaemonRestartFailure, reportExitFailure } from "./exitFailure";
 
 /** How long `doQuit` waits for `begin_quit`, and for `shutdown`'s or `planned_stop`'s `ack`, before giving up on it. The
  * daemon drops the serving future as soon as it starts stopping, so the ack usually never arrives at all — that
@@ -53,6 +55,18 @@ async function withinTimeout<T>(promise: Promise<T>, ms: number): Promise<T | un
   return Promise.race([promise.catch(() => undefined), new Promise<undefined>((resolve) => setTimeout(resolve, ms))]);
 }
 
+/** Sends the restart of the daemon this page is served by and returns the daemon's refusal of it, if it gave one. The
+ * daemon exits as it starts restarting, so its answer usually never comes, and a request cut short by that (the
+ * connection closing), or not answered in time, is the restart under way, not a failure: only a refusal the daemon itself
+ * gave (`isDaemonRefusal`) is one. */
+async function sendDaemonRestart(send: () => Promise<unknown>): Promise<CodedError | undefined> {
+  const refusal = send().then(
+    () => undefined,
+    (error: unknown) => (isDaemonRefusal(error) ? error : undefined),
+  );
+  return Promise.race([refusal, new Promise<undefined>((resolve) => setTimeout(resolve, SHUTDOWN_TIMEOUT_MS))]);
+}
+
 /** What holds a quit up: sessions in the middle of something (at work, or waiting for the user), and shell terminals
  * running something, which the quit would end. An idle or exited shell does not count. */
 export interface QuitHolders {
@@ -98,6 +112,11 @@ interface UseAppExitOptions {
    * answer that is everything running, and not known) would interrupt. Without it, or when it fails or takes too long,
    * a restart asks about everything that may be interrupted. */
   checkHandover?: (holderFloor: string | null, targetVersion: string | null) => Promise<HandoverCheck>;
+  /** Sends `restart_daemon`, which restarts the daemon this page is served by into the update it installed (`targetVersion`
+   * is its version, `null` where unknown). Where there is no shell to relaunch (a browser tab) it is what a confirmed
+   * restart does in place of the shell's, after the same confirmation; with a shell, the shell's way is always taken. It
+   * is called only once the restart is going ahead. */
+  restartDaemon?: (targetVersion: string | null) => Promise<unknown>;
 }
 
 export interface UseAppExitResult {
@@ -162,10 +181,19 @@ export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
   // Counts the requests, so one waiting on the daemon's answer gives way to a gesture that arrived meanwhile.
   const requestCount = useRef(0);
 
+  // The version of the update a restart that is being confirmed goes to, for the restart that follows the confirmation.
+  const restartTarget = useRef<string | null>(null);
+
   const doQuit = async (restart: boolean): Promise<void> => {
-    // Without a shell that owns the process there is no quit, and a daemon this page merely
-    // connects to must not be shut down by it.
-    if (!exit) return;
+    const { restartDaemon } = optionsRef.current;
+    if (!exit) {
+      // Without a shell that owns the process there is no quit, and a daemon this page merely connects to must not be
+      // shut down by it; a restart of a daemon that updated itself is the one thing a page may ask for.
+      if (!restart || !restartDaemon) return;
+      const refusal = await sendDaemonRestart(() => restartDaemon(restartTarget.current));
+      if (refusal !== undefined) reportDaemonRestartFailure(refusal);
+      return;
+    }
     quittingRef.current = true;
     const { requestShutdown, requestPlannedStop } = optionsRef.current;
     const stop = restart ? requestPlannedStop : requestShutdown;
@@ -218,15 +246,16 @@ export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
   };
 
   const request = async (restart: boolean, holderFloor: string | null = null, targetVersion: string | null = null): Promise<void> => {
-    if (!exit) return;
+    if (!exit && !(restart && optionsRef.current.restartDaemon)) return;
     const requestId = ++requestCount.current;
+    restartTarget.current = targetVersion;
     // Re-invoking `frontend_exit_heartbeat` here, on every quit gesture this webview actually
     // receives (not only when the user cancels the dialog), is what clears the Rust side's
     // `FORCE_QUIT_WINDOW` debounce: it is itself proof this webview is alive and answering, so
     // the next gesture should wait for it rather than treat this one as a wedge. A wedged webview
     // never reaches this line at all, so the debounce stays armed and the escape hatch in
     // `should_let_quit_through` (`apps/desktop/src-tauri/src/exit.rs`) still fires for it.
-    await exit.heartbeat().catch(() => {});
+    await exit?.heartbeat().catch(() => {});
     // A restart always asks the daemon what it would interrupt, whatever a quit would ask about: an incompatible
     // holder ends an idle session as much as a busy one.
     const { holders, sessions, detail, keepsRest } = restart && optionsRef.current.getSessions

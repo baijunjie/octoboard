@@ -46,6 +46,7 @@ mod records;
 mod removal_safety;
 mod request_guard;
 mod revert_gate;
+mod self_update;
 mod server;
 mod session;
 mod session_git_hooks;
@@ -398,6 +399,8 @@ async fn run_daemon(
     // put that cost on every application launch, and clients are served before it lands either way
     // (see `apps/daemon/src/agents/availability.rs`).
     agents::availability::spawn_determine(state.clone());
+    // The server form's update: checks on a schedule where this build and host carry one.
+    self_update::start(&state, parent_pid.is_some(), &paths::data_dir());
     records::collector::spawn(&state);
     accounts::quotas::spawn(&state);
     coordinator::archive_cleanup::spawn(&state);

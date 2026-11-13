@@ -84,6 +84,7 @@ const LAYERS: &[(&str, &[&str])] = &[
             "project_git",
             "removal_safety",
             "revert_gate",
+            "self_update",
             "terminal",
         ],
     ),

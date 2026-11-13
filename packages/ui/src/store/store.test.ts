@@ -217,6 +217,28 @@ it("keeps each agent's CLI status from the snapshot and the agent_cli_status_upd
   expect([...daemon.store.getState().agentCliStatuses.keys()]).toEqual(["claude", "codex"]);
 });
 
+it("keeps the daemon's own update from the snapshot and from daemon_update_status_updated, null where the daemon has none", () => {
+  const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
+  expect(daemon.store.getState().daemonUpdate).toBeNull();
+  const idle = { phase: "idle" as const, available: null, progress: null, installed: null, last_check: null, install: null, manual: null, updated_from: null };
+  const snapshotOf = (daemon_update: object | null) => ({
+    type: "snapshot", hosts: [], consoles: [], projects: [], sessions: [], trusted_directories: [], settings: {}, git_statuses: [],
+    agent_availability: [], account_quotas: [], account_logins: [], account_sharing: [], agent_cli_statuses: [], daemon_update, home_dir: null, host: { os: "linux", path_style: "unix", file_links: false, trash: "none", settings: "none", keep_awake: false }, keep_awake_held: false, shell_terminals: [],
+  }) as unknown as Event;
+  client.onEvents!([snapshotOf(idle)]);
+  const held = daemon.store.getState().daemonUpdate;
+  expect(held).toEqual(idle);
+  client.onEvents!([snapshotOf({ ...idle })]);
+  expect(daemon.store.getState().daemonUpdate).toBe(held);
+  const downloading = { ...idle, phase: "downloading" as const, available: { version: "0.2.0", notes: null, holder_floor: null, channel: "stable" as const }, progress: { downloaded: 1, total: 10 } };
+  client.onEvents!([{ type: "daemon_update_status_updated", status: downloading }]);
+  expect(daemon.store.getState().daemonUpdate).toEqual(downloading);
+  client.onEvents!([{ type: "daemon_update_status_updated", status: { ...downloading } }]);
+  expect(daemon.store.getState().daemonUpdate).toEqual(downloading);
+  client.onEvents!([snapshotOf(null)]);
+  expect(daemon.store.getState().daemonUpdate).toBeNull();
+});
+
 it("remembers the CLI updates this window asked for with the update each status held, and keeps after a snapshot one it shows running", () => {
   const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
   const status = (agent: "claude" | "codex" | "grok", update: object | null) => ({ agent, installed_version: "1.0.0", install_method: "npm", latest_version: "1.0.1", latest_error: null, latest_detail: null, checked_at: 1, update });

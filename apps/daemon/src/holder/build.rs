@@ -6,6 +6,11 @@
 //! stops on it, while one beside a copy replaces every file it ships. A project session's git hooks
 //! are the exception: a job the session leaves running outlives the copy, which goes once no holder
 //! runs from it, so they run the installation's own executable (`crate::session_git_hooks`).
+//!
+//! The copy is made at the first holder start, which can come after a self-update replaced the
+//! installed file (`crate::self_update`), so the running executable's bytes are read from the open
+//! image, not from its path (`platform::proc::image_source`): a copy of the new build under the old
+//! build's id would run the wrong holder.
 
 use std::ffi::OsString;
 use std::io::{self, Read};
@@ -82,7 +87,14 @@ impl Builds {
     /// installation, which on Windows keeps the installer from replacing the files in use.
     pub fn run_from<T>(&self, build_id: &str, source: &Path, start: impl FnOnce(&Path) -> T) -> T {
         let _serial = self.serial.lock().unwrap_or_else(|err| err.into_inner());
-        let exe = match copy_build(&self.dir, build_id, source, build_files::companions()) {
+        let exe_from = crate::platform::proc::image_source(source);
+        let exe = match copy_build(
+            &self.dir,
+            build_id,
+            source,
+            &exe_from,
+            build_files::companions(),
+        ) {
             Ok(exe) => exe,
             Err(err) => {
                 tracing::warn!(%err, build = build_id, "copying the build failed; the holder runs from the installation");
@@ -161,7 +173,9 @@ fn builds_in_use(dir: &Path, registry_dir: &Path) -> Vec<OsString> {
 }
 
 /// The executable of the copy of `build_id` in `dir`, made from `source` when there is none: the
-/// executable and, of `companions` (paths beside it), those that are there. The copy is made in a
+/// executable, whose bytes are read from `exe_from` (`source` itself, or the open image where the
+/// file at `source` is no longer the build being copied) and, of `companions` (paths beside
+/// `source`), those that are there. The copy is made in a
 /// directory of its own beside the final one and renamed into place, so one that is not whole is
 /// never used; a whole copy is reused as it is. A plain copy of the bytes keeps an embedded code
 /// signature, and the copy keeps the executable bit.
@@ -169,6 +183,7 @@ fn copy_build(
     dir: &Path,
     build_id: &str,
     source: &Path,
+    exe_from: &Path,
     companions: &[&str],
 ) -> io::Result<PathBuf> {
     let name = source
@@ -189,7 +204,7 @@ fn copy_build(
     let making = dir.join(format!("{MAKING_PREFIX}{}", uuid::Uuid::new_v4()));
     let made = (|| {
         std::fs::create_dir(&making)?;
-        std::fs::copy(source, making.join(name))?;
+        std::fs::copy(exe_from, making.join(name))?;
         for companion in &present {
             let to = making.join(companion);
             if let Some(parent) = to.parent() {
@@ -258,7 +273,7 @@ mod tests {
         let dir = ScratchDir::new("build-copy");
         let builds = dir.join("builds");
         let source = source_in(&dir, b"first");
-        let exe = copy_build(&builds, "1.0.0+aa", &source, &[]).expect("copied");
+        let exe = copy_build(&builds, "1.0.0+aa", &source, &source, &[]).expect("copied");
         assert_eq!(exe, builds.join("1.0.0+aa").join("octoboardd"));
         assert_eq!(std::fs::read(&exe).unwrap(), b"first");
         #[cfg(unix)]
@@ -277,9 +292,38 @@ mod tests {
 
         // A whole copy is reused, not made again.
         std::fs::write(&source, b"changed").unwrap();
-        let again = copy_build(&builds, "1.0.0+aa", &source, &[]).expect("reused");
+        let again = copy_build(&builds, "1.0.0+aa", &source, &source, &[]).expect("reused");
         assert_eq!(again, exe);
         assert_eq!(std::fs::read(&exe).unwrap(), b"first");
+    }
+
+    /// The copy takes the executable's bytes from where it is told, not from `source`'s path: after
+    /// an update replaced the file there, the path holds the next build.
+    #[test]
+    fn the_copy_is_made_from_the_bytes_it_is_told_to_read_not_from_the_path_it_is_named_after() {
+        let dir = ScratchDir::new("build-copy-image");
+        let builds = dir.join("builds");
+        let source = source_in(&dir, b"the build that was installed later");
+        let image = dir.join("image");
+        std::fs::write(&image, b"the build that runs").unwrap();
+        let exe = copy_build(&builds, "1.0.0+dd", &source, &image, &[]).expect("copied");
+        assert_eq!(exe, builds.join("1.0.0+dd").join("octoboardd"));
+        assert_eq!(std::fs::read(&exe).unwrap(), b"the build that runs");
+    }
+
+    /// Where the open image can be read, the running executable's own path stands for it; any other
+    /// path is read as it is.
+    #[test]
+    fn only_the_running_images_path_is_read_from_the_open_image() {
+        let image = crate::platform::proc::running_image().unwrap();
+        let read_from = crate::platform::proc::image_source(&image);
+        if cfg!(target_os = "linux") {
+            assert_eq!(read_from, Path::new("/proc/self/exe"));
+        } else {
+            assert_eq!(read_from, image);
+        }
+        let other = Path::new("/somewhere/else/octoboardd");
+        assert_eq!(crate::platform::proc::image_source(other), other);
     }
 
     #[test]
@@ -289,7 +333,7 @@ mod tests {
         let source = source_in(&dir, b"bytes");
         std::fs::create_dir_all(builds.join("1.0.0+aa").join("sub")).unwrap();
         std::fs::write(builds.join("1.0.0+aa").join("sub").join("stray"), b"x").unwrap();
-        let exe = copy_build(&builds, "1.0.0+aa", &source, &[]).expect("copied");
+        let exe = copy_build(&builds, "1.0.0+aa", &source, &source, &[]).expect("copied");
         assert_eq!(std::fs::read(&exe).unwrap(), b"bytes");
         assert!(!builds.join("1.0.0+aa").join("sub").exists());
     }
@@ -304,7 +348,7 @@ mod tests {
         std::fs::create_dir_all(install.join("x64")).unwrap();
         std::fs::write(install.join("x64").join("OpenConsole.exe"), b"host").unwrap();
         let companions = ["conpty.dll", "x64/OpenConsole.exe", "arm64/OpenConsole.exe"];
-        let exe = copy_build(&builds, "1.0.0+bb", &source, &companions).expect("copied");
+        let exe = copy_build(&builds, "1.0.0+bb", &source, &source, &companions).expect("copied");
         let copy = exe.parent().unwrap();
         assert_eq!(std::fs::read(copy.join("conpty.dll")).unwrap(), b"dll");
         assert_eq!(

@@ -6,21 +6,18 @@ import { appConfig } from "../appConfig";
 import { ExternalLink } from "../components/text/ExternalLink";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
-import { usePlatform } from "../platform/react";
 import { useUpdateSelector } from "../updates/UpdatesProvider";
 import { SettingRow } from "./SettingRow";
-import { UpdatesSetting } from "./UpdatesSetting";
 import { Button } from "../primitives";
 
 /** A web address as people write it, without its scheme. */
 const shown = (address: string) => address.replace(/^https?:\/\//, "");
 
-/** The application itself: its icon, name and running version (known where the platform can update itself), the
- * update controls where it can (`UpdatesSetting`), links to its website, repository and issue tracker, its license
- * and copyright, and the licenses of the third-party software it ships, in a dialog of their own. */
+/** The application itself: its icon, name and running version (known where something updates, the update store being
+ * what tells it), links to its website, repository and issue tracker, its license and copyright, and the licenses of
+ * the third-party software it ships, in a dialog of their own. The update controls are the Updates section's. */
 export function AboutSection(): React.ReactElement {
   const t = useT();
-  const { updater } = usePlatform();
   const version = useUpdateSelector((state) => state.currentVersion);
   const [licensesOpen, setLicensesOpen] = useState(false);
   const links = [
@@ -37,7 +34,6 @@ export function AboutSection(): React.ReactElement {
           {version && <p className="text-sm text-app-muted">{t("settings.about.version", { version: isolate(version) })}</p>}
         </div>
       </div>
-      {updater && <UpdatesSetting />}
       {links.map(({ searchId, label, href }) => (
         <SettingRow key={href} searchId={searchId} label={label}>
           <ExternalLink href={href}><span dir="ltr">{shown(href)}</span></ExternalLink>

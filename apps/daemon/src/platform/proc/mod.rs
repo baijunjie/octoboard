@@ -46,6 +46,45 @@ pub(crate) fn running_image() -> io::Result<std::path::PathBuf> {
     Ok(IMAGE.get_or_init(|| resolved).clone())
 }
 
+/// The executable file this process is running, opened. On Linux that is `/proc/self/exe`, which
+/// keeps leading to the image the process began with after the file at its path has been replaced
+/// or removed: an update replaces the installed file under a running daemon, and what is read from
+/// the path after that is the new build, not this one. Elsewhere the file at [`running_image`]'s
+/// path.
+pub(crate) fn running_image_file() -> io::Result<std::fs::File> {
+    if cfg!(target_os = "linux") {
+        return std::fs::File::open("/proc/self/exe");
+    }
+    std::fs::File::open(running_image()?)
+}
+
+/// The path to read the bytes of the running image from when `source` is the path it was started
+/// as: [`running_image`]'s own path is read as the file now at it, which an update may have
+/// replaced, so on Linux the open process image (`/proc/self/exe`) stands in for it. Any other path
+/// is returned as it is.
+pub(crate) fn image_source(source: &std::path::Path) -> std::path::PathBuf {
+    if cfg!(target_os = "linux") && running_image().is_ok_and(|image| image == source) {
+        return std::path::PathBuf::from("/proc/self/exe");
+    }
+    source.to_path_buf()
+}
+
+/// Whether `path` leads to the file this process is running, whatever it has been renamed to or
+/// replaced by since: the same device and inode as [`running_image_file`]. False for a path that
+/// leads nowhere.
+pub(crate) fn names_running_image(path: &std::path::Path) -> bool {
+    let at = super::fs::stat(path, super::fs::Links::Follow);
+    let image = running_image_file().and_then(|file| super::fs::stat_of(&file));
+    matches!((at, image), (Ok(at), Ok(image)) if at.identity == image.identity)
+}
+
+/// Whether the host is one the daemon can update its own executable on, and the release build
+/// it would fetch exists for: Linux on x86-64 or ARM64. What a self-update (`crate::self_update`)
+/// asks before offering one.
+pub(crate) fn self_update_host() -> bool {
+    cfg!(target_os = "linux") && matches!(std::env::consts::ARCH, "x86_64" | "aarch64")
+}
+
 #[cfg(test)]
 mod contract_tests;
 

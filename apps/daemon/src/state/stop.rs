@@ -37,6 +37,10 @@ pub enum RestartRefusal {
     /// The daemon follows an application (`--parent-pid`), which starts the daemon it talks to
     /// itself.
     FollowsApplication,
+    /// A stop of either kind has been asked for already, a restart included. Only
+    /// [`AppState::request_planned_restart_unless_stopping`] refuses with it; `POST /restart` and
+    /// the restart signal take a second request as the first.
+    StopInProgress,
 }
 
 impl RestartRefusal {
@@ -44,6 +48,7 @@ impl RestartRefusal {
     pub fn code(self) -> &'static str {
         match self {
             Self::FollowsApplication => "follows_application",
+            Self::StopInProgress => "stop_in_progress",
         }
     }
 
@@ -53,6 +58,7 @@ impl RestartRefusal {
             Self::FollowsApplication => {
                 "the daemon follows an application, which restarts the daemon it talks to itself"
             }
+            Self::StopInProgress => "the daemon is already stopping or restarting",
         }
     }
 }
@@ -81,13 +87,28 @@ impl AppState {
         Ok(())
     }
 
+    /// [`Self::request_planned_restart`] that refuses where a stop of either kind has been asked
+    /// for already, instead of leaving that one as the stop made: what a client that is told
+    /// "restarting" must not be given when the daemon is stopping for another reason.
+    pub fn request_planned_restart_unless_stopping(&self) -> Result<(), RestartRefusal> {
+        if let Some(refusal) = self.planned_restart_refusal() {
+            return Err(refusal);
+        }
+        if self.ask_planned(true) {
+            Ok(())
+        } else {
+            Err(RestartRefusal::StopInProgress)
+        }
+    }
+
     /// A planned stop asked for once the application has said it is quitting is made ordinary:
     /// the quit escalates a planned stop asked for before it (`note_application_quit`), and one
     /// asked for after it (an update restart's request reaching the daemon after a session end's
     /// note) must not leave the sessions to the next start either. Read under the stop's lock,
     /// which `note_application_quit` reads the stop under after noting the quit, so that one of
-    /// the two always sees the other.
-    fn ask_planned(&self, successor: bool) {
+    /// the two always sees the other. Whether this request became the stop: false when a stop
+    /// had been asked for already, which stays the one made.
+    fn ask_planned(&self, successor: bool) -> bool {
         self.stop.send_if_modified(|stop| {
             if stop.is_some() {
                 return false;
@@ -98,7 +119,7 @@ impl AppState {
                 StopKind::Planned { successor }
             });
             true
-        });
+        })
     }
 
     /// Why a planned restart would be refused now, if it would.
@@ -119,6 +140,13 @@ impl AppState {
             Err(_) => None,
         };
         asked.unwrap_or(StopKind::Ordinary)
+    }
+
+    /// Whether the daemon is stopping or about to: a stop of either kind asked for, an ordinary
+    /// stop begun, or a planned one at its handover. What work that would outlive the stop looks
+    /// at, cheaply and as often as it likes.
+    pub fn stop_asked(&self) -> bool {
+        self.stop.borrow().is_some() || self.is_shutting_down() || self.handover_barrier_raised()
     }
 
     /// Whether an ordinary stop has been asked for. During a planned stop `main` has begun, this is
@@ -254,6 +282,40 @@ mod tests {
             .await
             .expect("the escalation was remembered");
         assert_eq!(state.await_stop().await, StopKind::Ordinary);
+    }
+
+    /// The restart a client asks for over the protocol is refused where any stop is asked for
+    /// already, and a restart asked for twice is one restart; the HTTP route and the signal still
+    /// take a second request as the first.
+    #[tokio::test]
+    async fn a_restart_that_must_not_stack_on_a_stop_is_refused_while_one_is_asked_for() {
+        let (state, _dir) = app_state("stop-restart-unless-stopping");
+        state.set_service_managed(true);
+        assert_eq!(state.request_planned_restart_unless_stopping(), Ok(()));
+        assert_eq!(
+            state.request_planned_restart_unless_stopping(),
+            Err(RestartRefusal::StopInProgress)
+        );
+        assert_eq!(state.request_planned_restart(), Ok(()));
+        assert_eq!(
+            state.await_stop().await,
+            StopKind::Planned { successor: true }
+        );
+
+        let (other, _other_dir) = app_state("stop-restart-unless-stopping-ordinary");
+        other.request_shutdown();
+        assert_eq!(
+            other.request_planned_restart_unless_stopping(),
+            Err(RestartRefusal::StopInProgress)
+        );
+        assert_eq!(other.await_stop().await, StopKind::Ordinary);
+
+        let (following, _following_dir) = app_state("stop-restart-unless-stopping-follows");
+        following.set_follows_application();
+        assert_eq!(
+            following.request_planned_restart_unless_stopping(),
+            Err(RestartRefusal::FollowsApplication)
+        );
     }
 
     /// A planned stop or restart asked for after an ordinary stop leaves it ordinary, so nothing

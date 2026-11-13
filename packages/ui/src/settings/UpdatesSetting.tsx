@@ -1,5 +1,7 @@
 import React, { useId, useRef, useState } from "react";
 
+import { CopyCommand } from "../components/controls/CopyBox";
+import { UpdatedAge } from "../components/text/UpdatedAge";
 import { useHandoffAfterRemoval } from "../components/focus/HandoffOnUnmount";
 import { InlineReference } from "../i18n/InlineReference";
 import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
@@ -7,32 +9,52 @@ import { StatusMark } from "../components/status/StatusMark";
 import { ExternalLink } from "../components/text/ExternalLink";
 import { OptionSelect } from "../components/form/OptionSelect";
 import { isolate } from "../i18n/isolate";
-import { Message, useT } from "../i18n/react";
+import { formatRelativeTime, isJustNow } from "../format/relativeTime";
+import { useNow } from "../format/useNow";
+import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { UpdateChannel } from "../platform";
 import type { HostFacts } from "../platform/host";
 import { releaseUrl } from "../components/text/releaseUrl";
 import { useHost } from "../platform/react";
 import { installedMessageKey } from "../updates/installedMessageKey";
-import { effectiveUpdateChannel, updateChannel } from "../updates/updateChannel";
+import { DAEMON_INSTALL_COMMAND } from "../updates/daemonInstallCommand";
+import { reloadPage } from "../updates/reloadPage";
 import type { UpdateState } from "../updates/updateStore";
 import { useUpdates } from "../updates/UpdatesProvider";
-import { SettingRow } from "./SettingRow";
+import { SettingRow, SwitchSettingRow } from "./SettingRow";
 import { Button } from "../primitives";
 
-/** The sentence under "Updates": what the application's update is up to, in the order of what the user most needs
+/** The sentence under the row's name: what the application's update is up to, in the order of what the user most needs
  * to know — a restart waiting, a download under way, a check running, a newer version, then how the last check
  * ended when it found nothing to fault. A check that did not finish is not in the sentence but in the row's
- * warning mark (`checkFailed`). */
-function versionStatus(t: ReturnType<typeof useT>, state: UpdateState, updater: HostFacts["updater"]): string {
+ * warning mark (`checkFailed`). It comes in two forms of the same message: `text`, which the announcer speaks, and
+ * `shown`, the row's own, where the file the daemon cannot replace is a chip (`<Message>`) and not an isolated string. */
+function versionStatus(t: ReturnType<typeof useT>, state: UpdateState, updater: HostFacts["updater"]): { text: string; shown: React.ReactNode } {
   const version = isolate(state.currentVersion ?? "");
+  if (state.reloadNeeded) return { text: t("settings.updates.version.reload", { version }), shown: <Message id="settings.updates.version.reload" params={{ version }} /> };
   if (state.phase === "installed") {
-    return t(installedMessageKey(updater, "settings", !!state.installedVersion), { installed: isolate(state.installedVersion ?? "") });
+    const key = installedMessageKey(updater, "settings", !!state.installedVersion);
+    const params = { installed: isolate(state.installedVersion ?? "") };
+    return { text: t(key, params), shown: <Message id={key} params={params} /> };
   }
-  if (state.phase === "downloading") return t("settings.updates.version.downloading", { available: isolate(state.update?.version ?? "") });
-  if (state.phase === "checking") return t("settings.updates.version.checking");
-  if (state.update) return t("settings.updates.version.available", { available: isolate(state.update.version), version });
-  if (state.lastCheck?.outcome === "upToDate") return t("settings.updates.version.upToDate", { version });
-  return t("settings.updates.version.idle", { version });
+  if (state.phase === "downloading") {
+    const params = { available: isolate(state.update?.version ?? "") };
+    return { text: t("settings.updates.version.downloading", params), shown: <Message id="settings.updates.version.downloading" params={params} /> };
+  }
+  if (state.phase === "checking") return { text: t("settings.updates.version.checking"), shown: <Message id="settings.updates.version.checking" /> };
+  if (state.update && state.manual) {
+    const available = isolate(state.update.version);
+    return {
+      text: t("settings.updates.version.manual", { available, path: isolate(state.manual.path) }),
+      shown: <Message id="settings.updates.version.manual" params={{ available, path: <InlineReference monospace wrap>{state.manual.path}</InlineReference> }} />,
+    };
+  }
+  if (state.update) {
+    const params = { available: isolate(state.update.version), version };
+    return { text: t("settings.updates.version.available", params), shown: <Message id="settings.updates.version.available" params={params} /> };
+  }
+  if (state.lastCheck?.outcome === "upToDate") return { text: t("settings.updates.version.upToDate", { version }), shown: <Message id="settings.updates.version.upToDate" params={{ version }} /> };
+  return { text: t("settings.updates.version.idle", { version }), shown: <Message id="settings.updates.version.idle" params={{ version }} /> };
 }
 
 /** Whether the row shows that the last check did not finish: nothing newer is known, and nothing else is under way. */
@@ -40,20 +62,24 @@ function checkFailed(state: UpdateState): boolean {
   return state.phase === "idle" && !state.update && state.lastCheck?.outcome === "failed";
 }
 
-/** The running version with the control that moves it on — Check for updates, then Download and install once a
- * newer one is found, then Restart now once it is installed — beside What is new, the release notes on GitHub of the
- * version the sentence is about, and the channel the application follows. Rendered only where the platform can update
- * itself (`AboutSection`).
+/** What the Updates section holds: the running version with the control that moves it on — Check for updates, then
+ * Download and install once a newer one is found, then Restart now once it is installed — beside What is new, the release
+ * notes on GitHub of the version the sentence is about and when the last check ended; the switch for the automatic
+ * checks; and the channel the application follows. The same for the desktop application and for a daemon that updates
+ * itself, which is what the store behind it hides. A daemon that cannot replace its own executable offers no download:
+ * the row says so and gives the install command to run by hand below it, with its copy button; a page whose daemon now
+ * runs another version offers Reload. The section is listed only where something updates (`SettingsDialog`).
  *
  * The sentence is spoken from here, since the update notice's own announcer sits under the Settings modal and is not
  * heard. Once the update's phase has changed while Settings is open, whoever caused it (a press of Check for updates
  * or Download and install here, a check that was already running at open ending, a download started from the notice
  * finishing, an automatic check), every change of the sentence is spoken; what was there when Settings opened is not.
  * The sentence of a check under way is left unspoken, as the button's pending state says it. */
-export function UpdatesSetting(): React.ReactElement | null {
+export function UpdatesSetting(): React.ReactElement {
   const t = useT();
+  const language = useCurrentLanguage();
+  const now = useNow();
   const host = useHost();
-  const savedChannel = updateChannel.useValue();
   const updates = useUpdates();
   const [engaged, setEngaged] = useState(false);
   // A check pressed here that fails opens the error alert dialog, which owns announcing it: `pressed` is a press
@@ -63,10 +89,11 @@ export function UpdatesSetting(): React.ReactElement | null {
   const [phase, setPhase] = useState(updates?.state.phase);
   const markId = useId();
   const notesId = useId();
+  const commandId = useId();
   const actionButton = useRef<HTMLButtonElement>(null);
   // The mark and the notes link each hand focus they held to the row's action as they go.
   const handoffFrom = useHandoffAfterRemoval(() => actionButton.current);
-  if (!updates) return null;
+  if (!updates) return <></>;
   const { store, state } = updates;
   if (state.phase !== phase) {
     setPhase(state.phase);
@@ -76,9 +103,7 @@ export function UpdatesSetting(): React.ReactElement | null {
       setPressed(false);
     }
   }
-  const status = versionStatus(t, state, host.updater);
-  // With nothing chosen, the channel the running build defaults to; choosing either one saves it.
-  const channel = effectiveUpdateChannel(savedChannel, state.currentVersion);
+  const { text: status, shown: shownStatus } = versionStatus(t, state, host.updater);
   const channels: { value: UpdateChannel; label: string }[] = [
     { value: "stable", label: t("settings.updates.channel.stable") },
     { value: "beta", label: t("settings.updates.channel.beta") },
@@ -112,30 +137,64 @@ export function UpdatesSetting(): React.ReactElement | null {
     </>
   );
   const action =
-    state.phase === "installed" ? (
+    state.reloadNeeded ? (
+      <Button ref={actionButton} size="sm" variant="primary" onPress={reloadPage}>{t("settings.updates.reload")}</Button>
+    ) : state.phase === "installed" ? (
       <Button ref={actionButton} size="sm" variant="primary" pending={state.restarting} onPress={() => void store.restart()}>{t("settings.updates.restart")}</Button>
-    ) : state.update ? (
+    ) : state.update && !state.manual ? (
       // Pending rather than disabled while a check runs: a disabled button would drop the focus it holds.
       <Button ref={actionButton} size="sm" variant="primary" pending={state.phase !== "idle"} onPress={() => void store.install()}>
         {t("settings.updates.install")}
       </Button>
     ) : (
-      <Button ref={actionButton} size="sm" variant="secondary" pending={state.phase === "checking"} onPress={() => { setPressed(true); void store.check("manual"); }}>
+      <Button ref={actionButton} size="sm" variant="secondary" pending={state.phase === "checking" || state.checkAsked !== undefined} onPress={() => { setPressed(true); void store.check("manual"); }}>
         {t("settings.updates.check")}
       </Button>
     );
+  const manual = state.manual && state.update && !state.reloadNeeded;
+  const lastCheck = state.lastCheck && state.phase !== "checking" && !failed ? state.lastCheck : undefined;
+  // A check the daemon let pass (it looks again at most every 30 seconds) changes nothing on the row, so the press is
+  // answered by saying that the last check stands.
+  const lastCheckSentence = state.lastCheck && (isJustNow(state.lastCheck.at, now) ? t("settings.updates.lastCheckNow") : t("settings.updates.lastCheck", { age: formatRelativeTime(language, state.lastCheck.at, now) }));
+  const announced = state.checkAsked === "unchanged" ? lastCheckSentence : failed ? (engaged && !pressedCheck ? failedTitle : undefined) : engaged && state.phase !== "checking" ? status : undefined;
   return (
     <>
-      <SettingRow searchId="updates.version" label={t("settings.updates.version.label")} description={status}>
+      <SettingRow
+        searchId="updates.version"
+        label={t("settings.updates.status.label")}
+        description={
+          <>
+            <span className="block">{shownStatus}</span>
+            {lastCheck && <span className="block"><UpdatedAge at={lastCheck.at} copy={{ now: "settings.updates.lastCheckNow", age: "settings.updates.lastCheck" }} /></span>}
+          </>
+        }
+        below={
+          <>
+            {manual && (
+              <div role="group" aria-labelledby={commandId} className="flex flex-col gap-1.5">
+                <p id={commandId} className="text-sm text-app-muted">{t("settings.updates.manual.command")}</p>
+                <CopyCommand text={DAEMON_INSTALL_COMMAND} copyText={t("updates.notice.copyCommand")} failedText={t("updates.notice.copyCommandFailed")} />
+              </div>
+            )}
+          </>
+        }
+      >
         <div className="flex items-center gap-2">
           {notes}
           {warning}
           {action}
         </div>
-        <StatusAnnouncer text={failed ? (engaged && !pressedCheck ? failedTitle : undefined) : engaged && state.phase !== "checking" ? status : undefined} />
+        <StatusAnnouncer text={announced} />
       </SettingRow>
+      <SwitchSettingRow
+        searchId="updates.autoCheck"
+        label={t("settings.updates.autoCheck.label")}
+        description={state.autoCheck ? <Message id="settings.updates.autoCheck.description.on" /> : <Message id="settings.updates.autoCheck.description.off" />}
+        isSelected={state.autoCheck}
+        onChange={(value) => store.setAutoCheck(value)}
+      />
       <SettingRow fill searchId="updates.channel" label={t("settings.updates.channel.label")} description={t("settings.updates.channel.description")}>
-        <OptionSelect inline label={t("settings.updates.channel.label")} options={channels} value={channel} onChange={(value) => updateChannel.set(value)} />
+        <OptionSelect inline label={t("settings.updates.channel.label")} options={channels} value={state.channel} onChange={(value) => void store.setChannel(value)} />
       </SettingRow>
     </>
   );

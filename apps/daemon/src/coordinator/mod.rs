@@ -450,6 +450,21 @@ async fn handle_inner(
             Ok(None)
         }
 
+        RequestBody::CheckDaemonUpdate => {
+            crate::self_update::check_requested(state)?;
+            Ok(None)
+        }
+
+        RequestBody::UpdateDaemon => {
+            crate::self_update::update_requested(state).await?;
+            Ok(None)
+        }
+
+        RequestBody::RestartDaemon => {
+            crate::self_update::restart_requested(state)?;
+            Ok(None)
+        }
+
         RequestBody::StartAccountLogin { agent, account } => {
             start_account_login(state, agent, account).await?;
             Ok(None)
@@ -961,6 +976,8 @@ async fn handle_inner(
             auto_switch_on_usage_limit,
             auto_start_quota_windows,
             resume_sessions_on_start,
+            daemon_update_check,
+            daemon_update_channel,
             default_clone_dir,
             git_workflow,
             agent_tags,
@@ -985,6 +1002,8 @@ async fn handle_inner(
                     auto_switch_on_usage_limit,
                     auto_start_quota_windows,
                     resume_sessions_on_start,
+                    daemon_update_check,
+                    daemon_update_channel,
                     default_clone_dir,
                     git_workflow: git_workflow.unwrap_or_default(),
                     // Only a configuration import chooses provider settings in bulk.

@@ -1,7 +1,7 @@
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 import { describe, expect, it } from "vitest";
 
-import { SETTINGS_VERSIONS, gitStatusOf, projectOf, shellTerminalOf, snapshotState } from "./builders";
+import { SETTINGS_VERSIONS, daemonUpdateOf, gitStatusOf, projectOf, shellTerminalOf, snapshotState } from "./builders";
 
 describe("snapshotState", () => {
   it("carries the git statuses map through, keyed by project id", () => {
@@ -33,5 +33,12 @@ describe("snapshotState", () => {
     const terminal = shellTerminalOf("t1", projectOf("p1", "c1", "Site"), "zsh", 0);
     expect(snapshotState({ shellTerminals: [terminal] }).shellTerminals).toEqual(new Map([["t1", terminal]]));
     expect(snapshotState({}).shellTerminals).toEqual(new Map());
+  });
+
+  it("has no daemon update unless given, so a window has nothing to update, and carries a given status through", () => {
+    expect(snapshotState({}).daemonUpdate).toBeNull();
+    const status = daemonUpdateOf({ phase: "installed", installed: { version: "0.2.0", holder_floor: null } });
+    expect(snapshotState({ daemonUpdate: status }).daemonUpdate).toBe(status);
+    expect(daemonUpdateOf()).toEqual({ phase: "idle", available: null, progress: null, installed: null, last_check: null, install: null, manual: null, updated_from: null });
   });
 });

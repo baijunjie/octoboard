@@ -883,6 +883,34 @@ async fn settings_are_listed_without_directories_and_the_general_switches_are_wr
     .await;
     assert!(unknown.contains("always"), "{unknown}");
     assert!(state.store.keep_awake().unwrap());
+    // The daemon's update check and channel are settings of the Updates section, which an agent may
+    // read and change.
+    assert_eq!(read["daemon_update_check"], true);
+    assert_eq!(read["daemon_update_channel"], "stable");
+    let updated = call(
+        &state,
+        "a",
+        "update_settings",
+        &arguments(json!({ "daemon_update_check": false, "daemon_update_channel": " beta " })),
+    )
+    .await
+    .unwrap();
+    assert_eq!(updated["daemon_update_check"], false);
+    assert_eq!(updated["daemon_update_channel"], "beta");
+    assert!(!state.store.daemon_update_check().unwrap());
+    assert_eq!(
+        state.store.daemon_update_channel().unwrap(),
+        crate::protocol::DaemonUpdateChannel::Beta
+    );
+    let unknown = refused(
+        &state,
+        "a",
+        "update_settings",
+        json!({ "daemon_update_check": true, "daemon_update_channel": "nightly" }),
+    )
+    .await;
+    assert!(unknown.contains("stable"), "{unknown}");
+    assert!(!state.store.daemon_update_check().unwrap());
     // Each agent's default account, and the one account the state holds.
     assert_eq!(
         read["accounts"].as_array().unwrap().len(),

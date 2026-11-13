@@ -1171,6 +1171,173 @@ export type ConversationLocation = {
 };
 
 /**
+ * A release newer than the daemon that the last check found.
+ */
+export type DaemonUpdateAvailable = {
+  version: string,
+  /**
+   * The release's notes as the manifest carries them, Markdown; null when it has none.
+   */
+  notes: string | null,
+  /**
+   * The oldest holder version the new daemon adopts the terminals of (`handover_check`'s
+   * `holder_floor`); null when the manifest names none.
+   */
+  holder_floor: string | null,
+  /**
+   * The channel the manifest was read from.
+   */
+  channel: DaemonUpdateChannel,
+};
+
+/**
+ * Which release line the daemon's update check follows (`Settings.daemon_update_channel`).
+ */
+export type DaemonUpdateChannel = "stable" | "beta";
+
+/**
+ * The last check that ended.
+ */
+export type DaemonUpdateCheck = {
+  outcome: DaemonUpdateCheckOutcome,
+  /**
+   * When it ended, in milliseconds since the epoch.
+   */
+  at: number,
+  /**
+   * Why a `failed` check failed, `daemon_update_check_failed`; null otherwise.
+   */
+  error: string | null,
+  /**
+   * The English text of the failure behind `error`, trimmed and cut to a bounded length.
+   */
+  detail: string | null,
+};
+
+/**
+ * How the last check ended.
+ */
+export type DaemonUpdateCheckOutcome = "up_to_date" | "available" | "failed";
+
+/**
+ * The download and replacement of the update as the daemon last made one. Runtime state: never
+ * stored.
+ */
+export type DaemonUpdateInstall = {
+  state: DaemonUpdateInstallState,
+  /**
+   * When it started, in milliseconds since the epoch.
+   */
+  started_at: number,
+  /**
+   * When it ended; null while it runs.
+   */
+  finished_at: number | null,
+  /**
+   * Why a `failed` one failed: `daemon_update_download_failed`, `daemon_update_unverified` or
+   * `daemon_update_replace_failed`; null otherwise.
+   */
+  error: string | null,
+  /**
+   * The English text of the failure behind `error`, trimmed and cut to a bounded length.
+   */
+  detail: string | null,
+};
+
+/**
+ * Where the download and replacement of an update is.
+ */
+export type DaemonUpdateInstallState = "running" | "succeeded" | "failed";
+
+/**
+ * The release the executable was replaced with.
+ */
+export type DaemonUpdateInstalled = {
+  /**
+   * Its version; null when the file was replaced by something else (an install script run
+   * meanwhile) and the daemon did not write it, so the version is not known.
+   */
+  version: string | null,
+  /**
+   * Its holder floor, null where `version` is.
+   */
+  holder_floor: string | null,
+};
+
+/**
+ * An update the daemon found and cannot install itself.
+ */
+export type DaemonUpdateManual = {
+  reason: DaemonUpdateManualReason,
+  /**
+   * The executable that would be replaced, as a path on the daemon's host.
+   */
+  path: string,
+};
+
+/**
+ * Why the daemon does not update itself and the user has to.
+ */
+export type DaemonUpdateManualReason = "not_writable";
+
+/**
+ * What the daemon's update is doing. A check and a download never run together.
+ */
+export type DaemonUpdatePhase = "idle" | "checking" | "downloading" | "installed";
+
+/**
+ * How much of the archive has been downloaded.
+ */
+export type DaemonUpdateProgress = {
+  /**
+   * Bytes received so far.
+   */
+  downloaded: number,
+  /**
+   * The archive's size in bytes, when the server said it.
+   */
+  total: number | null,
+};
+
+/**
+ * The daemon's own update as it stands. Runtime state: never stored, and `null` in the snapshot
+ * where the daemon does not update itself (a build without the feature, the desktop
+ * application's daemon, a host it has no release for).
+ */
+export type DaemonUpdateStatus = {
+  phase: DaemonUpdatePhase,
+  /**
+   * The newer release the last check found and none has replaced yet; null otherwise.
+   */
+  available: DaemonUpdateAvailable | null,
+  /**
+   * How far the archive has come while `phase` is `downloading`; null otherwise.
+   */
+  progress: DaemonUpdateProgress | null,
+  /**
+   * What replaced the executable, once `phase` is `installed`; null otherwise.
+   */
+  installed: DaemonUpdateInstalled | null,
+  /**
+   * The last check that ended since the daemon started; null when none has.
+   */
+  last_check: DaemonUpdateCheck | null,
+  /**
+   * The last download and replacement since the daemon started; null when none ran.
+   */
+  install: DaemonUpdateInstall | null,
+  /**
+   * Set while an update is available that the user has to install by hand.
+   */
+  manual: DaemonUpdateManual | null,
+  /**
+   * The version this daemon replaced when it started, as an update left it; null when it
+   * replaced none. Held until the daemon stops, so a window that opens later is told too.
+   */
+  updated_from: string | null,
+};
+
+/**
  * Where the `default_model` of a `list_agent_models` answer came from.
  */
 export type DefaultModelSource = "configured" | "best_available";
@@ -1631,6 +1798,11 @@ export type Event = {
    */
   agent_cli_statuses: Array<AgentCliStatus>,
   /**
+   * The daemon's own update as it stands (`check_daemon_update`, `update_daemon`); null
+   * where this daemon does not update itself. Runtime state, not stored.
+   */
+  daemon_update: DaemonUpdateStatus | null,
+  /**
    * The daemon host's home directory, so a client can show a path under it as `~/...`; it
    * is the daemon's home, not the browser's, since the two may be on different machines.
    * Null when the daemon cannot determine one.
@@ -1669,6 +1841,10 @@ export type Event = {
 | {
   "type": "agent_cli_status_updated",
   status: AgentCliStatus,
+}
+| {
+  "type": "daemon_update_status_updated",
+  status: DaemonUpdateStatus,
 }
 | {
   "type": "account_sharing"
@@ -3926,6 +4102,8 @@ export type Request = {
   auto_switch_on_usage_limit?: boolean,
   auto_start_quota_windows?: boolean,
   resume_sessions_on_start?: boolean,
+  daemon_update_check?: boolean,
+  daemon_update_channel?: DaemonUpdateChannel,
   /**
    * A blank value goes back to the built-in default.
    */
@@ -4073,6 +4251,15 @@ export type Request = {
   | {
   "type": "update_agent_cli",
   agent: Agent,
+}
+  | {
+  "type": "check_daemon_update"
+}
+  | {
+  "type": "update_daemon"
+}
+  | {
+  "type": "restart_daemon"
 }
   | {
   "type": "refresh_git_status",
@@ -4782,6 +4969,8 @@ export type RequestBody = {
   auto_switch_on_usage_limit?: boolean,
   auto_start_quota_windows?: boolean,
   resume_sessions_on_start?: boolean,
+  daemon_update_check?: boolean,
+  daemon_update_channel?: DaemonUpdateChannel,
   /**
    * A blank value goes back to the built-in default.
    */
@@ -4929,6 +5118,15 @@ export type RequestBody = {
 | {
   "type": "update_agent_cli",
   agent: Agent,
+}
+| {
+  "type": "check_daemon_update"
+}
+| {
+  "type": "update_daemon"
+}
+| {
+  "type": "restart_daemon"
 }
 | {
   "type": "refresh_git_status",
@@ -5524,6 +5722,18 @@ export type Settings = {
    * turned it on; read at each start.
    */
   resume_sessions_on_start: boolean,
+  /**
+   * Whether a daemon that updates itself (`snapshot.daemon_update` is not null) checks for a
+   * newer release on its own: once shortly after it starts, every six hours, and at once when
+   * this is turned on or the channel changes. On unless the user turned it off. Off leaves only
+   * the check the user asks for (`check_daemon_update`); nothing is ever downloaded or restarted
+   * on its own either way.
+   */
+  daemon_update_check: boolean,
+  /**
+   * The release line the daemon's update check follows. `stable` unless the user chose `beta`.
+   */
+  daemon_update_channel: DaemonUpdateChannel,
   /**
    * The directory a `git` association clones into when none is named: the one the user set, or
    * `~/Projects` (expanded) while none is. Always an absolute, lexically normalised path.

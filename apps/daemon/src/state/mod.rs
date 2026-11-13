@@ -91,7 +91,7 @@ pub use live::Running;
 pub use restart_screens::ExactScreen;
 pub use sessions::Deletion;
 pub use sharing_lock::AccountSharingLock;
-pub use stop::StopKind;
+pub use stop::{RestartRefusal, StopKind};
 pub use turns::{LastReport, TurnClose};
 pub use unlinked::UnlinkedFinished;
 
@@ -265,6 +265,9 @@ pub struct AppState {
     /// What was last found out about each agent's installed CLI, and the updates running
     /// (`crate::agents::cli`). Held in memory only.
     pub agent_clis: crate::agents::cli::AgentClis,
+    /// The daemon's own update: what it found, what it downloaded and installed
+    /// (`crate::self_update`). Held in memory only.
+    pub daemon_update: crate::self_update::DaemonUpdates,
     /// The accounts a `delete_account` that moves the directory to the Trash is running for, each
     /// with the number of such removals; see [`AppState::begin_account_removal`]. Held in memory
     /// only. A plain mutex, never held across an `.await`.
@@ -481,6 +484,7 @@ impl AppState {
             mcp_server_auths: Default::default(),
             account_logins: Default::default(),
             agent_clis: Default::default(),
+            daemon_update: Default::default(),
             accounts_being_removed: Default::default(),
             account_sharing: Default::default(),
             sharing_status: Default::default(),

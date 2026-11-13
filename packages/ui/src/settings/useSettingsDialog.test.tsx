@@ -257,7 +257,7 @@ it("opens update settings and checks manually from the tray, keeping an already 
   expect(check).not.toHaveBeenCalled();
   act(() => hook().openSettingsAt("git"));
   await updates();
-  expect(hook()).toMatchObject({ settingsOpen: true, settingsNavigation: { section: "about" } });
+  expect(hook()).toMatchObject({ settingsOpen: true, settingsNavigation: { section: "updates" } });
   expect(check).toHaveBeenCalledOnce();
   act(() => hook().closeSettings());
   await updates();

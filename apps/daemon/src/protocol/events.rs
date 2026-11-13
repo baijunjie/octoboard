@@ -19,6 +19,7 @@ use super::configuration::{
     ImportedAccounts, ImportedConsole, InspectedAccounts, InspectedConsole, InspectedSettings,
     SettingsSection,
 };
+use super::daemon_update::DaemonUpdateStatus;
 use super::errors::{error_parts, params, Params};
 use super::fields::is_true;
 use super::history::{ConversationLocation, HistoryMessage, SessionRecordPresence};
@@ -155,6 +156,9 @@ pub enum Event {
         /// (`check_agent_clis`), the update of one that runs or ran included; empty until the
         /// first check ends. Runtime state, not stored.
         agent_cli_statuses: Vec<AgentCliStatus>,
+        /// The daemon's own update as it stands (`check_daemon_update`, `update_daemon`); null
+        /// where this daemon does not update itself. Runtime state, not stored.
+        daemon_update: Option<Box<DaemonUpdateStatus>>,
         /// The daemon host's home directory, so a client can show a path under it as `~/...`; it
         /// is the daemon's home, not the browser's, since the two may be on different machines.
         /// Null when the daemon cannot determine one.
@@ -194,6 +198,12 @@ pub enum Event {
     /// `snapshot`.
     AgentCliStatusUpdated {
         status: AgentCliStatus,
+    },
+    /// The daemon's own update moved on: a check started or ended, a download made progress,
+    /// ended or failed, or the executable was replaced. The whole status, like every other upsert;
+    /// it is also in a `snapshot`. Never sent by a daemon that does not update itself.
+    DaemonUpdateStatusUpdated {
+        status: DaemonUpdateStatus,
     },
     /// What stands in the way of a change of an account's sharing, the change running and the last
     /// one that failed: the account's whole sharing state, sent whenever any of it changes. Every

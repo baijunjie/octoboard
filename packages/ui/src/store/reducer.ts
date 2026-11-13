@@ -165,7 +165,7 @@ export function reducer(state: State, action: Action): State {
       const event = action.event;
       switch (event.type) {
         case "hello":
-          return { ...state, daemon: { version: event.daemon_version, generation: event.generation } };
+          return { ...state, daemon: { version: event.daemon_version, generation: event.generation }, daemonUpdateStale: true };
         case "snapshot":
           return {
             ...state,
@@ -199,6 +199,8 @@ export function reducer(state: State, action: Action): State {
             homeDir: event.home_dir,
             host: sameValue(state.host, event.host) ? state.host : event.host,
             keepAwakeHeld: event.keep_awake_held,
+            daemonUpdate: sameValue(state.daemonUpdate, event.daemon_update) ? state.daemonUpdate : event.daemon_update,
+            daemonUpdateStale: false,
             shellTerminals: keepSame(state.shellTerminals, event.shell_terminals, (t) => t.id),
           };
         case "trusted_directories_updated":
@@ -413,6 +415,8 @@ export function reducer(state: State, action: Action): State {
         }
         case "keep_awake_held_updated":
           return state.keepAwakeHeld === event.keep_awake_held ? state : { ...state, keepAwakeHeld: event.keep_awake_held };
+        case "daemon_update_status_updated":
+          return sameValue(state.daemonUpdate, event.status) && !state.daemonUpdateStale ? state : { ...state, daemonUpdate: event.status, daemonUpdateStale: false };
         case "agent_availability_updated":
           return { ...state, agentAvailability: new Map(event.agent_availability.map((a) => [a.agent, a])) };
         case "agent_cli_status_updated": {

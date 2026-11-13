@@ -14,6 +14,7 @@ mod installation;
 #[cfg(test)]
 mod key_source_tests;
 mod succession;
+pub(crate) mod update;
 
 pub(crate) use background::start_successor;
 pub(crate) use installation::launch_path;
@@ -86,6 +87,25 @@ pub(crate) enum Command {
     /// Say whether a daemon runs against this data directory, and where it listens; exits 3 when
     /// none does.
     Status,
+    /// Download the latest daemon, check it against the release key and replace this executable
+    /// with it, keeping the previous one as `octoboardd.previous`. The running daemon keeps
+    /// running the build it started as until `octoboardd restart`, which keeps every session
+    /// running. Where the user may not write to the executable's directory, upgrade by hand with
+    /// the install script instead. Refused for a daemon that follows the desktop application.
+    Update {
+        /// Only check: exits 0 when up to date, 10 when a newer daemon is published and 1 when the
+        /// check failed.
+        #[arg(long, conflicts_with = "rollback")]
+        check: bool,
+        /// Put the previous build back, by renaming `octoboardd.previous` over the executable
+        /// (what was replaced becomes the previous one), instead of updating.
+        #[arg(long, conflicts_with_all = ["check", "channel"])]
+        rollback: bool,
+        /// The release line to look in, instead of the one the daemon's settings name: `stable` or
+        /// `beta`.
+        #[arg(long, value_parser = parse_channel)]
+        channel: Option<protocol::DaemonUpdateChannel>,
+    },
     /// Print the address to open the running daemon at in a browser, its key included:
     /// `http://localhost:<port>/?key=<key>`, for an SSH port forward of that port. Exits 3 when
     /// none runs. The key is the owner key, which stays the same across launches, when the daemon
@@ -205,6 +225,12 @@ pub(crate) enum Command {
     },
 }
 
+/// The `--channel` values `update` accepts.
+fn parse_channel(text: &str) -> Result<protocol::DaemonUpdateChannel, String> {
+    protocol::DaemonUpdateChannel::from_wire_name(text)
+        .ok_or_else(|| "expected `stable` or `beta`".to_owned())
+}
+
 /// The `--kind` values the MCP mode accepts. A separate type from `protocol::SessionKind` because
 /// clap has to derive a value parser for it, and the protocol types are the wire's, not the CLI's.
 #[derive(Clone, Copy, clap::ValueEnum)]
@@ -229,6 +255,18 @@ pub(crate) fn run(command: Command) -> Result<()> {
         Command::Stop => std::process::exit(background::stop()?),
         Command::Restart => std::process::exit(background::restart()?),
         Command::Status => std::process::exit(background::status()?),
+        Command::Update {
+            check,
+            rollback,
+            channel,
+        } => {
+            let task = match (check, rollback) {
+                (true, _) => update::Task::Check,
+                (_, true) => update::Task::Rollback,
+                _ => update::Task::Install,
+            };
+            std::process::exit(update::run(task, channel)?)
+        }
         Command::Address { rotate } => std::process::exit(background::print_address(rotate)?),
         // The hook path must stay silent and must not pay for a runtime: it is on the agent's
         // turn critical path, several times per turn.
@@ -418,6 +456,55 @@ mod tests {
         assert!(parse(&["--rotate"]).is_err());
         assert!(parse(&["address", "--port", "7531"]).is_err());
         assert!(parse(&["--port", "7531", "address"]).is_err());
+    }
+
+    #[test]
+    fn update_takes_a_check_a_rollback_or_a_channel_and_no_daemon_option() {
+        let update = |args: &[&str]| parse(&[&["update"], args].concat());
+        assert!(matches!(
+            update(&[]).unwrap().command,
+            Some(Command::Update {
+                check: false,
+                rollback: false,
+                channel: None
+            })
+        ));
+        assert!(matches!(
+            update(&["--check"]).unwrap().command,
+            Some(Command::Update {
+                check: true,
+                rollback: false,
+                channel: None
+            })
+        ));
+        assert!(matches!(
+            update(&["--rollback"]).unwrap().command,
+            Some(Command::Update {
+                check: false,
+                rollback: true,
+                channel: None
+            })
+        ));
+        assert!(matches!(
+            update(&["--channel", "beta"]).unwrap().command,
+            Some(Command::Update {
+                channel: Some(protocol::DaemonUpdateChannel::Beta),
+                ..
+            })
+        ));
+        assert!(matches!(
+            update(&["--check", "--channel", "stable"]).unwrap().command,
+            Some(Command::Update {
+                check: true,
+                channel: Some(protocol::DaemonUpdateChannel::Stable),
+                ..
+            })
+        ));
+        assert!(update(&["--check", "--rollback"]).is_err());
+        assert!(update(&["--rollback", "--channel", "beta"]).is_err());
+        assert!(update(&["--channel", "nightly"]).is_err());
+        assert!(update(&["--channel"]).is_err());
+        assert!(parse(&["--port", "1", "update"]).is_err());
     }
 
     /// The helpers take the key's file, never the key: a key in arguments is listed by `ps` for

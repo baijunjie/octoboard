@@ -18,8 +18,8 @@ its body text (see "What an open dialog, menu or popover covers" in `docs/produc
 A failure under a field, on the screen or as a mark never opens an error alert: each is that failure's only
 presentation, with these exceptions:
 
-- A check for updates the user pressed that does not finish opens an error alert and still leaves the Updates row's
-  warning mark (see "The Updates and Update channel rows" in `docs/product/in-app-updates.md`).
+- A check for updates the user pressed that does not finish opens an error alert and still leaves the Version row's
+  warning mark in Settings' Updates section (see "The Version row" in `docs/product/update-settings.md`).
 - An account's sharing change, a long-running change that its own switch retries, that ends unfinished opens an error
   alert in the window that asked for it, and still leaves the warning mark at the switch as its lasting state, the
   alert alone speaking it there; the same change seen ending unfinished from another window, or found so later, is the
@@ -417,8 +417,8 @@ The places with a warning mark:
   request to switch a session's account or hand it off (see "The user's approval of an owner's switch" in
   `docs/product/switching-session-accounts.md` and "The user's approval of an owner's handoff" in
   `docs/product/handing-off-sessions.md`);
-- Settings' Updates row when the last check for updates did not finish, before **Check for updates** (see "The Updates
-  and Update channel rows" in `docs/product/in-app-updates.md`);
+- the Version row of Settings' Updates section when the last check for updates did not finish, before **Check for
+  updates** (see "The Version row" in `docs/product/update-settings.md`);
 - an account's sharing change that did not finish, after its Share default configuration switch in the account's
   settings dialog (see "Sharing the default configuration" in `docs/product/agent-accounts.md`);
 - an agent's Version row when the latest version of its CLI could not be looked up or its last update failed or did not

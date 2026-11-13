@@ -2,7 +2,7 @@ import { createStore, type StoreApi } from "zustand";
 
 import type { ConnectionState } from "../daemon-client";
 import { DEFAULT_SETTINGS } from "./defaultSettings";
-import { type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type AgentAvailability, type AgentCliStatus, type Console, type GitStatus, type Host, type HostInfo, type Page, type Project, type ProviderInfo, type Session, type Settings, type ShellTerminal } from "../protocol";
+import { type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type AgentAvailability, type AgentCliStatus, type Console, type DaemonUpdateStatus, type GitStatus, type Host, type HostInfo, type Page, type Project, type ProviderInfo, type Session, type Settings, type ShellTerminal } from "../protocol";
 import type { SessionRequest } from "./sessionRequests";
 
 /** A page's submission at one of its revisions, as `Page` and `page_submission` carry it. */
@@ -119,6 +119,14 @@ export interface State {
   /** Whether the daemon is holding its host awake (Prevent sleep) as the last `snapshot` or `keep_awake_held_updated`
    * said. False until the first snapshot. */
   keepAwakeHeld: boolean;
+  /** The daemon's own update as the last `snapshot` or `daemon_update_status_updated` said; null where the daemon does
+   * not update itself (also before the first snapshot), so there is no daemon update to show. Runtime state of the
+   * daemon, never stored. */
+  daemonUpdate: DaemonUpdateStatus | null;
+  /** The daemon's greeting (`hello`) arrived and no status of its update has since: `daemonUpdate` is then the previous
+   * connection's, which may be another daemon's, and nothing may be read from it as the daemon's own. A `snapshot` or a
+   * status event ends it. */
+  daemonUpdateStale: boolean;
   /** Every shell terminal the daemon holds, running or exited, keyed by id, in the order the
    * daemon lists them (oldest first) and then as created. Live state of the daemon: a `snapshot`
    * names them all again, and one goes only on `shell_terminal_deleted` or with its project. */
@@ -157,6 +165,8 @@ const initialState: State = {
   homeDir: null,
   host: null,
   keepAwakeHeld: false,
+  daemonUpdate: null,
+  daemonUpdateStale: false,
   shellTerminals: new Map(),
   queuedAccountSwitches: new Set(),
 };

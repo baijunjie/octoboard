@@ -57,8 +57,11 @@ pub(super) const MIGRATIONS: &[&str] = &[
      ALTER TABLE sessions ADD COLUMN compatibility TEXT;",
     // 3 to 4: a report page is a tree of components with the submission of its form, in place of an
     // HTML document. A page stored as HTML has no tree to be read as, so every one is discarded.
-    // The setting that keeps a project session to its own project is added too.
+    // The setting that keeps a project session to its own project is added too, and the daemon's
+    // update check with the channel it follows.
     "ALTER TABLE settings ADD COLUMN keep_sessions_in_own_project INTEGER NOT NULL DEFAULT 0;
+     ALTER TABLE settings ADD COLUMN daemon_update_check INTEGER NOT NULL DEFAULT 1;
+     ALTER TABLE settings ADD COLUMN daemon_update_channel TEXT NOT NULL DEFAULT 'stable';
      DROP TABLE pages;
      CREATE TABLE pages (
          id         TEXT PRIMARY KEY,
@@ -370,10 +373,11 @@ CREATE TABLE settings (
     squash_before_delivery INTEGER NOT NULL DEFAULT 0,
     rebase_before_delivery INTEGER NOT NULL DEFAULT 1,
     delivery            TEXT NOT NULL DEFAULT 'ask',
-    revert_gate         INTEGER NOT NULL DEFAULT 0 , resume_sessions_on_start INTEGER NOT NULL DEFAULT 0, keep_awake INTEGER NOT NULL DEFAULT 0, keep_awake_when TEXT NOT NULL DEFAULT 'working', keep_sessions_in_own_project INTEGER NOT NULL DEFAULT 0);
--- `resume_sessions_on_start`, `keep_awake`, `keep_awake_when` and `keep_sessions_in_own_project` are
--- the last columns, spelled as a migration leaves them; see `Store::resume_sessions_on_start`,
--- `Store::keep_awake` and `Store::keep_sessions_in_own_project`.
+    revert_gate         INTEGER NOT NULL DEFAULT 0 , resume_sessions_on_start INTEGER NOT NULL DEFAULT 0, keep_awake INTEGER NOT NULL DEFAULT 0, keep_awake_when TEXT NOT NULL DEFAULT 'working', keep_sessions_in_own_project INTEGER NOT NULL DEFAULT 0, daemon_update_check INTEGER NOT NULL DEFAULT 1, daemon_update_channel TEXT NOT NULL DEFAULT 'stable');
+-- `resume_sessions_on_start`, `keep_awake`, `keep_awake_when`, `keep_sessions_in_own_project`,
+-- `daemon_update_check` and `daemon_update_channel` are the last columns, spelled as a migration leaves
+-- them; see `Store::resume_sessions_on_start`, `Store::keep_awake`, `Store::keep_sessions_in_own_project`
+-- and `Store::daemon_update_check`.
 -- The user's explicit choice for a setting of a provider, as JSON (`true`, `false` or a quoted
 -- choice); a setting with no row follows its default. Rows naming a provider or setting this
 -- build does not declare are kept and ignored. See `Store::provider_settings`.

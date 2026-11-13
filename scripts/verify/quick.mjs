@@ -95,7 +95,7 @@ export function uiTests(files, exists = () => true) {
 
 // The files that declare wire types, which derive `TS` and `JsonSchema` together.
 const WIRE_TYPE_FILES = [
-  "src/protocol/accounts.rs", "src/protocol/agent_cli.rs", "src/protocol/agents.rs", "src/protocol/browse.rs", "src/protocol/configuration.rs", "src/protocol/events.rs",
+  "src/protocol/accounts.rs", "src/protocol/agent_cli.rs", "src/protocol/agents.rs", "src/protocol/browse.rs", "src/protocol/configuration.rs", "src/protocol/daemon_update.rs", "src/protocol/events.rs",
   "src/protocol/git_workflow.rs", "src/protocol/history.rs", "src/protocol/host.rs", "src/protocol/mcp_inventory.rs", "src/protocol/models.rs", "src/protocol/page_content/chart.rs",
   "src/protocol/page_content/mod.rs", "src/protocol/path_links.rs", "src/protocol/processes.rs",
   "src/protocol/providers.rs", "src/protocol/quotas.rs", "src/protocol/records.rs", "src/protocol/requests.rs", "src/protocol/session_branches.rs", "src/protocol/settings.rs",

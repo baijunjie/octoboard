@@ -370,6 +370,22 @@ pub mod error_code {
     /// An `update_agent_cli` for an agent whose CLI is being updated already. Nothing was run.
     /// `params` names `agent`.
     pub const AGENT_CLI_UPDATE_RUNNING: Code = Code("agent_cli_update_running");
+    /// A `check_daemon_update`, `update_daemon` or `restart_daemon` to a daemon that does not
+    /// update itself: a build without the feature, a daemon that follows the desktop application,
+    /// or a host there is no release for. Nothing was done.
+    pub const DAEMON_UPDATE_UNAVAILABLE: Code = Code("daemon_update_unavailable");
+    /// An `update_daemon` while an update is being downloaded or installed, by this daemon or by
+    /// `octoboardd update`. Nothing was started.
+    pub const DAEMON_UPDATE_RUNNING: Code = Code("daemon_update_running");
+    /// An `update_daemon` once an update has replaced the executable: the daemon has to restart
+    /// before it can update again. Nothing was started.
+    pub const DAEMON_UPDATE_INSTALLED: Code = Code("daemon_update_installed");
+    /// An `update_daemon` when the last check found no newer release, or none was made. Nothing
+    /// was started.
+    pub const DAEMON_UPDATE_NOTHING_TO_INSTALL: Code = Code("daemon_update_nothing_to_install");
+    /// An `update_daemon` for a daemon whose user may not replace its executable. Nothing was
+    /// downloaded. `params` names the `path` of the executable.
+    pub const DAEMON_UPDATE_NOT_WRITABLE: Code = Code("daemon_update_not_writable");
     /// A `cancel_account_login` for an account that is not being signed in. `params` names
     /// `agent`.
     pub const LOGIN_NOT_RUNNING: Code = Code("login_not_running");
@@ -669,6 +685,27 @@ pub mod agent_cli_code {
     /// The update command did not finish in time and was stopped. It may have changed the install
     /// before that.
     pub const UPDATE_TIMED_OUT: Code = Code("agent_cli_update_timed_out");
+}
+
+/// Codes carried by a `DaemonUpdateCheck` and a `DaemonUpdateInstall` (`error`); `PROTOCOL.md` lists
+/// each. Shown where the status is, so each needs only a `daemon.<code>` message in the UI's
+/// catalogs, not a remedy.
+pub mod daemon_update_code {
+    use super::Code;
+
+    /// The check could not read the release manifest: the host could not be reached, answered with
+    /// a status other than "not found", sent something that is not a manifest, or has no release
+    /// for this machine. Carried with the English text as the check's `detail`.
+    pub const CHECK_FAILED: Code = Code("daemon_update_check_failed");
+    /// The archive could not be downloaded or written to the disk. The executable was not touched.
+    pub const DOWNLOAD_FAILED: Code = Code("daemon_update_download_failed");
+    /// The archive is not what the release published: its SHA-256 or its signature does not
+    /// check, it names another file, or it does not hold the daemon. The executable was not
+    /// touched.
+    pub const UNVERIFIED: Code = Code("daemon_update_unverified");
+    /// The new executable could not be put in place. The one that runs, and the file at its path,
+    /// are as they were.
+    pub const REPLACE_FAILED: Code = Code("daemon_update_replace_failed");
 }
 
 /// The `reason_code` param of a failed press of a trust confirmation, in the `error` and in the

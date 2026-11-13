@@ -33,3 +33,9 @@ it("skips a preference left undefined", () => {
   writeStartingPreferences({ setItem: (key) => void written.push(key) }, { language: "en", theme: "light", preferences: { sidebarWidth: undefined } });
   expect(written).toEqual(["heroui-theme", "octoboard.language"]);
 });
+
+it("writes the desktop's automatic update check as the string its owner reads, off only when false", () => {
+  const written = new Map<string, string>();
+  writeStartingPreferences({ setItem: (key, value) => void written.set(key, value) }, { language: "en", theme: "light", preferences: { updateAutoCheck: false } });
+  expect(written.get("octoboard.updateAutoCheck")).toBe("false");
+});

@@ -1,5 +1,5 @@
 import { EXAMPLE_CONVERSATION_ID } from "../agents/conversationId";
-import type { MessageParams } from "./codedError";
+import { CodedError, type MessageParams } from "./codedError";
 import { pathLinkRefusedCause } from "./causes";
 import { PROVIDER_CODES } from "../agents/providers";
 import type { ErrorRecovery } from "./errorRecovery";
@@ -157,6 +157,18 @@ const CORE_CODES = {
   conversation_to_resume_not_found: { origin: "daemon", recovery: "conversation", recoveryLine: true, codeParams: ["path"] },
   conversation_unresumable: { origin: "daemon", recovery: "unresumable" },
   daemon_shutting_down: { origin: "daemon", recovery: "none" },
+  // The daemon's own update (server form): the check's and the download's failure codes are carried by its status and shown
+  // where it is; the five refusals of `check_daemon_update`, `update_daemon` and `restart_daemon` need no remedy beyond their
+  // sentence.
+  daemon_update_check_failed: { origin: "daemon" },
+  daemon_update_download_failed: { origin: "daemon" },
+  daemon_update_installed: { origin: "daemon", recovery: "none" },
+  daemon_update_not_writable: { origin: "daemon", recovery: "none", codeParams: ["path"] },
+  daemon_update_nothing_to_install: { origin: "daemon", recovery: "none" },
+  daemon_update_replace_failed: { origin: "daemon" },
+  daemon_update_running: { origin: "daemon", recovery: "none" },
+  daemon_update_unavailable: { origin: "daemon", recovery: "none" },
+  daemon_update_unverified: { origin: "daemon" },
   default_account_not_shareable: { origin: "daemon", recovery: "accountNotShareable" },
   directory_unavailable: { origin: "daemon", recovery: "openFileManager", detailBlock: true, noSummary: true },
   directory_unreachable: { origin: "daemon", recovery: "path", codeParams: ["path"], variants: { accountPermissions: { codeParams: ["path"] } }, variantOf: (_params, os) => notMacOS(os) },
@@ -399,6 +411,13 @@ export const CODE = Object.fromEntries(Object.keys(CORE_CODES).map((code) => [co
 /** The record of `code`, or nothing for a code the UI does not know (a daemon newer than this client). */
 export function codeRecord(code: string): CodeRecord | undefined {
   return Object.hasOwn(CODES, code) ? CODES[code] : undefined;
+}
+
+/** Whether `error` is a refusal the daemon itself gave: a coded failure whose code the daemon sends, one this client does
+ * not know yet included. The client's own (`connection_closed`, `request_timed_out`) and anything else thrown say only that
+ * no answer came, which for a request that ends the daemon's own process is the expected end. */
+export function isDaemonRefusal(error: unknown): error is CodedError {
+  return error instanceof CodedError && codeRecord(error.code)?.origin !== "client" && codeRecord(error.code)?.origin !== "ui";
 }
 
 /** The prefix of a provider's code and of its messages: `provider.<id>.<code>`. */

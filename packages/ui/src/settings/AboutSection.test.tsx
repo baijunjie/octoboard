@@ -55,11 +55,11 @@ it("has no version and no update controls where the platform cannot update itsel
   expect(text).not.toContain("Update channel");
 });
 
-it("shows the update controls and the version where the platform can update itself", async () => {
+it("shows the version where the platform can update itself, and none of the update controls, which are the Updates section's", async () => {
   const container = mount({ kind: "tauri", host: BROWSER_HOST, updater: { currentVersion: async () => "0.1.0", check: async () => undefined, install: async () => {} } });
   await act(async () => {});
-  expect(container.textContent).toContain("Check for updates");
-  expect(container.textContent).toContain("Update channel");
+  expect(container.textContent).not.toContain("Check for updates");
+  expect(container.textContent).not.toContain("Update channel");
   expect(container.querySelector("h3")?.parentElement?.textContent?.replace(/[\u2066-\u2069]/g, "")).toContain("Version 0.1.0");
 });
 

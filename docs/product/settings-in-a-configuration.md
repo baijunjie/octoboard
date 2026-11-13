@@ -19,9 +19,9 @@ accounts** section: the accounts themselves (see "The accounts" in `docs/product
 and the settings that apply to all of an agent's accounts or to every agent (see "The agent account settings an export
 carries" below). The one setting of those sections left out is an account's sharing of the default configuration (see
 "What is not configuration and never travels" in `docs/product/configuration-export-and-import.md`). Nothing of the
-Trusted folders, Permissions and Notifications sections travels, nor does a choice a client keeps elsewhere, such as the
-update channel (see "The Updates and Update channel rows" in `docs/product/in-app-updates.md`) or a project's focus mode
-(see `docs/product/focus-mode.md`).
+Trusted folders, Permissions, Notifications and Updates sections travels — neither form's update channel or automatic
+update check (see `docs/product/update-settings.md`) — nor does a choice a client keeps elsewhere, such as a project's
+focus mode (see `docs/product/focus-mode.md`).
 
 ## The application settings an export carries
 

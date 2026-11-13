@@ -36,6 +36,7 @@ const SECTION_LABELS: Record<SettingsSectionId, Parameters<typeof sectionMatches
   shortcuts: "settings.section.shortcuts",
   cleanup: "settings.section.cleanup",
   configuration: "settings.section.configuration",
+  updates: "settings.section.updates",
   about: "settings.section.about",
 };
 
@@ -231,10 +232,14 @@ describe("sectionMatches", () => {
     });
 
     it("finds the updates version row by its name and by its section, and not by a word that is not its name", () => {
-      const updater = context({ platform: { ...DESKTOP, updater: { currentVersion: async () => "1.0.0", check: async () => undefined, install: async () => {} } } });
-      expect(find("about", "updates", updater).ids.has("updates.version")).toBe(true);
-      expect(find("about", "about", updater).ids.has("updates.version")).toBe(true);
-      expect(find("about", "updates zzzznope", updater).ids.has("updates.version")).toBe(false);
+      expect(find("updates", "version").ids.has("updates.version")).toBe(true);
+      expect(find("updates", "updates").ids.has("updates.version")).toBe(true);
+      expect(find("updates", "updates zzzznope").ids.has("updates.version")).toBe(false);
+    });
+
+    it("finds the automatic check by either wording of its description", () => {
+      expect(find("updates", "in the background").ids.has("updates.autoCheck")).toBe(true);
+      expect(find("updates", "automatically").ids.has("updates.autoCheck")).toBe(true);
     });
   });
 

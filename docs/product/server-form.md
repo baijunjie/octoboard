@@ -2,7 +2,8 @@
 
 Octoboard comes in two forms. This document describes the **server form**: the daemon alone, on a Linux server
 without a display, reached by its owner from a browser on another machine over SSH. What it runs on, and how it is
-published, installed and upgraded, is in `docs/product/installing-the-server-form.md`. The command line described here also
+published, installed and upgraded, is in `docs/product/installing-the-server-form.md`; how it updates itself, in
+`docs/product/server-form-updates.md`. The command line described here also
 acts on the desktop application's daemon, within the limits each command states, and the planned stop is also what the
 desktop form's restart into an update and a crash of the application rely on. The desktop form, and what the server form
 changes in starting up, quitting and crashes, are in `docs/product/application-lifecycle.md`; who can reach the daemon,
@@ -117,7 +118,7 @@ already running against the same data directory is refused by the lock before th
 in `docs/product/application-lifecycle.md`).
 
 The daemon's own options, `--port`, `--parent-pid` and `--service-managed` (see "Planned restart and planned stop"
-below), are not accepted together with a mode (`start`, `stop`, `restart`, `status`, `address`
+below), are not accepted together with a mode (`start`, `stop`, `restart`, `status`, `address`, `update`
 or the helper modes the daemon starts for its agents): such a command line is a usage error.
 
 ## Running in the background from the command line
@@ -326,6 +327,10 @@ restart cannot be told apart from no daemon at all.
     output. A daemon that starts while the file is being replaced is waited for until it has recorded itself, and the
     key is then rotated through it as above.
 
+`octoboardd update` acts on the installed executable rather than on the running daemon: it checks for, downloads and
+puts in place a newer release, or puts the previous one back, and leaves the restart to `octoboardd restart` (see "The
+`octoboardd update` command" in `docs/product/server-form-updates.md`).
+
 ## Planned restart and planned stop
 
 A **planned restart** stops the daemon without ending anything: every session and shell terminal is handed over to the
@@ -337,7 +342,10 @@ takes everything over as exactly.
 
 **Asking for one.** A planned restart is asked for by `octoboardd restart` (see "Running in the background from the
 command line" above), by the signal `SIGUSR1` it sends, or by the control route `POST /restart`, which answers `202` at
-once and which `octoboardd restart` sends on Windows. A planned stop is asked for by the control route
+once and which `octoboardd restart` sends on Windows. A page served by a daemon that updates itself asks for one with
+**Restart now** once an update is installed, which, unlike the others, is refused while a download of the update runs or
+while any stop or restart is already asked for (see "Restarting into the update" in
+`docs/product/server-form-updates.md`). A planned stop is asked for by the control route
 `POST /planned-stop` or the WebSocket request `planned_stop`; both answer at once and neither is ever refused. The
 desktop application asks for one to restart into an update (see "Restarting" in
 `docs/product/application-lifecycle.md`), and a daemon that follows the application makes one itself when it finds the

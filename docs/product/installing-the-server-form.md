@@ -13,8 +13,8 @@ The desktop application's own installation is in `docs/product/installing-the-de
 - **No root.** It is installed for one user, under that user's home directory, and runs as that user.
 - It is installed only by the install script below, or by hand from a release's archive. There is no Homebrew formula,
   `.deb` or `.rpm` package, npm package or `cargo install`.
-- There is no automatic update: a newer version is installed by running the install script again (see "Upgrading"
-  below).
+- **It updates itself**, as the desktop application does: it looks for newer releases on its own and offers them in
+  the browser, and downloads one, or restarts into it, only when asked (see "Upgrading" below).
 
 ## What a release holds
 
@@ -39,8 +39,9 @@ same rules (see "Where updates come from" in `docs/product/in-app-updates.md`):
 | Beta | `https://github.com/baijunjie/octoboard/releases/download/updater/beta-linux.json` |
 | Stable | `https://github.com/baijunjie/octoboard/releases/download/updater/stable-linux.json` |
 
-No application reads them: the install script reads them for the newest version, and the website for its download
-links (see "Where download links point" in `docs/product/website-download-page.md`). A Linux manifest has the fields of
+The server form's daemon reads them to update itself (see `docs/product/server-form-updates.md`), the install script for
+the newest version, and the website for its download links (see "Where download links point" in
+`docs/product/website-download-page.md`). A Linux manifest has the fields of
 the others — `version`, `notes`, `pub_date`, `holder_floor` and `platforms` — with one entry under `linux-x86_64` and
 one under `linux-aarch64`, each holding the archive's `url` on the versioned release, its `signature` (the content of
 its `.sig`) and its `sha256` (lowercase hex):
@@ -80,8 +81,7 @@ curl -fsSL https://octoboard.dev/install.sh | sh -s -- --service [--port N]
 | `-h`, `--help` | Print the usage and exit. |
 
 Both `--port N` and `--port=N`, and both forms of `--bin-dir`, are accepted. Any other argument is an error.
-`OCTOBOARD_MANIFEST_BASE` in the environment replaces the address the manifests are read from (a mirror, or a test), and
-`OCTOBOARD_UPDATE_PUBKEY` the public key a signature is checked with.
+`OCTOBOARD_MANIFEST_BASE` in the environment replaces the address the manifests are read from (a mirror, or a test).
 
 What it does, in order; any failure prints a message starting `octoboardd install:` on the error output and exits with
 status 1:
@@ -132,9 +132,19 @@ With `--service`, after installing the binary, the script:
 
 ## Upgrading
 
-Upgrading is running the install script again, then `octoboardd restart` (see "Running in the
-background from the command line" in `docs/product/server-form.md`). The restart is a planned restart: every session
-and shell terminal keeps running and the next daemon, started from the new binary, takes them over, on the same port
-for a daemon started with `octoboardd start`, and on the unit's port for one the service runs. The owner key stays the
-same, so an address `octoboardd address` printed before still opens the daemon (see "The UI the daemon serves" in
-`docs/product/server-form.md`).
+A newer version is installed in any of three ways, each followed by a restart:
+
+- **From the browser**: **Download and install** in the update notice or in Settings' Updates section, then **Restart
+  now** (see `docs/product/server-form-updates.md`). This needs the official release build, which the install script
+  installs, and an install directory the daemon's user may write to.
+- **With `octoboardd update`** on the server, then `octoboardd restart` (see "The `octoboardd update` command" in
+  `docs/product/server-form-updates.md`). Both of these keep the replaced executable as `octoboardd.previous`, which
+  `octoboardd update --rollback` puts back.
+- **By running the install script again**, then `octoboardd restart` (see "Running in the background from the command
+  line" in `docs/product/server-form.md`). This is the way for a daemon that does not update itself or cannot replace
+  its own executable; for the latter the browser offers the script's command to copy.
+
+The restart is a planned restart: every session and shell terminal keeps running and the next daemon, started from the
+new binary, takes them over, on the same port for a daemon started with `octoboardd start`, and on the unit's port for
+one the service runs. The owner key stays the same, so an address `octoboardd address` printed before still opens the
+daemon (see "The UI the daemon serves" in `docs/product/server-form.md`).

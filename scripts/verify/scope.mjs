@@ -78,8 +78,8 @@ export const UI_READS_NATIVE = ["apps/desktop/src-tauri/Info.template.plist"];
 // whose shipped files the hooks list (`installer-hooks.test.mjs`).
 export const DESKTOP_READS_NATIVE = ["apps/desktop/src-tauri/localizations/", "apps/desktop/src-tauri/Info.template.plist", "apps/desktop/src-tauri/tauri.macos.conf.json", "apps/desktop/src-tauri/tauri.conf.json", "apps/desktop/src-tauri/tauri.windows.conf.json", "apps/desktop/src-tauri/windows/installer-hooks.nsh"];
 // A daemon test (`platform/build_files.rs`) holds the name the Windows installer hooks give a file they move aside to
-// the one the daemon removes.
-export const DAEMON_READS_NATIVE = ["apps/desktop/src-tauri/windows/installer-hooks.nsh"];
+// the one the daemon removes, and another (`self_update/tests.rs`) holds the daemon's update key to the updater's.
+export const DAEMON_READS_NATIVE = ["apps/desktop/src-tauri/windows/installer-hooks.nsh", "apps/desktop/src-tauri/tauri.conf.json"];
 // A website test (`install-script.test.ts`) holds the install script's public key to the updater's.
 export const WEB_READS_NATIVE = ["apps/desktop/src-tauri/tauri.conf.json"];
 // The same test holds the example systemd unit's port to the configured server port.

@@ -200,6 +200,7 @@ mod tests {
             account_logins: vec![],
             account_sharing: vec![],
             agent_cli_statuses: vec![],
+            daemon_update: None,
             home_dir: None,
             host: crate::platform::HostFacts::current().into(),
             keep_awake_held: false,

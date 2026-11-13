@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use super::agents::AgentId;
+use super::daemon_update::DaemonUpdateChannel;
 use super::git_workflow::GitWorkflowSettings;
 use super::records::Account;
 use crate::providers::SettingValue;
@@ -110,6 +111,14 @@ pub struct Settings {
     /// whichever run interrupted them (see `coordinator::resume_on_start`). Off unless the user
     /// turned it on; read at each start.
     pub resume_sessions_on_start: bool,
+    /// Whether a daemon that updates itself (`snapshot.daemon_update` is not null) checks for a
+    /// newer release on its own: once shortly after it starts, every six hours, and at once when
+    /// this is turned on or the channel changes. On unless the user turned it off. Off leaves only
+    /// the check the user asks for (`check_daemon_update`); nothing is ever downloaded or restarted
+    /// on its own either way.
+    pub daemon_update_check: bool,
+    /// The release line the daemon's update check follows. `stable` unless the user chose `beta`.
+    pub daemon_update_channel: DaemonUpdateChannel,
     /// The directory a `git` association clones into when none is named: the one the user set, or
     /// `~/Projects` (expanded) while none is. Always an absolute, lexically normalised path.
     pub default_clone_dir: String,
@@ -182,6 +191,8 @@ impl Default for Settings {
             auto_switch_on_usage_limit: false,
             auto_start_quota_windows: false,
             resume_sessions_on_start: false,
+            daemon_update_check: true,
+            daemon_update_channel: DaemonUpdateChannel::Stable,
             default_clone_dir: String::new(),
             accounts: Vec::new(),
             account_order: Default::default(),
@@ -229,6 +240,7 @@ mod tests {
             account_logins: vec![],
             account_sharing: vec![],
             agent_cli_statuses: vec![],
+            daemon_update: None,
             home_dir: Some("/Users/dev".to_string()),
             host: crate::platform::HostFacts::current().into(),
             keep_awake_held: false,

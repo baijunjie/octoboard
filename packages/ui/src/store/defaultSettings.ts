@@ -19,6 +19,8 @@ export const DEFAULT_SETTINGS: Settings = {
   auto_switch_on_usage_limit: false,
   auto_start_quota_windows: false,
   resume_sessions_on_start: false,
+  daemon_update_check: true,
+  daemon_update_channel: "stable",
   default_clone_dir: "",
   accounts: [],
   account_order: {},

@@ -198,6 +198,22 @@ pub fn create_replacement(staged: &Path, target: &Path, privacy: Privacy) -> io:
     Ok(file)
 }
 
+/// Creates `staged`, which must not exist, with the permissions of the file `target`, a link at
+/// `staged` being refused rather than followed: the file a program is about to rename over
+/// `target`, which another user of the directory must not be able to redirect.
+pub fn create_new_like(staged: &Path, target: &Path) -> io::Result<File> {
+    let mode = std::fs::metadata(target)?.permissions().mode() & 0o7777;
+    let file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(mode)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(staged)?;
+    // The mode an open applies is cut by the umask.
+    file.set_permissions(Permissions::from_mode(mode))?;
+    Ok(file)
+}
+
 /// Opens `path` with `options`, creating it readable by its owner alone from the first byte.
 pub fn create_private(path: &Path, options: &mut OpenOptions) -> io::Result<File> {
     options.mode(0o600).open(path)
@@ -228,6 +244,21 @@ pub fn keep_private_below(_dir: &Path) -> io::Result<()> {
 pub fn is_executable(path: &Path) -> bool {
     std::fs::metadata(path)
         .is_ok_and(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0)
+}
+
+/// Whether this process may create files in the directory `dir` and rename them there: the
+/// system's own answer (`access(2)`), which counts a read-only mount, a mode and an ACL alike.
+pub fn directory_writable(dir: &Path) -> bool {
+    let Ok(path) = std::ffi::CString::new(dir.as_os_str().as_bytes()) else {
+        return false;
+    };
+    // SAFETY: `path` is a NUL-terminated string that outlives the call.
+    unsafe { libc::access(path.as_ptr(), libc::W_OK | libc::X_OK) == 0 }
+}
+
+/// Flushes the entries of the directory `dir` to the disk, so that a rename in it survives a crash.
+pub fn sync_directory(dir: &Path) -> io::Result<()> {
+    File::open(dir)?.sync_all()
 }
 
 /// Whether `a` and `b` lead to the same file, symlinks followed: the same device and inode, as two

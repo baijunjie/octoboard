@@ -9,7 +9,7 @@ export const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 export type UpdatePhase = "idle" | "checking" | "downloading" | "installed";
 
 export interface UpdateState {
-  /** The version running, once the shell has said. */
+  /** The version running, once the shell (or, for a daemon, its greeting) has said. */
   currentVersion?: string;
   phase: UpdatePhase;
   /** The newer version the last check found, offered until it is installed or a later check finds none, or the
@@ -27,6 +27,19 @@ export interface UpdateState {
   installedHolderFloor?: string | null;
   /** How the last check ended, and when. */
   lastCheck?: { outcome: "upToDate" | "available" | "failed"; at: number };
+  /** The channel the next check looks on, as the user chose it or the running build defaults to. */
+  channel: UpdateChannel;
+  /** Whether the application looks for updates by itself; off, only a check the user asks for runs. */
+  autoCheck: boolean;
+  /** Set while the update found cannot be installed from here, the daemon's executable being a file it cannot replace
+   * (`path`): it is upgraded by hand, and no download is offered. */
+  manual?: { path: string };
+  /** A check the user asked for of the daemon that it may have answered with the last one (it looks again at most every
+   * 30 seconds): `pending` while nothing shows that it started, `unchanged` for a moment once it is clear it did not, so
+   * the button can say that it was heard and the last check stands. */
+  checkAsked?: "pending" | "unchanged";
+  /** The daemon this page talks to runs a version other than the one the page was loaded for, which a reload takes up. */
+  reloadNeeded?: boolean;
   /** The notice about `update` was dismissed; a different version brings it back. Settings still offers it. */
   noticeDismissed: boolean;
   /** The notice that a restart is needed was hidden with Later; Settings still shows the pending restart. */
@@ -40,10 +53,12 @@ export interface UpdateState {
  * reported, only recorded in `lastCheck`. */
 export interface UpdateFailure {
   action: "check" | "install";
-  /** `gone` is an install the shell had nothing to install for: the update it offered is no longer there. */
+  /** `gone` is an install the shell (or the daemon) had nothing to install for: the update it offered is no longer there. */
   reason: "failed" | "gone";
   /** The updater's own text. */
   detail: string;
+  /** The daemon's code of the failure, where it names one (`daemon_update_unverified`): its copy words the alert. */
+  code?: string;
 }
 
 export interface UpdateStore {
@@ -58,6 +73,12 @@ export interface UpdateStore {
   /** Downloads and installs the update the last check found. Does nothing without one, while anything else is
    * under way or once an update is installed, so nothing is ever installed twice. */
   install(): Promise<void>;
+  /** Chooses the channel to look on, withdrawing an update another channel offered, and, where the automatic checks are on, looks again at once on it. For the daemon's update it is the setting the daemon
+   * holds, so the promise is the save, which reports its own failure. */
+  setChannel(channel: UpdateChannel): void | Promise<unknown>;
+  /** Switches the automatic checks on or off; switched on, it looks at once. For the daemon's update it is the setting
+   * the daemon holds, so the promise is the save, which reports its own failure. */
+  setAutoCheck(value: boolean): void | Promise<unknown>;
   /** Hides the notice about the update found. */
   dismissNotice(): void;
   /** Hides the notice that a restart is needed. */
@@ -71,7 +92,8 @@ export interface UpdateStore {
    * the confirmation is open or the relaunch is under way. */
   onRestartRequested(handler: (holderFloor: string | null, targetVersion: string | null) => Promise<void>): () => void;
   /** Starts the automatic checks, the first `firstCheckDelayMs` after the call (`FIRST_CHECK_DELAY_MS` unless
-   * given) and then every `CHECK_INTERVAL_MS`; returns the function that stops them. With `null` there are none. */
+   * given) and then every `CHECK_INTERVAL_MS`, while the automatic checks are on; returns the function that stops them.
+   * With `null` there are none. */
   start(firstCheckDelayMs?: number | null): () => void;
 }
 
@@ -85,16 +107,31 @@ export interface UpdateStore {
 export function createUpdateStore({
   updater,
   getChannel,
+  setChannel,
+  getAutoCheck,
+  setAutoCheck,
   reportFailure,
   now = Date.now,
 }: {
   updater: UpdaterCapability;
   /** The channel to look on, given the running version (`undefined` until the shell has said). */
   getChannel: (currentVersion: string | undefined) => UpdateChannel;
+  /** Keeps the user's choice of channel, which `getChannel` then answers. */
+  setChannel: (channel: UpdateChannel) => void;
+  /** Whether the automatic checks are on, and keeps the user's choice. */
+  getAutoCheck: () => boolean;
+  setAutoCheck: (value: boolean) => void;
   reportFailure: (failure: UpdateFailure) => void;
   now?: () => number;
 }): UpdateStore {
-  let state: UpdateState = { phase: "idle", noticeDismissed: false, restartNoticeHidden: false, restarting: false };
+  let state: UpdateState = {
+    phase: "idle",
+    channel: getChannel(undefined),
+    autoCheck: getAutoCheck(),
+    noticeDismissed: false,
+    restartNoticeHidden: false,
+    restarting: false,
+  };
   const listeners = new Set<() => void>();
   let restartHandler: ((holderFloor: string | null, targetVersion: string | null) => Promise<void>) | undefined;
 
@@ -104,7 +141,7 @@ export function createUpdateStore({
   };
 
   void updater.currentVersion().then(
-    (currentVersion) => set({ currentVersion }),
+    (currentVersion) => set({ currentVersion, channel: getChannel(currentVersion) }),
     () => {},
   );
 
@@ -120,13 +157,17 @@ export function createUpdateStore({
     restartNoticeHidden: false,
   });
 
-  async function check(trigger: "manual" | "automatic"): Promise<void> {
-    const channel = getChannel(state.currentVersion);
-    // What another channel offered is no news about this one, and stays withdrawn if the check below fails. A download
-    // under way keeps its update, which `install` holds on to and which is gone once it ends.
+  /** What another channel offered is no news about `channel`, and stays withdrawn if a check on it fails. A download under
+   * way keeps its update, which `install` holds on to and which is gone once it ends. */
+  function withdrawOtherChannel(channel: UpdateChannel): void {
     if (state.update && state.updateChannel !== channel && state.phase !== "downloading") {
       set({ update: undefined, updateChannel: undefined, noticeDismissed: false });
     }
+  }
+
+  async function check(trigger: "manual" | "automatic"): Promise<void> {
+    const channel = getChannel(state.currentVersion);
+    withdrawOtherChannel(channel);
     if (state.phase !== "idle") return;
     set({ phase: "checking" });
     try {
@@ -204,6 +245,18 @@ export function createUpdateStore({
     },
     check,
     install,
+    setChannel(channel) {
+      setChannel(channel);
+      set({ channel: getChannel(state.currentVersion) });
+      // With the automatic checks off nothing looks until the user asks, but what the other channel offered is withdrawn.
+      withdrawOtherChannel(state.channel);
+      if (state.autoCheck) void check("automatic");
+    },
+    setAutoCheck(value) {
+      setAutoCheck(value);
+      set({ autoCheck: value });
+      if (value) void check("automatic");
+    },
     dismissNotice: () => set({ noticeDismissed: true }),
     hideRestartNotice: () => set({ restartNoticeHidden: true }),
     async restart() {
@@ -226,9 +279,13 @@ export function createUpdateStore({
     start(firstCheckDelayMs = FIRST_CHECK_DELAY_MS) {
       if (firstCheckDelayMs === null) return () => {};
       let interval: ReturnType<typeof setInterval> | undefined;
+      // The switch is read at each check, so turning it off stops the checks without stopping the timer.
+      const automatic = () => {
+        if (getAutoCheck()) void check("automatic");
+      };
       const first = setTimeout(() => {
-        void check("automatic");
-        interval = setInterval(() => void check("automatic"), CHECK_INTERVAL_MS);
+        automatic();
+        interval = setInterval(automatic, CHECK_INTERVAL_MS);
       }, firstCheckDelayMs);
       return () => {
         clearTimeout(first);

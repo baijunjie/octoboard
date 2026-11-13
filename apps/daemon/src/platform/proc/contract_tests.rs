@@ -1016,3 +1016,72 @@ fn a_start_without_a_group_starts_the_program_without_a_group() {
         .expect("the containment")
         .releases_members());
 }
+
+/// The path the process runs from leads to the running image, and so does any other name of the same
+/// file; another file with the same bytes, and a path that leads nowhere, do not.
+#[test]
+fn only_the_file_this_process_runs_names_the_running_image() {
+    let image = running_image().expect("the running executable");
+    assert!(names_running_image(&image));
+
+    let dir = ScratchDir::new("proc-running-image");
+    assert!(!names_running_image(&dir.join("missing")));
+    let copy = dir.join("copy");
+    std::fs::copy(&image, &copy).expect("a copy of the running executable");
+    assert!(!names_running_image(&copy));
+
+    #[cfg(unix)]
+    {
+        let link = dir.join("link");
+        crate::test_support::symlink(&image, &link).expect("a link to the running executable");
+        assert!(names_running_image(&link));
+        let other_name = dir.join("other-name");
+        if std::fs::hard_link(&image, &other_name).is_ok() {
+            assert!(names_running_image(&other_name));
+        }
+    }
+}
+
+/// The open image reads as the file at the running executable's path, so reading it for a copy gives
+/// the bytes this process runs.
+#[test]
+fn the_open_running_image_reads_as_the_file_at_the_running_path() {
+    use std::io::Read;
+    let image = running_image().expect("the running executable");
+    let mut opened = running_image_file().expect("the open image");
+    let mut head = [0u8; 4];
+    opened
+        .read_exact(&mut head)
+        .expect("the image's first bytes");
+    let mut at_path = [0u8; 4];
+    std::fs::File::open(&image)
+        .and_then(|mut file| file.read_exact(&mut at_path))
+        .expect("the file's first bytes");
+    assert_eq!(head, at_path);
+    assert_eq!(
+        crate::platform::fs::stat_of(&running_image_file().unwrap())
+            .unwrap()
+            .identity,
+        crate::platform::fs::stat(&image, crate::platform::fs::Links::Follow)
+            .unwrap()
+            .identity
+    );
+}
+
+/// The server form's update is offered on Linux for the two architectures there is a release for, and
+/// nowhere else.
+#[test]
+fn only_linux_on_x86_64_and_arm64_is_a_host_that_updates_itself() {
+    #[cfg(not(target_os = "linux"))]
+    assert!(!self_update_host());
+    #[cfg(all(
+        target_os = "linux",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ))]
+    assert!(self_update_host());
+    #[cfg(all(
+        target_os = "linux",
+        not(any(target_arch = "x86_64", target_arch = "aarch64"))
+    ))]
+    assert!(!self_update_host());
+}

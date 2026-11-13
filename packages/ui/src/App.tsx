@@ -24,6 +24,8 @@ import { PendingQuestionDialog, usePendingQuestion } from "./dialogs/PendingQues
 import { RequestedDialog } from "./dialogs/RequestedDialog";
 import { useConfirmIncompleteLaunch } from "./dialogs/useConfirmIncompleteLaunch";
 import { useQuickCreateSession } from "./dialogs/useQuickCreateSession";
+import { raiseError } from "./components/alerts/raiseError";
+import { CodedError } from "./errors/codedError";
 import { useT } from "./i18n/react";
 import { liveOwner, ownerKey, type AsideOwner } from "./layout/asideOwner";
 import { columnSpan, isDockEasing } from "./layout/paneDockMotion";
@@ -51,6 +53,8 @@ import { useSettingsDialog } from "./settings/useSettingsDialog";
 import { updateNoticeKind } from "./updates/noticeKind";
 import { UpdateNotice } from "./updates/UpdateNotice";
 import { useUpdateSelector, useUpdateStore } from "./updates/UpdatesProvider";
+import { useReloadAfterRestart } from "./updates/useReloadAfterRestart";
+import { useUpdatedNotice } from "./updates/useUpdatedNotice";
 import { useUpdateMenuLabel } from "./updates/useUpdateMenuLabel";
 import { belongsToFocus } from "./sidebar/focus";
 import { consoleSessionAbove } from "./sessions/order";
@@ -276,7 +280,18 @@ export function App(): React.ReactElement {
     const state = store.getState().connectionState;
     return state !== "incompatible" && state !== "keyRefused";
   };
+  const reloadAfterRestart = useReloadAfterRestart();
+  useUpdatedNotice();
   const exit = useAppExit({
+    // A browser tab has no shell to relaunch, so a restart (into an update the daemon installed) is the daemon's own.
+    restartDaemon: async (targetVersion) => {
+      // Nothing is sent on a connection that is not open, and no reload is waited for: say so as any request would.
+      if (store.getState().connectionState !== "open") {
+        raiseError(new CodedError(t("connection.error.connectionIsClosed"), "connection_closed", {}), { title: t("exit.daemonRestartFailed.title") });
+        return;
+      }
+      await reloadAfterRestart.restart(targetVersion, () => request({ type: "restart_daemon" }));
+    },
     getSessions: () => (reachable() ? allSessions() : []),
     getShellTerminals: () => (reachable() ? Array.from(store.getState().shellTerminals.values()) : []),
     requestShutdown: () => request({ type: "shutdown" }),

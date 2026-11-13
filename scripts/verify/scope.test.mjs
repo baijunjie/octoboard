@@ -81,7 +81,7 @@ const CASES = [
   ["apps/desktop/src-tauri/Info.template.plist", ["verify", "ui", "desktop", "native"]],
   ["apps/desktop/src-tauri/localizations/", ["verify", "desktop", "native"]],
   ["apps/desktop/src-tauri/localizations/ja.json", ["verify", "desktop", "native"]],
-  ["apps/desktop/src-tauri/tauri.conf.json", ["verify", "web", "desktop", "native"]],
+  ["apps/desktop/src-tauri/tauri.conf.json", ["verify", "web", "desktop", "daemon", "native"]],
   ["apps/daemon/dist/systemd/octoboardd.service", ["verify", "web", "daemon"]],
   ["apps/desktop/src-tauri/tauri.windows.conf.json", ["verify", "desktop", "native"]],
   ["apps/desktop/src-tauri/windows/installer-hooks.nsh", ["verify", "desktop", "daemon", "native"]],

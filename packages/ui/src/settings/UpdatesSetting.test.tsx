@@ -240,11 +240,11 @@ it("speaks the result of a check that starts while Settings is open, an automati
 
 it("keeps the channel the user picks and looks again on the new one", async () => {
   const check = vi.fn(async () => undefined);
-  const { container } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(check) });
+  const { container, store } = mount({ kind: "tauri", host: BROWSER_HOST, updater: updaterOf(check) });
   await act(async () => {});
   expect(updateChannel.get()).toBe("beta");
   expect(check).not.toHaveBeenCalled();
-  await act(async () => updateChannel.set("stable"));
+  await act(async () => void store().setChannel("stable"));
   expect(localStorage.getItem(PREFERENCE_KEYS.updateChannel)).toBe("stable");
   expect(container.textContent).toContain("Stable");
   expect(check).toHaveBeenCalledExactlyOnceWith("stable");
@@ -269,9 +269,9 @@ it.each([
 it("looks on a channel picked before the running version is known", async () => {
   updateChannel.set(undefined);
   const check = vi.fn(async () => undefined);
-  mount({ kind: "tauri", host: BROWSER_HOST, updater: { currentVersion: () => new Promise<string>(() => {}), check, install: async () => {} } });
+  const { store } = mount({ kind: "tauri", host: BROWSER_HOST, updater: { currentVersion: () => new Promise<string>(() => {}), check, install: async () => {} } });
   await act(async () => {});
-  await act(async () => updateChannel.set("beta"));
+  await act(async () => void store().setChannel("beta"));
   expect(check).toHaveBeenCalledExactlyOnceWith("beta");
 });
 

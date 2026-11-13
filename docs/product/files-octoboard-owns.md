@@ -32,6 +32,10 @@ under any other.
 | `~/.octoboard/builds/<build>/` | A copy of a build's daemon executable, which process holders and the helpers of their launches run from (a project session's git hooks excepted, which run the installation's own executable), so that an update can replace the installed application while they run; on Windows with `conpty.dll` and `OpenConsole.exe` beside it. `<build>` is the version and a short hash of the executable. Removed once no holder runs from it (see "The copy of the build holders run from" in `docs/product/process-holders.md`). |
 | `~/.octoboard/logs/holder-<holder id>.log` | A process holder's log, at the level of information and above, rotated as `daemon.log` is. A holder starting removes the logs of holders no longer running that have not been written for **7 days**. |
 | `~/.octoboard/agent-cli-updates/<agent>.log` | The output of the last update of that agent's CLI, one file per agent named by its id (see "Updating" in `docs/product/agent-cli-updates.md`). Overwritten by each update of the agent, kept across restarts. |
+| `~/.octoboard/update.lock` | Held while the server form's update downloads and replaces the daemon's executable, by the daemon or by `octoboardd update`, so that the two never do it together, and taken for an instant by a daemon that updates itself as it starts, to clear `updates/` (see "Downloading and replacing the executable" in `docs/product/server-form-updates.md`). Only the lock on it counts; the file stays. |
+| `~/.octoboard/updates/` | Where the server form's update downloads the release archive. The archive is removed once it is installed or the download fails; every download clears the directory first, and a daemon that updates itself clears what a stop left there as it starts, unless another process holds `update.lock`. |
+| `~/.octoboard/update-installed.json` | The last replacement of the daemon's executable by the server form's update: the version installed, its holder floor, the version it replaced and the executable's path. Written after every replacement, by the daemon or by `octoboardd update`, so that a running daemon learns of an update `octoboardd update` made under it (see "Downloading and replacing the executable" in `docs/product/server-form-updates.md`); a record that names another file, or a version not newer than the running daemon's, is ignored. Removed by `octoboardd update --rollback`. |
+| `~/.octoboard/daemon.version` | The version of the last daemon that updates itself to start, one line. Each such daemon reads it as it starts, then writes its own; one that finds an older version there started in place of that version, which the browser says once (see "What the browser shows" in `docs/product/server-form-updates.md`). Any other daemon neither reads nor writes it. |
 | `~/.octoboard/process-ledger.json` | The launch identities, attributed processes and user keeps used for background-process cleanup across daemon restarts (see "Automatic stopping and its boundaries" in `docs/product/background-processes.md`). It records the boot ID of the system it was written in (on Linux), and records from before the system last started are ignored. An unreadable file is moved aside as `process-ledger.json.unreadable`; processes identified only by their launch tag are kept rather than stopped without knowing the user's choices. A file whose boot ID cannot be compared with the running system's (it records none, written before boot IDs were recorded, on a system that has one, or the daemon cannot read the system's) is treated as unreadable but not moved aside. |
 
 The desktop application keeps the window's size, position and maximized state in
@@ -60,6 +64,12 @@ switch for either changes, including when an import applies them.
   them and writes them to the file, and then removes them from browser storage. Until then that launch runs on the
   defaults, so the icon shows even if the user had hidden it. Should the file not be written, the choices stay in
   browser storage and the next launch takes them over again.
+
+The server form's update also writes beside the daemon's executable, not under `~/.octoboard` (see
+`docs/product/server-form-updates.md`): `octoboardd.previous`, the executable an update or `octoboardd update --rollback`
+replaced, kept for a rollback and replaced by the next one of either; and, while it replaces the file, hidden files named
+`.octoboardd.update-<n>`, `.octoboardd.prev-<n>` or `.octoboardd.rollback-<n>`, which a replacement cut short can leave
+behind and the next update or rollback removes.
 
 What Octoboard writes inside a project's repository, and what it writes into the user's own agent configuration, is
 in "What Octoboard never modifies" in `docs/product/launching-agents.md`.

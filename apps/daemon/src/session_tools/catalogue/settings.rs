@@ -203,7 +203,9 @@ pub(super) const GET_SETTINGS: ToolDef = ToolDef {
                   `auto_delete_unresumable_archives`, `resume_sessions_on_start`, \
                   `keep_awake` (Prevent sleep: whether Octoboard keeps the computer it runs on \
                   awake), `keep_awake_when` (`always`, or `working` for while any session \
-                  works), `auto_select_account`, `interface_language` (the language every window of the \
+                  works), `daemon_update_check` (whether a daemon that updates itself checks \
+                  for a newer release on its own), `daemon_update_channel` (`stable` or \
+                  `beta`, the release line it follows), `auto_select_account`, `interface_language` (the language every window of the \
                   user shows and the one you are told to reply in, a tag; `null` until a window \
                   reported one), \
                   `default_clone_dir`, the `git_workflow` settings, \
@@ -268,6 +270,21 @@ pub(super) const UPDATE_SETTINGS: ToolDef = ToolDef {
                     "description": "When Prevent sleep holds the computer awake: `always`, \
                                     for as long as `keep_awake` is on, or `working`, only \
                                     while a session is working in any console or project.",
+                },
+                "daemon_update_check": {
+                    "type": "boolean",
+                    "description": "Whether a daemon that updates itself checks for a newer \
+                                    release on its own, shortly after it starts and every six \
+                                    hours. It never downloads or restarts on its own either way. \
+                                    Turning it on checks at once.",
+                },
+                "daemon_update_channel": {
+                    "type": "string",
+                    "enum": ["stable", "beta"],
+                    "description": "The release line the daemon's update check follows: \
+                                    `stable`, or `beta`, which also offers prereleases. A \
+                                    change withdraws what the old channel offered, and \
+                                    checks at once while automatic checks are on.",
                 },
                 "interface_language": {
                     "type": "string",

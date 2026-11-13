@@ -248,7 +248,7 @@ Where to start, by question:
   and planned stop, and the example systemd user unit.
 - [Installing the server form](product/installing-the-server-form.md) — what the Linux server build runs on, what a
   release holds for Linux (archives, `.sha256`, `.sig`, the Linux manifests), the install script with `--service`, and
-  upgrading.
+  the ways to upgrade.
 - [Who can reach the daemon](product/who-can-reach-the-daemon.md) — the daemon's access model in both forms: loopback
   only, the launch key and where helpers keep it, the owner key a browser address carries and its trade-off, SSH as
   the only remote path, other users of the machine, and the origin and key checks.
@@ -262,8 +262,13 @@ Where to start, by question:
 - [Keeping the computer awake](product/keeping-the-computer-awake.md) — Prevent sleep, held by the daemon on its host:
   which hosts can hold it (macOS, Windows, Linux with logind), Always or while sessions work, which sessions count, what
   is held on each system, and how clients learn whether it is held.
-- [In-app updates](product/in-app-updates.md) — update channels, where updates come from, checking, notice, download
-  and restart.
+- [In-app updates](product/in-app-updates.md) — the desktop application's updates: update channels, where updates come
+  from, checking, notice, download and restart.
+- [Server form updates](product/server-form-updates.md) — how the Linux server form's daemon updates itself: which
+  daemons do, checking, the browser's notices, downloading and replacing the executable, restarting, failures and the
+  `octoboardd update` command.
+- [Update settings](product/update-settings.md) — Settings' Updates section in both forms: the Version row, Check for
+  updates automatically and the update channel.
 - [Menu bar icon](product/menu-bar-icon.md) — the macOS menu bar icon, its dot, its red eyes while the computer is kept
   awake, its menu and hiding it.
 - [Website](product/website.md) — the official site: publishing, pages and languages, the homepage and navigation,
@@ -372,11 +377,16 @@ Where to start, by question:
   seeded model lists, keeping tests off the real agent CLI and the user's live data directory, testing budgets by
   lowering them.
 - [Writing daemon code](memory/writing-daemon-code.md) — which session state is stored and which lives in memory, where
-  live state lives, store writes, raising versions only between releases, timing, threads, process cleanup, linting,
-  and provider interface defaults that claim nothing.
+  live state lives, store writes, raising versions only between releases, timing, linting, and provider interface
+  defaults that claim nothing.
+- [Running processes and blocking work in the daemon](memory/running-processes-and-blocking-work-in-the-daemon.md) —
+  capping blocking threads in per-entity passes, keeping process starts off per-launch, per-hook and per-sweep paths,
+  ending what an agent CLI started by its session, no login-shell snapshot from a process with a controlling terminal,
+  and long work that must not hold the daemon's stop on a thread of its own with idle-bounded reads.
 - [Verifying the daemon on Linux](memory/verifying-the-daemon-on-linux.md) — running the daemon's tests in a Linux
-  container, verifying under systemd and a real SSH login in a container with systemd as PID 1, and proving with a
-  second user's scan that no key reaches another user.
+  container, verifying under systemd and a real SSH login in a container with systemd as PID 1, proving with a
+  second user's scan that no key reaches another user, and testing the self-update end to end against a local HTTPS
+  origin with a throwaway signing key.
 - [Writing desktop shell code](memory/writing-desktop-shell-code.md) — main-thread queuing, native hooks into Tauri
   internals and native menu width.
 - [Writing screen-reader announcements and focus moves](memory/writing-screen-reader-announcements-and-focus-moves.md) —

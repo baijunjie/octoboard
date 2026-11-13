@@ -9,7 +9,12 @@ import { AccountsNavigationContext } from "./accounts/AccountsNavigationContext"
 import { MAX_FRAMES_TO_WAIT_FOR_MODAL, SettingsDialog } from "./SettingsDialog";
 import type { SettingsNavigation } from "./sections";
 import type { HostFacts } from "../platform/host";
+import type { UpdaterCapability } from "../platform";
 import { PlatformProvider } from "../platform/react";
+import type { DaemonUpdateStatus } from "../protocol";
+import { DaemonProvider } from "../store";
+import { testDaemon } from "../test/testDaemon";
+import { UpdatesProvider } from "../updates/UpdatesProvider";
 import { browserHost } from "../platform/host";
 import { MAC_HOST, WINDOWS_HOST } from "../test/hosts";
 import { matchesWidthQuery } from "../test/viewport";
@@ -50,10 +55,25 @@ vi.mock("./AgentBehaviorSection", () => ({ AgentBehaviorSection: () => <p>Agent 
 vi.mock("./NotificationsSection", () => ({ NotificationsSection: () => <p>Notifications</p> }));
 vi.mock("./ConfigurationSection", () => ({ ConfigurationSection: () => <p>Configuration</p> }));
 
-function mount(first: SettingsNavigation, width = 1440, host: HostFacts = MAC_HOST) {
+/** What makes something update: the desktop shell's updater, or a daemon that updates itself (`daemonUpdate`). */
+interface Updating {
+  updater?: UpdaterCapability;
+  daemonUpdate?: DaemonUpdateStatus;
+}
+
+function mount(first: SettingsNavigation, width = 1440, host: HostFacts = MAC_HOST, updating: Updating = {}) {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
-  const show = (navigation: typeof first) => act(() => root.render(<PlatformProvider value={{ kind: "tauri", host }}><SettingsDialog navigation={navigation} onClose={() => {}} /></PlatformProvider>));
+  const daemon = updating.daemonUpdate && testDaemon({ state: { daemon: { version: "0.1.0", generation: 1 }, daemonUpdate: updating.daemonUpdate } });
+  const dialog = (navigation: typeof first) => <SettingsDialog navigation={navigation} onClose={() => {}} />;
+  const show = (navigation: typeof first) =>
+    act(() =>
+      root.render(
+        <PlatformProvider value={{ kind: "tauri", host, updater: updating.updater }}>
+          {daemon ? <DaemonProvider value={daemon}><UpdatesProvider firstCheckDelayMs={null}>{dialog(navigation)}</UpdatesProvider></DaemonProvider> : updating.updater ? <UpdatesProvider firstCheckDelayMs={null}>{dialog(navigation)}</UpdatesProvider> : dialog(navigation)}
+        </PlatformProvider>,
+      ),
+    );
   taken.count = 0;
   document.documentElement.style.setProperty("--breakpoint-tablet", "768px");
   document.documentElement.style.setProperty("--breakpoint-phone", "390px");
@@ -300,6 +320,18 @@ it.each([
   await act(async () => {});
   expect(tabs().includes("Permissions")).toBe(listed);
   expect(tabs()).toContain("Notifications");
+});
+
+it.each([
+  ["the desktop application", { updater: { currentVersion: async () => "0.1.0", check: async () => undefined, install: async () => {} } }, true],
+  ["a daemon that updates itself", { daemonUpdate: { phase: "idle", available: null, progress: null, installed: null, last_check: null, install: null, manual: null, updated_from: null } }, true],
+  ["nothing that updates", {}, false],
+] as const)("lists the Updates section just above About only where something updates: %s", async (_name, updating, listed) => {
+  mount({ nonce: 1, section: "general", addAgent: false }, 1440, MAC_HOST, updating as Updating);
+  await act(async () => {});
+  const tabs = [...document.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent);
+  expect(tabs.includes("Updates")).toBe(listed);
+  if (listed) expect(tabs.indexOf("Updates")).toBe(tabs.indexOf("About") - 1);
 });
 
 it("asks account forms to close for every later navigation request", async () => {

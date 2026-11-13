@@ -29,11 +29,61 @@ function setup(initial: UpdateChannel = "beta") {
   const fake = fakeUpdater();
   const failures: UpdateFailure[] = [];
   let channel = initial;
-  const store = createUpdateStore({ updater: fake.updater, getChannel: () => channel, reportFailure: (failure) => failures.push(failure), now: () => 1000 });
+  let autoCheck = true;
+  const store = createUpdateStore({ updater: fake.updater, getChannel: () => channel, setChannel: (next) => void (channel = next), getAutoCheck: () => autoCheck, setAutoCheck: (value) => void (autoCheck = value), reportFailure: (failure) => failures.push(failure), now: () => 1000 });
   return { ...fake, failures, store, switchTo: (next: UpdateChannel) => (channel = next) };
 }
 
 const flush = () => Promise.resolve().then(() => Promise.resolve());
+
+describe("the channel", () => {
+  it("is the chosen one, and choosing another looks again on it", async () => {
+    const { store, checks } = setup("stable");
+    await flush();
+    expect(store.getState().channel).toBe("stable");
+    store.setChannel("beta");
+    expect(store.getState().channel).toBe("beta");
+    expect(checks.map((check) => check.channel)).toEqual(["beta"]);
+  });
+});
+
+describe("the channel with the automatic checks off", () => {
+  it("is chosen without looking, as only the user's own check looks then", async () => {
+    const { store, checks } = setup("stable");
+    await flush();
+    store.setAutoCheck(false);
+    store.setChannel("beta");
+    expect(store.getState().channel).toBe("beta");
+    expect(checks).toHaveLength(0);
+  });
+});
+
+describe("the channel with the automatic checks off and an update on the other", () => {
+  it("withdraws the update the other channel offered, and its notice, without looking", async () => {
+    const { store, checks } = setup("stable");
+    const found = store.check("manual");
+    checks[0].settle(FOUND);
+    await found;
+    store.dismissNotice();
+    expect(store.getState()).toMatchObject({ update: { version: "0.2.0" }, noticeDismissed: true });
+    store.setAutoCheck(false);
+    store.setChannel("beta");
+    expect(store.getState()).toMatchObject({ update: undefined, updateChannel: undefined, noticeDismissed: false, phase: "idle" });
+    expect(checks).toHaveLength(1);
+  });
+
+  it("keeps an update being downloaded", async () => {
+    const { store, checks, installs } = setup("stable");
+    const found = store.check("manual");
+    checks[0].settle(FOUND);
+    await found;
+    store.setAutoCheck(false);
+    void store.install();
+    store.setChannel("beta");
+    expect(store.getState()).toMatchObject({ phase: "downloading", update: { version: "0.2.0" } });
+    expect(installs).toHaveLength(1);
+  });
+});
 
 describe("checking", () => {
   it("reads the running version and checks the chosen channel", async () => {
@@ -48,16 +98,16 @@ describe("checking", () => {
   it("asks for the channel with the running version, once the shell has said it", async () => {
     const fake = fakeUpdater();
     const seen: Array<string | undefined> = [];
-    const store = createUpdateStore({ updater: fake.updater, getChannel: (version) => (seen.push(version), "stable"), reportFailure: () => {} });
+    const store = createUpdateStore({ updater: fake.updater, getChannel: (version) => (seen.push(version), "stable"), setChannel: () => {}, getAutoCheck: () => true, setAutoCheck: () => {}, reportFailure: () => {} });
     await flush();
     void store.check("manual");
-    expect(seen[0]).toBe("0.1.0");
+    expect(seen.at(-1)).toBe("0.1.0");
   });
 
   it("drops a check started before the version was known when the build defaults elsewhere, and checks again there", async () => {
     let tell!: (version: string) => void;
     const fake = fakeUpdater(() => new Promise((resolve) => (tell = resolve)));
-    const store = createUpdateStore({ updater: fake.updater, getChannel: (version) => effectiveUpdateChannel(undefined, version), reportFailure: () => {} });
+    const store = createUpdateStore({ updater: fake.updater, getChannel: (version) => effectiveUpdateChannel(undefined, version), setChannel: () => {}, getAutoCheck: () => true, setAutoCheck: () => {}, reportFailure: () => {} });
     void store.check("automatic");
     tell("0.1.0-beta.3");
     await flush();
@@ -422,6 +472,19 @@ describe("the schedule", () => {
     checks[1].settle(undefined);
     await vi.advanceTimersByTimeAsync(CHECK_INTERVAL_MS * 2);
     expect(checks).toHaveLength(2);
+  });
+
+  it("makes no automatic check while they are switched off, and looks at once when they are switched back on", async () => {
+    const { store, checks } = setup();
+    store.setAutoCheck(false);
+    expect(store.getState().autoCheck).toBe(false);
+    expect(checks).toHaveLength(0);
+    const stop = store.start();
+    await vi.advanceTimersByTimeAsync(FIRST_CHECK_DELAY_MS + CHECK_INTERVAL_MS);
+    expect(checks).toHaveLength(0);
+    store.setAutoCheck(true);
+    expect(checks).toHaveLength(1);
+    stop();
   });
 
   it("starts the first check after the delay it is given", async () => {

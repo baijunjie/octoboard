@@ -1,7 +1,7 @@
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 import { FOLLOWING_GIT_WORKFLOW, GIT_WORKFLOW_ITEM_KEYS } from "../git/gitWorkflow";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
-import { PROTOCOL_GENERATION, type Account, type AccountQuota, type AccountSharing, type Agent, type AgentCliStatus, type AgentCliUpdate, type Console, type DocumentAgentSettings, type FileContent, type Launch, type GitStatus, type Host, type HostInfo, type InspectedAgentSettings, type Page, type PageContent, type PerAgent, type ProcessTree, type Project, type ProviderInfo, type Session, type SessionBranchItem, type SessionBranchState, type SessionContext, type SessionStatus, type Settings, type ShellTerminal } from "../protocol";
+import { PROTOCOL_GENERATION, type Account, type AccountQuota, type AccountSharing, type Agent, type AgentCliStatus, type AgentCliUpdate, type Console, type DaemonUpdateStatus, type DocumentAgentSettings, type FileContent, type Launch, type GitStatus, type Host, type HostInfo, type InspectedAgentSettings, type Page, type PageContent, type PerAgent, type ProcessTree, type Project, type ProviderInfo, type Session, type SessionBranchItem, type SessionBranchState, type SessionContext, type SessionStatus, type Settings, type ShellTerminal } from "../protocol";
 import { type MessageParams } from "../errors/codedError";
 import type { SessionRequest, State, TrustPrompt } from "../store";
 import type { NotificationFixture } from "./fixture";
@@ -54,7 +54,7 @@ export const SETTINGS_VERSIONS = versionsOf([
   "auto_approve_resume_requests", "auto_approve_account_switches", "auto_approve_handoffs", "ask_questions_as_choices",
   "keep_sessions_in_own_project",
   "interface_language", "keep_awake", "keep_awake_when", "auto_select_account", "auto_switch_on_usage_limit",
-  "auto_start_quota_windows", "default_clone_dir", "resume_sessions_on_start",
+  "auto_start_quota_windows", "default_clone_dir", "resume_sessions_on_start", "daemon_update_check", "daemon_update_channel",
   ...GIT_WORKFLOW_ITEM_KEYS.map((item) => `git_workflow.${item}`),
   ...forEachAgent((agent) => [`agent_tags.${agent}`]),
   ...FIXTURE_PROVIDERS.flatMap(({ id, settings }) => settings.map((setting) => `provider_settings.${id}.${setting.id}`)),
@@ -312,6 +312,12 @@ export function accountSharingOf(states: AccountSharing[]): Map<string, AccountS
 /** The release version the fixtures' daemon says it is in its hello. */
 export const FIXTURE_DAEMON_VERSION = "0.1.0";
 
+/** The status of a daemon that updates itself, idle with nothing checked, found or installed, over which `parts` lay what a
+ * scenario differs in. */
+export function daemonUpdateOf(parts: Partial<DaemonUpdateStatus> = {}): DaemonUpdateStatus {
+  return { phase: "idle", available: null, progress: null, installed: null, last_check: null, install: null, manual: null, updated_from: null, ...parts };
+}
+
 /** A connected window's state after its first snapshot, over which a scenario lays what it differs
  * in. Only what is given is set; the rest is the empty state. The daemon greeted it with a hello of the window's own
  * generation unless `daemon` says otherwise. */
@@ -330,6 +336,9 @@ export function snapshotState(parts: {
   accountQuotas?: AccountQuota[];
   accountSharing?: AccountSharing[];
   daemon?: State["daemon"];
+  /** The daemon's own update (`snapshot.daemon_update`), for a daemon that updates itself: what the window follows where the
+   * platform has no updater. Left out, the daemon does not update itself and the window has nothing to update. */
+  daemonUpdate?: DaemonUpdateStatus;
   /** The daemon host's own facts and home directory, for a scenario on a machine that is not the Unix one the rest assumes. */
   host?: HostInfo;
   homeDir?: string;
@@ -337,6 +346,7 @@ export function snapshotState(parts: {
   return {
     connectionState: parts.connectionState ?? "open",
     daemon: parts.daemon === undefined ? { version: FIXTURE_DAEMON_VERSION, generation: PROTOCOL_GENERATION } : parts.daemon,
+    daemonUpdate: parts.daemonUpdate ?? null,
     hosts: new Map([[LOCAL_HOST.id, LOCAL_HOST]]),
     consoles: new Map((parts.consoles ?? []).map((c) => [c.id, c])),
     projects: new Map((parts.projects ?? []).map((p) => [p.id, p])),

@@ -7,7 +7,9 @@ import type { CalloutTone, StatSentiment, StatTrend } from "../../protocol";
 import { useOctoboardTheme } from "../../preferences/theme";
 import { FencedCode } from "../../viewer/markdown/FencedCode";
 import { useCellText } from "./cells";
-import { BlockLabel, COPY_BUTTON_INSET, CopyBox, ScrollBox, useCodeSurface } from "./copyable";
+import { COPY_BUTTON_INSET, CopyBox } from "../../components/controls/CopyBox";
+import { ScrollBox } from "../../components/scroll/ScrollBox";
+import { BlockLabel, useCodeSurface, useCopyNames } from "./copyable";
 import { HeadingLevelContext, useChildHeadingLevel } from "./headingLevel";
 import { PageMarkdown } from "./PageMarkdown";
 import type { ComponentProps } from "./registry";
@@ -89,10 +91,11 @@ export function CodeView({ component }: ComponentProps<"code">): React.ReactElem
   const t = useT();
   const { resolved: theme } = useOctoboardTheme();
   const { surface } = useCodeSurface();
+  const names = useCopyNames(component.label);
   return (
     <div className="flex flex-col gap-1">
       <BlockLabel label={component.label} />
-      <CopyBox text={component.code} label={component.label} dir="ltr" surface={surface}>
+      <CopyBox text={component.code} dir="ltr" surface={surface} {...names}>
         <FencedCode language={component.language} text={component.code} theme={theme} highlight scroll label={component.label ?? t("report.block.code")} />
       </CopyBox>
     </div>
@@ -122,10 +125,11 @@ export function DiffView({ component }: ComponentProps<"diff">): React.ReactElem
   const t = useT();
   const lines = component.diff.replace(/\n$/, "").split("\n");
   const { style, surface, boxClass } = useCodeSurface();
+  const names = useCopyNames(component.label);
   return (
     <div className="flex flex-col gap-1">
       <BlockLabel label={component.label} />
-      <CopyBox text={component.diff} label={component.label} dir="ltr" surface={surface} tint={firstLineFill(lines[0])}>
+      <CopyBox text={component.diff} dir="ltr" surface={surface} tint={firstLineFill(lines[0])} {...names}>
         <ScrollBox label={component.label ?? t("report.block.diff")} className={boxClass} style={style}>
           <pre dir="ltr" className="w-max min-w-full py-2 font-mono text-xs leading-5">
             {lines.map((line, index) => <div key={index} className={`ps-3 ${COPY_BUTTON_INSET} ${diffLineClass(line)}`}>{line === "" ? " " : line}</div>)}

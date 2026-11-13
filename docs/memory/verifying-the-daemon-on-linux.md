@@ -111,3 +111,15 @@ by hand is enough; systemd is needed only when what you check is something a sys
   capturing the daemon's stdout, whose first line carries it. Otherwise the scan finds your leak, not the daemon's.
 - Root in a default Docker container cannot read another user's `/proc/<pid>/environ` (`CAP_SYS_PTRACE` is dropped),
   so you cannot use it to see what an environment holds.
+
+## Test the self-update end to end from a copy of the tree pointed at a local origin
+
+Applies when a check needs the server form's real self-update (`octoboardd update`, or the daemon's own) to fetch,
+verify and install a release, beyond the self-update's unit tests. It needs no change to the daemon's code, and none of
+it is done in the real tree, where the edits could be committed. In a copy of the tree: point `config/app.json`'s
+`repositoryUrl`, which `apps/daemon/build.rs` builds in as the base of the manifest's address
+(`apps/daemon/src/self_update/manifest.rs`), at an HTTPS origin served locally; replace `PUBLIC_KEY` in
+`apps/daemon/src/self_update/verify.rs` with the public key of a throwaway minisign key made by
+`tauri signer generate`, and sign the test archives with that key. Serve the origin with a certificate from a
+self-signed CA installed into the container's system trust store: the fetcher verifies against the platform's store
+(`RootCerts::PlatformVerifier`), so nothing else has to be told to trust it.

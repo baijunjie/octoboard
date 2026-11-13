@@ -2396,6 +2396,343 @@
       ],
       "description": "Where a conversation is held, as `locate_conversation_to_resume` reports it."
     },
+    "DaemonUpdateAvailable": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "notes": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The release's notes as the manifest carries them, Markdown; null when it has none."
+        },
+        "holder_floor": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The oldest holder version the new daemon adopts the terminals of (`handover_check`'s\n`holder_floor`); null when the manifest names none."
+        },
+        "channel": {
+          "$ref": "#/$defs/DaemonUpdateChannel",
+          "description": "The channel the manifest was read from."
+        }
+      },
+      "required": [
+        "version",
+        "notes",
+        "holder_floor",
+        "channel"
+      ],
+      "description": "A release newer than the daemon that the last check found."
+    },
+    "DaemonUpdateChannel": {
+      "oneOf": [
+        {
+          "type": "string",
+          "const": "stable",
+          "description": "Releases that are not marked as prereleases."
+        },
+        {
+          "type": "string",
+          "const": "beta",
+          "description": "Every release, prereleases included."
+        }
+      ],
+      "description": "Which release line the daemon's update check follows (`Settings.daemon_update_channel`)."
+    },
+    "DaemonUpdateCheck": {
+      "type": "object",
+      "properties": {
+        "outcome": {
+          "$ref": "#/$defs/DaemonUpdateCheckOutcome"
+        },
+        "at": {
+          "type": "integer",
+          "format": "int64",
+          "description": "When it ended, in milliseconds since the epoch."
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Why a `failed` check failed, `daemon_update_check_failed`; null otherwise."
+        },
+        "detail": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The English text of the failure behind `error`, trimmed and cut to a bounded length."
+        }
+      },
+      "required": [
+        "outcome",
+        "at",
+        "error",
+        "detail"
+      ],
+      "description": "The last check that ended."
+    },
+    "DaemonUpdateCheckOutcome": {
+      "type": "string",
+      "enum": [
+        "up_to_date",
+        "available",
+        "failed"
+      ],
+      "description": "How the last check ended."
+    },
+    "DaemonUpdateInstall": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/DaemonUpdateInstallState"
+        },
+        "started_at": {
+          "type": "integer",
+          "format": "int64",
+          "description": "When it started, in milliseconds since the epoch."
+        },
+        "finished_at": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64",
+          "description": "When it ended; null while it runs."
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Why a `failed` one failed: `daemon_update_download_failed`, `daemon_update_unverified` or\n`daemon_update_replace_failed`; null otherwise."
+        },
+        "detail": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The English text of the failure behind `error`, trimmed and cut to a bounded length."
+        }
+      },
+      "required": [
+        "state",
+        "started_at",
+        "finished_at",
+        "error",
+        "detail"
+      ],
+      "description": "The download and replacement of the update as the daemon last made one. Runtime state: never\nstored."
+    },
+    "DaemonUpdateInstallState": {
+      "type": "string",
+      "enum": [
+        "running",
+        "succeeded",
+        "failed"
+      ],
+      "description": "Where the download and replacement of an update is."
+    },
+    "DaemonUpdateInstalled": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Its version; null when the file was replaced by something else (an install script run\nmeanwhile) and the daemon did not write it, so the version is not known."
+        },
+        "holder_floor": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Its holder floor, null where `version` is."
+        }
+      },
+      "required": [
+        "version",
+        "holder_floor"
+      ],
+      "description": "The release the executable was replaced with."
+    },
+    "DaemonUpdateManual": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "$ref": "#/$defs/DaemonUpdateManualReason"
+        },
+        "path": {
+          "type": "string",
+          "description": "The executable that would be replaced, as a path on the daemon's host."
+        }
+      },
+      "required": [
+        "reason",
+        "path"
+      ],
+      "description": "An update the daemon found and cannot install itself."
+    },
+    "DaemonUpdateManualReason": {
+      "oneOf": [
+        {
+          "type": "string",
+          "const": "not_writable",
+          "description": "The user the daemon runs as may not replace its executable: the directory it lives in is\nnot writable by them."
+        }
+      ],
+      "description": "Why the daemon does not update itself and the user has to."
+    },
+    "DaemonUpdatePhase": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "idle"
+          ]
+        },
+        {
+          "type": "string",
+          "const": "checking",
+          "description": "Reading the release manifest."
+        },
+        {
+          "type": "string",
+          "const": "downloading",
+          "description": "Downloading the archive, checking it and replacing the executable: `install` says how far."
+        },
+        {
+          "type": "string",
+          "const": "installed",
+          "description": "The executable has been replaced; the update takes effect when the daemon restarts, and no\nmore checks are made until it has."
+        }
+      ],
+      "description": "What the daemon's update is doing. A check and a download never run together."
+    },
+    "DaemonUpdateProgress": {
+      "type": "object",
+      "properties": {
+        "downloaded": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "description": "Bytes received so far."
+        },
+        "total": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0,
+          "description": "The archive's size in bytes, when the server said it."
+        }
+      },
+      "required": [
+        "downloaded",
+        "total"
+      ],
+      "description": "How much of the archive has been downloaded."
+    },
+    "DaemonUpdateStatus": {
+      "type": "object",
+      "properties": {
+        "phase": {
+          "$ref": "#/$defs/DaemonUpdatePhase"
+        },
+        "available": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DaemonUpdateAvailable"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The newer release the last check found and none has replaced yet; null otherwise."
+        },
+        "progress": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DaemonUpdateProgress"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "How far the archive has come while `phase` is `downloading`; null otherwise."
+        },
+        "installed": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DaemonUpdateInstalled"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "What replaced the executable, once `phase` is `installed`; null otherwise."
+        },
+        "last_check": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DaemonUpdateCheck"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The last check that ended since the daemon started; null when none has."
+        },
+        "install": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DaemonUpdateInstall"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The last download and replacement since the daemon started; null when none ran."
+        },
+        "manual": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DaemonUpdateManual"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Set while an update is available that the user has to install by hand."
+        },
+        "updated_from": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The version this daemon replaced when it started, as an update left it; null when it\nreplaced none. Held until the daemon stops, so a window that opens later is told too."
+        }
+      },
+      "required": [
+        "phase",
+        "available",
+        "progress",
+        "installed",
+        "last_check",
+        "install",
+        "manual",
+        "updated_from"
+      ],
+      "description": "The daemon's own update as it stands. Runtime state: never stored, and `null` in the snapshot\nwhere the daemon does not update itself (a build without the feature, the desktop\napplication's daemon, a host it has no release for)."
+    },
     "DefaultModelSource": {
       "oneOf": [
         {
@@ -3384,6 +3721,17 @@
               },
               "description": "The installed CLI of every agent checked since the daemon started\n(`check_agent_clis`), the update of one that runs or ran included; empty until the\nfirst check ends. Runtime state, not stored."
             },
+            "daemon_update": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DaemonUpdateStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The daemon's own update as it stands (`check_daemon_update`, `update_daemon`); null\nwhere this daemon does not update itself. Runtime state, not stored."
+            },
             "home_dir": {
               "type": [
                 "string",
@@ -3426,6 +3774,7 @@
             "account_logins",
             "account_sharing",
             "agent_cli_statuses",
+            "daemon_update",
             "home_dir",
             "host",
             "keep_awake_held",
@@ -3505,6 +3854,23 @@
             "status"
           ],
           "description": "A check of an agent's installed CLI ended, or an update of it started, moved on or ended:\nthe agent's whole status, like every other upsert. Every agent's last one is also in a\n`snapshot`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "$ref": "#/$defs/DaemonUpdateStatus"
+            },
+            "type": {
+              "type": "string",
+              "const": "daemon_update_status_updated"
+            }
+          },
+          "required": [
+            "type",
+            "status"
+          ],
+          "description": "The daemon's own update moved on: a check started or ended, a download made progress,\nended or failed, or the executable was replaced. The whole status, like every other upsert;\nit is also in a `snapshot`. Never sent by a daemon that does not update itself."
         },
         {
           "$ref": "#/$defs/AccountSharing",
@@ -8558,6 +8924,14 @@
           "type": "boolean",
           "description": "Whether the daemon, once it has started, resumes the sessions that are interrupted then,\nwhichever run interrupted them (see `coordinator::resume_on_start`). Off unless the user\nturned it on; read at each start."
         },
+        "daemon_update_check": {
+          "type": "boolean",
+          "description": "Whether a daemon that updates itself (`snapshot.daemon_update` is not null) checks for a\nnewer release on its own: once shortly after it starts, every six hours, and at once when\nthis is turned on or the channel changes. On unless the user turned it off. Off leaves only\nthe check the user asks for (`check_daemon_update`); nothing is ever downloaded or restarted\non its own either way."
+        },
+        "daemon_update_channel": {
+          "$ref": "#/$defs/DaemonUpdateChannel",
+          "description": "The release line the daemon's update check follows. `stable` unless the user chose `beta`."
+        },
         "default_clone_dir": {
           "type": "string",
           "description": "The directory a `git` association clones into when none is named: the one the user set, or\n`~/Projects` (expanded) while none is. Always an absolute, lexically normalised path."
@@ -8665,6 +9039,8 @@
         "auto_switch_on_usage_limit",
         "auto_start_quota_windows",
         "resume_sessions_on_start",
+        "daemon_update_check",
+        "daemon_update_channel",
         "default_clone_dir",
         "accounts",
         "account_order",

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { codeRecord, messageFacets } from "./codes";
+import { CodedError } from "./codedError";
+import { codeRecord, isDaemonRefusal, messageFacets } from "./codes";
 
 describe("codeRecord", () => {
   it("knows no code the UI has nothing to say about, and no inherited property", () => {
@@ -37,5 +38,19 @@ describe("messageFacets", () => {
   it("knows nothing of a variant or a code it does not list", () => {
     expect(messageFacets("path_not_found.other")).toBeUndefined();
     expect(messageFacets("a_code_from_a_newer_daemon.variant")).toBeUndefined();
+  });
+});
+
+describe("isDaemonRefusal", () => {
+  it("is a coded failure the daemon sends, a code this client does not know yet included", () => {
+    expect(isDaemonRefusal(new CodedError("x", "daemon_shutting_down", {}))).toBe(true);
+    expect(isDaemonRefusal(new CodedError("x", "a_code_from_a_newer_daemon", {}))).toBe(true);
+  });
+
+  it("is not the client's own failure to get an answer, nor anything that is not a coded failure", () => {
+    expect(isDaemonRefusal(new CodedError("x", "connection_closed", {}))).toBe(false);
+    expect(isDaemonRefusal(new CodedError("x", "request_timed_out", {}))).toBe(false);
+    expect(isDaemonRefusal(new Error("x"))).toBe(false);
+    expect(isDaemonRefusal("daemon_shutting_down")).toBe(false);
   });
 });

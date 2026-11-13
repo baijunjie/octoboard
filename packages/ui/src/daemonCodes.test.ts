@@ -20,7 +20,7 @@ import { zhHans } from "./i18n/messages/zh-Hans";
 //
 // The daemon's registry of the codes it sends: a code is a `Code`, which only `protocol/codes.rs` can make, and each is
 // a `pub const NAME: Code = Code("code");` of one of its code modules.
-const MODULES = ["error_code", "models_unavailable_code", "quota_unavailable_code", "login_failure_code", "agent_cli_code", "notice_code"] as const;
+const MODULES = ["error_code", "models_unavailable_code", "quota_unavailable_code", "login_failure_code", "agent_cli_code", "daemon_update_code", "notice_code"] as const;
 type Module = (typeof MODULES)[number];
 
 function readRegistry(): Record<Module, string[]> {

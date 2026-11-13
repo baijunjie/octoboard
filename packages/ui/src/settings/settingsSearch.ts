@@ -205,10 +205,14 @@ const INDEX = {
       shown: ({ platform }) => platform.configurationFile !== undefined,
     },
   ],
-  about: [
+  // Listed only where something updates (`SettingsDialog`), so its entries need no `shown`.
+  updates: [
     // Its description is where updates stand, not what the row does, so it is not searched.
-    { id: "updates.version", label: "settings.updates.version.label", shown: ({ platform }) => platform.updater !== undefined },
-    { id: "updates.channel", label: "settings.updates.channel.label", description: ["settings.updates.channel.description"], shown: ({ platform }) => platform.updater !== undefined },
+    { id: "updates.version", label: "settings.updates.status.label" },
+    { id: "updates.autoCheck", label: "settings.updates.autoCheck.label", description: ["settings.updates.autoCheck.description.on", "settings.updates.autoCheck.description.off"] },
+    { id: "updates.channel", label: "settings.updates.channel.label", description: ["settings.updates.channel.description"] },
+  ],
+  about: [
     { id: "about.website", label: "settings.about.website.label" },
     { id: "about.repository", label: "settings.about.repository.label" },
     { id: "about.issues", label: "settings.about.issues.label" },

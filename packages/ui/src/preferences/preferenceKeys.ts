@@ -29,5 +29,7 @@ export const PREFERENCE_KEYS = {
   runInBackground: "octoboard.runInBackground",
   showMenuBarIcon: "octoboard.showMenuBarIcon",
   updateChannel: "octoboard.updateChannel",
+  updateAutoCheck: "octoboard.updateAutoCheck",
+  daemonUpdatedNoticeVersion: "octoboard.daemonUpdatedNoticeVersion",
   keyboardShortcuts: "octoboard.keyboardShortcuts",
 } as const;

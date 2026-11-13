@@ -448,6 +448,24 @@ pub fn keep_private_below(dir: &Path) -> io::Result<()> {
     restrict_to_owner(dir)
 }
 
+/// Creates `staged`, which must not exist, to be renamed over `target`; a file already at `staged`
+/// is refused. A file takes its permissions from its directory here.
+pub fn create_new_like(staged: &Path, _target: &Path) -> io::Result<File> {
+    OpenOptions::new().write(true).create_new(true).open(staged)
+}
+
+/// Whether the directory `dir` takes new files: it is not marked read-only.
+pub fn directory_writable(dir: &Path) -> bool {
+    std::fs::metadata(dir)
+        .is_ok_and(|metadata| metadata.is_dir() && !metadata.permissions().readonly())
+}
+
+/// A directory's entries cannot be flushed through a handle on Windows; the rename is left to the
+/// file system's own journal.
+pub fn sync_directory(_dir: &Path) -> io::Result<()> {
+    Ok(())
+}
+
 /// Whether `a` and `b` lead to the same file: their resolved paths are equal.
 pub fn same_file(a: &Path, b: &Path) -> bool {
     match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {

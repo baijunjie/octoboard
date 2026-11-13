@@ -8,9 +8,11 @@ import { useCurrentLanguage, useT } from "../../i18n/react";
  * meaning on one page. */
 export type UpdatedAgeCopy =
   | { now: "quota.updatedNow"; age: "quota.updated" }
-  | { now: "settings.accounts.mcp.updatedNow"; age: "settings.accounts.mcp.updated" };
+  | { now: "settings.accounts.mcp.updatedNow"; age: "settings.accounts.mcp.updated" }
+  | { now: "settings.updates.lastCheckNow"; age: "settings.updates.lastCheck" };
 
-/** When what a surface shows was read (`at`, in milliseconds), as "Updated just now" or "Updated 5 minutes ago",
+/** When what a surface shows was read (`at`, in milliseconds), as "Updated just now" or "Updated 5 minutes ago" (or, for the
+ * last check for an update, "Last checked just now"),
  * kept current as time passes. */
 export function UpdatedAge({ at, copy }: { at: number; copy: UpdatedAgeCopy }): React.ReactElement {
   const t = useT();

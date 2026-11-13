@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { errorAlerts } from "../components/alerts/errorAlerts";
+import { CodedError } from "../errors/codedError";
 import { sessionOf } from "../fixtures/builders";
 import type { ExitCapability } from "../platform";
 import { PlatformProvider } from "../platform/react";
@@ -355,5 +356,115 @@ describe("the daemon exiting by itself", () => {
     expect(alert.message).not.toContain("signal");
     expect(alert.details).not.toBeNull();
     expect(alert.classification.kind).toBe("unexpected");
+  });
+});
+
+describe("restarting the daemon a browser tab is served by", () => {
+  function mount({ restartDaemon, handover }: { restartDaemon: (target: string | null) => Promise<unknown>; handover: HandoverCheck }) {
+    const checkHandover = vi.fn(async () => handover);
+    let current!: ReturnType<typeof useAppExit>;
+    const Host = () => {
+      current = useAppExit({ getSessions: () => [sessionOf("s", "c", "p", "S", "working")], restartDaemon, checkHandover });
+      return null;
+    };
+    const container = document.body.appendChild(document.createElement("div"));
+    const root = createRoot(container);
+    onTestFinished(() => {
+      act(() => root.unmount());
+      container.remove();
+    });
+    act(() => root.render(createElement(PlatformProvider, { value: { kind: "browser", host: BROWSER_HOST } }, createElement(Host))));
+    return { checkHandover, hook: () => current };
+  }
+  const proven: HandoverCheck = { known: true, sessions: [], shellTerminals: [], unreachedShellTerminals: [] };
+
+  it("sends the restart, with the version it goes to, once the daemon says nothing is interrupted", async () => {
+    const restartDaemon = vi.fn(async () => {});
+    const { checkHandover, hook } = mount({ restartDaemon, handover: proven });
+    await act(async () => hook().requestRestart("0.2.0", "0.3.0"));
+    expect(checkHandover).toHaveBeenCalledExactlyOnceWith("0.2.0", "0.3.0");
+    expect(restartDaemon).toHaveBeenCalledExactlyOnceWith("0.3.0");
+  });
+
+  it("asks first when sessions would be interrupted, and sends the restart only once confirmed", async () => {
+    const restartDaemon = vi.fn(async () => {});
+    const { hook } = mount({ restartDaemon, handover: { ...proven, sessions: ["s"] } });
+    await act(async () => hook().requestRestart("0.2.0", "0.3.0"));
+    expect(hook().exitConfirmOpen).toBe(true);
+    expect(restartDaemon).not.toHaveBeenCalled();
+    await act(async () => hook().confirmExit());
+    expect(restartDaemon).toHaveBeenCalledExactlyOnceWith("0.3.0");
+    expect(hook().exitConfirmOpen).toBe(false);
+  });
+
+  it("does not wait for an answer the exiting daemon never gives, and reports a refusal in the restart's words", async () => {
+    fakeTimers();
+    const hung = mount({ restartDaemon: () => new Promise(() => {}), handover: proven });
+    const request = act(async () => hung.hook().requestRestart(null, "0.3.0"));
+    await act(async () => vi.advanceTimersByTimeAsync(2500));
+    await request;
+    expect(errorAlerts.getSnapshot()).toHaveLength(0);
+
+    const refused = mount({ restartDaemon: async () => { throw new CodedError("Shutting down.", "daemon_shutting_down", {}); }, handover: proven });
+    await act(async () => refused.hook().requestRestart(null, "0.3.0"));
+    onTestFinished(() => act(() => errorAlerts.acknowledge()));
+    expect(errorAlerts.getSnapshot()).toHaveLength(1);
+    expect(errorAlerts.getSnapshot()[0]?.title).toBe("Could not restart");
+    expect(errorAlerts.getSnapshot()[0]?.classification.kind).toBe("actionable");
+  });
+
+  it("never shuts the daemon down for a tab's quit, with the restart option or without", async () => {
+    const restartDaemon = vi.fn(async () => {});
+    const { hook } = mount({ restartDaemon, handover: proven });
+    await act(async () => hook().requestQuit());
+    expect(hook().exitConfirmOpen).toBe(false);
+    expect(restartDaemon).not.toHaveBeenCalled();
+  });
+
+  it("leaves the restart to the shell where there is one", async () => {
+    const restartDaemon = vi.fn(async () => {});
+    const exit: ExitCapability = { register: () => () => {}, heartbeat: async () => {}, beginQuit: vi.fn(async () => {}), confirmQuit: vi.fn(async () => {}) };
+    const requestPlannedStop = vi.fn(async () => {});
+    let current!: ReturnType<typeof useAppExit>;
+    const Host = () => {
+      current = useAppExit({ getSessions: () => [], requestShutdown: async () => {}, requestPlannedStop, restartDaemon, checkHandover: async () => ({ known: true, sessions: [], shellTerminals: [], unreachedShellTerminals: [] }) });
+      return null;
+    };
+    const container = document.body.appendChild(document.createElement("div"));
+    const root = createRoot(container);
+    onTestFinished(() => {
+      act(() => root.unmount());
+      container.remove();
+    });
+    act(() => root.render(createElement(PlatformProvider, { value: { kind: "tauri", host: BROWSER_HOST, exit } }, createElement(Host))));
+    await act(async () => current.requestRestart(null, "0.3.0"));
+    expect(requestPlannedStop).toHaveBeenCalledOnce();
+    expect(exit.confirmQuit).toHaveBeenCalledExactlyOnceWith({ restart: true });
+    expect(restartDaemon).not.toHaveBeenCalled();
+  });
+
+  it("takes a request cut short by the exiting daemon, or timed out, as the restart under way, and says nothing", async () => {
+    for (const code of ["connection_closed", "request_timed_out"]) {
+      const { hook } = mount({ restartDaemon: async () => { throw new CodedError("gone", code, {}); }, handover: proven });
+      await act(async () => hook().requestRestart(null, "0.3.0"));
+      expect(errorAlerts.getSnapshot()).toHaveLength(0);
+    }
+  });
+
+  it("asks for nothing a tab can do without that option", async () => {
+    const container = document.body.appendChild(document.createElement("div"));
+    const root = createRoot(container);
+    onTestFinished(() => {
+      act(() => root.unmount());
+      container.remove();
+    });
+    let current!: ReturnType<typeof useAppExit>;
+    const Host = () => {
+      current = useAppExit({ getSessions: () => [] });
+      return null;
+    };
+    act(() => root.render(createElement(PlatformProvider, { value: { kind: "browser", host: BROWSER_HOST } }, createElement(Host))));
+    await act(async () => current.requestRestart(null, null));
+    expect(current.exitConfirmOpen).toBe(false);
   });
 });

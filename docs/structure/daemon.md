@@ -10,7 +10,7 @@ Paths in this doc that do not start with `apps/` or `packages/` are relative to 
 
 Stack (`apps/daemon/Cargo.toml`): tokio, axum 0.7 (HTTP and WebSocket), rusqlite with bundled SQLite, `portable-pty` and
 `alacritty_terminal` (PTYs and the parsed screen), `rmcp` (the MCP server), clap (CLI modes), `notify` (repository ref
-watching), `ureq` (the daemon's only outbound HTTP client, which reads the npm registry in `src/agents/cli/latest.rs`),
+watching), `ureq` (the daemon's only outbound HTTP client, which reads the npm registry in `src/agents/cli/latest.rs` and the server form's release manifest and archive in `src/self_update/fetch.rs`),
 serde. The crate is a member of the root Cargo workspace beside the desktop shell's Tauri crate.
 
 ## Entry points
@@ -113,7 +113,7 @@ text as stored, and `without_paste_wrapper`, a prompt with the wrapper an agent 
 `time.rs` (the clock, `now_millis`, `now_micros` and `now_secs`, and the RFC 3339, compact and readable timestamps) and
 `wire_path.rs` (`RelPath`, the canonical wire form of a path or branch name, made and validated through
 `platform::names`, with no OS token of its own; whether this host can name it is asked only where it meets the disk, by
-`RelPath::host_path`, which gives `None` for a path it cannot). `build.rs` links `octoboardd.exe.manifest` (the
+`RelPath::host_path`, which gives `None` for a path it cannot). `build.rs` passes `repositoryUrl` and `websiteUrl` of `config/app.json` in as `OCTOBOARD_REPOSITORY_URL` (where the releases and their manifests are) and `OCTOBOARD_WEBSITE_URL` (which serves `install.sh`), and links `octoboardd.exe.manifest` (the
 long-path-aware and `asInvoker` declaration, the binary's whole manifest) into the Windows MSVC binary as its manifest
 resource: it writes the file into a compiled resource file (`$OUT_DIR/octoboardd-manifest.res`) and passes that to the
 linker as an input with `/MANIFEST:NO`, which `link.exe` and `lld-link` both take without `mt.exe`, libxml2 or a
@@ -124,7 +124,7 @@ with the feature when there is no UI build or when `VITE_DAEMON_KEY` or `VITE_DA
 `apps/daemon/package.json` makes the daemon the pnpm package `@octoboard/daemon`, only to run that cargo build after the
 UI's (`build` script, a dependency on `@octoboard/ui`); it has no test script. Test-only files (`tests.rs`,
 `*_tests.rs`, `test_support/` and `store/test_support.rs`, and the `layering_tests/` directory) sit beside the code they
-test, and `apps/daemon/testdata/` holds the captured agent screens and records tests replay. `apps/daemon/dist/` holds
+test, and `apps/daemon/testdata/` holds the captured agent screens and records tests replay, and `testdata/self_update/`, a signed test archive and its test key for the self-update's tests. `apps/daemon/dist/` holds
 hand-written distribution files, not build output (`dist/systemd/octoboardd.service`, an example systemd user unit for
 running the daemon in the background on Linux, which the Linux release archive ships and the website's `install.sh`
 installs with `--service`).
@@ -144,7 +144,7 @@ installs with `--service`).
 - `src/protocol/` — Rust types of the wire protocol, one file per concern, re-exported as `crate::protocol`; `codes.rs`
   is the `Code` registry (a core code can be made only there; a provider's code only through `Code::of_provider` from
   its declaration), `errors.rs` the one mapping from a failure to an `error` reply (with `CodedError::require_offered`,
-  which refuses an operation a provider does not offer as `provider_unsupported`), `version.rs` the protocol generation and the daemon's version the `hello` frame states, `host.rs` `HostInfo`, the snapshot's `host` (os, path style, file links, whether the host can be held awake, and how the host names its Trash and settings app, built from `platform::HostFacts`), `bindings.rs` the test
+  which refuses an operation a provider does not offer as `provider_unsupported`), `version.rs` the protocol generation and the daemon's version the `hello` frame states, `daemon_update.rs` the daemon's own update status (`DaemonUpdateStatus`) and its channel, `host.rs` `HostInfo`, the snapshot's `host` (os, path style, file links, whether the host can be held awake, and how the host names its Trash and settings app, built from `platform::HostFacts`), `bindings.rs` the test
   that renders the types (and the generation) into `packages/ui/src/protocol.generated.ts`, `schema.rs` the one that
   renders them as JSON Schema into `contracts/protocol/`, `crosscheck.rs` the one that holds the two renderings to the
   same optional and nullable fields, property by property, and checks that every `ts(...)` attribute that narrows a
@@ -161,7 +161,7 @@ installs with `--service`).
   the `pattern` of a text field compiled with `regress`), `chart.rs` the chart kind's allow-listed ECharts subset, and
   `submission.rs` what a submission may carry; `PageContent::parse` and `PageContent::check_submission` in `mod.rs` are
   the entry points.
-- `src/cli/` — the command line and the modes above; `hook.rs` is the `hook` mode and `background.rs` the user's `start`, `stop`, `restart`, `status` and `address`, and the start of a planned restart's successor, `succession.rs` how those commands find the daemon through a planned restart caught half-way and tell the daemon that took over from it, and `installation.rs` the path the daemon launches a successor, or `start` its daemon, from.
+- `src/cli/` — the command line and the modes above; `hook.rs` is the `hook` mode and `background.rs` the user's `start`, `stop`, `restart`, `status` and `address`, and the start of a planned restart's successor, `update.rs` the user's `update [--check] [--rollback] [--channel]` (the server form's update from the command line, over `self_update/`, refused for a daemon that follows the application), `succession.rs` how those commands find the daemon through a planned restart caught half-way and tell the daemon that took over from it, and `installation.rs` the path the daemon launches a successor, or `start` its daemon, from.
 
 ### Coordinator role
 
@@ -320,7 +320,17 @@ installs with `--service`).
   place that decides what a link may reach and what is only shown rather than launched.
 - `src/env_shell/` — the user's real shell environment agents are launched with (the host's login-shell snapshot from
   `platform::shell`, less the variables that mark an agent session, kept under the freshness rules of `cache.rs`), and
-  resolving a binary on it into what starts it (`resolve_binary`, over `platform::shell::resolve_binary`).
+  resolving a binary on it into what starts it (`resolve_binary`, over `platform::shell::resolve_binary`), and the
+  proxy it names for a host (`proxy_for` in `proxy.rs`, which the npm registry lookup and the update's downloads go through).
+- `src/self_update/` — the server form's self-update (see "Daemon updates" in `PROTOCOL.md`): `mod.rs` holds the status on
+  `AppState::daemon_update`, `task.rs` the scheduled check and the work each request starts (`check_daemon_update`,
+  `update_daemon`, `restart_daemon`), `check.rs` and `manifest.rs` the release manifest, `fetch.rs` the HTTP behind the
+  `Fetcher` seam, `verify.rs` (SHA-256, minisign signature, the file the signature names), `unpack.rs`, `replace.rs`
+  (the atomic replacement keeping `<name>.previous`) and `install.rs` (the order of those), which `cli/update.rs`
+  (`octoboardd update`) shares, and `record.rs` (`update.lock`, `update-installed.json`, `daemon.version`, `updates/`,
+  which a starting daemon clears of what a stop left in it). The cargo feature `self-update` (turned on by
+  `release-linux.mjs` only) decides at start whether a daemon that follows no application on Linux offers updates at
+  all; the code is compiled either way, so its tests run in every build.
 
 ### Running sessions
 
@@ -328,7 +338,7 @@ installs with `--service`).
   owns the PTYs of the programs the daemon starts so they outlive it (and the provider's private server a terminal
   attaches to, as its provider-neutral companion), and the daemon's side that links to them, adopts what they kept
   running and answers the helper requests they relay; `protocol.rs`, `registry.rs`, `compat.rs`, `build.rs`,
-  `quit_targets.rs` (the application's quit record), `server/` and `client/`.
+  `quit_targets.rs` (the application's quit record), `server/` and `client/`. `build.rs` copies the running build for the holders to run from, reading its bytes from the open image (`platform::proc::image_source`, `/proc/self/exe` on Linux) so that a copy made after a self-update replaced the installed file is still of the build that runs.
 - `src/terminal/` — PTY processes and what clients see of them (`backend.rs` where a terminal and its program live,
   `Backend::Local` (`platform::term`'s) or `Backend::Held` (a holder's), and `start`, which production spawn sites go
   through, and `Helpers::server_host`, which picks where a launch's private server runs; `server_host.rs` where that
@@ -427,7 +437,8 @@ installs with `--service`).
   directories, the exclusive lock `try_lock_file` that `instance_lock.rs` and the Grok trust store take and the shared
   one `try_lock_file_shared` that `instance_lock::is_running` looks with, the host's
   scratch directories (`temp_roots`), what git runs as a hook (`is_hook_script`) and setting a directory's modification time
-  (`set_dir_modified`) (contract tests in `fs/contract_tests.rs` hold every host to the same behaviour); `names/` how the host spells names (a name as bytes and back, the components a client may send, git bytes as a
+  (`set_dir_modified`), and what the self-update replaces its executable with (`directory_writable`, `sync_directory`, and
+  `create_new_like`, the staging file made new and never through a link) (contract tests in `fs/contract_tests.rs` hold every host to the same behaviour); `names/` how the host spells names (a name as bytes and back, the components a client may send, git bytes as a
   path, the lexical comparison key of a path, the path style, the canonical path, which on Windows is the long, plain form (`std::fs::canonicalize`), so a `%TEMP%` written as an 8.3 short path, as on the CI runner, compares equal to its long form; the Windows rules that need no OS call
   are plain functions tested on every host, the rest a skeleton); `shell/` what the host asks of the user's shell (the login shell
   and the environment snapshot it gives, finding a binary on a `PATH` as what starts it, the command line a hook runs (and the variant that always exits 0, `command_line_exit_ok`), the owner-only script that holds one (`write_runnable_exit_ok` for the exit-0 form), the time an agent lets a command hook run (`COMMAND_HOOK_TIMEOUT_SECS`, longer on Windows, where a hook's first start of a launch is slow) and `FIRST_HOOK_SLOWDOWN`, the factor that gives the wait for a launch's first report the same slack (`messaging/write_queue.rs` applies it), the shell that runs a user's own command, the git hooks' interpreter, the architectures of the programs the machine runs, native first (`runnable_architectures`), the
@@ -438,7 +449,7 @@ installs with `--service`).
   processes the daemon starts (leading a session or a process group, the child handle that tells how an unreaped child stands, asks
   it to end politely or kills it, sweeps what it left behind and reaps it, the containment that tells one launch's processes from any
   other's and lists their members where the host can (on Windows a named job per launch, which each child holds a duplicated handle on so the next daemon finds it by name again; on Linux, for an agent launch (`Containment::for_launch`), a cgroup v2 group `cgroup.rs` makes below the cgroup of the process that starts the launch where that cgroup lets it, which the launch's process enters before its program runs (`Containment::enter_before_exec`, a hook in the child; the move just after the start, `ChildHandle::started`, is the fallback where the hook could not), and which the launch's end kills and removes after moving out what it is told to spare, and without which the launch is told by its tag alone; a held launch (`Containment::for_held_launch`) has its group made below the cgroup of the holder that starts its program, `Containment::place_with_host`, which joins it with `Containment::join_launch`, and `Containment::note_host` has the daemon look there for groups of an earlier run), a polite request to end or a kill sent to a process or a group, the process
-  identity and its wire form, the bounded pipe reader, the host's request to end the daemon (`shutdown_requested`), its planned-restart request (`restart_requested`, which `request_restart` sends: `SIGUSR1` on Unix; on Windows there is no signal, `request_restart` fails as unsupported and the command line's `restart` asks over loopback instead), whether a systemd service runs the daemon as its main process (`restarted_by_service_manager`), `systemd.rs` (with `systemd_stub.rs` on other Unix hosts) which systemd user service the daemon is the main process of (`user_service_unit`) and starting a process as a transient user unit of its own (`start_in_user_unit`), the watch on the application that started it (`watch_parent`), `spawn_in_background` (starting the daemon the command line runs in the background with its stdout and stderr, and stdin when asked, as pipes to the caller, returning its child and whether the daemon stays in its starter's job), what `start` asks of the host to keep the daemon running after its login (a session of its own on Unix, where every descriptor above the standard three is marked close-on-exec before the daemon's program runs, so that it inherits only its three standard descriptors; on Windows the process is created with an explicit list of inherited handles, so the daemon inherits only its three standard handles, with a hidden console and process group of its own and a breakaway from the starter's job, which where the job refuses it is created again inside the job, and a child type of its own), `start_detached` (starting a process that outlives the daemon, with no stdio on Unix, in a session of its own), `windows/create.rs`, the Windows layer that creates a process with an explicit attribute list: the attribute list and the inheritable handle copy, the creation with three standard handles and the output pipe that the background start and the server start share, and the Windows `start_detached`, which uses only the attribute list, for its parent process (no console or inherited handle and outside the daemon's jobs, by breakaway or else as a child of the desktop application's process, or with a warning in the job when there is none to name or a child of it cannot be created), `server.rs`, a server started as a plain child with no terminal (`ServerChild`: a session of its own, in a launch's containment and the crash table,
+  identity and its wire form, the bounded pipe reader, the host's request to end the daemon (`shutdown_requested`), its planned-restart request (`restart_requested`, which `request_restart` sends: `SIGUSR1` on Unix; on Windows there is no signal, `request_restart` fails as unsupported and the command line's `restart` asks over loopback instead), whether a systemd service runs the daemon as its main process (`restarted_by_service_manager`), the executable it runs (`running_image`, `running_image_file` and `names_running_image`, which read the open image, `/proc/self/exe` on Linux, so that an update replacing the file does not change what they say; `image_source`, for the holder build copy; `self_update_host`, whether the host has a release to update to), `systemd.rs` (with `systemd_stub.rs` on other Unix hosts) which systemd user service the daemon is the main process of (`user_service_unit`) and starting a process as a transient user unit of its own (`start_in_user_unit`), the watch on the application that started it (`watch_parent`), `spawn_in_background` (starting the daemon the command line runs in the background with its stdout and stderr, and stdin when asked, as pipes to the caller, returning its child and whether the daemon stays in its starter's job), what `start` asks of the host to keep the daemon running after its login (a session of its own on Unix, where every descriptor above the standard three is marked close-on-exec before the daemon's program runs, so that it inherits only its three standard descriptors; on Windows the process is created with an explicit list of inherited handles, so the daemon inherits only its three standard handles, with a hidden console and process group of its own and a breakaway from the starter's job, which where the job refuses it is created again inside the job, and a child type of its own), `start_detached` (starting a process that outlives the daemon, with no stdio on Unix, in a session of its own), `windows/create.rs`, the Windows layer that creates a process with an explicit attribute list: the attribute list and the inheritable handle copy, the creation with three standard handles and the output pipe that the background start and the server start share, and the Windows `start_detached`, which uses only the attribute list, for its parent process (no console or inherited handle and outside the daemon's jobs, by breakaway or else as a child of the desktop application's process, or with a warning in the job when there is none to name or a child of it cannot be created), `server.rs`, a server started as a plain child with no terminal (`ServerChild`: a session of its own, in a launch's containment and the crash table,
   waited on until its endpoint exists or it reports a port, ended with a polite request, a grace and a kill; what the holder's companions and the daemon's local servers both run as);
   `server/parent.rs` the Unix owner-death watcher,
   `server/windows.rs` the atomic job placement and standard-handle inheritance for a server, and `crash/`, the table that kills every process the daemon runs on a PTY
@@ -614,7 +625,7 @@ same scan.
 | host | `env_shell`, `git`, `holder`, `host_open`, `hostfs`, `instance_lock`, `key_file`, `log_file`, `owner_key`, `owner_record`, `paths`, `processes` |
 | storage | `git_workflow`, `store` |
 | state | `state` |
-| workspace | `branch_cleanup`, `branch_origin`, `browse`, `host_tools`, `path_links`, `project_git`, `removal_safety`, `revert_gate`, `terminal` |
+| workspace | `branch_cleanup`, `branch_origin`, `browse`, `host_tools`, `path_links`, `project_git`, `removal_safety`, `revert_gate`, `self_update`, `terminal` |
 | agent sessions | `accounts`, `adapter`, `agents`, `cross_project_guard`, `handoff`, `hooks`, `keep_awake`, `messaging`, `records`, `session`, `session_git_hooks`, `session_tools`, `titles` |
 | control | `config_document`, `coordinator`, `mcp`, `session_request` |
 | entry | `cli`, `server` |

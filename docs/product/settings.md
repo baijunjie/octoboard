@@ -14,16 +14,17 @@ account details dialog, and on the sharing row of an account's settings dialog (
 configuration" in `docs/product/agent-accounts.md`, and "Explanations in help tips" in
 `docs/product/labels-and-tooltips.md`). The sections, in order, are **General**, **App behavior**, **Agent
 behavior**, **Agent accounts**, **Git**, **Trusted folders**, **Permissions**, **Notifications**, **Keyboard shortcuts**,
-**Cleanup**, **Configuration** and **About**; the dialog opens on General unless it was asked to open on another
-section. **Permissions** is there only in the macOS application; the Windows application and a browser leave it out. The
-search field narrows the sections and their rows to the settings that match what is typed (see
-`docs/product/searching-settings.md`).
+**Cleanup**, **Configuration**, **Updates** and **About**; the dialog opens on General unless it was asked to open on
+another section. **Permissions** is there only in the macOS application; the Windows application and a browser leave it
+out. **Updates** is there only where something updates itself: the desktop application, and a browser open on a daemon
+that updates itself (see `docs/product/update-settings.md`). The search field narrows the sections and their rows to
+the settings that match what is typed (see `docs/product/searching-settings.md`).
 
 A console session can read and change the default clone directory, the automatic pulling of repositories, the
 automatic deletion of archived sessions whose conversation is gone, resuming sessions on start, closing idle shell
-terminals with their panel, the application-wide git workflow settings and the language the daemon holds for the user
-(see "The language the daemon holds" in `docs/product/language.md`). It can read, but not change, automatic account
-selection, Claude compatibility, Codex compatibility, the agent tags, the agent accounts (without their directories) and the trusted
+terminals with their panel, the application-wide git workflow settings, the language the daemon holds for the user
+(see "The language the daemon holds" in `docs/product/language.md`) and the daemon's own automatic update check and
+update channel. It can read, but not change, automatic account selection, Claude compatibility, Codex compatibility, the agent tags, the agent accounts (without their directories) and the trusted
 folders. The switches of Agent behavior, the approval modes, and the switches that switch accounts at the usage limit
 and start usage windows, it can neither read nor change (see "Who reads and changes what" and "Application settings:
 `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`).
@@ -165,15 +166,17 @@ A row's switch whose value the daemon holds saves when it is turned, on its own:
 start**, **Prevent sleep** and **Close idle terminals when closing the panel**; in Git, **Automatically pull
 repositories**, **Squash commits before delivery**, **Rebase before delivery** and **Revert gate**; in Agent accounts,
 **Automatically select an account**, **Automatically switch accounts at the usage limit** and **Start usage windows
-automatically**; the five of Agent behavior; and in Cleanup, **Automatically delete archived sessions whose conversation
-is gone**. The switch always shows the value the daemon has stored, which every window shares: it moves when that value
-changes, not on the press itself. Once a press has sent a save, further presses are ignored until the stored value shows
+automatically**; the five of Agent behavior; in Cleanup, **Automatically delete archived sessions whose conversation
+is gone**; and, in a browser open on a daemon that updates itself, Updates' **Check for updates automatically**. The
+switch always shows the value the daemon has stored, which every window shares: it moves when that value changes, not
+on the press itself. Once a press has sent a save, further presses are ignored until the stored value shows
 that save, or the save fails. Nothing marks that wait — the switch does not look unavailable — and it keeps showing the
 stored value meanwhile. A failed save is shown in an error alert saying the setting could not be saved, the switch
 keeping its position (see "The error alert" in `docs/product/error-alerts.md`). App behavior's **When to prevent
-sleep** and the Git section's **Where sessions develop** and **Delivery** choices save the same way. Each save is
-checked against the setting's version, so a change another window made just before it is refused rather than
-overwritten, the error alert saying so and the control showing that change (see `docs/product/concurrent-edits.md`).
+sleep**, the Git section's **Where sessions develop** and **Delivery** choices and, in such a browser, Updates' **Update
+channel** save the same way. Each save is checked against the setting's version, so a change another window made just
+before it is refused rather than overwritten, the error alert saying so and the control showing that change (see
+`docs/product/concurrent-edits.md`).
 
 Other switches in Settings save by rules of their own: an account's Disable switch (see "Turning an account off" in
 `docs/product/agent-accounts.md`), each agent's Claude compatibility and Codex compatibility switches, each unavailable
@@ -181,7 +184,8 @@ while its save is unanswered (see "Provider settings" in `docs/product/per-agent
 settings dialog (see "Sharing the default configuration" in `docs/product/agent-accounts.md`), **Keep running in
 the background** and **Show menu bar icon**, choices the client keeps itself rather than the daemon, which take effect
 as they are turned (see "Keep running in the background" and "Show menu bar icon" in
-`docs/product/app-behavior-settings.md`), and **Launch at login**, which shows and changes the system's own state (see
+`docs/product/app-behavior-settings.md`), the desktop application's **Check for updates automatically**, kept by the
+client in the same way (see "Check for updates automatically" in `docs/product/update-settings.md`), and **Launch at login**, which shows and changes the system's own state (see
 "Launch at login" in the same document).
 
 ## General
@@ -297,7 +301,14 @@ from such a file (see `docs/product/configuration-export-and-import.md` and
 which is the first while none is chosen. Both rows need the window to be able to save and open files, and where it
 cannot the section holds a line saying that exporting and importing configuration files is not available here.
 
+## Updates
+
+Where Octoboard's updates stand, with the button that moves the update on, whether Octoboard checks for updates by
+itself, and the release channel it follows: three rows, **Version**, **Check for updates automatically** and **Update
+channel**, in the desktop application for the application and in a browser for a daemon that updates itself. The rows,
+and where each choice is kept, are in `docs/product/update-settings.md`.
+
 ## About
 
-The application itself, its updates, the project's links, its license, the third-party licenses and the copyright.
+The application itself, the project's links, its license, the third-party licenses and the copyright.
 What the section shows, and the third-party licenses dialog it opens, are in `docs/product/about-octoboard.md`.

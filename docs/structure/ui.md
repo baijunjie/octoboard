@@ -102,13 +102,14 @@ their cascade order does not depend on which screen opened first.
   (`lane.ts`), and how a failed browse request is treated and worded (`failure.ts`).
 - `src/store/` — the Zustand store of the connection and the state derived from daemon events (state, reducer, actions,
   session requests, the notification bus in `notifications.ts`, connection, React bindings, session-group hooks),
-  re-exported by `index.ts`.
+  re-exported by `index.ts`; `settingsWrite.ts` is the checked settings writer (`createSettingsWriter`) that
+  `useSettingsWrite` and the daemon's update store share.
 
 ### Leaf layer and window shell
 
 - `src/components/` — shared building blocks by kind: `alerts/` (error alerts and the error queue), `card/` (`FlatCard`, the flat card of a dialog: header, band, and rows or blocks set apart by inset hairlines), `dialog/` (the
-  `Dialog` frame and toolkit), `form/`, `controls/`, `menus/`, `hint/` (the one component behind tooltips and floating
-  popovers), `text/`, `status/`, `icons/`, `tabs/`, `motion/`, `scroll/` (the faded scroller and the sticky section
+  `Dialog` frame and toolkit), `form/`, `controls/` (including `CopyBox`, a block's box with its copy button, and `CopyCommand`, a command line with its copy button), `menus/`, `hint/` (the one component behind tooltips and floating
+  popovers), `text/`, `status/`, `icons/`, `tabs/`, `motion/`, `scroll/` (the faded scroller, `ScrollBox`, a box that scrolls sideways, and the sticky section
   heading), `focus/`, `announce/`, `panel/`, `host/`, `rows/` (the tree row, its icon and mark buttons, the
   hover-actions class), `hooks/` (breakpoints, `createLauncher`, `retryableLazy`, lazy readiness for capture hosts,
   polling, window focus (`windowFocus.ts`), the latest-request hook,
@@ -129,8 +130,9 @@ their cascade order does not depend on which screen opened first.
 - `src/layout/` — pane layout: panel kinds and widths, the resize handle, the sidebar drawer, swipes below `phone`.
 - `src/shortcuts/` — the central registry of keyboard shortcuts and its persisted overrides.
 - `src/navigation/` — Back and Forward through the locations the content area has shown.
-- `src/lifecycle/` — hooks and parts tying the UI to the platform: exit flow (`useAppExit.ts`, its
-  confirmation `ExitConfirmDialog.tsx`), notifications, native menu, native window theme, the two settings the desktop
+- `src/lifecycle/` — hooks and parts tying the UI to the platform: exit flow (`useAppExit.ts`, which also
+  restarts a daemon that updated itself where there is no shell to relaunch, `exitFailure.tsx` the alerts of a failed
+  exit or restart, its confirmation `ExitConfirmDialog.tsx`), notifications, native menu, native window theme, the two settings the desktop
   shell holds in its own file, run in background and menu bar icon visibility (`shellSettings.ts`: the store behind both
   preferences, started from the window's `settings` query, pushing changes through the platform capabilities,
   `connectShellSettings` called in `main.tsx`), keep awake (the daemon holds the computer awake itself;
@@ -198,7 +200,7 @@ their cascade order does not depend on which screen opened first.
 - `src/process/` — the Processes panel and its data, the polled global process count the rail shows
   (`processPolling.ts` holds the polling paces), and the rail's process panel (`ProcessCounts`).
 - `src/configuration/` — configuration export and import dialogs, by Settings section and by agent. Shared cards and parts: `SettingsGroups.tsx` (the sections' cards), `AgentSettingsCard.tsx` (the per-agent cards: `AgentCardSections` lays out an agent's card, `useAgentSettingLines` words one line per setting of that agent, from the served schema and the providers' copy, naming an unpresented setting by `idWords` of its id) and `importParts.tsx` (review rows, status lines, `ImportChoice` and `choiceHeader`, `LEFT_OUT_STATUS`); `settingsSections.ts` holds the Settings sections a document carries, in Settings order, with their labels; `useImportChoices.ts` holds the review's choice state (which parts, sections and agents are taken) and `useClientSettingsReview.ts` the values this client holds now, for the review to compare against; `clientSettings.ts` carries the settings only this client holds (appearance, Markdown style, run in the background, menu bar icon, language, session order) into and out of the document, with `clientSettingsPlatform` saying which of them this platform has; `ImportProgress.tsx` shows a running import item by item, its state kept in `progressState.ts`, with `ResultCards.tsx` shared by progress and result; `keepAwakeWhen.ts` holds the labels of Prevent sleep's choices of when, and the descriptions the Settings search indexes, shared by its Settings row, the search index and the import's cards; and the list of plain switch settings (`booleanSettings.ts`, grouped by the Settings section each belongs to).
-- `src/about/`, `src/updates/` — the licenses dialog and its data; the UI side of self-update.
+- `src/about/`, `src/updates/` — the licenses dialog and its data; the UI side of self-update: one `UpdateStore` interface, over the desktop shell's updater (`updateStore.ts`) or a daemon that updates itself (`daemonUpdateStore.ts`, from `snapshot.daemon_update`; its writes of the settings go through `store/settingsWrite.ts`), chosen by `UpdatesProvider`, which sits inside the daemon's provider. `UpdateNotice.tsx` is the notice, `useReloadAfterRestart.ts` reloads the page that asked for a daemon restart once the daemon is back on the new version (through `reloadPage.ts`), `useUpdatedNotice.tsx` tells a browser once per version that the daemon it uses was updated, and `daemonInstallCommand.ts` is the command for an update the daemon cannot put in place itself. Settings shows it in its `updates` section (`src/settings/UpdatesSetting.tsx`).
 
 ### Dev-only and website-facing
 
@@ -231,7 +233,7 @@ the shape is:
 - `components/` is the leaf layer: outside itself it imports only the pure layers, the `store/` barrel and the shared
   root files. `shortcuts/` imports `i18n/`, `platform/`, `preferences/`, `input/` and `components/`.
 - `viewer/`, `about/`, `updates/`, `layout/`, `quota/` and `statusItem/` import the leaf layer and the pure layers (`quota/` also
-  `accounts/`; `statusItem/` also `accounts/` and `quota/`) and no other feature directory; `project-browser/` additionally imports `viewer/`. The remaining feature
+  `accounts/`; `statusItem/` also `accounts/` and `quota/`; `updates/` also `protocol`, `requests`, `appConfig` and the `store/` barrel) and no other feature directory; `project-browser/` additionally imports `viewer/`. The remaining feature
   directories import one another freely.
 - From below `src/`, the root files that may be imported are `protocol`, `requests`, `daemon`, `daemon-client`, `appConfig` and the
   `store/`, `platform/` and `primitives/` barrels. The entry, `App` and the screens are imported by nothing below them.
@@ -323,6 +325,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | A strip of text tabs | the tab wrappers in `src/primitives/Tabs.tsx`, with `fit="content"` on `TabListContainer` and `TabList`, shared by every such strip (`TextTabStrip`, `RegionTabs`, `AgentTabList`, the console launch fields, the project browser); `Tab size="content"` is the tab for every strip, `size="compact"` only for a strip in a pane header beside the pane's title, as the project browser's Files / Changes tabs |
 | The frame of the sidebar's console and focus headers and the archive header | `PANE_HEADER_FRAME_CLASS` (`src/components/panel/paneHeaderFrame.ts`) |
 | A previous / next pager button | `PagerButton` (`src/components/controls/PagerButton.tsx`) |
+| A block with a copy button over its top end corner (a report page's code, diff and copyable blocks, a command in Settings) | `CopyBox`, and `CopyCommand` for a command line (`src/components/controls/CopyBox.tsx`), over `ScrollBox` (`src/components/scroll/ScrollBox.tsx`), a box that scrolls sideways instead of wrapping |
 | A block of code shown as text | `CodeBlock`, or `SurfaceCodeBlock` for a wrapping block on its own surface (`src/components/text/CodeBlock.tsx`); a flush `CodeBlock` built on a surface of its own, such as inside a scroller as `DiagnosticBlock` does, puts `CODE_SURFACE_CLASS` (the classes of the secondary `Surface` it sits on) on that surface |
 | Open an external address with the platform adapter and shared failure handling | `ExternalLink` (`src/components/text/ExternalLink.tsx`) for application links; `useExternalLinkAction` from the same module for document-owned link markup |
 | A settings section's lead paragraph and the rows under it | `SettingsLead` and `LeadRows` (`src/settings/SettingsLead.tsx`) |
@@ -339,7 +342,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | A test that depends on time (a fake clock, a timer, a frame, a wait on the real clock, a lazily imported chunk) | `src/test/clock.ts` (`fakeTimers`, whose one teardown drains pending timers and restores the real clock; `fakeTimersKeepingFrames`, `runOutTimers`, `runPendingTimers`, `afterQueuedWork`, `flushPromises`, `waitOnRealClock`) and `settleLazyImport` (`src/test/lazyImport.ts`); the module that owns a timing constant exports it, and a test imports it instead of writing the number. Time helpers tied to one area sit beside it: `settleFrames`, `framesAsTimers`, `framesHeld` and `withModality` (`src/components/dialog/dialogTestSupport.ts`), `press`, `tooltipsCooledDown` and `mountForTooltip` (`src/components/hint/tooltipTestSupport.ts`), `firstWriteDelayPassed` (`src/components/announce/statusAnnouncerTestSupport.ts`), `SUBMENU_HOVER_DELAY_MS` (`src/components/menus/menuTestSupport.ts`), `PAST_ANY_RETRY_MS` (`src/terminal/reconnectTestSupport.ts`), and `settle` and `settleInAct` for gallery steps (`src/fixtures/clockTestSupport.ts`) |
 | State a test leaves behind for the next one (the error-alert queue, the window preferences held in module memory) | `src/test/setup.ts` empties the alert queue after every jsdom test and shims `getClientRects` (no rects for a disconnected element, one that is or sits in `hidden` or `display: none`, a rect otherwise, as `useListMotion` reads none as a list not rendered); `stubWindow`'s teardown in `src/appTestSupport.tsx` calls `resetAppPreferences` (panel stacks, closed Report panels, the selected console, sidebar and aside visibility), which `localStorage.clear()` alone does not reset |
 | A plain on/off application setting in Settings | `DaemonSwitchSetting` (`src/settings/DaemonSwitchSetting.tsx`) over the list in `src/configuration/booleanSettings.ts` |
-| A checked write of application settings from a control (the switches, the choice of when to prevent sleep, the Git section) | `useSettingsWrite` (`src/settings/useSettingsWrite.ts`): sends `update_settings` based on the versions the store holds of the paths it changes, and drops a press while the store still holds a path at the version this window last wrote it from |
+| A checked write of application settings from a control (the switches, the choice of when to prevent sleep, the Git section) | `useSettingsWrite` (`src/settings/useSettingsWrite.ts`): sends `update_settings` based on the versions the store holds of the paths it changes, and drops a press while the store still holds a path at the version this window last wrote it from; code that is not a component writes through `createSettingsWriter` (`src/store/settingsWrite.ts`), which it wraps |
 | The checked-write side of a form dialog for a console, a project or an account | `useCheckedEdit` (`src/components/hooks/useCheckedEdit.ts`) over `baseVersions` and `writeConflict` (`src/errors/writeConflict.ts`): the `base_versions` of the fields the user changed, and putting a field the store moved past back to its current value, announced through `ChangedElsewhereAnnouncer` when the user had edited it |
 | Wait for the store to reach a state from code that outlives its component (a checked write that goes on after its field has gone) | `whenState` (`src/store/whenState.ts`) |
 | Announce a change made under the user that nothing marks on screen (a form field replaced because it changed elsewhere, a review read again) | `ChangeAnnouncer` (`src/components/announce/ChangeAnnouncer.tsx`) over `AttendedStatusAnnouncer`; `ChangedElsewhereAnnouncer` for replaced fields, naming them |

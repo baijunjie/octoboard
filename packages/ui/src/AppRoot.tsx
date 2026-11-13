@@ -59,8 +59,9 @@ export interface AppRootProps {
  * The provider tree every page that runs the application shares.
  *
  * `UpdatesProvider` is outside `ErrorBoundary`: a crash and its Try again remount everything below the boundary, and
- * the update state (an installed update waiting for its restart, a download under way) must survive that. It provides
- * nothing where the platform cannot update itself.
+ * the update state (an installed update waiting for its restart, a download under way) must survive that. It is inside
+ * `DaemonProvider`, since a daemon that updates itself is what it follows where the platform has no updater of its own,
+ * and provides nothing where neither updates.
  *
  * `DaemonProvider` is outside `ErrorBoundary` too, so the crash page's report can remove the names of the user's
  * records (it reads them from the daemon in context); there is none for the screens that have no daemon. The daemon's
@@ -81,9 +82,9 @@ export function AppRoot({ platform, daemon, nativeSync, firstCheckDelayMs, insid
     <PlatformProvider value={platform}>
       <LanguageProvider>
         {nativeSync && <NativeMenuLabelsSync />}
-        <UpdatesProvider firstCheckDelayMs={firstCheckDelayMs}>
-          {insideUpdates}
-          <DaemonProvider value={daemon}>
+        <DaemonProvider value={daemon}>
+          <UpdatesProvider firstCheckDelayMs={firstCheckDelayMs}>
+            {insideUpdates}
             <DaemonHostAnnouncement />
             {nativeSync && <KeepAwakeSync />}
             <ErrorBoundary>
@@ -92,8 +93,8 @@ export function AppRoot({ platform, daemon, nativeSync, firstCheckDelayMs, insid
                 {children}
               </ThemeProvider>
             </ErrorBoundary>
-          </DaemonProvider>
-        </UpdatesProvider>
+          </UpdatesProvider>
+        </DaemonProvider>
         <ErrorAlerts daemon={daemon} />
       </LanguageProvider>
     </PlatformProvider>

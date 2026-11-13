@@ -191,8 +191,9 @@ The Linux release is the daemon on its own, the server form with the UI embedded
 on Linux (`release-linux.mjs`) builds for the host's architecture (`--arch x86_64|aarch64`, which must be the host's:
 each architecture builds on a host of its own, and CI uses a runner of each): the UI (`pnpm --filter @octoboard/ui
 build`, or `--prebuilt-ui` to embed the `packages/ui/dist` already there), then `cargo build --release --locked -p
-octoboardd --features embedded-ui` for `<arch>-unknown-linux-musl`, with `musl-gcc` (Debian and Ubuntu's `musl-tools`)
-compiling the dependencies' C code. It checks the binary is statically linked, then packs `octoboardd`,
+octoboardd --features embedded-ui,self-update` (`self-update`, which only this build turns on, makes the daemon check
+for and install its own updates, see `apps/daemon/PROTOCOL.md`, "Daemon updates") for `<arch>-unknown-linux-musl`,
+with `musl-gcc` (Debian and Ubuntu's `musl-tools`) compiling the dependencies' C code. It checks the binary is statically linked, then packs `octoboardd`,
 `apps/daemon/dist/systemd/octoboardd.service` and `LICENSE` into
 `target/linux-release/octoboardd_<version>_linux_<arch>.tar.gz` (owner root, dated at the commit, `gzip -n`, so the
 archive does not carry the build machine's user or time) and writes its `.sha256` beside it. The update key variables
@@ -205,9 +206,9 @@ Nothing may touch the archive afterwards.
 pnpm --filter @octoboard/desktop release --no-sign-update
 ```
 
-The Linux archives serve no in-app updater: the install script (`apps/web/public/install.sh`) and the website read
-the `beta-linux.json` and `stable-linux.json` manifests for the newest version, each architecture's archive URL,
-signature and SHA-256.
+The Linux archives serve no desktop updater. The install script (`apps/web/public/install.sh`), the website and the
+daemon's own `self-update` (`apps/daemon/src/self_update/`) read the `beta-linux.json` and `stable-linux.json` manifests
+for the newest version, each architecture's archive URL, signature and SHA-256.
 
 ## Publishing a release
 

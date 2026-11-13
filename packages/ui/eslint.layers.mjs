@@ -182,7 +182,7 @@ export default [
   // Self-contained features: they use the leaf layer and import no other feature directory.
   ...layer("viewer", ["components", ...PURE_LAYERS], `viewer/ imports, outside itself, only components/, ${PURE_MESSAGE}, and the shared root files.`),
   ...layer("about", ["components", ...PURE_LAYERS], `about/ imports, outside itself, only components/ and ${PURE_MESSAGE}.`, []),
-  ...layer("updates", ["components", ...PURE_LAYERS], `updates/ imports, outside itself, only components/ and ${PURE_MESSAGE}, apart from the platform barrel.`, ["platform"]),
+  ...layer("updates", ["components", ...PURE_LAYERS], `updates/ imports, outside itself, only components/ and ${PURE_MESSAGE}, apart from protocol, requests, appConfig and the platform and store barrels.`, ["platform", "protocol", "requests", "appConfig", "store"]),
   ...layer("layout", ["components", ...PURE_LAYERS], `layout/ imports, outside itself, only components/ and ${PURE_MESSAGE}, apart from protocol.`, ["protocol"]),
   ...layer("quota", ["components", "accounts", ...PURE_LAYERS], `quota/ imports, outside itself, only components/, accounts/, ${PURE_MESSAGE}, and the shared root files.`),
   ...layer("statusItem", ["components", "accounts", "quota", ...PURE_LAYERS], `statusItem/ imports, outside itself, only components/, accounts/, quota/, ${PURE_MESSAGE}, protocol and the store and platform barrels.`, ["protocol", "store", "platform"]),

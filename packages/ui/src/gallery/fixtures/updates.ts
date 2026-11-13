@@ -1,7 +1,8 @@
 import type { AvailableUpdate } from "../../platform";
 import type { Step } from "../../fixtures/interact";
+import { PROTOCOL_GENERATION, type DaemonUpdateAvailable, type DaemonUpdateCheck } from "../../protocol";
 import type { Scenario } from "../scenario";
-import { SAMPLE, sessionOf, shellTerminalOf, snapshotState } from "../../fixtures/builders";
+import { SAMPLE, daemonUpdateOf, minutesAgo, sessionOf, shellTerminalOf, snapshotState } from "../../fixtures/builders";
 
 const GROUP = "Updates";
 
@@ -32,14 +33,23 @@ const NOTES = [
 
 const newer: AvailableUpdate = { version: "0.2.0", notes: NOTES };
 
+// The daemon's own update, for a browser tab whose daemon updates itself: the same offer as the desktop updater's, as the
+// daemon's status holds it.
+const daemonOffer: DaemonUpdateAvailable = { version: newer.version, notes: NOTES, holder_floor: "0.1.0", channel: "stable" };
+const foundOffer: DaemonUpdateCheck = { outcome: "available", at: minutesAgo(25), error: null, detail: null };
+// Where a daemon that cannot write to its own folder would have put the new executable.
+const NOT_WRITABLE = { reason: "not_writable", path: "/usr/local/bin/octoboardd" } as const;
+const browserQuiet = (daemonUpdate: ReturnType<typeof daemonUpdateOf>) => snapshotState({ consoles: [console_], projects: [web], sessions: idle, daemonUpdate });
+const REPLACE_FAILED = "rename /usr/local/bin/.octoboardd.update-4242 to /usr/local/bin/octoboardd: Permission denied (os error 13)";
+
 const FAILED_CHECK = "error sending request for url (https://updates.octoboard.example/stable/latest.json): error trying to connect: dns error: failed to lookup address information";
 
 /** Selects an idle session, so the notice sits under a terminal as it does in use. */
 const openSession: Step = (ui) => ui.press(ui.session("Update the dependencies"));
-/** Settings on its About section, where the version and update rows are. */
+/** Settings on its Updates section, where the version, the update controls, the automatic check and the channel are. */
 const openSettings: Step = async (ui) => {
   await ui.press(ui.t("rail.settings"));
-  await ui.press(ui.t("settings.section.about"));
+  await ui.press(ui.t("settings.section.updates"));
 };
 const downloadAndInstall: Step = (ui) => ui.press(ui.t("updates.notice.install"));
 const restartNow: Step = (ui) => ui.press(ui.t("updates.notice.restart"));
@@ -90,9 +100,10 @@ export const updateScenarios: Scenario[] = [
     id: "updates-settings-idle",
     group: GROUP,
     category: "normal",
-    title: "About, Updates row before any check",
-    description: "Settings opens on About. No check has run yet: the Updates row only says which version is in use, with the What is new link button (an external-link icon, opening the running version's release page) and Check for updates beside it, and the header above shows the same version. Choose Phone (390px) to see the row's controls move beneath the description, end-aligned: What is new and Check for updates sit against the end edge.",
+    title: "Updates section before any check, automatic checks off",
+    description: "Settings opens on Updates, which sits directly above About. No check has run yet, and none will by itself: the Version row only says which version is in use, with the What is new link button (an external-link icon, opening the running version's release page) and Check for updates beside it, and no last-check line under it. Below are the Check for updates automatically switch, off, whose description says that turning it on lets the application check in the background, and the Update channel row. Choose Phone (390px) to see the controls move beneath their descriptions, end-aligned.",
     state: quiet,
+    preferences: { updateAutoCheck: false },
     updater: {},
     steps: [openSettings],
   },
@@ -100,8 +111,8 @@ export const updateScenarios: Scenario[] = [
     id: "updates-settings-up-to-date",
     group: GROUP,
     category: "normal",
-    title: "About with updates, up to date, Stable channel",
-    description: "The whole About section on a platform that can update itself: the icon, the name and \"Version 0.1.0\" in the header, then the Updates row saying this version is the latest on the channel with What is new and Check for updates beside it, the Update channel row with Stable chosen, the three links, License, Copyright and Third-party licenses with View licenses. Scroll to see all of it. Choose Phone (390px) to see the Update channel select stretch across the row beneath its description.",
+    title: "Updates section, up to date, automatic checks on, Stable channel",
+    description: "The whole Updates section on the desktop application: the Version row saying this version is the latest on the channel, with \"Last checked just now\" under it and What is new and Check for updates beside it, the Check for updates automatically switch on, and the Update channel row with Stable chosen. Choose Phone (390px) to see the Update channel select stretch across the row beneath its description.",
     state: quiet,
     updater: { checked: true },
     steps: [openSettings],
@@ -110,8 +121,8 @@ export const updateScenarios: Scenario[] = [
     id: "updates-settings-checking",
     group: GROUP,
     category: "normal",
-    title: "About, Updates row while a check runs",
-    description: "The Updates row says it is checking for updates, and What is new stays beside Check for updates, which shows its pending spinner. The channel is Stable, the default. Choosing the other channel while an update was on offer withdraws the offer and lands here.",
+    title: "Updates section while a check runs",
+    description: "The Version row says it is checking for updates, and What is new stays beside Check for updates, which shows its pending spinner. The channel is Stable, the default. Choosing the other channel while an update was on offer withdraws the offer and lands here.",
     state: quiet,
     updater: { check: "pending", checked: true },
     steps: [openSettings],
@@ -120,8 +131,8 @@ export const updateScenarios: Scenario[] = [
     id: "updates-settings-available",
     group: GROUP,
     category: "normal",
-    title: "About, Updates row with a newer version, notice put off",
-    description: "The notice was put off with its Later icon; the update remains available here: the Updates row names the newer version and the running one, and What is new, for the newer version, sits before its primary button, Download and install.",
+    title: "Updates section with a newer version, notice put off",
+    description: "The notice was put off with its Later icon; the update remains available here: the Version row names the newer version and the running one, and What is new, for the newer version, sits before its primary button, Download and install.",
     state: quiet,
     updater: { check: newer, checked: true },
     steps: [(ui) => ui.press(ui.t("updates.notice.dismiss")), openSettings],
@@ -130,8 +141,8 @@ export const updateScenarios: Scenario[] = [
     id: "updates-settings-downloading",
     group: GROUP,
     category: "normal",
-    title: "About, Updates row while downloading",
-    description: "The Updates row says it is downloading the version and What is new, for that version, sits beside the button, which shows its pending spinner. The update notice is still there under the dialog's veil.",
+    title: "Updates section while downloading",
+    description: "The Version row says it is downloading the version and What is new, for that version, sits beside the button, which shows its pending spinner. The update notice is still there under the dialog's veil.",
     state: quiet,
     updater: { check: newer, checked: true, install: { progress: { downloaded: 3_400_000 }, ends: "pending" } },
     steps: [downloadAndInstall, openSettings],
@@ -140,8 +151,8 @@ export const updateScenarios: Scenario[] = [
     id: "updates-settings-installed",
     group: GROUP,
     category: "normal",
-    title: "About, Updates row waiting for a restart",
-    description: "The notice was hidden with Later; the Updates row still says the version takes effect after a restart and offers What is new, for the installed version, and Restart now. The same row when the installed version is not known to this window names no version and has no What is new.",
+    title: "Updates section waiting for a restart",
+    description: "The notice was hidden with Later; the Version row still says the version takes effect after a restart and offers What is new, for the installed version, and Restart now. The same row when the installed version is not known to this window names no version and has no What is new.",
     state: quiet,
     updater: { check: newer, checked: true },
     steps: [downloadAndInstall, (ui) => ui.press(ui.t("updates.notice.later")), openSettings],
@@ -189,6 +200,68 @@ export const updateScenarios: Scenario[] = [
     handover: { sessions: manySessions.map(({ id }) => id) },
     updater: { check: newer, checked: true },
     steps: [downloadAndInstall, restartNow],
+  },
+  {
+    id: "updates-daemon-settings",
+    group: GROUP,
+    category: "normal",
+    title: "Updates section in a browser, up to date",
+    description: "The Updates section where there is no desktop application and the daemon updates itself, the way a browser tab sees it: the Version row says this version, the daemon's, is the latest on the channel, \"Last checked 25 minutes ago\" under it and What is new and Check for updates beside it; the Check for updates automatically switch is on and the Update channel row has Stable chosen. It is the same section as the desktop application's, directly above About, and the rows keep working: the switch and the channel change at once.",
+    state: browserQuiet(daemonUpdateOf({ last_check: { outcome: "up_to_date", at: minutesAgo(25), error: null, detail: null } })),
+    steps: [openSettings],
+  },
+  {
+    id: "updates-daemon-notice-not-writable",
+    group: GROUP,
+    category: "normal",
+    title: "Update notice, the daemon cannot replace itself",
+    description: "The strip names the version and says the application cannot replace the executable at its path, so the upgrade is by hand with the install script. It has What is new, Copy install command and the Later icon, and no Download and install. Choose Phone (390px) to see the sentence and the three controls wrap.",
+    state: browserQuiet(daemonUpdateOf({ available: daemonOffer, manual: NOT_WRITABLE, last_check: foundOffer })),
+    steps: [openSession],
+  },
+  {
+    id: "updates-daemon-settings-not-writable",
+    group: GROUP,
+    category: "normal",
+    title: "Updates section, the daemon cannot replace itself",
+    description: "The notice was put off with its Later icon. The Version row says the newer version is available but that the application cannot replace the executable at its path, with What is new beside it and no Download and install button, and Check for updates in its place. Under the row, the Install command label and the one-line command in its own block, which carries a copy button.",
+    state: browserQuiet(daemonUpdateOf({ available: daemonOffer, manual: NOT_WRITABLE, last_check: foundOffer })),
+    steps: [(ui) => ui.press(ui.t("updates.notice.dismiss")), openSettings],
+  },
+  {
+    id: "updates-daemon-reload",
+    group: GROUP,
+    category: "normal",
+    title: "Reload bar, the daemon now runs another version",
+    description: "This page was loaded for version 0.1.0 and the daemon has since restarted into 0.2.0, as another tab's restart does: the strip along the bottom edge carries a refresh icon, the sentence that the application was updated to 0.2.0 and the page is to be reloaded, and Reload. It has no Later icon: the page is out of date until it is reloaded, and nothing reloads by itself.",
+    state: browserQuiet(daemonUpdateOf()),
+    steps: [
+      openSession,
+      (ui) => ui.daemonEvents({ type: "hello", generation: PROTOCOL_GENERATION, daemon_version: "0.2.0" }),
+    ],
+  },
+  {
+    id: "updates-daemon-updated-toast",
+    group: GROUP,
+    category: "normal",
+    title: "Toast after the daemon updated itself",
+    description: "The window opens on a daemon that started by replacing version 0.1.0 with 0.2.0: a toast says \"Updated to version 0.2.0.\" with a What is new link to that version's release page. It is told once per browser for each version, and the toast goes by itself after a few seconds (open the scenario again to see it).",
+    state: snapshotState({ consoles: [console_], projects: [web], sessions: idle, daemon: { version: "0.2.0", generation: PROTOCOL_GENERATION }, daemonUpdate: daemonUpdateOf({ updated_from: "0.1.0" }) }),
+  },
+  {
+    id: "updates-daemon-restart-confirmation",
+    group: GROUP,
+    category: "normal",
+    title: "Restart into an installed update, in a browser",
+    description: "Restart now of the notice, pressed in a browser tab where no desktop application owns the daemon, asks the same confirmation: it says the restart interrupts the sessions below, names two (one working, one idle) and ends with \"Everything else keeps running.\". The notice that offered the restart is under the dialog's veil.",
+    state: snapshotState({
+      consoles: [console_],
+      projects: [web],
+      sessions,
+      daemonUpdate: daemonUpdateOf({ phase: "installed", installed: { version: "0.2.0", holder_floor: "0.1.0" }, last_check: foundOffer }),
+    }),
+    handover: { sessions: ["s-web-1", "s-web-2"] },
+    steps: [restartNow],
   },
   {
     id: "updates-restart-uncertain",
@@ -248,8 +321,8 @@ export const updateScenarios: Scenario[] = [
     id: "updates-settings-check-failed",
     group: GROUP,
     category: "exceptional",
-    title: "About, Updates row after a check that did not finish",
-    description: "An automatic check failed with nothing raised over the window: the Updates row's sentence is only the running version, a warning triangle (named \"Last update check\") sits between What is new and Check for updates, beside the button it is about, and nothing is under the row. Its popover is shown in the next scenario. The mark is announced when an automatic check fails while Settings is open, even after an earlier check was pressed, but not when the latest check was the one pressed in the row, as the error alert dialog does that.",
+    title: "Updates section after a check that did not finish",
+    description: "An automatic check failed with nothing raised over the window: the Version row's sentence is only the running version, a warning triangle (named \"Last update check\") sits between What is new and Check for updates, beside the button it is about, and nothing is under the row. Its popover is shown in the next scenario. The mark is announced when an automatic check fails while Settings is open, even after an earlier check was pressed, but not when the latest check was the one pressed in the row, as the error alert dialog does that.",
     state: quiet,
     updater: { check: { error: FAILED_CHECK }, checked: true },
     steps: [openSettings],
@@ -258,7 +331,7 @@ export const updateScenarios: Scenario[] = [
     id: "updates-settings-check-failed-details",
     group: GROUP,
     category: "exceptional",
-    title: "About, why the last check for updates did not finish",
+    title: "Updates section, why the last check did not finish",
     description: "The mouse rests on the warning triangle between What is new and Check for updates: its popover opens above it with no click and no focus taken, with the title sentence, then \"It is not known whether a newer version exists.\", then \"Press Check for updates to try again.\" with the button's name as a chip and no button of its own.",
     state: quiet,
     updater: { check: { error: FAILED_CHECK }, checked: true },
@@ -269,7 +342,7 @@ export const updateScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Alert, checking for updates failed",
-    description: "Check for updates pressed in Settings > About failed: the alert stays until acknowledged, says the check failed and to check the connection, and keeps the updater's own text behind its disclosure. A download that fails part-way uses the same alert, pointing at the connection and the disk space.",
+    description: "Check for updates pressed in Settings > Updates failed: the alert stays until acknowledged, says the check failed and to check the connection, and keeps the updater's own text behind its disclosure. A download that fails part-way uses the same alert, pointing at the connection and the disk space.",
     state: quiet,
     updater: { check: { error: FAILED_CHECK } },
     steps: [openSettings, (ui) => ui.press(ui.t("settings.updates.check"))],
@@ -284,5 +357,25 @@ export const updateScenarios: Scenario[] = [
     state: quiet,
     updater: { check: newer, checked: true, install: { ends: "gone" } },
     steps: [openSession, downloadAndInstall],
+  },
+  {
+    id: "updates-daemon-error-install-failed",
+    group: GROUP,
+    category: "exceptional",
+    title: "Alert, the daemon could not put the update in place",
+    description: "Download and install was pressed and the daemon's download ended in failure: the alert stays until acknowledged, says the update could not be put in place and the installed daemon was not changed, and keeps the daemon's own text behind its disclosure. It gives no advice to check the connection or the disk, which would not help here. The notice that offered the update is back under it.",
+    state: browserQuiet(daemonUpdateOf({ available: daemonOffer, last_check: foundOffer })),
+    steps: [
+      openSession,
+      downloadAndInstall,
+      (ui) => ui.daemonEvents({
+        type: "daemon_update_status_updated",
+        status: daemonUpdateOf({
+          available: daemonOffer,
+          last_check: foundOffer,
+          install: { state: "failed", started_at: Date.now(), finished_at: Date.now(), error: "daemon_update_replace_failed", detail: REPLACE_FAILED },
+        }),
+      }),
+    ],
   },
 ];

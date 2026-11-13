@@ -12,6 +12,7 @@ use super::bindings;
 use super::configuration::{
     AccountResolution, ExportedConsoles, ProjectResolution, SettingsSection,
 };
+use super::daemon_update::DaemonUpdateChannel;
 use super::fields::{default_true, present_option};
 use super::git_workflow::{
     GitWorkflowOverride, GitWorkflowOverrideChanges, GitWorkflowSettingsChanges,
@@ -820,6 +821,12 @@ pub enum RequestBody {
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]
         resume_sessions_on_start: Option<bool>,
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        daemon_update_check: Option<bool>,
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        daemon_update_channel: Option<DaemonUpdateChannel>,
         /// A blank value goes back to the built-in default.
         #[cfg_attr(test, ts(optional))]
         default_clone_dir: Option<String>,
@@ -1129,6 +1136,33 @@ pub enum RequestBody {
     UpdateAgentCli {
         agent: AgentId,
     },
+    /// Checks the release manifest of the daemon's channel for a newer daemon, in the background.
+    /// Answered with `ack` at once; the result follows as `daemon_update_status_updated`, which
+    /// also announces that the check started. A check is not started while one or the download
+    /// runs, while one ended in the last 30 seconds, or once an update has been installed; the
+    /// request then changes nothing. Refused with `daemon_update_unavailable` where this daemon
+    /// does not update itself (`snapshot.daemon_update` is null). The user's own check; the
+    /// automatic ones follow `Settings.daemon_update_check`. See "Daemon updates" in `PROTOCOL.md`.
+    CheckDaemonUpdate,
+    /// Downloads the daemon update the last check found, checks it and replaces the daemon's
+    /// executable with it, in the background; the daemon keeps running the build it started as
+    /// until `restart_daemon`. Answered with `ack` once it has started; its progress and outcome
+    /// follow as `daemon_update_status_updated` (`progress`, `install`, `phase`). Refused with
+    /// `daemon_update_unavailable` where this daemon does not update itself,
+    /// `daemon_update_running` while a download or an update from the command line runs,
+    /// `daemon_update_installed` once one has been installed, `daemon_update_nothing_to_install`
+    /// when the last check found none, `daemon_update_not_writable` (`path`) when the daemon may
+    /// not replace its executable, and `daemon_shutting_down` once the daemon is stopping. The
+    /// daemon never does this on its own.
+    UpdateDaemon,
+    /// Restarts the daemon in place, the planned restart `octoboardd restart` makes: every session
+    /// keeps running under the daemon that takes over, on the same address. Answered with `ack`;
+    /// the connection then closes and comes back to the new daemon. Refused with
+    /// `daemon_update_unavailable` where this daemon does not update itself, and
+    /// `daemon_shutting_down` while a stop, restart or handover is under way. A client that
+    /// restarts after an update asks `handover_check` first, to tell the user which sessions the
+    /// restart interrupts.
+    RestartDaemon,
     /// Checks every project of this console's current git status against its remote, concurrently.
     /// Answered with `ack` at once; the statuses follow as `project_git_status` broadcasts, one per
     /// project as its check finishes. A project already being checked — by an earlier call this

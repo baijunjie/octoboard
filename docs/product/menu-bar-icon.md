@@ -216,7 +216,7 @@ From top to bottom:
    Opening the menu asks the daemon for a fresh reading, as opening the rail's panel or Settings' section does (see
    "When quotas are read" in `docs/product/account-quota-readings.md`); since the menu never changes while open, what that
    brings shows from the next time it is opened. The menu does not wait for the reply.
-3. **Check for updates**, which opens Settings on its About section with the update controls and checks when no
+3. **Check for updates**, which opens Settings on its Updates section and checks when no
    newer version is known. Its label identifies a known newer version, or a download in progress, as described in
    "The menu bar update entry" in `docs/product/in-app-updates.md`.
 4. **Open board**, which brings a window closed into the background back, as described under "Closing the window"

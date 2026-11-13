@@ -17,6 +17,26 @@ fn main() {
         .filter(|port| (1..=u64::from(u16::MAX)).contains(port))
         .expect("config/app.json `defaultServerPort` is a port number");
     println!("cargo:rustc-env=OCTOBOARD_DEFAULT_SERVER_PORT={port}");
+    // And the repository the releases are published in, which the self-update reads its manifest
+    // from, as `OCTOBOARD_REPOSITORY_URL`.
+    let repository = config["repositoryUrl"]
+        .as_str()
+        .filter(|url| url.starts_with("https://"))
+        .expect("config/app.json `repositoryUrl` is an https URL");
+    println!(
+        "cargo:rustc-env=OCTOBOARD_REPOSITORY_URL={}",
+        repository.trim_end_matches('/')
+    );
+    // The website that serves the install script a user upgrades by hand with, as
+    // `OCTOBOARD_WEBSITE_URL`.
+    let website = config["websiteUrl"]
+        .as_str()
+        .filter(|url| url.starts_with("https://"))
+        .expect("config/app.json `websiteUrl` is an https URL");
+    println!(
+        "cargo:rustc-env=OCTOBOARD_WEBSITE_URL={}",
+        website.trim_end_matches('/')
+    );
 
     embed_windows_manifest();
     embed_ui();

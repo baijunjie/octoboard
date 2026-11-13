@@ -37,6 +37,8 @@ export interface Preferences {
   diffLayout?: "unified" | "split";
   /** The release channel the user chose; unset, the running build's default (Beta on a prerelease, else Stable). */
   updateChannel?: UpdateChannel;
+  /** Whether the desktop application checks for updates by itself, on unless set to false. */
+  updateAutoCheck?: boolean;
   /** The keyboard shortcuts the user has changed, by command; the others keep their defaults. */
   keyboardShortcuts?: Overrides;
 }

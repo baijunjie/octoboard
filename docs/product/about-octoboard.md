@@ -1,13 +1,11 @@
 # About Octoboard
 
 Settings' **About** section (see "About" in `docs/product/settings.md`) shows the application itself, under its own
-heading in the section: its icon, its name and, in the desktop application, the version running ("Version …"). Then,
-one row each:
+heading in the section: its icon, its name and the version running ("Version …") — in the desktop application the
+application's version, and in a browser the daemon's, where the daemon updates itself (see "Which daemons update
+themselves" in `docs/product/server-form-updates.md`); in a browser on any other daemon there is no version. Then, one
+row each:
 
-- **Updates** and **Update channel**, in the desktop application only: where the application's updates stand, with a
-  **What is new** link to the release notes of the version it names and the button that moves the update on, and the
-  choice between the Stable and Beta channels (see "The Updates and Update channel rows" in
-  `docs/product/in-app-updates.md`).
 - **Website**, **GitHub repository** and **Issue tracker**: external links, each shown as its address without the
   `https://` — `octoboard.dev`, `github.com/baijunjie/octoboard` and
   `github.com/baijunjie/octoboard/issues/new`.
@@ -17,7 +15,7 @@ one row each:
   dialog" below.
 - **Copyright**: the project's shared copyright year and author name, with the name unchanged across UI languages.
 
-In a browser the Updates and Update channel rows and the version are absent.
+Octoboard's updates are followed in the Updates section, directly above About (see `docs/product/update-settings.md`).
 
 ## The third-party licenses dialog
 

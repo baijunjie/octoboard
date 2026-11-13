@@ -1,7 +1,7 @@
 import type { LicensedPackage, ThirdPartyLicenses } from "../../about/thirdPartyLicenses";
 import { describing, type Matcher, type Step } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";
-import { SAMPLE, snapshotState } from "../../fixtures/builders";
+import { SAMPLE, daemonUpdateOf, snapshotState } from "../../fixtures/builders";
 
 const GROUP = "Settings";
 
@@ -90,8 +90,18 @@ export const aboutScenarios: Scenario[] = [
     category: "normal",
     title: "About, a platform that cannot update itself",
     description:
-      "The icon and the application's name with no version line under it, then no update rows at all: straight to the Website, GitHub repository and Issue tracker links, License with its View license link, Third-party licenses with View licenses, and Copyright last. Compare with the Updates group's up-to-date scenario, the same section where the platform can update. Choose Phone (390px) to see the Website, GitHub repository and Issue tracker links sit beneath their labels against the end edge, while View license and View licenses stay beside theirs.",
+      "The icon and the application's name with no version line under it, since no version is known where nothing updates: straight to the Website, GitHub repository and Issue tracker links, License with its View license link, Third-party licenses with View licenses, and Copyright last. Compare with the next scenario, the same section where a version is known. Choose Phone (390px) to see the Website, GitHub repository and Issue tracker links sit beneath their labels against the end edge, while View license and View licenses stay beside theirs.",
     state,
+    steps: openAbout,
+  },
+  {
+    id: "settings-about-version",
+    group: GROUP,
+    category: "normal",
+    title: "About, the version known",
+    description:
+      "The icon, the name and \"Version 0.1.0\" in the header, then the Website, GitHub repository and Issue tracker links, License, Third-party licenses and Copyright; no update control is here, they are in the Updates section above About in the list. Shown on a daemon that updates itself, so the version is the daemon's.",
+    state: snapshotState({ consoles: [SAMPLE.console], projects: [SAMPLE.web], sessions: SAMPLE.sessions, daemonUpdate: daemonUpdateOf() }),
     steps: openAbout,
   },
   {

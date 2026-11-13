@@ -32,7 +32,8 @@ use crate::mcp::lookup::{
 use crate::mcp::views::{describe_console, describe_project};
 use crate::project_git::remote_url;
 use crate::protocol::{
-    error_code, AgentId, CodedError, KeepAwakeWhen, Project, ProjectSource, Session,
+    error_code, AgentId, CodedError, DaemonUpdateChannel, KeepAwakeWhen, Project, ProjectSource,
+    Session,
 };
 use crate::state::AppState;
 
@@ -218,6 +219,8 @@ pub(in crate::mcp) fn get_settings(state: &Arc<AppState>) -> Result<Value> {
         "resume_sessions_on_start": state.store.resume_sessions_on_start()?,
         "keep_awake": state.store.keep_awake()?,
         "keep_awake_when": state.store.keep_awake_when()?,
+        "daemon_update_check": state.store.daemon_update_check()?,
+        "daemon_update_channel": state.store.daemon_update_channel()?,
         "auto_select_account": state.store.auto_select_account()?,
         "interface_language": state.store.interface_language()?,
         "default_clone_dir": state.store.default_clone_dir()?,
@@ -236,6 +239,19 @@ fn keep_awake_when_argument(arguments: &Map<String, Value>) -> Result<Option<Kee
         .map(|text| {
             KeepAwakeWhen::from_wire_name(text.trim())
                 .ok_or_else(|| anyhow!("`{}` is not `always` or `working`", text.trim()))
+        })
+        .transpose()
+}
+
+/// The `daemon_update_channel` argument: `stable` or `beta`, surrounding whitespace ignored; `None`
+/// when absent, and any other text refused.
+fn daemon_update_channel_argument(
+    arguments: &Map<String, Value>,
+) -> Result<Option<DaemonUpdateChannel>> {
+    raw_text(arguments, "daemon_update_channel")?
+        .map(|text| {
+            DaemonUpdateChannel::from_wire_name(text.trim())
+                .ok_or_else(|| anyhow!("`{}` is not `stable` or `beta`", text.trim()))
         })
         .transpose()
 }
@@ -280,6 +296,8 @@ pub(in crate::mcp) fn update_settings(
             auto_switch_on_usage_limit: None,
             auto_start_quota_windows: None,
             resume_sessions_on_start: optional_bool(arguments, "resume_sessions_on_start")?,
+            daemon_update_check: optional_bool(arguments, "daemon_update_check")?,
+            daemon_update_channel: daemon_update_channel_argument(arguments)?,
             provider_settings: Default::default(),
             agent_tags: Default::default(),
             interface_language: raw_text(arguments, "interface_language")?

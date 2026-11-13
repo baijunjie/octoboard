@@ -96,8 +96,9 @@ async function mountSection(section: SettingsSectionId, platform: PlatformAdapte
 }
 
 describe.each(CASES)("in $name", ({ platform, state }) => {
-  // The Permissions section is listed only where the system has privacy grants to give.
-  const sections = SETTINGS_SECTION_IDS.filter((id) => id !== "permissions" || platform.host.os === "macos");
+  // The Permissions section is listed only where the system has privacy grants to give, the Updates one where the
+  // platform updates itself (a daemon that does is the same section over another store).
+  const sections = SETTINGS_SECTION_IDS.filter((id) => (id !== "permissions" || platform.host.os === "macos") && (id !== "updates" || platform.updater !== undefined));
 
   it.each(sections)("the %s section renders exactly the entries the search index shows for it, each in its group and worded as indexed", async (section) => {
     const { panel, reads } = await mountSection(section, platform, state);

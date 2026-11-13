@@ -7,7 +7,9 @@ use anyhow::Result;
 
 use crate::accounts::quotas;
 use crate::project_git;
-use crate::protocol::{AgentId, GitWorkflowSettingsChanges, KeepAwakeWhen, GIT_WORKFLOW_ITEMS};
+use crate::protocol::{
+    AgentId, DaemonUpdateChannel, GitWorkflowSettingsChanges, KeepAwakeWhen, GIT_WORKFLOW_ITEMS,
+};
 use crate::providers::{SettingDescriptor, SettingValue};
 use crate::state::{broadcast_settings, AppState, RecordKey, SETTINGS_FIELDS};
 
@@ -75,6 +77,8 @@ pub struct SettingsChanges {
     pub auto_switch_on_usage_limit: Option<bool>,
     pub auto_start_quota_windows: Option<bool>,
     pub resume_sessions_on_start: Option<bool>,
+    pub daemon_update_check: Option<bool>,
+    pub daemon_update_channel: Option<DaemonUpdateChannel>,
     /// Blank text goes back to the built-in default.
     pub default_clone_dir: Option<String>,
     pub git_workflow: GitWorkflowSettingsChanges,
@@ -111,6 +115,8 @@ impl SettingsChanges {
             self.auto_start_quota_windows.is_some(),
             self.default_clone_dir.is_some(),
             self.resume_sessions_on_start.is_some(),
+            self.daemon_update_check.is_some(),
+            self.daemon_update_channel.is_some(),
         ];
         let git = &self.git_workflow;
         let git_items: [bool; GIT_WORKFLOW_ITEMS.len()] = [
@@ -191,6 +197,8 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
         auto_switch_on_usage_limit,
         auto_start_quota_windows,
         resume_sessions_on_start,
+        daemon_update_check,
+        daemon_update_channel,
         default_clone_dir,
         git_workflow,
         provider_settings,
@@ -283,6 +291,19 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
     if let Some(value) = resume_sessions_on_start {
         changed |= state.store.set_resume_sessions_on_start(value)?;
     }
+    // Turning the check on, or moving to another channel, looks for an update at once.
+    let mut check_again = false;
+    if let Some(value) = daemon_update_check {
+        let updated = state.store.set_daemon_update_check(value)?;
+        check_again |= updated && value;
+        changed |= updated;
+    }
+    let mut channel_changed = false;
+    if let Some(value) = daemon_update_channel {
+        channel_changed = state.store.set_daemon_update_channel(value)?;
+        check_again |= channel_changed;
+        changed |= channel_changed;
+    }
     if let Some(value) = default_clone_dir {
         changed |= state.store.set_default_clone_dir(value.as_deref())?;
     }
@@ -299,6 +320,14 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
         return Ok(());
     }
     broadcast_settings(state)?;
+    // What the old channel's manifest offered says nothing of the new one, whether or not the
+    // automatic check goes on to look.
+    if channel_changed {
+        state.daemon_update.channel_changed(state);
+    }
+    if check_again {
+        state.daemon_update.check_again();
+    }
     // Turning the automatic pull on takes effect at once rather than at the client's next
     // five-minute sweep: the branches already known to be behind are fast-forwarded now (see
     // `project_git::status::pull_behind_projects`).

@@ -19,6 +19,12 @@ path = "src/main.rs"
 # `pnpm --filter @octoboard/daemon... build`.
 [features]
 embedded-ui = []
+# Turns on the server form's self-update (`src/self_update`): a Linux daemon that follows no application
+# checks the release manifest, and downloads, verifies and replaces its own executable when asked. Only
+# the official Linux release build enables it; development and test builds never check or show updates.
+# The code is compiled either way, so its tests run in every build, and this decides only whether a
+# daemon offers updates at all.
+self-update = []
 
 [build-dependencies]
 serde_json = "1"
@@ -70,6 +76,12 @@ notify = "8.2"
 # SOCKS proxies, which the user's shell may name (`ALL_PROXY=socks5://...`): without
 # `socks-proxy` ureq panics at connect on one.
 ureq = { version = "3", default-features = false, features = ["rustls", "platform-verifier", "socks-proxy"] }
+# The self-update's download (`src/self_update`): the release archive is a gzip tarball, whose one
+# executable is unpacked, and whose minisign signature is checked with the key built into the daemon.
+# The versions the lockfile already resolves for the desktop application's updater.
+flate2 = "1"
+tar = { version = "0.4", default-features = false }
+minisign-verify = "0.3"
 # Compiles a report page's text field `pattern` with ECMAScript's syntax, which the panel tests it
 # with as a JavaScript regular expression, to refuse one that does not compile when the page is
 # pushed (`crate::protocol::page_content`). The `regex` crate's syntax differs from JavaScript's.

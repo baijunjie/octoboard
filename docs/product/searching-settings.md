@@ -59,7 +59,7 @@ Some parts of Settings are found differently:
   place of the two rows (see `docs/product/macos-privacy-permissions.md`), is one block. It is found by its own title
   and text, by the names and descriptions of the Screen Recording and Accessibility rows it stands in for, and by the
   section's name, so a search for a permission finds the alert, counted as one, rather than saying no setting matches.
-- **Notifications** and the About section's **Updates** row are found by their name only, since their line of text says
+- **Notifications** and the Updates section's **Version** row are found by their name only, since their line of text says
   where things stand rather than what the setting does. So are **Website**, **GitHub repository** and **Issue
   tracker**, whose addresses are not searched.
 

@@ -145,6 +145,38 @@ fn update_settings_stores_prevent_sleep_and_when_it_holds() {
     assert!(events.try_recv().is_err(), "a repeat changes nothing");
 }
 
+/// The daemon's update check is on and follows the stable channel until the user chooses otherwise;
+/// both are changed through `update_settings` like the other settings: stored, broadcast once, a
+/// repeat changing nothing.
+#[test]
+fn update_settings_stores_the_daemons_update_check_and_channel() {
+    let (state, _dir) = crate::test_support::app_state("coordinator-daemon-update");
+    let settings = state.store.get_settings().unwrap();
+    assert!(settings.daemon_update_check);
+    assert_eq!(settings.daemon_update_channel, DaemonUpdateChannel::Stable);
+
+    let mut events = state.subscribe();
+    let change = || SettingsChanges {
+        daemon_update_check: Some(false),
+        daemon_update_channel: Some(DaemonUpdateChannel::Beta),
+        ..SettingsChanges::default()
+    };
+    update_settings(&state, change()).unwrap();
+    assert!(!state.store.daemon_update_check().unwrap());
+    assert_eq!(
+        state.store.daemon_update_channel().unwrap(),
+        DaemonUpdateChannel::Beta
+    );
+    assert!(matches!(
+        events.try_recv(),
+        Ok(Event::SettingsUpdated { settings })
+            if !settings.daemon_update_check
+                && settings.daemon_update_channel == DaemonUpdateChannel::Beta
+    ));
+    update_settings(&state, change()).unwrap();
+    assert!(events.try_recv().is_err(), "a repeat changes nothing");
+}
+
 /// Turning the setting that starts quota windows on looks over the readings already held;
 /// saying it is on again changes nothing, so it looks at nothing.
 #[tokio::test]
@@ -749,6 +781,20 @@ fn each_settings_change_names_the_path_it_writes() {
             "resume_sessions_on_start",
             SettingsChanges {
                 resume_sessions_on_start: Some(true),
+                ..SettingsChanges::default()
+            },
+        ),
+        (
+            "daemon_update_check",
+            SettingsChanges {
+                daemon_update_check: Some(false),
+                ..SettingsChanges::default()
+            },
+        ),
+        (
+            "daemon_update_channel",
+            SettingsChanges {
+                daemon_update_channel: Some(DaemonUpdateChannel::Beta),
                 ..SettingsChanges::default()
             },
         ),

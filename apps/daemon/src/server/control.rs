@@ -421,6 +421,7 @@ fn snapshot(state: &Arc<AppState>) -> anyhow::Result<Event> {
         account_logins: state.account_logins.running(),
         account_sharing: state.account_sharing_states()?,
         agent_cli_statuses: state.agent_clis.statuses(),
+        daemon_update: state.daemon_update.status().map(Box::new),
         home_dir: crate::paths::known_home_dir().map(|home| home.to_string_lossy().into_owned()),
         host: crate::platform::HostFacts::current().into(),
         keep_awake_held: state.keep_awake_held(),

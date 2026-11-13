@@ -13,7 +13,8 @@ use super::provider_settings::read_provider_settings;
 use super::rows::{enum_from_row, enum_to_text};
 use super::{Store, SETTINGS_ID};
 use crate::protocol::{
-    AgentId, GitWorkflowSettings, GitWorkflowSettingsChanges, KeepAwakeWhen, Settings,
+    AgentId, DaemonUpdateChannel, GitWorkflowSettings, GitWorkflowSettingsChanges, KeepAwakeWhen,
+    Settings,
 };
 
 /// Where a clone goes while the user has not chosen a directory.
@@ -56,6 +57,8 @@ impl Store {
             auto_switch_on_usage_limit: read_setting(&conn, "auto_switch_on_usage_limit")?,
             auto_start_quota_windows: read_setting(&conn, "auto_start_quota_windows")?,
             resume_sessions_on_start: read_setting(&conn, "resume_sessions_on_start")?,
+            daemon_update_check: read_setting(&conn, "daemon_update_check")?,
+            daemon_update_channel: read_daemon_update_channel(&conn)?,
             default_clone_dir: clone_dir_or_built_in(read_setting(&conn, "default_clone_dir")?),
             accounts: read_accounts(&conn)?,
             account_order: read_account_order(&conn)?,
@@ -251,6 +254,38 @@ impl Store {
         Ok(changed > 0)
     }
 
+    /// The release line the daemon's update check follows (`daemon_update_channel`).
+    pub fn daemon_update_channel(&self) -> Result<DaemonUpdateChannel> {
+        read_daemon_update_channel(&self.lock())
+    }
+
+    /// Whether the setting actually changed.
+    pub fn set_daemon_update_channel(&self, value: DaemonUpdateChannel) -> Result<bool> {
+        let changed = self.lock().execute(
+            "UPDATE settings SET daemon_update_channel = ?2 \
+             WHERE id = ?1 AND daemon_update_channel != ?2",
+            params![SETTINGS_ID, enum_to_text(&value)],
+        )?;
+        Ok(changed > 0)
+    }
+
+    /// The update channel stored in the database file at `path`, read through a connection that
+    /// cannot write and never settles or migrates the file: what a command line process asks while
+    /// the daemon owns the file, or after an update replaced the build that wrote it. `None` where
+    /// the file is missing, unreadable, from a version without the setting or holds a channel
+    /// this build does not know.
+    pub fn peek_daemon_update_channel(path: &std::path::Path) -> Option<DaemonUpdateChannel> {
+        let conn = Connection::open_with_flags(
+            path,
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+        )
+        .ok()?;
+        // The daemon may hold the file in the middle of a write: wait a moment rather than read
+        // nothing.
+        conn.busy_timeout(std::time::Duration::from_secs(1)).ok()?;
+        read_daemon_update_channel(&conn).ok()
+    }
+
     /// The directory a clone lands in when none is named: the stored one, else `~/Projects`
     /// expanded, which is as absolute and lexically normalised as the home it expands from.
     pub fn default_clone_dir(&self) -> Result<String> {
@@ -317,6 +352,7 @@ bool_settings! {
     auto_start_quota_windows, set_auto_start_quota_windows;
     resume_sessions_on_start, set_resume_sessions_on_start;
     keep_awake, set_keep_awake;
+    daemon_update_check, set_daemon_update_check;
 }
 
 impl Store {
@@ -331,6 +367,14 @@ impl Store {
 fn read_keep_awake_when(conn: &Connection) -> Result<KeepAwakeWhen> {
     Ok(conn.query_row(
         "SELECT keep_awake_when FROM settings WHERE id = ?1",
+        params![SETTINGS_ID],
+        |row| enum_from_row(row, 0),
+    )?)
+}
+
+fn read_daemon_update_channel(conn: &Connection) -> Result<DaemonUpdateChannel> {
+    Ok(conn.query_row(
+        "SELECT daemon_update_channel FROM settings WHERE id = ?1",
         params![SETTINGS_ID],
         |row| enum_from_row(row, 0),
     )?)
@@ -470,6 +514,51 @@ mod tests {
     use crate::protocol::{GitDelivery, GitDevelopment, GitWorkflowOverride};
 
     use crate::store::test_support::*;
+
+    fn user_version_of(path: &std::path::Path) -> i64 {
+        Connection::open(path)
+            .unwrap()
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .unwrap()
+    }
+
+    /// A command line process reads the channel without opening the file for writing or migrating
+    /// it, and reads nothing where there is nothing it can read.
+    #[test]
+    fn the_update_channel_is_read_without_opening_the_database_for_writing() {
+        let path = temp_db("peek-channel");
+        assert_eq!(Store::peek_daemon_update_channel(&path), None, "no file");
+        let store = Store::open(&path).expect("store");
+        assert_eq!(
+            Store::peek_daemon_update_channel(&path),
+            Some(DaemonUpdateChannel::Stable)
+        );
+        assert!(store
+            .set_daemon_update_channel(DaemonUpdateChannel::Beta)
+            .unwrap());
+        assert!(!store
+            .set_daemon_update_channel(DaemonUpdateChannel::Beta)
+            .unwrap());
+        // While the daemon holds the file open.
+        assert_eq!(
+            Store::peek_daemon_update_channel(&path),
+            Some(DaemonUpdateChannel::Beta)
+        );
+        drop(store);
+
+        // A file of a version before the setting, or one that is not a database, has none; neither
+        // is changed by the look.
+        let old = temp_db("peek-channel-old");
+        let conn = Connection::open(&old).unwrap();
+        conn.execute_batch("CREATE TABLE settings (id TEXT PRIMARY KEY);")
+            .unwrap();
+        drop(conn);
+        assert_eq!(Store::peek_daemon_update_channel(&old), None);
+        assert_eq!(user_version_of(&old), 0);
+        let garbage = temp_db("peek-channel-garbage");
+        std::fs::write(&garbage, b"not a database").unwrap();
+        assert_eq!(Store::peek_daemon_update_channel(&garbage), None);
+    }
 
     /// The tags of an agent round-trip per agent, an empty list clears them and a repeat write
     /// changes nothing, and they outlive the agent's removal from the added agents.

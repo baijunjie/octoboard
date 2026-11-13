@@ -1,4 +1,4 @@
-import { AppWindow, Bell, BrushCleaning, FileCog, FolderCheck, GitBranch, Info, Keyboard, KeyRound, SearchX, Settings2, ShieldCheck, ShieldUser, type LucideIcon } from "lucide-react";
+import { AppWindow, Bell, BrushCleaning, CircleArrowUp, FileCog, FolderCheck, GitBranch, Info, Keyboard, KeyRound, SearchX, Settings2, ShieldCheck, ShieldUser, type LucideIcon } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
@@ -40,6 +40,8 @@ import { SettingsFocusContext } from "./useSectionRefocus";
 import { useFocusRescue } from "./useFocusRescue";
 import { useSettingsQuery } from "./useSettingsQuery";
 import { TrustedFoldersSection } from "./TrustedFoldersSection";
+import { UpdatesSetting } from "./UpdatesSetting";
+import { useUpdateStore } from "../updates/UpdatesProvider";
 
 interface Section {
   label: PlainMessageKey;
@@ -62,6 +64,7 @@ const SECTIONS: Record<SettingsSectionId, Section> = {
   shortcuts: { label: "settings.section.shortcuts", Icon: Keyboard, Content: ShortcutsSection, stickyHeadingHeight: STICKY_HEADING_HEIGHT.group },
   cleanup: { label: "settings.section.cleanup", Icon: BrushCleaning, Content: CleanupSection },
   configuration: { label: "settings.section.configuration", Icon: FileCog, Content: ConfigurationSection },
+  updates: { label: "settings.section.updates", Icon: CircleArrowUp, Content: UpdatesSetting },
   about: { label: "settings.section.about", Icon: Info, Content: AboutSection },
 };
 
@@ -173,7 +176,9 @@ function SettingsDialogContent({ initialSection = SETTINGS_SECTION_IDS[0], navig
   const host = useHost();
   // The privacy grants are the system's own on macOS alone: managed in the app there (`permissionsPane`), and in a
   // browser on a Mac the section says they are managed in the app.
-  const sectionIds = SETTINGS_SECTION_IDS.filter((id) => id !== "permissions" || host.permissionsPane || host.os === "macos");
+  // The Updates section is there where something updates: the desktop application, or a daemon that updates itself.
+  const updates = useUpdateStore() !== undefined;
+  const sectionIds = SETTINGS_SECTION_IDS.filter((id) => (id !== "permissions" || host.permissionsPane || host.os === "macos") && (id !== "updates" || updates));
   const isNarrow = useIsNarrow();
   const fullScreen = isNarrow;
   const search = useSettingsQuery({ sectionIds, sectionLabel: (id) => SECTIONS[id].label, initialId: navigation?.section ?? initialSection });

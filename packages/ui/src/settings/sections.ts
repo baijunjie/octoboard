@@ -11,6 +11,7 @@ export const SETTINGS_SECTION_IDS = [
   "shortcuts",
   "cleanup",
   "configuration",
+  "updates",
   "about",
 ] as const;
 

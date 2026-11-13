@@ -62,16 +62,6 @@ pub(crate) trait Registry: Sync {
 /// The host of the registry, which `NO_PROXY` is matched against.
 const REGISTRY_HOST: &str = "registry.npmjs.org";
 
-/// The environment variables that name the proxy for an HTTPS request, in the order they apply.
-const PROXY_VARIABLES: [&str; 6] = [
-    "HTTPS_PROXY",
-    "https_proxy",
-    "ALL_PROXY",
-    "all_proxy",
-    "HTTP_PROXY",
-    "http_proxy",
-];
-
 /// The public npm registry, over HTTPS. A custom registry in the user's `.npmrc` is not read.
 #[cfg_attr(
     test,
@@ -116,36 +106,7 @@ impl Registry for NpmRegistry {
 pub(super) fn proxy_of(
     shell_env: &HashMap<String, String>,
 ) -> Result<Option<ureq::Proxy>, Failure> {
-    let value = |name: &str| shell_env.get(name).map(|value| value.trim());
-    let no_proxy = value("NO_PROXY")
-        .or_else(|| value("no_proxy"))
-        .unwrap_or("");
-    if bypasses(no_proxy, REGISTRY_HOST) {
-        return Ok(None);
-    }
-    for name in PROXY_VARIABLES {
-        let Some(url) = value(name).filter(|url| !url.is_empty()) else {
-            continue;
-        };
-        return ureq::Proxy::new(url)
-            .map(Some)
-            .map_err(|_| Failure::Failed(format!("{name} is not a proxy address")));
-    }
-    Ok(None)
-}
-
-/// Whether the `NO_PROXY` list `no_proxy` names `host`: `*`, the host itself, or a domain it is
-/// under, written with or without a leading `.` or `*.`.
-fn bypasses(no_proxy: &str, host: &str) -> bool {
-    no_proxy.split(',').map(str::trim).any(|entry| {
-        let domain = entry.trim_start_matches('*').trim_start_matches('.');
-        entry == "*"
-            || (!domain.is_empty()
-                && (host.eq_ignore_ascii_case(domain)
-                    || host
-                        .to_ascii_lowercase()
-                        .ends_with(&format!(".{}", domain.to_ascii_lowercase()))))
-    })
+    crate::env_shell::proxy_for(shell_env, REGISTRY_HOST).map_err(Failure::Failed)
 }
 
 /// The latest version of the CLI of `agent` installed as `install`, `None` where this install has
