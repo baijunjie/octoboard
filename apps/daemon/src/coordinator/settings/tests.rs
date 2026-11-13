@@ -209,6 +209,33 @@ async fn turning_the_quota_window_setting_on_kicks_held_readings_and_repeating_i
     assert!(!state.account_quotas.is_kicked_for_test(AgentId::GROK, None));
 }
 
+#[test]
+fn turning_on_keeping_sessions_to_their_own_project_changes_only_that_setting() {
+    let (state, _dir) = crate::test_support::app_state("coordinator-own-project-switch");
+    let before = state.store.get_settings().unwrap();
+    assert!(!before.keep_sessions_in_own_project);
+
+    update_settings(
+        &state,
+        SettingsChanges {
+            keep_sessions_in_own_project: Some(true),
+            ..SettingsChanges::default()
+        },
+    )
+    .unwrap();
+
+    let after = state.store.get_settings().unwrap();
+    assert!(after.keep_sessions_in_own_project);
+    assert!(state.store.keep_sessions_in_own_project().unwrap());
+    let mut expected = before;
+    expected.keep_sessions_in_own_project = true;
+    assert_eq!(
+        serde_json::to_value(&after).unwrap(),
+        serde_json::to_value(&expected).unwrap(),
+        "no other setting changed"
+    );
+}
+
 /// The value of the setting `id` of `agent`'s provider, as the session's launch reads it.
 fn launch_choice(state: &Arc<AppState>, agent: AgentId, id: &str) -> Option<String> {
     state
@@ -659,6 +686,13 @@ fn each_settings_change_names_the_path_it_writes() {
             "ask_questions_as_choices",
             SettingsChanges {
                 ask_questions_as_choices: Some(true),
+                ..SettingsChanges::default()
+            },
+        ),
+        (
+            "keep_sessions_in_own_project",
+            SettingsChanges {
+                keep_sessions_in_own_project: Some(true),
                 ..SettingsChanges::default()
             },
         ),

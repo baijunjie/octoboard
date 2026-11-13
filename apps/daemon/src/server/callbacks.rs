@@ -174,8 +174,9 @@ fn git_ref(state: Arc<AppState>, session_id: String, body: Bytes) -> Reply {
 }
 
 /// A session's git asking whether the revert gate applies to the update or push it is running a
-/// hook for, and what the gate is to know (`octoboardd gate-hook`). The reply is the gate's inputs,
-/// or `null` to skip it. Answered on the blocking pool, since it reads the store and runs `git`;
+/// hook for, and what the gate is to know (`octoboardd gate-hook`). The reply is the gate's inputs
+/// with the verdict on the repository (see `session_git_hooks::gate_inputs::GateAnswer`), or `null`
+/// to skip it all. Answered on the blocking pool, since it reads the store and runs `git`;
 /// the hook is waiting on the answer, so nothing else is done here.
 async fn revert_gate(state: Arc<AppState>, session_id: String, body: Bytes) -> Reply {
     let Ok(request) =
@@ -183,13 +184,13 @@ async fn revert_gate(state: Arc<AppState>, session_id: String, body: Bytes) -> R
     else {
         return Reply::status(StatusCode::BAD_REQUEST);
     };
-    let inputs = tokio::task::spawn_blocking(move || {
-        crate::session_git_hooks::gate_inputs::inputs(&state, &session_id, &request)
+    let answer = tokio::task::spawn_blocking(move || {
+        crate::session_git_hooks::gate_inputs::answer(&state, &session_id, &request)
     })
     .await
     .ok()
     .flatten();
-    Reply::json(&inputs)
+    Reply::json(&answer)
 }
 
 /// A Claude Code session's status line reporting the session's context window (`octoboardd

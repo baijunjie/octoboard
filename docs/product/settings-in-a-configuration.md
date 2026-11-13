@@ -83,6 +83,10 @@ language only when the daemon holds one; every other one is in every document wh
 - **Ask questions as choices** (see that section in `docs/product/agent-behavior-settings.md`), under `ask_questions_as_choices`. The
   review's line for turning it on says that Octoboard then asks sessions started afterwards to put a question that needs
   the user's decision as options to pick from.
+- **Keep sessions to their own project** (see that section in `docs/product/agent-behavior-settings.md`), under
+  `keep_sessions_in_own_project`. The review's line for turning it on says what the switch's own description says while
+  it is on: a project session that edits or commits in another project is stopped and asked to hand the work to a
+  session of that project, and edits are checked in sessions started afterwards.
 
 **Git**
 

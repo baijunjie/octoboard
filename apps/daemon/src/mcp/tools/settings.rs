@@ -273,6 +273,7 @@ pub(in crate::mcp) fn update_settings(
             auto_approve_account_switches: None,
             auto_approve_handoffs: None,
             ask_questions_as_choices: None,
+            keep_sessions_in_own_project: None,
             keep_awake: optional_bool(arguments, "keep_awake")?,
             keep_awake_when: keep_awake_when_argument(arguments)?,
             auto_select_account: None,

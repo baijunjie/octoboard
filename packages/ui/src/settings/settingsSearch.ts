@@ -150,6 +150,7 @@ const INDEX = {
     daemonSwitch("auto_approve_account_switches"),
     daemonSwitch("auto_approve_handoffs"),
     daemonSwitch("ask_questions_as_choices"),
+    daemonSwitch("keep_sessions_in_own_project"),
   ],
   // The folders are the user's own, so the list is found as a whole, by the section's name and its lead.
   "trusted-folders": [{ id: "trusted-folders.list", label: "settings.section.trustedFolders", description: ["settings.trusted.description"] }],

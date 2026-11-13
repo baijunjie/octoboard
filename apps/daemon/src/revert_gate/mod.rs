@@ -52,8 +52,8 @@ use anyhow::Result;
 use git::Git;
 use local::decide;
 
-/// The exit status of a rejection.
-const REJECTED: i32 = 3;
+/// The exit status of a rejection, which the hooks of a session's git take as the refusal.
+pub(crate) const REJECTED: i32 = 3;
 
 /// The hook the gate is run for.
 #[derive(clap::Subcommand)]

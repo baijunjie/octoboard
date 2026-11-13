@@ -26,9 +26,9 @@ it("lists every switch the settings page covers once", () => {
   expect([...APPLICATION_SWITCHES, ...AGENT_SWITCHES].map(({ field }) => field).filter((field) => field !== "keep_awake").sort()).toEqual(switches.map(({ key }) => key).sort());
 });
 
-// What each switch says while it is on; every one says the same while it is off.
+// What each switch says while it is on; every one says "Once this is on" while it is off, unless it words that itself.
 const OFF_TEXT = "Once this is on";
-const switches = [
+const switches: { key: string; label: string; help?: string; onText: string; offText?: string }[] = [
   { key: "resume_sessions_on_start", label: "Resume sessions on start", onText: "resumes every interrupted session each time it starts, including ones interrupted before it last stopped." },
   { key: "auto_close_idle_shell_terminals", label: "Close idle terminals when closing the panel", onText: "Closing the Terminal panel closes its idle terminals" },
   { key: "auto_delete_unresumable_archives", label: "Automatically delete archived sessions whose conversation is gone", onText: "is deleted automatically" },
@@ -36,6 +36,13 @@ const switches = [
   { key: "auto_approve_account_switches", label: "Automatically approve account switches", onText: "without asking you first" },
   { key: "auto_approve_handoffs", label: "Automatically approve handoffs", onText: "without asking you first" },
   { key: "ask_questions_as_choices", label: "Ask questions as choices", onText: "Sessions are asked to present decisions as options you can pick" },
+  {
+    key: "keep_sessions_in_own_project",
+    label: "Keep sessions to their own project",
+    onText:
+      "A project session that edits or commits in another project is stopped and asked to hand the work to a session of that project. Edits are checked in sessions started afterwards.",
+    offText: "Once on, a project session that edits or commits in another project is stopped and asked to hand the work to a session of that project.",
+  },
   { key: "auto_approve_session_requests", label: "Automatically approve session requests", onText: "without asking you first" },
   { key: "auto_select_account", label: "Automatically select an account", onText: "whose weekly limit resets soonest" },
   { key: "auto_switch_on_usage_limit", label: "Automatically switch accounts at the usage limit", onText: "switched to another account with usage left" },
@@ -53,7 +60,7 @@ function mount(field: string, on = false) {
   return container.querySelector<HTMLInputElement>("input[type=checkbox]")!;
 }
 
-describe.each(switches)("$key", ({ key, label, help, onText }) => {
+describe.each(switches)("$key", ({ key, label, help, onText, offText = OFF_TEXT }) => {
   it.each([
     { name: "off while it is on", on: true },
     { name: "on while it is off", on: false },
@@ -67,8 +74,8 @@ describe.each(switches)("$key", ({ key, label, help, onText }) => {
   });
 
   it.each([
-    { name: "what is happening now while it is on", on: true, shown: onText, hidden: OFF_TEXT },
-    { name: "what turning it on does while it is off", on: false, shown: OFF_TEXT, hidden: undefined },
+    { name: "what is happening now while it is on", on: true, shown: onText, hidden: offText },
+    { name: "what turning it on does while it is off", on: false, shown: offText, hidden: undefined },
   ])("describes $name", ({ on, shown, hidden }) => {
     mount(key, on);
     expect(document.body.textContent).toContain(shown);

@@ -2463,6 +2463,9 @@
             "ask_questions_as_choices": {
               "type": "boolean"
             },
+            "keep_sessions_in_own_project": {
+              "type": "boolean"
+            },
             "interface_language": {
               "type": "string",
               "description": "A tag the interface offers (`interface_language::display_name` knows it); any other\nis refused."

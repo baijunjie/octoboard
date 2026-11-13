@@ -12,9 +12,9 @@ import { AgentBehaviorSection } from "./AgentBehaviorSection";
 
 const request = vi.fn(() => Promise.resolve({}) as Promise<never>);
 
-const settings = { ...DEFAULT_SETTINGS, auto_approve_session_requests: true, auto_approve_resume_requests: false, auto_approve_account_switches: false, auto_approve_handoffs: true, ask_questions_as_choices: true };
+const settings = { ...DEFAULT_SETTINGS, auto_approve_session_requests: true, auto_approve_resume_requests: false, auto_approve_account_switches: false, auto_approve_handoffs: true, ask_questions_as_choices: true, keep_sessions_in_own_project: false };
 
-it("shows the session-request, resume-request, account-switch, handoff and question-asking switches in that order, each with its own value and setting", async () => {
+it("shows the session-request, resume-request, account-switch, handoff, question-asking and own-project switches in that order, each with its own value and setting", async () => {
   const container = mountHost(
     <LanguageProvider>
       <AgentBehaviorSection />
@@ -22,7 +22,7 @@ it("shows the session-request, resume-request, account-switch, handoff and quest
     { daemon: testDaemon({ state: { settings }, request }) },
   );
   expect(container.textContent).toContain("Choose what sessions may do without asking you first, and how they ask you.");
-  const [sessions, resumes, switches, handoffs, questions] = [...container.querySelectorAll<HTMLInputElement>("input[type=checkbox]")];
+  const [sessions, resumes, switches, handoffs, questions, ownProject] = [...container.querySelectorAll<HTMLInputElement>("input[type=checkbox]")];
   expect(container.textContent!.indexOf("Automatically approve session requests")).toBeLessThan(
     container.textContent!.indexOf("Automatically approve resume requests"),
   );
@@ -35,7 +35,12 @@ it("shows the session-request, resume-request, account-switch, handoff and quest
   expect(container.textContent!.indexOf("Automatically approve handoffs")).toBeLessThan(
     container.textContent!.indexOf("Ask questions as choices"),
   );
-  expect([sessions.checked, resumes.checked, switches.checked, handoffs.checked, questions.checked]).toEqual([true, false, false, true, true]);
+  // The own-project row comes after every existing one.
+  expect(container.textContent!.indexOf("Ask questions as choices")).toBeLessThan(
+    container.textContent!.indexOf("Keep sessions to their own project"),
+  );
+  expect([...container.querySelectorAll("input[type=checkbox]")]).toHaveLength(6);
+  expect([sessions.checked, resumes.checked, switches.checked, handoffs.checked, questions.checked, ownProject.checked]).toEqual([true, false, false, true, true, false]);
   await act(async () => {
     resumes.click();
   });
@@ -52,5 +57,9 @@ it("shows the session-request, resume-request, account-switch, handoff and quest
     questions.click();
   });
   expect(request).toHaveBeenLastCalledWith({ type: "update_settings", ask_questions_as_choices: false });
-  expect(request).toHaveBeenCalledTimes(4);
+  await act(async () => {
+    ownProject.click();
+  });
+  expect(request).toHaveBeenLastCalledWith({ type: "update_settings", keep_sessions_in_own_project: true });
+  expect(request).toHaveBeenCalledTimes(5);
 });

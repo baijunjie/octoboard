@@ -55,22 +55,27 @@ manager starts the successor, by that daemon's own record saying the same; `addr
 says the daemon holds one and `owner.key` has it, which outlives the daemon, else with the launch key, which it reads from the key record only the
 daemon's own user can open; `address --rotate` replaces the owner key first, through the running daemon (`POST /owner-key/rotate`) or, with none
 running, in `owner.key` (`owner_key::replace_in`), and prints the new address; where the host has no signal to stop or restart a daemon by (Windows), `stop` and `restart` ask it over loopback instead, with the key the key record (`daemon.key`) holds). The CLI modes other processes start are `hook`, `git-ref`,
-`gate-hook`, `status-line`, `mcp` and `holder`: their dispatch, with the user's modes, is `src/cli/mod.rs`, and their
+`gate-hook`, `guard-hook`, `status-line`, `mcp` and `holder`: their dispatch, with the user's modes, is `src/cli/mod.rs`, and their
 code is `src/cli/hook.rs` (`hook`), a provider's `StatusLine`
 (`status-line`; `src/cli/mod.rs` only finds the provider's and hands over, Claude Code's is
-`src/adapter/claude/status_line.rs`), `src/session_git_hooks/` (`git-ref`, `gate-hook`) and `src/mcp/stdio.rs` (`mcp`); `holder` is `src/cli/holder.rs`, which runs `holder::server::run`. The routes are in `src/server/`. Each mode takes the running
+`src/adapter/claude/status_line.rs`), `src/session_git_hooks/` (`git-ref`, `gate-hook`), `src/cross_project_guard/hook.rs` (`guard-hook`) and `src/mcp/stdio.rs` (`mcp`); `holder` is `src/cli/holder.rs`, which runs `holder::server::run`. The routes are in `src/server/`. Each mode takes the running
 daemon's port (`--port`) and the launch key, which is in no process's arguments, since every user of the machine can list
 those: `hook`, `status-line` and `mcp` are given the owner-only file that holds it (`--key-file`, written by
 `src/key_file.rs` into the session's scratch directory), and `git-ref` and `gate-hook` read it from the
 file that the `OCTOBOARD_DAEMON_CREDENTIAL_PATH` variable of the project session's agent environment names. Those two
 alone take `--port` as optional and, where the launch's route is gone (no port, no usable key file, a refused key,
 nothing listening), call the daemon its owner record names with its recorded key (`src/session_git_hooks/route.rs`,
-over `owner_record::Owner::recorded_in`, with the data directory passed in from `src/cli/mod.rs`):
+over `owner_record::Owner::recorded_in`, with the data directory passed in from `src/cli/mod.rs`). `guard-hook` is the one
+mode that calls no daemon: it takes neither of them, only the list file that the launch wrote (`--list`):
 
 - `hook` — posts an agent's hook payload from stdin to `POST /hook/:session`.
 - `git-ref` — posts created branches and moved refs a session's `reference-transaction` hook saw.
 - `gate-hook` — run by a session's `reference-transaction` and `pre-push` dispatchers: asks the daemon whether the
-  revert gate applies, runs it in-process, and exits with its status (3 rejects).
+  revert gate applies and whether the repository belongs to another registered project, runs the gate in-process, and
+  exits with its status (3 rejects).
+- `guard-hook` — the synchronous `PreToolUse` command of a project session launched with the setting that keeps sessions
+  to their own project on: decides a file-edit tool call from the launch's list alone and prints a `deny` decision for a
+  path inside another registered project.
 - `status-line` — the status line a provider that declares `Capabilities::status_line` injects (`--provider <id>`):
   posts the context window to `POST /context-window/:session` and runs the user's own status line with the same input.
 - `mcp` — the MCP server each adapter registers for a session: speaks MCP on stdin/stdout and forwards tool calls to
@@ -210,6 +215,13 @@ installs with `--service`).
   what belongs to something else; `project.rs` is the part for removing a project's folder.
 - [`src/session_git_hooks/`](../../apps/daemon/src/session_git_hooks/README.md) — the git hooks of a project session and
   the `git-ref` and `gate-hook` modes.
+- `src/cross_project_guard/` — keeping a project session to its own project, in two layers behind the Agent behavior
+  setting `keep_sessions_in_own_project`: the edit layer, where `list.rs` builds the launch's list (other registered
+  projects' roots, the session's own roots and repository, the shared directories) and writes it into the session's
+  scratch directory, and `hook.rs` is `guard-hook`, which decides one `PreToolUse` payload from that list; and the git
+  layer, where `repository.rs` judges whether the repository a session's git is updating belongs to another registered
+  project, which `session_git_hooks/gate_inputs.rs` sends the hook. The adapters inject the edit layer
+  (`adapter/hooks.rs`, below).
 - `src/revert_gate/` — the revert gate engine run in-process by `gate-hook`: `local.rs` decides a ref update, `push.rs`
   a push, `report.rs` words a rejection, `content.rs` the content criteria, `git.rs` the gate's own `git`.
 - `src/config_document/` — export and import of the configuration document that carries state between devices, selectable by Settings section (`protocol::SettingsSection`) and, for accounts, by agent (`import/accounts.rs`)
@@ -418,7 +430,7 @@ installs with `--service`).
   (`set_dir_modified`) (contract tests in `fs/contract_tests.rs` hold every host to the same behaviour); `names/` how the host spells names (a name as bytes and back, the components a client may send, git bytes as a
   path, the lexical comparison key of a path, the path style, the canonical path, which on Windows is the long, plain form (`std::fs::canonicalize`), so a `%TEMP%` written as an 8.3 short path, as on the CI runner, compares equal to its long form; the Windows rules that need no OS call
   are plain functions tested on every host, the rest a skeleton); `shell/` what the host asks of the user's shell (the login shell
-  and the environment snapshot it gives, finding a binary on a `PATH` as what starts it, the command line a hook runs, the owner-only script that holds one, the time an agent lets a command hook run (`COMMAND_HOOK_TIMEOUT_SECS`, longer on Windows, where a hook's first start of a launch is slow) and `FIRST_HOOK_SLOWDOWN`, the factor that gives the wait for a launch's first report the same slack (`messaging/write_queue.rs` applies it), the shell that runs a user's own command, the git hooks' interpreter, the architectures of the programs the machine runs, native first (`runnable_architectures`), the
+  and the environment snapshot it gives, finding a binary on a `PATH` as what starts it, the command line a hook runs (and the variant that always exits 0, `command_line_exit_ok`), the owner-only script that holds one (`write_runnable_exit_ok` for the exit-0 form), the time an agent lets a command hook run (`COMMAND_HOOK_TIMEOUT_SECS`, longer on Windows, where a hook's first start of a launch is slow) and `FIRST_HOOK_SLOWDOWN`, the factor that gives the wait for a launch's first report the same slack (`messaging/write_queue.rs` applies it), the shell that runs a user's own command, the git hooks' interpreter, the architectures of the programs the machine runs, native first (`runnable_architectures`), the
   installed version a binary reports, probed in the launch's environment, and `package_shims.rs`, where Node package
   managers (npm, pnpm, with its numbered `global\<n>` layouts taken highest first, Yarn classic, Bun, Volta) install a global package beside the shims they write on Windows,
   as plain path functions tested on every host: `shim_package` gives a `Shim`, none, the package's directory or an unresolved
@@ -534,7 +546,7 @@ installs with `--service`).
   remote resume needs of the server, the trust of the generated hooks and the `thread/resume` that applies the
   permission preset), `mcp_auth.rs` (its `McpServerAuth`: `codex mcp login` and `codex mcp logout`); Codex, Claude
   Code and Grok also have `mcp_inventory.rs` (their `McpInventoryReader`: Codex's over the app server, Claude Code's over
-  `claude auth status` and `claude mcp list`, Grok's over `grok mcp list` and `grok mcp doctor`, servers only), and Grok `trust.rs` (its `TrustCarrier`)); `mod.rs` holds the shared launch/resume flow, `hooks.rs` the hook URL, command and script (the command and script name the session's key file, not the key), and `account_cli.rs` the account
+  `claude auth status` and `claude mcp list`, Grok's over `grok mcp list` and `grok mcp doctor`, servers only), and Grok `trust.rs` (its `TrustCarrier`)); `mod.rs` holds the shared launch/resume flow, `hooks.rs` the hook URL, command and script (the command and script name the session's key file, not the key) and the cross-project guard's command, script and `PreToolUse` group (`guard_command`, `write_guard_script`, `add_guard_group`; Claude Code registers the command in its JSON hooks, Grok Build the script in its JSON hooks, Codex the script in its launch overrides), and `account_cli.rs` the account
   directories, commands and short queries (running an agent CLI as an account), and `files.rs` the bounded reads of the
   files an adapter reads, with `project_dirs` (the directories whose project configuration is layered) (`codex/claude_mcp.rs`
   only translates a compatibility source's MCP servers into Codex's launch overrides). The instruction file, tool-name prefix, ask-question tool and detection markers are read from the
@@ -603,7 +615,7 @@ same scan.
 | storage | `git_workflow`, `store` |
 | state | `state` |
 | workspace | `branch_cleanup`, `branch_origin`, `browse`, `host_tools`, `path_links`, `project_git`, `removal_safety`, `revert_gate`, `terminal` |
-| agent sessions | `accounts`, `adapter`, `agents`, `handoff`, `hooks`, `keep_awake`, `messaging`, `records`, `session`, `session_git_hooks`, `session_tools`, `titles` |
+| agent sessions | `accounts`, `adapter`, `agents`, `cross_project_guard`, `handoff`, `hooks`, `keep_awake`, `messaging`, `records`, `session`, `session_git_hooks`, `session_tools`, `titles` |
 | control | `config_document`, `coordinator`, `mcp`, `session_request` |
 | entry | `cli`, `server` |
 

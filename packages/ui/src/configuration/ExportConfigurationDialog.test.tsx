@@ -156,6 +156,9 @@ it("notes under each section what it includes", () => {
   const note = (label: string) => document.getElementById(box(label).getAttribute("aria-describedby")!)!.textContent;
   expect(note("General")).toBe("Includes appearance, language, Markdown style and sorting.");
   expect(note("Git")).toContain("default clone directory");
+  expect(note("Agent behavior")).toBe(
+    "Includes which requests are approved automatically, whether questions are asked as choices, and whether sessions are kept to their own project.",
+  );
   expect(note("Keyboard shortcuts")).toBe("Includes the keyboard shortcuts you have changed.");
   expect(note("Include agent accounts")).toContain("login credentials are not included");
 });

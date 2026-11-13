@@ -42,6 +42,9 @@ on **Claude Code 2.1.318** and **2.1.319**, **Codex 0.166.0** (the stop, the hoo
 measured on **Claude Code 2.1.319** on 2026-11-10, and what the Grok Build section says about the calls of one response
 running side by side on **Grok Build 1.0.77** on the same day. What the Claude Code section says about its Program
 Status Protocol reports and its title without activity glyphs was measured on **Claude Code 2.1.322** on 2026-11-13.
+What the three hook sections say about a `PreToolUse` deny blocking a file write was measured on 2026-11-12 and
+2026-11-13 on macOS on **Claude Code 2.1.322** (`claude -p`), **Codex 0.167.1** (`codex exec`) and **Grok Build 1.0.77**
+(`grok -p`), against scratch directories, by a probe whose `PreToolUse` hook printed a `deny` decision with a reason.
 All three rewrite their hook surface, their payload fields, their configuration layering and their on-disk layout on
 upgrade, so check a detail here against the installed version before relying on it.
 
@@ -295,6 +298,17 @@ handler that reads one.
 `.claude/settings.json` hooks rather than replacing them, and injected `permissions` merge with the project's.
 Precedence among permission rules is by rule *kind* rather than by source — `deny` > `ask` > `allow` — so an injected
 `allow` can never re-open something the project denies.
+
+**A `PreToolUse` deny blocks a write, and so does a `deny` permission rule, on different ground** (2.1.322, `claude -p`
+in `bypassPermissions`, a probe hook printing `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":
+"deny","permissionDecisionReason":"<text>"}}`). A deny with a reason, from a `command` hook and from an `http` hook
+alike, blocks `Edit`, `Write` and `Bash`, and the model sees `PreToolUse:<Tool> hook error: <reason>` in full. A rule
+`Edit(//abs/path/**)` passed in `--settings` blocks `Edit`, `Write` and a `Bash` write whose path is literal in the
+command (`echo > /abs`, `sed -i /abs`, `cd /abs && echo > rel`) in `bypassPermissions`, `acceptEdits` and `auto`, but
+not `python3 -c "open('/abs','w')"`, a path built from a variable, or a script run with `sh`. Its message is the generic
+"File is in a directory that is denied by your permission settings", and when a rule and a hook deny the same call the
+model sees only that generic message, not the hook's reason. An `http` hook whose URL is unreachable lets the call
+through (fail open), silently. After a deny the model did not try to write the file another way.
 
 **What Claude Code reads from other agents' layouts** (2.1.319, measured with `claude -p --model haiku
 --no-session-persistence` in scratch git repositories):
@@ -675,6 +689,13 @@ Octoboard deliberately keeps waiting is in "Waiting for the answer" of `docs/pro
 the hook's own stderr text is not shown — and a *synchronous* hook that hangs costs the turn its full timeout. With
 `async = true` a hook that exits non-zero and writes stderr produces no cell and no warning whatsoever.
 
+**A synchronous `PreToolUse` deny blocks a write** (0.167.1, `codex exec` in `workspace-write` with
+`--dangerously-bypass-hook-trust`, a probe command hook printing a `deny` decision with a reason). It blocks
+`apply_patch` and shell commands. The payload of an `apply_patch` call has `tool_name` `"apply_patch"` and
+`tool_input.command` holding the patch text, whose paths are relative to the payload's `cwd`; a shell call has
+`tool_name` `"Bash"`. The model sees `Command blocked by PreToolUse hook: <reason>. Command: <command>` and did not
+retry the write another way. A hook command that does not exist lets the call through.
+
 **Project configuration layering**: project hooks in `<cwd>/.codex/hooks.json` merge with injected ones;
 `<cwd>/AGENTS.md` is concatenated *after* `~/.codex/AGENTS.md` inside a single instructions block, separated by a `---
 project-doc ---` line, so the user's global file survives; skills are discovered as set out below.
@@ -873,6 +894,14 @@ silent tool call with no spurious flip, but the backstop that would have tested 
 and those lines appear **only in the TUI**, never in headless `-p`, so hook behavior has to be checked in the TUI. On
 `PreToolUse` a `deny` in the hook's stdout JSON is honoured **regardless of its exit code**, so a hook meant only to
 observe must emit no JSON at all.
+
+**A `PreToolUse` deny blocks a write, over HTTP too** (1.0.77, `grok -p` in `acceptEdits`, a hook file in
+`GROK_HOME/hooks/`, a probe printing a `deny` decision with a reason). A `command` hook's deny blocks `search_replace`
+(Grok's file edit) and `run_terminal_command`, and so does an `http` hook to `http://127.0.0.1:<port>`, which the probe
+reached. The model sees `Hook denied: <reason>`, the reason cut to about its first 270 characters and followed by `… [+N
+chars]`, and did not retry the write another way. An unreachable hook URL lets the call through, but with `"failClosed":
+true` it denies with `Hook denied: fail-closed hook '<name>' failed: HTTP request failed for <url>: error sending
+request`.
 
 **Project configuration layering**: hooks are additive across the global, project and managed layers, and
 byte-identical handlers are deduplicated across them.
@@ -2527,7 +2556,7 @@ in `docs/product/per-agent-launch-specifics.md`.
 |---|---|---|---|
 | Launch with an initial task | `claude "<task>"` | `codex "<task>"` | `grok "<task>"` |
 | Pre-allocate a session id | `--session-id <uuid>` | **Not possible.** Take it from the `SessionStart` payload; the interactive thread is created lazily on the first prompt, so a session opened without a task has no id until the user types | `--session-id <uuid>` (new sessions only) |
-| Inject hooks | `--settings <json-or-path>`, merged with the project settings | `-c 'hooks.<Event>=[{hooks=[{type="command",command=…,timeout=3 (15 on Windows, except 3 for `Interrupt`),async=true}]}]'`, one per event, plus the hook-trust step | A per-session `GROK_HOME` whose `hooks/` directory is Octoboard's and whose other entries mostly symlink to the source home |
+| Inject hooks | `--settings <json-or-path>`, merged with the project settings; for a project session under **Keep sessions to their own project**, a second, synchronous `PreToolUse` group (matcher `Edit\|Write\|MultiEdit\|NotebookEdit`, a POSIX command line ending in `exit 0`) beside the status hooks | `-c 'hooks.<Event>=[{hooks=[{type="command",command=…,timeout=3 (15 on Windows, except 3 for `Interrupt`),async=true}]}]'`, one per event, plus the hook-trust step; the guard is a second `PreToolUse` group (matcher `apply_patch`, `timeout=10`, no `async`) in the same `hooks.PreToolUse` override, run through the per-session script and trusted on a private-server resume | A per-session `GROK_HOME` whose `hooks/` directory is Octoboard's and whose other entries mostly symlink to the source home; the guard is a second `PreToolUse` group in its `hooks/octoboard.json` |
 | Inject MCP | `--mcp-config <json>` | `-c 'mcp_servers.octoboard.command=…'`, `.args=[…]`, `.default_tools_approval_mode="approve"` and `.tool_timeout_sec=660` | An `[mcp_servers.octoboard]` block appended to the `config.toml` copy inside that `GROK_HOME`, with `tool_timeout_sec = 660` |
 | Inject a role description | `--append-system-prompt` | `-c 'developer_instructions="…"'`, which adds a developer message and leaves the rest of the prompt byte-identical; not `-c instructions=`, which replaces the system prompt | `--rules "…"`, appended to the system prompt and persisted into the session record |
 | Resume | `claude --resume <id>` | `codex resume <id>` | `grok --resume <id>` |
@@ -2644,8 +2673,10 @@ in `docs/product/per-agent-launch-specifics.md`.
 - **Hook scripts must fail silently and fast on all three.** Every agent surfaces a failing hook, and a hook with no
   timeout blocks the turn for its full duration. Octoboard's scripts exit 0 unconditionally, write nothing to stderr,
   set a short explicit timeout (3 s; command hooks 15 s on Windows, HTTP hooks and Codex's `Interrupt` 3 s everywhere, where the first hook of a launch took 4.6 s to start under Codex's `pwsh`; Codex clamps some events to 3 s), are asynchronous where the agent allows it, and give
-  the daemon call a hard deadline. Grok's HTTP hooks cannot reach the daemon at all, since its SSRF protection rejects
-  plain HTTP and private addresses, so hooks are `command` type.
+  the daemon call a hard deadline. Octoboard's Grok hooks are `command` type because Grok's SSRF protection was found to
+  reject plain HTTP and private addresses, though a later probe on 1.0.77 reached `http://127.0.0.1:<port>` (see Grok's
+  "A `PreToolUse` deny blocks a write" above). The guard's behavior is in "How each agent is given the injection" in
+  `docs/product/per-agent-launch-specifics.md`.
 - Injection never modifies project files or the user's global configuration; where an agent can only be configured
   through a file, a "use this config directory" variable or flag is preferred.
 

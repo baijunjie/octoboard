@@ -1873,7 +1873,7 @@ export const th: Translation<"other"> = {
   "configuration.export.appBehavior.description": "รวมการดำเนินเซสชันต่อเมื่อเริ่มต้น การทำงานเบื้องหลัง {menuBarIcon} การป้องกันการสลีป และการปิดเทอร์มินัลที่ไม่ได้ใช้งาน",
   "configuration.export.appBehavior.description.basic": "รวมการดำเนินเซสชันต่อเมื่อเริ่มต้น การป้องกันการสลีป และการปิดเทอร์มินัลที่ไม่ได้ใช้งาน",
   "configuration.export.git.description": "รวมไดเรกทอรีโคลนเริ่มต้น การพูลที่เก็บอัตโนมัติ และเวิร์กโฟลว์ Git",
-  "configuration.export.agentBehavior.description": "รวมคำขอที่อนุมัติอัตโนมัติและการถามด้วยตัวเลือก",
+  "configuration.export.agentBehavior.projectScope.description": "รวมคำขอที่อนุมัติอัตโนมัติ การถามด้วยตัวเลือก และการจำกัดเซสชันให้อยู่ในโปรเจ็กต์ของตัวเอง",
   "configuration.export.shortcuts.description": "รวมปุ่มลัดแป้นพิมพ์ที่คุณเปลี่ยน",
   "configuration.export.cleanup.description": "รวมการลบเซสชันที่เก็บถาวรซึ่งไม่มีการสนทนาแล้ว",
   "configuration.export.accounts.include": "รวมบัญชีเอเจนต์",
@@ -1989,6 +1989,7 @@ export const th: Translation<"other"> = {
   "configuration.import.settings.consequence.autoApproveAccountSwitches": "หลังจากนี้จะอนุมัติคำขอสลับบัญชีของเซสชันย่อยโดยไม่ถามก่อน",
   "configuration.import.settings.consequence.autoApproveHandoffs": "หลังจากนี้จะอนุมัติคำขอส่งต่องานจากเซสชันย่อยให้เอเจนต์อื่นโดยไม่ถามก่อน",
   "configuration.import.settings.consequence.askQuestionsAsChoices": "จะขอให้เซสชันที่เริ่มภายหลังเสนอการตัดสินใจเป็นตัวเลือกที่กดเลือกได้",
+  "configuration.import.settings.consequence.keepSessionsInOwnProject": "เซสชันโปรเจ็กต์ที่แก้ไขหรือคอมมิตในโปรเจ็กต์อื่นจะถูกหยุดและถูกขอให้มอบงานให้เซสชันของโปรเจ็กต์นั้น การแก้ไขจะถูกตรวจสอบในเซสชันที่เริ่มหลังจากนี้",
   "configuration.import.settings.consequence.shortcuts": {
     "other": "ปุ่มลัดในไฟล์ {count} รายการต่างจากค่าเริ่มต้น มีผลเฉพาะอุปกรณ์หรือเบราว์เซอร์นี้",
   },
@@ -2213,6 +2214,11 @@ export const th: Translation<"other"> = {
   "settings.askQuestionsAsChoices.label": "ถามด้วยตัวเลือก",
   "settings.askQuestionsAsChoices.description.off": "เมื่อเปิด จะขอให้เซสชันเสนอการตัดสินใจเป็นตัวเลือกที่กดเลือกได้ แทนการแจกแจงในคำตอบ มีผลกับเซสชันที่เริ่มภายหลัง",
   "settings.askQuestionsAsChoices.description.on": "จะขอให้เซสชันเสนอการตัดสินใจเป็นตัวเลือกที่กดเลือกได้ แทนการแจกแจงในคำตอบ มีผลกับเซสชันที่เริ่มภายหลัง",
+  "settings.keepSessionsInOwnProject.label": "จำกัดเซสชันให้อยู่ในโปรเจ็กต์ของตัวเอง",
+  "settings.keepSessionsInOwnProject.description.off":
+    "เมื่อเปิด เซสชันโปรเจ็กต์ที่แก้ไขหรือคอมมิตในโปรเจ็กต์อื่นจะถูกหยุดและถูกขอให้มอบงานให้เซสชันของโปรเจ็กต์นั้น",
+  "settings.keepSessionsInOwnProject.description.on":
+    "เซสชันโปรเจ็กต์ที่แก้ไขหรือคอมมิตในโปรเจ็กต์อื่นจะถูกหยุดและถูกขอให้มอบงานให้เซสชันของโปรเจ็กต์นั้น การแก้ไขจะถูกตรวจสอบในเซสชันที่เริ่มหลังจากนี้",
   "settings.autoSelect.label": "เลือกบัญชีอัตโนมัติ",
   "settings.autoSelect.description.off": "เมื่อเปิด เซสชันใหม่จะใช้บัญชีที่ขีดจำกัดรายสัปดาห์รีเซ็ตเร็วที่สุด เพื่อไม่ให้การใช้งานที่เหลือก่อนรีเซ็ตสูญเปล่า",
   "settings.autoSelect.description.on": "เซสชันใหม่จะใช้บัญชีที่ขีดจำกัดรายสัปดาห์รีเซ็ตเร็วที่สุด เพื่อไม่ให้การใช้งานที่เหลือก่อนรีเซ็ตสูญเปล่า",

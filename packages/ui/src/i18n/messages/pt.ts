@@ -1750,7 +1750,7 @@ export const pt: Translation<"one" | "many" | "other"> = {
   "configuration.export.appBehavior.description": "Inclui retomar sessões ao iniciar, continuar em segundo plano, o {menuBarIcon}, impedir a suspensão e fechar terminais inativos.",
   "configuration.export.appBehavior.description.basic": "Inclui retomar sessões ao iniciar, impedir a suspensão e fechar terminais inativos.",
   "configuration.export.git.description": "Inclui o diretório padrão de clonagem, a obtenção automática de atualizações de repositórios e o fluxo de trabalho Git.",
-  "configuration.export.agentBehavior.description": "Inclui quais solicitações são aprovadas automaticamente e se as perguntas são feitas como opções.",
+  "configuration.export.agentBehavior.projectScope.description": "Inclui quais solicitações são aprovadas automaticamente, se as perguntas são feitas como opções e se as sessões ficam no próprio projeto.",
   "configuration.export.shortcuts.description": "Inclui os atalhos de teclado que você alterou.",
   "configuration.export.cleanup.description": "Inclui apagar sessões arquivadas cuja conversa não existe mais.",
   "configuration.export.accounts.include": "Incluir contas de agentes",
@@ -1858,6 +1858,7 @@ export const pt: Translation<"one" | "many" | "other"> = {
   "configuration.import.settings.consequence.autoApproveAccountSwitches": "Uma solicitação de sessão para trocar a conta de uma de suas sessões será aprovada sem perguntar antes.",
   "configuration.import.settings.consequence.autoApproveHandoffs": "Uma solicitação de sessão para passar o trabalho de uma de suas sessões a outro agente será aprovada sem perguntar antes.",
   "configuration.import.settings.consequence.askQuestionsAsChoices": "As sessões iniciadas depois serão instruídas a apresentar decisões como opções que você pode selecionar.",
+  "configuration.import.settings.consequence.keepSessionsInOwnProject": "Uma sessão de projeto que edita ou faz commits em outro projeto é interrompida e instruída a entregar o trabalho a uma sessão desse projeto. As edições são verificadas nas sessões iniciadas depois.",
   "configuration.import.settings.consequence.shortcuts": { "one": "{count} atalho do arquivo difere do padrão. Eles se aplicam apenas a este dispositivo ou navegador.", "many": "{count} atalhos do arquivo diferem dos padrões. Eles se aplicam apenas a este dispositivo ou navegador.", "other": "{count} atalhos do arquivo diferem dos padrões. Eles se aplicam apenas a este dispositivo ou navegador." },
   "configuration.import.settings.consequence.shortcutCount": { "one": "{count} atalho do arquivo difere do padrão.", "many": "{count} atalhos do arquivo diferem dos padrões.", "other": "{count} atalhos do arquivo diferem dos padrões." },
   "configuration.import.settings.consequence.shortcutsReset": "Eles se aplicam apenas a este dispositivo ou navegador.",
@@ -2064,6 +2065,11 @@ export const pt: Translation<"one" | "many" | "other"> = {
   "settings.askQuestionsAsChoices.label": "Fazer perguntas como opções",
   "settings.askQuestionsAsChoices.description.off": "Ao ativar, as sessões serão instruídas a apresentar decisões como opções que você pode selecionar, em vez de listá-las nas respostas. A alteração se aplica às sessões iniciadas depois.",
   "settings.askQuestionsAsChoices.description.on": "As sessões são instruídas a apresentar decisões como opções que você pode selecionar, em vez de listá-las nas respostas. A alteração se aplica às sessões iniciadas depois.",
+  "settings.keepSessionsInOwnProject.label": "Manter as sessões no próprio projeto",
+  "settings.keepSessionsInOwnProject.description.off":
+    "Ao ativar, uma sessão de projeto que edita ou faz commits em outro projeto é interrompida e instruída a entregar o trabalho a uma sessão desse projeto.",
+  "settings.keepSessionsInOwnProject.description.on":
+    "Uma sessão de projeto que edita ou faz commits em outro projeto é interrompida e instruída a entregar o trabalho a uma sessão desse projeto. As edições são verificadas nas sessões iniciadas depois.",
   "settings.autoSelect.label": "Selecionar uma conta automaticamente",
   "settings.autoSelect.description.off": "Ao ativar, uma nova sessão usará a conta cujo limite semanal será redefinido primeiro, aproveitando o uso disponível antes da redefinição.",
   "settings.autoSelect.description.on": "Uma nova sessão usa a conta cujo limite semanal será redefinido primeiro, aproveitando o uso disponível antes da redefinição.",

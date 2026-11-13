@@ -2108,7 +2108,7 @@ export const en = {
   "configuration.export.appBehavior.description": "Includes resuming sessions on start, running in the background, the {menuBarIcon}, preventing sleep and closing idle terminals.",
   "configuration.export.appBehavior.description.basic": "Includes resuming sessions on start, preventing sleep and closing idle terminals.",
   "configuration.export.git.description": "Includes the default clone directory, pulling repositories automatically and the Git workflow.",
-  "configuration.export.agentBehavior.description": "Includes which requests are approved automatically and whether questions are asked as choices.",
+  "configuration.export.agentBehavior.projectScope.description": "Includes which requests are approved automatically, whether questions are asked as choices, and whether sessions are kept to their own project.",
   "configuration.export.shortcuts.description": "Includes the keyboard shortcuts you have changed.",
   "configuration.export.cleanup.description": "Includes deleting archived sessions whose conversation is gone.",
   "configuration.export.accounts.include": "Include agent accounts",
@@ -2229,6 +2229,7 @@ export const en = {
   "configuration.import.settings.consequence.autoApproveAccountSwitches": "A session's request to switch the account of one of its sessions is then approved without asking you first.",
   "configuration.import.settings.consequence.autoApproveHandoffs": "A session's request to hand one of its sessions off to another agent is then approved without asking you first.",
   "configuration.import.settings.consequence.askQuestionsAsChoices": "Sessions started afterwards are asked to present decisions as options you can pick.",
+  "configuration.import.settings.consequence.keepSessionsInOwnProject": "A project session that edits or commits in another project is stopped and asked to hand the work to a session of that project. Edits are checked in sessions started afterwards.",
   "configuration.import.settings.consequence.shortcuts": {
     one: "{count} of the file's shortcuts differs from the default. They apply to this device or browser only.",
     other: "{count} of the file's shortcuts differ from the defaults. They apply to this device or browser only.",
@@ -2474,6 +2475,11 @@ export const en = {
     "Once this is on, sessions are asked to present decisions as options you can pick, rather than listing them in their replies. The change applies to sessions started afterwards.",
   "settings.askQuestionsAsChoices.description.on":
     "Sessions are asked to present decisions as options you can pick, rather than listing them in their replies. The change applies to sessions started afterwards.",
+  "settings.keepSessionsInOwnProject.label": "Keep sessions to their own project",
+  "settings.keepSessionsInOwnProject.description.off":
+    "Once on, a project session that edits or commits in another project is stopped and asked to hand the work to a session of that project.",
+  "settings.keepSessionsInOwnProject.description.on":
+    "A project session that edits or commits in another project is stopped and asked to hand the work to a session of that project. Edits are checked in sessions started afterwards.",
   "settings.autoSelect.label": "Automatically select an account",
   "settings.autoSelect.description.off":
     "Once this is on, a new session uses the account whose weekly limit resets soonest, so usage left before a reset is not wasted.",

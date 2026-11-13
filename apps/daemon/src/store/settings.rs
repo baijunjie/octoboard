@@ -48,6 +48,7 @@ impl Store {
             auto_approve_account_switches: read_setting(&conn, "auto_approve_account_switches")?,
             auto_approve_handoffs: read_setting(&conn, "auto_approve_handoffs")?,
             ask_questions_as_choices: read_setting(&conn, "ask_questions_as_choices")?,
+            keep_sessions_in_own_project: read_setting(&conn, "keep_sessions_in_own_project")?,
             interface_language: read_setting(&conn, "interface_language")?,
             keep_awake: read_setting(&conn, "keep_awake")?,
             keep_awake_when: read_keep_awake_when(&conn)?,
@@ -310,6 +311,7 @@ bool_settings! {
     auto_approve_account_switches, set_auto_approve_account_switches;
     auto_approve_handoffs, set_auto_approve_handoffs;
     ask_questions_as_choices, set_ask_questions_as_choices;
+    keep_sessions_in_own_project, set_keep_sessions_in_own_project;
     auto_select_account, set_auto_select_account;
     auto_switch_on_usage_limit, set_auto_switch_on_usage_limit;
     auto_start_quota_windows, set_auto_start_quota_windows;
@@ -599,6 +601,13 @@ mod tests {
                 set: Store::set_ask_questions_as_choices,
             },
             Setting {
+                column: "keep_sessions_in_own_project",
+                default: false,
+                read: |settings| settings.keep_sessions_in_own_project,
+                get: Store::keep_sessions_in_own_project,
+                set: Store::set_keep_sessions_in_own_project,
+            },
+            Setting {
                 column: "auto_select_account",
                 default: false,
                 read: |settings| settings.auto_select_account,
@@ -667,6 +676,21 @@ mod tests {
             }
             assert!((setting.set)(&store, setting.default).unwrap(), "{column}");
         }
+    }
+
+    /// The switch that keeps sessions to their own project is off in a new store, and once turned
+    /// on it is still on when the store is opened again.
+    #[test]
+    fn the_own_project_switch_is_off_at_first_and_survives_reopening_the_store() {
+        let path = temp_db("keep-sessions-reopen");
+        {
+            let store = Store::open(&path).expect("store");
+            assert!(!store.keep_sessions_in_own_project().unwrap());
+            assert!(store.set_keep_sessions_in_own_project(true).unwrap());
+        }
+        let store = Store::open(&path).expect("reopened");
+        assert!(store.keep_sessions_in_own_project().unwrap());
+        assert!(store.get_settings().unwrap().keep_sessions_in_own_project);
     }
 
     /// The application-wide git workflow settings start at worktree, on, ask, off, change item by

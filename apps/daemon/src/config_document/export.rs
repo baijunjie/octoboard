@@ -193,6 +193,8 @@ pub fn build(store: &Store, selection: &Selection) -> Result<ConfigurationDocume
                         Some(store.auto_approve_account_switches()?);
                     settings.auto_approve_handoffs = Some(store.auto_approve_handoffs()?);
                     settings.ask_questions_as_choices = Some(store.ask_questions_as_choices()?);
+                    settings.keep_sessions_in_own_project =
+                        Some(store.keep_sessions_in_own_project()?);
                 }
                 SettingsSection::KeyboardShortcuts => {}
                 SettingsSection::Cleanup => {
@@ -630,6 +632,7 @@ mod tests {
                 auto_approve_account_switches: Some(false),
                 auto_approve_handoffs: Some(false),
                 ask_questions_as_choices: Some(true),
+                keep_sessions_in_own_project: Some(false),
                 resume_sessions_on_start: Some(false),
                 keep_awake: Some(false),
                 keep_awake_when: Some("working".to_string()),
@@ -1094,6 +1097,7 @@ mod tests {
                 "auto_approve_handoffs",
                 "auto_approve_resume_requests",
                 "auto_approve_session_requests",
+                "keep_sessions_in_own_project",
             ]
         );
         // The client holds every key of this section, so the daemon's region is an empty object.

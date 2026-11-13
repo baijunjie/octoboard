@@ -1,8 +1,9 @@
 //! The command line: the daemon itself when no mode is named; `start`, `stop`, `restart`, `status`
 //! and `address`, which a user runs to keep the daemon in the background; the modes other processes
 //! start it in — an agent's hook, a session's git hooks, a provider's status line and the MCP
-//! server — each of which runs in a process of its own and calls the running daemon; and the
-//! holder, which the running daemon calls instead.
+//! server — each of which runs in a process of its own and calls the running daemon, and an
+//! agent's cross-project guard, which decides from a file alone; and the holder, which the running
+//! daemon calls instead.
 
 mod background;
 #[cfg(all(test, unix))]
@@ -23,7 +24,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 use crate::protocol::AgentId;
-use crate::{adapter, mcp, protocol, revert_gate, session_git_hooks};
+use crate::{adapter, cross_project_guard, mcp, protocol, revert_gate, session_git_hooks};
 
 #[derive(Parser)]
 #[command(name = "octoboardd", args_conflicts_with_subcommands = true)]
@@ -106,6 +107,14 @@ pub(crate) enum Command {
         /// The owner-only file holding the key the daemon requires of every connection.
         #[arg(long)]
         key_file: std::path::PathBuf,
+    },
+    /// Decide whether a file-edit tool call may go ahead, from the list a project session's launch
+    /// wrote, and print a `deny` decision when the call targets another registered project. This is
+    /// the `PreToolUse` command an agent's adapter injects; it is not meant to be run by hand.
+    GuardHook {
+        /// The list in the session's scratch directory.
+        #[arg(long)]
+        list: std::path::PathBuf,
     },
     /// Report the branches a session's git has just created, and whether it moved the refs a
     /// project's branch header reads. This is what the session's `reference-transaction` hook
@@ -229,6 +238,11 @@ pub(crate) fn run(command: Command) -> Result<()> {
             key_file,
         } => {
             hook::run(&session, port, &key_file);
+            Ok(())
+        }
+        // Synchronous, and silent unless it denies: the agent reads its stdout as the decision.
+        Command::GuardHook { list } => {
+            cross_project_guard::run(&list);
             Ok(())
         }
         Command::GitRef {

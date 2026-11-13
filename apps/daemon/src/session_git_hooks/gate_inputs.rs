@@ -13,6 +13,15 @@
 //! clone elsewhere is not its project's to guard. Every refusal to answer is the same `None`, which
 //! the hook takes as "skip": a session that is gone, a console session, a switch that is off,
 //! another repository, and any failure on the way.
+//!
+//! Beside the gate's inputs the answer can carry a verdict on the repository itself, which the
+//! hook acts on whether or not the gate applies: with the setting that keeps a session to its own
+//! project on, a repository that belongs to another registered project and not to the session's
+//! is refused ([`crate::cross_project_guard::foreign_repository`]). It is decided first, so
+//! neither the revert gate's own switch nor the hook's `REVERT_GATE_SKIP` turns it off; and it is
+//! sent without the gate's inputs, so that a hook older than the verdict, which cannot read it,
+//! fails to read the answer and skips, rather than run the gate on inputs the daemon meant to
+//! refuse the update over.
 
 use std::path::Path;
 use std::sync::atomic::AtomicBool;
@@ -21,11 +30,13 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 use crate::branch_origin::{is_same_branch, repo_key, reported_repository};
+use crate::cross_project_guard::{foreign_repository, ForeignRepository};
 use crate::git::isolated::IsolatedGit;
 use crate::git::remote_branch::split_remote_branch;
 use crate::git::remote_branches::{remote_default_branch, UPSTREAM_REMOTES_STDOUT};
 use crate::git::repo_files::{remote_default_branch_in_files, repository_of, uses_reftable};
 use crate::git_workflow;
+use crate::protocol::{Project, Session};
 use crate::revert_gate::GateInputs;
 use crate::state::AppState;
 use crate::wire_path;
@@ -38,12 +49,52 @@ pub struct GateRequest {
     pub git_dir: Option<String>,
 }
 
-/// The inputs of the gate for the session's project, or `None` for a hook that is to skip it.
-/// Blocking: it reads the store, one reflog line per row and the remotes' `HEAD` files, and runs
-/// `git` for the default branch only in a reftable repository.
-pub fn inputs(state: &AppState, session_id: &str, request: &GateRequest) -> Option<GateInputs> {
-    match inputs_of(state, session_id, request) {
-        Ok(inputs) => inputs,
+/// What the daemon answers a hook with: the gate's inputs, flattened so that a hook that knows
+/// nothing of the verdict still reads them from a daemon that does not give one, and the verdict.
+/// A verdict comes with no inputs: an older hook then finds none of the fields it requires, and
+/// skips. A newer hook reads an older daemon's answer as inputs alone.
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GateAnswer {
+    #[serde(flatten)]
+    pub inputs: Option<GateInputs>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub foreign_repository: Option<ForeignRepository>,
+}
+
+/// The answer for the session's hook, or `None` for a hook that is to skip everything: the
+/// verdict on the repository first, then the gate's inputs. The session, its project and their
+/// repository are read once for both. Blocking: it reads the store, one reflog line per row and
+/// the remotes' `HEAD` files, resolves projects' directories until the verdict is settled, and
+/// runs `git` for the default branch only in a reftable repository.
+pub fn answer(state: &AppState, session_id: &str, request: &GateRequest) -> Option<GateAnswer> {
+    let (session, project) = match session_and_project(state, session_id) {
+        Ok(Some(found)) => found,
+        Ok(None) => return None,
+        Err(err) => {
+            tracing::debug!(session = %session_id, %err, "revert gate: no answer for the hook");
+            return None;
+        }
+    };
+    let own = repository_of(Path::new(&project.path));
+    let reported = reported_repository(&request.cwd, request.git_dir.as_deref());
+    match foreign_repository(state, &session, own.as_deref(), reported.as_deref()) {
+        Ok(Some(foreign)) => {
+            return Some(GateAnswer {
+                inputs: None,
+                foreign_repository: Some(foreign),
+            })
+        }
+        Ok(None) => {}
+        // A verdict that cannot be reached is no verdict: the gate is still asked.
+        Err(err) => {
+            tracing::debug!(session = %session_id, %err, "cross-project guard: no verdict for the hook");
+        }
+    }
+    match inputs_of(state, &project, own.as_deref(), reported.as_deref()) {
+        Ok(inputs) => inputs.map(|inputs| GateAnswer {
+            inputs: Some(inputs),
+            foreign_repository: None,
+        }),
         Err(err) => {
             tracing::debug!(session = %session_id, %err, "revert gate: no inputs for the hook");
             None
@@ -51,37 +102,46 @@ pub fn inputs(state: &AppState, session_id: &str, request: &GateRequest) -> Opti
     }
 }
 
-fn inputs_of(
-    state: &AppState,
-    session_id: &str,
-    request: &GateRequest,
-) -> Result<Option<GateInputs>> {
+/// The session and the project it belongs to; `None` for a session that is gone and for a console
+/// session.
+fn session_and_project(state: &AppState, session_id: &str) -> Result<Option<(Session, Project)>> {
     let Some(session) = state.store.get_session(session_id)? else {
         return Ok(None);
     };
-    let Some(project_id) = session.project_id else {
+    let Some(project_id) = &session.project_id else {
         return Ok(None);
     };
-    let Some(project) = state.store.get_project(&project_id)? else {
+    let Some(project) = state.store.get_project(project_id)? else {
         return Ok(None);
     };
-    if !git_workflow::effective(&state.store, &project)?.revert_gate {
+    Ok(Some((session, project)))
+}
+
+/// The inputs of the gate for the session's project, in the repository `own`, or `None` for a hook
+/// that is to skip it: `reported` is the repository the hook ran in.
+fn inputs_of(
+    state: &AppState,
+    project: &Project,
+    own: Option<&Path>,
+    reported: Option<&Path>,
+) -> Result<Option<GateInputs>> {
+    if !git_workflow::effective(&state.store, project)?.revert_gate {
         return Ok(None);
     }
-    let Some(repo) = repository_of(Path::new(&project.path)) else {
+    let Some(repo) = own else {
         return Ok(None);
     };
-    if reported_repository(&request.cwd, request.git_dir.as_deref()).as_deref() != Some(&repo) {
+    if reported != Some(repo) {
         return Ok(None);
     }
 
     let mut inputs = GateInputs {
-        guard: default_branch(state, &repo).into_iter().collect(),
+        guard: default_branch(state, repo).into_iter().collect(),
         ..GateInputs::default()
     };
-    for row in state.store.branch_origins(&repo_key(&repo))? {
+    for row in state.store.branch_origins(&repo_key(repo))? {
         // A branch deleted and made again outside the session is not the one the row describes.
-        if !is_same_branch(&repo, &row) {
+        if !is_same_branch(repo, &row) {
             continue;
         }
         let Some(branch) = branch_name(&row.branch) else {

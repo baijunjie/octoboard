@@ -82,6 +82,9 @@ pub struct LaunchRequest {
     /// whoever runs the program; see `AppState::install_exe`.
     pub install_exe: String,
     pub mcp_token: String,
+    /// The list the cross-project guard decides from, for a project session launched with the
+    /// setting that keeps sessions to their own project on (`crate::cross_project_guard`).
+    pub guard: Option<crate::cross_project_guard::GuardList>,
     /// What every process of this launch carries, whatever the agent and the session's kind; see
     /// `crate::processes::ledger`.
     pub process_tag: crate::processes::ledger::ProcessTag,
@@ -115,6 +118,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         self_exe,
         install_exe,
         mcp_token,
+        guard,
         process_tag,
     } = request;
     let session_id = session_id.as_str();
@@ -172,6 +176,24 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         adapter::hook_script_path(&scratch)
     };
 
+    // The guard fails open: a list or script that cannot be written launches the session without
+    // it, since the git layer of the same setting catches what the edit layer would have.
+    let guard_files = guard.and_then(|list| {
+        let written = crate::cross_project_guard::write(&scratch, &list.with_launch(cwd, &shell_env))
+            .and_then(|file| {
+                let script = adapter::write_guard_script(&scratch, &install_exe, &file)
+                    .context("writing the cross-project guard script")?;
+                Ok((file, script))
+            });
+        match written {
+            Ok(files) => Some(files),
+            Err(err) => {
+                tracing::warn!(session = %session_id, error = ?err, "cross-project guard: launching without it");
+                None
+            }
+        }
+    });
+
     let new_agent_session_id = Uuid::new_v4().to_string();
     // Resolved ahead of the plan because the agent's version, read from where the binary is
     // installed, decides how some adapters inject; a failure is raised only after the plan, so a
@@ -212,6 +234,13 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         daemon_port: helpers.port,
         daemon_key: &helpers.key,
         mcp_token: &mcp_token,
+        guard: guard_files
+            .as_ref()
+            .map(|(list, script)| adapter::GuardHook {
+                exe: &install_exe,
+                list,
+                script,
+            }),
     };
     let plan = adapter.plan(&spec)?;
     // A stash key is used only where the provider says this launch was measured to take it.

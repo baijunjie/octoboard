@@ -143,7 +143,7 @@ the launch environment described below:
 The arguments and files through which each agent is given these are in "How each agent is given the injection" in
 `docs/product/per-agent-launch-specifics.md`.
 
-The injected hooks are built to be invisible. They never steer the agent, print nothing (with the one exception below),
+The injected status hooks are built to be invisible. They never steer the agent, print nothing (with the one exception below),
 never fail the turn, and carry a short timeout (3 seconds; a command hook gets 15 on Windows, where an agent's first
 hook of a launch starts cold and slowly, except Codex's `Interrupt`, which keeps 3) so a daemon that is unreachable costs a turn a fraction of a second rather than stalling it.
 The hooks, like the session's other helpers, call the process holder that runs the session rather than the daemon,
@@ -157,6 +157,14 @@ to a list that leaves out that loopback address, since Claude Code would skip su
 restriction delivered by other means than those is not seen. The one exception to printing nothing is the address form
 with an address that cannot be reached or does not answer in time: Claude Code shows its own non-blocking notice about
 the failed hook, where the command form stays silent.
+
+A project session launched while **Keep sessions to their own project** is on is also given the cross-project guard's
+hook, which a console session never is (see "The edit check" in
+`docs/product/keeping-sessions-to-their-own-project.md`). Unlike the status hooks it is synchronous, so the agent waits
+for it before each file-edit call, and has a timeout of its own, **10 seconds** on every host. It is always a command,
+never an address, whatever form the status hooks take, since it reads a list the launch writes into the session's
+scratch directory and calls neither the holder nor the daemon. It prints nothing unless it refuses the call, and a
+failure of its own, its timeout included, lets the call through.
 
 **The launch description can remain in the conversation after the role changes.** Two of the three agents record that
 text on the first turn and replay it on every resume. The coordinator or worker role and reporting relationship can

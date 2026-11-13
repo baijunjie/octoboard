@@ -335,10 +335,13 @@ impl CodexTransport {
             .connect()
             .context("initializing the private Codex app server")?;
         if plan.resume_thread.is_some() {
-            // A remote resume ignores the hook-trust bypass. Trust only the generated command, by
-            // Codex's own fingerprint of it, as overrides of this start alone.
+            // A remote resume ignores the hook-trust bypass. Trust only the generated commands, by
+            // Codex's own fingerprint of each, as overrides of this start alone.
             let metadata = rpc.request("hooks/list", json!({"cwds":[cwd]}))?;
-            let trusts = resume::own_hook_trust(&metadata, &plan.hook_command)?;
+            let commands: Vec<&str> = std::iter::once(plan.hook_command.as_str())
+                .chain(plan.guard_command.as_deref())
+                .collect();
+            let trusts = resume::own_hook_trust(&metadata, &commands)?;
             drop(rpc);
             // The first server goes, and what it left with it, before the next starts elsewhere.
             server.end();

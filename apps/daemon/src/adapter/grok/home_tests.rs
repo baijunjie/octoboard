@@ -192,6 +192,74 @@ fn the_hooks_are_command_type_with_an_explicit_timeout() {
     }
 }
 
+/// The cross-project guard is a group of its own after the status hook of `PreToolUse`, matching
+/// the edit tools, and with no `failClosed` (a guard that cannot decide stays silent); a launch
+/// without one has neither.
+#[test]
+fn the_cross_project_guard_is_a_group_for_the_edit_tools_that_does_not_fail_closed() {
+    let mut fixture = spec_fixture();
+    with_default_home(&mut fixture);
+    let list = fixture.scratch.join("cross-project-guard.json");
+    let script = fixture.scratch.join("guard-hook");
+    let hooks_of = |guard: Option<crate::adapter::GuardHook<'_>>| {
+        let mut spec = fixture.spec();
+        spec.guard = guard;
+        let plan = plan_isolated(&spec).expect("plan");
+        let farm = PathBuf::from(&plan.env[0].1);
+        let document: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(farm.join("hooks").join("octoboard.json")).expect("hooks"),
+        )
+        .expect("the hooks file is JSON");
+        document["hooks"].clone()
+    };
+
+    let hooks = hooks_of(Some(crate::adapter::GuardHook {
+        exe: "/opt/octoboard/install/octoboardd",
+        list: &list,
+        script: &script,
+    }));
+
+    let groups = hooks["PreToolUse"].as_array().expect("groups");
+    assert_eq!(groups.len(), 2, "{groups:?}");
+    assert!(groups[0].get("matcher").is_none());
+    let matcher = groups[1]["matcher"].as_str().expect("a matcher");
+    for tool in [
+        "Edit",
+        "Write",
+        "MultiEdit",
+        "NotebookEdit",
+        "search_replace",
+        "write",
+        "hashline_edit",
+        "StrReplace",
+        "EditNotebook",
+    ] {
+        assert!(
+            matcher.split('|').any(|name| name == tool),
+            "{tool}: {matcher}"
+        );
+    }
+    let handler = &groups[1]["hooks"][0];
+    assert_eq!(handler["type"], "command");
+    assert_eq!(handler["timeout"], crate::adapter::GUARD_HOOK_TIMEOUT_SECS);
+    assert_eq!(handler["timeout"], 10);
+    assert!(handler.get("async").is_none(), "synchronous: {handler}");
+    assert!(
+        !groups[1].to_string().contains("failClosed"),
+        "{}",
+        groups[1]
+    );
+    // The bare path of the per-session script, as the status hook's command is.
+    assert_eq!(handler["command"], script.to_string_lossy().as_ref());
+    for event in HOOK_EVENTS.iter().filter(|event| **event != "PreToolUse") {
+        assert_eq!(hooks[*event].as_array().unwrap().len(), 1, "{event}");
+    }
+
+    let hooks = hooks_of(None);
+    assert_eq!(hooks["PreToolUse"].as_array().unwrap().len(), 1);
+    assert!(!hooks.to_string().contains("guard-hook"));
+}
+
 #[test]
 fn the_entries_grok_protects_under_its_sandbox_are_real_copies() {
     let mut fixture = spec_fixture();

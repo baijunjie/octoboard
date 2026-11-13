@@ -65,7 +65,8 @@ sentence.
   one-sentence note under it saying what it includes: General the appearance, the language, the Markdown style and the
   sorting; App behavior resuming sessions on start, preventing sleep and closing idle terminals and, only where this
   client's platform has both, running in the background and the menu bar icon (named as the system names it);
-  Agent behavior which requests are approved automatically and whether questions are asked as choices; Git the default
+  Agent behavior which requests are approved automatically, whether questions are asked as choices and whether sessions
+  are kept to their own project; Git the default
   clone directory, pulling repositories automatically and the Git workflow; Keyboard shortcuts the shortcuts the
   user has changed; Cleanup deleting archived sessions whose conversation is gone. Trusted folders, Permissions and
   Notifications have no checkbox, since nothing of them travels.
@@ -279,7 +280,7 @@ the order of that section's rows:
 - **General**: Appearance, Language, Markdown style, then **Sorting**.
 - **App behavior**: the switch Resume sessions on start, then Keep running in the background and Show menu bar icon,
   then the switch Prevent sleep and When to prevent sleep, then the switch Close idle terminals when closing the panel.
-- **Agent behavior**: its five switches.
+- **Agent behavior**: its six switches.
 - **Git**: the default clone directory, Automatically pull repositories, then one line for the git workflow.
 - **Keyboard shortcuts**: one line, **Changed shortcuts**.
 - **Cleanup**: the switch Automatically delete archived sessions whose conversation is gone.

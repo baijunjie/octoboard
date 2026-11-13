@@ -98,7 +98,9 @@ mod unarchive;
 use serde_json::json;
 
 use super::files::{canonical_project, read_regular_text, SMALL_FILE_LIMIT};
-use super::{AgentProvider, LaunchPlan, LaunchSpec, COMMAND_HOOK_TIMEOUT_SECS};
+use super::{
+    AgentProvider, LaunchPlan, LaunchSpec, COMMAND_HOOK_TIMEOUT_SECS, GUARD_HOOK_TIMEOUT_SECS,
+};
 use crate::platform::shell::{self, ResolvedBinary};
 use crate::protocol::{error_code, AgentId, CodedError};
 use crate::providers::{codex, ProviderDescriptor};
@@ -403,13 +405,27 @@ impl AgentProvider for CodexProvider {
 
         // Codex runs the command through the host's own shell, whose language it is written in.
         let command = shell::script_command(spec.hook_script, shell::hook_dialect());
+        // The cross-project guard blocks only from a synchronous hook, so it is a group of its
+        // own beside the asynchronous status hook of the same event.
+        let guard_command = spec
+            .guard
+            .as_ref()
+            .map(|guard| shell::script_command(guard.script, shell::hook_dialect()));
         for event in HOOK_EVENTS {
-            args.push("-c".to_string());
-            args.push(format!(
-                "hooks.{event}=[{{hooks=[{{type=\"command\",command={},timeout={},async=true}}]}}]",
+            let mut groups = format!(
+                "{{hooks=[{{type=\"command\",command={},timeout={},async=true}}]}}",
                 toml_string(&command),
                 hook_timeout_secs(event)
-            ));
+            );
+            if let (Some(guard), "PreToolUse") = (&guard_command, *event) {
+                groups.push_str(&format!(
+                    ",{{matcher=\"apply_patch\",hooks=[{{type=\"command\",command={},timeout={}}}]}}",
+                    toml_string(guard),
+                    GUARD_HOOK_TIMEOUT_SECS
+                ));
+            }
+            args.push("-c".to_string());
+            args.push(format!("hooks.{event}=[{groups}]"));
         }
 
         let (mcp_command, mcp_args) = super::mcp_server_command(spec);
@@ -566,6 +582,7 @@ impl AgentProvider for CodexProvider {
                 spec.cwd,
                 task,
                 command.clone(),
+                guard_command.clone(),
                 spec.resume_agent_session_id,
                 preset,
             )) as Box<dyn crate::session::term::PrivateServer>

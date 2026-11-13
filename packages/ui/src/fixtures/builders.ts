@@ -52,6 +52,7 @@ export const ACCOUNT_VERSIONS = versionsOf(["name", "config_dir", "disabled", "s
 export const SETTINGS_VERSIONS = versionsOf([
   "auto_close_idle_shell_terminals", "auto_pull_repositories", "auto_delete_unresumable_archives", "auto_approve_session_requests",
   "auto_approve_resume_requests", "auto_approve_account_switches", "auto_approve_handoffs", "ask_questions_as_choices",
+  "keep_sessions_in_own_project",
   "interface_language", "keep_awake", "keep_awake_when", "auto_select_account", "auto_switch_on_usage_limit",
   "auto_start_quota_windows", "default_clone_dir", "resume_sessions_on_start",
   ...GIT_WORKFLOW_ITEM_KEYS.map((item) => `git_workflow.${item}`),

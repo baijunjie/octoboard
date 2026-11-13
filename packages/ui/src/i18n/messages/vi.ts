@@ -1750,7 +1750,7 @@ export const vi: Translation<"other"> = {
   "configuration.export.appBehavior.description": "Bao gồm tiếp tục các phiên khi khởi động, chạy nền, {menuBarIcon}, ngăn chế độ ngủ và đóng các thiết bị đầu cuối nhàn rỗi.",
   "configuration.export.appBehavior.description.basic": "Bao gồm tiếp tục các phiên khi khởi động, ngăn chế độ ngủ và đóng các thiết bị đầu cuối nhàn rỗi.",
   "configuration.export.git.description": "Bao gồm thư mục sao chép mặc định, tự động kéo kho lưu trữ và quy trình Git.",
-  "configuration.export.agentBehavior.description": "Bao gồm các yêu cầu được tự động chấp thuận và việc đặt câu hỏi bằng các lựa chọn.",
+  "configuration.export.agentBehavior.projectScope.description": "Bao gồm các yêu cầu được tự động chấp thuận, việc đặt câu hỏi bằng các lựa chọn và việc giữ phiên trong dự án của chính nó.",
   "configuration.export.shortcuts.description": "Bao gồm các phím tắt bạn đã thay đổi.",
   "configuration.export.cleanup.description": "Bao gồm việc xóa các phiên đã lưu trữ có hội thoại không còn tồn tại.",
   "configuration.export.accounts.include": "Bao gồm tài khoản tác tử",
@@ -1858,6 +1858,7 @@ export const vi: Translation<"other"> = {
   "configuration.import.settings.consequence.autoApproveAccountSwitches": "Yêu cầu của phiên để chuyển tài khoản cho một phiên trực thuộc sau đó được chấp thuận mà không hỏi trước.",
   "configuration.import.settings.consequence.autoApproveHandoffs": "Yêu cầu của phiên để bàn giao một phiên trực thuộc cho tác tử khác sau đó được chấp thuận mà không hỏi trước.",
   "configuration.import.settings.consequence.askQuestionsAsChoices": "Các phiên bắt đầu sau đó được yêu cầu trình bày quyết định dưới dạng tùy chọn mà bạn có thể chọn.",
+  "configuration.import.settings.consequence.keepSessionsInOwnProject": "Một phiên dự án chỉnh sửa hoặc commit trong dự án khác sẽ bị chặn lại và được yêu cầu giao công việc cho một phiên của dự án đó. Việc chỉnh sửa được kiểm tra ở các phiên bắt đầu sau đó.",
   "configuration.import.settings.consequence.shortcuts": { other: "{count} phím tắt trong tệp khác với mặc định. Chúng chỉ áp dụng cho thiết bị hoặc trình duyệt này." },
   "configuration.import.settings.consequence.shortcutCount": { other: "{count} phím tắt trong tệp khác với mặc định." },
   "configuration.import.settings.consequence.shortcutsReset": "Chúng chỉ áp dụng cho thiết bị hoặc trình duyệt này.",
@@ -2064,6 +2065,11 @@ export const vi: Translation<"other"> = {
   "settings.askQuestionsAsChoices.label": "Đặt câu hỏi bằng các lựa chọn",
   "settings.askQuestionsAsChoices.description.off": "Khi bật, các phiên được yêu cầu trình bày quyết định dưới dạng tùy chọn mà bạn có thể chọn thay vì liệt kê trong câu trả lời. Thay đổi áp dụng cho các phiên bắt đầu sau đó.",
   "settings.askQuestionsAsChoices.description.on": "Các phiên được yêu cầu trình bày quyết định dưới dạng tùy chọn mà bạn có thể chọn thay vì liệt kê trong câu trả lời. Thay đổi áp dụng cho các phiên bắt đầu sau đó.",
+  "settings.keepSessionsInOwnProject.label": "Giữ phiên trong dự án của chính nó",
+  "settings.keepSessionsInOwnProject.description.off":
+    "Khi bật, một phiên dự án chỉnh sửa hoặc commit trong dự án khác sẽ bị chặn lại và được yêu cầu giao công việc cho một phiên của dự án đó.",
+  "settings.keepSessionsInOwnProject.description.on":
+    "Một phiên dự án chỉnh sửa hoặc commit trong dự án khác sẽ bị chặn lại và được yêu cầu giao công việc cho một phiên của dự án đó. Việc chỉnh sửa được kiểm tra ở các phiên bắt đầu sau đó.",
   "settings.autoSelect.label": "Tự động chọn tài khoản",
   "settings.autoSelect.description.off": "Khi bật, phiên mới dùng tài khoản có giới hạn tuần được đặt lại sớm nhất để không lãng phí hạn mức còn lại trước lúc đặt lại.",
   "settings.autoSelect.description.on": "Phiên mới dùng tài khoản có giới hạn tuần được đặt lại sớm nhất để không lãng phí hạn mức còn lại trước lúc đặt lại.",

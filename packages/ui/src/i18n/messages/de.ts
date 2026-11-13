@@ -1778,7 +1778,7 @@ export const de: Translation<"one" | "other"> = {
   "configuration.export.appBehavior.description": "Enthält das Fortsetzen von Sitzungen beim Start, das Weiterlaufen im Hintergrund, {menuBarIcon}, das Verhindern des Ruhezustands und das Schließen inaktiver Terminals.",
   "configuration.export.appBehavior.description.basic": "Enthält das Fortsetzen von Sitzungen beim Start, das Verhindern des Ruhezustands und das Schließen inaktiver Terminals.",
   "configuration.export.git.description": "Enthält das Standard-Klonverzeichnis, das automatische Pullen von Repositorys und den Git-Arbeitsablauf.",
-  "configuration.export.agentBehavior.description": "Enthält, welche Anfragen automatisch genehmigt werden, und ob Fragen als Auswahl gestellt werden.",
+  "configuration.export.agentBehavior.projectScope.description": "Enthält, welche Anfragen automatisch genehmigt werden, ob Fragen als Auswahl gestellt werden und ob Sitzungen auf ihr eigenes Projekt beschränkt bleiben.",
   "configuration.export.shortcuts.description": "Enthält die Tastaturkurzbefehle, die du geändert hast.",
   "configuration.export.cleanup.description": "Enthält das Löschen archivierter Sitzungen, deren Gespräch nicht mehr vorhanden ist.",
   "configuration.export.accounts.include": "Agentenkonten einschließen",
@@ -1886,6 +1886,7 @@ export const de: Translation<"one" | "other"> = {
   "configuration.import.settings.consequence.autoApproveAccountSwitches": "Die Anfrage einer Sitzung, das Konto einer ihrer Sitzungen zu wechseln, wird danach ohne vorherige Rückfrage genehmigt.",
   "configuration.import.settings.consequence.autoApproveHandoffs": "Die Anfrage einer Sitzung, eine ihrer Sitzungen an einen anderen Agenten zu übergeben, wird danach ohne vorherige Rückfrage genehmigt.",
   "configuration.import.settings.consequence.askQuestionsAsChoices": "Danach gestartete Sitzungen werden gebeten, Entscheidungen als auswählbare Optionen darzustellen.",
+  "configuration.import.settings.consequence.keepSessionsInOwnProject": "Eine Projektsitzung, die in einem anderen Projekt etwas ändert oder committet, wird gestoppt und gebeten, die Arbeit an eine Sitzung dieses Projekts abzugeben. Änderungen werden in danach gestarteten Sitzungen geprüft.",
   "configuration.import.settings.consequence.shortcuts": { one: "{count} Kurzbefehl der Datei weicht vom Standard ab. Die Kurzbefehle gelten nur für dieses Gerät oder diesen Browser.", other: "{count} Kurzbefehle der Datei weichen vom Standard ab. Die Kurzbefehle gelten nur für dieses Gerät oder diesen Browser." },
   "configuration.import.settings.consequence.shortcutCount": { one: "{count} Kurzbefehl der Datei weicht vom Standard ab.", other: "{count} Kurzbefehle der Datei weichen vom Standard ab." },
   "configuration.import.settings.consequence.shortcutsReset": "Sie gelten nur für dieses Gerät oder diesen Browser.",
@@ -2092,6 +2093,11 @@ export const de: Translation<"one" | "other"> = {
   "settings.askQuestionsAsChoices.label": "Fragen als Auswahl stellen",
   "settings.askQuestionsAsChoices.description.off": "Wenn du diese Option aktivierst, werden Sitzungen gebeten, Entscheidungen als auswählbare Optionen darzustellen, statt sie in ihren Antworten aufzulisten. Die Änderung gilt für danach gestartete Sitzungen.",
   "settings.askQuestionsAsChoices.description.on": "Sitzungen werden gebeten, Entscheidungen als auswählbare Optionen darzustellen, statt sie in ihren Antworten aufzulisten. Die Änderung gilt für danach gestartete Sitzungen.",
+  "settings.keepSessionsInOwnProject.label": "Sitzungen auf ihr eigenes Projekt beschränken",
+  "settings.keepSessionsInOwnProject.description.off":
+    "Wenn du diese Option aktivierst, wird eine Projektsitzung, die in einem anderen Projekt etwas ändert oder committet, gestoppt und gebeten, die Arbeit an eine Sitzung dieses Projekts abzugeben.",
+  "settings.keepSessionsInOwnProject.description.on":
+    "Eine Projektsitzung, die in einem anderen Projekt etwas ändert oder committet, wird gestoppt und gebeten, die Arbeit an eine Sitzung dieses Projekts abzugeben. Änderungen werden in danach gestarteten Sitzungen geprüft.",
   "settings.autoSelect.label": "Konto automatisch auswählen",
   "settings.autoSelect.description.off": "Wenn du diese Option aktivierst, verwendet eine neue Sitzung das Konto, dessen Wochenlimit am frühesten zurückgesetzt wird, damit verbleibende Nutzung vor dem Zurücksetzen nicht verfällt.",
   "settings.autoSelect.description.on": "Eine neue Sitzung verwendet das Konto, dessen Wochenlimit am frühesten zurückgesetzt wird, damit verbleibende Nutzung vor dem Zurücksetzen nicht verfällt.",

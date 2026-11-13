@@ -611,6 +611,7 @@ it("groups the application settings as the Settings dialog does, each group in t
     "Automatically approve account switches",
     "Automatically approve handoffs",
     "Ask questions as choices",
+    "Keep sessions to their own project",
   ]);
   expect(groups[3].lines).toEqual(["Default clone directory", "Automatically pull repositories", "Git workflow"]);
   expect(groups[4].lines).toEqual(["Changed shortcuts"]);
@@ -1217,6 +1218,15 @@ it("states what turning on asking questions as choices does", async () => {
   const turningOn = { ...REVIEW, settings: { ...REVIEW.settings!, ask_questions_as_choices: true, current_ask_questions_as_choices: false } };
   await reviewingSettings({ reply: (body) => (body.type === "inspect_configuration" ? Promise.resolve({ type: "configuration_inspected", ...turningOn }) : reply(body)) });
   expect(settingLines()["Ask questions as choices"]).toEqual({ badge: "Turns on", note: "Sessions started afterwards are asked to present decisions as options you can pick." });
+});
+
+it("states what turning on keeping sessions to their own project does", async () => {
+  await reviewingSettings();
+  expect(settingLines()["Keep sessions to their own project"]).toEqual({
+    badge: "Turns on",
+    // The note is what the setting says while it is on.
+    note: "A project session that edits or commits in another project is stopped and asked to hand the work to a session of that project. Edits are checked in sessions started afterwards.",
+  });
 });
 
 describe("the git workflow settings", () => {

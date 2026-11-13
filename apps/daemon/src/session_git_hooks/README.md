@@ -22,8 +22,12 @@ revert gate. Applies to project sessions only.
   transaction that moves an existing branch, and `pre-push`, start `octoboardd gate-hook` in the foreground; only its
   exit status 3 refuses the update.
 - `gate-hook` asks the daemon at run time (`POST /revert-gate/:session`, answered by `gate_inputs.rs`) whether the gate
-  applies and with which branches, then runs the gate in-process (`apps/daemon/src/revert_gate/`). Anything but an
-  answer lets git through, so a daemon that is down never blocks the user's git.
+  applies and with which branches, then runs the gate in-process (`apps/daemon/src/revert_gate/`). The reply can carry,
+  instead of the inputs, the verdict that the repository belongs to another registered project than the session's
+  (`apps/daemon/src/cross_project_guard/repository.rs`, decided first, while the setting that keeps sessions to their own
+  project is on): at a prepared `reference-transaction` the hook refuses it with exit status 3, and it asks the daemon
+  for it even under `REVERT_GATE_SKIP`, which skips only the gate. Anything but an answer lets git through, so a daemon
+  that is down never blocks the user's git.
 - The two modes are given no key. They first take the launch's route (`route.rs`): the port in
   `OCTOBOARD_DAEMON_PORT`, with the launch key from the owner-only key file that `OCTOBOARD_DAEMON_CREDENTIAL_PATH`
   names (the key itself is never in the environment). Where that route is gone — no port, a key file missing, unreadable
@@ -48,5 +52,5 @@ the two CLI modes, `route.rs` the route they take to the daemon, `gate_inputs.rs
 
 - The directory of dispatchers and the environment that points a session's agent at it (`mod.rs`).
 - `octoboardd git-ref` (`ref_mode.rs`) — posts created branches and moved refs to `POST /git-ref/:session`.
-- `octoboardd gate-hook` (`gate_mode.rs`) — asks for the gate's inputs, runs the gate, exits with its status.
-- `gate_inputs.rs` — answers `POST /revert-gate/:session`.
+- `octoboardd gate-hook` (`gate_mode.rs`) — asks for the gate's inputs and the verdict on the repository, refuses a foreign repository, runs the gate, exits with its status.
+- `gate_inputs.rs` — answers `POST /revert-gate/:session` with the gate's inputs or the verdict on the repository.

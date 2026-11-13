@@ -1934,7 +1934,7 @@ export const tr: Translation<"one" | "other"> = {
   "configuration.export.appBehavior.description": "Başlangıçta oturumları sürdürmeyi, arka planda çalışmaya devam etmeyi, {menuBarIconAcc}, uykuyu engellemeyi ve boşta olan terminalleri kapatmayı içerir.",
   "configuration.export.appBehavior.description.basic": "Başlangıçta oturumları sürdürmeyi, uykuyu engellemeyi ve boşta olan terminalleri kapatmayı içerir.",
   "configuration.export.git.description": "Saptanmış klon dizinini, depoları otomatik çekmeyi ve Git iş akışını içerir.",
-  "configuration.export.agentBehavior.description": "Otomatik onaylanan istekleri ve soruları seçenek olarak sormayı içerir.",
+  "configuration.export.agentBehavior.projectScope.description": "Otomatik onaylanan istekleri, soruları seçenek olarak sormayı ve oturumların kendi projesiyle sınırlanmasını içerir.",
   "configuration.export.shortcuts.description": "Değiştirdiğiniz klavye kestirmelerini içerir.",
   "configuration.export.cleanup.description": "Konuşması kaybolan arşivlenmiş oturumların silinmesini içerir.",
   "configuration.export.accounts.include": "Ajan hesaplarını dahil et",
@@ -2054,6 +2054,7 @@ export const tr: Translation<"one" | "other"> = {
   "configuration.import.settings.consequence.autoApproveAccountSwitches": "Bir oturumun kendi oturumlarından birinin hesabını değiştirme isteği, önce size sorulmadan onaylanacak.",
   "configuration.import.settings.consequence.autoApproveHandoffs": "Bir oturumun kendi oturumlarından birini başka ajana devretme isteği, önce size sorulmadan onaylanacak.",
   "configuration.import.settings.consequence.askQuestionsAsChoices": "Daha sonra başlatılan oturumlardan kararları seçebileceğiniz seçenekler olarak sunmaları istenecek.",
+  "configuration.import.settings.consequence.keepSessionsInOwnProject": "Başka bir projede değişiklik yapan veya değişiklikleri işleyen bir proje oturumu durdurulur ve işi o projenin bir oturumuna vermesi istenir. Değişiklikler, sonradan başlatılan oturumlarda denetlenir.",
   "configuration.import.settings.consequence.shortcuts": {
     "one": "Dosyadaki {count} kestirme saptanmıştan farklı. Yalnızca bu aygıta veya tarayıcıya uygulanır.",
     "other": "Dosyadaki {count} kestirme saptanmışlardan farklı. Yalnızca bu aygıta veya tarayıcıya uygulanır.",
@@ -2287,6 +2288,11 @@ export const tr: Translation<"one" | "other"> = {
   "settings.askQuestionsAsChoices.label": "Soruları seçenek olarak sor",
   "settings.askQuestionsAsChoices.description.off": "Açıldığında oturumlardan kararları yanıtlarında listelemek yerine seçebileceğiniz seçenekler olarak sunmaları istenir. Değişiklik daha sonra başlatılan oturumlara uygulanır.",
   "settings.askQuestionsAsChoices.description.on": "Oturumlardan kararları yanıtlarında listelemek yerine seçebileceğiniz seçenekler olarak sunmaları istenir. Değişiklik daha sonra başlatılan oturumlara uygulanır.",
+  "settings.keepSessionsInOwnProject.label": "Oturumları kendi projesiyle sınırla",
+  "settings.keepSessionsInOwnProject.description.off":
+    "Açıldığında, başka bir projede değişiklik yapan veya değişiklikleri işleyen bir proje oturumu durdurulur ve işi o projenin bir oturumuna vermesi istenir.",
+  "settings.keepSessionsInOwnProject.description.on":
+    "Başka bir projede değişiklik yapan veya değişiklikleri işleyen bir proje oturumu durdurulur ve işi o projenin bir oturumuna vermesi istenir. Değişiklikler, sonradan başlatılan oturumlarda denetlenir.",
   "settings.autoSelect.label": "Hesabı otomatik seç",
   "settings.autoSelect.description.off": "Açıldığında yeni oturum, sıfırlama öncesi kalan kullanım boşa gitmesin diye haftalık sınırı en erken sıfırlanacak hesabı kullanır.",
   "settings.autoSelect.description.on": "Yeni oturum, sıfırlama öncesi kalan kullanım boşa gitmesin diye haftalık sınırı en erken sıfırlanacak hesabı kullanır.",

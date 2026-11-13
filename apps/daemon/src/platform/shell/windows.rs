@@ -71,9 +71,10 @@ pub fn hook_dialect() -> Dialect {
 /// Bash, each scanned before it runs. Measured at b187b2aad under a non-ASCII home, the pwsh path
 /// took 4.6 s cold and 0.6 to 1.3 s warm, so the 3 s of the warm hosts killed the first hook of a
 /// launch (`SessionStart`) and lost it. 15 s is over three times the cold start. Raising it costs
-/// nothing in the common case: Codex's and Claude's command hooks are registered `async`, so the
-/// timeout bounds the hook process alone and the agent's turn does not wait for it; a hook that
-/// never answers is merely killed later.
+/// nothing in the common case: the status hooks of Codex and Claude Code are registered `async`,
+/// so the timeout bounds the hook process alone and the agent's turn does not wait for it; a hook
+/// that never answers is merely killed later. The cross-project guard is synchronous, and has a
+/// timeout of its own ([`crate::adapter::GUARD_HOOK_TIMEOUT_SECS`]).
 pub const COMMAND_HOOK_TIMEOUT_SECS: u32 = 15;
 
 /// How many times as long as a later one an agent's first hook of a launch may take to report: the
@@ -312,6 +313,27 @@ pub fn write_runnable(
     args: &[Arg<'_>],
     stderr: Stderr,
 ) -> io::Result<PathBuf> {
+    write_batch(path, exe, args, stderr, false)
+}
+
+/// [`write_runnable`] for a batch file that exits 0 whatever the program does, so a failure of its
+/// own never reaches the agent that runs it.
+pub fn write_runnable_exit_ok(
+    path: &Path,
+    exe: &Path,
+    args: &[Arg<'_>],
+    stderr: Stderr,
+) -> io::Result<PathBuf> {
+    write_batch(path, exe, args, stderr, true)
+}
+
+fn write_batch(
+    path: &Path,
+    exe: &Path,
+    args: &[Arg<'_>],
+    stderr: Stderr,
+    exit_ok: bool,
+) -> io::Result<PathBuf> {
     let mut line = batch_quote(&exe.to_string_lossy())?;
     for arg in args {
         line.push(' ');
@@ -328,6 +350,9 @@ pub fn write_runnable(
         lines.push("chcp 65001 >nul".to_owned());
     }
     lines.push(line);
+    if exit_ok {
+        lines.push("exit /b 0".to_owned());
+    }
     lines.push(String::new());
     let script = path.with_extension("cmd");
     std::fs::write(&script, lines.join("\r\n"))?;

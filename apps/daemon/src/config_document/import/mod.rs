@@ -307,6 +307,7 @@ fn application_settings_changes(settings: &DocumentSettings) -> SettingsChanges 
         auto_approve_account_switches: settings.auto_approve_account_switches,
         auto_approve_handoffs: settings.auto_approve_handoffs,
         ask_questions_as_choices: settings.ask_questions_as_choices,
+        keep_sessions_in_own_project: settings.keep_sessions_in_own_project,
         interface_language: offered_language(settings.interface_language.as_deref()),
         resume_sessions_on_start: settings.resume_sessions_on_start,
         keep_awake: settings.keep_awake,
@@ -406,6 +407,7 @@ pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Res
             let auto_approve_account_switches = state.store.auto_approve_account_switches()?;
             let auto_approve_handoffs = state.store.auto_approve_handoffs()?;
             let ask_questions_as_choices = state.store.ask_questions_as_choices()?;
+            let keep_sessions_in_own_project = state.store.keep_sessions_in_own_project()?;
             let git_workflow = state.store.git_workflow_settings()?;
             Some(InspectedSettings {
                 auto_close_idle_shell_terminals: settings
@@ -440,6 +442,10 @@ pub async fn inspect(state: &Arc<AppState>, document: &serde_json::Value) -> Res
                     .ask_questions_as_choices
                     .unwrap_or(ask_questions_as_choices),
                 current_ask_questions_as_choices: ask_questions_as_choices,
+                keep_sessions_in_own_project: settings
+                    .keep_sessions_in_own_project
+                    .unwrap_or(keep_sessions_in_own_project),
+                current_keep_sessions_in_own_project: keep_sessions_in_own_project,
                 resume_sessions_on_start: settings
                     .resume_sessions_on_start
                     .unwrap_or(resume_sessions_on_start_now),

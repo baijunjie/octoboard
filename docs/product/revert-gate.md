@@ -177,7 +177,10 @@ branch and is not guarded.
 A commit that undoes another passes when it says so: the message `git revert` writes (`This reverts commit <sha>.`),
 or a `Reverts: <sha>` line per undone commit in the message of the commit that undoes it.
 
-`REVERT_GATE_SKIP=1` in git's environment skips the gate for that command.
+`REVERT_GATE_SKIP=1` in git's environment skips the gate for that command. It skips the gate alone: the refusal of an
+update in another project's repository still applies (see "The git check" in
+`docs/product/keeping-sessions-to-their-own-project.md`), so a session's git moving an existing branch still asks the
+daemon, and waits for its answer, with the variable set.
 
 ## What the agent sees
 
@@ -232,7 +235,7 @@ a stopped or archived session as for a running one (see "The session's git hooks
 `docs/product/branch-responsible-session.md`); with no daemon recorded as running, git goes through. When the daemon
 answers the gate's call with an error status, git still goes through, with one line on its error output saying that the
 revert gate did not check this update because the daemon refused the call (a 4xx status) or failed it (any other error
-status), with the HTTP status. And it goes through when the gate's own check fails, with a line saying the check failed
+status), with the HTTP status; under `REVERT_GATE_SKIP=1` that line is not written. And it goes through when the gate's own check fails, with a line saying the check failed
 and the update was allowed. A failing hook fails every reference update git makes, so the gate refuses only an update it
 has judged; an error of its own, or a daemon that is down, is no reason to stop the user's git.
 

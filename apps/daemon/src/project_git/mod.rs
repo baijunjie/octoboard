@@ -189,6 +189,15 @@ pub(crate) fn has_projects_in_repository(
     Ok(in_repository(state, repository)?.next().is_some())
 }
 
+/// The first stored project in the repository, as [`projects_in_repository`] counts them,
+/// resolving directories only until it is found. Blocking.
+pub(crate) fn first_project_in_repository(
+    state: &AppState,
+    repository: &Path,
+) -> anyhow::Result<Option<Project>> {
+    Ok(in_repository(state, repository)?.next())
+}
+
 /// The projects [`projects_in_repository`] lists, each directory resolved as it is reached.
 fn in_repository<'a>(
     state: &AppState,

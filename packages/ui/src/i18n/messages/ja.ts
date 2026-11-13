@@ -1874,7 +1874,7 @@ export const ja: Translation<"other"> = {
   "configuration.export.appBehavior.description": "起動時のセッション再開、バックグラウンドでの実行、{menuBarIcon}、スリープを防ぐ設定、未使用のターミナルを閉じる設定を含めます。",
   "configuration.export.appBehavior.description.basic": "起動時のセッション再開、スリープを防ぐ設定、未使用のターミナルを閉じる設定を含めます。",
   "configuration.export.git.description": "デフォルトのクローン先、リポジトリの自動プル、Git ワークフローを含めます。",
-  "configuration.export.agentBehavior.description": "自動で承認するリクエストと、選択肢で質問するかどうかを含めます。",
+  "configuration.export.agentBehavior.projectScope.description": "自動で承認するリクエスト、選択肢で質問するかどうか、セッションを自分のプロジェクトに限定するかどうかを含めます。",
   "configuration.export.shortcuts.description": "変更したショートカットを含めます。",
   "configuration.export.cleanup.description": "会話が失われたアーカイブ済みセッションを削除する設定を含めます。",
   "configuration.export.accounts.include": "アカウントを含める",
@@ -1990,6 +1990,7 @@ export const ja: Translation<"other"> = {
   "configuration.import.settings.consequence.autoApproveAccountSwitches": "以後、配下のセッションのアカウント切り替えリクエストを、事前に確認せず承認します。",
   "configuration.import.settings.consequence.autoApproveHandoffs": "以後、配下のセッションを別のエージェントへ引き継ぐリクエストを、事前に確認せず承認します。",
   "configuration.import.settings.consequence.askQuestionsAsChoices": "以後に開始するセッションには、判断が必要な場合に選択できる選択肢を提示するよう指示します。",
+  "configuration.import.settings.consequence.keepSessionsInOwnProject": "他のプロジェクトで編集やコミットをしようとしたプロジェクトのセッションは止められ、そのプロジェクトのセッションに作業を渡すよう求められます。編集のチェックは、以後に開始するセッションで有効になります。",
   "configuration.import.settings.consequence.shortcuts": {
     "other": "ファイル内の {count} 個のショートカットがデフォルトと異なります。このデバイスまたはブラウザにのみ適用されます。",
   },
@@ -2214,6 +2215,11 @@ export const ja: Translation<"other"> = {
   "settings.askQuestionsAsChoices.label": "選択肢で質問",
   "settings.askQuestionsAsChoices.description.off": "オンにすると、判断が必要な場合は、返信内に選択肢を並べる代わりに、選択可能な選択肢を提示するようセッションに指示します。変更は、以後に開始するセッションに適用されます。",
   "settings.askQuestionsAsChoices.description.on": "判断が必要な場合は、返信内に選択肢を並べる代わりに、選択可能な選択肢を提示するようセッションに指示します。変更は、以後に開始するセッションに適用されます。",
+  "settings.keepSessionsInOwnProject.label": "セッションを自分のプロジェクトに限定",
+  "settings.keepSessionsInOwnProject.description.off":
+    "オンにすると、他のプロジェクトで編集やコミットをしようとしたプロジェクトのセッションは止められ、そのプロジェクトのセッションに作業を渡すよう求められます。",
+  "settings.keepSessionsInOwnProject.description.on":
+    "他のプロジェクトで編集やコミットをしようとしたプロジェクトのセッションは止められ、そのプロジェクトのセッションに作業を渡すよう求められます。編集のチェックは、以後に開始するセッションで有効になります。",
   "settings.autoSelect.label": "アカウントを自動で選択",
   "settings.autoSelect.description.off": "オンにすると、リセット前の残量を無駄にしないよう、新しいセッションには週間制限が最も早くリセットされるアカウントを使用します。",
   "settings.autoSelect.description.on": "リセット前の残量を無駄にしないよう、新しいセッションには週間制限が最も早くリセットされるアカウントを使用します。",

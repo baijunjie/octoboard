@@ -1628,12 +1628,44 @@ fn resume_fingerprints_only_the_generated_session_flag_hook() {
         {"handlerType":"command","source":"user","command":"/scratch/hook","key":"user-hook","currentHash":"sha256:user"},
         {"handlerType":"command","source":"sessionFlags","command":"user-custom-command","key":"other-hook","currentHash":"sha256:other"}
     ]}]});
-    let overrides = resume::own_hook_trust(&metadata, "/scratch/hook").unwrap();
+    let overrides = resume::own_hook_trust(&metadata, &["/scratch/hook"]).unwrap();
     assert_eq!(overrides[0], "-c");
     assert_eq!(
         overrides[1],
         "hooks.state={\"/<session-flags>/config.toml:stop:0:0\"={trusted_hash=\"sha256:own\"}}"
     );
+    let parsed: toml::Table = overrides[1].parse().unwrap();
+    assert_eq!(parsed["hooks"]["state"].as_table().unwrap().len(), 1);
+}
+
+#[test]
+fn resume_fingerprints_the_guard_hook_with_the_status_hook_and_nothing_else() {
+    let metadata = json!({"data":[{"hooks":[
+        {"handlerType":"command","source":"sessionFlags","command":"/scratch/hook","key":"status-key","currentHash":"sha256:status"},
+        {"handlerType":"command","source":"sessionFlags","command":"/install/octoboardd guard-hook","key":"guard-key","currentHash":"sha256:guard"},
+        {"handlerType":"command","source":"user","command":"/install/octoboardd guard-hook","key":"user-guard","currentHash":"sha256:user"},
+        {"handlerType":"command","source":"sessionFlags","command":"user-custom-command","key":"other-hook","currentHash":"sha256:other"}
+    ]}]});
+
+    let overrides = resume::own_hook_trust(
+        &metadata,
+        &["/scratch/hook", "/install/octoboardd guard-hook"],
+    )
+    .unwrap();
+
+    let parsed: toml::Table = overrides[1].parse().unwrap();
+    let state = parsed["hooks"]["state"].as_table().unwrap();
+    assert_eq!(state.len(), 2, "{state:?}");
+    assert_eq!(
+        state["status-key"]["trusted_hash"].as_str(),
+        Some("sha256:status")
+    );
+    assert_eq!(
+        state["guard-key"]["trusted_hash"].as_str(),
+        Some("sha256:guard")
+    );
+    // Without a guard command the guard's hook is not trusted.
+    let overrides = resume::own_hook_trust(&metadata, &["/scratch/hook"]).unwrap();
     let parsed: toml::Table = overrides[1].parse().unwrap();
     assert_eq!(parsed["hooks"]["state"].as_table().unwrap().len(), 1);
 }
@@ -1934,6 +1966,7 @@ fn start_fake(mode: &str) -> (Result<CodexTransport>, Vec<fake::Started>) {
         tui_args: Vec::new(),
         task: None,
         hook_command: fake::HOOK.into(),
+        guard_command: None,
         resume_thread: Some("thread-1".into()),
         resume_permissions: Some(super::super::private_server::ResumePermissions {
             profile: ":workspace",
@@ -2472,6 +2505,7 @@ fn a_resume_restarts_the_server_through_the_host_on_an_endpoint_of_its_own() {
         tui_args: Vec::new(),
         task: None,
         hook_command: "the-hook".into(),
+        guard_command: None,
         resume_thread: Some("thread-1".into()),
         resume_permissions: Some(super::super::private_server::ResumePermissions {
             profile: ":workspace",

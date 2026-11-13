@@ -1751,7 +1751,7 @@ export const es: Translation<"one" | "many" | "other"> = {
   "configuration.export.appBehavior.description": "Incluye reanudar sesiones al iniciar, seguir en segundo plano, el {menuBarIcon}, evitar la suspensión y cerrar terminales inactivos.",
   "configuration.export.appBehavior.description.basic": "Incluye reanudar sesiones al iniciar, evitar la suspensión y cerrar terminales inactivos.",
   "configuration.export.git.description": "Incluye el directorio de clonación predeterminado, traer repositorios automáticamente y el flujo de trabajo de Git.",
-  "configuration.export.agentBehavior.description": "Incluye qué solicitudes se aprueban automáticamente y si se hacen preguntas con opciones.",
+  "configuration.export.agentBehavior.projectScope.description": "Incluye qué solicitudes se aprueban automáticamente, si se hacen preguntas con opciones y si las sesiones se limitan a su propio proyecto.",
   "configuration.export.shortcuts.description": "Incluye los atajos de teclado que has cambiado.",
   "configuration.export.cleanup.description": "Incluye eliminar las sesiones archivadas cuya conversación haya desaparecido.",
   "configuration.export.accounts.include": "Incluir cuentas de agentes",
@@ -1859,6 +1859,7 @@ export const es: Translation<"one" | "many" | "other"> = {
   "configuration.import.settings.consequence.autoApproveAccountSwitches": "Las solicitudes de una sesión para cambiar la cuenta de una de sus sesiones se aprobarán sin preguntarte antes.",
   "configuration.import.settings.consequence.autoApproveHandoffs": "Las solicitudes de una sesión para relevar una de sus sesiones con otro agente se aprobarán sin preguntarte antes.",
   "configuration.import.settings.consequence.askQuestionsAsChoices": "Se pedirá a las sesiones iniciadas después que presenten las decisiones como opciones que puedas elegir.",
+  "configuration.import.settings.consequence.keepSessionsInOwnProject": "Una sesión de proyecto que edite o haga commits en otro proyecto se detiene y se le pide que pase el trabajo a una sesión de ese proyecto. Las ediciones se comprueban en las sesiones iniciadas después.",
   "configuration.import.settings.consequence.shortcuts": { one: "{count} atajo del archivo difiere del predeterminado. Solo se aplican a este dispositivo o navegador.", other: "{count} atajos del archivo difieren de los predeterminados. Solo se aplican a este dispositivo o navegador.", many: "{count} atajos del archivo difieren de los predeterminados. Solo se aplican a este dispositivo o navegador." },
   "configuration.import.settings.consequence.shortcutCount": { one: "{count} atajo del archivo difiere del predeterminado.", other: "{count} atajos del archivo difieren de los predeterminados.", many: "{count} atajos del archivo difieren de los predeterminados." },
   "configuration.import.settings.consequence.shortcutsReset": "Solo se aplican a este dispositivo o navegador.",
@@ -2065,6 +2066,11 @@ export const es: Translation<"one" | "many" | "other"> = {
   "settings.askQuestionsAsChoices.label": "Hacer preguntas con opciones",
   "settings.askQuestionsAsChoices.description.off": "Al activar esta opción, se pide a las sesiones que presenten las decisiones como opciones que puedas elegir, en lugar de enumerarlas en sus respuestas. El cambio se aplica a las sesiones iniciadas después.",
   "settings.askQuestionsAsChoices.description.on": "Se pide a las sesiones que presenten las decisiones como opciones que puedas elegir, en lugar de enumerarlas en sus respuestas. El cambio se aplica a las sesiones iniciadas después.",
+  "settings.keepSessionsInOwnProject.label": "Limitar las sesiones a su propio proyecto",
+  "settings.keepSessionsInOwnProject.description.off":
+    "Al activar esta opción, una sesión de proyecto que edite o haga commits en otro proyecto se detiene y se le pide que pase el trabajo a una sesión de ese proyecto.",
+  "settings.keepSessionsInOwnProject.description.on":
+    "Una sesión de proyecto que edite o haga commits en otro proyecto se detiene y se le pide que pase el trabajo a una sesión de ese proyecto. Las ediciones se comprueban en las sesiones iniciadas después.",
   "settings.autoSelect.label": "Seleccionar automáticamente una cuenta",
   "settings.autoSelect.description.off": "Al activar esta opción, las sesiones nuevas usan la cuenta cuyo límite semanal se restablezca antes para no desperdiciar el uso restante antes del restablecimiento.",
   "settings.autoSelect.description.on": "Las sesiones nuevas usan la cuenta cuyo límite semanal se restablezca antes para no desperdiciar el uso restante antes del restablecimiento.",

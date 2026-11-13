@@ -1875,7 +1875,7 @@ export const ko: Translation<"other"> = {
   "configuration.export.appBehavior.description": "시작 시 세션 재개, 백그라운드 실행, {menuBarIcon}, 잠자기 방지, 유휴 터미널 닫기를 포함합니다.",
   "configuration.export.appBehavior.description.basic": "시작 시 세션 재개, 잠자기 방지, 유휴 터미널 닫기를 포함합니다.",
   "configuration.export.git.description": "기본 복제 디렉터리, 저장소 자동 풀, Git 작업 흐름을 포함합니다.",
-  "configuration.export.agentBehavior.description": "자동으로 승인하는 요청과 선택지로 질문할지 여부를 포함합니다.",
+  "configuration.export.agentBehavior.projectScope.description": "자동으로 승인하는 요청, 선택지로 질문할지 여부, 세션을 자기 프로젝트로 한정할지 여부를 포함합니다.",
   "configuration.export.shortcuts.description": "변경한 키보드 단축키를 포함합니다.",
   "configuration.export.cleanup.description": "대화가 사라진 아카이브 세션의 삭제를 포함합니다.",
   "configuration.export.accounts.include": "에이전트 계정 포함",
@@ -1991,6 +1991,7 @@ export const ko: Translation<"other"> = {
   "configuration.import.settings.consequence.autoApproveAccountSwitches": "이후 하위 세션의 계정을 전환하는 요청은 사전 확인 없이 승인됩니다.",
   "configuration.import.settings.consequence.autoApproveHandoffs": "이후 하위 세션을 다른 에이전트에게 인계하는 요청은 사전 확인 없이 승인됩니다.",
   "configuration.import.settings.consequence.askQuestionsAsChoices": "이후 시작하는 세션에는 결정이 필요할 때 선택 가능한 옵션으로 제시하도록 지시합니다.",
+  "configuration.import.settings.consequence.keepSessionsInOwnProject": "다른 프로젝트에서 수정하거나 커밋하는 프로젝트 세션은 중단되고, 그 프로젝트의 세션에 작업을 넘기도록 요청받습니다. 수정 검사는 이후에 시작한 세션에 적용됩니다.",
   "configuration.import.settings.consequence.shortcuts": {
     "other": "파일의 단축키 {count}개가 기본값과 다릅니다. 이 기기나 브라우저에만 적용됩니다.",
   },
@@ -2215,6 +2216,11 @@ export const ko: Translation<"other"> = {
   "settings.askQuestionsAsChoices.label": "선택지로 질문",
   "settings.askQuestionsAsChoices.description.off": "켜면 세션에 결정이 필요할 때 응답에 선택지를 나열하는 대신 선택 가능한 옵션을 제시하도록 지시합니다. 변경은 이후 시작하는 세션에 적용됩니다.",
   "settings.askQuestionsAsChoices.description.on": "세션에 결정이 필요할 때 응답에 선택지를 나열하는 대신 선택 가능한 옵션을 제시하도록 지시합니다. 변경은 이후 시작하는 세션에 적용됩니다.",
+  "settings.keepSessionsInOwnProject.label": "세션을 자기 프로젝트로 한정",
+  "settings.keepSessionsInOwnProject.description.off":
+    "켜면 다른 프로젝트에서 수정하거나 커밋하는 프로젝트 세션이 중단되고, 그 프로젝트의 세션에 작업을 넘기도록 요청받습니다.",
+  "settings.keepSessionsInOwnProject.description.on":
+    "다른 프로젝트에서 수정하거나 커밋하는 프로젝트 세션은 중단되고, 그 프로젝트의 세션에 작업을 넘기도록 요청받습니다. 수정 검사는 이후에 시작한 세션에 적용됩니다.",
   "settings.autoSelect.label": "계정 자동 선택",
   "settings.autoSelect.description.off": "켜면 초기화 전 남은 사용량을 낭비하지 않도록 새 세션에 주간 한도가 가장 빨리 초기화되는 계정을 사용합니다.",
   "settings.autoSelect.description.on": "초기화 전 남은 사용량을 낭비하지 않도록 새 세션에 주간 한도가 가장 빨리 초기화되는 계정을 사용합니다.",

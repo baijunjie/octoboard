@@ -67,8 +67,8 @@ use serde_json::json;
 
 use super::files::{canonical_project, read_regular_text, SMALL_FILE_LIMIT};
 use super::{
-    hook_command, hook_url, AgentProvider, AgentVersion, LaunchPlan, LaunchSpec, NamedTitle,
-    COMMAND_HOOK_TIMEOUT_SECS, HTTP_HOOK_TIMEOUT_SECS,
+    add_guard_group, guard_command, hook_command, hook_url, AgentProvider, AgentVersion,
+    LaunchPlan, LaunchSpec, NamedTitle, COMMAND_HOOK_TIMEOUT_SECS, HTTP_HOOK_TIMEOUT_SECS,
 };
 use crate::hostfs::replace::{replace_beside, Permissions};
 use crate::platform::shell::{self, Arg, Stderr};
@@ -111,6 +111,9 @@ const HTTP_HOOKS_SINCE: AgentVersion = (2, 1, 63);
 /// `crate::session::trust`), so without it such a session would hold its messages until the user
 /// typed a prompt.
 const COMMAND_ONLY_EVENTS: &[&str] = &["SessionStart"];
+
+/// The tools the cross-project guard looks at: the ones that write a file.
+const GUARD_MATCHER: &str = "Edit|Write|MultiEdit|NotebookEdit";
 
 /// The status line is injected only for a Claude Code known to be at least this version, well
 /// inside the releases that run a `statusLine` command; one whose input carries no context window
@@ -175,6 +178,15 @@ impl ClaudeProvider {
                 group["matcher"] = json!("idle_prompt");
             }
             hooks.insert((*event).to_string(), json!([group]));
+        }
+        // The cross-project guard decides a file-edit call before it runs, so it is synchronous
+        // and always a command, since it reads the list in the scratch directory and calls no
+        // daemon, whatever form the status hooks take. Like their command form it is a command
+        // line for the POSIX shell Claude Code runs commands through (Git Bash on Windows), and a
+        // group of its own beside theirs: Claude Code runs every matching group, and the status
+        // hooks must see every tool call.
+        if let Some(guard) = &spec.guard {
+            add_guard_group(&mut hooks, GUARD_MATCHER, &guard_command(guard));
         }
         // Octoboard's own tools are not a decision to put to the user: each is something the
         // session was told to do, and a prompt for every one would make orchestration unusable.
@@ -938,6 +950,72 @@ mod tests {
                     (*event == "Notification").then_some("idle_prompt")
                 );
             }
+        }
+    }
+
+    /// The cross-project guard is a second `PreToolUse` group beside the status hook, matching the
+    /// file-edit tools and running a synchronous command whatever form the status hooks take; a
+    /// launch with no guard has neither.
+    #[test]
+    fn the_cross_project_guard_is_a_synchronous_group_of_its_own_beside_the_status_hook() {
+        let mut fixture = spec_fixture();
+        let list = fixture.scratch.join("cross-project-guard.json");
+        let script = fixture.scratch.join("guard-hook");
+        let guard = crate::adapter::GuardHook {
+            exe: "/opt/octoboard/install/octoboardd",
+            list: &list,
+            script: &script,
+        };
+        for version in [Some((2, 1, 301)), None] {
+            fixture.agent_version = version;
+            let plan_hooks = |guard: Option<crate::adapter::GuardHook<'_>>| {
+                let mut spec = fixture.spec();
+                spec.guard = guard;
+                settings_of(&ClaudeProvider.plan(&spec).expect("plan"))["hooks"].clone()
+            };
+
+            let hooks = plan_hooks(Some(guard));
+
+            let groups = hooks["PreToolUse"].as_array().expect("groups");
+            assert_eq!(groups.len(), 2, "{version:?}: {groups:?}");
+            // The status hook is as it was: the first group, with no matcher.
+            assert!(groups[0].get("matcher").is_none(), "{version:?}");
+            assert_ne!(
+                groups[0]["hooks"][0]["command"],
+                groups[1]["hooks"][0]["command"]
+            );
+            assert_eq!(
+                groups[1]["matcher"], "Edit|Write|MultiEdit|NotebookEdit",
+                "{version:?}"
+            );
+            let handlers = groups[1]["hooks"].as_array().unwrap();
+            assert_eq!(handlers.len(), 1);
+            let handler = &handlers[0];
+            assert_eq!(handler["type"], "command", "{version:?}");
+            assert_eq!(handler["timeout"], crate::adapter::GUARD_HOOK_TIMEOUT_SECS);
+            assert_eq!(handler["timeout"], 10);
+            assert!(handler.get("async").is_none(), "synchronous: {handler}");
+            // An inline line for the POSIX shell Claude Code runs commands through, which exits 0
+            // whatever the daemon's mode did.
+            assert_eq!(
+                handler["command"],
+                format!(
+                    "'/opt/octoboard/install/octoboardd' guard-hook --list '{}' 2>/dev/null; exit 0",
+                    list.display()
+                ),
+                "{version:?}"
+            );
+            for event in HOOK_EVENTS.iter().filter(|event| **event != "PreToolUse") {
+                assert_eq!(hooks[*event].as_array().unwrap().len(), 1, "{event}");
+            }
+
+            let hooks = plan_hooks(None);
+            assert_eq!(
+                hooks["PreToolUse"].as_array().unwrap().len(),
+                1,
+                "{version:?}"
+            );
+            assert!(!hooks.to_string().contains("guard-hook"), "{version:?}");
         }
     }
 

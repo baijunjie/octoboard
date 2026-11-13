@@ -288,7 +288,10 @@ written to a configuration file or a repository, and nothing reaches a process o
   commit or a transaction still aborts it.
 - **The revert gate runs after the user's hook.** Once the user's `reference-transaction` hook has passed a
   transaction that moves an existing branch, or the user's `pre-push` hook has passed a push of branches, the
-  dispatcher runs the revert gate, which can still refuse it (see `docs/product/revert-gate.md`).
+  dispatcher runs the revert gate, which can still refuse it (see `docs/product/revert-gate.md`). While **Keep sessions
+  to their own project** is on, a prepared transaction that moves an existing branch in a repository of another project
+  is refused at that point instead, before the revert gate runs (see "The git check" in
+  `docs/product/keeping-sessions-to-their-own-project.md`).
 - **Moved refs reach the branch badge.** A completed transaction that updates `HEAD`, a local branch or a
   remote-tracking branch is also reported, in the background like a creation, so the projects of that repository have
   their branch badge re-read at once (see "Following changes to the repository's refs" in

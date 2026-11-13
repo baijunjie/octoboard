@@ -1,9 +1,10 @@
 # Agent behavior settings
 
 Settings' **Agent behavior** section (see "Agent behavior" in `docs/product/settings.md`): what a session may do
-without asking the user first, and how it asks the user. A paragraph under the heading says as much, above five rows:
+without asking the user first, and how it asks the user. A paragraph under the heading says as much, above six rows:
 **Automatically approve session requests**, **Automatically approve resume requests**, **Automatically approve account
-switches**, **Automatically approve handoffs**, then **Ask questions as choices**. The section is the same in every
+switches**, **Automatically approve handoffs**, **Ask questions as choices**, then **Keep sessions to their own
+project**. The section is the same in every
 client. Each switch is kept by the daemon, so every window shows the same, and besides its row only an import asked to
 apply a configuration document's Agent behavior section changes it (see "The application settings an export carries"
 in `docs/product/settings-in-a-configuration.md`); turning one on or off leaves the others as they are. How the
@@ -52,3 +53,15 @@ daemon stores it as `ask_questions_as_choices`. A session already running keeps 
 a change reaches a console session is in "The console session's instruction file" in
 `docs/product/launching-agents.md`. An agent can neither read nor change the switch through the settings tools (see
 "Who reads and changes what" in `docs/product/agent-settings-tools.md`).
+
+## Keep sessions to their own project
+
+A switch, **off to begin with**: whether a project session that edits or commits in another registered project is
+stopped and asked to hand that work to a session of that project, the cross-project guard (see
+`docs/product/keeping-sessions-to-their-own-project.md`). While the switch is off the row's description says what
+turning it on will do; while it is on it says what is happening now, and that edits are checked in sessions started
+afterwards. The daemon stores it as `keep_sessions_in_own_project`. Its git check follows the switch at once, in running
+sessions too; its edit check is set up at a session's launch, so a change reaches it at the session's next launch (see
+"Which sessions have it" in `docs/product/keeping-sessions-to-their-own-project.md`). An agent can neither read nor
+change the switch through the settings tools (see "Who reads and changes what" in
+`docs/product/agent-settings-tools.md`).

@@ -70,8 +70,10 @@ pub fn hook_dialect() -> Dialect {
 /// How long an agent lets a command hook run before it kills it, in seconds.
 /// A hook's shell and the daemon start warm here and report within a fraction of a second, so the
 /// timeout only has to catch a daemon that is unreachable, which costs a turn at most this long
-/// where the hook is synchronous (Codex's and Claude's command hooks are registered `async`, so
-/// the timeout bounds the hook process alone and never the agent's turn).
+/// where the hook is synchronous. The status hooks of Codex and Claude Code are registered `async`,
+/// so for them the timeout bounds the hook process alone and never the agent's turn; the
+/// cross-project guard is synchronous and has a timeout of its own
+/// ([`crate::adapter::GUARD_HOOK_TIMEOUT_SECS`]).
 pub const COMMAND_HOOK_TIMEOUT_SECS: u32 = 3;
 
 /// How many times as long as a later one an agent's first hook of a launch may take to report: no
@@ -87,6 +89,17 @@ pub fn write_runnable(
     stderr: Stderr,
 ) -> io::Result<PathBuf> {
     write_script(path, &command_line(exe, args, stderr))
+}
+
+/// [`write_runnable`] for a script that exits 0 whatever the program does
+/// ([`command_line_exit_ok`](super::command_line_exit_ok)).
+pub fn write_runnable_exit_ok(
+    path: &Path,
+    exe: &Path,
+    args: &[Arg<'_>],
+    stderr: Stderr,
+) -> io::Result<PathBuf> {
+    write_script(path, &super::command_line_exit_ok(exe, args, stderr))
 }
 
 /// Writes at `path` an executable that appends the first argument it is given, as a line, to

@@ -175,6 +175,15 @@ describe("while a query is entered", () => {
     expect(shownEntries()).toEqual(["git_workflow.revert_gate"]);
   });
 
+  it("finds the switch that keeps sessions to their own project, in the Agent behavior section, by its name and its description", async () => {
+    await open({ section: "general" });
+    await search("keep sessions to their own project");
+    expect(tabNames()).toEqual(["Agent behavior, 1 matching setting"]);
+    expect(shownEntries()).toEqual(["keep_sessions_in_own_project"]);
+    await search("hand the work");
+    expect(shownEntries()).toEqual(["keep_sessions_in_own_project"]);
+  });
+
   it("finds a row by its group's heading", async () => {
     await open({ section: "git" });
     await search("repository");
@@ -889,11 +898,16 @@ describe("the launch-at-login read", () => {
   });
 });
 
+// Exactly the Cleanup and the Permissions settings are worded with both of these ("check", "checked"; "Lets", "delete"),
+// and no other setting is: "check" alone is also in the wording of the switch that keeps sessions to their own project
+// ("checked"), and "agent" is in the name of the section that holds it.
+const SHARED_QUERY = "check let";
+
 describe("the section on screen while a read answers", () => {
   it("stays where it is when the Permissions section appears in the list ahead of it", async () => {
     const read = deferredRead<typeof GRANTED>();
     await open({ section: "about", platform: macPlatform(() => read.promise) });
-    await search("check");
+    await search(SHARED_QUERY);
     expect(tabNames()).toEqual(["Cleanup, 1 matching setting"]);
     expect(selectedTab()?.textContent).toContain("Cleanup");
     await read.resolve(GRANTED);
@@ -905,7 +919,7 @@ describe("the section on screen while a read answers", () => {
   it("stays where it is when the read answers, though the section the dialog opened on is now listed", async () => {
     const read = deferredRead<typeof GRANTED>();
     await open({ section: "permissions", platform: macPlatform(() => read.promise) });
-    await search("check");
+    await search(SHARED_QUERY);
     expect(tabNames()).toEqual(["Cleanup, 1 matching setting"]);
     expect(selectedTab()?.textContent).toContain("Cleanup");
     await read.resolve(GRANTED);
@@ -916,7 +930,7 @@ describe("the section on screen while a read answers", () => {
   it("shows the section whose tab is pressed, though it is the one the dialog opened on before a search moved away from it", async () => {
     const read = deferredRead<typeof GRANTED>();
     await open({ section: "permissions", platform: macPlatform(() => read.promise) });
-    await search("check");
+    await search(SHARED_QUERY);
     await read.resolve(GRANTED);
     expect(selectedTab()?.textContent).toContain("Cleanup");
     await click(tabLabelled("Permissions"));
@@ -929,7 +943,7 @@ describe("the section on screen while a read answers", () => {
     await open({ section: "about", platform: macPlatform(async () => GRANTED) });
     await search("sorting");
     expect(selectedTab()?.textContent).toContain("General");
-    await search("check");
+    await search(SHARED_QUERY);
     expect(tabNames()).toEqual(["Permissions, 1 matching setting", "Cleanup, 1 matching setting"]);
     expect(selectedTab()?.textContent).toContain("Permissions");
   });

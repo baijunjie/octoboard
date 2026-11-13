@@ -569,6 +569,14 @@ pub(super) async fn start_process(
         .process_ledger
         .begin_launch(&session.id)
         .context("creating the launch's process containment")?;
+    // The guard fails open: a list that cannot be built launches the session without it.
+    let guard = match crate::cross_project_guard::for_session(state, session).await {
+        Ok(guard) => guard,
+        Err(err) => {
+            tracing::warn!(session = %session.id, error = ?err, "cross-project guard: launching without it");
+            None
+        }
+    };
     let request = term::LaunchRequest {
         session_id: session.id.clone(),
         agent: session.agent,
@@ -595,6 +603,7 @@ pub(super) async fn start_process(
         // Issued per launch: the previous process is gone, and a token outliving it would let a
         // stale child act on this session.
         mcp_token: state.issue_mcp_token(&session.id),
+        guard,
         process_tag: pending_launch.tag().clone(),
     };
 

@@ -2917,6 +2917,9 @@
         "ask_questions_as_choices": {
           "type": "boolean"
         },
+        "keep_sessions_in_own_project": {
+          "type": "boolean"
+        },
         "keyboard_shortcuts": {
           "description": "The keyboard shortcuts the exporting client has changed, by command id, which only the\nclient reads and writes: the client adds them to a document it saves (an empty object when\nit has none changed, which on import means every shortcut at its default) and applies them\nfrom an import. The daemon builds none, stores them nowhere and does not read them, so\nthey pass through an import's reply as they came. Absent in a document a client saved\nwithout them: importing it leaves the client's shortcuts as they are."
         },
@@ -6571,6 +6574,12 @@
         "current_ask_questions_as_choices": {
           "type": "boolean"
         },
+        "keep_sessions_in_own_project": {
+          "type": "boolean"
+        },
+        "current_keep_sessions_in_own_project": {
+          "type": "boolean"
+        },
         "resume_sessions_on_start": {
           "type": "boolean",
           "description": "The document's value, or this machine's own when the document carries none, so the line\nreads as no change."
@@ -6631,6 +6640,8 @@
         "current_auto_approve_handoffs",
         "ask_questions_as_choices",
         "current_ask_questions_as_choices",
+        "keep_sessions_in_own_project",
+        "current_keep_sessions_in_own_project",
         "resume_sessions_on_start",
         "current_resume_sessions_on_start",
         "keep_awake",
@@ -8512,6 +8523,10 @@
           "type": "boolean",
           "description": "Whether the instructions given to every session at launch ask it to put each question that\nneeds the user's decision or answer as options to pick from. On unless the user turned it\noff. Fixed per session when it starts, so a change reaches only sessions begun afterwards\n(a console session's file is rewritten at each launch, so it follows at the next one). Only\nthe user's own client changes it."
         },
+        "keep_sessions_in_own_project": {
+          "type": "boolean",
+          "description": "Whether a project session is kept to its own project: its git is refused a ref update in\nthe repository of another registered project, and its file-edit tools are refused a path\nin one. Off unless the user turned it on. The git check reads it at every ref update, so a\nchange reaches running sessions at once; the edit check keeps the value a session was\nlaunched with, so a change reaches it only in sessions launched afterwards. Only the\nuser's own client changes it."
+        },
         "interface_language": {
           "type": [
             "string",
@@ -8642,6 +8657,7 @@
         "auto_approve_account_switches",
         "auto_approve_handoffs",
         "ask_questions_as_choices",
+        "keep_sessions_in_own_project",
         "interface_language",
         "keep_awake",
         "keep_awake_when",

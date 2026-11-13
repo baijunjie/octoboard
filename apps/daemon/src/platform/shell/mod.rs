@@ -129,7 +129,19 @@ pub fn split_path(value: &OsStr) -> Vec<PathBuf> {
 /// The command string that runs `exe` with `args` through a POSIX shell, replacing the shell, so
 /// none lingers.
 pub fn command_line(exe: &Path, args: &[Arg<'_>], stderr: Stderr) -> String {
-    let mut line = format!("exec {}", posix_quote(&exe.to_string_lossy()));
+    format!("exec {}", invocation(exe, args, stderr))
+}
+
+/// The command string that runs `exe` with `args` through a POSIX shell and then exits 0 whatever
+/// the program did, so a failure of its own (a command line it cannot parse exits 2, which an
+/// agent reads as a block) never reaches the agent. The shell is not replaced, so its status can
+/// be set.
+pub fn command_line_exit_ok(exe: &Path, args: &[Arg<'_>], stderr: Stderr) -> String {
+    format!("{}; exit 0", invocation(exe, args, stderr))
+}
+
+fn invocation(exe: &Path, args: &[Arg<'_>], stderr: Stderr) -> String {
+    let mut line = posix_quote(&exe.to_string_lossy());
     for arg in args {
         line.push(' ');
         match arg {

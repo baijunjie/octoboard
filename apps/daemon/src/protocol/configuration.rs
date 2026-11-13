@@ -299,6 +299,9 @@ pub struct DocumentSettings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(test, ts(optional))]
     pub ask_questions_as_choices: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub keep_sessions_in_own_project: Option<bool>,
     // Keyboard shortcuts.
     /// The keyboard shortcuts the exporting client has changed, by command id, which only the
     /// client reads and writes: the client adds them to a document it saves (an empty object when
@@ -338,6 +341,7 @@ impl DocumentSettings {
             auto_approve_account_switches,
             auto_approve_handoffs,
             ask_questions_as_choices,
+            keep_sessions_in_own_project,
             keyboard_shortcuts,
             auto_delete_unresumable_archives,
         } = self;
@@ -367,6 +371,7 @@ impl DocumentSettings {
                     || auto_approve_account_switches.is_some()
                     || auto_approve_handoffs.is_some()
                     || ask_questions_as_choices.is_some()
+                    || keep_sessions_in_own_project.is_some()
             }
             SettingsSection::KeyboardShortcuts => keyboard_shortcuts.is_some(),
             SettingsSection::Cleanup => auto_delete_unresumable_archives.is_some(),
@@ -410,6 +415,7 @@ impl DocumentSettings {
             auto_approve_account_switches,
             auto_approve_handoffs,
             ask_questions_as_choices,
+            keep_sessions_in_own_project,
             keyboard_shortcuts,
             auto_delete_unresumable_archives,
         } = self;
@@ -433,6 +439,7 @@ impl DocumentSettings {
             auto_approve_account_switches: auto_approve_account_switches.filter(|_| agent_behavior),
             auto_approve_handoffs: auto_approve_handoffs.filter(|_| agent_behavior),
             ask_questions_as_choices: ask_questions_as_choices.filter(|_| agent_behavior),
+            keep_sessions_in_own_project: keep_sessions_in_own_project.filter(|_| agent_behavior),
             keyboard_shortcuts: keyboard_shortcuts.filter(|_| keyboard),
             auto_delete_unresumable_archives: auto_delete_unresumable_archives.filter(|_| cleanup),
         }
@@ -677,6 +684,8 @@ pub struct InspectedSettings {
     pub current_auto_approve_handoffs: bool,
     pub ask_questions_as_choices: bool,
     pub current_ask_questions_as_choices: bool,
+    pub keep_sessions_in_own_project: bool,
+    pub current_keep_sessions_in_own_project: bool,
     /// The document's value, or this machine's own when the document carries none, so the line
     /// reads as no change.
     pub resume_sessions_on_start: bool,
@@ -1003,6 +1012,7 @@ mod tests {
             auto_approve_account_switches: Some(true),
             auto_approve_handoffs: Some(true),
             ask_questions_as_choices: Some(true),
+            keep_sessions_in_own_project: Some(true),
             keyboard_shortcuts: Some(serde_json::json!({})),
             auto_delete_unresumable_archives: Some(true),
         }

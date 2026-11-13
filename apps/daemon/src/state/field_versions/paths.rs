@@ -19,7 +19,7 @@ use crate::providers::AgentId;
 pub(crate) type Paths = BTreeMap<String, Value>;
 
 /// The settings fields `update_settings` takes as a path of their own.
-pub(crate) const SETTINGS_FIELDS: [&str; 16] = [
+pub(crate) const SETTINGS_FIELDS: [&str; 17] = [
     "auto_close_idle_shell_terminals",
     "auto_pull_repositories",
     "auto_delete_unresumable_archives",
@@ -28,6 +28,7 @@ pub(crate) const SETTINGS_FIELDS: [&str; 16] = [
     "auto_approve_account_switches",
     "auto_approve_handoffs",
     "ask_questions_as_choices",
+    "keep_sessions_in_own_project",
     "interface_language",
     "keep_awake",
     "keep_awake_when",

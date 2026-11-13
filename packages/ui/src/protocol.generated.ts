@@ -1485,6 +1485,7 @@ export type DocumentSettings = {
   auto_approve_account_switches?: boolean,
   auto_approve_handoffs?: boolean,
   ask_questions_as_choices?: boolean,
+  keep_sessions_in_own_project?: boolean,
   /**
    * The keyboard shortcuts the exporting client has changed, by command id, which only the
    * client reads and writes: the client adds them to a document it saves (an empty object when
@@ -2649,6 +2650,8 @@ export type InspectedSettings = {
   current_auto_approve_handoffs: boolean,
   ask_questions_as_choices: boolean,
   current_ask_questions_as_choices: boolean,
+  keep_sessions_in_own_project: boolean,
+  current_keep_sessions_in_own_project: boolean,
   /**
    * The document's value, or this machine's own when the document carries none, so the line
    * reads as no change.
@@ -3911,6 +3914,7 @@ export type Request = {
   auto_approve_account_switches?: boolean,
   auto_approve_handoffs?: boolean,
   ask_questions_as_choices?: boolean,
+  keep_sessions_in_own_project?: boolean,
   /**
    * A tag the interface offers (`interface_language::display_name` knows it); any other
    * is refused.
@@ -4766,6 +4770,7 @@ export type RequestBody = {
   auto_approve_account_switches?: boolean,
   auto_approve_handoffs?: boolean,
   ask_questions_as_choices?: boolean,
+  keep_sessions_in_own_project?: boolean,
   /**
    * A tag the interface offers (`interface_language::display_name` knows it); any other
    * is refused.
@@ -5466,6 +5471,15 @@ export type Settings = {
    * the user's own client changes it.
    */
   ask_questions_as_choices: boolean,
+  /**
+   * Whether a project session is kept to its own project: its git is refused a ref update in
+   * the repository of another registered project, and its file-edit tools are refused a path
+   * in one. Off unless the user turned it on. The git check reads it at every ref update, so a
+   * change reaches running sessions at once; the edit check keeps the value a session was
+   * launched with, so a change reaches it only in sessions launched afterwards. Only the
+   * user's own client changes it.
+   */
+  keep_sessions_in_own_project: boolean,
   /**
    * The tag of the interface language, one of the tags the interface offers; `null` until a
    * client reports one. It is the one language every client shows (each keeps a copy only to

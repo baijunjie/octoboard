@@ -22,12 +22,12 @@ pub(super) fn resume_params(thread: &str, cwd: &Path, permissions: ResumePermiss
     })
 }
 
-/// The override that trusts the hooks `command` was generated as, by Codex's own fingerprint of
+/// The override that trusts the hooks `commands` were generated as, by Codex's own fingerprint of
 /// each in `metadata` (a `hooks/list` reply), and nothing else. The state table goes as one
 /// assignment, since a quoted dotted key of it is split wrongly at the `.toml` in Codex's keys.
 /// Codex 0.166.0 merges it with the user's own `hooks.state` rather than replacing it: a hook the
 /// user had trusted in `config.toml` stayed trusted alongside it.
-pub(super) fn own_hook_trust(metadata: &Value, command: &str) -> Result<Vec<String>> {
+pub(super) fn own_hook_trust(metadata: &Value, commands: &[&str]) -> Result<Vec<String>> {
     let mut entries_to_trust = Vec::new();
     let entries = metadata
         .get("data")
@@ -39,7 +39,10 @@ pub(super) fn own_hook_trust(metadata: &Value, command: &str) -> Result<Vec<Stri
         .flatten()
     {
         if hook.get("handlerType").and_then(Value::as_str) != Some("command")
-            || hook.get("command").and_then(Value::as_str) != Some(command)
+            || !hook
+                .get("command")
+                .and_then(Value::as_str)
+                .is_some_and(|command| commands.contains(&command))
             || hook.get("source").and_then(Value::as_str) != Some("sessionFlags")
         {
             continue;

@@ -1875,7 +1875,7 @@ export const zhHant: Translation<"other"> = {
   "configuration.export.appBehavior.description": "包含啟動時恢復工作階段、在背景執行、{menuBarIcon}、防止睡眠和關閉閒置終端機。",
   "configuration.export.appBehavior.description.basic": "包含啟動時恢復工作階段、防止睡眠和關閉閒置終端機。",
   "configuration.export.git.description": "包含預設複製目錄、自動提取儲存庫和 Git 工作流程。",
-  "configuration.export.agentBehavior.description": "包含自動批准哪些請求，以及是否以選項形式提問。",
+  "configuration.export.agentBehavior.projectScope.description": "包含自動批准哪些請求、是否以選項形式提問，以及工作階段是否只改自己的專案。",
   "configuration.export.shortcuts.description": "包含你變更過的鍵盤快速鍵。",
   "configuration.export.cleanup.description": "包含刪除對話已遺失的已封存工作階段。",
   "configuration.export.accounts.include": "包含代理程式帳號",
@@ -1991,6 +1991,7 @@ export const zhHant: Translation<"other"> = {
   "configuration.import.settings.consequence.autoApproveAccountSwitches": "之後工作階段請求切換其名下某個工作階段的帳號時，將直接獲批，不再先詢問你。",
   "configuration.import.settings.consequence.autoApproveHandoffs": "之後工作階段請求將其名下某個工作階段移交給另一個代理程式時，將直接獲批，不再先詢問你。",
   "configuration.import.settings.consequence.askQuestionsAsChoices": "會要求之後啟動的工作階段在需要你決定時提供可點選的選項。",
+  "configuration.import.settings.consequence.keepSessionsInOwnProject": "專案工作階段在其他專案中修改或提交時會被攔下，並被要求把工作交給那個專案的工作階段。修改的檢查對之後啟動的工作階段生效。",
   "configuration.import.settings.consequence.shortcuts": {
     "other": "檔案中有 {count} 項快速鍵與預設值不同。僅對此裝置或瀏覽器生效。",
   },
@@ -2215,6 +2216,11 @@ export const zhHant: Translation<"other"> = {
   "settings.askQuestionsAsChoices.label": "以選項形式提問",
   "settings.askQuestionsAsChoices.description.off": "開啟後，會要求工作階段在需要你決定時提供可點選的選項，而非在回覆中羅列選項。更改對之後啟動的工作階段生效。",
   "settings.askQuestionsAsChoices.description.on": "會要求工作階段在需要你決定時提供可點選的選項，而非在回覆中羅列選項。更改對之後啟動的工作階段生效。",
+  "settings.keepSessionsInOwnProject.label": "工作階段只改自己的專案",
+  "settings.keepSessionsInOwnProject.description.off":
+    "開啟後，專案工作階段在其他專案中修改或提交時會被攔下，並被要求把工作交給那個專案的工作階段。",
+  "settings.keepSessionsInOwnProject.description.on":
+    "專案工作階段在其他專案中修改或提交時會被攔下，並被要求把工作交給那個專案的工作階段。修改的檢查對之後啟動的工作階段生效。",
   "settings.autoSelect.label": "自動選擇帳號",
   "settings.autoSelect.description.off": "開啟後，新增工作階段會使用每周限制最快重置的帳號，以免重置前剩餘的用量被浪費。",
   "settings.autoSelect.description.on": "新增工作階段使用每周限制最快重置的帳號，以免重置前剩餘的用量被浪費。",

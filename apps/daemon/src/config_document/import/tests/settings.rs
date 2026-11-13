@@ -420,6 +420,68 @@ async fn turning_off_asking_questions_as_choices_round_trips_in_a_full_export() 
     assert!(!target.store.ask_questions_as_choices().unwrap());
 }
 
+/// The switch that keeps sessions to their own project is off by default, so what travels is the
+/// user turning it on: the document carries it in the Agent behavior section, the inspection
+/// reports it beside the machine's own value, and the importing machine takes it only when
+/// settings are applied. A document without it leaves the machine's own value as it is.
+#[tokio::test]
+async fn keeping_sessions_to_their_own_project_round_trips_in_a_full_export() {
+    let (source, source_dir) = app_state("import-own-project-source");
+    source.store.set_keep_sessions_in_own_project(true).unwrap();
+    source
+        .store
+        .insert_console(&crate::test_support::console(&source_dir))
+        .unwrap();
+    let full = serde_json::to_value(
+        crate::config_document::export::build(&source.store, &export::Selection::full(true))
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(full["settings"]["keep_sessions_in_own_project"], true);
+
+    let (target, _target_dir) = app_state("import-own-project-target");
+    let settings = inspect(&target, &full).await.unwrap().settings.unwrap();
+    assert!(settings.keep_sessions_in_own_project);
+    assert!(!settings.current_keep_sessions_in_own_project);
+
+    let apply_with = |sections: Vec<SettingsSection>, document: serde_json::Value| {
+        let target = target.clone();
+        async move {
+            apply(
+                &target,
+                &document,
+                Vec::new(),
+                ApplyOptions {
+                    settings: sections,
+                    accounts: None,
+                    consoles: true,
+                    clone_dir: true,
+                    agents: None,
+                },
+            )
+            .await
+            .unwrap();
+        }
+    };
+    apply_with(Vec::new(), full.clone()).await;
+    assert!(!target.store.keep_sessions_in_own_project().unwrap());
+    apply_with(carried_sections(&full), full.clone()).await;
+    assert!(target.store.keep_sessions_in_own_project().unwrap());
+
+    // An older document, whose section lacks the key, leaves the value as it is, and the
+    // inspection reads as no change.
+    let mut older = full.clone();
+    older["settings"]
+        .as_object_mut()
+        .unwrap()
+        .remove("keep_sessions_in_own_project");
+    let settings = inspect(&target, &older).await.unwrap().settings.unwrap();
+    assert!(settings.keep_sessions_in_own_project);
+    assert!(settings.current_keep_sessions_in_own_project);
+    apply_with(carried_sections(&older), older).await;
+    assert!(target.store.keep_sessions_in_own_project().unwrap());
+}
+
 /// What travels is the user's choice, not the value in effect: a setting never chosen for is not
 /// exported. They travel in the accounts region, and the importing machine takes them only when the
 /// accounts are applied, per setting. The approval settings are exported too, since they only

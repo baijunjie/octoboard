@@ -57,7 +57,9 @@ pub(super) const MIGRATIONS: &[&str] = &[
      ALTER TABLE sessions ADD COLUMN compatibility TEXT;",
     // 3 to 4: a report page is a tree of components with the submission of its form, in place of an
     // HTML document. A page stored as HTML has no tree to be read as, so every one is discarded.
-    "DROP TABLE pages;
+    // The setting that keeps a project session to its own project is added too.
+    "ALTER TABLE settings ADD COLUMN keep_sessions_in_own_project INTEGER NOT NULL DEFAULT 0;
+     DROP TABLE pages;
      CREATE TABLE pages (
          id         TEXT PRIMARY KEY,
          session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
@@ -368,9 +370,10 @@ CREATE TABLE settings (
     squash_before_delivery INTEGER NOT NULL DEFAULT 0,
     rebase_before_delivery INTEGER NOT NULL DEFAULT 1,
     delivery            TEXT NOT NULL DEFAULT 'ask',
-    revert_gate         INTEGER NOT NULL DEFAULT 0 , resume_sessions_on_start INTEGER NOT NULL DEFAULT 0, keep_awake INTEGER NOT NULL DEFAULT 0, keep_awake_when TEXT NOT NULL DEFAULT 'working');
--- `resume_sessions_on_start`, `keep_awake` and `keep_awake_when` are the last columns, spelled as a
--- migration leaves them; see `Store::resume_sessions_on_start` and `Store::keep_awake`.
+    revert_gate         INTEGER NOT NULL DEFAULT 0 , resume_sessions_on_start INTEGER NOT NULL DEFAULT 0, keep_awake INTEGER NOT NULL DEFAULT 0, keep_awake_when TEXT NOT NULL DEFAULT 'working', keep_sessions_in_own_project INTEGER NOT NULL DEFAULT 0);
+-- `resume_sessions_on_start`, `keep_awake`, `keep_awake_when` and `keep_sessions_in_own_project` are
+-- the last columns, spelled as a migration leaves them; see `Store::resume_sessions_on_start`,
+-- `Store::keep_awake` and `Store::keep_sessions_in_own_project`.
 -- The user's explicit choice for a setting of a provider, as JSON (`true`, `false` or a quoted
 -- choice); a setting with no row follows its default. Rows naming a provider or setting this
 -- build does not declare are kept and ignored. See `Store::provider_settings`.
@@ -967,6 +970,46 @@ mod tests {
                 "submission_revision",
                 "created_at"
             ]
+        );
+    }
+
+    /// Migrating a version 3 database adds the switch that keeps sessions to their own project,
+    /// off, and keeps the values the settings row holds; once on, it survives reopening the store.
+    #[test]
+    fn migrating_a_version_3_database_adds_the_own_project_switch_off() {
+        let path = temp_db("migrate-own-project-switch");
+        {
+            let conn = Connection::open(&path).expect("version 3 database");
+            conn.execute_batch(PAST_SCHEMAS[2])
+                .expect("version 3 schema");
+            conn.pragma_update(None, "user_version", 3)
+                .expect("version");
+            conn.pragma_update(None, "application_id", APPLICATION_ID)
+                .expect("application id");
+            conn.execute_batch(
+                "INSERT INTO settings (id, auto_pull_repositories) VALUES ('singleton', 1);",
+            )
+            .expect("settings");
+        }
+
+        {
+            let store = Store::open(&path).expect("migrated");
+            let settings = store.get_settings().unwrap();
+            assert!(!settings.keep_sessions_in_own_project);
+            assert!(
+                settings.auto_pull_repositories,
+                "the row's other values stay"
+            );
+            assert!(!store.keep_sessions_in_own_project().unwrap());
+            assert!(store.set_keep_sessions_in_own_project(true).unwrap());
+        }
+        let reopened = Store::open(&path).expect("reopened");
+        assert!(reopened.keep_sessions_in_own_project().unwrap());
+        assert!(
+            reopened
+                .get_settings()
+                .unwrap()
+                .keep_sessions_in_own_project
         );
     }
 

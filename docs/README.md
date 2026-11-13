@@ -137,6 +137,8 @@ Where to start, by question:
 - [Git workflow settings](product/git-workflow-settings.md) — where a project session develops and the development
   rule.
 - [The revert gate](product/revert-gate.md) — the guard against quietly undoing changes already on a branch.
+- [Keeping sessions to their own project](product/keeping-sessions-to-their-own-project.md) — the cross-project guard:
+  which edits and git updates in another registered project it refuses, what passes, what the agent is told.
 - [Branch and worktree cleanup](product/branch-and-worktree-cleanup.md) — removing a session's branches and worktrees
   when it is archived or deleted.
 - [Configuration export and import](product/configuration-export-and-import.md) — the configuration document and its

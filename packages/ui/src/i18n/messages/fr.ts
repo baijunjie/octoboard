@@ -1751,7 +1751,7 @@ export const fr: Translation<"one" | "many" | "other"> = {
   "configuration.export.appBehavior.description": "Inclut la reprise des sessions au démarrage, l’exécution en arrière-plan, l’{menuBarIcon}, l’empêchement de la mise en veille et la fermeture des terminaux inactifs.",
   "configuration.export.appBehavior.description.basic": "Inclut la reprise des sessions au démarrage, l’empêchement de la mise en veille et la fermeture des terminaux inactifs.",
   "configuration.export.git.description": "Inclut le répertoire de clonage par défaut, tirer automatiquement les dépôts et le flux de travail Git.",
-  "configuration.export.agentBehavior.description": "Inclut quelles demandes sont approuvées automatiquement et si les questions sont posées sous forme de choix.",
+  "configuration.export.agentBehavior.projectScope.description": "Inclut quelles demandes sont approuvées automatiquement, si les questions sont posées sous forme de choix et si les sessions sont limitées à leur propre projet.",
   "configuration.export.shortcuts.description": "Inclut les raccourcis clavier que vous avez modifiés.",
   "configuration.export.cleanup.description": "Inclut la suppression des sessions archivées dont la conversation a disparu.",
   "configuration.export.accounts.include": "Inclure les comptes des agents",
@@ -1859,6 +1859,7 @@ export const fr: Translation<"one" | "many" | "other"> = {
   "configuration.import.settings.consequence.autoApproveAccountSwitches": "La demande d’une session pour changer le compte d’une de ses sessions sera alors approuvée sans vous demander d’abord.",
   "configuration.import.settings.consequence.autoApproveHandoffs": "La demande d’une session pour passer une de ses sessions à un autre agent sera alors approuvée sans vous demander d’abord.",
   "configuration.import.settings.consequence.askQuestionsAsChoices": "Les sessions démarrées ensuite seront invitées à présenter les décisions sous forme d’options à choisir.",
+  "configuration.import.settings.consequence.keepSessionsInOwnProject": "Une session de projet qui modifie des fichiers ou fait des commits dans un autre projet est arrêtée et priée de confier le travail à une session de ce projet. Les modifications sont vérifiées dans les sessions démarrées ensuite.",
   "configuration.import.settings.consequence.shortcuts": { one: "{count} raccourci du fichier diffère du réglage par défaut. Les raccourcis s’appliquent uniquement à cet appareil ou navigateur.", other: "{count} raccourcis du fichier diffèrent des réglages par défaut. Les raccourcis s’appliquent uniquement à cet appareil ou navigateur.", many: "{count} raccourcis du fichier diffèrent des réglages par défaut. Les raccourcis s’appliquent uniquement à cet appareil ou navigateur." },
   "configuration.import.settings.consequence.shortcutCount": { one: "{count} raccourci du fichier diffère du réglage par défaut.", other: "{count} raccourcis du fichier diffèrent des réglages par défaut.", many: "{count} raccourcis du fichier diffèrent des réglages par défaut." },
   "configuration.import.settings.consequence.shortcutsReset": "Ils s’appliquent uniquement à cet appareil ou navigateur.",
@@ -2065,6 +2066,11 @@ export const fr: Translation<"one" | "many" | "other"> = {
   "settings.askQuestionsAsChoices.label": "Poser les questions sous forme de choix",
   "settings.askQuestionsAsChoices.description.off": "Une fois cette option activée, les sessions sont invitées à présenter les décisions sous forme d’options à choisir plutôt que de les énumérer dans leurs réponses. Le changement s’applique aux sessions démarrées ensuite.",
   "settings.askQuestionsAsChoices.description.on": "Les sessions sont invitées à présenter les décisions sous forme d’options à choisir plutôt que de les énumérer dans leurs réponses. Le changement s’applique aux sessions démarrées ensuite.",
+  "settings.keepSessionsInOwnProject.label": "Limiter les sessions à leur propre projet",
+  "settings.keepSessionsInOwnProject.description.off":
+    "Une fois cette option activée, une session de projet qui modifie des fichiers ou fait des commits dans un autre projet est arrêtée et priée de confier le travail à une session de ce projet.",
+  "settings.keepSessionsInOwnProject.description.on":
+    "Une session de projet qui modifie des fichiers ou fait des commits dans un autre projet est arrêtée et priée de confier le travail à une session de ce projet. Les modifications sont vérifiées dans les sessions démarrées ensuite.",
   "settings.autoSelect.label": "Sélectionner automatiquement un compte",
   "settings.autoSelect.description.off": "Une fois cette option activée, une nouvelle session utilise le compte dont la limite hebdomadaire se réinitialise le plus tôt, pour ne pas perdre l’utilisation restante avant la réinitialisation.",
   "settings.autoSelect.description.on": "Une nouvelle session utilise le compte dont la limite hebdomadaire se réinitialise le plus tôt, pour ne pas perdre l’utilisation restante avant la réinitialisation.",

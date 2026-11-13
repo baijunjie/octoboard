@@ -15,6 +15,7 @@ agent.
 |---|---|---|---|
 | The session's id | `--session-id <id>` on a new session; `--resume <id>` on a resume | None on a new session (see "Codex" below); `codex resume <id>` on a resume | `--session-id <id>` on a new session; `--resume <id>` on a resume |
 | Status hooks | In the settings passed with `--settings`, a JSON file Octoboard writes for the launch in the session's scratch directory, owner-only since the hooks' address carries the key (see `docs/product/who-can-reach-the-daemon.md`); Claude Code merges them with the settings files rather than replacing them, so the project's own hooks still run | One `-c hooks.<event>=…` override per event, each run asynchronously; hook trust is handled as described in "Codex" below | A `hooks/` directory of Octoboard's own in the per-session Grok home (see "The per-session Grok home" below) |
+| The cross-project guard, for a project session launched while **Keep sessions to their own project** is on (see "The edit check" in `docs/product/keeping-sessions-to-their-own-project.md`) | A second `PreToolUse` group in the `--settings` file, beside the status hooks', matching Claude Code's file-edit tools (listed in "Which calls it checks" there): a synchronous command line, run through the shell Claude Code runs commands through (Git Bash on Windows), that runs `octoboardd guard-hook --list <list>` and then exits 0 whatever it did | A second `PreToolUse` group in the same `-c hooks.PreToolUse=…` override, matching `apply_patch` and run synchronously, whose command is a per-session script in the session's scratch directory (see `docs/product/files-octoboard-owns.md`), that runs the same mode and exits 0; its trust on a resume with the private app server is described in "Codex's private app server" below | A second `PreToolUse` group in Octoboard's hooks file in the per-session Grok home, matching Grok's edit tools under all their names, whose command is that per-session script |
 | Octoboard's MCP server | `--mcp-config` | `-c mcp_servers.octoboard.command=…` and `-c mcp_servers.octoboard.args=[…]` | An `[mcp_servers.octoboard]` table in the per-session copy of `config.toml` |
 | Running Octoboard's tools without asking | An `allow` rule, `mcp__octoboard`, in the `--settings` file | `-c mcp_servers.octoboard.default_tools_approval_mode="approve"` | Nothing is passed |
 | The agent's time limit on a call to Octoboard's tools | None is set | `-c mcp_servers.octoboard.tool_timeout_sec=660` | `tool_timeout_sec = 660` in that table |
@@ -214,9 +215,9 @@ permission as usual (see `docs/product/folder-trust.md`). On a resume:
   resuming a remote conversation. An explicit preset is applied to the conversation through the server before the
   terminal attaches, so it takes precedence over the conversation's saved choice as it does at an ordinary resume;
   under **Custom (config.toml)** the saved choice stays;
-- Codex does not honour the hook-trust bypass, so Octoboard trusts only its own generated hook command, by the
-  fingerprint Codex gives it, through overrides of that server start alone. It records no trust in the user's files
-  and grants none to the user's other hooks. Hook trust does not weaken the sandbox or the approval policy.
+- Codex does not honour the hook-trust bypass, so Octoboard trusts only its own generated hook commands — the status
+  hooks' and, where it is injected, the cross-project guard's — by the fingerprint Codex gives each, through overrides
+  of that server start alone. It records no trust in the user's files and grants none to the user's other hooks. Hook trust does not weaken the sandbox or the approval policy.
 
 **Where the server listens.** On macOS and Linux, a Unix socket in a private directory under `/tmp`, removed with the
 server. On a Windows daemon host, a loopback WebSocket port, which any local process can reach, guarded by a random
@@ -327,8 +328,8 @@ downloads during a session lands in Octoboard's copy and is not kept; the next l
 `grok` has fetched since.
 
 Three entries of the source home are left out altogether. Its `hooks/` directory is not linked: the per-session home's
-`hooks/` holds Octoboard's status hooks alone, so hooks the user keeps in the Grok home's own `hooks/` directory do not
-run in a session Octoboard starts, while a project's own hooks still do (see "A project's hooks and instruction files"
+`hooks/` holds Octoboard's own hooks alone (its status hooks and, where it is injected, the cross-project guard), so
+hooks the user keeps in the Grok home's own `hooks/` directory do not run in a session Octoboard starts, while a project's own hooks still do (see "A project's hooks and instruction files"
 below). Its `requirements.toml` and `managed_config.toml` are not carried either (see "Grok's own sandbox" below).
 
 On a Windows daemon host, a SQLite database the source home holds is a copy even where the host makes file links, so

@@ -19,7 +19,7 @@ use crate::session_git_hooks::fixture::{
     project_with_remote, rev, session_record, set_revert_gate, succeeds, system_exec_path,
     write_hook, Daemon, Fixture,
 };
-use crate::session_git_hooks::gate_inputs::{inputs, GateRequest};
+use crate::session_git_hooks::gate_inputs::{answer, GateRequest};
 use crate::session_git_hooks::gate_mode;
 use crate::session_git_hooks::route::Routes;
 use crate::session_git_hooks::{render, write_dir, Rendering, BUILT_IN_HOOKS};
@@ -70,22 +70,23 @@ fn launch_route(port: u16, key: &str) -> Routes {
     }
 }
 
-/// [`gate_mode::inputs_for`] through `routes`, with the deadlines the gate has.
+/// [`gate_mode::answer_for`] through `routes`, with the deadlines the gate has.
 fn ask_through(
     routes: &Routes,
     session: &str,
     repo: &Path,
 ) -> Option<crate::revert_gate::GateInputs> {
-    gate_mode::inputs_for(routes, session, repo, None, gate_mode::DEADLINES)
+    gate_mode::answer_for(routes, session, repo, None, gate_mode::DEADLINES)
+        .and_then(|answer| answer.inputs)
 }
 
 /// `git <args>` run as session `a` in `dir`, whose dispatchers start the real gate-hook.
-fn real_gate(fixture: &Fixture, dir: &Path, args: &[&str]) -> Output {
+pub(super) fn real_gate(fixture: &Fixture, dir: &Path, args: &[&str]) -> Output {
     real_gate_command(fixture, dir, args).output().unwrap()
 }
 
 /// The command [`real_gate`] runs.
-fn real_gate_command(fixture: &Fixture, dir: &Path, args: &[&str]) -> Command {
+pub(super) fn real_gate_command(fixture: &Fixture, dir: &Path, args: &[&str]) -> Command {
     real_gate_command_under(fixture, dispatchers(), dir, args)
 }
 
@@ -112,6 +113,16 @@ fn ok(fixture: &Fixture, args: &[&str]) {
 }
 
 // -- what the daemon answers ---------------------------------------------------
+
+/// The gate's inputs the daemon answers session `session_id` with, `None` where the hook is to
+/// skip the gate.
+pub(super) fn inputs(
+    state: &crate::state::AppState,
+    session_id: &str,
+    request: &GateRequest,
+) -> Option<crate::revert_gate::GateInputs> {
+    answer(state, session_id, request).and_then(|answer| answer.inputs)
+}
 
 fn request(dir: &Path) -> GateRequest {
     GateRequest {
@@ -376,7 +387,7 @@ fn the_hook_side_takes_only_an_answer_as_a_reason_to_run_the_gate() {
 
 /// A stand-in for a holder that answers the one request it gets with `status`, and says nothing
 /// else. Returns its port.
-fn answering_with(status: u16) -> u16 {
+pub(super) fn answering_with(status: u16) -> u16 {
     use std::io::{Read, Write};
 
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -804,7 +815,7 @@ fn session_commit(fixture: &Fixture, name: &str, content: &str, message: &str) {
 /// A squash that changed the base: `feature` gets the content of the old `main` on a commit whose
 /// parent is the latest, so `main`'s own change is undone. Returns `main`'s tip before and the
 /// squash, with `main` checked out again.
-fn squash_with_changed_base(fixture: &Fixture) -> (String, String) {
+pub(super) fn squash_with_changed_base(fixture: &Fixture) -> (String, String) {
     let repo = fixture.repo.to_path_buf();
     ok(fixture, &["switch", "-q", "-c", "feature"]);
     fixture.deliver(1);

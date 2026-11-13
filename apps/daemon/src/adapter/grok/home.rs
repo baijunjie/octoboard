@@ -8,7 +8,7 @@ use serde_json::json;
 
 use super::HOOK_EVENTS;
 use crate::adapter::files::{canonical_project, LARGE_FILE_LIMIT};
-use crate::adapter::{LaunchSpec, COMMAND_HOOK_TIMEOUT_SECS};
+use crate::adapter::{add_guard_group, GuardHook, LaunchSpec, COMMAND_HOOK_TIMEOUT_SECS};
 use crate::platform::fs::{self as platform, create_private};
 use crate::providers::grok::{GROK_CONFIG_FILE, GROK_SIGN_IN_FILE, GROK_TRUST_STORE};
 use crate::session_tools;
@@ -183,7 +183,7 @@ pub(super) fn build_grok_home(spec: &LaunchSpec<'_>, source_home: &Path) -> Resu
     for name in SANDBOX_CHECKED_ENTRIES {
         copy_if_present(&source_home.join(name), &farm.join(name), file_links)?;
     }
-    write_hooks(&farm, spec.hook_script)?;
+    write_hooks(&farm, spec.hook_script, spec.guard.as_ref())?;
 
     // A login store the user's shell names already reaches Grok through the launch environment.
     if !file_links && !spec.shell_env.contains_key(LOGIN_STORE_VAR) {
@@ -387,10 +387,15 @@ pub(super) fn canonical_cwd(cwd: &Path) -> String {
     canonical_project(cwd).to_string_lossy().into_owned()
 }
 
+/// The tools the cross-project guard decides: the edit tools under Claude's names, which Grok
+/// maps to `search_replace`, and under its own and the Cursor preset's.
+const GUARD_MATCHER: &str =
+    "Edit|Write|MultiEdit|NotebookEdit|search_replace|write|hashline_edit|StrReplace|EditNotebook";
+
 /// Writes Octoboard's hooks into the farm. Hooks placed in `$GROK_HOME/hooks/*.json` load at
 /// `global` scope, which is always trusted — the folder-trust requirement applies to the project's
 /// own `<project>/.grok/hooks`, not to these.
-fn write_hooks(farm: &Path, hook_script: &Path) -> Result<()> {
+fn write_hooks(farm: &Path, hook_script: &Path, guard: Option<&GuardHook<'_>>) -> Result<()> {
     let hooks_dir = farm.join("hooks");
     std::fs::create_dir_all(&hooks_dir)?;
     let command = hook_script.to_string_lossy().into_owned();
@@ -406,6 +411,11 @@ fn write_hooks(farm: &Path, hook_script: &Path) -> Result<()> {
                 }]
             }]),
         );
+    }
+    // The cross-project guard decides an edit before it runs, so it is a group of its own beside
+    // the status hook, and without `failClosed`: a guard that cannot decide stays silent.
+    if let Some(guard) = guard {
+        add_guard_group(&mut hooks, GUARD_MATCHER, &guard.script.to_string_lossy());
     }
     let document = json!({ "hooks": hooks });
     std::fs::write(

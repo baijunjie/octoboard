@@ -68,17 +68,27 @@ fn a_document_without_exported_by_is_read_with_none() {
 /// absent; the git workflow, once present, is whole.
 #[test]
 fn an_absent_setting_is_read_as_not_carried_but_a_partial_git_workflow_is_refused() {
-    let complete = with_settings(document(vec![console("Hub", Vec::new())]), true, false);
-    parse(&complete).expect("a complete settings region is read");
+    let mut complete = with_settings(document(vec![console("Hub", Vec::new())]), true, false);
+    complete["settings"]["keep_sessions_in_own_project"] = json!(true);
+    let read = parse(&complete).expect("a complete settings region is read");
+    assert_eq!(
+        read.settings.unwrap().keep_sessions_in_own_project,
+        Some(true)
+    );
 
-    for key in ["git_workflow", "ask_questions_as_choices"] {
+    for key in [
+        "git_workflow",
+        "ask_questions_as_choices",
+        "keep_sessions_in_own_project",
+    ] {
         let mut value = complete.clone();
         value["settings"].as_object_mut().unwrap().remove(key);
         let parsed = parse(&value).expect(key);
         let settings = parsed.settings.unwrap();
         match key {
             "git_workflow" => assert!(settings.git_workflow.is_none()),
-            _ => assert!(settings.ask_questions_as_choices.is_none()),
+            "ask_questions_as_choices" => assert!(settings.ask_questions_as_choices.is_none()),
+            _ => assert!(settings.keep_sessions_in_own_project.is_none()),
         }
     }
     let mut value = complete;

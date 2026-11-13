@@ -33,7 +33,7 @@ const SECTION_NOTE: Record<SettingsSection, PlainMessageKey> = {
   general: "configuration.export.general.description",
   app_behavior: "configuration.export.appBehavior.description",
   git: "configuration.export.git.description",
-  agent_behavior: "configuration.export.agentBehavior.description",
+  agent_behavior: "configuration.export.agentBehavior.projectScope.description",
   keyboard_shortcuts: "configuration.export.shortcuts.description",
   cleanup: "configuration.export.cleanup.description",
 };

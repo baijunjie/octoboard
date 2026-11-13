@@ -226,7 +226,7 @@ holds, where each is shown and what each does are in `docs/product/app-behavior-
 ## Agent behavior
 
 What a session may do without asking the user first, and how it asks the user: four switches that approve a session's
-requests automatically, then **Ask questions as choices**. The section and its rows are in
+requests automatically, then **Ask questions as choices** and **Keep sessions to their own project**. The section and its rows are in
 `docs/product/agent-behavior-settings.md`.
 
 ## Agent accounts

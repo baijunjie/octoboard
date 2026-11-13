@@ -1750,7 +1750,7 @@ export const hi: Translation<"one" | "other"> = {
   "configuration.export.appBehavior.description": "इसमें शुरू होने पर सेशन फिर से शुरू करना, बैकग्राउंड में चलते रहना, {menuBarIcon}, स्लीप रोकना और निष्क्रिय टर्मिनल बंद करना शामिल हैं।",
   "configuration.export.appBehavior.description.basic": "इसमें शुरू होने पर सेशन फिर से शुरू करना, स्लीप रोकना और निष्क्रिय टर्मिनल बंद करना शामिल हैं।",
   "configuration.export.git.description": "इसमें डिफ़ॉल्ट क्लोन डायरेक्टरी, रिपॉज़िटरी को अपने आप पुल करना और Git वर्कफ़्लो शामिल हैं।",
-  "configuration.export.agentBehavior.description": "इसमें यह शामिल है कि कौन से अनुरोध अपने आप मंज़ूर होते हैं और सवाल विकल्पों के रूप में पूछे जाते हैं या नहीं।",
+  "configuration.export.agentBehavior.projectScope.description": "इसमें यह शामिल है कि कौन से अनुरोध अपने आप मंज़ूर होते हैं, सवाल विकल्पों के रूप में पूछे जाते हैं या नहीं, और सेशन अपने प्रोजेक्ट तक सीमित रहते हैं या नहीं।",
   "configuration.export.shortcuts.description": "इसमें आपके बदले हुए कीबोर्ड शॉर्टकट शामिल हैं।",
   "configuration.export.cleanup.description": "इसमें उन आर्काइव किए सेशन को डिलीट करना शामिल है जिनकी बातचीत मिट गई है।",
   "configuration.export.accounts.include": "एजेंट अकाउंट शामिल करें",
@@ -1858,6 +1858,7 @@ export const hi: Translation<"one" | "other"> = {
   "configuration.import.settings.consequence.autoApproveAccountSwitches": "इसके बाद अपने किसी सेशन का अकाउंट बदलने का अनुरोध आपसे पूछे बिना मंज़ूर होता है।",
   "configuration.import.settings.consequence.autoApproveHandoffs": "इसके बाद अपने किसी सेशन का काम दूसरे एजेंट को सौंपने का अनुरोध आपसे पूछे बिना मंज़ूर होता है।",
   "configuration.import.settings.consequence.askQuestionsAsChoices": "इसके बाद शुरू हुए सेशन से फैसले चुनने योग्य विकल्पों में देने को कहा जाता है।",
+  "configuration.import.settings.consequence.keepSessionsInOwnProject": "किसी दूसरे प्रोजेक्ट में बदलाव या कमिट करने वाले प्रोजेक्ट सेशन को रोक दिया जाता है और उससे कहा जाता है कि वह काम उस प्रोजेक्ट के किसी सेशन को दे दे। बदलावों की जाँच इसके बाद शुरू हुए सेशन में होती है।",
   "configuration.import.settings.consequence.shortcuts": { "one": "फ़ाइल का {count} शॉर्टकट डिफ़ॉल्ट से अलग है। ये सिर्फ़ इस डिवाइस या ब्राउज़र पर लागू होते हैं।", "other": "फ़ाइल के {count} शॉर्टकट डिफ़ॉल्ट से अलग हैं। ये सिर्फ़ इस डिवाइस या ब्राउज़र पर लागू होते हैं।" },
   "configuration.import.settings.consequence.shortcutCount": { "one": "फ़ाइल का {count} शॉर्टकट डिफ़ॉल्ट से अलग है।", "other": "फ़ाइल के {count} शॉर्टकट डिफ़ॉल्ट से अलग हैं।" },
   "configuration.import.settings.consequence.shortcutsReset": "ये सिर्फ़ इस डिवाइस या ब्राउज़र पर लागू होते हैं।",
@@ -2064,6 +2065,11 @@ export const hi: Translation<"one" | "other"> = {
   "settings.askQuestionsAsChoices.label": "सवाल विकल्पों के रूप में पूछें",
   "settings.askQuestionsAsChoices.description.off": "चालू होने पर सेशन से कहा जाता है कि फैसले अपने जवाब में सूची की तरह लिखने के बजाय आपके चुनने योग्य विकल्पों में दें। बदलाव इसके बाद शुरू हुए सेशन पर लागू होता है।",
   "settings.askQuestionsAsChoices.description.on": "सेशन से कहा जाता है कि फैसले अपने जवाब में सूची की तरह लिखने के बजाय आपके चुनने योग्य विकल्पों में दें। बदलाव इसके बाद शुरू हुए सेशन पर लागू होता है।",
+  "settings.keepSessionsInOwnProject.label": "सेशन को उनके अपने प्रोजेक्ट तक सीमित रखें",
+  "settings.keepSessionsInOwnProject.description.off":
+    "चालू करने पर, किसी दूसरे प्रोजेक्ट में बदलाव या कमिट करने वाले प्रोजेक्ट सेशन को रोक दिया जाता है और उससे कहा जाता है कि वह काम उस प्रोजेक्ट के किसी सेशन को दे दे।",
+  "settings.keepSessionsInOwnProject.description.on":
+    "किसी दूसरे प्रोजेक्ट में बदलाव या कमिट करने वाले प्रोजेक्ट सेशन को रोक दिया जाता है और उससे कहा जाता है कि वह काम उस प्रोजेक्ट के किसी सेशन को दे दे। बदलावों की जाँच इसके बाद शुरू हुए सेशन में होती है।",
   "settings.autoSelect.label": "अकाउंट अपने आप चुनें",
   "settings.autoSelect.description.off": "चालू होने पर नया सेशन उस अकाउंट को इस्तेमाल करता है जिसकी साप्ताहिक सीमा सबसे पहले रीसेट होगी, ताकि रीसेट से पहले बचा इस्तेमाल बेकार न जाए।",
   "settings.autoSelect.description.on": "नया सेशन उस अकाउंट को इस्तेमाल करता है जिसकी साप्ताहिक सीमा सबसे पहले रीसेट होगी, ताकि रीसेट से पहले बचा इस्तेमाल बेकार न जाए।",

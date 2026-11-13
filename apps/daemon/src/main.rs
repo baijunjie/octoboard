@@ -13,6 +13,7 @@ mod browse;
 mod cli;
 mod config_document;
 mod coordinator;
+mod cross_project_guard;
 mod env_shell;
 mod git;
 mod git_workflow;

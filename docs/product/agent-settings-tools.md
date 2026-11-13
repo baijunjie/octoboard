@@ -63,7 +63,9 @@ that rule. What is the user's alone is never changed through these tools, by any
   account's quota without asking;
 - reading or changing whether sessions are asked to put their questions as choices (see "Ask questions as choices" in
   `docs/product/agent-behavior-settings.md`), since that shapes what sessions are told, and a session could otherwise switch off the
-  rule it is given.
+  rule it is given;
+- reading or changing whether sessions are kept to their own project (see "Keep sessions to their own project" in
+  `docs/product/agent-behavior-settings.md`), since a session could otherwise switch off the check that stops it.
 
 Each of those stays the user's own, in the UI. A project's directory, source, host and remote URL are not settings of
 either kind: they are chosen when the project is associated, by the user or by `add_project`, and nobody, the user
@@ -248,8 +250,8 @@ Settings does, and every open window switches to it.
 keep their values while it is); an item left out, or given as `null`, stays as it is. A refused value leaves the others
 unapplied too. An `auto_approve_session_requests`, `auto_approve_resume_requests`, `auto_approve_account_switches`,
 `auto_approve_handoffs`, `auto_start_quota_windows`, `auto_switch_on_usage_limit`, `ask_questions_as_choices`,
-`auto_select_account`, `provider_settings` or `agent_tags` argument is ignored, whatever its value — the setting stays
-as it is and the rest of the call applies as usual; `get_settings` lists only the last three, read-only. Turning
+`keep_sessions_in_own_project`, `auto_select_account`, `provider_settings` or `agent_tags` argument is ignored,
+whatever its value — the setting stays as it is and the rest of the call applies as usual; `get_settings` lists only the last three, read-only. Turning
 `auto_pull_repositories` on fast-forwards the projects already known to be behind at once, as turning the switch on in
 Settings does, which changes files in the user's repositories. Turning `auto_delete_unresumable_archives` on deletes
 nothing at once, and turning it off stops a deletion pass under way, exactly as the switch in Settings does. The call

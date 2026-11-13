@@ -1751,7 +1751,7 @@ export const ar: Translation<"zero" | "one" | "two" | "few" | "many" | "other"> 
   "configuration.export.appBehavior.description": "تتضمن استئناف الجلسات عند البدء ومواصلة العمل في الخلفية و{menuBarIcon} ومنع السكون وإغلاق الطرفيات الخاملة.",
   "configuration.export.appBehavior.description.basic": "تتضمن استئناف الجلسات عند البدء ومنع السكون وإغلاق الطرفيات الخاملة.",
   "configuration.export.git.description": "تتضمن مجلد الاستنساخ الافتراضي وسحب المستودعات تلقائياً وسير عمل Git.",
-  "configuration.export.agentBehavior.description": "تتضمن الطلبات التي تُوافَق عليها تلقائياً وطرح الأسئلة كخيارات.",
+  "configuration.export.agentBehavior.projectScope.description": "تتضمن الطلبات التي تُوافَق عليها تلقائياً وطرح الأسئلة كخيارات وإبقاء الجلسات ضمن مشاريعها.",
   "configuration.export.shortcuts.description": "تتضمن اختصارات لوحة المفاتيح التي غيّرتها.",
   "configuration.export.cleanup.description": "تتضمن حذف الجلسات المؤرشفة التي فُقدت محادثاتها.",
   "configuration.export.accounts.include": "تضمين حسابات الوكلاء",
@@ -1859,6 +1859,7 @@ export const ar: Translation<"zero" | "one" | "two" | "few" | "many" | "other"> 
   "configuration.import.settings.consequence.autoApproveAccountSwitches": "سيُوافق على طلب الجلسة تبديل حساب إحدى جلساتها دون سؤالك أولاً.",
   "configuration.import.settings.consequence.autoApproveHandoffs": "سيُوافق على طلب الجلسة تسليم إحدى جلساتها إلى وكيل آخر دون سؤالك أولاً.",
   "configuration.import.settings.consequence.askQuestionsAsChoices": "سيُطلب من الجلسات التي تبدأ لاحقاً صياغة القرارات كخيارات يمكنك تحديدها.",
+  "configuration.import.settings.consequence.keepSessionsInOwnProject": "تُوقَف جلسة المشروع التي تعدّل أو تُجري إيداعاً في مشروع آخر، ويُطلب منها إحالة العمل إلى جلسة من ذلك المشروع. يُفحص التعديل في الجلسات التي تبدأ بعد ذلك.",
   "configuration.import.settings.consequence.shortcuts": { "zero": "تختلف اختصارات الملف عن القيم الافتراضية (عددها {count}). تنطبق على هذا الجهاز أو المتصفح فقط.", "one": "يختلف اختصار الملف عن القيمة الافتراضية (عدده {count}). ينطبق على هذا الجهاز أو المتصفح فقط.", "two": "تختلف اختصارات الملف عن القيم الافتراضية (عددها {count}). تنطبق على هذا الجهاز أو المتصفح فقط.", "few": "تختلف اختصارات الملف عن القيم الافتراضية (عددها {count}). تنطبق على هذا الجهاز أو المتصفح فقط.", "many": "تختلف اختصارات الملف عن القيم الافتراضية (عددها {count}). تنطبق على هذا الجهاز أو المتصفح فقط.", "other": "تختلف اختصارات الملف عن القيم الافتراضية (عددها {count}). تنطبق على هذا الجهاز أو المتصفح فقط." },
   "configuration.import.settings.consequence.shortcutCount": { "zero": "تختلف اختصارات الملف عن القيم الافتراضية (عددها {count}).", "one": "يختلف اختصار الملف عن القيمة الافتراضية (عدده {count}).", "two": "تختلف اختصارات الملف عن القيم الافتراضية (عددها {count}).", "few": "تختلف اختصارات الملف عن القيم الافتراضية (عددها {count}).", "many": "تختلف اختصارات الملف عن القيم الافتراضية (عددها {count}).", "other": "تختلف اختصارات الملف عن القيم الافتراضية (عددها {count})." },
   "configuration.import.settings.consequence.shortcutsReset": "تنطبق على هذا الجهاز أو المتصفح فقط.",
@@ -2065,6 +2066,11 @@ export const ar: Translation<"zero" | "one" | "two" | "few" | "many" | "other"> 
   "settings.askQuestionsAsChoices.label": "طرح الأسئلة كخيارات",
   "settings.askQuestionsAsChoices.description.off": "عند تفعيله، يُطلب من الجلسات صياغة القرارات كخيارات يمكنك تحديدها، بدلاً من سردها في الردود. ينطبق التغيير على الجلسات التي تبدأ لاحقاً.",
   "settings.askQuestionsAsChoices.description.on": "يُطلب من الجلسات صياغة القرارات كخيارات يمكنك تحديدها، بدلاً من سردها في الردود. ينطبق التغيير على الجلسات التي تبدأ لاحقاً.",
+  "settings.keepSessionsInOwnProject.label": "إبقاء الجلسات ضمن مشروعها",
+  "settings.keepSessionsInOwnProject.description.off":
+    "عند تفعيله، تُوقَف جلسة المشروع التي تعدّل أو تُجري إيداعاً في مشروع آخر، ويُطلب منها إحالة العمل إلى جلسة من ذلك المشروع.",
+  "settings.keepSessionsInOwnProject.description.on":
+    "تُوقَف جلسة المشروع التي تعدّل أو تُجري إيداعاً في مشروع آخر، ويُطلب منها إحالة العمل إلى جلسة من ذلك المشروع. يُفحص التعديل في الجلسات التي تبدأ بعد ذلك.",
   "settings.autoSelect.label": "اختيار حساب تلقائياً",
   "settings.autoSelect.description.off": "عند تفعيله، تستخدم الجلسة الجديدة الحساب الذي يُعاد تعيين حده الأسبوعي أقرب من غيره، حتى لا يضيع الاستخدام المتبقي قبل إعادة التعيين.",
   "settings.autoSelect.description.on": "تستخدم الجلسة الجديدة الحساب الذي يُعاد تعيين حده الأسبوعي أقرب من غيره، حتى لا يضيع الاستخدام المتبقي قبل إعادة التعيين.",

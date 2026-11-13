@@ -52,6 +52,8 @@ pub struct PrivateServerPlan {
     pub task: Option<String>,
     /// The hook command the launch generated, whose trust a resume grants by its fingerprint.
     pub hook_command: String,
+    /// The cross-project guard's hook command, trusted on a resume the same way.
+    pub guard_command: Option<String>,
     pub resume_thread: Option<String>,
     /// Applied to the resumed thread before the terminal connects; `None` leaves its saved choice.
     pub resume_permissions: Option<ResumePermissions>,
@@ -65,6 +67,7 @@ impl PrivateServerPlan {
         cwd: &Path,
         task: Option<&str>,
         hook_command: String,
+        guard_command: Option<String>,
         resume_thread: Option<&str>,
         resume_permissions: Option<ResumePermissions>,
     ) -> Self {
@@ -84,6 +87,7 @@ impl PrivateServerPlan {
             tui_args,
             task: task.map(str::to_string),
             hook_command,
+            guard_command,
             resume_thread: resume_thread.map(str::to_string),
             resume_permissions: resume_thread.and(resume_permissions),
         }
@@ -249,6 +253,7 @@ mod tests {
             "hook".into(),
             None,
             None,
+            None,
         );
         assert_eq!(
             plan.tui_args,
@@ -284,6 +289,7 @@ mod tests {
             Path::new("/work"),
             None,
             "hook".into(),
+            None,
             Some("thread-1"),
             Some(preset),
         );
@@ -307,6 +313,7 @@ mod tests {
             Path::new("/work"),
             None,
             "hook".into(),
+            None,
             None,
             Some(preset),
         );

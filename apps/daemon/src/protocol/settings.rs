@@ -73,6 +73,13 @@ pub struct Settings {
     /// (a console session's file is rewritten at each launch, so it follows at the next one). Only
     /// the user's own client changes it.
     pub ask_questions_as_choices: bool,
+    /// Whether a project session is kept to its own project: its git is refused a ref update in
+    /// the repository of another registered project, and its file-edit tools are refused a path
+    /// in one. Off unless the user turned it on. The git check reads it at every ref update, so a
+    /// change reaches running sessions at once; the edit check keeps the value a session was
+    /// launched with, so a change reaches it only in sessions launched afterwards. Only the
+    /// user's own client changes it.
+    pub keep_sessions_in_own_project: bool,
     /// The tag of the interface language, one of the tags the interface offers; `null` until a
     /// client reports one. It is the one language every client shows (each keeps a copy only to
     /// render in before it has connected) and the one sessions are told to reply in, so a change
@@ -167,6 +174,7 @@ impl Default for Settings {
             auto_approve_account_switches: false,
             auto_approve_handoffs: false,
             ask_questions_as_choices: true,
+            keep_sessions_in_own_project: false,
             interface_language: None,
             keep_awake: false,
             keep_awake_when: KeepAwakeWhen::Working,

@@ -1928,7 +1928,7 @@ export const zhHans: Translation<"other"> = {
   "configuration.export.appBehavior.description": "包含启动时恢复会话、在后台运行、{menuBarIcon}、阻止睡眠和关闭闲置终端。",
   "configuration.export.appBehavior.description.basic": "包含启动时恢复会话、阻止睡眠和关闭闲置终端。",
   "configuration.export.git.description": "包含默认克隆目录、自动拉取仓库和 Git 工作流。",
-  "configuration.export.agentBehavior.description": "包含自动批准哪些请求，以及是否以选项形式提问。",
+  "configuration.export.agentBehavior.projectScope.description": "包含自动批准哪些请求、是否以选项形式提问，以及会话是否只改自己的项目。",
   "configuration.export.shortcuts.description": "包含你修改过的键盘快捷键。",
   "configuration.export.cleanup.description": "包含删除对话已丢失的已归档会话。",
   "configuration.export.accounts.include": "包含智能体账户",
@@ -2044,6 +2044,7 @@ export const zhHans: Translation<"other"> = {
   "configuration.import.settings.consequence.autoApproveAccountSwitches": "之后会话请求切换其名下某个会话的账户时，将直接获批，不再先询问你。",
   "configuration.import.settings.consequence.autoApproveHandoffs": "之后会话请求将其名下某个会话移交给另一个智能体时，将直接获批，不再先询问你。",
   "configuration.import.settings.consequence.askQuestionsAsChoices": "会要求之后启动的会话在需要你决定时提供可点选的选项。",
+  "configuration.import.settings.consequence.keepSessionsInOwnProject": "项目会话在其他项目里修改或提交时会被拦下，并被要求把工作交给那个项目的会话。修改的检查对之后启动的会话生效。",
   "configuration.import.settings.consequence.shortcuts": {
     other: "文件中有 {count} 项快捷键与默认值不同。仅对此设备或浏览器生效。",
   },
@@ -2278,6 +2279,11 @@ export const zhHans: Translation<"other"> = {
     "开启后，会要求会话在需要你决定时提供可点选的选项，而非在回复中罗列选项。更改对之后启动的会话生效。",
   "settings.askQuestionsAsChoices.description.on":
     "会要求会话在需要你决定时提供可点选的选项，而非在回复中罗列选项。更改对之后启动的会话生效。",
+  "settings.keepSessionsInOwnProject.label": "会话只改自己的项目",
+  "settings.keepSessionsInOwnProject.description.off":
+    "打开后，项目会话在其他项目里修改或提交时会被拦下，并被要求把工作交给那个项目的会话。",
+  "settings.keepSessionsInOwnProject.description.on":
+    "项目会话在其他项目里修改或提交时会被拦下，并被要求把工作交给那个项目的会话。修改的检查对之后启动的会话生效。",
   "settings.autoSelect.label": "自动选择账户",
   "settings.autoSelect.description.off":
     "开启后，新建会话会使用每周限制最快重置的账户，以免重置前剩余的用量被浪费。",

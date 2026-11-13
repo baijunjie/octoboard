@@ -794,6 +794,9 @@ pub enum RequestBody {
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]
         ask_questions_as_choices: Option<bool>,
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        keep_sessions_in_own_project: Option<bool>,
         /// A tag the interface offers (`interface_language::display_name` knows it); any other
         /// is refused.
         #[serde(default)]

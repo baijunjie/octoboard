@@ -288,6 +288,77 @@ fn injects_one_hook_override_per_event_and_gets_past_the_trust_gate() {
         .any(|arg| arg == "--dangerously-bypass-hook-trust"));
 }
 
+/// The value of the `hooks.<event>` override of `args`, as the groups it lists.
+fn hook_groups(args: &[String], event: &str) -> Vec<toml::Value> {
+    let prefix = format!("hooks.{event}=");
+    let value = overrides(args)
+        .into_iter()
+        .find_map(|override_| override_.strip_prefix(&prefix).map(str::to_string))
+        .unwrap_or_else(|| panic!("no override for {event}"));
+    let table: toml::Table = format!("groups={value}").parse().expect("TOML");
+    table["groups"].as_array().expect("an array").clone()
+}
+
+/// The cross-project guard is a synchronous group of its own beside the asynchronous status hook of
+/// `PreToolUse`, matching `apply_patch`; a launch without one carries neither, and the private
+/// server's plan keeps the command for a resume to trust.
+#[test]
+fn the_cross_project_guard_is_a_synchronous_apply_patch_group_beside_the_status_hook() {
+    let mut fixture = spec_fixture();
+    // A release that runs a private server, whose plan a resume trusts hooks by.
+    fixture.agent_version = Some((0, 166, 0));
+    let list = fixture.scratch.join("cross-project-guard.json");
+    let script = fixture.scratch.join("guard-hook");
+    let guard = crate::adapter::GuardHook {
+        exe: "/opt/octoboard/install/octoboardd",
+        list: &list,
+        script: &script,
+    };
+    let mut spec = fixture.spec();
+    spec.guard = Some(guard);
+
+    let plan = CodexProvider.plan(&spec).expect("plan");
+
+    let groups = hook_groups(&plan.args, "PreToolUse");
+    assert_eq!(groups.len(), 2, "{groups:?}");
+    let status = &groups[0]["hooks"][0];
+    assert_eq!(status["async"].as_bool(), Some(true));
+    assert!(groups[0].get("matcher").is_none());
+    assert_eq!(groups[1]["matcher"].as_str(), Some("apply_patch"));
+    let handler = &groups[1]["hooks"][0];
+    assert_eq!(handler["type"].as_str(), Some("command"));
+    assert!(handler.get("async").is_none(), "synchronous: {handler}");
+    assert_eq!(
+        handler["timeout"].as_integer(),
+        Some(i64::from(crate::adapter::GUARD_HOOK_TIMEOUT_SECS))
+    );
+    assert_eq!(handler["timeout"].as_integer(), Some(10));
+    // The command is the per-session script, as the status hook's is, in the host's hook dialect.
+    let command = handler["command"].as_str().expect("a command");
+    assert_eq!(
+        command,
+        crate::platform::shell::script_command(&script, crate::platform::shell::hook_dialect())
+    );
+    assert!(!command.contains("guard-hook --list"), "{command}");
+    for event in HOOK_EVENTS.iter().filter(|event| **event != "PreToolUse") {
+        let groups = hook_groups(&plan.args, event);
+        assert_eq!(groups.len(), 1, "{event}");
+        assert!(!groups[0].to_string().contains("guard-hook"), "{event}");
+    }
+    assert_eq!(
+        private_plan(&plan).guard_command.as_deref(),
+        Some(command),
+        "a resume trusts the guard's command too"
+    );
+
+    spec.guard = None;
+    let plain = CodexProvider.plan(&spec).expect("plan");
+    assert_eq!(hook_groups(&plain.args, "PreToolUse").len(), 1);
+    assert!(!plain.args.join(" ").contains("guard-hook"));
+    assert!(!plain.args.join(" ").contains("apply_patch"));
+    assert_eq!(private_plan(&plain).guard_command, None);
+}
+
 #[test]
 fn a_resume_names_the_subcommand_first_and_still_re_injects() {
     let fixture = spec_fixture();

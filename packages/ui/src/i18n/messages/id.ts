@@ -1751,7 +1751,7 @@ export const id: Translation<"other"> = {
   "configuration.export.appBehavior.description": "Mencakup melanjutkan sesi saat dimulai, berjalan di latar belakang, {menuBarIcon}, mencegah tidur, dan menutup terminal yang tidak aktif.",
   "configuration.export.appBehavior.description.basic": "Mencakup melanjutkan sesi saat dimulai, mencegah tidur, dan menutup terminal yang tidak aktif.",
   "configuration.export.git.description": "Mencakup direktori klon default, pull repositori secara otomatis, dan alur kerja Git.",
-  "configuration.export.agentBehavior.description": "Mencakup permintaan yang disetujui otomatis dan pertanyaan yang diajukan sebagai pilihan.",
+  "configuration.export.agentBehavior.projectScope.description": "Mencakup permintaan yang disetujui otomatis, pertanyaan yang diajukan sebagai pilihan, dan pembatasan sesi pada proyeknya sendiri.",
   "configuration.export.shortcuts.description": "Mencakup pintasan keyboard yang Anda ubah.",
   "configuration.export.cleanup.description": "Mencakup penghapusan sesi yang diarsipkan jika percakapannya hilang.",
   "configuration.export.accounts.include": "Sertakan akun agen",
@@ -1859,6 +1859,7 @@ export const id: Translation<"other"> = {
   "configuration.import.settings.consequence.autoApproveAccountSwitches": "Permintaan sesi untuk mengalihkan akun salah satu sesinya kemudian disetujui tanpa bertanya terlebih dahulu.",
   "configuration.import.settings.consequence.autoApproveHandoffs": "Permintaan sesi untuk menyerahkan salah satu sesinya ke agen lain kemudian disetujui tanpa bertanya terlebih dahulu.",
   "configuration.import.settings.consequence.askQuestionsAsChoices": "Sesi yang dimulai setelahnya diminta menyajikan keputusan sebagai opsi yang dapat Anda pilih.",
+  "configuration.import.settings.consequence.keepSessionsInOwnProject": "Sesi proyek yang mengedit atau melakukan commit di proyek lain akan dihentikan dan diminta memberikan pekerjaan kepada salah satu sesi di proyek tersebut. Pengeditan diperiksa pada sesi yang dimulai setelahnya.",
   "configuration.import.settings.consequence.shortcuts": { "other": "{count} pintasan dalam file berbeda dari default. Pintasan hanya berlaku untuk perangkat atau browser ini." },
   "configuration.import.settings.consequence.shortcutCount": { "other": "{count} pintasan dalam file berbeda dari default." },
   "configuration.import.settings.consequence.shortcutsReset": "Pintasan hanya berlaku untuk perangkat atau browser ini.",
@@ -2065,6 +2066,11 @@ export const id: Translation<"other"> = {
   "settings.askQuestionsAsChoices.label": "Ajukan pertanyaan sebagai pilihan",
   "settings.askQuestionsAsChoices.description.off": "Jika diaktifkan, sesi diminta menyajikan keputusan sebagai opsi yang dapat Anda pilih, alih-alih mencantumkannya dalam balasan. Perubahan berlaku untuk sesi yang dimulai setelahnya.",
   "settings.askQuestionsAsChoices.description.on": "Sesi diminta menyajikan keputusan sebagai opsi yang dapat Anda pilih, alih-alih mencantumkannya dalam balasan. Perubahan berlaku untuk sesi yang dimulai setelahnya.",
+  "settings.keepSessionsInOwnProject.label": "Batasi sesi pada proyeknya sendiri",
+  "settings.keepSessionsInOwnProject.description.off":
+    "Jika diaktifkan, sesi proyek yang mengedit atau melakukan commit di proyek lain akan dihentikan dan diminta memberikan pekerjaan kepada salah satu sesi di proyek tersebut.",
+  "settings.keepSessionsInOwnProject.description.on":
+    "Sesi proyek yang mengedit atau melakukan commit di proyek lain akan dihentikan dan diminta memberikan pekerjaan kepada salah satu sesi di proyek tersebut. Pengeditan diperiksa pada sesi yang dimulai setelahnya.",
   "settings.autoSelect.label": "Pilih akun secara otomatis",
   "settings.autoSelect.description.off": "Jika diaktifkan, sesi baru menggunakan akun yang batas mingguannya direset paling cepat, sehingga sisa penggunaan sebelum reset tidak terbuang.",
   "settings.autoSelect.description.on": "Sesi baru menggunakan akun yang batas mingguannya direset paling cepat, sehingga sisa penggunaan sebelum reset tidak terbuang.",

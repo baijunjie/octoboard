@@ -49,12 +49,13 @@ mod hooks;
 #[cfg(test)]
 mod test_provider;
 
+pub(crate) use account_cli::snapshot_home;
 pub use account_cli::{
     account_command_of, account_dir, default_account_dir, resolve_account_binary, Unstartable,
 };
 pub use hooks::{
-    hook_command, hook_script_path, hook_url, write_hook_script, COMMAND_HOOK_TIMEOUT_SECS,
-    HTTP_HOOK_TIMEOUT_SECS,
+    add_guard_group, guard_command, hook_command, hook_script_path, hook_url, write_guard_script,
+    write_hook_script, COMMAND_HOOK_TIMEOUT_SECS, GUARD_HOOK_TIMEOUT_SECS, HTTP_HOOK_TIMEOUT_SECS,
 };
 
 use std::collections::{BTreeMap, HashMap};
@@ -165,6 +166,20 @@ pub struct LaunchSpec<'a> {
     pub key_file: &'a Path,
     /// The token that session's MCP server authenticates to the daemon with.
     pub mcp_token: &'a str,
+    /// The cross-project guard to inject, which the launch wrote the list of; absent for a
+    /// console session and while the setting that keeps sessions to their own project is off.
+    pub guard: Option<GuardHook<'a>>,
+}
+
+/// What a guard's hook command is built from: the installation's entry point, which an update
+/// replaces in place, the list in the session's scratch directory it decides from (see
+/// `crate::cross_project_guard`), and the per-session script that runs it for an agent that
+/// registers a hook by its path.
+#[derive(Clone, Copy)]
+pub struct GuardHook<'a> {
+    pub exe: &'a str,
+    pub list: &'a Path,
+    pub script: &'a Path,
 }
 
 impl LaunchSpec<'_> {
@@ -784,6 +799,7 @@ pub mod tests {
                 daemon_port: 4321,
                 daemon_key: "feedface",
                 mcp_token: &self.mcp_token,
+                guard: None,
             }
         }
     }
