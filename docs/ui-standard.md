@@ -2271,12 +2271,13 @@ HeroUI's 24px, 14px and 8px, which stood out of the 14px text around them. Only 
 stay. Lines holding them are 24px tall, so a wrapped line of caps never touches the next. Key caps on a row of their
 own, as in Settings and menus, keep HeroUI's size.
 
-In Settings > Keyboard shortcuts a changeable shortcut's key caps are themselves its edit button, by the user's
-decision (`packages/ui/src/settings/ShortcutsSection.tsx`). The button is HeroUI's ghost variant with its hover and
-pressed fills made transparent and no padding, so no box is drawn around the caps; hover and press darken the caps
-instead (`--default-hover`, the text taking the foreground colour), and keyboard focus keeps HeroUI's ring around them.
-While recording, the button holds the prompt and an X in muted text, with no hover fill. Each row ends in a fixed
-24px slot holding an icon-only Reset, a lock for a key that cannot be changed, or nothing, so the caps line up.
+In Settings > Keyboard shortcuts a changeable shortcut's key caps are themselves its edit button, by the user's decision
+(`packages/ui/src/settings/ShortcutsSection.tsx`). The button is HeroUI's ghost variant with its hover and pressed fills
+made transparent and no padding, so no box is drawn around the caps; hover and press darken the caps instead
+(`--default-hover`, the text taking the foreground colour), and keyboard focus keeps HeroUI's ring around them. While
+recording, the button holds the prompt and an X in muted text, which takes the foreground colour on hover and press,
+again with no fill. Each row ends in a fixed 24px slot holding an icon-only Reset, a lock for a key that cannot be
+changed, or nothing, so the caps line up.
 
 ### Form controls on a surface
 

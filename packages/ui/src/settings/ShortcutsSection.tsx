@@ -231,7 +231,8 @@ function ShortcutRow({
                 size="sm"
                 variant="ghost"
                 // An approved departure from HeroUI (`docs/ui-standard.md`, "Do not change how a HeroUI component looks"): the ghost button
-                // draws no fill of its own, so only the key caps show; hover and press darken the caps themselves.
+                // draws no fill of its own, so only the key caps show; hover and press darken the caps themselves, or the recording
+                // prompt's text.
                 className="h-auto min-h-6 min-w-0 justify-self-end rounded-md p-0 whitespace-normal [--button-bg-hover:transparent] [--button-bg-pressed:transparent]"
                 // While recording, the visible prompt leads the accessible name, followed by what pressing does.
                 label={recording ? undefined : actionLabel}
@@ -242,7 +243,7 @@ function ShortcutRow({
                 onPress={() => (recording ? onCancel() : onRecord(id))}
               >
                 {recording ? (
-                  <span className="flex items-center gap-2 px-1.5 text-end text-sm text-app-muted">
+                  <span className="flex items-center gap-2 px-1.5 text-end text-sm text-app-muted transition-colors motion-reduce:transition-none in-ui-hovered:text-foreground in-ui-pressed:text-foreground">
                     <span id={promptId}>{t("settings.shortcuts.recording")}</span>
                     <span id={cancelId} className="sr-only">{actionLabel}</span>
                     <X aria-hidden="true" className="size-3.5 shrink-0" />

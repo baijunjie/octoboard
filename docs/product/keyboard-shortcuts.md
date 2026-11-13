@@ -144,11 +144,11 @@ A group's heading stays pinned at the top of the section's area while the group'
 ### Changing a shortcut
 
 Pressing a row's key caps — with the pointer, or with Enter or Space while they have keyboard focus — starts recording
-on that row: within the same button the key caps give way to a line asking for the new keys, followed by an X icon, and
-the row's Reset goes away until the recording ends. Pressing the button again cancels the recording; there is no
-separate Cancel button. While recording, the button's name is that line followed by the wording that pressing cancels
-changing the shortcut for the command, and its tooltip says the latter. One row records at a time; starting another
-row's recording ends the first.
+on that row: within the same button the key caps give way to a line asking for the new keys, followed by an X icon, both
+taking the foreground colour under the pointer and while pressed, and the row's Reset goes away until the recording
+ends. Pressing the button again cancels the recording; there is no separate Cancel button. While recording, the button's
+name is that line followed by the wording that pressing cancels changing the shortcut for the command, and its tooltip
+says the latter. One row records at a time; starting another row's recording ends the first.
 
 While a row records, every key press goes to the recording and to nothing else: no window shortcut runs, Escape does not
 close Settings and the terminal receives nothing. A modifier pressed on its own is the start of a combination and is
