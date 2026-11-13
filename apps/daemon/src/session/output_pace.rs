@@ -200,7 +200,8 @@ mod tests {
     fn an_update_closed_and_opened_again_starts_a_new_timer_at_that_chunk() {
         let opened = Instant::now();
         let again = opened + FRAME_TIMEOUT * 9 / 10;
-        let cases: [(&str, Vec<(&[u8], Instant)>); 3] = [
+        type Chunks = Vec<(&'static [u8], Instant)>;
+        let cases: [(&str, Chunks); 3] = [
             ("one chunk", vec![(&b"\x1b[?2026l\x1b[?2026h"[..], again)]),
             (
                 "the close cut in two",

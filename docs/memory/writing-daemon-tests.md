@@ -207,6 +207,15 @@ the group through `grouped_launch` / `ChildCgroup::new`, which do), not an `epri
 `skip` fails the test where `OCTOBOARD_REQUIRE_CGROUP=1`, as in the CI run that gives the suite a writable hierarchy,
 while a test's own line lets a broken setup pass there without running it.
 
+## A test that returns early on a `git` too old for reftable says so through `test_support::init_reftable`
+
+Applies to daemon tests that need a repository in the reftable ref format. Create it with
+`test_support::init_reftable(dir)` (or call `test_support::skip_without_reftable(dir, what)` before returning for
+another reftable gap, such as a `git` that cannot migrate), not an `eprintln!("skipped: …")` of your own: it names
+the `git` version and fails the test where `OCTOBOARD_TEST_REQUIRE_REFTABLE` is set. The musl jobs of
+`.github/workflows/linux-daemon.yml` set it, since their runners' Git is new enough; the cgroup job's image has
+Git 2.47, which cannot migrate a repository with reflogs (Git 2.49), so it does not.
+
 ## On tokio's paused clock, nothing in the test blocks or times out on real I/O
 
 Applies to daemon tests on `#[tokio::test(start_paused = true)]`, and to the stretches a real-clock test pauses with

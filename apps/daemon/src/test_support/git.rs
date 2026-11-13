@@ -157,6 +157,38 @@ pub(crate) fn git(dir: &Path, args: &[&str]) -> Vec<u8> {
     git_bytes(dir, &args)
 }
 
+/// Set (to anything) where the reftable tests must run rather than skip: in CI, whose `git` is
+/// known to be new enough, a skip would let them pass without testing anything.
+pub(crate) const REQUIRE_REFTABLE: &str = "OCTOBOARD_TEST_REQUIRE_REFTABLE";
+
+/// Says on stderr that a reftable test is skipped because the `git` that runs in `dir` cannot
+/// do `what`, with its version, or fails the test where [`REQUIRE_REFTABLE`] is set.
+pub(crate) fn skip_without_reftable(dir: &Path, what: &str) {
+    let version = fixture_git(dir)
+        .arg("--version")
+        .output()
+        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
+        .unwrap_or_default();
+    assert!(
+        std::env::var_os(REQUIRE_REFTABLE).is_none(),
+        "{REQUIRE_REFTABLE} is set, but {version} cannot {what}"
+    );
+    eprintln!("skipped: {version} cannot {what}");
+}
+
+/// Runs `git init --ref-format=reftable` in `dir`. `false` where `git` does not know the format
+/// (before Git 2.45), and the test is skipped ([`skip_without_reftable`]).
+pub(crate) fn init_reftable(dir: &Path) -> bool {
+    let init = fixture_git(dir)
+        .args(["init", "-q", "--ref-format=reftable"])
+        .output()
+        .expect("git runs");
+    if !init.status.success() {
+        skip_without_reftable(dir, "create a reftable repository (Git 2.45)");
+    }
+    init.status.success()
+}
+
 /// Whether the `git` on this machine knows `show-ref --exists` (Git 2.43), which is what tells a
 /// branch that is broken from one not born yet; before it a broken branch is taken for an unborn
 /// one. `dir` must be inside a repository, since outside one `git` exits 128 and this panics.

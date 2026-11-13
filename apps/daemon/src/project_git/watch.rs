@@ -913,36 +913,12 @@ mod tests {
         }
     }
 
-    /// Set (to anything) where the reftable tests must run rather than skip: in CI, whose `git` is
-    /// known to be new enough, a skip would let them pass without testing anything.
-    const REQUIRE_REFTABLE: &str = "OCTOBOARD_TEST_REQUIRE_REFTABLE";
-
-    /// Says on stderr that a reftable test is skipped because `git` cannot do `what`, or fails it
-    /// where [`REQUIRE_REFTABLE`] is set.
-    fn skip_without_reftable(what: &str) {
-        let version = crate::test_support::fixture_git(Path::new("."))
-            .arg("--version")
-            .output()
-            .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
-            .unwrap_or_default();
-        assert!(
-            std::env::var_os(REQUIRE_REFTABLE).is_none(),
-            "{REQUIRE_REFTABLE} is set, but {version} cannot {what}"
-        );
-        eprintln!("skipped: {version} cannot {what}");
-    }
-
     /// A repository created with the reftable ref format, with one commit holding a file. `None`
     /// where `git` does not know the format (before Git 2.45), and the test is skipped
-    /// ([`skip_without_reftable`]).
+    /// ([`init_reftable`](crate::test_support::init_reftable)).
     fn reftable_repo_with(label: &str) -> Option<crate::test_support::ScratchDir> {
         let dir = crate::test_support::ScratchDir::new(label);
-        let init = crate::test_support::fixture_git(&dir)
-            .args(["init", "-q", "--ref-format=reftable"])
-            .output()
-            .unwrap();
-        if !init.status.success() {
-            skip_without_reftable("create a reftable repository (Git 2.45)");
+        if !crate::test_support::init_reftable(&dir) {
             return None;
         }
         std::fs::write(dir.join("a"), b"a").unwrap();
@@ -1262,7 +1238,7 @@ mod tests {
     /// Converts the repository at `repo` to the reftable ref format in place. `false` where `git`
     /// cannot be relied on to migrate a repository with reflogs, as every fixture has: reflog
     /// migration came in Git 2.48 and `--no-reflog`, probed here, in 2.49, so 2.48 skips too
-    /// ([`skip_without_reftable`]).
+    /// ([`skip_without_reftable`](crate::test_support::skip_without_reftable)).
     fn migrated_to_reftable(repo: &Path) -> bool {
         let known = crate::test_support::fixture_git(repo)
             .args(["refs", "migrate", "-h"])
@@ -1271,7 +1247,10 @@ mod tests {
         // `-h` prints the usage to stdout (exiting 129) where the subcommand exists; an older `git`
         // knows no `refs` or no `migrate`, or predates `--no-reflog` (Git 2.49).
         if !String::from_utf8_lossy(&known.stdout).contains("--no-reflog") {
-            skip_without_reftable("migrate a repository with reflogs to reftable (Git 2.49)");
+            crate::test_support::skip_without_reftable(
+                repo,
+                "migrate a repository with reflogs to reftable (Git 2.49)",
+            );
             return false;
         }
         let migrate = crate::test_support::fixture_git(repo)
@@ -2021,7 +2000,7 @@ mod tests {
         let git_dir = dirs.git_dir.clone();
         let identity = root_state(watch, &refs).identity;
 
-        watch.lose(&[refs.clone()]);
+        watch.lose(std::slice::from_ref(&refs));
 
         assert!(!root_state(watch, &refs).armed);
         assert_eq!(root_state(watch, &refs).holders, 1);
@@ -2065,8 +2044,8 @@ mod tests {
 
         assert!(all_roots_armed(watch));
         // A watched root itself is lost, and reporting it again changes nothing.
-        watch.lose(&[refs.clone()]);
-        watch.lose(&[refs.clone()]);
+        watch.lose(std::slice::from_ref(&refs));
+        watch.lose(std::slice::from_ref(&refs));
         assert!(!root_state(watch, &refs).armed);
         assert_eq!(root_state(watch, &refs).holders, 1);
     }
@@ -2125,7 +2104,7 @@ mod tests {
         let refs = Dirs::resolve(&repo).unwrap().common_dir.join("refs");
 
         std::fs::remove_dir_all(&refs).unwrap();
-        watch.lose(&[refs.clone()]);
+        watch.lose(std::slice::from_ref(&refs));
         watch_now(&state, &project);
 
         // Gone: still counted for the project, with no watch.
@@ -2170,7 +2149,7 @@ mod tests {
         watch_now(&state, &project);
         assert!(settled(&dirs));
 
-        watch.lose(&[refs.clone()]);
+        watch.lose(std::slice::from_ref(&refs));
         assert!(!settled(&dirs));
         watch_now(&state, &project);
         assert!(settled(&dirs));
@@ -2222,7 +2201,7 @@ mod tests {
         assert_eq!(watched_counts(watch), held_counts(watch));
 
         // A watch lost is lost for both holders, and the other holder's check sets it up again.
-        watch.lose(&[refs.clone()]);
+        watch.lose(std::slice::from_ref(&refs));
         assert!(!root_state(watch, &refs).armed);
         assert_eq!(root_state(watch, &refs).holders, 2);
         watch_now(&state, &main);
@@ -2264,7 +2243,7 @@ mod tests {
             ],
         );
         // What the platform's removal event does where it ends the watch.
-        watch.lose(&[old_git_dir.clone()]);
+        watch.lose(std::slice::from_ref(&old_git_dir));
         watch_now(&state, &linked);
         assert_eq!(watched_counts(watch), held_counts(watch));
 

@@ -23,7 +23,9 @@ use crate::session_git_hooks::gate_inputs::{answer, GateRequest};
 use crate::session_git_hooks::gate_mode;
 use crate::session_git_hooks::route::Routes;
 use crate::session_git_hooks::{render, write_dir, Rendering, BUILT_IN_HOOKS};
-use crate::test_support::{fixture_git, git, ClosedPort, ScratchDir, PATIENCE, TEST_KEY};
+use crate::test_support::{
+    fixture_git, git, init_reftable, ClosedPort, ScratchDir, PATIENCE, TEST_KEY,
+};
 use crate::wire_path;
 
 // -- the gate-hook process --------------------------------------------------------
@@ -186,11 +188,7 @@ fn the_default_branch_of_a_reftable_repository_whose_remote_name_holds_a_percent
 fn reftable_default_branch(remote: &str) {
     let fixture = gated_fixture();
     let repo = ScratchDir::new("branch-origin-gate-reftable");
-    let init = fixture_git(&repo)
-        .args(["init", "-q", "--ref-format=reftable"])
-        .output()
-        .unwrap();
-    if !init.status.success() {
+    if !init_reftable(&repo) {
         return;
     }
     commit_file(&repo, "a.txt", &numbered("alpha", 3), "base");

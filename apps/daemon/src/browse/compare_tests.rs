@@ -12,7 +12,7 @@ use crate::protocol::{
     SideRef, UpstreamInfo,
 };
 use crate::test_support::{
-    fixture_git, git, git_stdin, isolated_git_env, repo_with, symlink, ScratchDir, SYSTEM_GIT,
+    git, git_stdin, init_reftable, isolated_git_env, repo_with, symlink, ScratchDir, SYSTEM_GIT,
 };
 
 /// A comparison as `compare_project_branches` answered it.
@@ -578,11 +578,7 @@ fn the_main_working_copys_branch_is_found_in_either_reference_format() {
     // A repository in reftable format keeps a placeholder in its `HEAD` file. Skipped where
     // `git` does not know the format.
     let repo = ScratchDir::new("upstream-reftable");
-    let init = fixture_git(&repo)
-        .args(["init", "-q", "--ref-format=reftable"])
-        .output()
-        .expect("git runs");
-    if !init.status.success() {
+    if !init_reftable(&repo) {
         return;
     }
     std::fs::write(repo.join("a.txt"), b"a\n").unwrap();

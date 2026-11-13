@@ -164,7 +164,8 @@ fn a_session_bound_to_no_state_has_no_hooks_status() {
 #[test]
 fn an_escape_is_mid_turn_on_a_running_title_of_any_age_or_on_the_hooks_reporting_one() {
     use SessionStatus::*;
-    let cases: [(&str, SessionStatus, fn(&LiveSession), bool); 7] = [
+    type Case = (&'static str, SessionStatus, fn(&LiveSession), bool);
+    let cases: [Case; 7] = [
         ("nothing said, hooks idle", Idle, |_| {}, false),
         (
             "fresh running title, hooks idle",

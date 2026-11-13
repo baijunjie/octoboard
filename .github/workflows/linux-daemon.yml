@@ -37,7 +37,8 @@ jobs:
   # `.github/daemon-cgroup-tests.sh` hands to a test user; `OCTOBOARD_REQUIRE_CGROUP=1` there fails a test that would
   # otherwise return early for want of a cgroup from `test_support::cgroups`. The image is pinned by digest; the script
   # installs the pinned toolchain in it. The script comes from this workflow's own commit, so that a tag made before
-  # it can be checked too.
+  # it can be checked too. The image's Git (2.47) is too old for the reftable tests that migrate a repository (Git
+  # 2.49), so `OCTOBOARD_TEST_REQUIRE_REFTABLE` is not set here: those tests skip.
   cgroup-tests:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
@@ -63,7 +64,8 @@ jobs:
 
   # The release links the daemon statically against musl on a runner of each architecture, so its tests run against
   # musl there too: a dependency or a call that behaves differently there would otherwise show only on a server.
-  # `musl-gcc` compiles the C code of the dependencies for musl.
+  # `musl-gcc` compiles the C code of the dependencies for musl. The runners' Git (2.56) is new enough for every
+  # reftable test, so `OCTOBOARD_TEST_REQUIRE_REFTABLE` makes one that would skip fail instead.
   musl:
     strategy:
       fail-fast: false
@@ -91,3 +93,4 @@ jobs:
         env:
           CC_x86_64_unknown_linux_musl: musl-gcc
           CC_aarch64_unknown_linux_musl: musl-gcc
+          OCTOBOARD_TEST_REQUIRE_REFTABLE: "1"
