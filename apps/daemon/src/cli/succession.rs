@@ -9,9 +9,7 @@ use anyhow::Result;
 
 use crate::instance_lock;
 use crate::owner_record::{Owner, Predecessor};
-use crate::platform::proc::ProcessIdentity;
-
-use super::service_unit::{self, UnitState};
+use crate::platform::proc::{unit_state, ProcessIdentity, UnitState};
 
 pub(super) const POLL: Duration = Duration::from_millis(100);
 
@@ -70,7 +68,7 @@ pub(super) fn find_daemon(wait: Duration, through_unrecorded: bool) -> Result<Fo
                 },
                 Instant::now(),
                 SystemTime::now(),
-                service_unit::state,
+                unit_state,
             )
         });
         let noted_from = noted.map(|noted| noted.from);

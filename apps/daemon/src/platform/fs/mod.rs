@@ -11,6 +11,8 @@ use std::fs::{File, Metadata, OpenOptions, TryLockError};
 use std::io;
 use std::path::Path;
 
+mod lock_table;
+
 #[cfg(unix)]
 mod unix;
 

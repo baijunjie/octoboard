@@ -1,30 +1,10 @@
-//! Which process holds the instance lock, where the host says: on Linux, `/proc/locks` lists every
-//! lock with the pid that took it and the device and inode of the locked file. For a command that
-//! finds the lock held by a daemon that has not recorded itself, so that it can name that process.
+//! Reading the table of file locks Linux lists in `/proc/locks`, which names the process that took
+//! each lock and the device and inode of the locked file, for a command that finds the instance
+//! lock held by a daemon that has not recorded itself, so that it can name that process. The
+//! lookup that reads the file is `lock_holder`, on the host that has one.
 
-use std::path::Path;
-
-/// The pid of the process holding a lock on the file at `path`, where the host says and exactly one
-/// process does; `None` otherwise, and on every host but Linux.
-pub(super) fn holder_of(path: &Path) -> Option<u32> {
-    #[cfg(target_os = "linux")]
-    {
-        use std::os::unix::fs::MetadataExt;
-
-        let metadata = std::fs::metadata(path).ok()?;
-        let dev = metadata.dev();
-        let locks = std::fs::read_to_string("/proc/locks").ok()?;
-        holder_in(&locks, libc::major(dev), libc::minor(dev), metadata.ino())
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        let _ = path;
-        None
-    }
-}
-
-/// [`holder_of`] over the text of `/proc/locks` and the locked file's device (`major`, `minor`)
-/// and inode. Each line is `<n>: <class> <mode> <access> <pid> <major>:<minor>:<inode> <start>
+/// The pid of the one process holding a lock on a file, over the text of `/proc/locks` and the
+/// locked file's device (`major`, `minor`) and inode. Each line is `<n>: <class> <mode> <access> <pid> <major>:<minor>:<inode> <start>
 /// <end>`, the device numbers in hexadecimal; a line whose class is preceded by `->` is a process
 /// waiting for the lock, not holding it, and an open file description lock has no pid (`-1`).
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]

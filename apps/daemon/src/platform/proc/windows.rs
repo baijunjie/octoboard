@@ -50,7 +50,9 @@ pub(super) use create::{create_with_std_handles, inherited, output, Attributes};
 pub(crate) use create::{spawn_in_background, start_detached, BackgroundChild};
 
 use super::{tag_value, TAG_VARIABLE};
-use super::{Polite, ProcessId, ProcessIdentity, Reach, Sent, SetEnv, Signal, Swept, Unreaped};
+use super::{
+    Polite, ProcessId, ProcessIdentity, Reach, Sent, SetEnv, Signal, Swept, UnitState, Unreaped,
+};
 use crate::platform::proc_table::{is_running, start_of_handle, Process};
 
 /// `JOB_OBJECT_ALL_ACCESS` (winnt.h): what a job is opened again with, to list, assign and query.
@@ -681,6 +683,16 @@ pub(crate) fn start_in_user_unit(
     _daemon: &str,
 ) -> io::Result<()> {
     Err(io::ErrorKind::Unsupported.into())
+}
+
+/// Windows has no `ETXTBSY`: a file being written is refused by another error.
+pub(crate) fn is_text_busy(_err: &anyhow::Error) -> bool {
+    false
+}
+
+/// No systemd user manager is there to ask on Windows.
+pub(crate) fn unit_state(_unit: &str) -> Option<UnitState> {
+    None
 }
 
 /// Whether a service manager restarts this daemon on the status a planned restart ends it with:

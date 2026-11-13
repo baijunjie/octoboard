@@ -5,9 +5,11 @@
 use std::fs;
 use std::io;
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use super::cgroup::unified_path;
+use super::unit_state::{parse_show, UnitState};
 
 /// How long `systemd-run` has to start a unit before whether it started counts as unknown.
 const UNIT_START_DEADLINE: Duration = Duration::from_secs(15);
@@ -172,6 +174,104 @@ fn service_of(path: &str, uid: u32) -> Option<String> {
         && service.ends_with(".service")
         && slices.iter().all(|slice| slice.ends_with(".slice")))
     .then(|| (*service).to_string())
+}
+
+/// How long `systemctl` has to answer before systemd counts as not to be asked.
+const ANSWER_WAIT: Duration = Duration::from_secs(2);
+
+/// How long [`unit_state`] waits before it asks again about a unit found inactive or failed.
+const DOWN_RECHECK: Duration = Duration::from_millis(100);
+
+/// Set once `systemctl` could not be started or did not answer in time.
+static UNANSWERED: AtomicBool = AtomicBool::new(false);
+
+/// What systemd says of the user unit `unit`; `None` where it cannot be asked: `systemctl` is
+/// missing, does not reach the user's manager (no `XDG_RUNTIME_DIR`, say), takes too long, or does
+/// not know the unit. A `systemctl` that could not be started or did not answer in time is not
+/// asked again by this process, which polls. An inactive unit is asked again after
+/// [`DOWN_RECHECK`] before it counts as down: systemd before 254 lets a unit restarting pass
+/// through inactive while its restart job turns from a stop into a start.
+pub(crate) fn unit_state(unit: &str) -> Option<UnitState> {
+    match ask(unit)? {
+        UnitState::Down => {
+            std::thread::sleep(DOWN_RECHECK);
+            ask(unit)
+        }
+        state => Some(state),
+    }
+}
+
+/// One `systemctl --user show` of `unit`.
+fn ask(unit: &str) -> Option<UnitState> {
+    if UNANSWERED.load(Ordering::Relaxed) {
+        return None;
+    }
+    let output = run_bounded(
+        Command::new("systemctl").args([
+            "--user",
+            "show",
+            "--property=LoadState,ActiveState,MainPID",
+            "--",
+            unit,
+        ]),
+        ANSWER_WAIT,
+    );
+    match output {
+        Ran::Answered(output) => parse_show(&output),
+        Ran::Failed => None,
+        Ran::Unanswered => {
+            UNANSWERED.store(true, Ordering::Relaxed);
+            None
+        }
+    }
+}
+
+/// How [`run_bounded`] went.
+enum Ran {
+    /// It exited successfully, having written this.
+    Answered(String),
+    /// It exited unsuccessfully.
+    Failed,
+    /// It could not be started, or did not exit in time and was killed.
+    Unanswered,
+}
+
+/// Runs `command` with its stdout piped and nothing else, and gives what it wrote there if it
+/// exits successfully within `wait`; kills it if it does not exit in time.
+fn run_bounded(command: &mut Command, wait: Duration) -> Ran {
+    let Ok(mut child) = command
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+    else {
+        return Ran::Unanswered;
+    };
+    let deadline = Instant::now() + wait;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            _ => {
+                child.kill().ok();
+                child.wait().ok();
+                return Ran::Unanswered;
+            }
+        }
+    };
+    // What `show` writes is a few lines, well within what the pipe holds before it exits.
+    let mut output = String::new();
+    let read = child
+        .stdout
+        .take()
+        .is_some_and(|mut stdout| io::Read::read_to_string(&mut stdout, &mut output).is_ok());
+    if read && status.success() {
+        Ran::Answered(output)
+    } else {
+        Ran::Failed
+    }
 }
 
 #[cfg(test)]

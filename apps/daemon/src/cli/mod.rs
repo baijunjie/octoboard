@@ -14,13 +14,11 @@ pub(crate) mod hook;
 mod installation;
 #[cfg(test)]
 mod key_source_tests;
-mod lock_holder;
-mod service_unit;
 mod succession;
 pub(crate) mod update;
 mod verify_archive;
 
-pub(crate) use background::{start_successor, SuccessorStart};
+pub(crate) use background::start_successor;
 pub(crate) use installation::launch_path;
 pub(crate) use succession::handed_over_from;
 

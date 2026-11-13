@@ -5,7 +5,9 @@ use std::process::{Command, Stdio};
 use std::sync::{Arc, OnceLock};
 
 use super::cgroup::{Group, Subtree};
-pub(crate) use super::systemd::{in_systemd_service, start_in_user_unit, user_service_unit};
+pub(crate) use super::systemd::{
+    in_systemd_service, start_in_user_unit, unit_state, user_service_unit,
+};
 
 use super::{
     tag_value, Polite, ProcessId, ProcessIdentity, Sent, SetEnv, Signal, Swept, Unreaped,
@@ -309,6 +311,14 @@ pub(crate) fn lead_session(command: &mut Command) {
 /// Has `command` start in a process group of its own, which it leads (`setpgid(0, 0)`).
 pub(crate) fn lead_group(command: &mut Command) {
     command.process_group(0);
+}
+
+/// Whether a failure to run a program was the file being busy (`ETXTBSY`): it is still open for
+/// writing, as a file just written is until the writer's descriptor is closed.
+pub(crate) fn is_text_busy(err: &anyhow::Error) -> bool {
+    err.chain()
+        .filter_map(|cause| cause.downcast_ref::<io::Error>())
+        .any(|io| io.raw_os_error() == Some(libc::ETXTBSY))
 }
 
 /// Has `command` start apart from the daemon, for an application that outlives it, which nothing

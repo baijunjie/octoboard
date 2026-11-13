@@ -10,7 +10,7 @@ use std::process::{Command, Output};
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
-use crate::platform::proc::Reach;
+use crate::platform::proc::{self, Reach};
 use crate::processes::subprocess::{run_bounded, BoundedFailure, Bounds};
 
 /// How long a build may take to answer `--version`. Far above a real build's few milliseconds; a
@@ -78,7 +78,7 @@ fn run(exe: &Path, timeout: Duration) -> Result<Output, String> {
         command.arg("--version").current_dir("/");
         match run_bounded(&mut command, &bounds, &AtomicBool::new(false)) {
             Ok(output) => return Ok(output),
-            Err(BoundedFailure::Failed(err)) if is_busy(&err) && tries < BUSY_TRIES => {
+            Err(BoundedFailure::Failed(err)) if proc::is_text_busy(&err) && tries < BUSY_TRIES => {
                 tries += 1;
                 std::thread::sleep(BUSY_WAIT);
             }
@@ -94,20 +94,5 @@ fn run(exe: &Path, timeout: Duration) -> Result<Output, String> {
             }
             Err(other) => return Err(format!("`{} --version` failed: {other}", exe.display())),
         }
-    }
-}
-
-/// Whether a failure to run was the file being busy (`ETXTBSY`).
-fn is_busy(err: &anyhow::Error) -> bool {
-    #[cfg(unix)]
-    {
-        err.chain()
-            .filter_map(|cause| cause.downcast_ref::<std::io::Error>())
-            .any(|io| io.raw_os_error() == Some(libc::ETXTBSY))
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = err;
-        false
     }
 }

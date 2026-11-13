@@ -20,6 +20,23 @@ pub(super) fn host_stat_of(file: &File) -> io::Result<Stat> {
     Ok(stat_from(file.metadata()?))
 }
 
+/// The pid of the process holding a lock on the file at `path`, where the host says and exactly one
+/// process does; `None` otherwise. Only Linux says, in `/proc/locks`.
+pub fn lock_holder(path: &Path) -> Option<u32> {
+    #[cfg(target_os = "linux")]
+    {
+        let metadata = std::fs::metadata(path).ok()?;
+        let dev = metadata.dev();
+        let locks = std::fs::read_to_string("/proc/locks").ok()?;
+        super::lock_table::holder_in(&locks, libc::major(dev), libc::minor(dev), metadata.ino())
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = path;
+        None
+    }
+}
+
 fn stat_from(metadata: std::fs::Metadata) -> Stat {
     let identity = Identity {
         volume: metadata.dev(),

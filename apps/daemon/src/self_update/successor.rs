@@ -16,40 +16,47 @@ use std::path::Path;
 
 use super::record::Files;
 use super::replace::{previous_path, swap_with_previous};
-use crate::cli::SuccessorStart;
 use crate::platform::{fs, proc};
 
-/// Starts the next daemon from `launch` on `port` with `key`, handing it `listener`
-/// (`crate::cli::start_successor`), and falls back to the build that ran when that fails after an
-/// update (see the module). Whether a daemon started. Blocking.
+/// How starting the next daemon went ([`start_successor`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SuccessorStart {
+    /// It reported listening.
+    Started,
+    /// It ended at once refusing the argument that hands it the listener: a build from before
+    /// listeners were handed over, which would come up binding the port itself.
+    RefusedListener,
+    /// It did not come up for any other reason.
+    Failed,
+}
+
+/// Starts the next daemon with `start` (handed `listener`, the duplicate of this daemon's
+/// listening socket, or none), the command line's start of the daemon at `launch`, and falls back
+/// to the build that ran when that fails after an update (see the module). Whether a daemon
+/// started. Blocking.
 pub(crate) fn start_successor(
-    port: u16,
-    key: &str,
     launch: &Path,
     listener: Option<crate::platform::listener_handover::Kept>,
+    start: impl FnMut(Option<&crate::platform::listener_handover::Kept>) -> SuccessorStart,
 ) -> bool {
-    start_with(
-        listener,
-        |listener| crate::cli::start_successor(port, key, launch, listener),
-        || {
-            let put_back = cfg!(feature = "self-update")
-                && proc::self_update_host()
-                && fall_back(
-                    launch,
-                    &Files::new(&crate::paths::data_dir()),
-                    &crate::paths::db_path(),
-                    proc::names_running_image,
-                );
-            if put_back {
-                tracing::warn!(
-                    launch = %launch.display(),
-                    "the next daemon did not start; the build that ran was put back and is started \
-                     instead, and the one that did not start is kept as the previous build"
-                );
-            }
-            put_back
-        },
-    )
+    start_with(listener, start, || {
+        let put_back = cfg!(feature = "self-update")
+            && proc::self_update_host()
+            && fall_back(
+                launch,
+                &Files::new(&crate::paths::data_dir()),
+                &crate::paths::db_path(),
+                proc::names_running_image,
+            );
+        if put_back {
+            tracing::warn!(
+                launch = %launch.display(),
+                "the next daemon did not start; the build that ran was put back and is started \
+                 instead, and the one that did not start is kept as the previous build"
+            );
+        }
+        put_back
+    })
 }
 
 /// [`start_successor`] over the start of one daemon (`start`, handed the listener or none) and the

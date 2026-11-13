@@ -5,6 +5,8 @@
 use std::io;
 use std::process::Command;
 
+use super::unit_state::UnitState;
+
 /// No systemd user manager runs a daemon here.
 pub(crate) fn user_service_unit(_managed: bool) -> Option<String> {
     None
@@ -23,4 +25,9 @@ pub(crate) fn start_in_user_unit(
     _daemon: &str,
 ) -> io::Result<()> {
     Err(io::ErrorKind::Unsupported.into())
+}
+
+/// No systemd user manager is there to ask here.
+pub(crate) fn unit_state(_unit: &str) -> Option<UnitState> {
+    None
 }

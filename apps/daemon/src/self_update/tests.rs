@@ -3858,7 +3858,9 @@ mod starting_the_successor {
             (port, kept)
         });
         let listener = std::env::var_os(WITH_LISTENER).is_some().then_some(kept);
-        let started = super::super::start_successor(port, TEST_KEY_TEXT, &launch, listener);
+        let started = super::super::start_successor(&launch, listener, |listener| {
+            crate::cli::start_successor(port, TEST_KEY_TEXT, &launch, listener)
+        });
         println!("started={started}");
     }
 
@@ -4025,10 +4027,10 @@ exit 0
 /// start is not repeated.
 mod starting_with_a_fallback {
     use super::super::successor::start_with;
-    #[cfg(unix)]
-    use crate::cli::SuccessorStart::RefusedListener;
-    use crate::cli::SuccessorStart::{self, Failed, Started};
     use crate::platform::listener_handover::Kept;
+    #[cfg(unix)]
+    use crate::self_update::SuccessorStart::RefusedListener;
+    use crate::self_update::SuccessorStart::{self, Failed, Started};
 
     /// What the stand-in start saw of one call: whether it was handed a listener, and whether the
     /// port could be bound by anyone at that moment (nothing held it).

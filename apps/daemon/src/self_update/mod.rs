@@ -46,7 +46,7 @@ mod tests;
 pub(crate) mod unpack;
 pub(crate) mod verify;
 
-pub(crate) use successor::start_successor;
+pub(crate) use successor::{start_successor, SuccessorStart};
 pub(crate) use task::{check_requested, restart_requested, start, update_requested};
 
 use std::path::PathBuf;

@@ -144,6 +144,11 @@ fn version_of(volume: u64, file: u64, size: u64, written: i64, changed: i64) -> 
     format!("{volume}:{file}:{size}:{written}:{changed}")
 }
 
+/// Windows does not say which process holds a lock on a file.
+pub fn lock_holder(_path: &Path) -> Option<u32> {
+    None
+}
+
 /// The version of the file `stat` describes (see [`EntryStat::version`] for the same file seen
 /// through a directory listing).
 pub fn version(stat: &Stat) -> String {

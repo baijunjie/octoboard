@@ -109,6 +109,10 @@ mod systemd_stub;
 #[cfg(all(unix, not(target_os = "linux")))]
 use systemd_stub as systemd;
 
+mod unit_state;
+
+pub(crate) use unit_state::UnitState;
+
 #[cfg(unix)]
 mod unix;
 

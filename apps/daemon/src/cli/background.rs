@@ -24,10 +24,10 @@ use anyhow::{Context, Result};
 use crate::instance_lock;
 use crate::loopback;
 use crate::owner_record::Owner;
-use crate::platform::proc::{self, Polite, Sent, Signal};
+use crate::platform::fs;
+use crate::platform::proc::{self, unit_state, Polite, Sent, Signal};
+use crate::self_update::SuccessorStart;
 
-use super::lock_holder::holder_of;
-use super::service_unit;
 use super::succession::{
     find_daemon, handover_input, next_may_come, recorded_after, succession, Awaited, EndWatch,
     Found, Succession, POLL, SERVICE_RESTART_GRACE,
@@ -98,7 +98,7 @@ fn no_record(what: &str, waited: Duration, holder: Option<u32>) -> String {
 /// The process holding the instance lock, where the host says.
 fn lock_holder() -> Option<u32> {
     // The lock's file, as `instance_lock` names it.
-    holder_of(&crate::paths::data_dir().join("daemon.lock"))
+    fs::lock_holder(&crate::paths::data_dir().join("daemon.lock"))
 }
 
 pub(super) fn status() -> Result<i32> {
@@ -323,7 +323,7 @@ pub(super) fn restart() -> Result<i32> {
                 &awaited,
                 Instant::now(),
                 SystemTime::now(),
-                service_unit::state,
+                unit_state,
             )
             && !earlier_build_may_be_restarted(&owner, &awaited, Instant::now())
             // Looked at again: a successor that took the lock since it was seen free, and
@@ -536,18 +536,6 @@ pub(crate) fn start_successor(
             SuccessorStart::Failed
         }
     }
-}
-
-/// How starting the next daemon went ([`start_successor`]).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum SuccessorStart {
-    /// It reported listening.
-    Started,
-    /// It ended at once refusing the argument that hands it the listener: a build from before
-    /// listeners were handed over, which would come up binding the port itself.
-    RefusedListener,
-    /// It did not come up for any other reason.
-    Failed,
 }
 
 /// Whether a daemon that ended while starting with `status`, having written `said` on stderr,
@@ -802,8 +790,7 @@ fn stop_following(
             }
         } else if !lock_held
             && ended
-            && (now >= deadline
-                || !next_may_come(&awaited, now, SystemTime::now(), service_unit::state))
+            && (now >= deadline || !next_may_come(&awaited, now, SystemTime::now(), unit_state))
         {
             return Ok(outcome_once_gone(taken_at.is_some(), took));
         }
