@@ -1036,8 +1036,6 @@ Every control has an accessible name: its visible text, or an `aria-label` when 
   action) is the instance — its visible message, then an `sr-only` span with the action, giving "No projects yet Add
   project". Such a row also sets an empty `aria-describedby` itself, since `TitledControl` only recognizes a tooltip
   that repeats an `aria-label`.
-  The shortcut button of Settings > Keyboard shortcuts names its recording state the same way: the visible prompt,
-  then an `sr-only` span with the cancel action.
 - **An accepted exception to 2.5.3: a shortcut's key caps as its edit button.** In Settings > Keyboard shortcuts the
   button shows only the caps of the current combination (symbols such as ⇧⌘G on a Mac), and is named "Change the
   shortcut for {command}" with the combination as its description, by the user's decision: the caps' symbols cannot be
@@ -2310,9 +2308,10 @@ In Settings > Keyboard shortcuts a changeable shortcut's key caps are themselves
 (`packages/ui/src/settings/ShortcutsSection.tsx`). The button is HeroUI's ghost variant with its hover and pressed fills
 made transparent and no padding, so no box is drawn around the caps; hover and press darken the caps instead
 (`--default-hover`, the text taking the foreground colour), and keyboard focus keeps HeroUI's ring around them. While
-recording, the button holds the prompt and an X in muted text, which takes the foreground colour on hover and press,
-again with no fill. Each row ends in a fixed 24px slot holding an icon-only Reset, a lock for a key that cannot be
-changed, or nothing, so the caps line up.
+recording, the button gives way to the prompt drawn as a key cap with HeroUI's accent soft fill and text, in the caps'
+place; it is not a control, and only the Cancel beside it, or Escape, stops the recording. Each row ends in a fixed 24px
+slot holding an icon-only Reset, a lock for a key that cannot be changed, the icon-only Cancel while recording, or
+nothing, so the caps and the chip line up.
 
 ### Form controls on a surface
 

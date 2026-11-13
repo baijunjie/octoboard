@@ -81,7 +81,7 @@ collapsed lines" in `docs/product/project-pane-git-change-viewer.md`).
 A control shown only as an icon has a tooltip naming it, shown both when the mouse rests on it and when it receives
 keyboard focus. The tooltip's text is the same name assistive technology announces for the control, except on the ⋮
 buttons, the pin buttons, the session Delete or Archive shortcuts, the file viewer's File manager and Default
-application buttons and the Keyboard shortcuts section's Reset buttons below. These are:
+application buttons and the Keyboard shortcuts section's Cancel and Reset buttons below. These are:
 
 - the top bar's controls — Back, Forward, the sidebar toggle at its start and the panel toggles at its end; each
   toggle's tooltip follows its "Show …" / "Hide …" label (see "The sidebar toggle and the panel toggles" in
@@ -114,6 +114,9 @@ application buttons and the Keyboard shortcuts section's Reset buttons below. Th
 - the Reset button at the end of a row in Settings' Keyboard shortcuts section, whose tooltip is a short "Reset", while
   the name announced for it says that it resets the shortcut for that row's command to its default (see "The Keyboard
   shortcuts section" in `docs/product/keyboard-shortcuts.md`);
+- the Cancel button that takes Reset's place while a row of Settings' Keyboard shortcuts section is recording, whose
+  tooltip is a short "Cancel", while the name announced for it says that it cancels changing the shortcut for that
+  row's command (see "Changing a shortcut" in `docs/product/keyboard-shortcuts.md`);
 - the report panel's previous-page and next-page buttons;
 - a right pane panel's Close panel button and the Report and Terminal panels' Maximize panel / Restore panel size (see
   "A panel's header" in `docs/product/right-pane-panels.md`);

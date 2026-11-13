@@ -126,6 +126,7 @@ defaults** button.
 Each group has a heading, and each command a row: its name, then its current key caps, and then a slot of fixed width
 at the row's end, so that the key caps of every row line up. That slot holds:
 
+- a **Cancel** icon button (an X icon) while the row is recording (see "Changing a shortcut" below);
 - a **Reset** icon button (a rotate-arrow icon) while the command's shortcut differs from its default and the row is not
   recording;
 - a **lock** icon for a key that cannot be changed, whose tooltip and name say "Fixed" — the word itself is not shown;
@@ -135,7 +136,7 @@ A command that can be changed has its key caps as a button: the caps draw no but
 under the pointer and while pressed. Its name says it changes the shortcut for that command, its tooltip says the same,
 and its description is the current combination. A key that cannot be changed shows its key caps only, as text.
 
-For the tooltips of Reset and of the lock see "Tooltips on icon-only controls" and "Tooltips on indicators" in
+For the tooltips of Cancel, of Reset and of the lock see "Tooltips on icon-only controls" and "Tooltips on indicators" in
 `docs/product/labels-and-tooltips.md`.
 
 A group's heading stays pinned at the top of the section's area while the group's rows scroll beneath it, as in
@@ -144,11 +145,15 @@ A group's heading stays pinned at the top of the section's area while the group'
 ### Changing a shortcut
 
 Pressing a row's key caps — with the pointer, or with Enter or Space while they have keyboard focus — starts recording
-on that row: within the same button the key caps give way to a line asking for the new keys, followed by an X icon, both
-taking the foreground colour under the pointer and while pressed, and the row's Reset goes away until the recording
-ends. Pressing the button again cancels the recording; there is no separate Cancel button. While recording, the button's
-name is that line followed by the wording that pressing cancels changing the shortcut for the command, and its tooltip
-says the latter. One row records at a time; starting another row's recording ends the first.
+on that row: the key caps button gives way, in its place, to a prompt asking for the new keys, drawn as a single key cap
+in the accent colour (the accent's soft fill). The prompt is not a control: pressing it does nothing, and it does not
+change under the pointer. The row's Reset goes away until the recording ends, and a **Cancel** icon button takes its
+place in the row's trailing slot; keyboard focus moves to Cancel as the recording starts, whether it was started with
+the pointer or with the keyboard. Cancel's tooltip is a short "Cancel", its name says that it cancels changing the
+shortcut for the command, and its description is the prompt. Only Cancel — pressed with the pointer, or with Enter or
+Space while it has keyboard focus — and Escape (see below) cancel the recording. When a recording ends with keyboard
+focus on Cancel, or on nothing, focus moves to the row's key caps button; when Tab or another control has taken focus
+meanwhile, it stays there. One row records at a time; starting another row's recording ends the first.
 
 While a row records, every key press goes to the recording and to nothing else: no window shortcut runs, Escape does not
 close Settings and the terminal receives nothing. A modifier pressed on its own is the start of a combination and is
@@ -162,11 +167,11 @@ other combination pressed is then taken:
 
 A few keys are not recorded:
 
-- **Escape**, with no modifier, cancels the recording, as pressing the recording button does.
+- **Escape**, with no modifier, cancels the recording, as pressing the recording row's Cancel does.
 - **Tab** held with neither `Ctrl` nor `Cmd` (the Windows key elsewhere) — so `Shift+Tab` and `Option+Tab` too — ends
   the recording and moves keyboard focus as Tab always does. Tab with either of them is recorded, as the
   console-session keys use `Ctrl+Tab`.
-- **Enter** and **Space**, with no modifier, are left to the focused button, so on the recording row's button they
+- **Enter** and **Space**, with no modifier, are left to the focused button, so on the recording row's Cancel they
   cancel.
 
 Ending a recording in any of these ways changes nothing and clears the row's reason.
@@ -185,8 +190,9 @@ leaves shown, or the section's tab while the search shows none (see `docs/produc
 
 The section has one status region of its own, which says that a recording has started and that Escape cancels it, the
 new keys once one is saved, that a change was cancelled, the keys a reset or Restore defaults put back, and every
-reason a combination or a reset was refused — again when the same refusal repeats. A reason shown on a row is also the
-description of that row's key caps button, after the current combination while not recording, and of its Reset.
+reason a combination or a reset was refused — again when the same refusal repeats. A reason shown on a row is also part
+of the description of that row's key caps button, after the current combination, of its Cancel, after the prompt, and
+of its Reset.
 
 ## Which combinations are refused
 

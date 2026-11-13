@@ -104,7 +104,7 @@ export const shortcutsScenarios: Scenario[] = [
     category: "normal",
     title: "Keyboard shortcuts, recording a new key",
     description:
-      "The New session key caps give way to the prompt \"Press the new keys…\" with an X icon for canceling; the other rows keep their key caps and alignment. Press the prompt again or Escape to cancel without changing the shortcut.",
+      "The New session key caps give way to an accent-filled key cap reading \"Press the new keys…\", aligned with the other rows' key caps; it is a prompt, not a button, and pressing it does nothing. A Cancel icon button takes the trailing slot where Reset otherwise sits and holds the focus; it or Escape cancels without changing the shortcut.",
     state,
     steps: [...openSection, recordFor("newSession")],
   },

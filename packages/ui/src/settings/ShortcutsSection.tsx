@@ -16,13 +16,13 @@ import type { ShortcutProblem } from "../shortcuts/validate";
 import { SettingRow } from "./SettingRow";
 import { SettingsGroup } from "./SettingsGroup";
 import { SettingsFocusContext } from "./useSectionRefocus";
-import { Button } from "../primitives";
+import { Button, Kbd } from "../primitives";
 
 /**
  * The keyboard shortcuts: every key the app has, grouped, with the app's own commands rebindable. A
  * row's shortcut button records the next combination pressed (see `recordKeys`): a valid one is saved at
- * once, one that cannot be used says why in the row and keeps recording, and Escape (or pressing the
- * shortcut button again) stops. Everything said is also spoken through the status region. The commands this client does
+ * once, one that cannot be used says why in the row and keeps recording, and Escape (or the row's
+ * Cancel) stops. Everything said is also spoken through the status region. The commands this client does
  * not have (the desktop app's, in a browser) are left out of the list.
  */
 export function ShortcutsSection(): React.ReactElement {
@@ -88,7 +88,7 @@ export function ShortcutsSection(): React.ReactElement {
         setProblem(undefined);
         return "passed";
       }
-      // Enter and Space on their own press the focused shortcut button, which cancels; they are not keys to bind either.
+      // Enter and Space on their own press the focused Cancel; they are not keys to bind either.
       if ((event.key === "Enter" || event.key === " ") && plain && !event.shiftKey) return "passed";
       // A modifier on its own is the start of a combination.
       if (isModifierCode(event.code)) return "consumed";
@@ -204,8 +204,16 @@ function ShortcutRow({
   const problemId = useId();
   const bindingDescriptionId = useId();
   const promptId = useId();
-  const cancelId = useId();
   const changeRef = useRef<HTMLButtonElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  const wasRecording = useRef(recording);
+  // The shortcut button gives way to the prompt while recording, so focus follows: to Cancel when recording starts, and
+  // back to the shortcut when it ends with focus lost along with Cancel (not when Tab or another row took it).
+  useEffect(() => {
+    if (recording && !wasRecording.current) cancelRef.current?.focus();
+    if (!recording && wasRecording.current && (document.activeElement === null || document.activeElement === document.body)) changeRef.current?.focus();
+    wasRecording.current = recording;
+  }, [recording]);
   const label = t(command.label);
   const id = command.id as CommandId;
   const differs = command.rebindable && !sameKeys(binding, command.binding, host);
@@ -221,7 +229,11 @@ function ShortcutRow({
       )}
     >
       <div className="grid grid-cols-[minmax(0,1fr)_1.5rem] items-center gap-2">
-        {command.rebindable ? (
+        {command.rebindable && recording ? (
+          // The prompt takes the key caps' place as an accent key cap, so the row reads as waiting for keys. It is not
+          // a control: only the Cancel in the trailing slot, or Escape, stops the recording.
+          <span className="justify-self-end"><Kbd className="bg-accent-soft text-accent-soft-foreground"><span id={promptId}>{t("settings.shortcuts.recording")}</span></Kbd></span>
+        ) : command.rebindable ? (
           <>
             <span id={bindingDescriptionId} hidden>{describeBinding(binding, t, host)}</span>
             <TitledControl title={actionLabel}>
@@ -231,24 +243,15 @@ function ShortcutRow({
                 size="sm"
                 variant="ghost"
                 // An approved departure from HeroUI (`docs/ui-standard.md`, "Do not change how a HeroUI component looks"): the ghost button
-                // draws no fill of its own, so only the key caps show; hover and press darken the caps themselves, or the recording
-                // prompt's text.
+                // draws no fill of its own, so only the key caps show; hover and press darken the caps themselves.
                 className="h-auto min-h-6 min-w-0 justify-self-end rounded-md p-0 whitespace-normal [--button-bg-hover:transparent] [--button-bg-pressed:transparent]"
-                // While recording, the visible prompt leads the accessible name, followed by what pressing does.
-                label={recording ? undefined : actionLabel}
-                labelledBy={recording ? `${promptId} ${cancelId}` : undefined}
+                label={actionLabel}
                 // Never left undefined: an empty value keeps the tooltip, which repeats the name, from being read as
                 // the description too.
-                describedBy={[!recording && bindingDescriptionId, problem && problemId].filter(Boolean).join(" ")}
-                onPress={() => (recording ? onCancel() : onRecord(id))}
+                describedBy={[bindingDescriptionId, problem && problemId].filter(Boolean).join(" ")}
+                onPress={() => onRecord(id)}
               >
-                {recording ? (
-                  <span className="flex items-center gap-2 px-1.5 text-end text-sm text-app-muted transition-colors motion-reduce:transition-none in-ui-hovered:text-foreground in-ui-pressed:text-foreground">
-                    <span id={promptId}>{t("settings.shortcuts.recording")}</span>
-                    <span id={cancelId} className="sr-only">{actionLabel}</span>
-                    <X aria-hidden="true" className="size-3.5 shrink-0" />
-                  </span>
-                ) : <BindingKbd binding={binding} className="transition-colors in-ui-hovered:bg-(--default-hover) in-ui-hovered:text-foreground in-ui-pressed:bg-(--default-hover) in-ui-pressed:text-foreground" />}
+                <BindingKbd binding={binding} className="transition-colors in-ui-hovered:bg-(--default-hover) in-ui-hovered:text-foreground in-ui-pressed:bg-(--default-hover) in-ui-pressed:text-foreground" />
               </Button>
             </TitledControl>
           </>
@@ -256,6 +259,21 @@ function ShortcutRow({
           <span className="justify-self-end"><BindingKbd binding={binding} /></span>
         )}
         <div className="flex size-6 items-center justify-center">
+          {recording && (
+            <TitledControl title={t("common.cancel")}>
+              <Button
+                ref={cancelRef}
+                size="xs"
+                iconOnly
+                variant="ghost"
+                label={actionLabel}
+                describedBy={[promptId, problem && problemId].filter(Boolean).join(" ")}
+                onPress={onCancel}
+              >
+                <X aria-hidden="true" className="size-3.5" />
+              </Button>
+            </TitledControl>
+          )}
           {/* A short tooltip, as the row's name sits beside it; the accessible name keeps the full wording. */}
           {differs && !recording && (
             <TitledControl title={t("settings.shortcuts.reset")}>
