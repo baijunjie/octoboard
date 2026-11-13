@@ -81,6 +81,14 @@ pub(crate) const APP_NAME: &str = env!("OCTOBOARD_APP_NAME");
 /// `EX_TEMPFAIL`.
 const RESTART_EXIT_STATUS: i32 = 75;
 
+/// How long the end of the daemon waits for the work still running on its runtime once
+/// [`run_daemon`] has returned: blocking work nothing waits for any more (a `git` command on a
+/// mount that hangs, an update check), which would otherwise hold the exit for as long as it runs,
+/// and with it, under a service manager, a planned restart's successor. A running agent CLI update
+/// is waited for first, up to its own deadline, and is not part of this bound (see
+/// `agents::cli`).
+const RUNTIME_SHUTDOWN_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+
 fn main() -> Result<()> {
     let cli = cli::Cli::parse();
     if let Some(command) = cli.command {
@@ -98,22 +106,47 @@ fn main() -> Result<()> {
     let log_file = init_logging();
     platform::proc::crash::install();
 
-    let exit_status = tokio::runtime::Builder::new_multi_thread()
+    let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
-        .build()?
-        .block_on(run_daemon(
-            cli.parent_pid,
-            cli.port,
-            key,
-            handed_over_from,
-            cli.service_managed,
-            log_file,
-        ))?;
+        .build()?;
+    let state = std::sync::OnceLock::new();
+    let exit_status = runtime.block_on(run_daemon(
+        cli.parent_pid,
+        cli.port,
+        key,
+        handed_over_from,
+        cli.service_managed,
+        log_file,
+        &state,
+    ));
+    // An update the stop was asked for is not cut off by the exit, up to its own deadline; what
+    // else is still running is then given the usual bound. Read once the daemon has stopped, so an
+    // update claimed until then is waited for.
+    if let Some(state) = state.get() {
+        state.agent_clis.wait_for_updates();
+    }
+    shut_down_runtime(runtime, RUNTIME_SHUTDOWN_WAIT);
     // Once the runtime is gone.
-    if let Some(status) = exit_status {
+    if let Some(status) = exit_status? {
         std::process::exit(status);
     }
     Ok(())
+}
+
+/// Shuts the daemon's runtime down once [`run_daemon`] has returned, waiting up to `wait`
+/// ([`RUNTIME_SHUTDOWN_WAIT`]) for its blocking work, whatever is still running then left to the
+/// process's exit; its tasks are dropped, as dropping the runtime drops them. What the stop has to
+/// finish (the handover to the holders, the files the next daemon reads, the sessions' records)
+/// [`run_daemon`] awaits before it returns, so only work nothing is waiting for is cut short.
+fn shut_down_runtime(runtime: tokio::runtime::Runtime, wait: std::time::Duration) {
+    let began = std::time::Instant::now();
+    runtime.shutdown_timeout(wait);
+    if began.elapsed() >= wait {
+        tracing::warn!(
+            ?wait,
+            "work still running at the end of the daemon did not finish in time; it is cut short by the exit"
+        );
+    }
 }
 
 /// The key the daemon a planned restart stopped hands its successor (`--key-stdin`): the first
@@ -174,8 +207,9 @@ fn init_logging() -> log_file::LogFile {
 
 /// Runs the daemon on `port` when one is given, else on a port the system assigns, with `key` when
 /// one is given, else a key of its own; `handed_over_from` is the daemon that handed `key` over,
-/// as far as it said. `service_managed` is `--service-managed`. Returns the status to exit with,
-/// when it is not 0.
+/// as far as it said. `service_managed` is `--service-managed`. `state_out` is given the daemon's
+/// state once it exists, for `main` to read what is still running after this returns, error or
+/// not. Returns the status to exit with, when it is not 0.
 async fn run_daemon(
     parent_pid: Option<u32>,
     port: Option<u16>,
@@ -183,6 +217,7 @@ async fn run_daemon(
     handed_over_from: Option<owner_record::Predecessor>,
     service_managed: bool,
     log_file: log_file::LogFile,
+    state_out: &std::sync::OnceLock<Arc<AppState>>,
 ) -> Result<Option<i32>> {
     // Held for the whole run, up to the start of a successor: see `instance_lock` for what a
     // second daemon would do to the first one's sessions.
@@ -224,6 +259,7 @@ async fn run_daemon(
         paths::handoff_dir(),
         processes::ledger::ProcessLedger::new(&paths::data_dir()),
     ));
+    let _ = state_out.set(state.clone());
     // The browser's own socket, where this daemon serves the browser: it runs without the desktop
     // application and embeds the UI, on a host with such sockets. Bound under the instance lock,
     // which a stale socket file's removal needs. A daemon that cannot bind it, or cannot hold the
@@ -836,6 +872,8 @@ fn port_file_path() -> std::path::PathBuf {
 #[cfg(test)]
 mod tests {
     use std::process::{Command, Stdio};
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
     use std::time::{Duration, Instant};
 
     use crate::test_support::{app_state, ScratchDir, PATIENCE};
@@ -986,5 +1024,88 @@ mod tests {
         assert!(!path.exists());
         // Already gone: nothing to do, and no panic.
         super::remove_port_file(&path, 4021);
+    }
+
+    /// A runtime whose blocking work stays busy far past the wait is shut down when the wait runs
+    /// out, not when the work ends: the work here is released only once the shutdown has
+    /// returned, so a shutdown that waited for it would find it finished.
+    #[test]
+    fn shutting_the_runtime_down_does_not_wait_for_blocking_work_past_the_wait() {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("a runtime");
+        let (started_tx, started_rx) = std::sync::mpsc::channel::<()>();
+        let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+        let (finished_tx, finished_rx) = std::sync::mpsc::channel::<()>();
+        runtime.spawn_blocking(move || {
+            started_tx.send(()).ok();
+            // Ends on the release, or on the patience running out, whichever comes first.
+            release_rx.recv_timeout(PATIENCE).ok();
+            finished_tx.send(()).ok();
+        });
+        // Only work that is running holds a shutdown; one still queued would just be dropped.
+        started_rx
+            .recv_timeout(PATIENCE)
+            .expect("the blocking work started");
+
+        super::shut_down_runtime(runtime, Duration::from_millis(100));
+        let still_running = finished_rx.try_recv().is_err();
+
+        // Let the blocked thread go before judging, so a failure does not leave it behind.
+        release_tx.send(()).ok();
+        assert!(
+            still_running,
+            "the shutdown returned only once the work had ended"
+        );
+        finished_rx
+            .recv_timeout(PATIENCE)
+            .expect("the blocked thread was released");
+    }
+
+    /// Blocking work that finishes within the wait is waited for, as dropping the runtime would
+    /// have, and the shutdown returns once it is done instead of using up the whole wait.
+    #[test]
+    fn shutting_the_runtime_down_waits_for_blocking_work_that_finishes_within_the_wait() {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("a runtime");
+        let (started_tx, started_rx) = std::sync::mpsc::channel::<()>();
+        let done = Arc::new(AtomicBool::new(false));
+        let work_done = done.clone();
+        runtime.spawn_blocking(move || {
+            started_tx.send(()).ok();
+            std::thread::sleep(Duration::from_millis(100));
+            work_done.store(true, Ordering::SeqCst);
+        });
+        started_rx
+            .recv_timeout(PATIENCE)
+            .expect("the blocking work started");
+
+        let began = Instant::now();
+        super::shut_down_runtime(runtime, PATIENCE);
+        let elapsed = began.elapsed();
+
+        assert!(
+            done.load(Ordering::SeqCst),
+            "the shutdown returned before the blocking work was done"
+        );
+        assert!(
+            elapsed < PATIENCE,
+            "the shutdown used the whole wait ({elapsed:?}) for work that had finished"
+        );
+    }
+
+    /// A runtime with nothing running on it is shut down at once.
+    #[test]
+    fn shutting_down_an_idle_runtime_returns_before_the_wait_is_up() {
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .expect("a runtime");
+        let began = Instant::now();
+        super::shut_down_runtime(runtime, PATIENCE);
+        assert!(began.elapsed() < PATIENCE);
     }
 }

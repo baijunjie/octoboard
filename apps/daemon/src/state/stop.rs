@@ -19,6 +19,10 @@
 //! `shutdown` request on a connection still open, a termination signal, the application's quit
 //! note (`super::application_note`). A new connection is not accepted once the stop has begun, so
 //! a `POST /shutdown` made then does not reach the daemon.
+//!
+//! Lock order: the stop (the watch's own lock) before `AgentClis`, before the session publication
+//! lock. [`AppState::ask_planned`] reads the agent CLI claims under the stop's lock, so nothing
+//! under either of the other two may read the stop (`borrow`, [`AppState::restart_asked`]).
 
 use std::sync::atomic::Ordering;
 
@@ -51,6 +55,12 @@ pub enum RestartRefusal {
     /// daemon's own systemd service, having no unit of its own (`holder::client::launch_holder`):
     /// the service's stop would end it with every terminal it runs.
     HoldersInService,
+    /// An update of an agent's CLI is running, which a restart would cut off mid-install: an
+    /// install left half done can break that CLI. Only a restart is refused with it, and only
+    /// where no stop has been asked for yet. A stop the daemon is asked for waits for the update up
+    /// to its own deadline (`AgentClis::wait_for_updates`); one a service manager makes is cut at
+    /// the unit's `TimeoutStopSec`, which kills the update.
+    AgentUpdateRunning,
 }
 
 impl RestartRefusal {
@@ -60,6 +70,7 @@ impl RestartRefusal {
             Self::FollowsApplication => "follows_application",
             Self::StopInProgress => "stop_in_progress",
             Self::HoldersInService => "holders_in_service",
+            Self::AgentUpdateRunning => "agent_update_running",
         }
     }
 
@@ -74,6 +85,9 @@ impl RestartRefusal {
                 "sessions and terminals run inside the daemon's systemd unit, so stopping or \
                  restarting the daemon would end them; to do it anyway, stop or restart the unit \
                  with systemctl on the server"
+            }
+            Self::AgentUpdateRunning => {
+                "an agent CLI update is running; try again when it finishes"
             }
         }
     }
@@ -111,7 +125,8 @@ impl AppState {
     /// (`super::application_note`). A stop asked for already, of either kind, stays the one made,
     /// and one asked for after the application said it is quitting is ordinary.
     pub fn request_planned_stop(&self) {
-        self.ask_planned(false);
+        // Never refused: only a restart is.
+        let _ = self.ask_planned(false);
     }
 
     /// [`Self::request_planned_stop`] for a client's request, which is refused where a service
@@ -121,7 +136,8 @@ impl AppState {
     /// service from then on either.
     pub fn request_planned_stop_unless_holders_in_service(&self) -> Result<(), RestartRefusal> {
         self.claim_planned_stop()?;
-        self.ask_planned(false);
+        // Never refused for an agent CLI update: only a restart is.
+        let _ = self.ask_planned(false);
         Ok(())
     }
 
@@ -129,7 +145,7 @@ impl AppState {
     /// already, of either kind, stays the one made.
     pub fn request_planned_restart(&self) -> Result<(), RestartRefusal> {
         self.claim_restart()?;
-        self.ask_planned(true);
+        self.ask_planned(true)?;
         Ok(())
     }
 
@@ -138,7 +154,7 @@ impl AppState {
     /// "restarting" must not be given when the daemon is stopping for another reason.
     pub fn request_planned_restart_unless_stopping(&self) -> Result<(), RestartRefusal> {
         self.claim_restart()?;
-        if self.ask_planned(true) {
+        if self.ask_planned(true)? {
             Ok(())
         } else {
             Err(RestartRefusal::StopInProgress)
@@ -151,10 +167,17 @@ impl AppState {
     /// note) must not leave the sessions to the next start either. Read under the stop's lock,
     /// which `note_application_quit` reads the stop under after noting the quit, so that one of
     /// the two always sees the other. Whether this request became the stop: false when a stop
-    /// had been asked for already, which stays the one made.
-    fn ask_planned(&self, successor: bool) -> bool {
-        self.stop.send_if_modified(|stop| {
+    /// had been asked for already, which stays the one made. A restart is refused here, under the
+    /// same lock, where an agent CLI update runs: a claim taken meanwhile reads the stop after it
+    /// has taken the claim (`AgentClis::begin_update`), so one of the two always sees the other.
+    fn ask_planned(&self, successor: bool) -> Result<bool, RestartRefusal> {
+        let mut refusal = None;
+        let made = self.stop.send_if_modified(|stop| {
             if stop.is_some() {
+                return false;
+            }
+            if successor && self.agent_clis.any_updating() {
+                refusal = Some(RestartRefusal::AgentUpdateRunning);
                 return false;
             }
             *stop = Some(if self.application_said_quit() {
@@ -163,7 +186,11 @@ impl AppState {
                 StopKind::Planned { successor }
             });
             true
-        })
+        });
+        match refusal {
+            Some(refusal) => Err(refusal),
+            None => Ok(made),
+        }
     }
 
     /// Refuses a planned restart as [`RestartRefusal`] says; where it is not refused, claims the
@@ -189,6 +216,15 @@ impl AppState {
     /// the daemon's own service.
     fn claim_holders() -> bool {
         crate::holder::client::current().is_none_or(|holders| holders.claim_planned_stop())
+    }
+
+    /// Whether the stop asked for is a planned restart, accepted: after it no agent CLI update is
+    /// started.
+    pub(crate) fn restart_asked(&self) -> bool {
+        matches!(
+            *self.stop.borrow(),
+            Some(StopKind::Planned { successor: true })
+        )
     }
 
     /// Waits until a stop is asked for, and says which. A stop asked for before the wait began is
@@ -416,6 +452,88 @@ mod tests {
         );
     }
 
+    /// A restart is refused while an agent CLI update runs, by either way of asking, and asks for
+    /// no stop; it is taken once the update has ended. A stop already asked for stays the one made
+    /// rather than being told an update runs.
+    #[tokio::test]
+    async fn a_planned_restart_is_refused_while_an_agent_cli_update_runs() {
+        use crate::protocol::AgentId;
+
+        let (state, _dir) = app_state("stop-restart-update-running");
+        state.set_service_managed(true);
+        let claim = state
+            .agent_clis
+            .begin_update(&state, AgentId::CODEX, Duration::from_secs(60))
+            .unwrap();
+        assert_eq!(
+            state.request_planned_restart(),
+            Err(RestartRefusal::AgentUpdateRunning)
+        );
+        assert_eq!(
+            state.request_planned_restart_unless_stopping(),
+            Err(RestartRefusal::AgentUpdateRunning)
+        );
+        assert!(!state.stop_asked(), "a refused restart asked for a stop");
+
+        drop(claim);
+        assert_eq!(state.request_planned_restart(), Ok(()));
+        assert_eq!(
+            state.await_stop().await,
+            StopKind::Planned { successor: true }
+        );
+
+        // With a stop asked for already, a duplicate restart is told so, not that an update runs.
+        let _claim = state
+            .agent_clis
+            .begin_update(&state, AgentId::CODEX, Duration::from_secs(60))
+            .err()
+            .expect("no claim once a restart was accepted");
+        let (stopping, _stopping_dir) = app_state("stop-restart-update-duplicate");
+        stopping.set_service_managed(true);
+        let _held = stopping
+            .agent_clis
+            .begin_update(&stopping, AgentId::CODEX, Duration::from_secs(60))
+            .unwrap();
+        stopping.request_shutdown();
+        assert_eq!(
+            stopping.request_planned_restart_unless_stopping(),
+            Err(RestartRefusal::StopInProgress)
+        );
+    }
+
+    /// An update claimed once a restart was accepted is given back and refused as the daemon
+    /// shutting down, so no update starts that the restart would cut off; a planned stop with no
+    /// successor leaves updates alone.
+    #[tokio::test]
+    async fn no_agent_cli_update_is_claimed_after_a_planned_restart_was_accepted() {
+        use crate::protocol::AgentId;
+
+        let (state, _dir) = app_state("stop-update-after-restart");
+        state.set_service_managed(true);
+        assert_eq!(state.request_planned_restart(), Ok(()));
+        let refused = state
+            .agent_clis
+            .begin_update(&state, AgentId::CODEX, Duration::from_secs(60))
+            .err()
+            .expect("the claim was refused");
+        assert_eq!(
+            crate::protocol::CodedError::of(&refused).code,
+            crate::protocol::error_code::DAEMON_SHUTTING_DOWN
+        );
+        assert!(
+            !state.agent_clis.any_updating(),
+            "the claim was not given back"
+        );
+
+        let (stopping, _stopping_dir) = app_state("stop-update-after-planned-stop");
+        stopping.request_planned_stop();
+        let claim =
+            stopping
+                .agent_clis
+                .begin_update(&stopping, AgentId::CODEX, Duration::from_secs(60));
+        assert!(claim.is_ok());
+    }
+
     /// A planned stop or restart asked for after an ordinary stop leaves it ordinary, so nothing
     /// is handed over.
     #[tokio::test]
@@ -502,13 +620,15 @@ mod tests {
             match refusal {
                 RestartRefusal::FollowsApplication
                 | RestartRefusal::StopInProgress
-                | RestartRefusal::HoldersInService => refusal,
+                | RestartRefusal::HoldersInService
+                | RestartRefusal::AgentUpdateRunning => refusal,
             }
         }
         let all = [
             listed(RestartRefusal::FollowsApplication),
             listed(RestartRefusal::StopInProgress),
             listed(RestartRefusal::HoldersInService),
+            listed(RestartRefusal::AgentUpdateRunning),
         ];
         let codes: std::collections::HashSet<_> =
             all.iter().map(|refusal| refusal.code()).collect();

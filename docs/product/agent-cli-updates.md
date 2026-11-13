@@ -102,9 +102,12 @@ window shows the update as running while it runs.
 
 The command's output, standard output and error together, is written to `~/.octoboard/agent-cli-updates/<agent>.log`,
 named by the agent's id (`claude.log`, `codex.log`, `grok.log`), overwritten by each update of that agent and kept
-across restarts; on macOS and Linux only the user can read it. The update is not tied to the daemon: when the daemon
-stops while an update runs, the update goes on to its end, and the daemon's own process may stay until then, at most
-the ten minutes. A daemon started afterwards knows nothing of that update: it shows none running and accepts another,
+across restarts; on macOS and Linux only the user can read it. A stop the daemon is asked for (`octoboardd stop`,
+`POST /shutdown`, the shutdown request, a planned stop) waits for a running update, up to its own deadline: the ten
+minutes and the updater's 6 s grace; a planned restart is refused while an update runs, since it would cut the update
+off. A stop a service manager makes (`systemctl stop` or `restart`, the host shutting down) is cut at the unit's
+`TimeoutStopSec` (90 s), after which the update is killed and may be left half installed; outside a unit the update's
+tool outlives the daemon. A daemon started afterwards knows nothing of that update: it shows none running and accepts another,
 and the earlier update's result shows only in the next check. Once the daemon has begun to shut down, no update is
 started (see "Quitting" in `docs/product/application-lifecycle.md`).
 

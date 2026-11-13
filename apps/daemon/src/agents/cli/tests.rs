@@ -5,7 +5,11 @@ use std::path::Path;
 use crate::adapter::CliPackaging;
 use crate::platform::shell::ResolvedBinary;
 use crate::protocol::Code;
+use crate::test_support::PATIENCE;
 use latest::Failure;
+
+/// The time an update claim taken directly by a test is given.
+const CLAIM_TIMEOUT: Duration = Duration::from_secs(60);
 
 /// A registry that answers a fixed way, so a test makes no request.
 pub(super) enum Stub {
@@ -735,7 +739,7 @@ async fn an_update_that_ends_during_shutdown_records_its_outcome_and_checks_noth
     let claim = cli
         .state
         .agent_clis
-        .begin_update(&cli.state, AgentId::CODEX)
+        .begin_update(&cli.state, AgentId::CODEX, CLAIM_TIMEOUT)
         .unwrap();
     cli.state
         .agent_clis
@@ -907,7 +911,7 @@ async fn a_second_update_of_an_agent_is_refused_until_the_first_ends() {
     assert!(cli
         .state
         .agent_clis
-        .begin_update(&cli.state, AgentId::CLAUDE)
+        .begin_update(&cli.state, AgentId::CLAUDE, CLAIM_TIMEOUT)
         .is_ok());
 
     next_status(&mut events, ended).await;
@@ -1190,7 +1194,9 @@ async fn an_agent_being_updated_is_not_checked_and_a_claim_is_released_when_drop
     let (state, _dir) = crate::test_support::app_state("cli-claims-update");
     let clis = &state.agent_clis;
 
-    let update = clis.begin_update(&state, AgentId::CODEX).unwrap();
+    let update = clis
+        .begin_update(&state, AgentId::CODEX, CLAIM_TIMEOUT)
+        .unwrap();
     assert!(clis.begin_check(&state, AgentId::CODEX).is_none());
     drop(update);
 
@@ -1199,7 +1205,7 @@ async fn an_agent_being_updated_is_not_checked_and_a_claim_is_released_when_drop
         move || {
             let _claim = state
                 .agent_clis
-                .begin_update(&state, AgentId::CODEX)
+                .begin_update(&state, AgentId::CODEX, CLAIM_TIMEOUT)
                 .unwrap();
             panic!("the update task panicked");
         }
@@ -1207,9 +1213,85 @@ async fn an_agent_being_updated_is_not_checked_and_a_claim_is_released_when_drop
     .join();
     assert!(panicked.is_err());
     assert!(
-        clis.begin_update(&state, AgentId::CODEX).is_ok(),
+        clis.begin_update(&state, AgentId::CODEX, CLAIM_TIMEOUT)
+            .is_ok(),
         "a panic must not hold the agent for the rest of the daemon's life"
     );
+}
+
+/// What a stop waits for is the latest deadline among the updates running, each its own start plus
+/// the time it was given, and nothing once they have ended.
+#[tokio::test]
+async fn the_deadline_a_stop_waits_for_is_the_latest_of_the_updates_running() {
+    let (state, _dir) = crate::test_support::app_state("cli-update-deadline");
+    let clis = &state.agent_clis;
+    assert_eq!(clis.lock().latest_update_deadline(), None);
+    assert!(!clis.any_updating());
+
+    let before = Instant::now();
+    let short = clis
+        .begin_update(&state, AgentId::CODEX, Duration::from_secs(60))
+        .unwrap();
+    let long = clis
+        .begin_update(&state, AgentId::CLAUDE, Duration::from_secs(600))
+        .unwrap();
+    let after = Instant::now();
+    assert!(clis.any_updating());
+    let deadline = clis.lock().latest_update_deadline().expect("updates run");
+    // Each update's own time and the grace its updater has to end after it.
+    assert!(deadline >= before + Duration::from_secs(600) + super::TERM_GRACE);
+    assert!(deadline <= after + Duration::from_secs(600) + super::TERM_GRACE);
+
+    drop(long);
+    let deadline = clis
+        .lock()
+        .latest_update_deadline()
+        .expect("one still runs");
+    assert!(deadline <= after + Duration::from_secs(60) + super::TERM_GRACE);
+
+    drop(short);
+    assert_eq!(clis.lock().latest_update_deadline(), None);
+    assert!(!clis.any_updating());
+}
+
+/// The stop's wait for the updates returns at once with none running, as soon as the last claim is
+/// released, and at the deadline where one is not.
+#[tokio::test]
+async fn waiting_for_the_updates_ends_when_they_do_or_at_their_deadline() {
+    let (state, _dir) = crate::test_support::app_state("cli-update-wait");
+    let clis = &state.agent_clis;
+    let began = Instant::now();
+    clis.wait_for_updates();
+    assert!(began.elapsed() < PATIENCE, "waited with no update running");
+
+    let claim = clis
+        .begin_update(&state, AgentId::CODEX, Duration::from_secs(600))
+        .unwrap();
+    let waiting = std::thread::spawn({
+        let state = state.clone();
+        move || {
+            state.agent_clis.wait_for_updates();
+            Instant::now()
+        }
+    });
+    std::thread::sleep(Duration::from_millis(50));
+    let released = Instant::now();
+    drop(claim);
+    let ended = waiting.join().expect("the wait ended");
+    assert!(
+        ended.duration_since(released) < PATIENCE,
+        "the wait did not end with the update"
+    );
+
+    // An update that outlasts its deadline holds the wait only until then.
+    let mut inner = clis.lock();
+    inner.held.entry(AgentId::CLAUDE).or_default().updating =
+        Some(Instant::now() + Duration::from_millis(100));
+    drop(inner);
+    let began = Instant::now();
+    clis.wait_for_updates();
+    assert!(began.elapsed() >= Duration::from_millis(100));
+    assert!(began.elapsed() < PATIENCE);
 }
 
 #[tokio::test]
@@ -1227,7 +1309,9 @@ async fn a_check_begun_before_an_update_is_dropped_when_it_lands_after() {
     };
     let clis = &state.agent_clis;
     let stale = clis.begin_check(&state, AgentId::CODEX).expect("free");
-    let update = clis.begin_update(&state, AgentId::CODEX).unwrap();
+    let update = clis
+        .begin_update(&state, AgentId::CODEX, CLAIM_TIMEOUT)
+        .unwrap();
     clis.record(&state, status("0.167.0"));
     drop(update);
     let mut events = state.subscribe();
@@ -1264,7 +1348,7 @@ async fn an_update_that_ends_without_a_word_is_recorded_as_failed() {
         move || {
             let _claim = state
                 .agent_clis
-                .begin_update(&state, AgentId::CODEX)
+                .begin_update(&state, AgentId::CODEX, CLAIM_TIMEOUT)
                 .unwrap();
             state.agent_clis.record_update_started(&state, status);
             panic!("the update task panicked");

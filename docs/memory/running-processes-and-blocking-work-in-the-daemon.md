@@ -62,11 +62,23 @@ environment instead, as `UreqFetcher::command_line` (`apps/daemon/src/self_updat
 ## Long work that must not hold the daemon's stop runs on a thread of its own, not the blocking pool
 
 Applies to daemon work that can run for minutes — a download, a wait on the network or on another process — which the
-daemon's stop or a planned restart should not wait for. The daemon's runtime (`apps/daemon/src/main.rs`) is dropped at
-exit, and dropping a tokio runtime waits for every `spawn_blocking` task to return, so such work on the blocking pool
-holds the exit for as long as it runs: a stalled download keeps the daemon from stopping for its whole deadline. Start
-it with `std::thread::spawn`, and check `AppState::stop_asked` right before each step that cannot be undone (replacing
-a file, writing a record), refusing it once the stop has begun.
+daemon's stop or a planned restart should not wait for. Once `run_daemon` returns, `main` (`apps/daemon/src/main.rs`)
+shuts the runtime down waiting up to `RUNTIME_SHUTDOWN_WAIT` (5 s) for the `spawn_blocking` work still running, then
+exits with that work cut off wherever it stands, its child processes with it under the systemd unit
+(`KillMode=mixed`). So long work on the blocking pool both holds the exit for those seconds and is cut short at an
+arbitrary step. Start it with `std::thread::spawn`, and check `AppState::stop_asked` right before each step that cannot
+be undone (replacing a file, writing a record), refusing it once the stop has begun.
+
+The one exception is an agent CLI update (`agents::cli`): the updater's tool must not be cut off mid-install, so a
+planned restart is refused while one runs (`RestartRefusal::AgentUpdateRunning`), no update is claimed once a restart
+was accepted, and a stop the daemon is asked for waits for it up to its own deadline (`AgentClis::wait_for_updates`,
+called by `main` before the 5 s runtime shutdown, so an update that ends early frees the exit at once). A stop a service
+manager makes is cut at the unit's `TimeoutStopSec` instead, which kills the update. Do not add more long
+`spawn_blocking` work that the stop must wait for; give it a thread of its own as above.
+
+The same bound means that whatever the stop has to finish — a record the next daemon reads, the handover — must be
+awaited by `run_daemon` itself: blocking work started and left (its `JoinHandle` dropped) is not waited for past the
+bound.
 
 That check cannot interrupt a blocking read. Where a read can stall, run it on a reader thread of its own with an idle
 deadline, so the work gives up and moves on while the abandoned reader ends only with its request's own deadline, and

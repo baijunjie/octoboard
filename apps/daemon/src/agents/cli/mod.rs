@@ -19,6 +19,13 @@
 //! running when the daemon is stopped is not broken by it. A daemon that has begun to shut down
 //! refuses a new update, and one that ends after the shutdown began only records its outcome:
 //! it takes no shell environment and checks nothing.
+//!
+//! An install ended halfway can break the CLI, so the daemon does not cut an update off itself: a
+//! planned restart is refused while one runs (and no update is claimed once one was accepted), and
+//! a stop the daemon is asked for (`octoboardd stop`, `POST /shutdown`, the `shutdown` request, a
+//! planned stop) waits for it up to its own deadline ([`AgentClis::wait_for_updates`]). A stop a
+//! service manager makes is cut at the unit's `TimeoutStopSec`, which kills the update; outside a
+//! unit the updater's tool outlives the daemon.
 
 pub(crate) mod install;
 pub(crate) mod latest;
@@ -34,7 +41,7 @@ use update::{run_update_tool, start_update, Refresh, UPDATE_TIMEOUT};
 
 use std::collections::HashMap;
 use std::process::Output;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
@@ -48,7 +55,7 @@ use crate::protocol::{
     agent_cli_code, error_code, AgentCliStatus, AgentCliUpdate, AgentId, CliInstallMethod,
     CliUpdateState, CodedError, Event,
 };
-use crate::state::AppState;
+use crate::state::{shutting_down_refusal, AppState};
 use crate::time::now_millis;
 use install::{Install, ToolCommand};
 use latest::Registry;
@@ -75,6 +82,8 @@ const TERM_GRACE: Duration = Duration::from_secs(6);
 #[derive(Default)]
 pub struct AgentClis {
     inner: Mutex<Inner>,
+    /// Notified whenever an update's claim is released ([`Self::wait_for_updates`]).
+    ended: Condvar,
 }
 
 #[derive(Default)]
@@ -83,10 +92,19 @@ struct Inner {
     held: HashMap<AgentId, Held>,
 }
 
+impl Inner {
+    /// The latest time at which a running update is given up on, or `None` while none runs.
+    fn latest_update_deadline(&self) -> Option<Instant> {
+        self.held.values().filter_map(|held| held.updating).max()
+    }
+}
+
 #[derive(Default)]
 struct Held {
     checking: bool,
-    updating: bool,
+    /// While an update runs: when its own time, and the grace its updater has to end after it, runs
+    /// out, the latest a stop waits for it ([`AgentClis::wait_for_updates`]).
+    updating: Option<Instant>,
     /// When the last check or update of the agent ended.
     last_ended: Option<Instant>,
     /// Moved on whenever an update starts: a check that began before it read versions the update
@@ -119,10 +137,12 @@ impl Drop for Claim {
         let held = inner.held.entry(self.agent).or_default();
         match self.work {
             Work::Check => held.checking = false,
-            Work::Update => held.updating = false,
+            Work::Update => held.updating = None,
         }
         held.last_ended = Some(Instant::now());
         if self.work == Work::Update {
+            // A stop waiting for the updates to end.
+            self.state.agent_clis.ended.notify_all();
             if let Some(status) = inner.statuses.get_mut(&self.agent) {
                 let running = status
                     .update
@@ -164,7 +184,7 @@ impl AgentClis {
         let recent = held
             .last_ended
             .is_some_and(|ended| ended.elapsed() < CHECK_FLOOR);
-        if held.checking || held.updating || recent {
+        if held.checking || held.updating.is_some() || recent {
             return None;
         }
         held.checking = true;
@@ -176,26 +196,78 @@ impl AgentClis {
         })
     }
 
-    /// The claim to update `agent`, or the refusal that one is running. A check running meanwhile
-    /// is left to end, but what it reads is older than the update, so its result is dropped.
-    fn begin_update(&self, state: &Arc<AppState>, agent: AgentId) -> Result<Claim> {
-        let mut inner = self.lock();
-        let held = inner.held.entry(agent).or_default();
-        if held.updating {
-            return Err(CodedError::raised(
-                error_code::AGENT_CLI_UPDATE_RUNNING,
-                format!("{} is already being updated.", agent.label()),
-                &[("agent", agent.label())],
-            ));
+    /// The claim to update `agent`, which has `timeout` to run, or the refusal that one is
+    /// running or that a planned restart has been asked for. A check running meanwhile is left to
+    /// end, but what it reads is older than the update, so its result is dropped.
+    ///
+    /// A planned restart is refused while an update runs (`AppState::request_planned_restart`),
+    /// and the two checks meet without a lock held across both: the restart is accepted under the
+    /// stop's lock, reading the claims under this one, while this claim is taken under this lock
+    /// and the stop is read after it is released. So either the restart sees the claim and is
+    /// refused, or the claim sees the restart and is given back.
+    pub(crate) fn begin_update(
+        &self,
+        state: &Arc<AppState>,
+        agent: AgentId,
+        timeout: Duration,
+    ) -> Result<Claim> {
+        if state.restart_asked() {
+            return Err(shutting_down_refusal());
         }
-        held.updating = true;
-        held.generation += 1;
-        Ok(Claim {
-            state: state.clone(),
-            agent,
-            work: Work::Update,
-            generation: held.generation,
-        })
+        let claim = {
+            let mut inner = self.lock();
+            let held = inner.held.entry(agent).or_default();
+            if held.updating.is_some() {
+                return Err(CodedError::raised(
+                    error_code::AGENT_CLI_UPDATE_RUNNING,
+                    format!("{} is already being updated.", agent.label()),
+                    &[("agent", agent.label())],
+                ));
+            }
+            // Its own time, and the grace its updater is given to end once that runs out.
+            held.updating = Some(Instant::now() + timeout + TERM_GRACE);
+            held.generation += 1;
+            Claim {
+                state: state.clone(),
+                agent,
+                work: Work::Update,
+                generation: held.generation,
+            }
+        };
+        // Read again, after the claim: a restart accepted between the first read and the claim
+        // saw no claim and was not refused.
+        if state.restart_asked() {
+            return Err(shutting_down_refusal());
+        }
+        Ok(claim)
+    }
+
+    /// Whether an update of any agent's CLI is running.
+    pub(crate) fn any_updating(&self) -> bool {
+        self.lock()
+            .held
+            .values()
+            .any(|held| held.updating.is_some())
+    }
+
+    /// Blocks until no update is running, or until the latest deadline of those running has
+    /// passed: what a stop does so that an update, which nothing cancels, is not cut off by the
+    /// exit. Updates that end early release it at once. Blocking.
+    pub(crate) fn wait_for_updates(&self) {
+        let mut inner = self.lock();
+        loop {
+            let Some(deadline) = inner.latest_update_deadline() else {
+                return;
+            };
+            let Some(left) = deadline.checked_duration_since(Instant::now()) else {
+                return;
+            };
+            inner = self
+                .ended
+                .wait_timeout(inner, left)
+                .expect("agent CLI statuses lock poisoned")
+                .0;
+        }
     }
 
     /// Records the result of a check taken under `claim`, keeping the update the status already

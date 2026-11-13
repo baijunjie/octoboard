@@ -50,7 +50,8 @@ StandardError=journal
 # remains in the unit afterwards. The holders are not in it: the daemon starts each as a user unit
 # of its own, ordered to stop after this one, so that at a shutdown the daemon still reaches them.
 KillMode=mixed
-# Stopping every session takes time.
+# Stopping every session takes time. A running agent CLI update is waited for only this long, after
+# which it is killed and may be left half installed.
 TimeoutStopSec=90
 # A writable cgroup v2 subtree for the daemon. The per-launch groups of agent processes are made
 # in the cgroup of the holder unit that runs them; this one is for a daemon whose holders could

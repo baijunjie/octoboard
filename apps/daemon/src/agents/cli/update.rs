@@ -125,7 +125,9 @@ pub(crate) fn start_update(
     output_dir: &Path,
 ) -> Result<()> {
     state.refuse_while_shutting_down()?;
-    let claim = state.agent_clis.begin_update(state, prepared.agent)?;
+    let claim = state
+        .agent_clis
+        .begin_update(state, prepared.agent, timeout)?;
     state
         .agent_clis
         .record_update_started(state, prepared.found.clone());

@@ -35,7 +35,10 @@ message says that sessions and terminals run inside the daemon's systemd unit, s
 would end them, and to stop or restart the unit with `systemctl` on the server to do it anyway). That decision is made
 together with admitting new programs there: once the restart is accepted, a session or terminal that would run inside
 the unit (a holder started there, or a program added to a holder already there) is refused until the restart completes.
-A planned stop or restart asked for while an ordinary stop (the shutdown request, a termination signal) is already asked
+A planned restart is refused too, and nothing is stopped, while an update of an agent's CLI runs (`409` with the reason
+`agent_update_running`), since the exit would cut the update off mid-install, and an update asked for once a restart has
+been accepted is refused as the daemon shutting down; a planned stop with no successor is never refused for an update. A
+planned stop or restart asked for while an ordinary stop (the shutdown request, a termination signal) is already asked
 for does not replace it, and a planned stop asked for after the desktop application's quit note is made ordinary (see
 "The quit note" in `docs/product/application-lifecycle.md`); an ordinary stop asked for before a planned one has begun
 replaces it, and one asked for once it has begun cuts it short (see "An ordinary stop during a planned stop" below).
