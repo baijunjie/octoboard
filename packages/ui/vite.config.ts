@@ -9,6 +9,7 @@ import type { Plugin } from "vite";
 import { configDefaults, defineConfig } from "vitest/config";
 
 import appConfig from "../../config/app.json" with { type: "json" };
+import desktopPackage from "../../apps/desktop/package.json" with { type: "json" };
 import { loadEnv } from "../../scripts/lib/env.mjs";
 
 import { REPORT_ENV } from "./src/test/failedFilesReporter.ts";
@@ -92,7 +93,10 @@ export default defineConfig(({ command }) => {
     // the build, the dev server, the gallery and jsdom tests run the compiled code, while tests in
     // the node environment run it uncompiled.
     plugins: [react(), babel({ presets: [reactCompilerPreset()] }), tailwindcss(), appName, galleryFrameCsp, viewerThemes],
-    define: { __OCTOBOARD_DEV_PROXY__: JSON.stringify(Boolean(daemonPort)) },
+    // The release version, which the desktop application and the daemon share (`release:version` writes it into
+    // `apps/desktop/package.json` and the Cargo workspace together), so that a page can tell whether the daemon it talks
+    // to is of its own build.
+    define: { __OCTOBOARD_DEV_PROXY__: JSON.stringify(Boolean(daemonPort)), __OCTOBOARD_VERSION__: JSON.stringify(desktopPackage.version) },
     // A build's CSS minifier lowers `:dir()` to `:lang()` lists for its default targets, so every
     // `:dir()` rule would follow the page's language instead of the element's own reading direction:
     // the task-list rules in `src/viewer/markdown/markdown.css` then put a right-to-left item's box opposite

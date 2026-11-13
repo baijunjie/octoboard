@@ -281,6 +281,8 @@ export function App(): React.ReactElement {
     const state = store.getState().connectionState;
     return state !== "incompatible" && state !== "keyRefused";
   };
+  // In this order: the status that reloads the page that asked for the restart is the one that says it was updated, and
+  // the notice holds back once the reload has begun, which it can only see when the reload's effect runs first.
   const reloadAfterRestart = useReloadAfterRestart();
   useUpdatedNotice();
   const exit = useAppExit({

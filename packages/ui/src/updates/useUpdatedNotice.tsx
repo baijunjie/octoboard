@@ -7,6 +7,7 @@ import { t } from "../i18n/language";
 import { Message } from "../i18n/react";
 import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
 import { useDaemon, useDaemonStore } from "../store";
+import { isReloading } from "../platform/reloadPage";
 
 /** The version this browser was last told of, read from storage at the moment of asking and not once at load: another tab
  * may have told it since, and each version is said once per browser, not once per tab. `undefined` where storage is
@@ -31,8 +32,8 @@ function remember(version: string): void {
 /** Says "Updated to version X" once per browser per version, when the daemon this page talks to started by replacing
  * an older version of itself (`updated_from`, which it holds for as long as it runs), with a link to what is new. A
  * toast, since it is no more than news; it comes as soon as the daemon that greeted has sent its own status, in whichever
- * tab of the browser is first to see it. What is held from a daemon that went before (`daemonUpdateStale`) says nothing
- * of this one. */
+ * tab of the browser is first to see it, unless that page is reloading. What is held from a daemon that went before
+ * (`daemonUpdateStale`) says nothing of this one. */
 export function useUpdatedNotice(): void {
   const { showNotice } = useDaemon();
   const updatedFrom = useDaemonStore((state) => (state.daemonUpdateStale ? undefined : state.daemonUpdate?.updated_from));
@@ -40,7 +41,9 @@ export function useUpdatedNotice(): void {
   // Said once per page load in a browser with no storage.
   const said = useRef<string>(undefined);
   useEffect(() => {
-    if (!updatedFrom || !version || said.current === version || toldVersion() === version) return;
+    // A page already reloading (the one that asked for the restart, whose reload this same status set off) leaves it to
+    // the page that replaces it, as one told of it here would never be seen.
+    if (!updatedFrom || !version || said.current === version || toldVersion() === version || isReloading()) return;
     said.current = version;
     remember(version);
     showNotice(

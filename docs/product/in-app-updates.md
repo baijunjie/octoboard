@@ -261,10 +261,10 @@ behind **Error details**:
 
 - **Check for updates** pressed in Settings or the menu bar icon's menu that fails: titled "Could not check for
   updates"; Octoboard keeps running the current version and whether a newer one is available is not known; check
-  the internet connection and try again.
+  the internet connection of the computer Octoboard is installed on, then try again.
 - **Download and install** that fails: titled "Could not install the update"; the update could not be downloaded and
-  installed; check the internet connection and the free disk space, then try again. The update stays offered, so it
-  can be tried again.
+  installed; check the internet connection and the free disk space of the computer Octoboard is installed on, then try
+  again. The update stays offered, so it can be tried again.
 - **Download and install** when the application no longer holds the update the window offers: titled "Could not
   install the update"; the update is no longer available to install; check for updates to look for it again. The offer
   and its notice are withdrawn, and the alert has no Error details.

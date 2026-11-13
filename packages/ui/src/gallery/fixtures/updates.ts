@@ -3,7 +3,7 @@ import type { AvailableUpdate } from "../../platform";
 import type { Step } from "../../fixtures/interact";
 import { PROTOCOL_GENERATION, type DaemonUpdateAvailable, type DaemonUpdateCheck, type DaemonUpdateManual } from "../../protocol";
 import type { Scenario } from "../scenario";
-import { SAMPLE, daemonUpdateOf, minutesAgo, sessionOf, shellTerminalOf, snapshotState } from "../../fixtures/builders";
+import { FIXTURE_DAEMON_INSTALL_STARTED_AT, FIXTURE_DAEMON_VERSION, SAMPLE, daemonUpdateOf, minutesAgo, sessionOf, shellTerminalOf, snapshotState } from "../../fixtures/builders";
 
 const GROUP = "Updates";
 
@@ -239,7 +239,7 @@ export const updateScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Reload bar, the daemon now runs another version",
-    description: "This page was loaded for version 0.1.0 and the daemon has since restarted into 0.2.0, as another tab's restart does: the strip along the bottom edge carries a refresh icon, the sentence that the application was updated to 0.2.0 and the page is to be reloaded, and Reload. It has no Later icon: the page is out of date until it is reloaded, and nothing reloads by itself.",
+    description: "This page was loaded for the daemon's own version, which has since restarted into 0.2.0, as another tab's restart does: the strip along the bottom edge carries a refresh icon, the sentence that the application was updated to 0.2.0 and the page is to be reloaded, and Reload. It has no Later icon: the page is out of date until it is reloaded, and nothing reloads by itself.",
     state: browserQuiet(daemonUpdateOf()),
     steps: [
       openSession,
@@ -251,8 +251,8 @@ export const updateScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Toast after the daemon updated itself",
-    description: "The window opens on a daemon that started by replacing version 0.1.0 with 0.2.0: a toast says \"Updated to version 0.2.0.\" with a What is new link to that version's release page. It is told once per browser for each version, and the toast goes by itself after a few seconds (open the scenario again to see it).",
-    state: snapshotState({ consoles: [console_], projects: [web], sessions: idle, daemon: { version: "0.2.0", generation: PROTOCOL_GENERATION }, daemonUpdate: daemonUpdateOf({ updated_from: "0.1.0" }) }),
+    description: "The window opens on a daemon that started by replacing an earlier version with this page's own: a toast says the application was updated to this page's own version, with a What is new link to that version's release page. It is told once per browser for each version, and the toast goes by itself after a few seconds (open the scenario again to see it).",
+    state: snapshotState({ consoles: [console_], projects: [web], sessions: idle, daemon: { version: FIXTURE_DAEMON_VERSION, generation: PROTOCOL_GENERATION }, daemonUpdate: daemonUpdateOf({ updated_from: "0.0.9" }) }),
   },
   {
     id: "updates-daemon-restart-confirmation",
@@ -379,7 +379,7 @@ export const updateScenarios: Scenario[] = [
         status: daemonUpdateOf({
           available: daemonOffer,
           last_check: foundOffer,
-          install: { state: "failed", started_at: Date.now(), finished_at: Date.now(), error: "daemon_update_replace_failed", detail: REPLACE_FAILED },
+          install: { state: "failed", started_at: FIXTURE_DAEMON_INSTALL_STARTED_AT, finished_at: Date.now(), error: "daemon_update_replace_failed", detail: REPLACE_FAILED },
         }),
       }),
     ],

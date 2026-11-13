@@ -8,18 +8,36 @@ import type { DaemonUpdateStatus } from "../protocol";
 import { applyDaemonEvent, DaemonProvider } from "../store";
 import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
 import { testDaemon } from "../test/testDaemon";
+import { reloadPage } from "../platform/reloadPage";
+import { useReloadAfterRestart } from "./useReloadAfterRestart";
 import { useUpdatedNotice } from "./useUpdatedNotice";
+
+// The reload flag as the real module holds it, set by the call that starts the reload.
+const page = vi.hoisted(() => ({ reloading: false }));
+vi.mock("../platform/reloadPage", () => ({
+  reloadPage: vi.fn(() => {
+    page.reloading = true;
+  }),
+  isReloading: () => page.reloading,
+}));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-afterEach(() => localStorage.clear());
+afterEach(() => {
+  localStorage.clear();
+  page.reloading = false;
+  vi.mocked(reloadPage).mockClear();
+});
 
 const IDLE: DaemonUpdateStatus = { phase: "idle", available: null, progress: null, installed: null, last_check: null, install: null, manual: null, updated_from: null };
 
 function mount(status: DaemonUpdateStatus, version: string) {
   const showNotice = vi.fn();
   const daemon = testDaemon({ state: { daemon: { version, generation: 1 }, daemonUpdate: status }, showNotice });
+  let restart!: ReturnType<typeof useReloadAfterRestart>["restart"];
+  // As `App` calls them: the reload first, so that on the status that sets it off the notice already sees it.
   const Probe = () => {
+    ({ restart } = useReloadAfterRestart());
     useUpdatedNotice();
     return null;
   };
@@ -38,7 +56,7 @@ function mount(status: DaemonUpdateStatus, version: string) {
       </LanguageProvider>,
     ),
   );
-  return { daemon, showNotice };
+  return { daemon, showNotice, restart: (target: string | null) => act(async () => void (await restart(target, async () => {}))) };
 }
 
 const hello = (version: string) => ({ type: "hello", daemon_version: version, generation: 1 }) as never;
@@ -89,4 +107,35 @@ it("says it once per page load where the browser has no storage", () => {
   act(() => applyDaemonEvent(daemon.store, hello("0.2.0")));
   act(() => applyDaemonEvent(daemon.store, { type: "daemon_update_status_updated", status: { ...IDLE, updated_from: "0.1.0" } }));
   expect(showNotice).toHaveBeenCalledOnce();
+});
+
+it("says nothing while the page is reloading, and does not remember the version, so the reloaded page says it", () => {
+  page.reloading = true;
+  const reloading = mount({ ...IDLE, updated_from: "0.1.0" }, "0.2.0");
+  expect(reloading.showNotice).not.toHaveBeenCalled();
+  expect(localStorage.getItem(PREFERENCE_KEYS.daemonUpdatedNoticeVersion)).toBeNull();
+  // The reloaded page starts over, with nothing reloading.
+  page.reloading = false;
+  const reloaded = mount({ ...IDLE, updated_from: "0.1.0" }, "0.2.0");
+  expect(reloaded.showNotice).toHaveBeenCalledOnce();
+  expect(localStorage.getItem(PREFERENCE_KEYS.daemonUpdatedNoticeVersion)).toBe("0.2.0");
+});
+
+it("leaves the tab that asked for the restart without the notice on the status that reloads it, and remembers nothing", async () => {
+  const { daemon, showNotice, restart } = mount(IDLE, "0.1.0");
+  await restart("0.2.0");
+  act(() => applyDaemonEvent(daemon.store, hello("0.2.0")));
+  act(() => applyDaemonEvent(daemon.store, { type: "daemon_update_status_updated", status: { ...IDLE, updated_from: "0.1.0" } }));
+  expect(reloadPage).toHaveBeenCalledOnce();
+  expect(showNotice).not.toHaveBeenCalled();
+  expect(localStorage.getItem(PREFERENCE_KEYS.daemonUpdatedNoticeVersion)).toBeNull();
+});
+
+it("tells another tab of the browser, which asked for no restart, and remembers the version", () => {
+  const { daemon, showNotice } = mount(IDLE, "0.1.0");
+  act(() => applyDaemonEvent(daemon.store, hello("0.2.0")));
+  act(() => applyDaemonEvent(daemon.store, { type: "daemon_update_status_updated", status: { ...IDLE, updated_from: "0.1.0" } }));
+  expect(reloadPage).not.toHaveBeenCalled();
+  expect(showNotice).toHaveBeenCalledOnce();
+  expect(localStorage.getItem(PREFERENCE_KEYS.daemonUpdatedNoticeVersion)).toBe("0.2.0");
 });

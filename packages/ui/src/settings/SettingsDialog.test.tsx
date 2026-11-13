@@ -64,7 +64,7 @@ interface Updating {
 function mount(first: SettingsNavigation, width = 1440, host: HostFacts = MAC_HOST, updating: Updating = {}) {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
-  const daemon = updating.daemonUpdate && testDaemon({ state: { daemon: { version: "0.1.0", generation: 1 }, daemonUpdate: updating.daemonUpdate } });
+  const daemon = updating.daemonUpdate && testDaemon({ state: { daemon: { version: __OCTOBOARD_VERSION__, generation: 1 }, daemonUpdate: updating.daemonUpdate } });
   const dialog = (navigation: typeof first) => <SettingsDialog navigation={navigation} onClose={() => {}} />;
   const show = (navigation: typeof first) =>
     act(() =>

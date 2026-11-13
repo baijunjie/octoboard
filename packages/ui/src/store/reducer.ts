@@ -15,7 +15,8 @@ export type Action =
   | { kind: "track_agent_cli_update"; agent: Agent; from: number | null | undefined }
   | { kind: "track_pages_listing"; session: string; listing: boolean }
   | { kind: "dismiss_account_login"; login: AccountLogin }
-  | { kind: "queue_account_switches"; ids: readonly string[]; queued: boolean };
+  | { kind: "queue_account_switches"; ids: readonly string[]; queued: boolean }
+  | { kind: "await_restart"; awaited: boolean };
 
 /** The map of `records` by `idOf`, each one the record `previous` already holds for its id when that
  * is the same data. A snapshot (the first, or a lag recovery) names everything again, and what it
@@ -161,11 +162,13 @@ export function reducer(state: State, action: Action): State {
       const queuedAccountSwitches = action.ids.reduce((held, id) => withMember(held, id, action.queued), state.queuedAccountSwitches);
       return queuedAccountSwitches === state.queuedAccountSwitches ? state : { ...state, queuedAccountSwitches };
     }
+    case "await_restart":
+      return state.restartAwaited === action.awaited ? state : { ...state, restartAwaited: action.awaited };
     case "event": {
       const event = action.event;
       switch (event.type) {
         case "hello":
-          return { ...state, daemon: { version: event.daemon_version, generation: event.generation }, daemonUpdateStale: true };
+          return { ...state, daemon: { version: event.daemon_version, generation: event.generation }, daemonUpdateStale: true, restartAwaited: false };
         case "snapshot":
           return {
             ...state,

@@ -5,6 +5,8 @@ import { PaneFailure } from "../components/alerts/PaneFailure";
 import { retryableLazy } from "../components/hooks/retryableLazy";
 import { PanelHeader } from "../components/panel/PanelHeader";
 import { useT } from "../i18n/react";
+import { reloadPage } from "../platform/reloadPage";
+import { useServedByDaemon } from "./useServedByDaemon";
 import type { ProjectBrowser as ProjectBrowserType } from "./ProjectBrowser";
 
 type Props = React.ComponentProps<typeof ProjectBrowserType> & {
@@ -22,7 +24,9 @@ const Browser = browser.Component;
  * what it brings is needed only then. While it loads its panel keeps its place, empty; a load (or a
  * render) that fails shows in the panel, with a way to try again, rather than taking the window with
  * it. The failure takes keyboard focus when what held it went down with the browser, and gives it
- * to the terminal when Try again replaces it by the empty pane of another load.
+ * to the terminal when Try again replaces it by the empty pane of another load. In a page the daemon
+ * serves, the way out is Reload instead: after the daemon updated, the page asks for files it no
+ * longer has, which loading again cannot find.
  */
 export function LazyProjectBrowser({ focusTerminal, ...props }: Props): React.ReactElement {
   return (
@@ -66,6 +70,7 @@ class LoadBoundary extends React.Component<
 /** The fallback, a function component because only one can read the current language. */
 function LoadFailed({ title, onRetry }: { title: string; onRetry: (holdsFocus: boolean) => void }): React.ReactElement {
   const t = useT();
+  const reload = useServedByDaemon();
   const pane = useRef<HTMLDivElement>(null);
   // A render that failed with focus inside the browser took focus down with it.
   useEffect(() => {
@@ -76,7 +81,14 @@ function LoadFailed({ title, onRetry }: { title: string; onRetry: (holdsFocus: b
       <PanelHeader title={title} />
       {/* It replaces a pane that was drawn, so it is always something that appeared. */}
       <div ref={pane} className="contents">
-        <PaneFailure title={t("browser.loadFailed")} announce landing onRetry={(from) => onRetry(from?.contains(document.activeElement) ?? false)} />
+        <PaneFailure
+          title={t("browser.loadFailed")}
+          summary={reload ? t("browser.loadFailed.reload") : undefined}
+          retryLabel={reload ? t("error.reload") : undefined}
+          announce
+          landing
+          onRetry={reload ? () => reloadPage() : (from) => onRetry(from?.contains(document.activeElement) ?? false)}
+        />
       </div>
     </>
   );

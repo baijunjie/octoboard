@@ -2315,6 +2315,17 @@ export type Event = {
   id: string | null,
 }
 | {
+  "type": "daemon_update_check",
+  id: string | null,
+  started: boolean,
+  last_check_at: number | null,
+}
+| {
+  "type": "daemon_update_started",
+  id: string | null,
+  started_at: number,
+}
+| {
   "type": "handover_check",
   id: string | null,
   known: boolean,

@@ -11,11 +11,12 @@ import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 import { BROWSER_HOST } from "../test/hosts";
 import { testDaemon } from "../test/testDaemon";
 import { UpdateNotice } from "../updates/UpdateNotice";
+import { answerDaemonUpdateRequest } from "../updates/daemonUpdateTestSupport";
 import { UpdatesProvider } from "../updates/UpdatesProvider";
-import { reloadPage } from "../updates/reloadPage";
+import { reloadPage } from "../platform/reloadPage";
 import { UpdatesSetting } from "./UpdatesSetting";
 
-vi.mock("../updates/reloadPage", () => ({ reloadPage: vi.fn() }));
+vi.mock("../platform/reloadPage", () => ({ reloadPage: vi.fn() }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -37,9 +38,9 @@ const MANUAL_COMMAND = "curl -fsSL https://example.test/install.sh | sh -s -- --
 const IDLE: DaemonUpdateStatus = { phase: "idle", available: null, progress: null, installed: null, last_check: null, install: null, manual: null, updated_from: null };
 const AVAILABLE = { version: "0.2.0", notes: null, holder_floor: null, channel: "stable" } as const;
 
-function mount(status: DaemonUpdateStatus | null, request = vi.fn(async () => ({ type: "ack" as const, id: null }))) {
+function mount(status: DaemonUpdateStatus | null, request = vi.fn(answerDaemonUpdateRequest)) {
   const daemon = testDaemon({
-    state: { daemon: { version: "0.1.0", generation: 1 }, daemonUpdate: status, settings: { ...DEFAULT_SETTINGS, versions: { daemon_update_check: 1, daemon_update_channel: 1 } } },
+    state: { daemon: { version: __OCTOBOARD_VERSION__, generation: 1 }, daemonUpdate: status, settings: { ...DEFAULT_SETTINGS, versions: { daemon_update_check: 1, daemon_update_channel: 1 } } },
     request,
   });
   const container = document.body.appendChild(document.createElement("div"));
@@ -75,7 +76,7 @@ it("shows nothing where the daemon does not update itself", () => {
 
 it("shows the section's rows from the daemon's status, and checks by asking the daemon", async () => {
   const { container, request } = mount(IDLE);
-  expect(textOf(container)).toContain("You are using version 0.1.0.");
+  expect(textOf(container)).toContain(`You are using version ${__OCTOBOARD_VERSION__}.`);
   expect(textOf(container)).toContain("Check for updates automatically");
   await act(async () => void button(container, "Check for updates")!.click());
   expect(request).toHaveBeenCalledExactlyOnceWith({ type: "check_daemon_update" });

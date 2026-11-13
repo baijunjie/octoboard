@@ -29,7 +29,7 @@ const CASES = [
   ["apps/daemon/src/main.rs", ["daemon"]],
   ["apps/desktop/src-tauri/src/lib.rs", ["native"]],
   ["apps/desktop/scripts/bundle.mjs", ["desktop"]],
-  ["apps/desktop/package.json", ["desktop", "native"]],
+  ["apps/desktop/package.json", ["ui", "desktop", "native"], ["ui"]],
   ["Cargo.toml", RUST],
   ["Cargo.lock", RUST, ["ui"]],
   ["apps/daemon/Cargo.toml", RUST],

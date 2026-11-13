@@ -8,6 +8,7 @@ import { useAppVersion } from "../platform/useAppVersion";
 import { PROTOCOL_GENERATION } from "../protocol";
 import { useDaemonStore } from "../store";
 import { StartupFailure, StartupScreen } from "../StartupScreen";
+import { reloadPage } from "../platform/reloadPage";
 
 /**
  * The whole window while the daemon speaks another protocol generation than this window (connection state
@@ -39,7 +40,7 @@ export function IncompatibleDaemonScreen({ onQuit }: { onQuit: () => void }): Re
           }}
           action={desktop
             ? { label: t("connection.incompatible.quit"), onSelect: onQuit }
-            : { label: t("connection.incompatible.reload"), onSelect: () => window.location.reload() }}
+            : { label: t("connection.incompatible.reload"), onSelect: reloadPage }}
           diagnostic={diagnostic}
           known={{ title: `${appConfig.name} and its daemon are different versions` }}
         />

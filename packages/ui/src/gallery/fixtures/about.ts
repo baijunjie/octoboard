@@ -100,7 +100,7 @@ export const aboutScenarios: Scenario[] = [
     category: "normal",
     title: "About, the version known",
     description:
-      "The icon, the name and \"Version 0.1.0\" in the header, then the Website, GitHub repository and Issue tracker links, License, Third-party licenses and Copyright; no update control is here, they are in the Updates section above About in the list. Shown on a daemon that updates itself, so the version is the daemon's.",
+      "The icon, the name and \"Version\" with the daemon's version in the header, then the Website, GitHub repository and Issue tracker links, License, Third-party licenses and Copyright; no update control is here, they are in the Updates section above About in the list. Shown on a daemon that updates itself, so the version is the daemon's.",
     state: snapshotState({ consoles: [SAMPLE.console], projects: [SAMPLE.web], sessions: SAMPLE.sessions, daemonUpdate: daemonUpdateOf() }),
     steps: openAbout,
   },

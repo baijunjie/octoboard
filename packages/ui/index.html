@@ -52,8 +52,9 @@
         `ws://127.0.0.1:*` already covers the one `http://127.0.0.1:*` URL the app ever builds
         (`ws://127.0.0.1:${port}` in `packages/ui/src/daemon.ts`) without a separate entry, and
         `ws://localhost:*` grants plain `http` to any localhost port by that same rule — harmless
-        here since nothing in `packages/ui/src` ever issues a `fetch`, `XMLHttpRequest`,
-        `EventSource`, or `sendBeacon` call.
+        here since the one `fetch` this page makes is the key check (`/key-check`, in
+        `daemon.ts`), on the page's own origin, which `'self'` admits, and nothing issues an
+        `XMLHttpRequest`, `EventSource`, or `sendBeacon` call.
       - `worker-src 'self'`: a report page's text field `pattern` is tested in a Web Worker
         (`src/report/page/patternWorker.ts`), as the pattern is the agent's and must never run on the
         window's own thread. The worker's script is served from this origin, which is all this

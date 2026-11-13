@@ -1,44 +1,73 @@
 // @vitest-environment jsdom
 import { describe, expect, it, onTestFinished, vi } from "vitest";
 
+import { fakeTimers } from "../test/clock";
+
 import { CodedError } from "../errors/codedError";
 import type { DaemonUpdateStatus } from "../protocol";
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 import { createStateStore } from "../store/state";
-import { applyDaemonEvent } from "../store/actions";
+import { applyDaemonEvent, setRestartAwaited } from "../store/actions";
 import { createDaemonUpdateStore } from "./daemonUpdateStore";
 import type { UpdateFailure } from "./updateStore";
+
+(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const IDLE: DaemonUpdateStatus = { phase: "idle", available: null, progress: null, installed: null, last_check: null, install: null, manual: null, updated_from: null };
 const AVAILABLE = { version: "0.2.0", notes: null, holder_floor: "0.1.0", channel: "stable" } as const;
 
-function setup(status: DaemonUpdateStatus | null = IDLE, version = "0.1.0", clock = { now: 1000 }, broadcasts = true) {
+const UI_VERSION = "0.1.0";
+
+function setup(status: DaemonUpdateStatus | null = IDLE, version = UI_VERSION, broadcasts = true, uiVersion = UI_VERSION) {
   const store = createStateStore({ daemon: { version, generation: 1 }, daemonUpdate: status, settings: { ...DEFAULT_SETTINGS, versions: { daemon_update_check: 3, daemon_update_channel: 4 } } });
   const requests: { type: string; [key: string]: unknown }[] = [];
-  const answers: { fail?: unknown } = {};
+  /** What the daemon answers: a refusal, the reply to a check and to an install, a promise the reply waits for, and
+   * what happens (a status arriving) just before the reply does. */
+  const answers: { fail?: unknown; check: { started: boolean; last_check_at: number | null }; install: { started_at: number }; hold?: Promise<unknown>; beforeReply?: () => void } = {
+    check: { started: true, last_check_at: null },
+    install: { started_at: 3 },
+  };
   const request = vi.fn(async (body: { type: string; base_versions?: Record<string, number> }) => {
     requests.push(body);
+    await answers.hold;
+    answers.beforeReply?.();
     if (answers.fail) throw answers.fail;
     // The daemon's broadcast of the setting it stored, with the version it moved to.
     if (body.type === "update_settings" && broadcasts) {
       const moved = Object.fromEntries(Object.entries(body.base_versions ?? {}).map(([path, version]) => [path, version + 1]));
       store.setState((state) => ({ settings: { ...state.settings, versions: { ...state.settings.versions, ...moved } } }));
     }
+    if (body.type === "check_daemon_update") return { type: "daemon_update_check", id: null, ...answers.check };
+    if (body.type === "update_daemon") return { type: "daemon_update_started", id: null, ...answers.install };
     return {};
   });
   const failures: UpdateFailure[] = [];
-  const refusals: unknown[] = [];
+  const refusals: { error: unknown; action?: UpdateFailure["action"] }[] = [];
   const updates = createDaemonUpdateStore({
     daemon: { store, request: request as never },
     reportFailure: (failure) => failures.push(failure),
-    reportRequestFailure: (error) => refusals.push(error),
-    reportSaveFailure: (error) => refusals.push(error),
-    now: () => clock.now,
+    reportRequestFailure: (error, action) => refusals.push({ error, action }),
+    reportSaveFailure: (error) => refusals.push({ error }),
+    uiVersion,
   });
   const stop = updates.start();
+  onTestFinished(stop);
   const send = (next: DaemonUpdateStatus | null) => store.setState({ daemonUpdate: next });
-  return { updates, store, requests, answers, failures, refusals, send, stop };
+  /** The daemon coming back: its greeting and its snapshot, which the connection delivers together in one update. */
+  const comesBack = (to: string, status: DaemonUpdateStatus) => {
+    store.setState((state) => ({ daemon: { version: to, generation: 1 }, daemonUpdate: status, daemonUpdateStale: false, snapshotEpoch: state.snapshotEpoch + 1, restartAwaited: false }));
+  };
+  return { updates, store, requests, answers, failures, refusals, send, stop, comesBack };
 }
+
+const CHECKED = (at: number, outcome: "up_to_date" | "available" | "failed" = "up_to_date") => ({ outcome, at, error: outcome === "failed" ? "daemon_update_check_failed" : null, detail: outcome === "failed" ? "offline" : null });
+const INSTALL = (state: "running" | "succeeded" | "failed", startedAt: number) => ({
+  state,
+  started_at: startedAt,
+  finished_at: state === "running" ? null : startedAt + 1,
+  error: state === "failed" ? "daemon_update_unverified" : null,
+  detail: state === "failed" ? "bad" : null,
+});
 
 describe("the state", () => {
   it("reads the daemon's status in the shape of the desktop application's", () => {
@@ -74,12 +103,22 @@ describe("the state", () => {
     expect(updates.getState().manual).toEqual({ path: "/usr/bin/octoboardd", command: "curl -fsSL https://example.test/install.sh | sh -s -- --bin-dir /usr/bin" });
   });
 
-  it("asks for a reload once the daemon runs another version than the page was loaded for", () => {
-    const { updates, store } = setup();
+  it("asks for a reload exactly while the daemon runs another version than the page's own build, whichever daemon greeted first", () => {
+    const { updates, store } = setup(IDLE, "0.2.0", true, "0.2.0");
     expect(updates.getState().reloadNeeded).toBe(false);
     store.setState({ daemon: null });
     expect(updates.getState().reloadNeeded).toBe(false);
-    store.setState({ daemon: { version: "0.2.0", generation: 1 } });
+    applyDaemonEvent(store, { type: "hello", daemon_version: "0.3.0", generation: 1 } as never);
+    expect(updates.getState().reloadNeeded).toBe(true);
+    applyDaemonEvent(store, { type: "hello", daemon_version: "0.2.0", generation: 1 } as never);
+    expect(updates.getState().reloadNeeded).toBe(false);
+  });
+
+  it("takes the page's own build version from the build when none is given", () => {
+    const store = createStateStore({ daemon: { version: __OCTOBOARD_VERSION__, generation: 1 }, daemonUpdate: IDLE });
+    const updates = createDaemonUpdateStore({ daemon: { store, request: vi.fn() as never }, reportFailure: () => {}, reportRequestFailure: () => {}, reportSaveFailure: () => {} });
+    expect(updates.getState().reloadNeeded).toBe(false);
+    applyDaemonEvent(store, { type: "hello", daemon_version: `${__OCTOBOARD_VERSION__}-other`, generation: 1 } as never);
     expect(updates.getState().reloadNeeded).toBe(true);
   });
 
@@ -119,57 +158,228 @@ describe("requests", () => {
     expect(manual.requests).toEqual([]);
   });
 
-  it("reports a refusal of an install, and an update that is no longer there as gone", async () => {
-    const { updates, answers, refusals, failures } = setup({ ...IDLE, available: AVAILABLE });
-    answers.fail = new CodedError("running", "daemon_update_running", {});
-    await updates.install();
-    expect(refusals).toHaveLength(1);
-    answers.fail = new CodedError("none", "daemon_update_nothing_to_install", {});
-    await updates.install();
-    expect(failures).toEqual([{ action: "install", reason: "gone", detail: "" }]);
+  it("says nothing of a failed check it did not ask for", async () => {
+    const { updates, send, failures } = setup();
+    send({ ...IDLE, last_check: CHECKED(2, "failed") });
+    await updates.check("automatic");
+    send({ ...IDLE, last_check: CHECKED(3, "failed") });
+    expect(failures).toEqual([]);
+    expect(updates.getState().checkAsked).toBeUndefined();
+  });
+});
+
+describe("a check the user asked for", () => {
+  it("is pending until the daemon has replied, and is no longer once it refuses, reporting the refusal as a check's", async () => {
+    let release!: () => void;
+    const { updates, answers, refusals } = setup();
+    answers.hold = new Promise<void>((resolve) => (release = resolve));
+    answers.fail = new CodedError("unavailable", "daemon_update_unavailable", {});
+    const done = updates.check("manual");
+    expect(updates.getState().checkAsked).toBe("pending");
+    release();
+    await done;
+    expect(updates.getState().checkAsked).toBeUndefined();
+    expect(refusals).toEqual([{ error: answers.fail, action: "check" }]);
   });
 
-  it("reports the failure of the check and of the install this window asked for, once", async () => {
-    const { updates, send, failures } = setup({ ...IDLE, available: AVAILABLE });
+  it("stays pending after the daemon replied that it started, until a check ends, and ends with no word for one that went well", async () => {
+    const { updates, send, failures } = setup({ ...IDLE, last_check: CHECKED(5) });
     await updates.check("manual");
-    send({ ...IDLE, available: AVAILABLE, last_check: { outcome: "failed", at: 2, error: "daemon_update_check_failed", detail: "offline" } });
-    await updates.install();
-    send({ ...IDLE, available: AVAILABLE, install: { state: "failed", started_at: 3, finished_at: 4, error: "daemon_update_unverified", detail: "bad" } });
-    send({ ...IDLE, available: AVAILABLE, install: { state: "failed", started_at: 3, finished_at: 5, error: "daemon_update_unverified", detail: "bad" } });
-    expect(failures).toEqual([
-      { action: "check", reason: "failed", detail: "offline", code: "daemon_update_check_failed" },
-      { action: "install", reason: "failed", detail: "bad", code: "daemon_update_unverified" },
-    ]);
+    expect(updates.getState().checkAsked).toBe("pending");
+    send({ ...IDLE, phase: "checking", last_check: CHECKED(5) });
+    expect(updates.getState().checkAsked).toBe("pending");
+    send({ ...IDLE, last_check: CHECKED(6) });
+    expect(updates.getState().checkAsked).toBeUndefined();
+    expect(failures).toEqual([]);
+  });
+
+  it("is ended by the first check after the one that had ended before it started, with no timer deciding whose it is", async () => {
+    fakeTimers();
+    const { updates, send, answers } = setup(IDLE);
+    answers.check = { started: true, last_check_at: 5 };
+    send({ ...IDLE, last_check: CHECKED(5) });
+    await updates.check("manual");
+    await vi.advanceTimersByTimeAsync(10 * 60 * 1000);
+    expect(updates.getState().checkAsked).toBe("pending");
+    send({ ...IDLE, last_check: CHECKED(5) });
+    expect(updates.getState().checkAsked).toBe("pending");
+    send({ ...IDLE, last_check: CHECKED(9) });
+    expect(updates.getState().checkAsked).toBeUndefined();
+  });
+
+  it("reports a failed one once, with the daemon's text and code", async () => {
+    const { updates, send, failures, answers } = setup({ ...IDLE, last_check: CHECKED(5) });
+    answers.check = { started: true, last_check_at: 5 };
+    await updates.check("manual");
+    send({ ...IDLE, last_check: CHECKED(6, "failed") });
+    send({ ...IDLE, available: AVAILABLE, last_check: CHECKED(6, "failed") });
+    expect(failures).toEqual([{ action: "check", reason: "failed", detail: "offline", code: "daemon_update_check_failed" }]);
+    expect(updates.getState().checkAsked).toBeUndefined();
+  });
+
+  it("reports a failed one whose status arrived ahead of the reply", async () => {
+    const { updates, send, failures, answers } = setup({ ...IDLE, last_check: CHECKED(5) });
+    answers.check = { started: true, last_check_at: 5 };
+    answers.beforeReply = () => send({ ...IDLE, last_check: CHECKED(6, "failed") });
+    await updates.check("manual");
+    expect(failures).toEqual([{ action: "check", reason: "failed", detail: "offline", code: "daemon_update_check_failed" }]);
+    expect(updates.getState().checkAsked).toBeUndefined();
+  });
+
+  it("is ended with nothing said when an update installed meanwhile", async () => {
+    const { updates, send, failures, answers } = setup({ ...IDLE, last_check: CHECKED(5) });
+    answers.check = { started: true, last_check_at: 5 };
+    await updates.check("manual");
+    send({ ...IDLE, phase: "installed", installed: { version: "0.2.0", holder_floor: null }, last_check: CHECKED(5) });
+    expect(updates.getState().checkAsked).toBeUndefined();
+    expect(failures).toEqual([]);
+  });
+
+  it("drops the wait, with nothing said, when a fresh snapshot shows no check running, and keeps it for one that does", async () => {
+    const running = setup({ ...IDLE, last_check: CHECKED(5) });
+    running.answers.check = { started: true, last_check_at: 5 };
+    await running.updates.check("manual");
+    running.comesBack("0.1.0", { ...IDLE, phase: "checking", last_check: CHECKED(5) });
+    expect(running.updates.getState().checkAsked).toBe("pending");
+    running.send({ ...IDLE, last_check: CHECKED(6, "failed") });
+    expect(running.failures).toHaveLength(1);
+
+    const gone = setup({ ...IDLE, last_check: CHECKED(5) });
+    gone.answers.check = { started: true, last_check_at: 5 };
+    await gone.updates.check("manual");
+    gone.comesBack("0.1.0", { ...IDLE, last_check: CHECKED(5) });
+    expect(gone.updates.getState().checkAsked).toBeUndefined();
+    gone.send({ ...IDLE, last_check: CHECKED(6, "failed") });
+    expect(gone.failures).toEqual([]);
+  });
+
+  it("ends, with nothing said, a check the daemon was seen running that stopped without recording an end", async () => {
+    const { updates, answers, send, failures } = setup({ ...IDLE, last_check: CHECKED(5) });
+    answers.check = { started: true, last_check_at: 5 };
+    await updates.check("manual");
+    send({ ...IDLE, phase: "checking", last_check: CHECKED(5) });
+    expect(updates.getState().checkAsked).toBe("pending");
+    send({ ...IDLE, last_check: CHECKED(5) });
+    expect(updates.getState().checkAsked).toBeUndefined();
+    send({ ...IDLE, last_check: CHECKED(6, "failed") });
+    expect(failures).toEqual([]);
   });
 
   it("keeps the button pending for a check the daemon let pass, then says the last check stands", async () => {
-    vi.useFakeTimers();
-    onTestFinished(() => void vi.useRealTimers());
-    const { updates } = setup({ ...IDLE, last_check: { outcome: "up_to_date", at: 5, error: null, detail: null } });
+    fakeTimers();
+    const { updates, answers, send, failures } = setup({ ...IDLE, last_check: CHECKED(5) });
+    answers.check = { started: false, last_check_at: null };
     const done = updates.check("manual");
     expect(updates.getState().checkAsked).toBe("pending");
-    await vi.advanceTimersByTimeAsync(700);
+    await vi.advanceTimersByTimeAsync(0);
     expect(updates.getState().checkAsked).toBe("unchanged");
-    await vi.advanceTimersByTimeAsync(1300);
+    await vi.runOnlyPendingTimersAsync();
     await done;
     expect(updates.getState().checkAsked).toBeUndefined();
-  });
-
-  it("stops being pending at once when the daemon shows the check started", async () => {
-    vi.useFakeTimers();
-    onTestFinished(() => void vi.useRealTimers());
-    const { updates, send } = setup();
-    const done = updates.check("manual");
-    send({ ...IDLE, phase: "checking" });
-    await vi.advanceTimersByTimeAsync(700);
-    await done;
-    expect(updates.getState().checkAsked).toBeUndefined();
-  });
-
-  it("says nothing of a failed check it did not ask for", () => {
-    const { send, failures } = setup();
-    send({ ...IDLE, last_check: { outcome: "failed", at: 2, error: "daemon_update_check_failed", detail: "offline" } });
+    // A check it never started is no check of this press: a later failed one is the section's mark alone.
+    send({ ...IDLE, last_check: CHECKED(6, "failed") });
     expect(failures).toEqual([]);
+  });
+
+  it("is not cleared by the end of an earlier press's hold when a later press has asked again meanwhile", async () => {
+    fakeTimers();
+    const { updates, answers } = setup({ ...IDLE, last_check: CHECKED(5) });
+    answers.check = { started: false, last_check_at: null };
+    const first = updates.check("manual");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(updates.getState().checkAsked).toBe("unchanged");
+    answers.check = { started: true, last_check_at: 5 };
+    await updates.check("manual");
+    expect(updates.getState().checkAsked).toBe("pending");
+    await vi.runOnlyPendingTimersAsync();
+    await first;
+    expect(updates.getState().checkAsked).toBe("pending");
+  });
+});
+
+describe("an install the user asked for", () => {
+  it("shows the download begun at once, before any status, and sends one request for a double press", async () => {
+    let release!: () => void;
+    const { updates, answers, requests } = setup({ ...IDLE, available: AVAILABLE });
+    answers.hold = new Promise<void>((resolve) => (release = resolve));
+    const first = updates.install();
+    expect(updates.getState()).toMatchObject({ phase: "downloading", progress: { downloaded: 0 } });
+    await updates.install();
+    expect(requests.filter((request) => request.type === "update_daemon")).toHaveLength(1);
+    release();
+    await first;
+    // The daemon has replied and no status has shown the download yet.
+    expect(updates.getState()).toMatchObject({ phase: "downloading", progress: { downloaded: 0 } });
+    expect(requests.filter((request) => request.type === "update_daemon")).toHaveLength(1);
+  });
+
+  it("reports the failure of the install the daemon named in its reply, once, and none that is another window's", async () => {
+    const { updates, send, failures } = setup({ ...IDLE, available: AVAILABLE });
+    await updates.install();
+    send({ ...IDLE, available: AVAILABLE, phase: "downloading", install: INSTALL("running", 3) });
+    expect(failures).toEqual([]);
+    send({ ...IDLE, available: AVAILABLE, install: INSTALL("failed", 9) });
+    expect(failures).toEqual([]);
+    send({ ...IDLE, available: AVAILABLE, install: INSTALL("failed", 3) });
+    send({ ...IDLE, available: AVAILABLE, install: { ...INSTALL("failed", 3), finished_at: 99 } });
+    expect(failures).toEqual([{ action: "install", reason: "failed", detail: "bad", code: "daemon_update_unverified" }]);
+    expect(updates.getState().phase).toBe("idle");
+  });
+
+  it("says nothing when the install it asked for succeeds", async () => {
+    const { updates, send, failures } = setup({ ...IDLE, available: AVAILABLE });
+    await updates.install();
+    send({ ...IDLE, phase: "installed", installed: { version: "0.2.0", holder_floor: null }, install: INSTALL("succeeded", 3) });
+    expect(failures).toEqual([]);
+    expect(updates.getState().phase).toBe("installed");
+  });
+
+  it("reports a failure whose status arrived ahead of the reply", async () => {
+    const { updates, send, failures, answers } = setup({ ...IDLE, available: AVAILABLE });
+    answers.beforeReply = () => send({ ...IDLE, available: AVAILABLE, install: INSTALL("failed", 3) });
+    await updates.install();
+    expect(failures).toEqual([{ action: "install", reason: "failed", detail: "bad", code: "daemon_update_unverified" }]);
+  });
+
+  it("reports an update the daemon holds none of any more as gone, and any other refusal as an install's, each ending the pending phase", async () => {
+    const { updates, answers, refusals, failures } = setup({ ...IDLE, available: AVAILABLE });
+    answers.fail = new CodedError("none", "daemon_update_nothing_to_install", {});
+    await updates.install();
+    expect(failures).toEqual([{ action: "install", reason: "gone", detail: "" }]);
+    expect(refusals).toEqual([]);
+    expect(updates.getState()).toMatchObject({ phase: "idle", progress: undefined });
+
+    answers.fail = new CodedError("running", "daemon_update_running", {});
+    await updates.install();
+    expect(refusals).toEqual([{ error: answers.fail, action: "install" }]);
+    expect(failures).toHaveLength(1);
+    expect(updates.getState().phase).toBe("idle");
+    // Not pending any more: the next press asks again.
+    delete answers.fail;
+    await updates.install();
+    expect(updates.getState().phase).toBe("downloading");
+  });
+
+  it("drops the wait, with nothing said, when a fresh snapshot shows no download, and keeps it for one that does", async () => {
+    const running = setup({ ...IDLE, available: AVAILABLE });
+    await running.updates.install();
+    running.comesBack("0.1.0", { ...IDLE, phase: "downloading", available: AVAILABLE, install: INSTALL("running", 3) });
+    running.send({ ...IDLE, available: AVAILABLE, install: INSTALL("failed", 3) });
+    expect(running.failures).toHaveLength(1);
+
+    const gone = setup({ ...IDLE, available: AVAILABLE });
+    await gone.updates.install();
+    gone.comesBack("0.1.0", { ...IDLE, available: AVAILABLE });
+    expect(gone.updates.getState().phase).toBe("idle");
+    gone.send({ ...IDLE, available: AVAILABLE, install: INSTALL("failed", 3) });
+    expect(gone.failures).toEqual([]);
+  });
+
+  it("reports an install that failed under another window's press only as the section's state, not as an alert", () => {
+    const { send, failures, updates } = setup({ ...IDLE, available: AVAILABLE });
+    send({ ...IDLE, available: AVAILABLE, install: INSTALL("failed", 3) });
+    expect(failures).toEqual([]);
+    expect(updates.getState().phase).toBe("idle");
   });
 });
 
@@ -217,23 +427,6 @@ describe("what the daemon refuses or does not answer", () => {
       expect(requests, phase).toEqual([]);
     }
   });
-
-  it("leaves a failed check to the section's mark once the press that asked for it is old", async () => {
-    const clock = { now: 1000 };
-    const { updates, send, failures } = setup(IDLE, "0.1.0", clock);
-    await updates.check("manual");
-    // A request the daemon let pass without checking, and a failure of the automatic check a minute later.
-    clock.now += 61_000;
-    send({ ...IDLE, last_check: { outcome: "failed", at: 2, error: "daemon_update_check_failed", detail: "offline" } });
-    expect(failures).toEqual([]);
-  });
-
-  it("reports an install that failed under another window's press only as the section's state, not as an alert", () => {
-    const { send, failures, updates } = setup({ ...IDLE, available: AVAILABLE });
-    send({ ...IDLE, available: AVAILABLE, install: { state: "failed", started_at: 3, finished_at: 4, error: "daemon_update_replace_failed", detail: "x" } });
-    expect(failures).toEqual([]);
-    expect(updates.getState().phase).toBe("idle");
-  });
 });
 
 describe("saving the settings", () => {
@@ -248,7 +441,7 @@ describe("saving the settings", () => {
   });
 
   it("drops a write of a setting while the store still holds the version the last one was based on", async () => {
-    const { updates, requests } = setup(IDLE, "0.1.0", { now: 1000 }, false);
+    const { updates, requests } = setup(IDLE, UI_VERSION, false);
     const first = updates.setChannel("beta");
     const second = updates.setChannel("stable");
     await Promise.all([first, second]);
@@ -301,5 +494,47 @@ describe("the restart", () => {
     expect(handler).not.toHaveBeenCalled();
     updates.hideRestartNotice();
     expect(updates.getState()).toMatchObject({ restartNoticeHidden: true, phase: "installed" });
+  });
+
+  it("is pending while the daemon's restart is awaited, which the exit flow having answered does not end, and the next hello does", async () => {
+    const { updates, store } = setup(INSTALLED);
+    updates.onRestartRequested(async () => {
+      setRestartAwaited(store, true);
+    });
+    await updates.restart();
+    expect(updates.getState().restarting).toBe(true);
+    // A press while the restart is pending asks for nothing more.
+    const handler = vi.fn(async () => {});
+    updates.onRestartRequested(handler);
+    await updates.restart();
+    expect(handler).not.toHaveBeenCalled();
+    applyDaemonEvent(store, { type: "hello", daemon_version: "0.2.0", generation: 1 } as never);
+    expect(updates.getState().restarting).toBe(false);
+  });
+
+  it("stops being pending when the restart is no longer awaited, as when the daemon refused it", () => {
+    const { updates, store } = setup(INSTALLED);
+    setRestartAwaited(store, true);
+    expect(updates.getState().restarting).toBe(true);
+    setRestartAwaited(store, false);
+    expect(updates.getState().restarting).toBe(false);
+  });
+
+  it("hides the restart notice for the installed version only: another version installed brings it back, and the same stays hidden", () => {
+    const { updates, send } = setup(INSTALLED);
+    expect(updates.getState().restartNoticeHidden).toBe(false);
+    updates.hideRestartNotice();
+    expect(updates.getState().restartNoticeHidden).toBe(true);
+    send({ ...INSTALLED, last_check: CHECKED(5) });
+    expect(updates.getState().restartNoticeHidden).toBe(true);
+    send({ ...IDLE, phase: "installed", installed: { version: "0.3.0", holder_floor: "0.1.0" } });
+    expect(updates.getState().restartNoticeHidden).toBe(false);
+  });
+
+  it("has the restart notice hidden only while an update is installed", () => {
+    const { updates, send } = setup(INSTALLED);
+    updates.hideRestartNotice();
+    send(IDLE);
+    expect(updates.getState().restartNoticeHidden).toBe(false);
   });
 });

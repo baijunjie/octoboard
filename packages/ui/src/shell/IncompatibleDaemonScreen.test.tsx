@@ -5,14 +5,20 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { appConfig } from "../appConfig";
 import { setLanguage } from "../i18n/language";
 import type { PlatformAdapter } from "../platform";
+import { reloadPage } from "../platform/reloadPage";
 import { mountHost } from "../test/mountHost";
 import { testDaemon } from "../test/testDaemon";
 import { IncompatibleDaemonScreen } from "./IncompatibleDaemonScreen";
 import { BROWSER_HOST } from "../test/hosts";
 
+vi.mock("../platform/reloadPage", () => ({ reloadPage: vi.fn() }));
+
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-beforeEach(() => act(() => setLanguage("en")));
+beforeEach(() => {
+  vi.mocked(reloadPage).mockClear();
+  act(() => setLanguage("en"));
+});
 
 const desktop = { kind: "tauri", host: BROWSER_HOST, exit: {}, updater: { currentVersion: () => Promise.resolve("1.3.0") } } as unknown as PlatformAdapter;
 const button = (container: HTMLElement, name: string) => Array.from(container.querySelectorAll("button")).find((b) => b.textContent === name);
@@ -36,4 +42,13 @@ it("offers Reload in a browser, and says a version it does not know is unknown",
   expect(container.textContent).toContain("Window version: unknown. Daemon version: unknown.");
   expect(button(container, `Quit ${appConfig.name}`)).toBeUndefined();
   expect(button(container, "Reload")).toBeDefined();
+});
+
+it("reloads the page through reloadPage when Reload is pressed in a browser", async () => {
+  const daemon = testDaemon({ state: { connectionState: "incompatible", daemon: { version: "1.4.0", generation: 2 } } });
+  const container = mountHost(<IncompatibleDaemonScreen onQuit={vi.fn()} />, { daemon });
+  await act(async () => {});
+  expect(reloadPage).not.toHaveBeenCalled();
+  act(() => button(container, "Reload")!.click());
+  expect(reloadPage).toHaveBeenCalledOnce();
 });

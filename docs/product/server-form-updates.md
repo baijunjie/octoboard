@@ -83,19 +83,22 @@ The update notice is the desktop application's strip along the bottom of the win
 - **Downloading**: as on the desktop.
 - **Installed**: says the version is installed and takes effect after Octoboard restarts, with **Restart now** and
   **Later**; an update the daemon learned of without its version (see below) is named as an update.
-- **The daemon now runs another version than the page was loaded for** — after a restart into an update, or any other
-  restart into another build: the notice says that Octoboard now runs that version and to reload the page to use it,
-  with **Reload**. It outranks every other notice and has no Later. Nothing reloads by itself, except the page that
-  asked for the restart (see "Restarting into the update" below).
+- **The daemon runs another version than the page's own build** — the release version the page was built as — after a
+  restart into an update, or any other restart into another build: the notice says that Octoboard now runs that version
+  and to reload the page to use it, with **Reload**. It outranks every other notice and has no Later. Nothing reloads by
+  itself, except the page that asked for the restart (see "Restarting into the update" below).
 
-**Later** hides the notice in that page alone, until it is reloaded; a different version found later brings it back.
+**Later** hides the notice in that page alone, until it is reloaded: the notice of a newer version until a different
+version is found, and the notice of an installed update for that installed version only, so that an update of another
+version installed later brings it back.
 
 **After the daemon has started in place of an older version** — by an update from a browser, `octoboardd update` or the
 install script — each browser shows once, per version, a toast saying that Octoboard was updated to that version, with a
 **What is new** link to its release page (see `docs/product/toasts.md`). It comes in the first tab of the browser to see
 it, at any time while that daemon runs; a browser that keeps no site data shows it once per page load instead. A daemon
 knows the version it replaced from `daemon.version` (see `docs/product/files-octoboard-owns.md`), so the first start of
-a daemon that updates itself shows nothing.
+a daemon that updates itself shows nothing. A page about to reload leaves the toast to the page it reloads into: the
+page that pressed **Restart now** shows it once it has reloaded (see "Restarting into the update" below).
 
 Settings' Updates section holds the version, the update's controls, the automatic check and the channel (see
 `docs/product/update-settings.md`), and About names the daemon's version (see `docs/product/about-octoboard.md`).
@@ -104,7 +107,9 @@ Settings' Updates section holds the version, the update's controls, the automati
 
 **Download and install**, in the notice or in Settings, starts the download of the update the last check found, in the
 daemon; the download goes on whether or not the page stays open, and every browser shows its progress, a bar with the
-percentage when the archive's size is known. `octoboardd update` does the same in its own process.
+percentage when the archive's size is known. The page where it was pressed shows the download under way from the
+press, with an indeterminate bar until the daemon reports its progress, and a second press there does nothing; a
+refusal (see below) ends it. `octoboardd update` does the same in its own process.
 
 - **What is replaced** is the executable at the path a planned restart starts the next daemon from (see "Who starts the
   next daemon" in `docs/product/planned-restart-and-planned-stop.md`), its links followed to the file itself.
@@ -174,10 +179,22 @@ The daemon then makes a planned restart (see "Planned restart and planned stop" 
 started from the new executable, takes them over. Under a service manager the daemon exits with status 75 and the
 manager starts the new file; the unit file is never changed.
 
-The page that pressed **Restart now** reloads itself once the daemon is back on the installed version, or on any other
-version when that one is not known, so that it runs the new version's UI. Every other page, and that one when the daemon
-comes back on another version than the installed one, shows the reload notice instead (see "What the browser shows"
-above).
+**Restart now** shows a pending spinner from the press until a confirmation opens, and again from when the restart is
+sent until the next daemon greets the page, or the page reloads; a refusal ends it.
+
+The page that pressed **Restart now** waits for the daemon to come back. Once its connection's own reconnect attempts
+are spent (see "Losing the daemon connection" in `docs/product/application-lifecycle.md`), it starts them again by
+itself until **60 seconds** after the restart was sent, since a planned restart can take longer than they last: up to
+about 15 seconds for the holders, up to 30 seconds for the next daemon to come up, and whatever delay a service manager
+adds (see "Planned restart and planned stop" in `docs/product/planned-restart-and-planned-stop.md`). After that the
+connection banner stays, with its Retry.
+
+That page reloads itself once the daemon is back on the installed version, or on any version other than the one it ran
+when the installed version is not known, so that it runs the new version's UI. A daemon that comes back on another
+version than the installed one ends the wait, and the page shows the reload notice (see "What the browser shows" above),
+as every other page does. A daemon that comes back speaking another protocol generation reloads that page too, in place
+of the screen for a daemon of another version (see "A daemon of another version" in
+`docs/product/application-lifecycle.md`): the daemon serves the page of its own build, which speaks its protocol.
 
 The restart is refused, with an error alert titled that Octoboard could not restart and saying why, while a download is
 under way (a restart would end it) and while the daemon is already stopping or restarting — unlike `octoboardd restart`,
@@ -238,7 +255,8 @@ report:
 
 - **Check for updates** pressed in that page whose check fails: titled "Could not check for updates", as on the desktop.
 - **Download and install** whose download fails: titled "Could not install the update", saying that the update could not
-  be downloaded and nothing was changed, and to check the internet connection and the free disk space, then try again.
+  be downloaded and nothing was changed, and to check the internet connection and the free disk space of the computer
+  Octoboard is installed on, then try again.
 - One whose archive is not what the release published: the same title, saying that the downloaded update is not what was
   published, so it was discarded, and nothing was changed.
 - One whose new executable could not be put in place — a new build that did not answer `--version` with the release's

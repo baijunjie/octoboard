@@ -10,7 +10,7 @@ import { isolate } from "../i18n/isolate";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { useHost } from "../platform/react";
 import { installedMessageKey } from "./installedMessageKey";
-import { reloadPage } from "./reloadPage";
+import { reloadPage } from "../platform/reloadPage";
 import { releaseUrl } from "../components/text/releaseUrl";
 import { updateNoticeKind } from "./noticeKind";
 import { useUpdates } from "./UpdatesProvider";

@@ -3,6 +3,7 @@ import React, { Suspense } from "react";
 import { trackSuspenseFallback } from "../../components/hooks/lazyReadiness";
 import { ActionableError } from "../../errors/actionableError";
 import { useT } from "../../i18n/react";
+import { useServedByDaemon } from "../useServedByDaemon";
 import { retryableLazy } from "../../components/hooks/retryableLazy";
 import { raiseError } from "../../components/alerts/raiseError";
 
@@ -17,12 +18,14 @@ const Viewer = viewer.Component;
  */
 export function LazyLinkedFileViewer(props: React.ComponentProps<typeof Viewer>): React.ReactElement {
   const t = useT();
+  const servedByDaemon = useServedByDaemon();
   return (
     <LoadBoundary
       onFailed={() => {
         viewer.retry();
-        // A known failure: the body says to open the file again, and it is not reported as a bug.
-        raiseError(new ActionableError(t("viewer.loadFailed"), "none"), { title: t("viewer.loadFailedTitle") });
+        // A known failure: the body says what to do, and it is not reported as a bug. In a page the daemon serves, that
+        // is to reload it, since the daemon no longer has the file the page asks for.
+        raiseError(new ActionableError(t(servedByDaemon ? "viewer.loadFailed.reload" : "viewer.loadFailed"), "none"), { title: t("viewer.loadFailedTitle") });
         props.onClose();
       }}
     >

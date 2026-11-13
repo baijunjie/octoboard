@@ -14,7 +14,7 @@ How the repository is built, checked and released, outside the code of any one e
   registers the patches in `patches/` (currently one for jsdom's selector engine, used by the UI's tests).
 - **Cargo workspace** (`Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml`, `rustfmt.toml`): members `apps/daemon` and
   `apps/desktop/src-tauri`, built into one `target/`. The workspace `version` is the application's version and must
-  equal `version` in `apps/desktop/package.json`; the desktop crate's `build.rs` fails the build when they differ.
+  equal `version` in `apps/desktop/package.json`; the desktop crate's `build.rs` fails the build when they differ, and the UI's `vite.config.ts` builds the same version in, so `scripts/verify/scope.mjs` also routes `apps/desktop/package.json` to the UI.
   `rust-toolchain.toml` pins the one toolchain used locally and in CI, and the workspace `rust-version` matches it.
 - `eslint.config.mjs` — the repository-wide lint and format rules (JavaScript, TypeScript, TSX, Vue), including the UI's
   import-layering blocks, which live in `packages/ui/eslint.layers.mjs` (see [`ui.md`](ui.md)); `pnpm format` runs it

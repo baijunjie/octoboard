@@ -61,7 +61,7 @@ const initialNativeThemePush = platform.nativeWindow
   ?.setTheme(initialThemeChoice === "system" ? undefined : (initialResolvedTheme as "light" | "dark"))
   .catch(() => {});
 
-const startupError = resolveStartupError();
+const startupError = resolveStartupError(platform);
 const daemonAddress = resolveDaemonAddress(platform);
 // Created here rather than by a component: the connection lives as long as the window, and a
 // component that owned it would drop it, for good, on its first unmount (StrictMode's included).

@@ -376,4 +376,6 @@ stays its text and a relative image shows its alt text, as an address that is no
 **The first time a viewer is opened from the terminal** its code is loaded, and nothing is shown until it has loaded.
 A load that fails raises an error alert, titled that the file viewer could not be shown, saying that it did not load
 and that opening the file again tries once more; it is a known failure and asks for no report. The next click tries
-again.
+again. In a page the daemon serves, talking to the daemon at the address it was loaded from (see "The UI the daemon
+serves" in `docs/product/server-form.md`), the alert says instead to reload the page, then open the file again, since a
+page left open across a restart of the daemon into another build asks for code that daemon no longer has.

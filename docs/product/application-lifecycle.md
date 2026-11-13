@@ -119,7 +119,9 @@ does while the daemon is not running.
 A dropped connection is retried automatically a couple of times with a short backoff. While that is happening a
 banner says so. Once the attempts are spent, the banner offers a Retry button; nothing retries forever on its own.
 Pressing Retry turns the banner back at once to saying it is reconnecting, without the button; a connection that
-fails again is retried automatically as before, and Retry is offered again once those attempts are spent. Each new connection re-reads the whole state, so nothing has to be replayed by hand. A request still waiting for its
+fails again is retried automatically as before, and Retry is offered again once those attempts are spent. A browser page
+that has asked its daemon to restart into an update starts the attempts again by itself for a while (see "Restarting
+into the update" in `docs/product/server-form-updates.md`). Each new connection re-reads the whole state, so nothing has to be replayed by hand. A request still waiting for its
 reply when the connection closes, or when it is reopened, is never sent again on the new connection: it fails, saying
 that the connection closed, or that it was reopened before the reply arrived.
 
@@ -170,7 +172,9 @@ the screen for a daemon of another version (see "The window chrome and the conte
 `docs/product/window-layout.md`), even when the window was already in use on an earlier connection: nothing the window
 had shown stays. No connection banner shows and there is no Retry, since another attempt would meet the same daemon.
 The way out is the screen's: in the desktop application, quitting and opening Octoboard again, which brings up the
-daemon bundled with it; in a browser, reloading the page.
+daemon bundled with it; in a browser, reloading the page. A browser page waiting for its daemon to come back from a
+restart into an update it asked for reloads itself instead of showing the screen (see "Restarting into the update" in
+`docs/product/server-form-updates.md`).
 
 A quit while that screen is shown — its own **Quit Octoboard**, or any of the shell's quit gestures (see "Quitting"
 below) — quits at once, asking nothing about running sessions or terminals: that daemon is not talked to.

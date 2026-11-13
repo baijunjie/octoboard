@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { UpdaterError, type AvailableUpdate, type UpdateChannel, type UpdaterCapability, type UpdateProgress } from "../platform";
 import { effectiveUpdateChannel } from "./updateChannel";
-import { CHECK_INTERVAL_MS, createUpdateStore, FIRST_CHECK_DELAY_MS, type UpdateFailure } from "./updateStore";
+import { CHECK_INTERVAL_MS, createUpdateStore, createUpdateStoreBase, FIRST_CHECK_DELAY_MS, type UpdateFailure, type UpdateState } from "./updateStore";
 import { fakeTimers } from "../test/clock";
 
 const FOUND: AvailableUpdate = { version: "0.2.0", notes: "Fixes." };
@@ -502,5 +502,96 @@ describe("the schedule", () => {
     store.start(null)();
     await vi.advanceTimersByTimeAsync(CHECK_INTERVAL_MS * 2);
     expect(checks).toHaveLength(0);
+  });
+});
+
+describe("the part every update store shares", () => {
+  const installedState = (change: Partial<UpdateState> = {}): UpdateState => ({
+    phase: "installed",
+    channel: "stable",
+    autoCheck: true,
+    noticeDismissed: false,
+    restartNoticeHidden: false,
+    restarting: false,
+    installedVersion: "0.2.0",
+    installedHolderFloor: "0.1.0",
+    ...change,
+  });
+
+  function base(state: UpdateState = installedState()) {
+    const current = { state };
+    const setRestarting = vi.fn((restarting: boolean) => void (current.state = { ...current.state, restarting }));
+    return { current, setRestarting, ...createUpdateStoreBase(() => current.state, setRestarting) };
+  }
+
+  it("tells the listeners that subscribed, until they unsubscribe", () => {
+    const { subscribe, notify } = base();
+    const first = vi.fn();
+    const second = vi.fn();
+    const off = subscribe(first);
+    subscribe(second);
+    notify();
+    off();
+    notify();
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).toHaveBeenCalledTimes(2);
+  });
+
+  it("hands the installed update's holder floor and version to the handler, holding the press pending until it answers", async () => {
+    const { restart, onRestartRequested, setRestarting } = base();
+    let finish!: () => void;
+    const handler = vi.fn(() => new Promise<void>((resolve) => (finish = resolve)));
+    onRestartRequested(handler);
+    const pressed = restart();
+    expect(handler).toHaveBeenCalledExactlyOnceWith("0.1.0", "0.2.0");
+    expect(setRestarting).toHaveBeenLastCalledWith(true);
+    finish();
+    await pressed;
+    expect(setRestarting).toHaveBeenLastCalledWith(false);
+  });
+
+  it("passes null for a floor or a version it never saw", async () => {
+    const { restart, onRestartRequested } = base(installedState({ installedVersion: undefined, installedHolderFloor: undefined }));
+    const handler = vi.fn(async () => {});
+    onRestartRequested(handler);
+    await restart();
+    expect(handler).toHaveBeenCalledExactlyOnceWith(null, null);
+  });
+
+  it("asks for nothing without an installed update, while one is pending, or with no handler", async () => {
+    const handler = vi.fn(async () => {});
+    const idle = base(installedState({ phase: "idle" }));
+    idle.onRestartRequested(handler);
+    await idle.restart();
+    const pending = base(installedState({ restarting: true }));
+    pending.onRestartRequested(handler);
+    await pending.restart();
+    const none = base();
+    await none.restart();
+    expect(handler).not.toHaveBeenCalled();
+    expect(idle.setRestarting).not.toHaveBeenCalled();
+    expect(pending.setRestarting).not.toHaveBeenCalled();
+    expect(none.setRestarting).not.toHaveBeenCalled();
+  });
+
+  it("stops being pending when the handler fails, and settles without throwing", async () => {
+    const { restart, onRestartRequested, setRestarting } = base();
+    onRestartRequested(async () => {
+      throw new Error("cancelled");
+    });
+    await expect(restart()).resolves.toBeUndefined();
+    expect(setRestarting).toHaveBeenLastCalledWith(false);
+  });
+
+  it("takes away only the handler its own unregister function was given for", async () => {
+    const { restart, onRestartRequested } = base();
+    const first = vi.fn(async () => {});
+    const second = vi.fn(async () => {});
+    const offFirst = onRestartRequested(first);
+    onRestartRequested(second);
+    offFirst();
+    await restart();
+    expect(first).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledOnce();
   });
 });

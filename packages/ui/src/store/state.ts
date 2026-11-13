@@ -136,6 +136,9 @@ export interface State {
    * the daemon's records as sent, and what a session shows or allows adds this set to their
    * `Session.switching_account` (`holdsAccountSwitch`). */
   queuedAccountSwitches: ReadonlySet<string>;
+  /** This window asked the daemon to restart (`restart_daemon`, see `setRestartAwaited`) and no daemon has greeted it
+   * since: the next `hello` ends it. Client state, which the daemon knows nothing of. */
+  restartAwaited: boolean;
 }
 
 const initialState: State = {
@@ -169,6 +172,7 @@ const initialState: State = {
   daemonUpdateStale: false,
   shellTerminals: new Map(),
   queuedAccountSwitches: new Set(),
+  restartAwaited: false,
 };
 
 /** A store holding the empty state with `initial` laid over it. */

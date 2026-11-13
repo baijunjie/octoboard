@@ -39,6 +39,11 @@ export function dismissAccountLogin(store: StoreApi<State>, login: AccountLogin)
   store.setState((state) => reducer(state, { kind: "dismiss_account_login", login }));
 }
 
+/** Marks that this window asked the daemon to restart, or that the daemon refused it; the next `hello` ends it. */
+export function setRestartAwaited(store: StoreApi<State>, awaited: boolean): void {
+  store.setState((state) => reducer(state, { kind: "await_restart", awaited }));
+}
+
 /** Applies a daemon `event` to the store, as the daemon connection does for each one it receives. */
 export function applyDaemonEvent(store: StoreApi<State>, event: Event): void {
   store.setState((state) => reducer(state, { kind: "event", event }));

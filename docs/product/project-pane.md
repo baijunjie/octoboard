@@ -473,3 +473,9 @@ panel's own controls — an empty-state failure headed that the project pane cou
 rest of the window is unaffected. Try again pressed from the keyboard hands keyboard focus to the terminal while the
 next load runs. A project pane that fails while it is shown, with keyboard focus inside it, shows the same failure and
 puts keyboard focus on its Try again.
+
+In a page the daemon serves, talking to the daemon at the address it was loaded from (see "The UI the daemon serves" in
+`docs/product/server-form.md`), the failure says instead to reload the page to load the project pane, and its button is
+**Reload**, which reloads the page: a page left open across a restart of the daemon into another build asks for code
+that daemon no longer has, so loading again cannot help. Elsewhere — the desktop application, a dev server, a page given
+a port in its address — it is as above.

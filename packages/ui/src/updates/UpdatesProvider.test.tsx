@@ -12,6 +12,7 @@ import { BROWSER_HOST } from "../test/hosts";
 import { fakeTimers } from "../test/clock";
 import { testDaemon } from "../test/testDaemon";
 import { CHECK_INTERVAL_MS, FIRST_CHECK_DELAY_MS, type UpdateStore } from "./updateStore";
+import { answerDaemonUpdateRequest } from "./daemonUpdateTestSupport";
 import { UpdatesProvider, useUpdateStore } from "./UpdatesProvider";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -22,7 +23,7 @@ const IDLE: DaemonUpdateStatus = { phase: "idle", available: null, progress: nul
 
 /** The version the desktop application's shell reports, distinct from the daemon's so a state says whose store it is. */
 const SHELL_VERSION = "7.7.7";
-const DAEMON_VERSION = "0.1.0";
+const DAEMON_VERSION = __OCTOBOARD_VERSION__;
 
 function updaterOf(check: UpdaterCapability["check"] = async () => undefined): UpdaterCapability {
   return { currentVersion: async () => SHELL_VERSION, check, install: async () => {} };
@@ -31,7 +32,7 @@ function updaterOf(check: UpdaterCapability["check"] = async () => undefined): U
 /** Mounts the provider the way `AppRoot` nests it: inside the daemon's provider (when `daemonUpdate` is given, the daemon is
  * there with that status; `undefined` mounts none), under a platform with or without an updater. */
 function mount({ updater, daemonUpdate, firstCheckDelayMs }: { updater?: UpdaterCapability; daemonUpdate?: DaemonUpdateStatus | null; firstCheckDelayMs?: number | null }) {
-  const request = vi.fn(async () => ({ type: "ack" as const, id: null }));
+  const request = vi.fn(answerDaemonUpdateRequest);
   const daemon = daemonUpdate === undefined ? undefined : testDaemon({ state: { daemon: { version: DAEMON_VERSION, generation: 1 }, daemonUpdate }, request });
   let store: UpdateStore | undefined;
   const Capture = () => {

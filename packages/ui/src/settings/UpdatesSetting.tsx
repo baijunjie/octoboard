@@ -17,7 +17,7 @@ import type { HostFacts } from "../platform/host";
 import { releaseUrl } from "../components/text/releaseUrl";
 import { useHost } from "../platform/react";
 import { installedMessageKey } from "../updates/installedMessageKey";
-import { reloadPage } from "../updates/reloadPage";
+import { reloadPage } from "../platform/reloadPage";
 import type { UpdateState } from "../updates/updateStore";
 import { useUpdates } from "../updates/UpdatesProvider";
 import { SettingRow, SwitchSettingRow } from "./SettingRow";

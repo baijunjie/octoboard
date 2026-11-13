@@ -15,8 +15,8 @@ import { FadedScroller, useFadeRegion } from "../scroll/scrollFade";
  * when `message` is given; under it goes the one main thing to do, `remedy` or what `message` holds of
  * it, and the rest (further explanation, then raw text) on a surface under them: `details`, or what
  * `message` holds of it. `onRetry` is optional (without it, or for a failure no retry can change
- * (`retryCanHelp`), there is no Try again) and gets the element the pane is drawn in, which the pressed
- * button does not outlive, to hand focus on from. `announce` is `ErrorAlert`'s: for a failure that
+ * (`retryCanHelp`), there is no Try again; `retryLabel` names the button otherwise) and gets the
+ * element the pane is drawn in, which the pressed button does not outlive, to hand focus on from. `announce` is `ErrorAlert`'s: for a failure that
  * appears after the pane has painted; `attempt`, `announceDelayMs` and `pending` are `FailureAlert`'s.
  * `linkAction` is `EmptyPanel`'s, put before Try again (a step to take, then retry). `landing` makes Try again
  * the landing of an F6 cycle (`data-region-landing`). */
@@ -27,6 +27,7 @@ export function PaneFailure({
   remedy,
   details,
   onRetry,
+  retryLabel,
   announce,
   attempt,
   announceDelayMs,
@@ -40,6 +41,7 @@ export function PaneFailure({
   remedy?: React.ReactNode;
   details?: React.ReactNode;
   onRetry?: (from: Element | null) => void;
+  retryLabel?: string;
   announce: boolean;
   attempt?: number;
   announceDelayMs?: number;
@@ -67,7 +69,7 @@ export function PaneFailure({
           description={summary ?? (message !== undefined && <DaemonErrorMessage error={message} part="summary" />)}
           remedy={remedy ?? (message !== undefined && errorRemedy(message))}
           details={details ?? (message !== undefined && errorDetails(message))}
-          action={onRetry && (message === undefined || retryCanHelp(message)) ? { label: t("error.tryAgain"), variant: "primary", isPending: pending, landing, onPress: () => onRetry(ref.current) } : undefined}
+          action={onRetry && (message === undefined || retryCanHelp(message)) ? { label: retryLabel ?? t("error.tryAgain"), variant: "primary", isPending: pending, landing, onPress: () => onRetry(ref.current) } : undefined}
           linkAction={linkAction}
           linkFirst
           announce={announce}

@@ -125,9 +125,12 @@ export function isLocalDaemon(address: DaemonAddress): boolean {
  * When the daemon failed to start at all (another instance already holds its lock, a corrupt
  * database, ...), the Tauri shell still opens the window rather than leaving the user staring at
  * nothing — it passes the failure message along as `?error=` instead of `?port=`, percent-encoded
- * since the message is free text. Checked before `resolveDaemonAddress`.
+ * since the message is free text. Checked before `resolveDaemonAddress`. Read only under the shell:
+ * in a browser anyone can put text there, and the page would show it as the daemon's failure on the
+ * daemon's own trusted origin.
  */
-export function resolveStartupError(): string | undefined {
+export function resolveStartupError(platform: PlatformAdapter): string | undefined {
+  if (platform.kind !== "tauri") return undefined;
   const raw = new URLSearchParams(window.location.search).get("error");
   return raw ?? undefined;
 }

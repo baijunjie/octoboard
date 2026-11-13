@@ -10,11 +10,12 @@ import type { DaemonUpdateStatus } from "../protocol";
 import { DaemonProvider } from "../store";
 import { BROWSER_HOST } from "../test/hosts";
 import { testDaemon } from "../test/testDaemon";
-import { reloadPage } from "./reloadPage";
+import { reloadPage } from "../platform/reloadPage";
+import { answerDaemonUpdateRequest } from "./daemonUpdateTestSupport";
 import { UpdateNotice } from "./UpdateNotice";
 import { UpdatesProvider } from "./UpdatesProvider";
 
-vi.mock("./reloadPage", () => ({ reloadPage: vi.fn() }));
+vi.mock("../platform/reloadPage", () => ({ reloadPage: vi.fn() }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -40,8 +41,8 @@ const IDLE: DaemonUpdateStatus = { phase: "idle", available: null, progress: nul
 const AVAILABLE = { version: "0.2.0", notes: null, holder_floor: null, channel: "stable" } as const;
 
 function mount(status: DaemonUpdateStatus, clipboard?: PlatformAdapter["clipboard"]) {
-  const request = vi.fn(async () => ({ type: "ack" as const, id: null }));
-  const daemon = testDaemon({ state: { daemon: { version: "0.1.0", generation: 1 }, daemonUpdate: status }, request });
+  const request = vi.fn(answerDaemonUpdateRequest);
+  const daemon = testDaemon({ state: { daemon: { version: __OCTOBOARD_VERSION__, generation: 1 }, daemonUpdate: status }, request });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {

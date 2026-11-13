@@ -1137,17 +1137,19 @@ pub enum RequestBody {
         agent: AgentId,
     },
     /// Checks the release manifest of the daemon's channel for a newer daemon, in the background.
-    /// Answered with `ack` at once; the result follows as `daemon_update_status_updated`, which
-    /// also announces that the check started. A check is not started while one or the download
-    /// runs, while one ended in the last 30 seconds, or once an update has been installed; the
-    /// request then changes nothing. Refused with `daemon_update_unavailable` where this daemon
+    /// Answered with `daemon_update_check` once it is known whether the check started; the result
+    /// follows as `daemon_update_status_updated`, which also announces that the check started. A
+    /// check is not started while one or the download runs, while one ended in the last 30
+    /// seconds, or once an update has been installed; the request then changes nothing and is
+    /// answered with `started` false. Refused with `daemon_update_unavailable` where this daemon
     /// does not update itself (`snapshot.daemon_update` is null). The user's own check; the
     /// automatic ones follow `Settings.daemon_update_check`. See "Daemon updates" in `PROTOCOL.md`.
     CheckDaemonUpdate,
     /// Downloads the daemon update the last check found, checks it and replaces the daemon's
     /// executable with it, in the background; the daemon keeps running the build it started as
-    /// until `restart_daemon`. Answered with `ack` once it has started; its progress and outcome
-    /// follow as `daemon_update_status_updated` (`progress`, `install`, `phase`). Refused with
+    /// until `restart_daemon`. Answered with `daemon_update_started` once it has started; its
+    /// progress and outcome follow as `daemon_update_status_updated` (`progress`, `install`,
+    /// `phase`), the install's `started_at` being the one the reply gives. Refused with
     /// `daemon_update_unavailable` where this daemon does not update itself,
     /// `daemon_update_running` while a download or an update from the command line runs,
     /// `daemon_update_installed` once one has been installed, `daemon_update_nothing_to_install`

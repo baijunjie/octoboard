@@ -122,8 +122,9 @@ glyph is drawn in the danger colour.
   could not recover from, then the remedy to try again and, if the error comes back, to report it. The surface holds
   the stack trace, headed by the error's name and message, the stack following them without repeating that line where
   the stack already begins with it. Its row holds **Try again**, the primary button, then **Report issue**.
-- **A daemon that could not start**: headed that the daemon failed to start, with the line saying that the daemon is
-  the background process that runs the user's sessions and terminals, then the remedy saying Octoboard cannot work
+- **A daemon that could not start**, shown only in the desktop application, whose shell passes the failure to the
+  window (a browser page never shows it): headed that the daemon failed to start, with the line saying that the daemon
+  is the background process that runs the user's sessions and terminals, then the remedy saying Octoboard cannot work
   without it and that opening Octoboard again tries once more. The surface starts with a sentence saying that if the
   steps above do not resolve it, **Report issue** files an Issue with the steps that led to it; the reason the daemon
   did not start follows (see "Starting up" in `docs/product/application-lifecycle.md`). Its row holds **Report issue**

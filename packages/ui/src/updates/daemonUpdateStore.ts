@@ -6,19 +6,9 @@ import type { RequestSender } from "../requests";
 import { createSettingsWriter, type State } from "../store";
 import { sameValue } from "../values/sameValue";
 import type { UpdateChannel } from "../platform";
-import type { UpdateFailure, UpdateState, UpdateStore } from "./updateStore";
+import { createUpdateStoreBase, type UpdateFailure, type UpdateState, type UpdateStore } from "./updateStore";
 
-/** How long a check this window asked for stays the one whose failure is reported, so that a request the daemon let
- * pass without checking (it answers nothing for one within 30 seconds of the last) does not leave a later automatic
- * check's failure to be taken for it. */
-const ASKED_CHECK_LIFETIME_MS = 60_000;
-
-/** How long after the daemon answered a check the page waits for a sign that it started (its status turning to checking,
- * or a last check that ended): the daemon answers one it lets pass, within 30 seconds of the last, as it answers any, and
- * says nothing more. */
-const CHECK_STARTED_WAIT_MS = 600;
-
-/** How long a check that did not start keeps the button pending, so that the press is seen to have been heard. */
+/** How long a check the daemon did not start keeps the button pending, so that the press is seen to have been heard. */
 const CHECK_UNCHANGED_HOLD_MS = 1200;
 
 /**
@@ -28,18 +18,20 @@ const CHECK_UNCHANGED_HOLD_MS = 1200;
  * status; a restart goes through the window's exit flow, which asks about the sessions it would interrupt and sends
  * `restart_daemon`. Nothing is downloaded or restarted but by the user's press.
  *
- * What only this window knows stays here: whether its notice was dismissed or hidden, whether its restart is pending, the
- * check and the install it asked for (whose failure it alone reports, as an action the user started; another window's
- * failure is the section's mark alone), and the version of the daemon the page was loaded for, so that a restart into
- * another version asks for a reload. The channel and the automatic check are the daemon's settings, written as any
- * setting is, based on the version this window holds.
+ * What only this window knows stays here: whether its notice was dismissed or its restart notice hidden (for the version
+ * installed), whether its restart is pending (until the daemon that follows greets, `restartAwaited`), and the check and
+ * the install it asked for, whose failure it alone reports, as an action the user started (another window's failure is
+ * the section's mark alone). The daemon's reply tells which they are: whether the check started, with the last check's
+ * `at` it started after, and the install's `started_at`. A daemon of another version than the page's own build asks for
+ * a reload. The channel and the automatic check are the daemon's settings, written as any setting is, based on the
+ * version this window holds.
  */
 export function createDaemonUpdateStore({
   daemon,
   reportFailure,
   reportRequestFailure,
   reportSaveFailure,
-  now = Date.now,
+  uiVersion = __OCTOBOARD_VERSION__,
 }: {
   daemon: { store: StoreApi<State>; request: RequestSender };
   /** An end of a check or an install this window asked for that went wrong. */
@@ -48,22 +40,22 @@ export function createDaemonUpdateStore({
   reportRequestFailure: (error: unknown, action: UpdateFailure["action"]) => void;
   /** A setting the daemon would not take. */
   reportSaveFailure: (error: unknown) => void;
-  now?: () => number;
+  /** The release version of the page's own build. */
+  uiVersion?: string;
 }): UpdateStore {
   const { store, request } = daemon;
-  const listeners = new Set<() => void>();
-  let restartHandler: ((holderFloor: string | null, targetVersion: string | null) => Promise<void>) | undefined;
 
   // Client state: what this window has done about the daemon's update.
   let dismissedVersion: string | undefined;
-  let restartNoticeHidden = false;
+  /** The installed version (null where unknown) whose restart notice was hidden. */
+  let restartNoticeHiddenFor: string | null | undefined;
   let restarting = false;
-  /** The version of the daemon the page was loaded for: the first one that greeted it. */
-  let loadedVersion: string | undefined;
-  /** The `at` of the last check when this window asked for another (`null` for none yet) and when it asked. */
-  let askedCheck: { from: number | null; at: number } | undefined;
-  /** The `started_at` of the last install when this window asked for another (`null` for none yet). */
-  let askedInstall: { from: number | null } | undefined;
+  /** A check this window asked for that the daemon started, after the last check that had ended at `after` (null for
+   * none): its end is the status whose last check is another, or, once a status showed it `checking`, one that no longer
+   * does (a check the daemon gave up on records nothing). */
+  let askedCheck: { after: number | null; seenChecking: boolean } | undefined;
+  /** An install this window asked for: `startedAt` once the daemon's reply has named it. */
+  let askedInstall: { startedAt?: number } | undefined;
   let checkAsked: UpdateState["checkAsked"];
   const save = createSettingsWriter({ store, request, onFailure: reportSaveFailure });
 
@@ -71,17 +63,20 @@ export function createDaemonUpdateStore({
     // What was held from the daemon before this one greeted is not this one's: read nothing from it until its own status.
     const status: DaemonUpdateStatus | null = held.daemonUpdateStale ? null : held.daemonUpdate;
     const version = held.daemon?.version;
-    loadedVersion ??= version;
+    // Asked for and not yet begun as the status sees it: shown as begun, so that the press is seen to have taken and a
+    // second one finds the download under way.
+    const installing = askedInstall !== undefined && (status?.phase ?? "idle") === "idle";
+    const installedVersion = status?.installed?.version ?? null;
     const available = status?.available ?? undefined;
     const progress = status?.progress ?? undefined;
     const installed = status?.installed ?? undefined;
     const last = status?.last_check ?? undefined;
     const next: UpdateState = {
       currentVersion: version,
-      phase: status?.phase ?? "idle",
+      phase: installing ? "downloading" : status?.phase ?? "idle",
       update: available && { version: available.version, holderFloor: available.holder_floor, notes: available.notes ?? undefined },
       updateChannel: available?.channel,
-      progress: progress && { downloaded: progress.downloaded, total: progress.total ?? undefined },
+      progress: progress ? { downloaded: progress.downloaded, total: progress.total ?? undefined } : installing ? { downloaded: 0 } : undefined,
       installedVersion: installed?.version ?? undefined,
       installedHolderFloor: installed ? installed.holder_floor : undefined,
       lastCheck: last && { outcome: last.outcome === "up_to_date" ? "upToDate" : last.outcome, at: last.at },
@@ -89,92 +84,107 @@ export function createDaemonUpdateStore({
       autoCheck: held.settings.daemon_update_check,
       manual: status?.manual ? { path: status.manual.path, command: status.manual.command } : undefined,
       checkAsked,
-      reloadNeeded: version !== undefined && loadedVersion !== undefined && version !== loadedVersion,
+      reloadNeeded: version !== undefined && version !== uiVersion,
       noticeDismissed: available !== undefined && dismissedVersion === available.version,
-      restartNoticeHidden,
-      restarting,
+      restartNoticeHidden: status?.phase === "installed" && restartNoticeHiddenFor === installedVersion,
+      restarting: restarting || held.restartAwaited,
     };
     // A state that says what the last said is the same state, so what reads it does not render again.
     return previous && sameValue(previous, next) ? previous : next;
   };
 
   let state = derive(store.getState(), undefined);
+  const base = createUpdateStoreBase(() => state, (value) => {
+    restarting = value;
+    refresh();
+  });
 
-  const refresh = () => {
+  function refresh() {
     const next = derive(store.getState(), state);
     if (next === state) return;
     state = next;
-    for (const listener of listeners) listener();
-  };
+    base.notify();
+  }
 
-  /** Reports the end of what this window asked for, once. */
-  const settle = (held: State) => {
+  /** Reports the end of what this window asked for, once. `fresh` is a status a new `snapshot` brought (a new connection,
+   * or a recovery from lag): work it does not show running ended unseen, or was another daemon's, and is no longer
+   * waited for. */
+  const settle = (held: State, fresh: boolean) => {
     const status = held.daemonUpdateStale ? null : held.daemonUpdate;
     if (!status) return;
     const last = status.last_check;
-    if (askedCheck && last && last.at !== askedCheck.from) {
-      const asked = askedCheck;
+    if (askedCheck && last && last.at !== askedCheck.after) {
       askedCheck = undefined;
-      if (last.outcome === "failed" && now() - asked.at <= ASKED_CHECK_LIFETIME_MS) {
-        reportFailure({ action: "check", reason: "failed", detail: last.detail ?? "", code: last.error ?? undefined });
-      }
+      checkAsked = undefined;
+      if (last.outcome === "failed") reportFailure({ action: "check", reason: "failed", detail: last.detail ?? "", code: last.error ?? undefined });
+    } else if (askedCheck && (status.phase === "installed" || ((fresh || askedCheck.seenChecking) && status.phase !== "checking"))) {
+      // An update learned of meanwhile ends the check with nothing to say, as does a check that ended unrecorded or unseen.
+      askedCheck = undefined;
+      checkAsked = undefined;
+    } else if (askedCheck && status.phase === "checking") {
+      askedCheck.seenChecking = true;
     }
     const install = status.install;
-    if (askedInstall && install && install.started_at !== askedInstall.from && install.state !== "running") {
+    if (askedInstall?.startedAt !== undefined && install?.started_at === askedInstall.startedAt && install.state !== "running") {
       askedInstall = undefined;
       if (install.state === "failed") reportFailure({ action: "install", reason: "failed", detail: install.detail ?? "", code: install.error ?? undefined });
+    } else if (askedInstall?.startedAt !== undefined && fresh && status.phase !== "downloading") {
+      askedInstall = undefined;
     }
   };
 
   return {
     getState: () => state,
-    subscribe(listener) {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
+    subscribe: base.subscribe,
     async check(trigger) {
-      // The daemon looks by itself; what a press asks for is remembered, to report its failure.
-      if (trigger === "manual") {
-        askedCheck = { from: store.getState().daemonUpdate?.last_check?.at ?? null, at: now() };
-        checkAsked = "pending";
-        refresh();
-      }
-      try {
-        await request({ type: "check_daemon_update" });
-      } catch (error) {
-        askedCheck = undefined;
-        checkAsked = undefined;
-        refresh();
-        if (trigger === "manual") reportRequestFailure(error, "check");
+      // The daemon looks by itself; what a press asks for is followed, to report its failure.
+      if (trigger !== "manual") {
+        await request({ type: "check_daemon_update" }).catch(() => {});
         return;
       }
-      if (trigger !== "manual") return;
-      // Whether the daemon looked is only told by its status: a check it let pass changes nothing.
-      const asked = askedCheck;
-      await new Promise((resolve) => setTimeout(resolve, CHECK_STARTED_WAIT_MS));
-      const held = store.getState().daemonUpdate;
-      if (held && (held.phase !== "idle" || held.last_check?.at !== asked?.from)) {
+      checkAsked = "pending";
+      refresh();
+      let reply;
+      try {
+        reply = await request({ type: "check_daemon_update" });
+      } catch (error) {
         checkAsked = undefined;
+        refresh();
+        reportRequestFailure(error, "check");
+        return;
+      }
+      if (reply.started) {
+        askedCheck = { after: reply.last_check_at, seenChecking: false };
+        // Its end may have arrived ahead of the reply.
+        settle(store.getState(), false);
         refresh();
         return;
       }
       checkAsked = "unchanged";
       refresh();
       await new Promise((resolve) => setTimeout(resolve, CHECK_UNCHANGED_HOLD_MS));
-      checkAsked = undefined;
+      // A later press may have asked again meanwhile.
+      if (checkAsked === "unchanged") checkAsked = undefined;
       refresh();
     },
     async install() {
-      if (state.phase !== "idle" || !state.update || state.manual) return;
-      askedInstall = { from: store.getState().daemonUpdate?.install?.started_at ?? null };
+      if (state.phase !== "idle" || !state.update || state.manual || askedInstall) return;
+      const asked: { startedAt?: number } = {};
+      askedInstall = asked;
+      refresh();
       try {
-        await request({ type: "update_daemon" });
+        asked.startedAt = (await request({ type: "update_daemon" })).started_at;
       } catch (error) {
-        askedInstall = undefined;
+        if (askedInstall === asked) askedInstall = undefined;
+        refresh();
         // An update the daemon holds none of any more is withdrawn at its next status; the others are said as they are.
         if (error instanceof CodedError && error.code === "daemon_update_nothing_to_install") reportFailure({ action: "install", reason: "gone", detail: "" });
         else reportRequestFailure(error, "install");
+        return;
       }
+      // Its end may have arrived ahead of the reply.
+      settle(store.getState(), false);
+      refresh();
     },
     setChannel: (channel: UpdateChannel) => save({ daemon_update_channel: channel }, ["daemon_update_channel"]),
     setAutoCheck: (value) => save({ daemon_update_check: value }, ["daemon_update_check"]),
@@ -183,33 +193,19 @@ export function createDaemonUpdateStore({
       refresh();
     },
     hideRestartNotice() {
-      restartNoticeHidden = true;
+      restartNoticeHiddenFor = state.installedVersion ?? null;
       refresh();
     },
-    async restart() {
-      if (state.phase !== "installed" || restarting || !restartHandler) return;
-      restarting = true;
-      refresh();
-      try {
-        await restartHandler(state.installedHolderFloor ?? null, state.installedVersion ?? null);
-      } catch {
-        // The exit flow reports its own failures; the press only stops being pending.
-      } finally {
-        restarting = false;
-        refresh();
-      }
-    },
-    onRestartRequested(handler) {
-      restartHandler = handler;
-      return () => {
-        if (restartHandler === handler) restartHandler = undefined;
-      };
-    },
+    restart: base.restart,
+    onRestartRequested: base.onRestartRequested,
     // The daemon checks by itself, on its own schedule: what starts here is following its status.
     start() {
       refresh();
       return store.subscribe((held, previous) => {
-        if (held.daemonUpdate !== previous.daemonUpdate || held.daemonUpdateStale !== previous.daemonUpdateStale) settle(held);
+        if (held.daemonUpdate !== previous.daemonUpdate || held.daemonUpdateStale !== previous.daemonUpdateStale || held.snapshotEpoch !== previous.snapshotEpoch) {
+          // `hello` and `snapshot` usually arrive in one batch, so the stale step between them is seldom seen.
+          settle(held, held.snapshotEpoch !== previous.snapshotEpoch);
+        }
         refresh();
       });
     },

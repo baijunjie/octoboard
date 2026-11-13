@@ -79,19 +79,43 @@ fn setup_of(state: &AppState) -> Result<Arc<Setup>> {
     state.daemon_update.setup().ok_or_else(unavailable)
 }
 
+/// Whether `check_daemon_update` started a check, and the `at` of the last check that had ended
+/// when it did (None for none, and when nothing started), which the end of the one started is
+/// told apart by.
+#[derive(Debug)]
+pub(crate) struct CheckStart {
+    pub started: bool,
+    pub last_check_at: Option<i64>,
+}
+
 /// `check_daemon_update`: starts a check unless one or the download runs, one ended a moment ago,
-/// or an update is installed, and returns at once.
-pub(crate) fn check_requested(state: &Arc<AppState>) -> Result<()> {
+/// or an update is installed, and returns once it is known whether it started, not when it ends.
+pub(crate) async fn check_requested(state: &Arc<AppState>) -> Result<CheckStart> {
     let setup = setup_of(state)?;
     let state = state.clone();
-    // Blocking all the way, the look at the disk before the check included.
+    let (told, start) = tokio::sync::oneshot::channel();
+    // On the check's own thread all the way, the look at the disk before the claim included; the
+    // reply waits only for the claim, not for the check.
     spawn_check(move || {
         forget_rolled_back(&state, &setup);
-        if let Some(claim) = state.daemon_update.begin_check(&state, false) {
+        // Read under the claim: no other check can end until this one has.
+        let claim = state.daemon_update.begin_check(&state, false);
+        let _ = told.send(CheckStart {
+            started: claim.is_some(),
+            last_check_at: claim
+                .is_some()
+                .then(|| state.daemon_update.last_check_at())
+                .flatten(),
+        });
+        if let Some(claim) = claim {
             run_check(&state, &setup, claim);
         }
     });
-    Ok(())
+    // A thread that could not be started, or that panicked before it answered, started nothing.
+    Ok(start.await.unwrap_or(CheckStart {
+        started: false,
+        last_check_at: None,
+    }))
 }
 
 /// Runs `check` (blocking: it reads the disk and the manifest) on a thread of its own, which the
@@ -106,8 +130,8 @@ fn spawn_check(check: impl FnOnce() + Send + 'static) {
 }
 
 /// `update_daemon`: starts the download and replacement of the release the last check found, and
-/// returns once it has started.
-pub(crate) async fn update_requested(state: &Arc<AppState>) -> Result<()> {
+/// returns once it has started, with the `install.started_at` the status gives it.
+pub(crate) async fn update_requested(state: &Arc<AppState>) -> Result<i64> {
     let setup = setup_of(state)?;
     state.refuse_while_shutting_down()?;
     let looking = {
@@ -152,13 +176,19 @@ pub(crate) async fn update_requested(state: &Arc<AppState>) -> Result<()> {
     // Looked at again: the stop may have begun while the lock and the executable were looked at.
     state.refuse_while_shutting_down()?;
     let (claim, release) = state.daemon_update.begin_install(state).map_err(refused)?;
+    // Read under the claim, before the work starts: the install in the status is this one.
+    let started_at = state
+        .daemon_update
+        .status()
+        .and_then(|status| status.install)
+        .map_or_else(now_millis, |install| install.started_at);
     tracing::info!(version = %release.version, "updating the daemon");
     let state = state.clone();
     // A thread of its own, not the runtime's blocking pool, whose end the runtime waits for: a
     // download that stalls must not hold the daemon's exit. A stop that begins meanwhile keeps the
     // executable from being replaced (`Sources::stopping`).
     std::thread::spawn(move || run_install(&state, &setup, claim, &release, lock));
-    Ok(())
+    Ok(started_at)
 }
 
 /// `restart_daemon`: asks for the planned restart `octoboardd restart` makes, which hands every

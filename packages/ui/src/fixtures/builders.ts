@@ -309,8 +309,13 @@ export function accountSharingOf(states: AccountSharing[]): Map<string, AccountS
   return new Map(states.map((sharing) => [sharing.account, sharing]));
 }
 
-/** The release version the fixtures' daemon says it is in its hello. */
-export const FIXTURE_DAEMON_VERSION = "0.1.0";
+/** The release version the fixtures' daemon says it is in its hello: the build's own, as the page a daemon serves is of
+ * the daemon's build, so that no Reload bar asks for another version unless a scenario's daemon greets with one. */
+export const FIXTURE_DAEMON_VERSION: string = __OCTOBOARD_VERSION__;
+
+/** The `install.started_at` the fixture daemon names in its reply to `update_daemon`: the status a scenario sends to end that
+ * install echoes it, as the real daemon's does, and the window then takes it as that install's end. */
+export const FIXTURE_DAEMON_INSTALL_STARTED_AT = NOW;
 
 /** The status of a daemon that updates itself, idle with nothing checked, found or installed, over which `parts` lay what a
  * scenario differs in. */

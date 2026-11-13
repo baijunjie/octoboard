@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
-import { daemonRefusedKey, daemonWsUrl, isKeylessDaemonPage, isLocalDaemon, KEY_CHECK_TIMEOUT_MS, resolveDaemonAddress, resolveRecovered } from "./daemon";
+import { daemonRefusedKey, daemonWsUrl, isKeylessDaemonPage, isLocalDaemon, KEY_CHECK_TIMEOUT_MS, resolveDaemonAddress, resolveRecovered, resolveStartupError } from "./daemon";
 import type { PlatformAdapter } from "./platform";
 import { BROWSER_HOST } from "./test/hosts";
 
@@ -41,6 +41,18 @@ it.each([
 ])("reads the shell's recovered marker in %s as %s", (search, expected) => {
   openAt(search);
   expect(resolveRecovered()).toBe(expected);
+});
+
+it("reads the shell's startup failure from ?error=, percent-decoded, only under the desktop shell", () => {
+  openAt("?error=Another%20instance%20is%20running");
+  expect(resolveStartupError(platform)).toBe("Another instance is running");
+  openAt("?port=4242");
+  expect(resolveStartupError(platform)).toBeUndefined();
+});
+
+it("ignores ?error= in a browser, where anyone can put text there", () => {
+  openAt("?error=Daemon%20failed");
+  expect(resolveStartupError({ kind: "browser", host: BROWSER_HOST } as PlatformAdapter)).toBeUndefined();
 });
 
 it("takes the port and the key from the page's query", () => {

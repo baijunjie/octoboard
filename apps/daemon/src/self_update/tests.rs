@@ -1477,7 +1477,7 @@ mod requests {
         assert_eq!(state.daemon_update.status(), None);
         let unavailable = error_code::DAEMON_UPDATE_UNAVAILABLE;
         assert_eq!(
-            code_of(&super::super::check_requested(&state).unwrap_err()),
+            code_of(&super::super::check_requested(&state).await.unwrap_err()),
             unavailable
         );
         assert_eq!(
@@ -1505,7 +1505,7 @@ mod requests {
     async fn a_check_finds_the_release_and_announces_it() {
         let (state, installation, _dir) = enabled("update-check", newer_host());
         installation.files.write_daemon_version("0.1.0").unwrap();
-        super::super::check_requested(&state).unwrap();
+        super::super::check_requested(&state).await.unwrap();
         until(&state, |updates| {
             updates.status().unwrap().last_check.is_some()
         })
@@ -1527,7 +1527,7 @@ mod requests {
     async fn a_failed_check_is_told_with_its_cause_and_keeps_what_an_earlier_one_found() {
         let host = newer_host();
         let (state, _installation, _dir) = enabled("update-check-fails", host.clone());
-        super::super::check_requested(&state).unwrap();
+        super::super::check_requested(&state).await.unwrap();
         until(&state, |updates| {
             updates.status().unwrap().last_check.is_some()
         })
@@ -1558,12 +1558,18 @@ mod requests {
     async fn a_second_check_within_the_floor_changes_nothing() {
         let host = newer_host();
         let (state, _installation, _dir) = enabled("update-check-floor", host.clone());
-        super::super::check_requested(&state).unwrap();
+        let first = super::super::check_requested(&state).await.unwrap();
+        assert!(first.started);
+        assert_eq!(
+            first.last_check_at, None,
+            "no check had ended before the first"
+        );
         until(&state, |updates| {
             updates.status().unwrap().last_check.is_some()
         })
         .await;
-        super::super::check_requested(&state).unwrap();
+        let second = super::super::check_requested(&state).await.unwrap();
+        assert!(!second.started, "the reply says that nothing started");
         assert_eq!(phase(&state.daemon_update), DaemonUpdatePhase::Idle);
         assert_eq!(host.asked().len(), 1);
         // A forced one (the channel changed) is not held back by it.
@@ -1571,21 +1577,119 @@ mod requests {
     }
 
     #[tokio::test]
+    async fn a_check_started_after_an_earlier_one_ended_names_the_time_that_one_ended() {
+        let (state, _installation, _dir) = enabled("update-check-after", newer_host());
+        let first = super::super::check_requested(&state).await.unwrap();
+        assert_eq!(first.last_check_at, None);
+        until(&state, |updates| {
+            updates.status().unwrap().last_check.is_some()
+                && phase(updates) == DaemonUpdatePhase::Idle
+        })
+        .await;
+        let ended_at = state.daemon_update.last_check_at().unwrap();
+        // The floor has passed without waiting for it.
+        state.daemon_update.lock().last_ended = std::time::Instant::now()
+            .checked_sub(super::super::CHECK_FLOOR + std::time::Duration::from_secs(1));
+        let second = super::super::check_requested(&state).await.unwrap();
+        assert!(second.started);
+        assert_eq!(
+            second.last_check_at,
+            Some(ended_at),
+            "the end of this check is the first status whose last check is another"
+        );
+        until(&state, |updates| phase(updates) == DaemonUpdatePhase::Idle).await;
+    }
+
+    #[tokio::test]
+    async fn the_coordinator_answers_a_check_with_whether_it_started_and_an_install_with_when_it_began(
+    ) {
+        use crate::protocol::{Event, RequestBody};
+        let (state, _installation, _dir) = enabled("update-replies", newer_host());
+        let reply = crate::coordinator::handle(
+            &state,
+            Some("check-1".to_owned()),
+            RequestBody::CheckDaemonUpdate,
+        )
+        .await
+        .unwrap();
+        assert!(
+            matches!(
+                &reply,
+                Some(Event::DaemonUpdateCheck { id: Some(id), started: true, last_check_at: None }) if id == "check-1"
+            ),
+            "answered with daemon_update_check: {reply:?}"
+        );
+        until(&state, |updates| {
+            updates.status().unwrap().available.is_some()
+                && phase(updates) == DaemonUpdatePhase::Idle
+        })
+        .await;
+        // Asked again within the floor: answered, with nothing started.
+        let held = crate::coordinator::handle(
+            &state,
+            Some("check-2".to_owned()),
+            RequestBody::CheckDaemonUpdate,
+        )
+        .await
+        .unwrap();
+        assert!(
+            matches!(
+                &held,
+                Some(Event::DaemonUpdateCheck { id: Some(id), started: false, last_check_at: None }) if id == "check-2"
+            ),
+            "answered with daemon_update_check: {held:?}"
+        );
+
+        let reply = crate::coordinator::handle(
+            &state,
+            Some("install-1".to_owned()),
+            RequestBody::UpdateDaemon,
+        )
+        .await
+        .unwrap();
+        let started_at = match &reply {
+            Some(Event::DaemonUpdateStarted { id, started_at }) => {
+                assert_eq!(id.as_deref(), Some("install-1"));
+                *started_at
+            }
+            other => panic!("answered with daemon_update_started: {other:?}"),
+        };
+        until(&state, |updates| {
+            phase(updates) == DaemonUpdatePhase::Installed
+        })
+        .await;
+        assert_eq!(
+            state
+                .daemon_update
+                .status()
+                .unwrap()
+                .install
+                .map(|install| install.started_at),
+            Some(started_at)
+        );
+    }
+
+    #[tokio::test]
     async fn the_update_is_downloaded_verified_and_installed_and_restart_is_then_the_next_step() {
         let (state, installation, _dir) = enabled("update-install", newer_host());
         let mut events = state.subscribe();
-        super::super::check_requested(&state).unwrap();
+        super::super::check_requested(&state).await.unwrap();
         until(&state, |updates| {
             updates.status().unwrap().available.is_some()
         })
         .await;
-        super::super::update_requested(&state).await.unwrap();
+        let started_at = super::super::update_requested(&state).await.unwrap();
         until(&state, |updates| {
             phase(updates) == DaemonUpdatePhase::Installed
         })
         .await;
 
         let status = state.daemon_update.status().unwrap();
+        assert_eq!(
+            status.install.as_ref().map(|install| install.started_at),
+            Some(started_at),
+            "the reply names the install the status then tells of"
+        );
         let installed = status.installed.unwrap();
         assert_eq!(installed.version.as_deref(), Some(VERSION));
         assert_eq!(installed.holder_floor.as_deref(), Some("99.0.0"));
@@ -1616,7 +1720,7 @@ mod requests {
         // Once installed, nothing is checked and nothing installed again.
         let err = super::super::update_requested(&state).await.unwrap_err();
         assert_eq!(code_of(&err), error_code::DAEMON_UPDATE_INSTALLED);
-        super::super::check_requested(&state).unwrap();
+        super::super::check_requested(&state).await.unwrap();
         assert_eq!(phase(&state.daemon_update), DaemonUpdatePhase::Installed);
         assert!(state.daemon_update.begin_check(&state, true).is_none());
 
@@ -1633,7 +1737,7 @@ mod requests {
         let err = super::super::update_requested(&state).await.unwrap_err();
         assert_eq!(code_of(&err), error_code::DAEMON_UPDATE_NOTHING_TO_INSTALL);
 
-        super::super::check_requested(&state).unwrap();
+        super::super::check_requested(&state).await.unwrap();
         until(&state, |updates| {
             updates.status().unwrap().available.is_some()
         })
@@ -1674,7 +1778,7 @@ mod requests {
     async fn a_failed_install_is_told_by_its_code_and_can_be_asked_for_again() {
         let host = newer_host();
         let (state, installation, _dir) = enabled("update-install-fails", host.clone());
-        super::super::check_requested(&state).unwrap();
+        super::super::check_requested(&state).await.unwrap();
         until(&state, |updates| {
             updates.status().unwrap().available.is_some()
         })
@@ -1717,7 +1821,7 @@ mod requests {
         let (state, installation, _dir) = enabled("update-manual", host.clone());
         let dir = installation.exe.parent().unwrap().to_path_buf();
         std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o555)).unwrap();
-        super::super::check_requested(&state).unwrap();
+        super::super::check_requested(&state).await.unwrap();
         until(&state, |updates| {
             updates.status().unwrap().last_check.is_some()
         })
@@ -1763,7 +1867,7 @@ mod requests {
             .store
             .set_daemon_update_channel(DaemonUpdateChannel::Beta)
             .unwrap();
-        super::super::check_requested(&state).unwrap();
+        super::super::check_requested(&state).await.unwrap();
         until(&state, |updates| {
             updates.status().unwrap().last_check.is_some()
         })
@@ -1861,7 +1965,7 @@ mod requests {
             is_running_image: is_not_running,
             probe: accept,
         });
-        super::super::check_requested(&state).unwrap();
+        super::super::check_requested(&state).await.unwrap();
         until(&state, |updates| {
             updates.status().unwrap().available.is_some()
         })
@@ -1898,7 +2002,7 @@ mod requests {
                     .into_owned(),
             })
             .unwrap();
-        super::super::check_requested(&state).unwrap();
+        super::super::check_requested(&state).await.unwrap();
         until(&state, |updates| {
             phase(updates) == DaemonUpdatePhase::Installed
         })
@@ -1959,7 +2063,7 @@ mod scheduled {
         scheduled_check(&state, true).await;
         assert!(host.asked().is_empty());
         assert_eq!(state.daemon_update.status().unwrap().last_check, None);
-        super::super::check_requested(&state).unwrap();
+        super::super::check_requested(&state).await.unwrap();
         until(&state, |updates| {
             updates.status().unwrap().last_check.is_some()
         })
@@ -1992,7 +2096,7 @@ mod scheduled {
         let (state, installation, _dir) = enabled("schedule-installed", host.clone());
         let release = installation.release();
         let (claim, _) = {
-            super::super::check_requested(&state).unwrap();
+            super::super::check_requested(&state).await.unwrap();
             until(&state, |updates| {
                 updates.status().unwrap().available.is_some()
             })
@@ -2193,7 +2297,7 @@ mod hardening {
     #[tokio::test]
     async fn a_restart_is_refused_while_the_download_runs() {
         let (state, _installation, _dir) = enabled("harden-restart-download", newer_host());
-        super::super::check_requested(&state).unwrap();
+        super::super::check_requested(&state).await.unwrap();
         until(&state, |updates| {
             updates.status().unwrap().available.is_some()
         })
@@ -2239,7 +2343,7 @@ mod hardening {
     #[tokio::test]
     async fn a_new_channel_forgets_what_the_old_one_offered_even_with_the_check_off() {
         let (state, _installation, _dir) = enabled("harden-channel", newer_host());
-        super::super::check_requested(&state).unwrap();
+        super::super::check_requested(&state).await.unwrap();
         until(&state, |updates| {
             updates.status().unwrap().available.is_some()
         })
@@ -2269,7 +2373,7 @@ mod hardening {
     async fn the_lock_comes_before_an_adopted_record_and_an_update_made_meanwhile_is_not_noted_over_a_download(
     ) {
         let (state, installation, _dir) = enabled("harden-adopt-lock", newer_host());
-        super::super::check_requested(&state).unwrap();
+        super::super::check_requested(&state).await.unwrap();
         until(&state, |updates| {
             updates.status().unwrap().available.is_some()
         })
@@ -2333,13 +2437,13 @@ mod hardening {
             .unwrap();
         let _ = super::super::update_requested(&state).await;
         assert_eq!(phase(&state.daemon_update), DaemonUpdatePhase::Installed);
-        super::super::check_requested(&state).unwrap();
+        super::super::check_requested(&state).await.unwrap();
         assert_eq!(phase(&state.daemon_update), DaemonUpdatePhase::Installed);
 
         // `octoboardd update --rollback` put the running build back and forgot its record.
         ROLLED_BACK.store(true, Ordering::SeqCst);
         installation.files.forget_installed().unwrap();
-        super::super::check_requested(&state).unwrap();
+        super::super::check_requested(&state).await.unwrap();
         until(&state, |updates| {
             updates.status().unwrap().last_check.is_some()
         })
@@ -2440,7 +2544,7 @@ mod hardening {
         });
         let (state, installation, _dir) = enabled_running("harden-stall", stalls, is_running_old);
         runtime.block_on(async {
-            super::super::check_requested(&state).unwrap();
+            super::super::check_requested(&state).await.unwrap();
             until(&state, |updates| {
                 updates.status().unwrap().available.is_some()
             })
@@ -2536,7 +2640,7 @@ mod hardening {
         *flips.state.lock().unwrap() = Some(Arc::downgrade(&state));
         // The automatic check is off, so nothing follows the change but this check itself.
         state.store.set_daemon_update_check(false).unwrap();
-        super::super::check_requested(&state).unwrap();
+        super::super::check_requested(&state).await.unwrap();
         until(&state, |updates| {
             updates.status().unwrap().last_check.is_some()
         })
@@ -3612,7 +3716,7 @@ mod check_thread {
         let _state_and_dir = rt.block_on(async {
             let (state, _installation, dir) =
                 enabled_running("check-thread-stuck", stuck, is_running_old);
-            super::super::check_requested(&state).unwrap();
+            super::super::check_requested(&state).await.unwrap();
             entered_rx
                 .recv_timeout(PATIENCE)
                 .expect("the check reached the fetcher");
@@ -3638,7 +3742,7 @@ mod check_thread {
             let (hold_tx, hold_rx) = std::sync::mpsc::channel::<()>();
             let held = tokio::task::spawn_blocking(move || hold_rx.recv().ok());
 
-            super::super::check_requested(&state).unwrap();
+            super::super::check_requested(&state).await.unwrap();
             until(&state, |updates| {
                 updates.status().unwrap().last_check.is_some()
             })
@@ -3670,7 +3774,7 @@ mod check_thread {
         let (fetcher, reached) = Panicking::new();
         let (state, _installation, _dir) =
             enabled_running("check-thread-requested-panic", fetcher, is_running_old);
-        super::super::check_requested(&state).unwrap();
+        super::super::check_requested(&state).await.unwrap();
         reached
             .recv_timeout(PATIENCE)
             .expect("the check reached the fetcher");

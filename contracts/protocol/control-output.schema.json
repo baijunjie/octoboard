@@ -5623,6 +5623,63 @@
                 "null"
               ]
             },
+            "started": {
+              "type": "boolean"
+            },
+            "last_check_at": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            },
+            "type": {
+              "type": "string",
+              "const": "daemon_update_check"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "started",
+            "last_check_at"
+          ],
+          "description": "The reply to `check_daemon_update`: whether it started a check (`started`), and, when it\ndid, the `last_check.at` of the status as the check started (null for none), so that the\nend of this check is the status whose `last_check.at` is another. A check that did not start\nchanges nothing; `last_check_at` is then null."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "started_at": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "type": {
+              "type": "string",
+              "const": "daemon_update_started"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "started_at"
+          ],
+          "description": "The reply to `update_daemon`, once the download has started: the `install.started_at` the\nstatus gives it, by which a client tells this install's end from another's."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "known": {
               "type": "boolean"
             },

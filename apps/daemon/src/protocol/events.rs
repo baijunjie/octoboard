@@ -688,6 +688,21 @@ pub enum Event {
     Ack {
         id: Option<String>,
     },
+    /// The reply to `check_daemon_update`: whether it started a check (`started`), and, when it
+    /// did, the `last_check.at` of the status as the check started (null for none), so that the
+    /// end of this check is the status whose `last_check.at` is another. A check that did not start
+    /// changes nothing; `last_check_at` is then null.
+    DaemonUpdateCheck {
+        id: Option<String>,
+        started: bool,
+        last_check_at: Option<i64>,
+    },
+    /// The reply to `update_daemon`, once the download has started: the `install.started_at` the
+    /// status gives it, by which a client tells this install's end from another's.
+    DaemonUpdateStarted {
+        id: Option<String>,
+        started_at: i64,
+    },
     /// The reply to `handover_check`: the running sessions and shell terminals, by id, that the
     /// planned stop would not carry over. `known` is false when the request did not give a floor
     /// and target version that read, so the lists hold everything running rather than a proven

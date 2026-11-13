@@ -1,12 +1,19 @@
 // What the fixture daemon answers for the lifecycle of the daemon itself: which running work a restart into an update
-// would not carry over. `shutdown` and `planned_stop` need no module: they are acknowledged.
+// would not carry over, and how it takes a check or an install of its own update. `shutdown` and `planned_stop` need no
+// module: they are acknowledged.
 import { isLive } from "../sessions/sessionStatus";
 import { refuseUnfillable } from "./banner";
+import { FIXTURE_DAEMON_INSTALL_STARTED_AT } from "./builders";
 import type { FixtureContext, Handlers } from "./fixtureContext";
 
 /** The replies about the daemon's own lifecycle. */
 export function createLifecycleReplies({ scenario, store }: FixtureContext): Handlers {
   return {
+    // The daemon starts a check, after the last one that ended at the `at` its status holds; a scenario ends it by sending a
+    // status whose last check has another `at`.
+    check_daemon_update: () => ({ type: "daemon_update_check", id: null, started: true, last_check_at: store.getState().daemonUpdate?.last_check?.at ?? null }),
+    // The install a scenario ends is the one with `started_at` as named here (`FIXTURE_DAEMON_INSTALL_STARTED_AT`).
+    update_daemon: () => ({ type: "daemon_update_started", id: null, started_at: FIXTURE_DAEMON_INSTALL_STARTED_AT }),
     handover_check: () => {
       const { known = true, sessions = [], unnamedSessions = [], shellTerminals = [], unreachedShellTerminals = [] } = scenario.handover ?? {};
       // The daemon lists only what runs: a session without a process or an exited shell has nothing to interrupt.

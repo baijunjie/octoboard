@@ -451,13 +451,20 @@ async fn handle_inner(
         }
 
         RequestBody::CheckDaemonUpdate => {
-            crate::self_update::check_requested(state)?;
-            Ok(None)
+            let start = crate::self_update::check_requested(state).await?;
+            Ok(Some(Event::DaemonUpdateCheck {
+                id: request_id,
+                started: start.started,
+                last_check_at: start.last_check_at,
+            }))
         }
 
         RequestBody::UpdateDaemon => {
-            crate::self_update::update_requested(state).await?;
-            Ok(None)
+            let started_at = crate::self_update::update_requested(state).await?;
+            Ok(Some(Event::DaemonUpdateStarted {
+                id: request_id,
+                started_at,
+            }))
         }
 
         RequestBody::RestartDaemon => {

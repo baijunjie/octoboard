@@ -15,7 +15,7 @@ differ, it is said below.
 
 **Version** says in a sentence where the updates stand, the first that applies of:
 
-1. in a browser, the daemon running another version than the page was loaded for: that Octoboard now runs that version,
+1. in a browser, the daemon running another version than the page's own build: that Octoboard now runs that version,
    and to reload the page to use it (see "What the browser shows" in `docs/product/server-form-updates.md`);
 2. an update installed, which takes effect after Octoboard restarts — on Windows, an update downloaded, which is
    installed when Octoboard quits or restarts (see "Installed, waiting for a restart" in
@@ -37,14 +37,15 @@ Beside the row one button moves the update on:
 
 - **Reload**, in a browser whose daemon now runs another version (case 1 above), which reloads the page;
 - **Restart now** once the update is installed, showing a pending spinner as "Restarting to apply an update" in
-  `docs/product/in-app-updates.md` says; in a browser it restarts the daemon (see "Restarting into the update" in
-  `docs/product/server-form-updates.md`);
+  `docs/product/in-app-updates.md` says; in a browser it restarts the daemon and stays pending until the next daemon
+  greets the page (see "Restarting into the update" in `docs/product/server-form-updates.md`);
 - **Download and install** once a newer version is found that can be installed from here, showing the spinner while a
-  check or the download is under way;
+  check or the download is under way — in a browser, from the press;
 - otherwise **Check for updates**, showing the spinner while a check runs. In a browser it shows it from the press until
-  the daemon's status shows the check started; a press the daemon lets pass, within 30 seconds of the end of its last
-  check or download (see "When the daemon checks" in `docs/product/server-form-updates.md`), keeps the spinner a moment
-  longer and then says, to assistive technology too, when the last check ended.
+  the check the daemon started for it ends; when the daemon starts none — within 30 seconds of the end of its last check
+  or download, or while a check or a download runs (see "When the daemon checks" in
+  `docs/product/server-form-updates.md`) — it keeps the spinner a moment and says, to assistive technology too, when
+  the last check ended.
 
 **Installing by hand.** While the daemon cannot install the update itself (case 5), a block under the row, labelled
 **Install command**, shows the install command the daemon gives for its executable's directory and channel (see
