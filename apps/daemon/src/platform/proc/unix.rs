@@ -608,7 +608,12 @@ pub(crate) fn watch_parent(pid: u32, on_gone: impl FnOnce() + Send + 'static) {
 
 /// Resolves when the host asks the daemon to end: Ctrl-C, SIGTERM, or SIGHUP, which a closing
 /// terminal sends it. The handlers are installed by this call, not by the first poll of what it
-/// returns, so a request made after it returns is not lost to the default action.
+/// returns, so a request made after it returns is not lost to the default action. Where the process
+/// was started with SIGHUP ignored (`nohup`), a hang-up is not a request to end: the end of the SSH
+/// session the daemon was started from leaves it running. Its handler is installed all the same,
+/// so that the processes the daemon starts get SIGHUP's default action, as a handler is reset at
+/// `exec` where an ignored signal stays ignored, and a hang-up the daemon sends them still ends
+/// them.
 pub(crate) fn shutdown_requested() -> impl std::future::Future<Output = ()> {
     use tokio::signal::unix::{signal, SignalKind};
 
@@ -622,6 +627,12 @@ pub(crate) fn shutdown_requested() -> impl std::future::Future<Output = ()> {
     };
     let mut sigint = install(SignalKind::interrupt(), "SIGINT");
     let mut sigterm = install(SignalKind::terminate(), "SIGTERM");
+    let hang_up_ends = !is_ignored(libc::SIGHUP);
+    if !hang_up_ends {
+        tracing::info!(
+            "SIGHUP was ignored when this process started (as nohup leaves it); a hang-up does not end it"
+        );
+    }
     let mut sighup = install(SignalKind::hangup(), "SIGHUP");
     async fn arrival(stream: &mut Option<tokio::signal::unix::Signal>) {
         match stream {
@@ -635,8 +646,30 @@ pub(crate) fn shutdown_requested() -> impl std::future::Future<Output = ()> {
         tokio::select! {
             _ = arrival(&mut sigint) => {}
             _ = arrival(&mut sigterm) => {}
-            _ = arrival(&mut sighup) => {}
+            _ = async {
+                if hang_up_ends {
+                    arrival(&mut sighup).await;
+                } else {
+                    // Each hang-up is taken and dropped; a stream that has closed takes none.
+                    if let Some(stream) = &mut sighup {
+                        while stream.recv().await.is_some() {}
+                    }
+                    std::future::pending::<()>().await;
+                }
+            } => {}
         }
+    }
+}
+
+/// Whether `signal`'s disposition is to be ignored (`SIG_IGN`), as `nohup` leaves `SIGHUP` for the
+/// program it starts. Read without changing it; false where it cannot be read.
+fn is_ignored(signal: libc::c_int) -> bool {
+    // SAFETY: a zeroed `sigaction` is a valid buffer for the call to fill in; a null new action
+    // only reads the current one, which is read once the call has succeeded.
+    unsafe {
+        let mut current: libc::sigaction = std::mem::zeroed();
+        libc::sigaction(signal, std::ptr::null(), &mut current) == 0
+            && current.sa_sigaction == libc::SIG_IGN
     }
 }
 
@@ -685,7 +718,11 @@ pub(crate) fn restart_requested() -> RestartRequests {
 
 #[cfg(test)]
 mod tests {
-    use super::restart_is_managed;
+    use std::process::{Command, Stdio};
+
+    use super::{is_ignored, restart_is_managed, shutdown_requested};
+    use crate::platform::test_helper::{self, ROLE};
+    use crate::test_support::PATIENCE;
 
     fn by_environment(invocation: Option<&str>, exec_pid: Option<&str>, own_pid: u32) -> bool {
         restart_is_managed(false, invocation, exec_pid, own_pid)
@@ -732,5 +769,150 @@ mod tests {
         assert!(restart_is_managed(true, None, None, 7));
         assert!(restart_is_managed(true, Some("abc"), Some("8"), 7));
         assert!(!restart_is_managed(false, None, None, 7));
+    }
+
+    /// Signal dispositions belong to the whole process, and tokio's handlers cannot be removed, so
+    /// each case runs in a child: this test binary run again with only [`a_signal_helper`]
+    /// selected, as `ROLE` says. Whatever the child asserts, its exit status carries.
+    fn run_helper(role: &str) {
+        let output = Command::new(test_helper::program())
+            .args(test_helper::args(
+                "platform::proc::unix::tests::a_signal_helper",
+            ))
+            .env(ROLE, role)
+            .stdin(Stdio::null())
+            .output()
+            .expect("the test binary starts");
+        assert!(
+            output.status.success(),
+            "the helper `{role}` ended with {}:\n{}\n{}",
+            output.status,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        );
+    }
+
+    /// The disposition of `signal`, read without changing it.
+    fn disposition(signal: libc::c_int) -> libc::sighandler_t {
+        // SAFETY: a zeroed `sigaction` is a valid buffer for the call to fill in, and a null new
+        // action only reads the current one.
+        unsafe {
+            let mut current: libc::sigaction = std::mem::zeroed();
+            assert_eq!(libc::sigaction(signal, std::ptr::null(), &mut current), 0);
+            current.sa_sigaction
+        }
+    }
+
+    fn set_disposition(signal: libc::c_int, handler: libc::sighandler_t) {
+        // SAFETY: only changes the disposition of a signal of this helper process.
+        assert_ne!(unsafe { libc::signal(signal, handler) }, libc::SIG_ERR);
+    }
+
+    extern "C" fn nothing(_: libc::c_int) {}
+
+    fn runtime() -> tokio::runtime::Runtime {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("the runtime")
+    }
+
+    /// The helper: does what `ROLE` names and panics where the behavior is not the expected one.
+    /// A no-op in an ordinary run.
+    #[test]
+    fn a_signal_helper() {
+        let Ok(role) = std::env::var(ROLE) else {
+            return;
+        };
+        match role.as_str() {
+            "hang-up-ignored" => {
+                // What `nohup` leaves.
+                set_disposition(libc::SIGHUP, libc::SIG_IGN);
+                runtime().block_on(async {
+                    use futures_util::FutureExt as _;
+                    use tokio::signal::unix::{signal, SignalKind};
+
+                    let mut requested = std::pin::pin!(shutdown_requested());
+                    // A handler, not the ignore, so that the processes the daemon starts get the
+                    // default action.
+                    assert_ne!(
+                        disposition(libc::SIGHUP),
+                        libc::SIG_IGN,
+                        "processes the daemon starts would inherit the ignored hang-up"
+                    );
+                    // A marker raised after the hang-up: once it has arrived, the hang-up has
+                    // been delivered to every stream that listens for it.
+                    let mut marker = signal(SignalKind::user_defined2()).expect("the marker");
+                    // SAFETY: raising signals in this process, which has handlers for them.
+                    assert_eq!(unsafe { libc::raise(libc::SIGHUP) }, 0);
+                    assert_eq!(unsafe { libc::raise(libc::SIGUSR2) }, 0);
+                    tokio::time::timeout(PATIENCE, marker.recv())
+                        .await
+                        .expect("the marker arrived");
+                    assert!(
+                        requested.as_mut().now_or_never().is_none(),
+                        "a hang-up ended the wait for a shutdown request"
+                    );
+                    // SAFETY: as above; SIGTERM has a handler installed by `shutdown_requested`.
+                    assert_eq!(unsafe { libc::raise(libc::SIGTERM) }, 0);
+                    assert!(
+                        tokio::time::timeout(PATIENCE, &mut requested).await.is_ok(),
+                        "SIGTERM did not end the wait for a shutdown request"
+                    );
+                });
+            }
+            "hang-up-default" => {
+                set_disposition(libc::SIGHUP, libc::SIG_DFL);
+                runtime().block_on(async {
+                    let requested = shutdown_requested();
+                    // SAFETY: raising a signal in this process, which has a handler for it by now.
+                    assert_eq!(unsafe { libc::raise(libc::SIGHUP) }, 0);
+                    assert!(
+                        tokio::time::timeout(PATIENCE, requested).await.is_ok(),
+                        "a hang-up did not end the wait for a shutdown request"
+                    );
+                });
+            }
+            "dispositions" => {
+                set_disposition(libc::SIGUSR1, libc::SIG_IGN);
+                set_disposition(libc::SIGUSR2, libc::SIG_DFL);
+                set_disposition(
+                    libc::SIGALRM,
+                    nothing as extern "C" fn(libc::c_int) as libc::sighandler_t,
+                );
+                assert!(is_ignored(libc::SIGUSR1), "an ignored signal");
+                assert!(
+                    !is_ignored(libc::SIGUSR2),
+                    "a signal with its default action"
+                );
+                assert!(!is_ignored(libc::SIGALRM), "a signal with a handler");
+                assert!(!is_ignored(10_000), "a signal number that cannot be read");
+                // Reading changed nothing.
+                assert_eq!(disposition(libc::SIGUSR1), libc::SIG_IGN);
+                assert_eq!(disposition(libc::SIGUSR2), libc::SIG_DFL);
+                assert_eq!(
+                    disposition(libc::SIGALRM),
+                    nothing as extern "C" fn(libc::c_int) as libc::sighandler_t
+                );
+            }
+            other => panic!("no helper role `{other}`"),
+        }
+    }
+
+    /// A daemon started by `nohup` has SIGHUP ignored: a hang-up must not end it, while SIGTERM
+    /// still does.
+    #[test]
+    fn a_hang_up_does_not_end_the_wait_for_a_shutdown_request_where_it_was_ignored_at_start() {
+        run_helper("hang-up-ignored");
+    }
+
+    #[test]
+    fn a_hang_up_ends_the_wait_for_a_shutdown_request_where_it_has_its_default_action() {
+        run_helper("hang-up-default");
+    }
+
+    #[test]
+    fn a_signal_is_ignored_only_where_its_disposition_is_to_ignore_it() {
+        run_helper("dispositions");
     }
 }

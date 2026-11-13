@@ -18,8 +18,10 @@ started by hand, by `octoboardd start` or by a service manager.
 
 - **Starting and stopping are the administrator's.** Nothing starts the daemon but the person or the service manager
   told to, and nothing stops it but a termination signal — `SIGTERM`; `SIGINT`, which `Ctrl+C` in the terminal it was
-  started from sends; or `SIGHUP`, which that terminal sends as it closes. The daemon answers any of them exactly as the
-  desktop form's quit does once confirmed (see "Quitting" in `docs/product/application-lifecycle.md`): every session's
+  started from sends; or `SIGHUP`, which that terminal sends as it closes — except where the daemon was started with
+  `SIGHUP` ignored, as `nohup octoboardd … &` starts it, when the end of the terminal or SSH session it was started from
+  leaves it running (the processes it starts still get `SIGHUP`'s default action). The daemon answers any of them
+  exactly as the desktop form's quit does once confirmed (see "Quitting" in `docs/product/application-lifecycle.md`): every session's
   process is ended and every one of those sessions is left *interrupted*, never archived, every shell terminal ends, and
   nobody is asked first; it then exits with status 0. On Windows, which has no signals, the same stop follows `Ctrl+C`
   or `Ctrl+Break` in the console window the daemon was started in, and closing that window; after a close, Windows ends
