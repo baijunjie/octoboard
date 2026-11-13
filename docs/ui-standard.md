@@ -589,7 +589,9 @@ shows a decorative spinner before it (in place of the content of an icon-only bu
 takes no further press, and keeps focus, so a dialog's Escape and Tab containment survive; the button grows by the
 spinner's width. The label never changes to a progressive form ("Saving…", "Importing…"), so no catalog carries a
 pending variant of a button's label. A link drawn as a button (`ExternalLink`) shows the same spinner while its target
-opens.
+opens. The account MCP dialog's Refresh button keeps its refresh icon and rotates it at the file panel's slow
+pace while pending, respecting reduced motion, in place of the default spinner. It keeps its normal opacity and
+colour while pending; only further presses are blocked. (Source: user decision.)
 
 **A busy dialog disables everything in it but the pending action.** While a dialog's action runs the dialog is busy
 (`busy` on the shared `Dialog`, which gives it to the layer's `Modal`) and cannot be left: every control in it is
@@ -1414,6 +1416,13 @@ The strip is bounded by its available width and scrolls when its content does no
 and its end actions, or the divider drawn under the strip (the agent tabs of the rail's quota panel), may span the
 section while the transparent tab list keeps its content width. Keep the scrolling and focus-ring clearance specified
 under "Visible focus".
+
+### Loading text with a trailing indicator
+
+When a loading status has a spinner or rotating refresh icon immediately after its text, the text takes no trailing
+ellipsis in any language. This applies to the account MCP dialog's refreshing status. A select whose value and loading
+indicator occupy opposite ends of the control keeps its loading ellipsis. Order follows the reading direction, so RTL
+layouts mirror the positions. (Source: user decision.)
 
 ### Progress of a long operation
 

@@ -265,9 +265,9 @@ that text says the reading is still running and that the agent can take about a 
 
 Once an answer has arrived, the account's name line ends with a **Refresh** icon button, which reads again with
 refresh on (see "Requesting an MCP inventory" above). During a further reading, the last answer stays shown and the
-name line says it is refreshing, beside the pending Refresh button, whose busy state is announced to assistive
-technology. The dialog makes one reading at a time. A press of Refresh or an alert's **Try again** while one runs does
-nothing, and Try again is unavailable meanwhile.
+name line says it is refreshing, beside the pending Refresh button. Its refresh icon rotates unless reduced motion is
+requested, and its busy state is announced to assistive technology. The dialog makes one reading at a time. A press of
+Refresh or an alert's **Try again** while one runs does nothing, and Try again is unavailable meanwhile.
 
 The window stops waiting after 100 seconds and shows the reading as timed out with **Try again**, even if the daemon
 has not answered. A late answer can replace this timeout while the dialog stays open, until a newer reading has

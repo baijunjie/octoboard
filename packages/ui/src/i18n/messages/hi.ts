@@ -2344,7 +2344,7 @@ export const hi: Translation<"one" | "other"> = {
   "settings.accounts.mcp.updatedNow": "अभी अपडेट हुआ",
   "settings.accounts.mcp.reading": "कनेक्टर और MCP सर्वर पढ़े जा रहे हैं…",
   "settings.accounts.mcp.readingSlow": "अभी भी पढ़ा जा रहा है… {agent} को लगभग एक मिनट लग सकता है।",
-  "settings.accounts.mcp.refreshing": "रीफ़्रेश हो रहा है…",
+  "settings.accounts.mcp.refreshing": "रीफ़्रेश हो रहा है",
   "settings.accounts.mcp.column.name": "नाम",
   "settings.accounts.mcp.column.status": "स्थिति",
   "settings.accounts.mcp.column.details": "विवरण",

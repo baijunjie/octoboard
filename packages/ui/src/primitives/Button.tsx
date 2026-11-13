@@ -112,16 +112,21 @@ export function baseButtonProps({
 }
 
 /** HeroUI's button, in its `variant` (`primary` by default) and `size` (HeroUI's `md` by default, or the project's
- * `xs`). While `pending`, a decorative spinner leads the unchanged content (it replaces the content of an icon-only
- * button), and the button reports itself busy (`aria-busy`). In a busy `Modal` it is disabled, unless it is `pending`:
- * the pending button is the one control left, and takes the focus the others give up (see `busy.ts`). */
-export function Button({ variant, size, type = "button", pending, unavailable, current, hasPopup, onPress, className, children, ref: forwarded, ...rest }: ButtonBaseProps & {
+ * `xs`). While `pending`, a decorative indicator (a spinner by default) leads the unchanged content (it replaces the
+ * content of an icon-only button), and the button reports itself busy (`aria-busy`). In a busy `Modal` it is disabled,
+ * unless it is `pending`: the pending button is the one control left, and takes the focus the others give up (see
+ * `busy.ts`). */
+export function Button({ variant, size, type = "button", pending, pendingIndicator, dimWhilePending = true, unavailable, current, hasPopup, onPress, className, children, ref: forwarded, ...rest }: ButtonBaseProps & {
   variant?: ButtonVariant;
   /** `submit` submits the form around it. */
   type?: "button" | "submit";
-  /** Shows a spinner before the unchanged content and keeps the button where it is, unavailable and busy, while what it
-   * started runs. */
+  /** Shows the pending indicator before the unchanged content and keeps the button where it is, unavailable and busy,
+   * while what it started runs. */
   pending?: boolean;
+  /** A decorative indicator to show while pending, in place of the default spinner. */
+  pendingIndicator?: React.ReactNode;
+  /** Whether a pending button is dimmed; false keeps its normal opacity while presses remain blocked. */
+  dimWhilePending?: boolean;
   /** Why the button cannot act now, which makes it unavailable rather than disabled (see "Buttons" in
    * `docs/ui-standard.md`): it stays focusable and pressable, reads as `aria-disabled` and in HeroUI's disabled style
    * with neither hover fill nor press shrink, and has the reason as its description, from a visually hidden copy inside
@@ -146,10 +151,10 @@ export function Button({ variant, size, type = "button", pending, unavailable, c
     element?.setAttribute("aria-busy", "true");
     return () => element?.removeAttribute("aria-busy");
   }, [pending, ref]);
-  const spinner = pending && <Spinner color="current" size={size === "lg" ? "md" : "sm"} className={size === "xs" ? "size-3" : undefined} />;
+  const indicator = pending && (pendingIndicator ?? <Spinner color="current" size={size === "lg" ? "md" : "sm"} className={size === "xs" ? "size-3" : undefined} />);
   const reasonId = useId();
   const reason = unavailable !== undefined && <span id={reasonId} className="sr-only">{unavailable}</span>;
-  const classes = [size === "xs" && XS_CLASS, unavailable !== undefined && UNAVAILABLE_CLASS, className, placement].filter(Boolean).join(" ");
+  const classes = [size === "xs" && XS_CLASS, pending && !dimWhilePending && "[--disabled-opacity:1]", unavailable !== undefined && UNAVAILABLE_CLASS, className, placement].filter(Boolean).join(" ");
   return (
     <HeroButton
       {...baseButtonProps({ ...rest, disabled, describedBy: unavailable === undefined ? rest.describedBy : reasonId })}
@@ -167,7 +172,7 @@ export function Button({ variant, size, type = "button", pending, unavailable, c
       className={classes || undefined}
     >
       {reason}
-      {spinner && rest.iconOnly ? spinner : <>{spinner}{children}</>}
+      {indicator && rest.iconOnly ? indicator : <>{indicator}{children}</>}
     </HeroButton>
   );
 }

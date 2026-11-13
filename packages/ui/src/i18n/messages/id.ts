@@ -2345,7 +2345,7 @@ export const id: Translation<"other"> = {
   "settings.accounts.mcp.updatedNow": "Baru saja diperbarui",
   "settings.accounts.mcp.reading": "Membaca konektor dan server MCP…",
   "settings.accounts.mcp.readingSlow": "Masih membaca… {agent} bisa memerlukan sekitar satu menit.",
-  "settings.accounts.mcp.refreshing": "Memperbarui…",
+  "settings.accounts.mcp.refreshing": "Memperbarui",
   "settings.accounts.mcp.column.name": "Nama",
   "settings.accounts.mcp.column.status": "Status",
   "settings.accounts.mcp.column.details": "Detail",

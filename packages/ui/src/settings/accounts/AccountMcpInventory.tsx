@@ -26,8 +26,8 @@ import { providerConnectorPlatform, providerMcpSessionSignIn } from "../../provi
 import type { McpInventoryState } from "./useAccountMcpInventory";
 
 /** The aside at the end of the account's name line, once the first answer is in (until then the body's reading line is
- * the only progress shown): when the inventory shown was read (not while the last answer is a failure), or "Refreshing…"
- * while a later reading runs, then the Refresh button, pending meanwhile. */
+ * the only progress shown): when the inventory shown was read (not while the last answer is a failure), or "Refreshing"
+ * while a later reading runs, then the Refresh button, whose icon rotates meanwhile. */
 export function McpInventoryAside({ state, refreshButton }: { state: McpInventoryState; refreshButton: React.Ref<HTMLButtonElement> }): React.ReactElement | null {
   const t = useT();
   if (!state.answer) return null;
@@ -38,7 +38,7 @@ export function McpInventoryAside({ state, refreshButton }: { state: McpInventor
         ? <span>{t("settings.accounts.mcp.refreshing")}</span>
         : inventory && !inventory.unavailable && <UpdatedAge at={inventory.read_at} copy={{ now: "settings.accounts.mcp.updatedNow", age: "settings.accounts.mcp.updated" }} />}
       <TitledControl title={t("settings.accounts.mcp.refresh")}>
-        <Button ref={refreshButton} iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={t("settings.accounts.mcp.refresh")} focusOnPress={false} pending={state.reading} onPress={state.refresh}>
+        <Button ref={refreshButton} iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={t("settings.accounts.mcp.refresh")} focusOnPress={false} pending={state.reading} dimWhilePending={false} pendingIndicator={<RefreshCw aria-hidden="true" className="size-4 motion-safe:animate-spin-slow" />} onPress={state.refresh}>
           <RefreshCw aria-hidden="true" className="size-4" />
         </Button>
       </TitledControl>

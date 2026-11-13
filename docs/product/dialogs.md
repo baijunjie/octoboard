@@ -102,7 +102,10 @@ runs" below).
 button changes its words to say what is under way. An icon-only button shows the spinner in place of its icon. A pending
 button cannot be pressed, keeps keyboard focus when it has it, and is reported to assistive technology as busy; the
 spinner itself is not announced. This holds for every button in the window, in a dialog or not, and for a link drawn
-as a button while what it opens is being opened.
+as a button while what it opens is being opened, except **Refresh** on the Connectors and MCP dialog. While a further
+reading of that account runs, it keeps its refresh icon and rotates it, unless reduced motion is requested, and keeps
+its normal opacity and colour. It takes no further press and is reported to assistive technology as busy; the icon
+itself is not announced.
 
 ## A dialog cannot be left while its request runs
 

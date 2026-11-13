@@ -2345,7 +2345,7 @@ export const ar: Translation<"zero" | "one" | "two" | "few" | "many" | "other"> 
   "settings.accounts.mcp.updatedNow": "حُدّث للتو",
   "settings.accounts.mcp.reading": "جارٍ قراءة الموصّلات وخوادم MCP…",
   "settings.accounts.mcp.readingSlow": "لا تزال القراءة جارية… قد يستغرق {agent} نحو دقيقة.",
-  "settings.accounts.mcp.refreshing": "جارٍ التحديث…",
+  "settings.accounts.mcp.refreshing": "جارٍ التحديث",
   "settings.accounts.mcp.column.name": "الاسم",
   "settings.accounts.mcp.column.status": "الحالة",
   "settings.accounts.mcp.column.details": "التفاصيل",

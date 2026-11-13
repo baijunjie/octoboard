@@ -2503,7 +2503,7 @@ export const zhHant: Translation<"other"> = {
   "settings.accounts.mcp.updatedNow": "剛剛更新",
   "settings.accounts.mcp.reading": "正在讀取連接器和 MCP 伺服器…",
   "settings.accounts.mcp.readingSlow": "仍在讀取…{agent} 可能需要一分鐘左右。",
-  "settings.accounts.mcp.refreshing": "正在重新整理…",
+  "settings.accounts.mcp.refreshing": "正在重新整理",
   "settings.accounts.mcp.column.name": "名稱",
   "settings.accounts.mcp.column.status": "狀態",
   "settings.accounts.mcp.column.details": "詳細資訊",

@@ -2501,7 +2501,7 @@ export const th: Translation<"other"> = {
   "settings.accounts.mcp.updatedNow": "เพิ่งอัปเดต",
   "settings.accounts.mcp.reading": "กำลังอ่านคอนเนคเตอร์และเซิร์ฟเวอร์ MCP…",
   "settings.accounts.mcp.readingSlow": "ยังอ่านอยู่… {agent} อาจใช้เวลาประมาณหนึ่งนาที",
-  "settings.accounts.mcp.refreshing": "กำลังรีเฟรช…",
+  "settings.accounts.mcp.refreshing": "กำลังรีเฟรช",
   "settings.accounts.mcp.column.name": "ชื่อ",
   "settings.accounts.mcp.column.status": "สถานะ",
   "settings.accounts.mcp.column.details": "รายละเอียด",

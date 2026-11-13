@@ -187,15 +187,26 @@ it("rereads with the refresh flag, keeping the last reading while it runs and ig
   await first.answer(inventoryOf({ connectors: [{ id: "a", name: "Gmail", state: "connected", plugins: [] }] }));
   const second = nextReading();
   const refresh = buttonNamed(dialog, "Refresh connectors and MCP servers")!;
+  expect(refresh.querySelector("svg.lucide-refresh-cw")).not.toBeNull();
+  expect(refresh.querySelector("svg")!.classList.contains("motion-safe:animate-spin-slow")).toBe(false);
   press(refresh);
   press(refresh);
+  const icon = refresh.querySelector("svg.lucide-refresh-cw")!;
+  expect(icon).not.toBeNull();
+  expect(icon.getAttribute("aria-hidden")).toBe("true");
+  expect(icon.classList.contains("motion-safe:animate-spin-slow")).toBe(true);
+  expect(spinners(refresh)).toBe(0);
   expect(readMcpInventory.mock.calls.slice(1)).toEqual([[{ type: "read_account_mcp_inventory", agent: "claude", account: "claude-work", refresh: true }]]);
   expect(refresh.getAttribute("aria-busy")).toBe("true");
+  expect(refresh.classList.contains("[--disabled-opacity:1]")).toBe(true);
   expect(dialog.textContent).toContain("Gmail");
   await second.answer(inventoryOf({ connectors: [{ id: "b", name: "Drive", state: "connected", plugins: [] }] }));
   expect(dialog.textContent).toContain("Drive");
   expect(dialog.textContent).not.toContain("Gmail");
   expect(refresh.getAttribute("aria-busy")).toBeNull();
+  expect(refresh.classList.contains("[--disabled-opacity:1]")).toBe(false);
+  expect(refresh.querySelector("svg.lucide-refresh-cw")).not.toBeNull();
+  expect(refresh.querySelector("svg")!.classList.contains("motion-safe:animate-spin-slow")).toBe(false);
 });
 
 it.each<[AccountMcpInventory["unavailable"] & object, string, string, boolean]>([
@@ -579,7 +590,7 @@ it("says Refreshing in place of the age while a later reading runs, with Refresh
   expect(dialog.textContent).not.toContain("Refreshing");
   const second = nextReading();
   press(buttonNamed(dialog, REFRESH)!);
-  expect(dialog.textContent).toContain("Refreshing…");
+  expect(dialog.textContent).toContain("Refreshing");
   expect(dialog.textContent).not.toContain("Updated");
   expect(buttonNamed(dialog, REFRESH)!.getAttribute("aria-busy")).toBe("true");
   expect(dialog.textContent).toContain("Gmail");
@@ -598,7 +609,7 @@ it("shows no age over an unavailable inventory, with Refreshing while it is read
   expect(dialog.textContent).not.toContain("Refreshing");
   const second = nextReading();
   press(buttonNamed(dialog, REFRESH)!);
-  expect(dialog.textContent).toContain("Refreshing…");
+  expect(dialog.textContent).toContain("Refreshing");
   await second.answer(inventoryOf());
   expect(dialog.textContent).not.toContain("Refreshing");
   expect(dialog.textContent).toContain("Updated just now");
@@ -635,7 +646,7 @@ it("does not say a later reading is slow, since the lists are already on show", 
   press(buttonNamed(dialog, REFRESH)!);
   await act(async () => vi.advanceTimersByTime(SLOW_READING_MS));
   expect(dialog.textContent).not.toContain("Still reading");
-  expect(dialog.textContent).toContain("Refreshing…");
+  expect(dialog.textContent).toContain("Refreshing");
 });
 
 it("shows the reading as timed out when no answer comes within READING_CEILING_MS", async () => {
@@ -708,7 +719,7 @@ it("keeps the answer of the reading that Try again started over the late answer 
   expect(readMcpInventory.mock.calls.at(-1)![0].refresh).toBe(true);
   await late.answer(inventoryOf({ connectors: [{ id: "old", name: "Stale", state: "connected", plugins: [] }] }));
   expect(dialog.textContent).not.toContain("Stale");
-  expect(dialog.textContent).toContain("Refreshing…");
+  expect(dialog.textContent).toContain("Refreshing");
   await retry.answer(inventoryOf({ connectors: [{ id: "new", name: "Fresh", state: "connected", plugins: [] }] }));
   expect(dialog.textContent).toContain("Fresh");
   expect(dialog.textContent).not.toContain("Stale");

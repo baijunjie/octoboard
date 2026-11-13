@@ -2344,7 +2344,7 @@ export const vi: Translation<"other"> = {
   "settings.accounts.mcp.updatedNow": "Vừa cập nhật",
   "settings.accounts.mcp.reading": "Đang đọc trình kết nối và máy chủ MCP…",
   "settings.accounts.mcp.readingSlow": "Vẫn đang đọc… {agent} có thể mất khoảng một phút.",
-  "settings.accounts.mcp.refreshing": "Đang làm mới…",
+  "settings.accounts.mcp.refreshing": "Đang làm mới",
   "settings.accounts.mcp.column.name": "Tên",
   "settings.accounts.mcp.column.status": "Trạng thái",
   "settings.accounts.mcp.column.details": "Chi tiết",

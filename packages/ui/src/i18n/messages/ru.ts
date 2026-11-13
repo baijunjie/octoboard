@@ -2345,7 +2345,7 @@ export const ru: Translation<"one" | "few" | "many" | "other"> = {
   "settings.accounts.mcp.updatedNow": "Только что обновлено",
   "settings.accounts.mcp.reading": "Чтение коннекторов и MCP-серверов…",
   "settings.accounts.mcp.readingSlow": "Чтение ещё идёт… {agent} может понадобиться около минуты.",
-  "settings.accounts.mcp.refreshing": "Обновление…",
+  "settings.accounts.mcp.refreshing": "Обновление",
   "settings.accounts.mcp.column.name": "Название",
   "settings.accounts.mcp.column.status": "Статус",
   "settings.accounts.mcp.column.details": "Подробности",

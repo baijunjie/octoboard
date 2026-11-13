@@ -1215,7 +1215,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Connectors and MCP, a refresh under way",
-    description: "Refresh was pressed in Work's Connectors and MCP dialog and the new reading has not come: the aside at the end of the account line reads \"Refreshing…\" with the pending Refresh button (a spinner) in place of \"Updated 4 minutes ago\", and both tables stay as they were instead of being replaced by the reading line.",
+    description: "Refresh was pressed in Work's Connectors and MCP dialog and the new reading has not come: the aside at the end of the account line reads \"Refreshing\" with the Refresh icon rotating in place of \"Updated 4 minutes ago\", and both tables stay as they were instead of being replaced by the reading line.",
     state: detailsWorkState,
     accountMcpInventory: [{ ageMinutes: 4, connectors: CLAUDE_CONNECTORS, servers: CLAUDE_SERVERS }, "pending"],
     steps: [...accountMcp("Work"), refreshMcp],

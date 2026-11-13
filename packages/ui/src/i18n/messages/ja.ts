@@ -2502,7 +2502,7 @@ export const ja: Translation<"other"> = {
   "settings.accounts.mcp.updatedNow": "たった今更新",
   "settings.accounts.mcp.reading": "コネクタと MCP サーバーを読み込み中…",
   "settings.accounts.mcp.readingSlow": "まだ読み込み中です… {agent} は 1 分ほどかかることがあります。",
-  "settings.accounts.mcp.refreshing": "更新中…",
+  "settings.accounts.mcp.refreshing": "更新中",
   "settings.accounts.mcp.column.name": "名前",
   "settings.accounts.mcp.column.status": "状態",
   "settings.accounts.mcp.column.details": "詳細",

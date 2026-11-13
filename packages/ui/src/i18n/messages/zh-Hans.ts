@@ -2579,7 +2579,7 @@ export const zhHans: Translation<"other"> = {
   "settings.accounts.mcp.updatedNow": "刚刚更新",
   "settings.accounts.mcp.reading": "正在读取连接器和 MCP 服务器…",
   "settings.accounts.mcp.readingSlow": "仍在读取…{agent} 可能需要一分钟左右。",
-  "settings.accounts.mcp.refreshing": "正在刷新…",
+  "settings.accounts.mcp.refreshing": "正在刷新",
   "settings.accounts.mcp.column.name": "名称",
   "settings.accounts.mcp.column.status": "状态",
   "settings.accounts.mcp.column.details": "详情",

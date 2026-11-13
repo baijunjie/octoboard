@@ -2792,7 +2792,7 @@ export const en = {
   "settings.accounts.mcp.updatedNow": "Updated just now",
   "settings.accounts.mcp.reading": "Reading connectors and MCP servers…",
   "settings.accounts.mcp.readingSlow": "Still reading… {agent} can take about a minute.",
-  "settings.accounts.mcp.refreshing": "Refreshing…",
+  "settings.accounts.mcp.refreshing": "Refreshing",
   "settings.accounts.mcp.column.name": "Name",
   "settings.accounts.mcp.column.status": "Status",
   "settings.accounts.mcp.column.details": "Details",

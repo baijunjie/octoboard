@@ -55,6 +55,13 @@ it("registers a complete catalog for every offered language", () => {
   }
 });
 
+it("omits ellipses beside the MCP refresh icon and keeps them in loading placeholders in every language", () => {
+  for (const language of LANGUAGES) {
+    expect(messageText(language, "settings.accounts.mcp.refreshing"), language).not.toMatch(/(?:…|\.{3})\s*$/);
+    expect(messageText(language, "common.loading"), language).toMatch(/…$/);
+  }
+});
+
 const translated = Object.entries(CATALOGS).filter(([language]) => language !== "en") as [
   Language,
   Record<string, Message>,

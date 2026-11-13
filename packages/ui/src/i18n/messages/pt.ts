@@ -2344,7 +2344,7 @@ export const pt: Translation<"one" | "many" | "other"> = {
   "settings.accounts.mcp.updatedNow": "Atualizado agora mesmo",
   "settings.accounts.mcp.reading": "Lendo conectores e servidores MCP…",
   "settings.accounts.mcp.readingSlow": "Ainda lendo… {agent} pode levar cerca de um minuto.",
-  "settings.accounts.mcp.refreshing": "Atualizando…",
+  "settings.accounts.mcp.refreshing": "Atualizando",
   "settings.accounts.mcp.column.name": "Nome",
   "settings.accounts.mcp.column.status": "Status",
   "settings.accounts.mcp.column.details": "Detalhes",

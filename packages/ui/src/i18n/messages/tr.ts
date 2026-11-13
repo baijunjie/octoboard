@@ -2579,7 +2579,7 @@ export const tr: Translation<"one" | "other"> = {
   "settings.accounts.mcp.updatedNow": "Az önce güncellendi",
   "settings.accounts.mcp.reading": "Bağlayıcılar ve MCP sunucuları okunuyor…",
   "settings.accounts.mcp.readingSlow": "Hâlâ okunuyor… {agent} yaklaşık bir dakika sürebilir.",
-  "settings.accounts.mcp.refreshing": "Yenileniyor…",
+  "settings.accounts.mcp.refreshing": "Yenileniyor",
   "settings.accounts.mcp.column.name": "Ad",
   "settings.accounts.mcp.column.status": "Durum",
   "settings.accounts.mcp.column.details": "Ayrıntılar",

@@ -2503,7 +2503,7 @@ export const ko: Translation<"other"> = {
   "settings.accounts.mcp.updatedNow": "방금 갱신됨",
   "settings.accounts.mcp.reading": "커넥터 및 MCP 서버 읽는 중…",
   "settings.accounts.mcp.readingSlow": "아직 읽는 중… {agent}은(는) 1분 정도 걸릴 수 있습니다.",
-  "settings.accounts.mcp.refreshing": "새로 고치는 중…",
+  "settings.accounts.mcp.refreshing": "새로 고치는 중",
   "settings.accounts.mcp.column.name": "이름",
   "settings.accounts.mcp.column.status": "상태",
   "settings.accounts.mcp.column.details": "세부 정보",

@@ -61,6 +61,7 @@ it("shows a decorative spinner before the unchanged label while pending", () => 
   expect(spinner.getAttribute("aria-hidden")).toBe("true");
   expect(button.firstElementChild).toBe(spinner);
   expect(button.getAttribute("aria-busy")).toBe("true");
+  expect(button.classList.contains("[--disabled-opacity:1]")).toBe(false);
 });
 
 it("shows neither spinner nor busy state when not pending", () => {
@@ -75,6 +76,35 @@ it("lets a pending icon-only button show the spinner in place of its icon", () =
   const button = container.querySelector("button")!;
   expect(button.querySelector("[data-testid=icon]")).toBeNull();
   expect(button.querySelector("[data-slot=spinner]")).not.toBeNull();
+});
+
+it.each([false, true])("uses a custom indicator and opts out of dimming only while pending (icon-only: %s)", (iconOnly) => {
+  const onPress = vi.fn();
+  const view = (pending: boolean) => (
+    <Button iconOnly={iconOnly} pending={pending} dimWhilePending={false} pendingIndicator={<span aria-hidden="true" data-testid="pending-indicator" />} label="Refresh" onPress={onPress}>
+      <span data-testid="content">Refresh</span>
+    </Button>
+  );
+  const { container, render } = mount(view(false));
+  const button = container.querySelector("button")!;
+  expect(button.querySelector("[data-testid=pending-indicator]")).toBeNull();
+  expect(button.querySelector("[data-testid=content]")).not.toBeNull();
+  expect(button.classList.contains("[--disabled-opacity:1]")).toBe(false);
+  render(view(true));
+  expect(button.querySelector("[data-testid=pending-indicator]")).not.toBeNull();
+  expect(button.querySelector("[data-slot=spinner]")).toBeNull();
+  expect(button.querySelector("[data-testid=content]") === null).toBe(iconOnly);
+  expect(button.getAttribute("aria-busy")).toBe("true");
+  expect(button.classList.contains("[--disabled-opacity:1]")).toBe(true);
+  pressWithKeyboard(button);
+  expect(onPress).not.toHaveBeenCalled();
+  render(view(false));
+  expect(button.querySelector("[data-testid=pending-indicator]")).toBeNull();
+  expect(button.querySelector("[data-testid=content]")).not.toBeNull();
+  expect(button.classList.contains("[--disabled-opacity:1]")).toBe(false);
+  expect(button.getAttribute("aria-busy")).toBeNull();
+  pressWithKeyboard(button);
+  expect(onPress).toHaveBeenCalledTimes(1);
 });
 
 it("marks an autofocused button as its dialog's opening focus", () => {
