@@ -1,5 +1,5 @@
-//! The scratch directory a test works in and removes on drop, and the files, links and fifos made
-//! in one.
+//! The scratch directory a test works in and removes on drop, the files, links and fifos made in
+//! one, and the second real path a macOS firmlink gives it.
 
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
@@ -287,4 +287,52 @@ pub(crate) fn mkfifo(path: &Path) {
     let _ = std::fs::remove_file(path);
     let c_path = std::ffi::CString::new(path.as_os_str().as_bytes()).unwrap();
     assert_eq!(unsafe { libc::mkfifo(c_path.as_ptr(), 0o600) }, 0);
+}
+
+/// The second real path of `real`, for a test that also spells a directory that way: `None`, with
+/// a note, where there is none to be had, and a failure where there must be one, so a Mac whose
+/// scratch directory is on its data volume never loses that spelling silently.
+pub(crate) fn firmlink_spelling(real: &Path) -> Option<PathBuf> {
+    let second = second_real_path(real);
+    if second.is_none() {
+        assert!(
+            !must_have_second_real_path(real),
+            "{} has no second real path",
+            real.display()
+        );
+        eprintln!("{} has no second real path", real.display());
+    }
+    second
+}
+
+/// `/System/Volumes/Data` followed by `real`, where that is the same directory as `real` under
+/// another real path: on macOS the data volume's firmlinks give everything under `/private` and
+/// `/Users` one, as a bind mount does on Linux.
+fn second_real_path(real: &Path) -> Option<PathBuf> {
+    let second = Path::new("/System/Volumes/Data").join(real.strip_prefix("/").ok()?);
+    let identity =
+        |path: &Path| crate::platform::fs::identity(path, crate::platform::fs::Links::Follow).ok();
+    let distinct =
+        crate::hostfs::canonical(&second).ok()? != crate::hostfs::canonical(real).ok()?;
+    (distinct && identity(&second).is_some() && identity(&second) == identity(real))
+        .then_some(second)
+}
+
+/// Whether [`second_real_path`] must find one for `real`: on macOS, where `real` is on the same
+/// device as `/System/Volumes/Data`, which the system volume shares, and is not already spelled
+/// through it. A path on another mounted volume (`TMPDIR` on an external disk) has none:
+/// `realpath` folds its `/System/Volumes/Data/...` spelling back to the volume's own.
+fn must_have_second_real_path(real: &Path) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        use std::os::unix::fs::MetadataExt as _;
+        let data = Path::new("/System/Volumes/Data");
+        let device = |path: &Path| std::fs::metadata(path).ok().map(|meta| meta.dev());
+        !real.starts_with(data) && device(real).is_some() && device(real) == device(data)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = real;
+        false
+    }
 }

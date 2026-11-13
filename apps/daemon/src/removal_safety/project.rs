@@ -335,7 +335,7 @@ mod tests {
     use crate::hostfs::lexical_key;
     use crate::protocol::ProjectSource;
     use crate::store::LOCAL_HOST_ID;
-    use crate::test_support::{app_state, git, repo_with, second_real_path};
+    use crate::test_support::{app_state, firmlink_spelling, git, repo_with};
 
     /// A project named `id` stored at `path`.
     fn project_at(id: &str, path: &Path) -> Project {
@@ -511,18 +511,16 @@ mod tests {
     /// One directory with two real paths is one directory: on macOS the data volume's firmlinks
     /// give everything under `/private` and `/Users` a second real path below
     /// `/System/Volumes/Data`, as a bind mount does on Linux. That holds for another project's
-    /// folder, for the home directory and for Octoboard's data. Run on macOS only, where the
-    /// scratch directory always has such a second path.
+    /// folder, for the home directory and for Octoboard's data. It fails where the scratch
+    /// directory must have such a second path (on macOS's data volume) and has none, and is skipped
+    /// elsewhere.
     #[tokio::test]
     async fn trashing_tells_a_directory_by_what_it_is_not_by_its_real_path() {
         let (state, dir) = app_state("project-trash-firmlink");
         let outer = crate::hostfs::canonical(&*dir).unwrap().join("outer");
         let inner = outer.join("inner");
         std::fs::create_dir_all(&inner).unwrap();
-        let Some(second) = second_real_path(&outer) else {
-            if cfg!(target_os = "macos") {
-                panic!("{} has no second real path", outer.display());
-            }
+        let Some(second) = firmlink_spelling(&outer) else {
             return;
         };
         for (deleted, other) in [

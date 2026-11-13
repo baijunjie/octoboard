@@ -331,22 +331,22 @@ fn a_link_into_another_project_is_followed() {
 }
 
 /// A path is told by what it leads to: through the second real path a firmlink or a bind mount
-/// gives it, or in another letter case on a file system that ignores case.
+/// gives it, or in another letter case on a file system that ignores case. A scratch directory on
+/// macOS's data volume always has a second real path, so its absence fails there.
 #[test]
 fn another_spelling_of_the_same_directory_is_the_same_project() {
     let pair = pair();
     let list = pair.list();
     let real = crate::hostfs::canonical(&pair.other).unwrap();
-    match crate::test_support::second_real_path(&real) {
-        Some(second) => assert!(
+    if let Some(second) = crate::test_support::firmlink_spelling(&real) {
+        assert!(
             denial(decide_for(
                 &list,
                 &write_payload(&second.join("file.txt"), &pair.own)
             ))
             .is_some(),
             "second real path"
-        ),
-        None => eprintln!("{} has no second real path", real.display()),
+        );
     }
     let respelled = pair.other.with_file_name("OTHER");
     let identity =

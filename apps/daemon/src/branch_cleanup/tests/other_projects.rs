@@ -60,8 +60,8 @@ fn is_untold(item: &SessionBranchItem) -> bool {
 /// A worktree holding another project's folder is that project's however the folder's path is
 /// spelled: through the second real path a macOS firmlink gives it (as a bind mount does on
 /// Linux), through a link, or in another letter case on a file system that ignores case. It is
-/// never removed, nor taken along with a project's folder. On macOS the scratch directory always
-/// has a second real path, so its absence fails there.
+/// never removed, nor taken along with a project's folder. A scratch directory on macOS's data
+/// volume always has a second real path, so its absence fails there.
 #[tokio::test]
 async fn a_worktree_holding_another_projects_folder_by_another_path_is_never_removed() {
     let fixture = Fixture::new("cleanup-holds-other");
@@ -70,10 +70,8 @@ async fn a_worktree_holding_another_projects_folder_by_another_path_is_never_rem
     std::fs::create_dir(root.join("inner")).unwrap();
 
     let mut spellings = Vec::new();
-    match crate::test_support::second_real_path(&root) {
-        Some(second) => spellings.push(("firmlink", second.join("inner"))),
-        None if cfg!(target_os = "macos") => panic!("{} has no second real path", root.display()),
-        None => {}
+    if let Some(second) = crate::test_support::firmlink_spelling(&root) {
+        spellings.push(("firmlink", second.join("inner")));
     }
     let link = fixture.worktrees.join("link");
     crate::test_support::symlink(&root, &link).unwrap();

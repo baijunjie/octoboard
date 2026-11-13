@@ -4,7 +4,8 @@
 //! (`LiveSession::new`, `AppState::new`). The submodules are re-exported here, so a caller names
 //! a fixture as `test_support::X`:
 //!
-//! - [`scratch`]: a scratch directory that removes itself, and the files and links made in one.
+//! - [`scratch`]: a scratch directory that removes itself, the files and links made in one, and
+//!   the second real path a macOS firmlink gives it.
 //! - [`app`]: an `AppState` over a store in one, the host tools and environment, and the records
 //!   it seeds.
 //! - [`stand_in`]: a stand-in live session on a PTY that ends itself, the fake agent CLIs, and
