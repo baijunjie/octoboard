@@ -390,6 +390,11 @@ describe("restarting", () => {
     expect(handler).toHaveBeenCalledExactlyOnceWith(null, FOUND.version);
   });
 
+  it("never holds the restart back for an agent's update, which only a daemon that updates itself knows of", async () => {
+    const { store } = await installed();
+    expect(store.getState().restartBlocked).toBeUndefined();
+  });
+
   it("hands the exit flow the installed update's holder floor and version", async () => {
     const context = setup();
     let done = context.store.check("automatic");

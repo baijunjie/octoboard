@@ -58,7 +58,7 @@ it("raises the failure to restart, sends no restart and waits for no reload, whi
   await pressElement(restart);
   await act(async () => new Promise((resolve) => setTimeout(resolve, 100)));
   expect(vi.mocked(daemon.request).mock.calls.some(([body]) => body.type === "restart_daemon")).toBe(false);
-  expect(errorAlerts.getSnapshot()[0]?.title).toBe("Could not restart");
+  expect(errorAlerts.getSnapshot()[0]?.title).toBe("Cannot restart");
   // The daemon coming back on the version it was meant to go to is no business of a page that sent nothing.
   await deliver(daemon, { type: "hello", daemon_version: "0.2.0", generation: 1 } as never);
   await deliver(daemon, { type: "daemon_update_status_updated", status: { ...INSTALLED, phase: "idle", installed: null } });

@@ -3,7 +3,8 @@ import type { AvailableUpdate } from "../../platform";
 import type { Step } from "../../fixtures/interact";
 import { PROTOCOL_GENERATION, type DaemonUpdateAvailable, type DaemonUpdateCheck, type DaemonUpdateManual } from "../../protocol";
 import type { Scenario } from "../scenario";
-import { FIXTURE_DAEMON_INSTALL_STARTED_AT, FIXTURE_DAEMON_VERSION, SAMPLE, daemonUpdateOf, minutesAgo, sessionOf, shellTerminalOf, snapshotState } from "../../fixtures/builders";
+import { withCliStatus } from "../../fixtures/fixtureAgentClis";
+import { FIXTURE_DAEMON_INSTALL_STARTED_AT, FIXTURE_DAEMON_VERSION, SAMPLE, agentCliStatusOf, agentCliUpdateOf, daemonUpdateOf, minutesAgo, sessionOf, shellTerminalOf, snapshotState } from "../../fixtures/builders";
 
 const GROUP = "Updates";
 
@@ -46,6 +47,11 @@ const NOT_WRITABLE: DaemonUpdateManual = {
   command: `curl --proto '=https' --tlsv1.2 -fsSL ${appConfig.websiteUrl}/install.sh | sh -s -- --bin-dir /usr/local/bin`,
 };
 const browserQuiet = (daemonUpdate: ReturnType<typeof daemonUpdateOf>) => snapshotState({ consoles: [console_], projects: [web], sessions: idle, daemonUpdate });
+const daemonInstalled = daemonUpdateOf({ phase: "installed", installed: { version: "0.2.0", holder_floor: "0.1.0" }, last_check: foundOffer });
+// An update installed and waiting for a restart while Claude Code's CLI is being updated, which the daemon would refuse the
+// restart for: the window holds Restart now back. The other agents' CLIs are current, as in any scenario.
+const restartBlockedByAgentUpdate = (): Scenario["state"] =>
+  withCliStatus(browserQuiet(daemonInstalled), agentCliStatusOf("claude", { install_method: "npm", latest_version: "2.1.320", update: agentCliUpdateOf() }));
 const REPLACE_FAILED = "rename /usr/local/bin/.octoboardd.update-4242 to /usr/local/bin/octoboardd: Permission denied (os error 13)";
 
 const FAILED_CHECK = "error sending request for url (https://updates.octoboard.example/stable/latest.json): error trying to connect: dns error: failed to lookup address information";
@@ -264,10 +270,28 @@ export const updateScenarios: Scenario[] = [
       consoles: [console_],
       projects: [web],
       sessions,
-      daemonUpdate: daemonUpdateOf({ phase: "installed", installed: { version: "0.2.0", holder_floor: "0.1.0" }, last_check: foundOffer }),
+      daemonUpdate: daemonInstalled,
     }),
     handover: { sessions: ["s-web-1", "s-web-2"] },
     steps: [restartNow],
+  },
+  {
+    id: "updates-daemon-notice-restart-blocked",
+    group: GROUP,
+    category: "normal",
+    title: "Update notice, installed, restart held back by an agent's update",
+    description: "An agent's CLI is being updated, so the strip says the version is installed and to restart when the agent update finishes. Restart now is faded, as an unavailable button is, and still legible on the accent strip, and the mouse rests on it: its tooltip gives the reason. Later is as in the ordinary installed strip. Pressing the faded Restart now opens the alert of the \"Alert, restart refused while an agent is updated\" scenario.",
+    state: restartBlockedByAgentUpdate(),
+    steps: [openSession, (ui) => ui.hoverTitledControl(ui.t("updates.notice.restart"), ui.t("updates.restartBlocked"))],
+  },
+  {
+    id: "updates-daemon-settings-restart-blocked",
+    group: GROUP,
+    category: "normal",
+    title: "Updates section, installed, restart held back by an agent's update",
+    description: "The notice was hidden with Later. The Version row says the version is installed and to restart when the agent update finishes, with What is new beside Restart now, which is faded as an unavailable button is: it is still focusable, and its tooltip on hover or focus gives the reason.",
+    state: restartBlockedByAgentUpdate(),
+    steps: [(ui) => ui.press(ui.t("updates.notice.later")), openSettings],
   },
   {
     id: "updates-restart-uncertain",
@@ -383,5 +407,14 @@ export const updateScenarios: Scenario[] = [
         }),
       }),
     ],
+  },
+  {
+    id: "updates-daemon-error-restart-blocked",
+    group: GROUP,
+    category: "exceptional",
+    title: "Alert, restart refused while an agent is updated",
+    description: "Restart now was pressed while it was unavailable: nothing restarts, and an alert titled Cannot restart stays until acknowledged, saying that an agent is being updated, that restarting now could leave it partly updated, and to try again when the update finishes. It is the alert the daemon's own refusal of a restart raises, and has no details disclosure. The notice that held the button is back under it.",
+    state: restartBlockedByAgentUpdate(),
+    steps: [openSession, (ui) => ui.pressUnavailable(ui.t("updates.notice.restart"))],
   },
 ];

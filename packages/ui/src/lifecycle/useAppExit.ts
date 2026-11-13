@@ -6,7 +6,8 @@ import { isDaemonRefusal } from "../errors/codes";
 import { usePlatform } from "../platform/react";
 import type { Session, ShellTerminal } from "../protocol";
 import { isLive, sessionIsWorking } from "../sessions/sessionStatus";
-import { reportDaemonExit, reportDaemonRestartFailure, reportExitFailure } from "./exitFailure";
+import { reportDaemonRestartFailure } from "../updates/restartFailure";
+import { reportDaemonExit, reportExitFailure } from "./exitFailure";
 
 /** How long `doQuit` waits for `begin_quit`, and for `shutdown`'s or `planned_stop`'s `ack`, before giving up on it. The
  * daemon drops the serving future as soon as it starts stopping, so the ack usually never arrives at all — that

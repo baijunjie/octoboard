@@ -409,7 +409,7 @@ describe("restarting the daemon a browser tab is served by", () => {
     await act(async () => refused.hook().requestRestart(null, "0.3.0"));
     onTestFinished(() => act(() => errorAlerts.acknowledge()));
     expect(errorAlerts.getSnapshot()).toHaveLength(1);
-    expect(errorAlerts.getSnapshot()[0]?.title).toBe("Could not restart");
+    expect(errorAlerts.getSnapshot()[0]?.title).toBe("Cannot restart");
     expect(errorAlerts.getSnapshot()[0]?.classification.kind).toBe("actionable");
   });
 

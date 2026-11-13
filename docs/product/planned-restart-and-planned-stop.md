@@ -37,7 +37,8 @@ would end them, and to stop or restart the unit with `systemctl` on the server t
 together with admitting new programs there: once the restart is accepted, a session or terminal that would run inside
 the unit (a holder started there, or a program added to a holder already there) is refused until the restart completes.
 A planned restart is refused too, and nothing is stopped, while an update of an agent's CLI runs (`POST /restart`
-answers `409` with the reason `agent_update_running`, and **Restart now** fails with that code), since the exit would
+answers `409` with the reason `agent_update_running`, and **Restart now**, unavailable while the page knows of such an
+update, fails with that code), since the exit would
 cut the update off mid-install, and an update asked for once a restart has been accepted is refused as the daemon
 shutting down; a planned stop with no successor is never refused for an update. A
 planned stop or restart asked for while an ordinary stop (the shutdown request, a termination signal) is already asked

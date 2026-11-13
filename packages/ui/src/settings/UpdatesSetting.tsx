@@ -18,21 +18,24 @@ import { releaseUrl } from "../components/text/releaseUrl";
 import { useHost } from "../platform/react";
 import { installedMessageKey } from "../updates/installedMessageKey";
 import { reloadPage } from "../platform/reloadPage";
+import { restartPress } from "../updates/restartPress";
 import type { UpdateState } from "../updates/updateStore";
 import { useUpdates } from "../updates/UpdatesProvider";
+import { TitledControl } from "../components/hint/TitledControl";
 import { SettingRow, SwitchSettingRow } from "./SettingRow";
 import { Button } from "../primitives";
 
 /** The sentence under the row's name: what the application's update is up to, in the order of what the user most needs
- * to know — a restart waiting, a download under way, a check running, a newer version, then how the last check
- * ended when it found nothing to fault. A check that did not finish is not in the sentence but in the row's
- * warning mark (`checkFailed`). It comes in two forms of the same message: `text`, which the announcer speaks, and
- * `shown`, the row's own, where the file the daemon cannot replace is a chip (`<Message>`) and not an isolated string. */
+ * to know — a restart waiting (or held back by an agent's update, `UpdateState.restartBlocked`), a download under way, a
+ * check running, a newer version, then how the last check ended when it found nothing to fault. A check that did not
+ * finish is not in the sentence but in the row's warning mark (`checkFailed`). It comes in two forms of the same
+ * message: `text`, which the announcer speaks, and `shown`, the row's own, where the file the daemon cannot replace is
+ * a chip (`<Message>`) and not an isolated string. */
 function versionStatus(t: ReturnType<typeof useT>, state: UpdateState, updater: HostFacts["updater"]): { text: string; shown: React.ReactNode } {
   const version = isolate(state.currentVersion ?? "");
   if (state.reloadNeeded) return { text: t("settings.updates.version.reload", { version }), shown: <Message id="settings.updates.version.reload" params={{ version }} /> };
   if (state.phase === "installed") {
-    const key = installedMessageKey(updater, "settings", !!state.installedVersion);
+    const key = installedMessageKey(updater, "settings", !!state.installedVersion, state.restartBlocked !== undefined);
     const params = { installed: isolate(state.installedVersion ?? "") };
     return { text: t(key, params), shown: <Message id={key} params={params} /> };
   }
@@ -62,17 +65,19 @@ function checkFailed(state: UpdateState): boolean {
 }
 
 /** What the Updates section holds: the running version with the control that moves it on — Check for updates, then
- * Download and install once a newer one is found, then Restart now once it is installed — beside What is new, the release
- * notes on GitHub of the version the sentence is about and when the last check ended; the switch for the automatic
- * checks; and the channel the application follows. The same for the desktop application and for a daemon that updates
- * itself, which is what the store behind it hides. A daemon that cannot replace its own executable offers no download:
- * the row says so and gives the install command to run by hand below it, with its copy button; a page whose daemon now
+ * Download and install once a newer one is found, then Restart now once it is installed (unavailable, with the reason,
+ * while an agent's update runs and the daemon would refuse the restart) — beside What is new, the release notes on
+ * GitHub of the version the sentence is about and when the last check ended; the switch for the automatic checks; and
+ * the channel the application follows. The same for the desktop application and for a daemon that updates itself,
+ * which is what the store behind it hides. A daemon that cannot replace its own executable offers no download: the row
+ * says so and gives the install command to run by hand below it, with its copy button; a page whose daemon now
  * runs another version offers Reload. The section is listed only where something updates (`SettingsDialog`).
  *
  * The sentence is spoken from here, since the update notice's own announcer sits under the Settings modal and is not
- * heard. Once the update's phase has changed while Settings is open, whoever caused it (a press of Check for updates
- * or Download and install here, a check that was already running at open ending, a download started from the notice
- * finishing, an automatic check), every change of the sentence is spoken; what was there when Settings opened is not.
+ * heard. Once the update's phase has changed while Settings is open, or the restart of an installed update has been
+ * held back by an agent's update or let go, whoever caused it (a press of Check for updates or Download and install
+ * here, a check that was already running at open ending, a download started from the notice finishing, an automatic
+ * check, an agent's update starting or ending), every change of the sentence is spoken; what was there when Settings opened is not.
  * The sentence of a check under way is left unspoken, as the button's pending state says it. */
 export function UpdatesSetting(): React.ReactElement {
   const t = useT();
@@ -86,6 +91,7 @@ export function UpdatesSetting(): React.ReactElement {
   const [pressed, setPressed] = useState(false);
   const [pressedCheck, setPressedCheck] = useState(false);
   const [phase, setPhase] = useState(updates?.state.phase);
+  const [restartBlocked, setRestartBlocked] = useState(updates?.state.restartBlocked);
   const markId = useId();
   const notesId = useId();
   const commandId = useId();
@@ -94,6 +100,11 @@ export function UpdatesSetting(): React.ReactElement {
   const handoffFrom = useHandoffAfterRemoval(() => actionButton.current);
   if (!updates) return <></>;
   const { store, state } = updates;
+  // The sentence changes with the restart held back or let go, which is spoken like a change of phase.
+  if (state.restartBlocked !== restartBlocked) {
+    setRestartBlocked(state.restartBlocked);
+    setEngaged(true);
+  }
   if (state.phase !== phase) {
     setPhase(state.phase);
     setEngaged(true);
@@ -135,11 +146,15 @@ export function UpdatesSetting(): React.ReactElement {
       <ExternalLink data-release-notes-id={notesId} href={releaseUrl(notesVersion)} appearance="button" size="sm">{t("settings.updates.notes")}</ExternalLink>
     </>
   );
+  const restart = restartPress(t, state, store);
   const action =
     state.reloadNeeded ? (
       <Button ref={actionButton} size="sm" variant="primary" onPress={reloadPage}>{t("settings.updates.reload")}</Button>
     ) : state.phase === "installed" ? (
-      <Button ref={actionButton} size="sm" variant="primary" pending={state.restarting} onPress={() => void store.restart()}>{t("settings.updates.restart")}</Button>
+      // The title stays put and only goes inert, so the button is not remounted (losing focus) as it toggles.
+      <TitledControl title={restart.unavailable ?? t("updates.restartBlocked")} isDisabled={restart.unavailable === undefined}>
+        <Button ref={actionButton} size="sm" variant="primary" label={t("settings.updates.restart")} pending={state.restarting} unavailable={restart.unavailable} onPress={restart.onPress}>{t("settings.updates.restart")}</Button>
+      </TitledControl>
     ) : state.update && !state.manual ? (
       // Pending rather than disabled while a check runs: a disabled button would drop the focus it holds.
       <Button ref={actionButton} size="sm" variant="primary" pending={state.phase !== "idle"} onPress={() => void store.install()}>

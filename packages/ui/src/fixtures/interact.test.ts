@@ -143,6 +143,42 @@ it("focusControl focuses an unavailable control (aria-disabled), and presses non
   await settle(refused);
 });
 
+it("pressUnavailable presses the unavailable control of that name, not an available one beside it nor a natively disabled one", async () => {
+  document.body.innerHTML = '<button id="a">Keep</button><button id="b" aria-disabled="true">Keep</button><button id="c" disabled aria-disabled="true">Keep</button>';
+  const pressed: string[] = [];
+  document.addEventListener("click", (event) => pressed.push((event.target as Element).id));
+  const done = createUi(document, "en").pressUnavailable("Keep");
+  await settle(done);
+  expect(pressed).toEqual(["b"]);
+});
+
+it("pressUnavailable fails for a natively disabled control, for one that is available, and for one inert in its subtree", async () => {
+  document.body.innerHTML = '<button disabled aria-disabled="true">Off</button><button>On</button><div inert><button aria-disabled="true">Away</button></div>';
+  const pressed = vi.fn();
+  document.addEventListener("click", pressed);
+  const ui = createUi(document, "en");
+  for (const name of ["Off", "On", "Away"]) {
+    const refused = expect(ui.pressUnavailable(name)).rejects.toThrow(new RegExp(`Nothing unavailable to press matching ${name}`));
+    await settle(refused);
+  }
+  expect(pressed).not.toHaveBeenCalled();
+});
+
+it("press does not reach an unavailable control, which only the steps that say so do", async () => {
+  document.body.innerHTML = '<button id="keep" aria-disabled="true">Keep</button>';
+  const pressed = vi.fn();
+  document.addEventListener("click", pressed);
+  const refused = expect(createUi(document, "en").press("Keep")).rejects.toThrow(/Nothing to press matching Keep/);
+  await settle(refused);
+  expect(pressed).not.toHaveBeenCalled();
+});
+
+it("focusControl does not reach an unavailable control inert in its subtree", async () => {
+  document.body.innerHTML = '<div inert><button id="keep" aria-disabled="true">Keep</button></div>';
+  const refused = expect(createUi(document, "en").focusControl("Keep")).rejects.toThrow(/Nothing to focus matching Keep/);
+  await settle(refused);
+});
+
 it("changeRow names a change row by its file and status in the window's language, whatever follows", () => {
   const english = createUi(document, "en").changeRow("new-name.ts", "renamed");
   const chinese = createUi(document, "zh-Hans").changeRow("new-name.ts", "renamed");

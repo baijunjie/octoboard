@@ -7,6 +7,7 @@ import { CodedError } from "../errors/codedError";
 import type { DaemonUpdateStatus } from "../protocol";
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 import { createStateStore } from "../store/state";
+import { agentCliStatusesOf, agentCliStatusOf, agentCliUpdateOf } from "../fixtures/builders";
 import { applyDaemonEvent, setRestartAwaited } from "../store/actions";
 import { createDaemonUpdateStore } from "./daemonUpdateStore";
 import type { UpdateFailure } from "./updateStore";
@@ -117,6 +118,8 @@ describe("the state", () => {
   it("takes the page's own build version from the build when none is given", () => {
     const store = createStateStore({ daemon: { version: __OCTOBOARD_VERSION__, generation: 1 }, daemonUpdate: IDLE });
     const updates = createDaemonUpdateStore({ daemon: { store, request: vi.fn() as never }, reportFailure: () => {}, reportRequestFailure: () => {}, reportSaveFailure: () => {} });
+    // The store follows the daemon's state only once started, as `setup` does.
+    onTestFinished(updates.start());
     expect(updates.getState().reloadNeeded).toBe(false);
     applyDaemonEvent(store, { type: "hello", daemon_version: `${__OCTOBOARD_VERSION__}-other`, generation: 1 } as never);
     expect(updates.getState().reloadNeeded).toBe(true);
@@ -183,7 +186,9 @@ describe("a check the user asked for", () => {
   });
 
   it("stays pending after the daemon replied that it started, until a check ends, and ends with no word for one that went well", async () => {
-    const { updates, send, failures } = setup({ ...IDLE, last_check: CHECKED(5) });
+    const { updates, send, failures, answers } = setup({ ...IDLE, last_check: CHECKED(5) });
+    // The daemon's reply names the last check it started after, the one the status already holds.
+    answers.check = { started: true, last_check_at: 5 };
     await updates.check("manual");
     expect(updates.getState().checkAsked).toBe("pending");
     send({ ...IDLE, phase: "checking", last_check: CHECKED(5) });
@@ -536,5 +541,68 @@ describe("the restart", () => {
     updates.hideRestartNotice();
     send(IDLE);
     expect(updates.getState().restartNoticeHidden).toBe(false);
+  });
+});
+
+describe("the restart held back by an agent's update", () => {
+  const INSTALLED: DaemonUpdateStatus = { ...IDLE, phase: "installed", installed: { version: "0.2.0", holder_floor: "0.1.0" } };
+
+  it("is not blocked while no agent's CLI is being updated", () => {
+    const { updates, store } = setup(INSTALLED);
+    expect(updates.getState().restartBlocked).toBeUndefined();
+    store.setState({ agentCliStatuses: agentCliStatusesOf([agentCliStatusOf("claude"), agentCliStatusOf("codex", { update: agentCliUpdateOf({ state: "succeeded", finished_at: 1 }) })]) });
+    expect(updates.getState().restartBlocked).toBeUndefined();
+  });
+
+  it("is blocked by the update of any one agent's CLI, whichever of several statuses holds it", () => {
+    const { updates, store } = setup(INSTALLED);
+    store.setState({ agentCliStatuses: agentCliStatusesOf([agentCliStatusOf("claude"), agentCliStatusOf("codex"), agentCliStatusOf("grok", { update: agentCliUpdateOf() })]) });
+    expect(updates.getState().restartBlocked).toBe("agentUpdate");
+  });
+
+  it("follows an agent's update as it starts and as it ends, however it ends, and tells its listeners", () => {
+    const { updates, store } = setup(INSTALLED);
+    const listener = vi.fn();
+    updates.subscribe(listener);
+    store.setState({ agentCliStatuses: agentCliStatusesOf([agentCliStatusOf("claude", { update: agentCliUpdateOf() })]) });
+    expect(updates.getState().restartBlocked).toBe("agentUpdate");
+    expect(listener).toHaveBeenCalled();
+    store.setState({ agentCliStatuses: agentCliStatusesOf([agentCliStatusOf("claude", { update: agentCliUpdateOf({ state: "succeeded", finished_at: 2 }) })]) });
+    expect(updates.getState().restartBlocked).toBeUndefined();
+    store.setState({ agentCliStatuses: agentCliStatusesOf([agentCliStatusOf("claude", { update: agentCliUpdateOf() })]) });
+    expect(updates.getState().restartBlocked).toBe("agentUpdate");
+    store.setState({ agentCliStatuses: agentCliStatusesOf([agentCliStatusOf("claude", { update: agentCliUpdateOf({ state: "failed", finished_at: 2, error: "agent_update_failed", detail: "bad" }) })]) });
+    expect(updates.getState().restartBlocked).toBeUndefined();
+  });
+
+  it("is blocked from the start when an agent's update is already running as the store begins", () => {
+    const store = createStateStore({
+      daemon: { version: UI_VERSION, generation: 1 },
+      daemonUpdate: INSTALLED,
+      agentCliStatuses: agentCliStatusesOf([agentCliStatusOf("claude", { update: agentCliUpdateOf() })]),
+    });
+    const updates = createDaemonUpdateStore({ daemon: { store, request: vi.fn() as never }, reportFailure: () => {}, reportRequestFailure: () => {}, reportSaveFailure: () => {}, uiVersion: UI_VERSION });
+    onTestFinished(updates.start());
+    expect(updates.getState().restartBlocked).toBe("agentUpdate");
+  });
+
+  it("is not blocked before the update is installed, whatever runs for an agent, and is once it is installed", () => {
+    const { updates, store, send } = setup();
+    store.setState({ agentCliStatuses: agentCliStatusesOf([agentCliStatusOf("claude", { update: agentCliUpdateOf() })]) });
+    expect(updates.getState().restartBlocked).toBeUndefined();
+    send({ ...IDLE, available: AVAILABLE });
+    expect(updates.getState().restartBlocked).toBeUndefined();
+    send({ ...IDLE, phase: "downloading", available: AVAILABLE, progress: { downloaded: 10, total: 100 } });
+    expect(updates.getState().restartBlocked).toBeUndefined();
+    send(INSTALLED);
+    expect(updates.getState().restartBlocked).toBe("agentUpdate");
+    send(IDLE);
+    expect(updates.getState().restartBlocked).toBeUndefined();
+  });
+
+  it("leaves the rest of the state as it was", () => {
+    const { updates, store } = setup(INSTALLED);
+    store.setState({ agentCliStatuses: agentCliStatusesOf([agentCliStatusOf("claude", { update: agentCliUpdateOf() })]) });
+    expect(updates.getState()).toMatchObject({ phase: "installed", installedVersion: "0.2.0", installedHolderFloor: "0.1.0", restarting: false });
   });
 });

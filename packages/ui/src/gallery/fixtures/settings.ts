@@ -2,12 +2,12 @@ import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import { FIXTURE_AGENTS, FIXTURE_PROVIDERS, UNPRESENTED_PROVIDER } from "../../fixtures/fixtureProviders";
 import { providerLabel } from "../../agents/providers";
 import { describing, type Matcher, type Ui, type Step } from "../../fixtures/interact";
-import { type AccountLogin, type AccountSharing, type Agent, type AgentAvailability, type AgentCliStatus, type LocalMcpServer, type McpInventoryFailure, type PlatformConnector } from "../../protocol";
+import { type AccountLogin, type AccountSharing, type Agent, type AgentAvailability, type LocalMcpServer, type McpInventoryFailure, type PlatformConnector } from "../../protocol";
 import type { AccountMcpAnswer } from "../../fixtures/fixture";
 import type { FixtureError } from "../../fixtures/sampleFiles";
 import type { Scenario } from "../scenario";
 import { accountOf, agentCliStatusOf, agentCliUpdateOf, MACOS_MACHINE, SAMPLE, accountSharingOf, minutesAgo, sessionOf, snapshotState, WINDOWS_MACHINE } from "../../fixtures/builders";
-import { defaultAgentCliStatuses } from "../../fixtures/fixtureAgentClis";
+import { withCliStatus } from "../../fixtures/fixtureAgentClis";
 import { browserHost } from "../../platform/host";
 import { MAC_HOST, WINDOWS_HOST } from "../../test/hosts";
 import { noneAddedState } from "./empty";
@@ -183,12 +183,6 @@ const unavailableQuotaState: Scenario["state"] = {
     }),
   ],
 };
-
-/** `state` with every installed agent's CLI current, but for the one `status` is of. */
-const withCliStatus = (state: Scenario["state"], status: AgentCliStatus): Scenario["state"] => ({
-  ...state,
-  agentCliStatuses: new Map(defaultAgentCliStatuses(state!.agentAvailability!)).set(status.agent, status),
-});
 
 /** Claude Code installed with npm at 2.1.319 while 2.1.320 is out: what the Version row offers an Update for. */
 const OUTDATED_CLI = agentCliStatusOf("claude", { install_method: "npm", latest_version: "2.1.320" });

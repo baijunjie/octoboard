@@ -23,8 +23,9 @@ const CHECK_UNCHANGED_HOLD_MS = 1200;
  * the install it asked for, whose failure it alone reports, as an action the user started (another window's failure is
  * the section's mark alone). The daemon's reply tells which they are: whether the check started, with the last check's
  * `at` it started after, and the install's `started_at`. A daemon of another version than the page's own build asks for
- * a reload. The channel and the automatic check are the daemon's settings, written as any setting is, based on the
- * version this window holds.
+ * a reload. A restart is held back, and said to be, while an agent's CLI is being updated (`restartBlocked`), which the
+ * daemon would refuse. The channel and the automatic check are the daemon's settings, written as any setting is, based
+ * on the version this window holds.
  */
 export function createDaemonUpdateStore({
   daemon,
@@ -79,6 +80,12 @@ export function createDaemonUpdateStore({
       progress: progress ? { downloaded: progress.downloaded, total: progress.total ?? undefined } : installing ? { downloaded: 0 } : undefined,
       installedVersion: installed?.version ?? undefined,
       installedHolderFloor: installed ? installed.holder_floor : undefined,
+      // Only the restart into an installed update is held back; read nothing otherwise, so a CLI update that starts or
+      // ends changes nothing the row or the strip shows before then.
+      restartBlocked:
+        status?.phase === "installed" && [...held.agentCliStatuses.values()].some((cli) => cli.update?.state === "running")
+          ? "agentUpdate"
+          : undefined,
       lastCheck: last && { outcome: last.outcome === "up_to_date" ? "upToDate" : last.outcome, at: last.at },
       channel: held.settings.daemon_update_channel,
       autoCheck: held.settings.daemon_update_check,

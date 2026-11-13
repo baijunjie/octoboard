@@ -19,7 +19,8 @@ differ, it is said below.
    and to reload the page to use it (see "What the browser shows" in `docs/product/server-form-updates.md`);
 2. an update installed, which takes effect after Octoboard restarts — on Windows, an update downloaded, which is
    installed when Octoboard quits or restarts (see "Installed, waiting for a restart" in
-   `docs/product/in-app-updates.md`) — naming its version where it is known;
+   `docs/product/in-app-updates.md`) — naming its version where it is known; in a browser, while an update of any
+   agent's CLI runs, it says instead that the update is installed and to restart when the agent update finishes;
 3. a version being downloaded;
 4. a check under way;
 5. in a browser, a newer version available that the daemon cannot install itself: naming that version and the file the
@@ -38,7 +39,9 @@ Beside the row one button moves the update on:
 - **Reload**, in a browser whose daemon now runs another version (case 1 above), which reloads the page;
 - **Restart now** once the update is installed, showing a pending spinner as "Restarting to apply an update" in
   `docs/product/in-app-updates.md` says; in a browser it restarts the daemon and stays pending until the next daemon
-  greets the page (see "Restarting into the update" in `docs/product/server-form-updates.md`);
+  greets the page, and while an update of any agent's CLI runs it is unavailable, with that reason, and its press
+  sends nothing and opens an error alert saying why (see "Restarting into the update" in
+  `docs/product/server-form-updates.md`);
 - **Download and install** once a newer version is found that can be installed from here, showing the spinner while a
   check or the download is under way — in a browser, from the press;
 - otherwise **Check for updates**, showing the spinner while a check runs. In a browser it shows it from the press until
@@ -73,7 +76,8 @@ point" in `docs/product/error-alerts.md`). The mark goes once a check starts; ke
 popover then goes to **Check for updates**. In a browser every page shows it, whichever page or schedule ran the check.
 
 While Settings is open, once the state of the update changes — through a press here, a check that was already running
-when Settings opened ending, a download started from the notice finishing, or an automatic check — every change of the
+when Settings opened ending, a download started from the notice finishing, an automatic check, or, in a browser, an
+update of an agent's CLI starting or ending while an update is installed — every change of the
 sentence is announced, except the sentence of a check under way, which the button's pending state already says, and
 the sentence after a check that did not finish. That the last check for updates did not finish is announced instead,
 except when the check that did not finish was the one **Check for updates** started here, whose failure its error

@@ -2,6 +2,7 @@
 // update of one.
 import type { Agent, AgentAvailability, AgentCliStatus } from "../protocol";
 import { agentCliStatusesOf, agentCliStatusOf } from "./builders";
+import type { Fixture } from "./fixture";
 import type { FixtureContext, Handlers } from "./fixtureContext";
 import { servedLabel } from "./fixtureProviders";
 
@@ -27,6 +28,12 @@ export function defaultAgentCliStatuses(availability: ReadonlyMap<Agent, AgentAv
       return agentCliStatusOf(agent, { installed_version, install_method, latest_version: installed_version });
     }));
 }
+
+/** `state` with every installed agent's CLI current, but for the one `status` is of. */
+export const withCliStatus = (state: Fixture["state"], status: AgentCliStatus): Fixture["state"] => ({
+  ...state,
+  agentCliStatuses: new Map(defaultAgentCliStatuses(state!.agentAvailability!)).set(status.agent, status),
+});
 
 /** The replies about the agents' CLIs. A `check_agent_clis` is acknowledged and nothing more: the statuses are the
  * scenario's, so a window that has none keeps waiting for them. */

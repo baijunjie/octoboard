@@ -194,6 +194,10 @@ export interface Ui {
    * on the sidebar's heading row (earlier in the DOM) and in the filter picker, so pressing it
    * again to unpick it would hit the sidebar row. */
   press: (matcher: Matcher) => Promise<void>;
+  /** Presses the first control named `matcher` that is unavailable (`aria-disabled`, yet focusable and pressable, with its
+   * reason as a tooltip): the press the control answers by explaining, which `press` does not reach, since it waits for a
+   * control that can act. Fails for a natively disabled control, or one that is not unavailable. */
+  pressUnavailable: (matcher: Matcher) => Promise<void>;
   /** Presses the menu item named `matcher`, for a name an open menu shares with a control elsewhere on the page (the
    * Settings item of an account's menu, and the rail's Settings button). */
   pressMenuItem: (matcher: Matcher) => Promise<void>;
@@ -324,12 +328,13 @@ export interface Ui {
    * avoids by matching the state glyph instead. */
   hoverStatusMarker: (host: Matcher) => Promise<void>;
   /** Moves the pointer onto the first control named `matcher` and leaves it there, as `hoverIndicator`
-   * does, for a control whose tooltip repeats its accessible name, such as a rail avatar's. It is not
-   * for a control whose tooltip says something else (an actions button, a pane toggle): the step fails
-   * unless the tooltip that opens is the control's name, so hovering one whose tooltip stays shut (a
-   * rail avatar while the hidden sidebar can float in, where the pointer floats the sidebar instead)
-   * is not passed over. */
-  hoverTitledControl: (matcher: Matcher) => Promise<void>;
+   * does, for a control whose tooltip repeats its accessible name, such as a rail avatar's. Without
+   * `tooltip` it is not for a control whose tooltip says something else (an actions button, a pane toggle): the step
+   * fails unless the tooltip that opens is the control's name, so hovering one whose tooltip stays shut (a rail avatar
+   * while the hidden sidebar can float in, where the pointer floats the sidebar instead) is not passed over. `tooltip`
+   * is for a control whose tooltip says something else than its name (an unavailable button's reason, which it also
+   * reaches): the step then fails unless the tooltip that opens reads it. */
+  hoverTitledControl: (matcher: Matcher, tooltip?: string) => Promise<void>;
   /** Moves the pointer onto the first control named `host` and leaves it there, for a control that
    * floats a panel in while the pointer rests on it (the rail's quota entry), and returns once the
    * dialog named `panel` is up. Fails if none opens, which also catches a control whose panel needs a
@@ -652,6 +657,12 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
     return named.filter((element) => !named.some((other) => other !== element && element.contains(other)));
   };
   const find = (matcher: Matcher): HTMLElement | undefined => findAll(matcher)[0];
+  /** The control named `matcher` that is unavailable (`aria-disabled`) but not disabled: it stays focusable and pressable, and a
+   * press explains why it does nothing, so a step reaches it on purpose, by the steps that say so, and `find` leaves it be.
+   * A natively disabled control, or one in an inert subtree, is not found. */
+  const findUnavailable = (matcher: Matcher): HTMLElement | undefined =>
+    Array.from(doc.querySelectorAll<HTMLElement>(PRESSABLE)).find((element) =>
+      element.getAttribute("aria-disabled") === "true" && !element.hasAttribute("disabled") && !element.closest("[inert]") && matches(matcher, nameOf(element)));
   /** The focusable scroll region named `matcher`. */
   const findRegion = (matcher: Matcher): HTMLElement | undefined =>
     Array.from(doc.querySelectorAll<HTMLElement>("[role=region][tabindex]")).find((element) => {
@@ -912,10 +923,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
       await wait(300);
     },
     async focusControl(matcher) {
-      const unavailable = () =>
-        Array.from(doc.querySelectorAll<HTMLElement>(PRESSABLE)).find((element) =>
-          element.getAttribute("aria-disabled") === "true" && !element.hasAttribute("disabled") && !element.closest("[inert]") && matches(matcher, nameOf(element)));
-      const control = await waitFor(() => find(matcher) ?? unavailable(), `Nothing to focus matching ${String(matcher)}`);
+      const control = await waitFor(() => find(matcher) ?? findUnavailable(matcher), `Nothing to focus matching ${String(matcher)}`);
       // react-aria reads what the focus came from off the last key event, so Tab is sent first.
       (doc.activeElement ?? doc.body).dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
       control.focus();
@@ -1042,12 +1050,13 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
         (last) => `The control matching ${String(host)} has no status marker: its last tooltip is ${quoted(last)}`,
       );
     },
-    async hoverTitledControl(matcher) {
-      const control = await hover(() => find(matcher), `Nothing to hover matching ${String(matcher)}`);
+    async hoverTitledControl(matcher, tooltip) {
+      const control = await hover(() => find(matcher) ?? findUnavailable(matcher), `Nothing to hover matching ${String(matcher)}`);
+      const expected = tooltip ?? nameOf(control);
       await tooltipWhere(
         "[role=tooltip]",
-        (shown) => withoutIsolates(shown.textContent ?? "").trim() === nameOf(control),
-        (last) => `The control matching ${String(matcher)} has no tooltip of its name: its last tooltip is ${quoted(last)}`,
+        (shown) => withoutIsolates(shown.textContent ?? "").trim() === expected,
+        (last) => `The control matching ${String(matcher)} has no tooltip ${tooltip === undefined ? "of its name" : `"${tooltip}"`}: its last tooltip is ${quoted(last)}`,
       );
     },
     async hoverPanel(host, panel) {
@@ -1352,6 +1361,9 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
     },
     async press(matcher) {
       await clickWhenFound(() => find(matcher), `Nothing to press matching ${String(matcher)}`);
+    },
+    async pressUnavailable(matcher) {
+      await clickWhenFound(() => findUnavailable(matcher), `Nothing unavailable to press matching ${String(matcher)}`);
     },
     async pressMenuItem(matcher) {
       await clickWhenFound(() => findAll(matcher).find((element) => element.matches('[role="menuitem"]')), `No menu item matching ${String(matcher)}`);

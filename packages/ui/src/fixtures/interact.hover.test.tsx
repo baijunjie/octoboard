@@ -341,8 +341,8 @@ it("hoverTitledControl fails for a control that is not there", async () => {
 
 /** A control whose tooltip the test puts in the page itself, `after` ms from now, as a loaded page opens one later than
  * the hover step's fixed wait. */
-function mountProbe(tooltip: string, after: number): void {
-  mountForTooltip(<div role="button" aria-label="Probe">Probe</div>);
+function mountProbe(tooltip: string, after: number, unavailable = false): void {
+  mountForTooltip(<div role="button" aria-label="Probe" aria-disabled={unavailable || undefined}>Probe</div>);
   const timer = setTimeout(() => {
     const shown = document.body.appendChild(document.createElement("div"));
     shown.setAttribute("role", "tooltip");
@@ -368,6 +368,30 @@ it("a hover step fails, naming the last tooltip, only once its patience has run 
   const done = expect(createUi(document, "en").hoverTitledControl("Probe")).rejects.toThrow(/has no tooltip of its name: its last tooltip is "Other"/);
   await settleInAct(done);
   expect(Date.now() - started).toBeGreaterThanOrEqual(TOOLTIP_DELAY_MS + TOOLTIP_SHOW_MS + TIMEOUT_MS);
+});
+
+it("hoverTitledControl with a tooltip passes for a control whose tooltip reads it, though it is not the control's name", async () => {
+  mountProbe("Cannot be kept", 0);
+  await settleInAct(createUi(document, "en").hoverTitledControl("Probe", "Cannot be kept"));
+  expect(openTooltip()?.textContent).toBe("Cannot be kept");
+});
+
+it("hoverTitledControl with a tooltip fails where the tooltip that opens reads something else, the control's name included, and names both", async () => {
+  mountProbe("Probe", 0);
+  const done = expect(createUi(document, "en").hoverTitledControl("Probe", "Cannot be kept")).rejects.toThrow(/has no tooltip "Cannot be kept": its last tooltip is "Probe"/);
+  await settleInAct(done);
+});
+
+it("hoverTitledControl reaches an unavailable control (aria-disabled), whose tooltip is its reason", async () => {
+  mountProbe("Cannot be kept", 0, true);
+  await settleInAct(createUi(document, "en").hoverTitledControl("Probe", "Cannot be kept"));
+  expect(openTooltip()?.textContent).toBe("Cannot be kept");
+});
+
+it("hoverTitledControl does not reach a natively disabled control, even one marked aria-disabled", async () => {
+  mountForTooltip(<button disabled aria-disabled="true" aria-label="Probe">Probe</button>);
+  const done = expect(createUi(document, "en").hoverTitledControl("Probe", "Cannot be kept")).rejects.toThrow(/Nothing to hover matching Probe/);
+  await settleInAct(done);
 });
 
 /** The rail's quota entry over a daemon with Claude Code available, the panel a resting pointer floats in. */

@@ -22,6 +22,11 @@ export interface UpdateState {
   /** The version installed and waiting for a restart, once `phase` is `installed`; it is the version of the daemon the
    * restart starts, which the restart's compatibility check measures holders against. */
   installedVersion?: string;
+  /** Why the restart that applies the installed update cannot be asked for now, which the daemon would refuse: `agentUpdate`
+   * is an update of an agent's CLI running, which a restart would cut off. Only a daemon that updates itself knows
+   * it (the desktop application's store never sets it); the window shows it ahead of the press, and the refusal that
+   * still arrives (the update began after the press) is reported as an error. */
+  restartBlocked?: "agentUpdate";
   /** The holder floor of the installed update (see `AvailableUpdate`); `null` when unknown (this window never saw it,
    * or the update gave none). */
   installedHolderFloor?: string | null;

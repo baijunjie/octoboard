@@ -82,7 +82,10 @@ The update notice is the desktop application's strip along the bottom of the win
   the install command the daemon gives for that directory, and **Later**; there is no download.
 - **Downloading**: as on the desktop.
 - **Installed**: says the version is installed and takes effect after Octoboard restarts, with **Restart now** and
-  **Later**; an update the daemon learned of without its version (see below) is named as an update.
+  **Later**; an update the daemon learned of without its version (see below) is named as an update. While an update of
+  any agent's CLI runs, it says instead that the version (or the update) is installed and to restart when the agent
+  update finishes, and **Restart now** is unavailable for that reason (see "Restarting into the update" below); once
+  the agent update ends, it says again what it says otherwise.
 - **The daemon runs another version than the page's own build** — the release version the page was built as — after a
   restart into an update, or any other restart into another build: the notice says that Octoboard now runs that version
   and to reload the page to use it, with **Reload**. It outranks every other notice and has no Later. Nothing reloads by
@@ -196,12 +199,18 @@ as every other page does. A daemon that comes back speaking another protocol gen
 of the screen for a daemon of another version (see "A daemon of another version" in
 `docs/product/application-lifecycle.md`): the daemon serves the page of its own build, which speaks its protocol.
 
-The restart is refused, with an error alert titled that Octoboard could not restart and saying why, while a download is
+The restart is refused, with an error alert titled that Octoboard cannot restart and saying why, while a download is
 under way (a restart would end it), while the daemon is already stopping or restarting (unlike `octoboardd restart`,
 which takes a second request as the first), while a holder inside the daemon's own systemd service runs a session
 (see "Where a holder cannot be started as a unit of its own" in `docs/product/server-form.md`; the alert names
-`systemctl`), and while an update of an agent's CLI runs (a restart would cut it off mid-install). A page whose connection
-to the daemon is not open sends nothing and says that the connection is closed. `octoboardd restart` on the server
+`systemctl`), and while an update of an agent's CLI runs (`agent_update_running`; a restart would cut it off
+mid-install). The page foresees only the last: while an update of any agent's CLI runs, **Restart now**, in the notice
+and in Settings, is unavailable — faded, still focusable, its tooltip and accessible description saying that an agent
+is being updated and to restart when the update finishes — and pressing it sends nothing and opens that same alert,
+saying that restarting the daemon now could leave the agent partly updated and to try again when the update finishes.
+It becomes available again once the agent update ends. The alert still comes from the daemon when an agent update
+began after the press. A page whose connection to the daemon is not open sends nothing and says that the connection is
+closed. `octoboardd restart` on the server
 restarts into the update just the same.
 
 ## When the update does not start

@@ -10,6 +10,7 @@ import { isolate } from "../i18n/isolate";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import { useHost } from "../platform/react";
 import { installedMessageKey } from "./installedMessageKey";
+import { restartPress } from "./restartPress";
 import { reloadPage } from "../platform/reloadPage";
 import { releaseUrl } from "../components/text/releaseUrl";
 import { updateNoticeKind } from "./noticeKind";
@@ -29,19 +30,22 @@ const NOTICE_KEYS = {
 const NOTICE_HEIGHT_VAR = "--update-notice-height";
 
 /** HeroUI's outline button retinted through the button's own color tokens to sit on the notice's solid accent
- * fill. */
-const BUTTON_CLASS =
-  "rounded-lg border-accent-foreground/30 " +
-  "[--button-bg-hover:var(--accent-hover)] [--button-bg-pressed:var(--accent-hover)] " +
-  "[--button-fg:var(--accent-foreground)]";
+ * fill, without the fills it takes on hover and press, which a button that is unavailable leaves off (see `Button`'s
+ * `unavailable`). */
+const UNAVAILABLE_BUTTON_CLASS = "rounded-lg border-accent-foreground/30 [--button-fg:var(--accent-foreground)]";
+
+/** `UNAVAILABLE_BUTTON_CLASS` with the hover and press fills retinted too. */
+const BUTTON_CLASS = `${UNAVAILABLE_BUTTON_CLASS} [--button-bg-hover:var(--accent-hover)] [--button-bg-pressed:var(--accent-hover)]`;
 
 /**
  * The strip along the bottom edge, above the connection banner, that tells the user about the application's
  * updates without taking the window: a newer version is available (with a link to its release page, and
  * a Download and install that is the user's to press, never done automatically), the download is under way, or the
- * update is installed and takes effect after a restart (Restart now, or Later, which only hides the strip). Where an
- * installer applies the update (Windows) it only says the update is downloaded, and installed when the application
- * quits or restarts (`installedMessageKey`). For a daemon that cannot replace its own executable it says so, with the
+ * update is installed and takes effect after a restart (Restart now, or Later, which only hides the strip). While an
+ * agent's CLI is being updated a daemon would refuse the restart, so the strip says the restart waits for it and
+ * Restart now is unavailable with that reason (`UpdateState.restartBlocked`, `restartPress`). Where an installer
+ * applies the update (Windows) it only says the update is downloaded, and installed when the application quits or
+ * restarts (`installedMessageKey`). For a daemon that cannot replace its own executable it says so, with the
  * install command to copy and no download; and a page whose daemon now runs another version is asked to reload (a
  * Reload that is the user's to press, never done automatically). Nothing here restarts anything: Restart now goes
  * through the window's exit confirmation (`UpdateStore.restart`).
@@ -68,8 +72,9 @@ export function UpdateNotice({ focusTerminal }: { focusTerminal: () => void }): 
   const message =
     kind &&
     (kind === "installed"
-      ? t(installedMessageKey(host.updater, "notice", !!state.installedVersion), { version })
+      ? t(installedMessageKey(host.updater, "notice", !!state.installedVersion, state.restartBlocked !== undefined), { version })
       : t(NOTICE_KEYS[kind], { version: kind === "reload" ? isolate(state.currentVersion ?? "") : version }));
+  const restart = restartPress(t, state, store);
   const progress = state.progress;
   const percent = progress?.total ? Math.min(progress.downloaded / progress.total, 1) : undefined;
   const percentText = percent === undefined ? undefined : new Intl.NumberFormat(language, { style: "percent" }).format(percent);
@@ -141,9 +146,12 @@ export function UpdateNotice({ focusTerminal }: { focusTerminal: () => void }): 
             )}
             {kind === "installed" && (
               <>
-                <Button size="xs" variant="outline" className={BUTTON_CLASS} focusOnPress={false} pending={state.restarting} onPress={() => void store.restart()}>
-                  {t("updates.notice.restart")}
-                </Button>
+                {/* The title stays put and only goes inert, so the button is not remounted (losing focus) as it toggles. */}
+                <TitledControl title={restart.unavailable ?? t("updates.restartBlocked")} isDisabled={restart.unavailable === undefined}>
+                  <Button size="xs" variant="outline" className={restart.unavailable === undefined ? BUTTON_CLASS : UNAVAILABLE_BUTTON_CLASS} focusOnPress={false} label={t("updates.notice.restart")} pending={state.restarting} unavailable={restart.unavailable} onPress={restart.onPress}>
+                    {t("updates.notice.restart")}
+                  </Button>
+                </TitledControl>
                 <Button size="xs" variant="outline" className={BUTTON_CLASS} focusOnPress={false} onPress={store.hideRestartNotice}>
                   {t("updates.notice.later")}
                 </Button>
