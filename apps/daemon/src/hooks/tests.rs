@@ -392,17 +392,266 @@ fn a_subagent_hand_back_is_a_completion_notice_and_a_peers_message_is_not() {
     }
 }
 
+/// Codex's `Stop` lists no background work, whichever way the payload spells the list; Claude
+/// Code's and Grok Build's do (the latter's is read in the tests below).
 #[test]
-fn only_claude_codes_stop_carries_background_tasks() {
+fn codex_stop_carries_no_background_tasks() {
     let stop = json!({"backgroundTasks": [{"id": "g1"}], "background_tasks": [{"id": "g1"}]});
-    assert_eq!(
-        of(AgentId::GROK).background_tasks_change("Stop", &stop),
-        None
-    );
     assert_eq!(
         of(AgentId::CODEX).background_tasks_change("Stop", &stop),
         None
     );
+}
+
+/// A Grok Build `Stop` as Grok Build 1.0.77 fires it at the end of a turn that left a shell
+/// command and a subagent running.
+fn grok_stop_with_work() -> Value {
+    json!({
+        "hookEventName": "Stop",
+        "reason": "end_turn",
+        "backgroundTasks": [
+            {"id": "ba739e73-d2e1-47cd-9e3c-b15e09208d66", "type": "shell", "status": "running",
+             "command": "sleep 20"},
+            {"id": "01a1d55a-d394-78a3-b398-801cdc722351", "type": "subagent", "status": "running",
+             "description": "Sleep then reply OK", "agentType": "general-purpose"},
+        ],
+    })
+}
+
+/// The per-turn `Stop` lists what the turn left running, and that list replaces the session's: a
+/// shell command is described by its command, a subagent by its description.
+#[test]
+fn a_grok_stop_replaces_the_background_tasks_with_the_ones_it_lists() {
+    assert_eq!(
+        of(AgentId::GROK).background_tasks_change("Stop", &grok_stop_with_work()),
+        Some(BackgroundTasksChange::Replace(vec![
+            task("ba739e73-d2e1-47cd-9e3c-b15e09208d66", "shell", "sleep 20"),
+            task(
+                "01a1d55a-d394-78a3-b398-801cdc722351",
+                "subagent",
+                "Sleep then reply OK"
+            ),
+        ]))
+    );
+}
+
+/// A description wins over a command; an entry with no id, or a blank one, is not a task; the
+/// type and the description are optional.
+#[test]
+fn a_grok_stop_lists_only_entries_with_an_id() {
+    let stop = json!({
+        "reason": "end_turn",
+        "backgroundTasks": [
+            {"id": "m1", "type": "monitor", "description": "watch the log", "command": "tail -f x"},
+            {"id": "  ", "type": "shell", "command": "sleep 1"},
+            {"type": "shell", "command": "sleep 2"},
+            {"id": "bare"},
+        ],
+    });
+    assert_eq!(
+        of(AgentId::GROK).background_tasks_change("Stop", &stop),
+        Some(BackgroundTasksChange::Replace(vec![
+            task("m1", "monitor", "watch the log"),
+            BackgroundTask {
+                id: "bare".to_string(),
+                kind: None,
+                description: None,
+            },
+        ]))
+    );
+}
+
+/// A per-turn `Stop` that lists nothing, or no list at all, and a failed turn leave nothing
+/// running; the teardown `Stop` says nothing about the work, and the session's process ending
+/// clears it.
+#[test]
+fn a_grok_stop_without_work_and_a_failed_turn_clear_the_tasks_but_the_teardown_does_not() {
+    let grok = of(AgentId::GROK);
+    let cleared = Some(BackgroundTasksChange::Replace(Vec::new()));
+    for payload in [
+        json!({"reason": "end_turn", "backgroundTasks": []}),
+        json!({"reason": "end_turn"}),
+        json!({}),
+    ] {
+        assert_eq!(
+            grok.background_tasks_change("Stop", &payload),
+            cleared,
+            "{payload}"
+        );
+    }
+    assert_eq!(
+        grok.background_tasks_change("StopFailure", &json!({})),
+        cleared
+    );
+    let shutdown = json!({"reason": "shutdown"});
+    assert_eq!(grok.background_tasks_change("Stop", &shutdown), None);
+    let shutdown_listing = json!({"reason": "shutdown", "backgroundTasks": [{"id": "x"}]});
+    assert_eq!(
+        grok.background_tasks_change("Stop", &shutdown_listing),
+        None
+    );
+}
+
+/// A subagent's payload, which carries `subagentType`, changes nothing of the session's list,
+/// whatever the event; the session's own next `Stop` lists the subagent.
+#[test]
+fn a_grok_subagents_events_leave_the_background_tasks_alone() {
+    let completion = "<system-reminder>\nBackground task \"ba739e73\" completed (exit code: 0).\n\
+                      </system-reminder>";
+    for event in [
+        "Stop",
+        "StopFailure",
+        "UserPromptSubmit",
+        "SubagentStart",
+        "SubagentStop",
+    ] {
+        let payload = json!({
+            "subagentType": "general-purpose",
+            "reason": "end_turn",
+            "prompt": completion,
+            "backgroundTasks": [{"id": "x", "type": "shell"}],
+        });
+        assert_eq!(
+            of(AgentId::GROK).background_tasks_change(event, &payload),
+            None,
+            "{event}"
+        );
+    }
+}
+
+/// Only a `Stop`, a `StopFailure` and a completion prompt say anything of the list.
+#[test]
+fn other_grok_events_say_nothing_of_the_background_tasks() {
+    for (event, payload) in [
+        ("SessionStart", json!({})),
+        ("PreToolUse", json!({"toolName": "run_terminal_command"})),
+        ("PostToolUse", json!({"toolName": "run_terminal_command"})),
+        ("Notification", json!({"notificationType": "idle_prompt"})),
+        ("StopCancelled", json!({})),
+        ("SubagentStart", json!({})),
+        ("SubagentStop", json!({})),
+    ] {
+        assert_eq!(
+            of(AgentId::GROK).background_tasks_change(event, &payload),
+            None,
+            "{event}"
+        );
+    }
+}
+
+/// The wake-up prompts Grok Build 1.0.77 sends itself when a piece of work finishes.
+const GROK_SHELL_COMPLETION: &str = "<system-reminder>\nBackground task \
+    \"ba739e73-d2e1-47cd-9e3c-b15e09208d66\" completed (exit code: 0).\nDescription: Sleep 20 \
+    seconds in background | Duration: 20.2s\nUse \
+    get_command_or_subagent_output(\"ba739e73-d2e1-47cd-9e3c-b15e09208d66\") to see the full \
+    output.\n</system-reminder>";
+const GROK_SUBAGENT_COMPLETION: &str = "<system-reminder>\nWhile you were idle, 1 background \
+    subagent completed:\n- [general-purpose] \"Sleep then reply OK\" \u{2014} completed \
+    successfully (29.1s, 1 tool calls)\n=== Task 01a1d55a-d394-78a3-b398-801cdc722351 ===\n\
+    Command: [subagent:general-purpose] Sleep then reply OK\nStatus: completed\n\
+    </system-reminder>";
+
+/// A completion prompt names the work that finished, and only that.
+#[test]
+fn a_grok_completion_prompt_names_the_work_that_finished() {
+    let grok = of(AgentId::GROK);
+    let finished =
+        |prompt: &str| grok.background_tasks_change("UserPromptSubmit", &json!({"prompt": prompt}));
+    assert_eq!(
+        finished(GROK_SHELL_COMPLETION),
+        Some(BackgroundTasksChange::Finished(vec![
+            "ba739e73-d2e1-47cd-9e3c-b15e09208d66".to_string()
+        ]))
+    );
+    assert_eq!(
+        finished(GROK_SUBAGENT_COMPLETION),
+        Some(BackgroundTasksChange::Finished(vec![
+            "01a1d55a-d394-78a3-b398-801cdc722351".to_string()
+        ]))
+    );
+    // Several in one prompt: every id comes back (in no order the caller may rely on).
+    let several = "<system-reminder>\nBackground task \"s1\" completed (exit code: 0).\n\
+                   Background task \"s2\" completed (exit code: 1).\nWhile you were idle, 2 \
+                   background subagents completed:\n=== Task a1 ===\nStatus: completed\n\
+                   === Task a2 ===\nStatus: completed\n</system-reminder>";
+    let Some(BackgroundTasksChange::Finished(mut ids)) = finished(several) else {
+        panic!("a completion notice names the finished work");
+    };
+    ids.sort();
+    assert_eq!(ids, ["a1", "a2", "s1", "s2"]);
+    // An ordinary prompt, and the event with no prompt at all, change nothing.
+    assert_eq!(finished("run the tests"), None);
+    assert_eq!(
+        grok.background_tasks_change("UserPromptSubmit", &json!({})),
+        None
+    );
+}
+
+/// Only a prompt the agent sent itself is a completion notice: one that opens with
+/// `<system-reminder>` and names finished work. A user prompt that quotes such text is a prompt
+/// like any other, and so is a reminder that names none.
+#[test]
+fn only_a_prompt_opening_with_a_reminder_that_names_finished_work_is_a_grok_completion_notice() {
+    let grok = of(AgentId::GROK);
+    let quoted_shell = format!("why did this appear?\n{GROK_SHELL_COMPLETION}");
+    let quoted_subagent = format!(" {GROK_SUBAGENT_COMPLETION}");
+    for (prompt, notice) in [
+        (GROK_SHELL_COMPLETION, true),
+        (GROK_SUBAGENT_COMPLETION, true),
+        (quoted_shell.as_str(), false),
+        (quoted_subagent.as_str(), false),
+        (
+            "<system-reminder>\nThe date changed.\n</system-reminder>",
+            false,
+        ),
+        (
+            "<system-reminder>\nBackground task \"\" completed\n</system-reminder>",
+            false,
+        ),
+        ("run the tests", false),
+        ("", false),
+    ] {
+        assert_eq!(grok.is_completion_notice(prompt), notice, "{prompt}");
+        assert_eq!(grok.is_self_sent(prompt), notice, "{prompt}");
+    }
+    // Another agent's prompt is never read this way.
+    for agent in AgentId::ALL
+        .into_iter()
+        .filter(|agent| *agent != AgentId::GROK)
+    {
+        assert!(
+            !of(agent).is_completion_notice(GROK_SHELL_COMPLETION),
+            "{agent:?}"
+        );
+    }
+}
+
+/// A `Stop` that lists work is the turn held on it, not finished: it is idle with the tasks, and
+/// no turn end is synthesised from it. One that lists nothing ends the turn as ever, and the
+/// teardown fire never does.
+#[test]
+fn a_grok_stop_that_lists_work_holds_the_turn() {
+    let grok = of(AgentId::GROK);
+    let held = grok_stop_with_work();
+    assert_eq!(grok.status("Stop", &held), Some(SessionStatus::Idle));
+    assert!(grok.turn_end("Stop", &held).is_none());
+
+    for payload in [
+        json!({"reason": "end_turn", "backgroundTasks": []}),
+        json!({"reason": "end_turn"}),
+        json!({"reason": "end_turn", "lastAssistantMessage": "done"}),
+    ] {
+        let end = grok.turn_end("Stop", &payload).expect("a turn end");
+        assert!(!end.failed && !end.backstop, "{payload}");
+    }
+
+    let shutdown = json!({"reason": "shutdown"});
+    assert!(grok.turn_end("Stop", &shutdown).is_none());
+    let shutdown_listing = json!({"reason": "shutdown", "backgroundTasks": [{"id": "x"}]});
+    assert!(grok.turn_end("Stop", &shutdown_listing).is_none());
+
+    // The held `Stop` still counts as a normal end of the turn for the paused flag.
+    assert_eq!(grok.turn_outcome("Stop", &held), Some(TurnOutcome::Normal));
 }
 
 /// On Claude Code any `agent_id` marks a subagent's payload, including the internal helper

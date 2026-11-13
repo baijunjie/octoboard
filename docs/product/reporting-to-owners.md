@@ -107,10 +107,10 @@ no message at all is reported as such, with the suggestion that the owner check 
 A synthesised report never archives the session: only a session's own `done` report does that. Its owner is reminded
 of the session once if it stays idle after that report (see "Notices to an owner" below).
 
-**No report is synthesised for a Claude Code turn that ends with work still running in the background** — the session is
-then working in background (see "Working in background" in `docs/product/session-statuses.md`): its work is not over.
-The turn in which Claude Code tells the session that work has finished is judged like any other: reported on, unless it
-too ends with work still running.
+**No report is synthesised for a Claude Code or Grok Build turn that ends with work still running in the background** —
+the session is then working in background (see "Working in background" in `docs/product/session-statuses.md`): its work
+is not over. Grok Build's backstop does not end such a turn either. The turn in which the agent tells the session that
+work has finished is judged like any other: reported on, unless it too ends with work still running.
 
 **No report is synthesised for a Claude Code turn followed at once by a completion notice.** A turn can end just as the
 background work it waited on finishes: its end lists nothing still running, but Claude Code has not yet told the session

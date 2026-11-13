@@ -954,6 +954,279 @@ async fn a_grok_idle_prompt_does_not_end_a_waiting_question() {
     assert_eq!(status_of(&state), SessionStatus::Working);
 }
 
+/// Grok Build's `Stop` of a turn that left a shell command and a subagent running.
+const GROK_STOP_WITH_WORK: &str = r#"{"hookEventName": "Stop", "reason": "end_turn", "backgroundTasks": [
+    {"id": "sh1", "type": "shell", "status": "running", "command": "sleep 20"},
+    {"id": "sub1", "type": "subagent", "status": "running", "description": "Sleep then reply OK", "agentType": "general-purpose"}]}"#;
+const GROK_IDLE_PROMPT: &[u8] =
+    br#"{"hookEventName": "Notification", "notificationType": "idle_prompt"}"#;
+
+/// The ids of the work the session has listed, in order.
+fn listed_task_ids(state: &Arc<AppState>) -> Vec<String> {
+    state
+        .background_tasks_of("s")
+        .into_iter()
+        .map(|task| task.id)
+        .collect()
+}
+
+/// A Grok turn that ends with work still running is held on it: the session is idle with the work
+/// listed and the turn open; the `idle_prompt` that follows does not close the turn or take the
+/// list away; each finished piece wakes a turn of its own, whose `Stop` lists what is left, and
+/// the one that lists nothing closes the turn and empties the list.
+#[tokio::test]
+async fn a_grok_turn_held_on_background_work_stays_open_until_the_work_is_done() {
+    let (state, _dir, _live) = grok_session("server-grok-held-turn", SessionStatus::Idle);
+    let hook = |body: &str| apply_hook(&state, "s", body.as_bytes());
+    let prompt = |text: &str| {
+        serde_json::json!({"hookEventName": "UserPromptSubmit", "prompt": text}).to_string()
+    };
+
+    hook(&prompt("run two things in the background"));
+    assert_eq!(status_of(&state), SessionStatus::Working);
+    assert!(state.turn_is_open("s"));
+
+    // The turn ends with both running: idle, work listed, turn held open.
+    hook(GROK_STOP_WITH_WORK);
+    assert_eq!(status_of(&state), SessionStatus::Idle);
+    assert_eq!(listed_task_ids(&state), ["sh1", "sub1"]);
+    let listed = state.background_tasks_of("s");
+    assert_eq!(listed[0].kind.as_deref(), Some("shell"));
+    assert_eq!(listed[0].description.as_deref(), Some("sleep 20"));
+    assert_eq!(listed[1].kind.as_deref(), Some("subagent"));
+    assert_eq!(
+        listed[1].description.as_deref(),
+        Some("Sleep then reply OK")
+    );
+    assert!(state.turn_is_open("s"), "a held turn is not over");
+    assert_eq!(
+        state
+            .wire_session(state.session_record("s").unwrap())
+            .background_tasks
+            .len(),
+        2,
+        "the record shows the session working in the background"
+    );
+
+    // The `idle_prompt` a minute later: neither the turn nor the list changes.
+    state.quiet_past_backstop("s");
+    apply_hook(&state, "s", GROK_IDLE_PROMPT);
+    assert_eq!(status_of(&state), SessionStatus::Idle);
+    assert_eq!(listed_task_ids(&state), ["sh1", "sub1"]);
+    assert!(state.turn_is_open("s"));
+
+    // The shell command finishes and wakes the session; its `Stop` lists the subagent.
+    hook(&prompt(
+        "<system-reminder>\nBackground task \"sh1\" completed (exit code: 0).\n</system-reminder>",
+    ));
+    assert_eq!(status_of(&state), SessionStatus::Working);
+    assert_eq!(state.completion_notices("s"), 1);
+    assert_eq!(listed_task_ids(&state), ["sub1"]);
+    hook(
+        r#"{"hookEventName": "Stop", "reason": "end_turn", "backgroundTasks": [{"id": "sub1", "type": "subagent", "description": "Sleep then reply OK"}]}"#,
+    );
+    assert_eq!(status_of(&state), SessionStatus::Idle);
+    assert_eq!(listed_task_ids(&state), ["sub1"]);
+    assert!(state.turn_is_open("s"));
+    state.quiet_past_backstop("s");
+    apply_hook(&state, "s", GROK_IDLE_PROMPT);
+    assert!(state.turn_is_open("s"));
+
+    // The subagent's own events never change the list.
+    hook(
+        r#"{"hookEventName": "SubagentStop", "subagentType": "general-purpose", "backgroundTasks": []}"#,
+    );
+    assert_eq!(listed_task_ids(&state), ["sub1"]);
+
+    // The subagent finishes; the wake turn's `Stop` lists nothing and ends the turn.
+    hook(&prompt(
+        "<system-reminder>\nWhile you were idle, 1 background subagent completed:\n=== Task sub1 ===\nStatus: completed\n</system-reminder>",
+    ));
+    assert_eq!(status_of(&state), SessionStatus::Working);
+    assert_eq!(state.completion_notices("s"), 2);
+    hook(r#"{"hookEventName": "Stop", "reason": "end_turn", "backgroundTasks": []}"#);
+    assert_eq!(status_of(&state), SessionStatus::Idle);
+    assert!(state.background_tasks_of("s").is_empty());
+    assert!(!state.turn_is_open("s"), "the turn ends with the last work");
+}
+
+/// The teardown `Stop` lists no work and leaves the list as the last per-turn `Stop` left it (the
+/// process ending clears it).
+#[tokio::test]
+async fn a_grok_teardown_stop_leaves_the_listed_work_alone() {
+    let (state, _dir, _live) = grok_session("server-grok-teardown-work", SessionStatus::Idle);
+    apply_hook(&state, "s", GROK_STOP_WITH_WORK.as_bytes());
+    assert_eq!(listed_task_ids(&state), ["sh1", "sub1"]);
+    apply_hook(
+        &state,
+        "s",
+        br#"{"hookEventName": "Stop", "reason": "shutdown"}"#,
+    );
+    assert_eq!(listed_task_ids(&state), ["sh1", "sub1"]);
+}
+
+/// A `Stop` that lists nothing after a held one takes the list away, and so does a failed turn.
+#[tokio::test]
+async fn a_grok_stop_without_work_or_a_failed_turn_empties_the_list() {
+    for end in [
+        r#"{"hookEventName": "Stop", "reason": "end_turn"}"#,
+        r#"{"hookEventName": "StopFailure"}"#,
+    ] {
+        let (state, _dir, _live) = grok_session("server-grok-emptied-work", SessionStatus::Idle);
+        apply_hook(&state, "s", GROK_STOP_WITH_WORK.as_bytes());
+        assert_eq!(listed_task_ids(&state), ["sh1", "sub1"], "{end}");
+        apply_hook(&state, "s", end.as_bytes());
+        assert!(state.background_tasks_of("s").is_empty(), "{end}");
+    }
+}
+
+/// A clock-attributed turn end is acted on only while no work is listed: with some listed and the
+/// session at its prompt, `Stop` held the turn and the end is ignored (the caller reads nothing
+/// else of the event), whether or not a turn is open and however long the turn has been quiet; with
+/// none, it is read as before.
+#[tokio::test]
+async fn a_backstop_turn_end_is_ignored_while_background_work_is_listed() {
+    let interpreter = crate::adapter::provider(AgentId::GROK).hooks();
+    let backstop = serde_json::json!({"notificationType": "idle_prompt"});
+    let read = |state: &Arc<AppState>| {
+        read_turn_boundary(state, "s", interpreter, "Notification", &backstop)
+    };
+
+    // A turn open and held on work.
+    let (state, _dir, _live) = grok_session("server-grok-backstop-held", SessionStatus::Idle);
+    apply_hook(&state, "s", br#"{"hookEventName": "UserPromptSubmit"}"#);
+    apply_hook(&state, "s", GROK_STOP_WITH_WORK.as_bytes());
+    state.quiet_past_backstop("s");
+    assert!(!read(&state));
+    assert!(state.turn_is_open("s"));
+
+    // The work listed and no turn open: still nothing to read in it.
+    let (state, _dir, _live) = grok_session("server-grok-backstop-no-turn", SessionStatus::Idle);
+    apply_hook(&state, "s", GROK_STOP_WITH_WORK.as_bytes());
+    assert_eq!(status_of(&state), SessionStatus::Idle);
+    assert!(!state.turn_is_open("s"));
+    assert!(!read(&state));
+
+    // With nothing listed, the backstop of a session with no turn open is believed, as before.
+    let (state, _dir, _live) = grok_session("server-grok-backstop-free", SessionStatus::Idle);
+    assert!(read(&state));
+}
+
+/// The quiet gate is what keeps a backstop from closing a turn that is still producing events; a
+/// turn held on listed work has gone quiet past it, and the backstop still must not close it. The
+/// control is the same turn with nothing listed, which the backstop does close: a closed turn is
+/// the one that owes a report (`TurnClose::OwesReport`), and a turn left open owes none.
+#[tokio::test]
+async fn an_idle_prompt_after_the_quiet_gate_closes_a_turn_only_when_no_work_is_listed() {
+    let prompt = br#"{"hookEventName": "UserPromptSubmit", "prompt": "go"}"#;
+
+    // Held on work: the idle prompt arrives long after the `Stop`, and leaves everything as it was.
+    let (state, _dir, _live) = grok_session("server-grok-aged-backstop-held", SessionStatus::Idle);
+    apply_hook(&state, "s", prompt);
+    apply_hook(&state, "s", GROK_STOP_WITH_WORK.as_bytes());
+    let ends = state.turn_ends("s");
+    state.quiet_past_backstop("s");
+    apply_hook(&state, "s", GROK_IDLE_PROMPT);
+    assert!(
+        state.turn_is_open("s"),
+        "the turn is still held on its work"
+    );
+    assert_eq!(state.turn_ends("s"), ends);
+    assert_eq!(listed_task_ids(&state), ["sh1", "sub1"]);
+    assert_eq!(status_of(&state), SessionStatus::Idle);
+    // Its own end is still reportable: nothing closed it in between.
+    assert_eq!(state.close_turn("s", false), TurnClose::OwesReport);
+
+    // Control: a turn left open with nothing listed, as long quiet, is closed by the same event.
+    let (state, _dir, _live) = grok_session("server-grok-aged-backstop-free", SessionStatus::Idle);
+    apply_hook(&state, "s", prompt);
+    assert!(state.turn_is_open("s"));
+    let ends = state.turn_ends("s");
+    state.quiet_past_backstop("s");
+    apply_hook(&state, "s", GROK_IDLE_PROMPT);
+    assert!(!state.turn_is_open("s"), "the backstop closes a quiet turn");
+    assert_eq!(state.turn_ends("s"), ends + 1);
+    assert_eq!(status_of(&state), SessionStatus::Idle);
+}
+
+/// A prompt typed while the work is still listed joins the held turn, and when that turn reports
+/// no `Stop` of its own the backstop is its only end: the session reads as working, not at its
+/// prompt, so the listed work does not keep the backstop from closing the turn.
+#[tokio::test]
+async fn a_backstop_still_closes_a_turn_a_later_prompt_joined_while_work_is_listed() {
+    let (state, _dir, _live) = grok_session("server-grok-backstop-joined", SessionStatus::Idle);
+    apply_hook(
+        &state,
+        "s",
+        br#"{"hookEventName": "UserPromptSubmit", "prompt": "go"}"#,
+    );
+    apply_hook(&state, "s", GROK_STOP_WITH_WORK.as_bytes());
+    assert_eq!(status_of(&state), SessionStatus::Idle);
+    apply_hook(
+        &state,
+        "s",
+        br#"{"hookEventName": "UserPromptSubmit", "prompt": "and one more thing"}"#,
+    );
+    assert_eq!(status_of(&state), SessionStatus::Working);
+    assert!(state.turn_is_open("s"));
+    assert!(!state.background_tasks_of("s").is_empty());
+
+    let ends = state.turn_ends("s");
+    state.quiet_past_backstop("s");
+    apply_hook(&state, "s", GROK_IDLE_PROMPT);
+    assert!(!state.turn_is_open("s"), "the backstop closes the turn");
+    assert_eq!(state.turn_ends("s"), ends + 1);
+    assert_eq!(status_of(&state), SessionStatus::Idle);
+}
+
+/// Grok Build 1.0.77's hook events of a turn that started a shell command and a subagent and
+/// ended, the work finishing one piece at a time (see `testdata/grok-hook-captures.md`).
+const GROK_BACKGROUND_WORK_TURNS: &str =
+    include_str!("../../../testdata/grok_hooks_background_work_turns.jsonl");
+
+/// Replayed as captured: each per-turn `Stop` leaves the session idle with the work it lists, each
+/// completion prompt wakes it, the subagent's own events change nothing, and the last `Stop` lists
+/// nothing, which ends the turn with the list empty. The teardown `Stop` leaves that as it is.
+#[tokio::test]
+async fn a_captured_grok_run_with_background_work_lists_what_each_stop_says() {
+    let (state, _dir, _live) = grok_session("server-grok-captured-work", SessionStatus::Idle);
+    // The ids each of the session's own `Stop`s lists, in the order the capture has them.
+    let mut stops = vec![
+        vec![
+            "ba739e73-d2e1-47cd-9e3c-b15e09208d66",
+            "01a1d55a-d394-78a3-b398-801cdc722351",
+        ],
+        vec!["01a1d55a-d394-78a3-b398-801cdc722351"],
+        vec![],
+    ]
+    .into_iter();
+    let mut stops_seen = 0;
+    for line in GROK_BACKGROUND_WORK_TURNS.lines() {
+        let payload: serde_json::Value = serde_json::from_str(line).unwrap();
+        let own = payload.get("subagentType").is_none();
+        apply_hook(&state, "s", line.as_bytes());
+        match payload["hook_event_name"].as_str().unwrap() {
+            "UserPromptSubmit" if own => {
+                assert_eq!(status_of(&state), SessionStatus::Working, "{line}");
+            }
+            "Stop" if payload["reason"] == "end_turn" => {
+                stops_seen += 1;
+                assert_eq!(status_of(&state), SessionStatus::Idle, "{line}");
+                assert_eq!(listed_task_ids(&state), stops.next().unwrap(), "{line}");
+                let held = !state.background_tasks_of("s").is_empty();
+                assert_eq!(state.turn_is_open("s"), held, "{line}");
+            }
+            "SubagentStart" | "SubagentStop" | "UserPromptSubmit" | "Stop" => {}
+            other => panic!("unexpected event {other}"),
+        }
+    }
+    assert_eq!(stops_seen, 3);
+    assert_eq!(status_of(&state), SessionStatus::Idle);
+    assert!(state.background_tasks_of("s").is_empty());
+    assert!(!state.turn_is_open("s"));
+    assert_eq!(state.completion_notices("s"), 2);
+}
+
 /// A helper agent's tool events carry an `agent_id` and no `agent_type`: they are not the
 /// session's work, so an idle session stays idle.
 #[tokio::test]

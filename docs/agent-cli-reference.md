@@ -832,6 +832,20 @@ usable provenance — `GROK_SESSION_ID` and `GROK_WORKSPACE_ROOT`.
 **The per-turn `Stop` carries `promptId`, `lastAssistantMessage`, `backgroundTasks` and `sessionCrons`**, and the
 teardown fire carries none of them, so the two are distinguishable by payload shape as well as by `reason`.
 
+**`backgroundTasks` lists the work the turn left running, and each finished piece wakes the session** (1.0.77, measured
+on 2026-11-13 with a headless `grok -p` run against the live model; the capture is
+`apps/daemon/testdata/grok_hooks_background_work_turns.jsonl`). An entry has camelCase keys only: `id`, `type` (`shell`,
+`monitor` or `subagent`), `status` (`"running"`), and `command` for a shell command or `description` and `agentType`
+for a subagent; the list is `[]` when nothing runs. With a background `sleep 20` and a background subagent started in
+one turn, that turn's `Stop` listed both; the shell command's completion then started a turn of its own with a
+`UserPromptSubmit` whose prompt was `<system-reminder>` + `Background task "<id>" completed (exit code: 0).` and more
+lines, and that turn's `Stop` listed only the subagent; the subagent's completion started another, whose prompt was
+`<system-reminder>` + `While you were idle, 1 background subagent completed:` with a `=== Task <id> ===` block, and
+that turn's `Stop` listed nothing. The subagent's own `SubagentStart`, `UserPromptSubmit` and `SubagentStop` carry
+`subagentType`; its `SubagentStop` came between the two wakes. The Grok user guide ("Hooks", "Stop Decision Control")
+documents the same shape. Not measured: whether a monitor's events, or Grok with `features.auto_wake` off (the guide
+says an idle-drain notification turn runs instead), wake the session the same way.
+
 **Events whose payload a mapping has to know:**
 
 - `Stop` — fires **twice** per session: once per turn with `reason: "end_turn"` and again at teardown with

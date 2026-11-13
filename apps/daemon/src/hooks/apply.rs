@@ -303,21 +303,29 @@ fn read_turn_boundary(
         start_own_queue(state, session_id);
         return true;
     }
+    let status = || {
+        state
+            .store
+            .get_session(session_id)
+            .ok()
+            .flatten()
+            .map(|session| state.agent_status(&session))
+    };
     match interpreter.turn_end(event, payload) {
         // A session with its hand up has not finished its turn — it is waiting for a person (the
         // agent's own hand: a session request's hand says nothing of its turn). Grok's
         // clock-attributed end would otherwise lower the hand and report "it said nothing" for any
         // prompt left unanswered longer than the backstop delay.
+        Some(turn) if turn.backstop && status() == Some(SessionStatus::WaitingUser) => false,
+        // A turn held on work still running is not over: Grok's `Stop` that listed the work left
+        // it open at the prompt, and the `idle_prompt` it arms a minute later would otherwise close
+        // it as if it had ended there, with nothing to show for it. The work's completion wakes a
+        // turn of the agent's own, whose `Stop` closes it. Only while the session sits at its
+        // prompt: a turn running since then that reports no `Stop` has the backstop as its only end.
         Some(turn)
             if turn.backstop
-                && state
-                    .store
-                    .get_session(session_id)
-                    .ok()
-                    .flatten()
-                    .is_some_and(|session| {
-                        state.agent_status(&session) == SessionStatus::WaitingUser
-                    }) =>
+                && status() == Some(SessionStatus::Idle)
+                && !state.background_tasks_of(session_id).is_empty() =>
         {
             false
         }

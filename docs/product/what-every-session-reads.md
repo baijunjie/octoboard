@@ -351,8 +351,9 @@ relationship. Console sessions read `coordinator`; project sessions use the role
 Session records sent to windows carry `role` too, always, and name the parent `bound_to`. A project session's role
 cannot be inferred from a non-null parent alone, since a coordinator can also have a parent: it is read from `role`.
 
-Each record also carries `background_tasks`: for a Claude Code session working in background, the work it left running,
-each entry with `id` and, where Claude Code gives them, `type` and `description`; an empty list for every other session.
+Each record also carries `background_tasks`: for a Claude Code or Grok Build session working in background, the work it
+left running, each entry with `id` and, where the agent gives them, `type` and `description`; an empty list for every
+other session.
 Such a session's `status` is `idle`: it takes a message like any other session at its prompt, but its work is not over
 (see "Working in background" in `docs/product/session-statuses.md`).
 

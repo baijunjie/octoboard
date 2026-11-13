@@ -10,7 +10,7 @@
 | Done | `idle`, with `has_conversation` true | a green circle with a check mark | The process is running and sitting at its prompt with nothing left running in the background and no delegated work in progress, and the session has a conversation. See "Done, awaiting instructions and child sessions working" below. |
 | Awaiting instructions | `idle`, with `has_conversation` false | a green speech bubble | The process is running and sitting at its prompt, and the session has never had a conversation: it waits for its first instruction. |
 | Child sessions working | `idle`, while a session under it is starting, working, waiting for the user, dormant or has work left running in the background | a hollow green ring with a filled green dot in its centre, pinging outward | The process is sitting at its prompt with nothing of its own left running, while work it delegated is in progress in the sessions under it. See "Done, awaiting instructions and child sessions working" below. |
-| Working in background | `idle`, with a non-empty `background_tasks` | a hollow green ring, pinging outward | The process is sitting at its prompt, but its last turn ended with work still running in the background. Claude Code sessions only; see "Working in background" below. |
+| Working in background | `idle`, with a non-empty `background_tasks` | a hollow green ring, pinging outward | The process is sitting at its prompt, but its last turn ended with work still running in the background. Claude Code and Grok Build sessions only; see "Working in background" below. |
 | Switching account | any status except `archived`, with `switching_account` true, or queued in this window's account switch | the *starting* arc | An account switch holds the session, or, in the window that confirmed the switch, the session waits for its turn in it (see "While a session is switching" in `docs/product/switching-session-accounts.md`). Shown in place of the session's own status, which it does not change; lists ranked by status sort it by the status it will have once the switch is over (see "The status order" in `docs/product/order-of-projects-and-sessions.md`). |
 | Reconnecting | `starting`, `working`, `waiting_user`, `dormant` or `idle`, with `holder_link` `pending` | the *starting* arc | The session's process still runs but Octoboard cannot reach it for now, and retries by itself (see "A holder that cannot be connected to" in `docs/product/process-holders.md`). Worked out by the client alone and shown in place of the session's own status and of *switching account*; the stored status, which may be out of date until the process is reached again, is unchanged, and lists ranked by status sort the session by it. |
 | Interrupted | `interrupted` | a grey pause sign, with no circle | No process is running, and it did not end by being archived. The session stays in its project's list (a console session, in the console sessions section) and can be resumed. |
@@ -36,8 +36,8 @@ A session shows the first of these that applies:
 2. *Switching account*, while an account switch holds it, over every status but *archived*.
 3. Its wire status, when that is not `idle` — *dormant* included, which the daemon works out (see "Dormant" below).
 4. *Paused*, while `paused` is true.
-5. *Working in background*, while it has work left running in the background (Claude Code only; for the other agents
-   this step never applies).
+5. *Working in background*, while it has work left running in the background (Claude Code and Grok Build only; for the
+   other agents this step never applies).
 6. *Child sessions working*, while a session under it is starting, working, waiting for the user, dormant or has work
    left running in the background.
 7. *Done*, when it has a conversation.
@@ -185,7 +185,7 @@ limitations of what the agents expose rather than of this one:
 - A question the agent asks through **its own ask-the-user tool** is reported by Claude Code and Grok Build but not by
   Codex, which has no such event; a Codex session asking that way reads as *working* unless its terminal title signals
   `Action Required`.
-- For status reporting, work left running in the background is followed for **Claude Code only**. A Grok Build or Codex
+- For status reporting, work left running in the background is followed for **Claude Code and Grok Build only**. A Codex
   session whose turn ends with work still running reads as *done* (or another status at its prompt), never *working in
   background*.
   Process cleanup follows every agent's launches separately (see "Automatic stopping and its boundaries" in
@@ -200,14 +200,15 @@ owner, no report is synthesized for that turn. Whether Grok produces that sequen
 
 ## Working in background
 
-A Claude Code turn can end while work it started is still running in the background — a shell command sent there (by the
-user, or by Claude Code when it runs past the tool's time limit), a Monitor, an MCP tool call still waiting, or a
-background agent. Claude Code lists that work as the turn ends, and as its background subagents start and stop between
-turns, and the session then reads as *working in background* instead of *done* or any other status at its prompt
-until none of it is left. On the wire it is still `idle`; what sets it apart is the session's `background_tasks`, one entry per piece of
-work: `id`, and `type` and `description` where Claude Code gives them.
+A Claude Code or Grok Build turn can end while work it started is still running in the background. The agent lists that
+work, and the session then reads as *working in background* instead of *done* or any other status at its prompt until
+none of it is left. On the wire it is still `idle`; what sets it apart is the session's `background_tasks`, one entry
+per piece of work: `id`, and `type` and `description` where the agent gives them. When and how the agent lists the work
+differs between the two agents.
 
-**How the list is kept:**
+**How Claude Code's list is kept.** The work is a shell command sent to the background (by the user, or by Claude Code
+when it runs past the tool's time limit), a Monitor, an MCP tool call still waiting, or a background agent. Claude Code
+lists it as the turn ends, and as its background subagents start and stop between turns:
 
 - Every turn end Claude Code reports carries the complete list of what is still running, and replaces the one before; a
   turn end listing nothing empties it. A turn that ends in an error empties it too.
@@ -229,12 +230,38 @@ work: `id`, and `type` and `description` where Claude Code gives them.
 - A subagent stop that would leave nothing running takes effect only after about **2 seconds**, so one subagent handing
   over to the next does not make the session flash to another status at its prompt in between; a turn end, a subagent
   starting, or another subagent stop within that time decides the list instead.
+- Clearing the conversation with `/clear` does not end work running in the background (measured on Claude Code 2.1.303),
+  so the session keeps reading as *working in background*.
+
+**How Grok Build's list is kept** (measured on Grok Build 1.0.77). The work is a shell command sent to the background, a
+monitor, or a background subagent; its `type` is `shell`, `monitor` or `subagent` as Grok Build gives it, and its
+`description` is the description Grok Build gives the work, or, for a shell command, which has none, its command line.
+Grok Build lists it only as the session's own turns end:
+
+- Every turn end carries the complete list of what is still running, and replaces the one before; a turn end listing
+  nothing empties it. A turn that ends in an error empties it too. The turn end Grok Build reports as the session shuts
+  down changes nothing.
+- When a background shell command or subagent finishes, Grok Build wakes the session for a turn of its own, started by
+  a **completion notice**, and the session reads as *working* for that turn as for any other. A completion notice is a
+  prompt wrapped in `<system-reminder>`: `Background task "<id>" completed (…)` for a shell command, and `While you were
+  idle, N background subagent(s) completed:` followed by a `=== Task <id> ===` block for each subagent. The work it
+  names leaves the list at once, and that turn's end lists what is left. It counts as a prompt Grok Build sent itself,
+  not one sent from its input box.
+- A subagent's own starts and stops are not read: between the session's turns the list changes only by a completion
+  notice.
+- A turn whose end lists work still running is held on that work, not over. Grok Build's turn-end backstop (see its
+  attribution under "What the statuses are derived from" above) is ignored while the session is at its prompt with work
+  listed, so it does not end that turn either. Once the session is *working* again, on a completion notice or any other
+  prompt, a turn that reports no end of its own is ended by the backstop as any other is.
+
+**On either agent:**
+
 - The list survives Octoboard's own restart, planned or after a crash, while the session's process keeps running in
   its process holder: it is written to disk whenever it changes (see `~/.octoboard/background-tasks.json` under
   `docs/product/files-octoboard-owns.md`), and a session Octoboard takes over again after the restart gets it back when
-  the process taken over is the one that left that work, so it keeps reading as *working in background* until Claude
-  Code reports again. What Claude Code reported while Octoboard was down is applied on top of
-  it. A subagent stop still waiting out the 2 seconds above when Octoboard went down counts as having emptied the list.
+  the process taken over is the one that left that work, so it keeps reading as *working in background* until its
+  agent reports again. What the agent reported while Octoboard was down is applied on top of it. A Claude Code subagent
+  stop still waiting out the 2 seconds above when Octoboard went down counts as having emptied the list.
 - When the process taken over is another one than the process that left the saved list, the saved list is dropped,
   together with the subagent starts, stops and finished-work notices reported on top of it, which say nothing of what
   the earlier process left; a turn end reported meanwhile, which lists everything still running, stands. A session kept
@@ -245,11 +272,9 @@ work: `id`, and `type` and `description` where Claude Code gives them.
   change of model or switches, or handed off. The launch's background work is stopped except for processes the user
   kept, under "Automatic stopping and its boundaries" in `docs/product/background-processes.md`. A session resumed or
   restarted on its conversation starts with no list: Claude Code does not start stopped background agents again when it
-  resumes a conversation, and one the agent itself starts again in the new process is listed by that turn's end.
+  resumes a conversation, and work the agent itself starts again in the new process is listed by that turn's end.
 - It is given only while the session is at its prompt: in any other status the session shows that status and no list,
   and what was last listed shows again if it comes back to its prompt without a new turn end.
-- Clearing the conversation with `/clear` does not end work running in the background (measured on Claude Code 2.1.303),
-  so the session keeps reading as *working in background*.
 
 **In every other respect it is like any other session at its prompt.** It takes a message straight away (see "Messages held
 until a session can take them" in `docs/product/message-delivery.md`), and it can be handed off (see "What can be handed

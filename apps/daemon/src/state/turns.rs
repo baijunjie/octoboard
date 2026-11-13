@@ -183,6 +183,16 @@ impl AppState {
             .is_some_and(|turn| turn.echo_pending)
     }
 
+    /// Makes the session's turn look quiet for longer than a clock-attributed end has to wait
+    /// (`BACKSTOP_QUIET`), as it would a minute after its last event: the gate reads the wall clock,
+    /// which a test cannot move.
+    #[cfg(test)]
+    pub fn quiet_past_backstop(&self, id: &str) {
+        if let Some(turn) = self.turns.lock().expect("turn lock poisoned").get_mut(id) {
+            turn.last_event_at = now_millis() - BACKSTOP_QUIET.as_millis() as i64 - 1;
+        }
+    }
+
     /// Notes the turn id an event of the session's own carried (`hooks::turn_key`).
     pub fn note_turn_key(&self, id: &str, key: String) {
         self.turns

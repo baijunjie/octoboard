@@ -104,7 +104,7 @@ pub trait HookInterpreter: Send + Sync {
     ///
     /// Distinct from [`Self::status`] on purpose: several events put a session back to `idle`
     /// without a turn having ended (a `SessionStart`, a cancelled turn), and several turn ends are
-    /// not reportable (a Claude Code `Stop` that is only held on background work). Reading one from
+    /// not reportable (a `Stop` that is only held on background work). Reading one from
     /// the other would make a phantom report out of each.
     fn turn_end(&self, _event: &str, _payload: &Value) -> Option<TurnEnd> {
         None
@@ -309,7 +309,7 @@ pub enum TurnOutcome {
     /// Cancelled (Codex's `Interrupt`, Grok's `StopCancelled`), or failed (Claude Code's and
     /// Grok's `StopFailure`).
     Abnormal,
-    /// An ordinary stop at the prompt, including a Claude Code `Stop` that leaves background
+    /// An ordinary stop at the prompt, including a `Stop` that leaves background
     /// tasks running, and a Claude Code `SessionStart` that begins a fresh conversation.
     Normal,
 }

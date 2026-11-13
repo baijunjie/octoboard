@@ -3,8 +3,15 @@
 //! `Stop` fires twice per session — once per turn with `reason: "end_turn"` and again at teardown
 //! with `reason: "shutdown"` — so an unfiltered mapping ends every session with a phantom finished
 //! turn. Payload keys exist in both camelCase and snake_case. Only a named subagent's `agent_type`
-//! marks a subagent's payload (the default). Its `Stop` also carries a `backgroundTasks`, but
-//! nothing records how it is shaped or whether the work outlives the turn, so it is not read.
+//! marks a subagent's payload (the default).
+//!
+//! The per-turn `Stop` also lists the work the turn left running, in `backgroundTasks` (Grok Build
+//! 1.0.77 user guide, "Hooks", "Stop Decision Control"): a shell command, a monitor or a subagent,
+//! each with an `id`, a `type` and a `status`, and camelCase keys only. Each piece that finishes
+//! wakes the session for a turn of its own, whose prompt is a completion notice naming the work,
+//! and that turn's `Stop` lists what is left; so every `Stop` replaces the list, and the session's
+//! own `SubagentStart` and `SubagentStop` are not needed to keep it. A `Stop` that lists work is
+//! the turn held on it, not finished. Its `idle_prompt` still follows about a minute later.
 //!
 //! A post event says only that its own call ended, and one response's calls run side by side
 //! (1.0.77): each call fires `PreToolUse` and gets its permission decision in turn, and then they
@@ -20,9 +27,10 @@
 use serde_json::Value;
 
 use crate::hooks::{
-    text_field, CallShape, HookInterpreter, RecordWatch, ToolCallChange, TurnEnd, TurnOutcome,
+    text_field, BackgroundTasksChange, CallShape, HookInterpreter, RecordWatch, ToolCallChange,
+    TurnEnd, TurnOutcome,
 };
-use crate::protocol::{AgentId, SessionStatus};
+use crate::protocol::{AgentId, BackgroundTask, SessionStatus};
 
 pub(super) struct GrokHooks;
 
@@ -70,6 +78,14 @@ impl HookInterpreter for GrokHooks {
 
     // The default `submitted_prompt`: Grok Build (1.0.70) supplies the pasted text verbatim.
 
+    /// A background task's or subagent's completion, which Grok Build (1.0.77) reports to the
+    /// session as a prompt of its own wrapped in `<system-reminder>`: `Background task "<id>"
+    /// completed (…)` for a shell command (measured on a zero exit), and `While you were idle, N
+    /// background subagent(s) completed:` followed by a `=== Task <id> ===` block for each.
+    fn is_completion_notice(&self, prompt: &str) -> bool {
+        !completion_notice_ids(prompt).is_empty()
+    }
+
     fn turn_cancelled(&self, event: &str) -> bool {
         event == "StopCancelled"
     }
@@ -86,8 +102,10 @@ impl HookInterpreter for GrokHooks {
 
     fn turn_end(&self, event: &str, payload: &Value) -> Option<TurnEnd> {
         match event {
-            // The teardown fire is the session going away, not a turn ending.
-            "Stop" if is_shutdown(payload) => None,
+            // The teardown fire is the session going away, not a turn ending. One that lists work
+            // still running holds the turn on it, so synthesising here would report an unfinished
+            // turn as a result.
+            "Stop" if is_shutdown(payload) || !background_tasks(payload).is_empty() => None,
             "Stop" => Some(TurnEnd {
                 last_assistant_message: last_assistant_message(payload),
                 failed: false,
@@ -106,6 +124,29 @@ impl HookInterpreter for GrokHooks {
                 failed: false,
                 backstop: true,
             }),
+            _ => None,
+        }
+    }
+
+    /// Only the session's own events: a subagent's `Stop` fires as `SubagentStop` and lists
+    /// nothing, and the session's next `Stop` lists the subagent while it runs.
+    fn background_tasks_change(
+        &self,
+        event: &str,
+        payload: &Value,
+    ) -> Option<BackgroundTasksChange> {
+        if self.is_subagent(payload) {
+            return None;
+        }
+        match event {
+            // The teardown fire lists nothing; the process ending clears the list.
+            "Stop" if is_shutdown(payload) => None,
+            "Stop" => Some(BackgroundTasksChange::Replace(background_tasks(payload))),
+            "StopFailure" => Some(BackgroundTasksChange::Replace(Vec::new())),
+            "UserPromptSubmit" => {
+                let ids = completion_notice_ids(self.submitted_prompt(payload)?);
+                (!ids.is_empty()).then_some(BackgroundTasksChange::Finished(ids))
+            }
             _ => None,
         }
     }
@@ -174,6 +215,49 @@ impl HookInterpreter for GrokHooks {
             turn_id: None,
         })
     }
+}
+
+/// The work a `Stop` lists as still running; an entry without an id is not one. A shell command
+/// carries no `description`, so its `command` describes it.
+fn background_tasks(payload: &Value) -> Vec<BackgroundTask> {
+    payload
+        .get("backgroundTasks")
+        .and_then(Value::as_array)
+        .map(|tasks| tasks.iter().filter_map(background_task).collect())
+        .unwrap_or_default()
+}
+
+fn background_task(entry: &Value) -> Option<BackgroundTask> {
+    Some(BackgroundTask {
+        id: text_field(entry, "id")?,
+        kind: text_field(entry, "type"),
+        description: text_field(entry, "description").or_else(|| text_field(entry, "command")),
+    })
+}
+
+/// The ids a completion notice names as finished: a shell command's `Background task "<id>"
+/// completed`, and each subagent's `=== Task <id> ===`. None for a prompt that is no completion
+/// notice, which opens with something other than `<system-reminder>`.
+fn completion_notice_ids(prompt: &str) -> Vec<String> {
+    if !prompt.starts_with("<system-reminder>") {
+        return Vec::new();
+    }
+    let tasks = prompt
+        .split("Background task \"")
+        .skip(1)
+        .filter_map(|rest| rest.split_once("\" completed"))
+        .map(|(id, _)| id);
+    let subagents = prompt
+        .split("=== Task ")
+        .skip(1)
+        .filter_map(|rest| rest.split_once(" ==="))
+        .map(|(id, _)| id);
+    tasks
+        .chain(subagents)
+        .map(str::trim)
+        .filter(|id| !id.is_empty() && !id.contains(char::is_whitespace))
+        .map(str::to_string)
+        .collect()
 }
 
 fn is_shutdown(payload: &Value) -> bool {
