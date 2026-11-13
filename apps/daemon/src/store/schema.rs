@@ -1506,8 +1506,11 @@ mod tests {
         assert_eq!(path.metadata().unwrap().modified().unwrap(), modified);
         // The store goes on working.
         store
-            .insert_console(&console(None, None, None))
-            .expect("console again");
+            .insert_console(&crate::protocol::Console {
+                id: "console-2".to_string(),
+                ..console(None, None, None)
+            })
+            .expect("another console");
     }
 
     #[test]

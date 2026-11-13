@@ -1036,10 +1036,8 @@ mod tests {
         let dir = ScratchDir::new("owner-record-succession-order");
         let path = dir.join("daemon.owner");
         let cases = [
-            (
-                "10:123456 7531 after=9:77 unit=u.service alone",
-                Some(false),
-            ),
+            // `alone` counts only as the third token, as every build reads it.
+            ("10:123456 7531 after=9:77 unit=u.service alone", None),
             (
                 "10:123456 7531 alone after=9:77 service unit=u.service",
                 Some(false),

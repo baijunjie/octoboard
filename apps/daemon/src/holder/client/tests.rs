@@ -16,7 +16,9 @@ use crate::platform::proc::Containment;
 use crate::platform::term::Command;
 #[cfg(target_os = "linux")]
 use crate::test_support::cgroups::ChildCgroup;
-use crate::test_support::{code_of, ScratchDir, PATIENCE};
+#[cfg(unix)]
+use crate::test_support::code_of;
+use crate::test_support::{ScratchDir, PATIENCE};
 
 /// What the scripted holder does once it has been asked to start a program.
 #[derive(Clone, Copy)]
@@ -2008,6 +2010,16 @@ fn sleeping_spec() -> SpawnSpec {
     sleeping
 }
 
+/// A sleeping terminal's spec under another id, for a second terminal while the first runs: a
+/// holder refuses a terminal of an id it already spawned.
+#[cfg(unix)]
+fn second_sleeping_spec() -> SpawnSpec {
+    SpawnSpec {
+        id: "t2".to_string(),
+        ..sleeping_spec()
+    }
+}
+
 /// A restart is claimed only where no holder in the daemon's service runs a program, and a claim
 /// refused changes nothing: a program is still admitted after it.
 #[cfg(unix)]
@@ -2033,7 +2045,7 @@ fn a_restart_claim_is_refused_while_a_holder_in_the_daemons_service_runs_a_progr
         "a refused claim was kept"
     );
     let second = holders
-        .spawn(sleeping_spec())
+        .spawn(second_sleeping_spec())
         .expect("a program is admitted after a refused claim");
 
     for terminal in [terminal, second] {
@@ -2199,7 +2211,7 @@ fn a_restart_claim_leaves_holders_outside_the_daemons_service_alone() {
             .claim_planned_stop()
             .unwrap_or_else(|| panic!("a holder started as {placement:?} was counted"));
         let second = holders
-            .spawn(sleeping_spec())
+            .spawn(second_sleeping_spec())
             .expect("a holder started outside the service admits a program after the claim");
         for terminal in [first, second] {
             terminal.end();

@@ -986,7 +986,7 @@ impl Holders {
     /// of this daemon, so that the service's stop would end what they run. A linked holder with
     /// nothing to run does not count, nor does one that is lost or whose start failed, which are
     /// forgotten.
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub(super) fn any_in_daemon_service(&self) -> bool {
         locked(&self.shared.in_service).runs_programs()
     }

@@ -1452,9 +1452,12 @@ fn newer_host() -> Arc<Host> {
     Host::serving(&manifest_text(VERSION, "99.0.0", &sha256_of(ARCHIVE)))
 }
 
+/// Waits until `done` holds and no check or download holds the claim. A check or download records
+/// what it came to before it lets go of its claim, so a test that went on as soon as the record
+/// shows would race that release: a check or an install it then begins would be refused as running.
 async fn until(state: &AppState, done: impl Fn(&DaemonUpdates) -> bool) {
     let deadline = std::time::Instant::now() + PATIENCE;
-    while !done(&state.daemon_update) {
+    while !(done(&state.daemon_update) && state.daemon_update.lock().working.is_none()) {
         assert!(
             std::time::Instant::now() < deadline,
             "the update did not get there"
@@ -4062,7 +4065,7 @@ mod starting_with_a_fallback {
             |handed| {
                 calls.push(Call {
                     handed: handed.is_some(),
-                    port_free: std::net::TcpListener::bind(("127.0.0.1", port)).is_ok(),
+                    port_free: port_free(port, handed.is_none()),
                 });
                 outcomes
                     .next()
@@ -4074,6 +4077,23 @@ mod starting_with_a_fallback {
             },
         );
         (started, calls, asked)
+    }
+
+    /// Whether the port can be bound, asked again within `PATIENCE` while it cannot when
+    /// `let_go`, for a start handed no listener: a child another test spawns shares this
+    /// process's sockets until it execs, so a port the listener let go can stay held for a moment
+    /// under the suite's load. A start handed the listener is asked once, as the listener holds it.
+    fn port_free(port: u16, let_go: bool) -> bool {
+        let deadline = std::time::Instant::now() + crate::test_support::PATIENCE;
+        loop {
+            if std::net::TcpListener::bind(("127.0.0.1", port)).is_ok() {
+                return true;
+            }
+            if !let_go || std::time::Instant::now() >= deadline {
+                return false;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
     }
 
     #[cfg(unix)]

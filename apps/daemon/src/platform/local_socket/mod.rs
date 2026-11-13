@@ -65,5 +65,5 @@ pub fn check_private_tree(dir: &Path) -> io::Result<()> {
     imp::check_private_tree(dir)
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 pub(crate) use imp::test_api;

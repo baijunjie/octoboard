@@ -148,6 +148,9 @@ mod tests {
         let raw = kept.0 .0.try_clone().unwrap().into_raw_fd();
         // SAFETY: `raw` is a fresh duplicate this test owns.
         let adopted = std::net::TcpListener::from(unsafe { OwnedFd::from_raw_fd(raw) });
+        // The duplicate shares the runtime's non-blocking mode; waiting here is what shows the
+        // connection was queued rather than refused, however late the handshake completes.
+        adopted.set_nonblocking(false).unwrap();
         let (accepted, _) = adopted.accept().expect("the queued connection");
         assert_eq!(accepted.peer_addr().unwrap(), client.local_addr().unwrap());
         drop((adopted, kept));
@@ -259,6 +262,8 @@ mod tests {
         let flags = unsafe { libc::fcntl(own.as_raw_fd(), libc::F_GETFD) };
         assert_ne!(flags & libc::FD_CLOEXEC, 0);
         let client = std::net::TcpStream::connect(("127.0.0.1", port)).expect("queued");
+        // Shares the runtime listener's non-blocking mode; wait for the handshake to complete.
+        own.set_nonblocking(false).unwrap();
         let (accepted, _) = own.accept().expect("accepted on the listener of its own");
         assert_eq!(accepted.peer_addr().unwrap(), client.local_addr().unwrap());
     }

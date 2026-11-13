@@ -150,13 +150,12 @@ pub(crate) fn key_check_router() -> axum::Router {
     )
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
     use crate::test_support::{ScratchDir, PATIENCE};
 
     /// A data directory others can enter gets no socket, and nothing is created in it.
-    #[cfg(unix)]
     #[test]
     fn a_data_directory_others_can_enter_gets_no_socket() {
         use crate::platform::local_socket::test_api::set_mode;
@@ -175,7 +174,6 @@ mod tests {
     /// A private data directory gets a socket only its user may use. The temporary directory's
     /// own ancestors may let others in (a shared volume), which no test can change: there the
     /// refusal is checked instead.
-    #[cfg(unix)]
     #[tokio::test]
     async fn a_private_data_directory_gets_an_owner_only_socket() {
         use crate::platform::local_socket::test_api::{mode_of, set_mode};
@@ -198,7 +196,6 @@ mod tests {
 
     /// The key check over the socket tells an accepted key from a refused one, as the router
     /// answers them, through the same accept loop the daemon serves the browser with.
-    #[cfg(unix)]
     #[tokio::test]
     async fn the_key_check_goes_over_the_socket() {
         let dir = ScratchDir::new("bsock-check");
@@ -218,7 +215,6 @@ mod tests {
 
     /// A socket that answers a key check with anything but 204 or 401 cannot say whether the key is
     /// accepted: that is an error, not a refusal, and neither is a socket nobody listens on.
-    #[cfg(unix)]
     #[tokio::test]
     async fn a_socket_that_answers_otherwise_or_not_at_all_cannot_be_asked() {
         use axum::http::StatusCode;
@@ -251,7 +247,6 @@ mod tests {
     /// The daemon's own router, served on a real socket: the owner key, the launch key and no key
     /// are told apart; a WebSocket upgrade goes through; and a rotation ends the connection the
     /// owner key opened, while the one the launch key opened stays.
-    #[cfg(unix)]
     #[tokio::test]
     async fn the_browser_router_serves_the_owner_key_over_the_socket() {
         use futures_util::{SinkExt, StreamExt};
@@ -342,7 +337,6 @@ mod tests {
     }
 
     /// Dropping the task ends the accepting: nothing connects to the socket afterwards.
-    #[cfg(unix)]
     #[tokio::test]
     async fn dropping_the_serve_task_stops_the_accepting() {
         let dir = ScratchDir::new("bsock-drop");

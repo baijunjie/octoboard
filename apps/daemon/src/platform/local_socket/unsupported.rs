@@ -34,6 +34,3 @@ pub(super) fn connect(_path: &Path, _timeout: Duration) -> io::Result<BlockingSt
 pub(super) fn check_private_tree(_dir: &Path) -> io::Result<()> {
     Err(unsupported())
 }
-
-#[cfg(test)]
-pub(crate) mod test_api {}

@@ -445,6 +445,7 @@ mod tests {
             }
         }
 
+        #[cfg(unix)]
         fn also_on_beta(mut self) -> Self {
             self.on_beta = true;
             self
@@ -523,7 +524,34 @@ mod tests {
             self.run_on(task, host, DaemonUpdateChannel::Stable)
         }
 
+        /// [`Fixture::run`] on `channel`. A task refused because the update lock is held is run
+        /// again until it is not, within `PATIENCE`: the lock is an `flock`, held by the open file
+        /// description, and a child another test spawns shares it until that child execs, so a
+        /// lock the fixture's previous task let go can outlive it for a moment under the suite's
+        /// load. A refused task changes nothing. A test that holds the lock itself runs
+        /// [`Fixture::run_once`].
         fn run_on(
+            &self,
+            task: Task,
+            host: &Host,
+            channel: DaemonUpdateChannel,
+        ) -> (i32, String, String) {
+            let deadline = std::time::Instant::now() + crate::test_support::PATIENCE;
+            loop {
+                let ran = self.run_once(task, host, channel);
+                let (status, _, err) = &ran;
+                if *status != 1
+                    || !err.contains("under way already")
+                    || std::time::Instant::now() >= deadline
+                {
+                    return ran;
+                }
+                std::thread::sleep(Duration::from_millis(20));
+            }
+        }
+
+        /// Runs `task` against `host` on `channel` once, a refusal for a held lock included.
+        fn run_once(
             &self,
             task: Task,
             host: &Host,
@@ -674,7 +702,7 @@ mod tests {
         let _held = fs::try_lock_file(&fixture.files.lock()).unwrap();
         let host = Host::publishing("9.9.9", "0.0.0");
         for task in [Task::Install, Task::Rollback] {
-            let (status, out, err) = fixture.run(task, &host);
+            let (status, out, err) = fixture.run_once(task, &host, DaemonUpdateChannel::Stable);
             assert_eq!(status, 1);
             assert!(out.is_empty() && err.contains("under way already"), "{err}");
         }
@@ -831,7 +859,11 @@ mod tests {
         let (status, out, err) = fixture.run(Task::Rollback, &host);
         assert_eq!(status, 0, "{err}");
         assert!(
-            out.contains(&format!("back to octoboardd {}", env!("CARGO_PKG_VERSION"))),
+            out.contains(&format!(
+                "back to {} {}",
+                crate::APP_NAME,
+                env!("CARGO_PKG_VERSION")
+            )),
             "{out}"
         );
     }
@@ -921,8 +953,10 @@ mod tests {
                 .unwrap();
         }
         let (_, _, err) = fixture.run(Task::Rollback, &Host::publishing("9.9.9", "0.0.0"));
-        assert!(err.contains(&newer.display().to_string()), "{err}");
-        assert!(!err.contains(&older.display().to_string()), "{err}");
+        // The older copy's name is the start of the newer one's, so each is matched with the `;`
+        // that ends it in the message.
+        assert!(err.contains(&format!("{};", newer.display())), "{err}");
+        assert!(!err.contains(&format!("{};", older.display())), "{err}");
     }
 
     #[test]
