@@ -204,7 +204,8 @@ export function repositorySlug(repositoryUrl) {
 // the update archive, the Windows installer, or each Linux archive and its `.sha256`), and `updates`, the files the
 // manifest points to, each with the manifest keys it serves (`keys`) and the name its signature is published under
 // (`signature`). `publish-release.mjs` publishes under these names, and `releaseAssets` tells a release's assets apart
-// by them.
+// by them. The release workflow's `sign` and `publish` jobs list the same files by hand (what they sign and attest), so
+// a file added here is added there too.
 export function releaseLayout(platform, { productName, version }) {
   if (platform === "macos") {
     const archive = archiveName(productName, version);

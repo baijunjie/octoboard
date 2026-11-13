@@ -23,8 +23,10 @@ name: Release
 # `release-signing` environment (whose required reviewers approve each run's signing), and it installs nothing but the
 # Tauri CLI, pinned with its integrity in `.github/signer/package-lock.json` and installed without install scripts; it
 # runs no build and no workspace script. The repository must hold no secret of the key's name: one would stand in for
-# the environment's and be readable by any workflow. `publish` holds only the workflow's own token. Once the release is
-# published, `website` starts the website's deployment, which reads the new version's downloads from the manifests.
+# the environment's and be readable by any workflow. `publish` holds only the workflow's own token, with the rights to
+# attest the build provenance of what it publishes (`gh attestation verify`), which adds to the minisign signatures and
+# replaces none. Once the release is published, `website` starts the website's deployment, which reads the new
+# version's downloads from the manifests.
 on:
   push:
     tags:
@@ -641,14 +643,19 @@ jobs:
 
   # Publishes what the build jobs of the selected platforms uploaded, with the signatures `sign` made, once `sign` has
   # succeeded. The macOS tools that check the disk image are needed only with macOS in the release, so a publish without
-  # macOS runs on Linux. Nothing here is built, and the update key is not given to it.
+  # macOS runs on Linux. Nothing here is built, and the update key is not given to it. It attests the build provenance
+  # of the files it publishes too: here, because these are the exact bytes it uploads (the disk image reaches no other
+  # job), and not in `sign`, so that the job holding the update key gains no further right.
   publish:
     needs: [validate, sign]
     if: ${{ !cancelled() && needs.validate.result == 'success' && needs.sign.result == 'success' }}
     runs-on: ${{ contains(needs.validate.outputs.platforms, 'macos') && 'macos-26' || 'ubuntu-latest' }}
     timeout-minutes: 30
+    # `id-token` and `attestations` are for the provenance attestations alone.
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     env:
       PLATFORMS: ${{ needs.validate.outputs.platforms }}
     steps:
@@ -709,6 +716,49 @@ jobs:
           case ",$PLATFORMS," in
             *,linux,*) place "$RUNNER_TEMP"/linux/octoboardd_*.tar.gz ;;
           esac
+      # The publishing's own checks (versions, notarization, the signatures against the public key, the SHA-256 files),
+      # with nothing published yet, so that only files it accepts are attested.
+      - name: Check the release
+        run: |
+          set --
+          case ",$PLATFORMS," in
+            *,windows,*) set -- "$@" --windows-dir "$RUNNER_TEMP/windows" ;;
+          esac
+          case ",$PLATFORMS," in
+            *,linux,*) set -- "$@" --linux-dir "$RUNNER_TEMP/linux" ;;
+          esac
+          node apps/desktop/scripts/publish-release.mjs --notes-file "$RUNNER_TEMP/notes.md" --platforms "$PLATFORMS" "$@" --dry-run
+      # Each selected platform's files are listed with `ls`, so that a missing one fails here: the attestation itself
+      # fails only when no path matches at all. The list mirrors what `publish-release.mjs` uploads besides the `.sha256`
+      # and `.sig` files (`releaseLayout` in `release-manifest.mjs`). The attestation names each file by its SHA-256,
+      # which the published copy keeps whatever name it is published under.
+      - name: List the files to attest
+        id: subjects
+        run: |
+          {
+            echo "paths<<EOF"
+            case ",$PLATFORMS," in
+              *,macos,*) ls target/universal-apple-darwin/release/bundle/dmg/*.dmg target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz ;;
+            esac
+            case ",$PLATFORMS," in
+              *,windows,*) ls "$RUNNER_TEMP"/windows/*-setup.exe ;;
+            esac
+            case ",$PLATFORMS," in
+              *,linux,*) ls "$RUNNER_TEMP"/linux/octoboardd_*.tar.gz ;;
+            esac
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+      # A build provenance attestation of each file, signed through the workflow's OIDC identity (Sigstore's public
+      # instance, so it is logged publicly) and stored with the repository, so that anyone can check with
+      # `gh attestation verify <file> --repo <owner>/<repo>` that the file was made by a run of this workflow in this
+      # repository. The provenance names the run's ref: the tag for a tag push, but the branch it was started from for a
+      # run by hand. It adds to the minisign signatures, which the updaters and the install script check, and replaces
+      # nothing. Made before publishing, so that no file is published without one; an outage fails the job, which is
+      # re-run.
+      - name: Attest the build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ steps.subjects.outputs.paths }}
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}

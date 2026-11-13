@@ -30,6 +30,22 @@ platforms). For each architecture, `<arch>` being `x86_64` or `aarch64`, it hold
 - **`<archive>.sig`**, the archive's signature, made with the same update key, and in the same format, as the desktop
   application's updates (see "Downloading and installing" in `docs/product/in-app-updates.md`).
 
+**Build provenance attestation.** Each archive also has a GitHub build provenance attestation, made by the release
+workflow when it publishes the release, signed on Sigstore's public-good instance (so each one is logged publicly) and
+stored with the repository; it is not a file of the release. The release's macOS disk image and update archive and its
+Windows installer have one each too; the `.sha256` and `.sig` files and the manifests have none. With the GitHub CLI
+installed, a downloaded file is checked to have been built by the release workflow of this repository with:
+
+```sh
+gh attestation verify octoboardd_<version>_linux_<arch>.tar.gz --repo baijunjie/octoboard
+```
+
+The attestation identifies the file by its SHA-256, not by its name. The provenance names the tag `desktop-v<version>`
+for a release made by pushing its tag, but the branch the run was started from for a release, or a platform added to
+one, by a run by hand; so `--source-ref refs/tags/desktop-v<version>` holds only for the former. The attestation is an
+optional check in addition to the `.sha256` and the `.sig`, replacing neither: the install script and the daemon's
+self-update neither check nor require it. Releases published before attestations were introduced have none.
+
 **The Linux manifests.** Each release is also written to `beta-linux.json`, and to `stable-linux.json` as a release
 reaches a platform's stable manifest, on the `updater` release, beside the desktop application's manifests and by the
 same rules (see "Where updates come from" in `docs/product/in-app-updates.md`):

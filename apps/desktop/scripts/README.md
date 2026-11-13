@@ -430,8 +430,17 @@ The workflow:
    artifacts and `update-signatures` (the macOS tar is unpacked into `target/universal-apple-darwin/release`; both
    Linux artifacts are merged into one directory), places each signature beside its file and runs
    `node apps/desktop/scripts/publish-release.mjs --notes-file ... --platforms <selection>` with `--windows-dir` for
-   Windows and `--linux-dir` for Linux, which checks every signature against the public key before it publishes. It is the only job whose token may write (`contents: write`, for `gh`; every other job reads, and
-   checkouts keep no credential in `.git/config`) and has no update key. It installs nothing (the script uses Node's
+   Windows and `--linux-dir` for Linux, which checks every signature against the public key before it publishes. Before that
+   it attests the build provenance of the files it is about to upload: `Check the release` runs the same script with
+   `--dry-run`, so that only files its checks accept are attested; `List the files to attest` names, per selected
+   platform, the macOS disk image and update archive, the Windows installer and the Linux archives (not the `.sha256` and
+   `.sig` files or the manifests), with `ls`, so that a missing file fails; and `actions/attest-build-provenance`
+   (pinned by commit SHA) attests them before `Publish`, so that no file is published without one. It is the only job whose
+   token may write (`contents: write`, for `gh`; every other job reads, and
+   checkouts keep no credential in `.git/config`) and the only one holding `id-token: write` and `attestations: write`,
+   for the attestations alone; it has no update key. The attestations are made here, not in `sign`, because `publish`
+   holds exactly the bytes it uploads (the disk image reaches no other job) and the job holding the update key gains no
+   further right. It installs nothing of its own (the script uses Node's
    built-in modules only) and runs on
    `macos-26` when macOS is selected, whose tools check the disk image, and on `ubuntu-latest` otherwise.
 8. `website` runs after `publish`, in a job of its own that alone may start a workflow (`actions: write`): it runs
@@ -500,6 +509,15 @@ tag (`gh release delete desktop-v<version>`, without `--cleanup-tag`) and re-run
 build fails, `publish` does not run and nothing is published: fix the cause and re-run the failed jobs, or release the
 passing platforms alone by running the workflow by hand for them and the other one later. The script's own messages still
 describe the manual flow.
+
+The attestations add to the minisign signatures and replace nothing: the installer and the self-updater do not require
+them. They are signed through the workflow's OIDC identity on Sigstore's public-good instance, so each is logged
+publicly, and are stored with the repository. A file is checked with `gh attestation verify <file> --repo <owner>/<repo>`;
+the attestation identifies a file by its SHA-256, so the macOS archive published under a versioned name verifies the same.
+The provenance names the tag for a run started by a tag push but the branch it was dispatched from for a run by hand, so
+`--source-ref refs/tags/<tag>` holds only for the former. An outage of the attestation service fails `publish` before
+anything is published: re-run the failed job (the artifacts are kept); a re-run attests again, which leaves harmless
+duplicates.
 
 Every route above assumes the tag's commit still has the workflow files main has. GitHub refused the run's own token
 the release of 0.1.0-beta.3 (`HTTP 403: Resource not accessible by integration` from `gh release create`, a re-run
