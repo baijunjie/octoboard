@@ -191,6 +191,15 @@ asserting the refusal, return when it cannot happen: check `libc::geteuid() == 0
 or try the write and return if it succeeds (`apps/daemon/src/accounts/relocate/tests.rs`). A test that fails only when
 run as root is missing this early return; it is not a regression in the change being verified.
 
+## A test that returns early for want of a cgroup says so through `test_support::cgroups::skip`
+
+Applies to Linux daemon tests that need a cgroup v2 group the host may not let them make or use (making a group,
+changing its mode, moving a process into it). Before returning, call `test_support::cgroups::skip(reason)` (or take
+the group through `grouped_launch` / `ChildCgroup::new`, which do), not an `eprintln!("skipped: …")` of your own, even
+though older tests in `apps/daemon/src/processes/ledger/tests.rs` and `apps/daemon/src/platform/proc/` still do that:
+`skip` fails the test where `OCTOBOARD_REQUIRE_CGROUP=1`, as in the CI run that gives the suite a writable hierarchy,
+while a test's own line lets a broken setup pass there without running it.
+
 ## On tokio's paused clock, nothing in the test blocks or times out on real I/O
 
 Applies to daemon tests on `#[tokio::test(start_paused = true)]`, and to the stretches a real-clock test pauses with

@@ -13,8 +13,8 @@ toolchain before invoking it so the compiler identity contributes to the cache k
 |---|---|---|
 | `checks` | The macOS native quality job | `pnpm clippy:rust`, then `pnpm test:rust --no-run`. |
 | `release` | The macOS universal release build | `pnpm --filter @octoboard/desktop release`, unsigned and without signing credentials. |
-| `linux-check` | The Linux compilation job | `node scripts/cargo.mjs check --locked`, after installing the Linux prerequisites. |
-| `linux-musl` | The quality workflow's `linux-musl` job (the daemon's tests on `x86_64-unknown-linux-musl`) | None: the job saves its own cache when it runs on main. |
+| `linux-check` | The Linux compilation job and the clippy job of `linux-daemon.yml` | `node scripts/cargo.mjs check --locked`, after installing the Linux prerequisites. |
+| `linux-musl` | The musl jobs of `linux-daemon.yml` (the daemon's tests on `x86_64-unknown-linux-musl` and `aarch64-unknown-linux-musl`, on a runner of each architecture; run by the quality and release workflows) | `cargo test --locked -p octoboardd --target <musl target> --no-run` on a runner of each architecture, after installing `musl-tools`. |
 | `linux-release` | The Linux release builds (`release.yml`'s `linux` jobs, one per architecture) | `pnpm --filter @octoboard/desktop release --arch <arch> --no-sign-update` on a runner of each architecture, after installing `musl-tools`; unsigned and without the update key. |
 | `windows-check` | The Windows compilation job | None: the job saves its own cache when it runs on main. |
 | `windows-release` | The Windows release builds (`release.yml`'s Windows jobs) and the Windows installer build of the quality workflow (`windows-bundle`) | `WINDOWS_SIGNING=none pnpm --filter @octoboard/desktop release --no-sign-update`, unsigned and without the update key. |
@@ -42,8 +42,8 @@ Once the workflow has landed on main, use **Actions → Warm Rust caches → Run
 gh workflow run warm-rust-cache.yml --ref main
 ```
 
-The workflow rejects other refs. It runs the `checks`, `release`, `linux-check`, `linux-release` (on an x86_64 and an
-aarch64 Ubuntu runner) and `windows-release` profiles on GitHub-hosted macOS, Ubuntu and Windows runners, without signing
+The workflow rejects other refs. It runs the `checks`, `release`, `linux-check`, `linux-release` and `linux-musl` (each
+on an x86_64 and an aarch64 Ubuntu runner) and `windows-release` profiles on GitHub-hosted macOS, Ubuntu and Windows runners, without signing
 secrets or publishing. The macOS release profile builds
 both architectures; the checks profile compiles its tests without executing them. Warming does not replace the full checks in the quality workflow.
 

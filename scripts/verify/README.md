@@ -96,20 +96,22 @@ automatically.
 ## Hosted application checks
 
 `.github/workflows/quality.yml` runs only on request. Its independent jobs provide hosted checks; release CI
-does not call this workflow or wait for its results:
+does not call this workflow or wait for its results, except that its `linux-daemon` job is the reusable workflow
+`.github/workflows/linux-daemon.yml`, which release CI also calls for a release with Linux in it and waits for:
 
 | Job | Runner | Command and scope |
 |---|---|---|
 | `frontend` | `ubuntu-latest` | `pnpm verify --release --release-group frontend --fresh`: identity, application lint, production UI type check and application UI tests. |
 | `native` | `macos-26` | `pnpm verify --release --release-group native --fresh`: identity, desktop script tests, rustfmt, clippy for the workspace and all targets, and both Rust crates' tests. |
-| `linux-check` | `ubuntu-latest` | `node scripts/cargo.mjs check --locked`: compile both crates with the Linux prerequisites installed. |
-| `linux-musl` | `ubuntu-latest` | `cargo test --locked -p octoboardd --target x86_64-unknown-linux-musl`: the daemon's tests on the target the Linux release links statically. |
+| `linux-check` | `ubuntu-latest` | `node scripts/cargo.mjs check --locked`: compile both crates (compilation only) with the Linux prerequisites installed. |
+| `linux-daemon` | `ubuntu-24.04`, `ubuntu-24.04-arm` | `.github/workflows/linux-daemon.yml`: clippy on the daemon, its whole test suite on glibc in a privileged container with a writable cgroup v2 hierarchy, and its tests on musl for x86_64 and aarch64, the targets the Linux release links statically. It also gates Linux releases. |
 | `windows-check`, `windows-bundle` | `windows-latest` | Native Windows checks and the unsigned installer build (see the [tooling overview](../../docs/structure/tooling.md)); the local release plan's windows group also cross-checks the same crates from the Mac. |
 
 The frontend group does not invoke `rustc`, including when identifying the toolchain for local pass stamps, so it
 does not download the pinned Rust toolchain. Desktop script tests stay on macOS because archive tests exercise its
-BSD tar; Rust checks stay there for the desktop crate's native frameworks. The separate Linux job detects compilation
-failures that the local macOS release checks cannot; it is not a publication gate. Website and gallery-only checks
+BSD tar; Rust checks stay there for the desktop crate's native frameworks. The separate Linux jobs detect compilation
+failures and Linux-only test failures that the local macOS release checks cannot; `linux-check` is not a publication gate,
+`linux-daemon` is one for a release with Linux in it. Website and gallery-only checks
 remain outside the application release plan.
 
 CI uses `--fresh` to run the complete selected checks each time. Rust dependency caches reduce repeated compilation;

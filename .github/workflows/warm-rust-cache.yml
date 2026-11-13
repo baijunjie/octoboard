@@ -132,3 +132,33 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Compile the unsigned archive
         run: /usr/bin/time -v pnpm --filter @octoboard/desktop release --arch ${{ matrix.arch }} --no-sign-update
+
+  # The daemon's musl tests (`linux-daemon.yml`'s `musl` jobs, run for every release with Linux in it) use this profile
+  # on a runner of each architecture; building the tests warms it.
+  linux-musl:
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            runner: ubuntu-24.04
+          - target: aarch64-unknown-linux-musl
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+      - run: rustup toolchain install && rustup target add ${{ matrix.target }}
+      - uses: ./.github/actions/rust-cache
+        with:
+          profile: linux-musl
+      - name: Compile the daemon's tests
+        run: /usr/bin/time -v cargo test --locked -p octoboardd --target ${{ matrix.target }} --no-run
+        env:
+          CC_x86_64_unknown_linux_musl: musl-gcc
+          CC_aarch64_unknown_linux_musl: musl-gcc

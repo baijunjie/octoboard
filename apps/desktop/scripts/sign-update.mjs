@@ -2,9 +2,10 @@
 // Signs the update artifact `pnpm release --no-sign-update` left, on macOS the archive next to the universal `.app`, on
 // Windows the NSIS installer and on Linux each of this version's daemon archives in `target/linux-release/`, with the
 // update key (`TAURI_SIGNING_PRIVATE_KEY`, and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` for a key with a password; see
-// `.env.secret.example`), and checks that a fresh `.sig` came out. It runs on its own so that the release build never
-// holds the key: the release workflow gives it to this step only, so no build step has it in its environment. `pnpm
-// release` without the flag does the same itself.
+// `.env.secret.example`), and checks that a fresh `.sig` came out. It runs on its own so that a build by hand can leave
+// the key out of the build's environment; `pnpm release` without the flag does the same itself. The release workflow
+// does not run it: its `sign` job signs the builds' files on a runner of its own, which runs none of the workspace's
+// code (`.github/workflows/release.yml`).
 import path from "node:path";
 import { loadEnv } from "../../../scripts/lib/env.mjs";
 import {

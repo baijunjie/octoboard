@@ -6,17 +6,25 @@ name: Release
 # `platforms` input names: how a platform that a version's tag left out is added later. Application checks run locally
 # before tagging. The tag's message is the release notes, which the in-app update notice shows too.
 # The builds run in parallel, each only for a selected platform: `macos` builds, signs and notarizes the universal
-# build and signs the update archive; the Windows build makes the x64 installer, code-signs it as the repository
-# variable `WINDOWS_SIGNING` says (none, command or signpath; unset is none) and signs the update, in the one job
-# `windows` for none and command and in the `windows-signpath-*` jobs for signpath; `linux` builds the daemon on its own
-# with the UI inside it, statically linked, on a runner of each architecture, and signs each archive. Each uploads its
-# signed output as an artifact. `publish` runs once every selected platform's build has succeeded (an unselected,
-# skipped one does not stop it, a failed selected one does) and publishes what they uploaded. What runs is
-# `pnpm release --no-sign-update`, `sign-update` and `publish-release`, as by hand (apps/desktop/scripts/README.md's
-# "Release builds" and "Publishing a release" sections); this workflow only supplies their credentials from the
-# repository's secrets and variables. The update key is given to the `sign-update` steps of the build jobs alone;
-# `publish` holds only the workflow's own token. Once the release is published, `website` starts the website's
-# deployment, which reads the new version's downloads from the manifests.
+# build; the Windows build makes the x64 installer and code-signs it as the repository variable `WINDOWS_SIGNING` says
+# (none, command or signpath; unset is none), in the one job `windows` for none and command and in the
+# `windows-signpath-*` jobs for signpath; `linux` builds the daemon on its own with the UI inside it, statically linked,
+# on a runner of each architecture. Each uploads its output as an artifact. With Linux selected, `linux-daemon` lints
+# the daemon and runs its tests on Linux (`linux-daemon.yml`) meanwhile. `sign` runs once every selected platform's
+# build and those checks have succeeded (an unselected, skipped one does not stop it, a failed selected one does): on a
+# fresh runner it signs the update files the builds uploaded with the update key, and `publish` checks each signature
+# against the update key's public key and publishes. What runs is `pnpm release --no-sign-update` and
+# `publish-release`, as by hand (apps/desktop/scripts/README.md's "Release builds" and "Publishing a release" sections),
+# and `tauri signer sign` in place of `sign-update`; this workflow only supplies their credentials.
+#
+# The update key signs the desktop updates and the daemon's self-updates, so no job that runs the workspace's code holds
+# it: a build runs every dependency's install and build scripts, which could rewrite what a later step of the same
+# runner runs or outlive their step and read its environment. Only `sign` has the key, from the secrets of the
+# `release-signing` environment (whose required reviewers approve each run's signing), and it installs nothing but the
+# Tauri CLI, pinned with its integrity in `.github/signer/package-lock.json` and installed without install scripts; it
+# runs no build and no workspace script. The repository must hold no secret of the key's name: one would stand in for
+# the environment's and be readable by any workflow. `publish` holds only the workflow's own token. Once the release is
+# published, `website` starts the website's deployment, which reads the new version's downloads from the manifests.
 on:
   push:
     tags:
@@ -101,7 +109,6 @@ jobs:
           HAS_APPLE_API_KEY: ${{ secrets.APPLE_API_KEY != '' }}
           HAS_APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER != '' }}
           HAS_APPLE_API_PRIVATE_KEY: ${{ secrets.APPLE_API_PRIVATE_KEY != '' }}
-          HAS_TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
           # The Windows code-signing mode and what it needs; variables are not secret, but are passed the same way.
           WINDOWS_SIGNING: ${{ vars.WINDOWS_SIGNING }}
           HAS_WINDOWS_SIGN_COMMAND: ${{ vars.WINDOWS_SIGN_COMMAND != '' }}
@@ -118,10 +125,11 @@ jobs:
             echo "::error::$TAG is on a commit that is not on main. Merge it into main and tag it there."
             exit 1
           fi
-          # Every platform signs its update with the update key; only the selected ones need their own credentials.
-          needed="TAURI_SIGNING_PRIVATE_KEY"
+          # The update key is a secret of the `release-signing` environment, which this job cannot see; `sign` checks
+          # it. Only the selected platforms need their own credentials.
+          needed=""
           case ",$PLATFORMS," in
-            *,macos,*) needed="$needed APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_API_KEY APPLE_API_ISSUER APPLE_API_PRIVATE_KEY" ;;
+            *,macos,*) needed="APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_API_KEY APPLE_API_ISSUER APPLE_API_PRIVATE_KEY" ;;
           esac
           missing=""
           for name in $needed; do
@@ -159,8 +167,8 @@ jobs:
       - name: Check that Cargo.lock is up to date
         run: cargo metadata --locked --format-version 1 > /dev/null
 
-  # The x64 installer for `none` and `command`, built on its own runner, in parallel with the macOS build. The update key
-  # is given to the `sign-update` step alone, as on macOS. `publish` takes the installer from the artifact.
+  # The x64 installer for `none` and `command`, built on its own runner, in parallel with the macOS build. `sign` signs
+  # the update from the artifact and `publish` takes the installer from it.
   windows:
     needs: validate
     if: contains(needs.validate.outputs.platforms, 'windows') && needs.validate.outputs.windows_signing != 'signpath'
@@ -193,25 +201,18 @@ jobs:
         env:
           WINDOWS_SIGN_COMMAND: ${{ vars.WINDOWS_SIGN_COMMAND }}
         run: pnpm --filter @octoboard/desktop release --no-sign-update
-      - name: Sign the update
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: pnpm --filter @octoboard/desktop sign-update
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows-installer
-          path: |
-            target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
-            target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe.sig
+          path: target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
           if-no-files-found: error
 
   # `signpath`: SignPath signs only uploaded artifacts, and each of its two requests waits for an approval given by
   # hand, which can take longer than the six hours a GitHub-hosted job may run. So the route is five jobs, each well
   # under that, passing artifacts on: build the executables, have SignPath sign them, bundle the installer from them,
-  # have SignPath sign that, then finish it and sign the update. The waits run on Linux, where nothing is built. The
-  # bundling job builds the tree the bundler reads again, from the same commit, rather than carrying it over: the
-  # signed executables then replace the ones it built.
+  # have SignPath sign that, then finish it (`sign` signs the update, as for the other routes). The waits run on Linux,
+  # where nothing is built. The bundling job builds the tree the bundler reads again, from the same commit, rather than
+  # carrying it over: the signed executables then replace the ones it built.
   windows-signpath-build:
     needs: validate
     if: contains(needs.validate.outputs.platforms, 'windows') && needs.validate.outputs.windows_signing == 'signpath'
@@ -353,8 +354,8 @@ jobs:
           path: signed-installer/*
           if-no-files-found: error
 
-  # Puts the signed installer in the bundle directory under the bundler's name, checks it against the ConPTY files
-  # fetched again, and signs the update with the update key, given to that step alone.
+  # Puts the signed installer in the bundle directory under the bundler's name and checks it against the ConPTY files
+  # fetched again.
   windows-signpath-finish:
     needs: windows-signpath-sign-installer
     runs-on: windows-latest
@@ -387,21 +388,15 @@ jobs:
           path: target/signpath/signed-installer
       - name: Finish the installer
         run: pnpm --filter @octoboard/desktop release --stage finish --signed target/signpath/signed-installer --no-sign-update
-      - name: Sign the update
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: pnpm --filter @octoboard/desktop sign-update
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows-installer
-          path: |
-            target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
-            target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe.sig
+          path: target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe
           if-no-files-found: error
 
   # The universal build, signed and notarized, on its own runner, in parallel with the Windows build. `publish` takes
-  # it from the artifact, and its macOS tools check the disk image there.
+  # it from the artifact, and its macOS tools check the disk image there; `sign` signs the update archive, uploaded on
+  # its own as well.
   macos:
     needs: validate
     if: contains(needs.validate.outputs.platforms, 'macos')
@@ -456,10 +451,7 @@ jobs:
         run: |
           printf '%s' "$APPLE_API_PRIVATE_KEY" > "$RUNNER_TEMP/AuthKey.p8"
           echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/AuthKey.p8" >> "$GITHUB_ENV"
-      # The update key is not in the environment of any build step, so the daemon's cargo build scripts and the UI's
-      # dependencies, which run in the build, cannot read it from there; it does not guard against code planted
-      # for the later steps of the same runner. `--no-sign-update` leaves the update archive for the next step to
-      # sign.
+      # `--no-sign-update` leaves the update archive unsigned, for `sign`.
       - name: Build, sign and notarize
         env:
           # Apply the Finder background and icon layout on the macOS release runner.
@@ -474,14 +466,8 @@ jobs:
         run: |
           security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true
           rm -f "$RUNNER_TEMP/certificate.p12" "$RUNNER_TEMP/AuthKey.p8"
-      - name: Sign the update archive
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: pnpm --filter @octoboard/desktop sign-update
-      # One tar keeps what the publishing looks at (the `.app` the version is read from, the disk image, the archive and
-      # its signature) as built, symlinks, permissions and modification times included, which an artifact's zip would
-      # not.
+      # One tar keeps what the publishing looks at (the `.app` the version is read from, the disk image and the update
+      # archive) as built, symlinks, permissions and modification times included, which an artifact's zip would not.
       - name: Pack the signed build
         run: tar -C target/universal-apple-darwin/release -cf "$RUNNER_TEMP/macos-bundle.tar" bundle/macos bundle/dmg
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -490,11 +476,18 @@ jobs:
           path: ${{ runner.temp }}/macos-bundle.tar
           compression-level: 0
           if-no-files-found: error
+      # The update archive alone, for `sign`, which then has nothing else of the build to unpack.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: macos-update
+          path: target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz
+          compression-level: 0
+          if-no-files-found: error
 
   # The daemon on its own for Linux, one archive per architecture, each built on a runner of its architecture: the UI,
   # then the release daemon embedding it for the musl target, linked statically, packed with the example systemd unit
-  # and the license, with its SHA-256. `musl-gcc` compiles the C code of the dependencies for musl. The update key is
-  # given to the `sign-update` step alone, as on the other platforms.
+  # and the license, with its SHA-256. `musl-gcc` compiles the C code of the dependencies for musl. `sign` signs the
+  # archives from the artifacts.
   linux:
     needs: validate
     if: contains(needs.validate.outputs.platforms, 'linux')
@@ -527,25 +520,33 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Build
         run: /usr/bin/time -v pnpm --filter @octoboard/desktop release --arch ${{ matrix.arch }} --no-sign-update
-      - name: Sign the update
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: pnpm --filter @octoboard/desktop sign-update
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: linux-${{ matrix.arch }}
           path: target/linux-release/*
           if-no-files-found: error
 
-  # Publishes what the build jobs of the selected platforms uploaded. It runs when `validate` succeeded and every
-  # selected platform's build did: a platform that was not selected leaves its jobs skipped, which must not stop it,
-  # and a failed one must. Windows is built by `windows` or by the `signpath` route, which ends in
-  # `windows-signpath-finish`; the other one is skipped. The macOS tools that check the disk image are needed only with
-  # macOS in the release, so a publish without macOS runs on Linux. Nothing here is built, so the update key is not
-  # given to it.
-  publish:
-    needs: [validate, macos, windows, windows-signpath-finish, linux]
+  # The daemon's Linux lint and tests (`linux-daemon.yml`), for a release with Linux in it: the local checks before
+  # tagging run on macOS and do not compile its Linux-only code. `sign`, and so the publishing, waits for them.
+  linux-daemon:
+    needs: validate
+    if: contains(needs.validate.outputs.platforms, 'linux')
+    uses: ./.github/workflows/linux-daemon.yml
+    with:
+      ref: refs/tags/${{ inputs.tag || github.ref_name }}
+
+  # Signs the update files the builds of the selected platforms uploaded: the macOS update archive, the Windows
+  # installer, the Linux archives. It runs when `validate` succeeded and every selected platform's build and checks did:
+  # a platform that was not selected leaves its jobs skipped, which must not stop it, and a failed one must. Windows is
+  # built by `windows` or by the `signpath` route, which ends in `windows-signpath-finish`; the other one is skipped.
+  # The update key comes from the `release-signing` environment, so its protection rules (required reviewers, the
+  # refs that may use it) hold the signing until they are met; it reaches this job only as long as no repository secret
+  # of the same name exists, which would stand in for a missing environment secret and be readable by any workflow. The
+  # runner is a fresh one that runs nothing of the builds: their files are only read, the tag's checkout is only read
+  # (the version and the product name), and the signer is the Tauri CLI pinned by `.github/signer/package-lock.json`
+  # of this workflow's own commit (so that a tag made before it can be signed too), installed without install scripts.
+  sign:
+    needs: [validate, macos, windows, windows-signpath-finish, linux, linux-daemon]
     if: >-
       ${{ !cancelled() && needs.validate.result == 'success'
       && needs.macos.result == (contains(needs.validate.outputs.platforms, 'macos') && 'success' || 'skipped')
@@ -553,7 +554,97 @@ jobs:
         && needs.validate.outputs.windows_signing != 'signpath' && 'success' || 'skipped')
       && needs.windows-signpath-finish.result == (contains(needs.validate.outputs.platforms, 'windows')
         && needs.validate.outputs.windows_signing == 'signpath' && 'success' || 'skipped')
-      && needs.linux.result == (contains(needs.validate.outputs.platforms, 'linux') && 'success' || 'skipped') }}
+      && needs.linux.result == (contains(needs.validate.outputs.platforms, 'linux') && 'success' || 'skipped')
+      && needs.linux-daemon.result == (contains(needs.validate.outputs.platforms, 'linux') && 'success' || 'skipped') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: release-signing
+    steps:
+      - name: Check the update key
+        env:
+          # Only whether the secret is set reaches the step, never its value.
+          HAS_TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
+        run: |
+          if [ "$HAS_TAURI_SIGNING_PRIVATE_KEY" != true ]; then
+            echo "::error::The release-signing environment has no TAURI_SIGNING_PRIVATE_KEY secret (and no repository secret of that name, which should not exist). See the \"Releasing by tag\" section of apps/desktop/scripts/README.md."
+            exit 1
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/tags/${{ env.TAG }}
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: workflow
+          sparse-checkout: .github/signer
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+      # `npm ci` installs exactly the lockfile, each package checked against its recorded integrity.
+      - name: Install the signer
+        run: npm ci --ignore-scripts --no-audit --no-fund --prefix workflow/.github/signer
+      - name: Download the macOS update archive
+        if: contains(needs.validate.outputs.platforms, 'macos')
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: macos-update
+          path: ${{ runner.temp }}/updates
+      - name: Download the Windows installer
+        if: contains(needs.validate.outputs.platforms, 'windows')
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: windows-installer
+          path: ${{ runner.temp }}/updates
+      - name: Download the Linux archives
+        if: contains(needs.validate.outputs.platforms, 'linux')
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: linux-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/updates
+      # Exactly this version's update files of the selected platforms are signed, by the names the build gives them
+      # (`release-manifest.mjs`), and nothing else a build may have put beside them; a missing one fails here. Each
+      # signature is bound to the version (`--app-version`) and names the file it was made for, which the daemon's
+      # self-update checks. `publish` checks every signature against the public key before publishing.
+      - name: Sign the updates
+        env:
+          PLATFORMS: ${{ needs.validate.outputs.platforms }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          version=$(node -p 'require("./apps/desktop/package.json").version')
+          product=$(node -p 'require("./apps/desktop/src-tauri/tauri.conf.json").productName')
+          set --
+          case ",$PLATFORMS," in
+            *,macos,*) set -- "$@" "$product.app.tar.gz" ;;
+          esac
+          case ",$PLATFORMS," in
+            *,windows,*) set -- "$@" "${product}_${version}_x64-setup.exe" ;;
+          esac
+          case ",$PLATFORMS," in
+            *,linux,*) set -- "$@" "octoboardd_${version}_linux_x86_64.tar.gz" "octoboardd_${version}_linux_aarch64.tar.gz" ;;
+          esac
+          for name in "$@"; do
+            if [ ! -f "$RUNNER_TEMP/updates/$name" ]; then
+              echo "::error::The builds uploaded no $name to sign."
+              exit 1
+            fi
+            workflow/.github/signer/node_modules/.bin/tauri signer sign --app-version "$version" "$RUNNER_TEMP/updates/$name"
+          done
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: update-signatures
+          path: ${{ runner.temp }}/updates/*.sig
+          if-no-files-found: error
+
+  # Publishes what the build jobs of the selected platforms uploaded, with the signatures `sign` made, once `sign` has
+  # succeeded. The macOS tools that check the disk image are needed only with macOS in the release, so a publish without
+  # macOS runs on Linux. Nothing here is built, and the update key is not given to it.
+  publish:
+    needs: [validate, sign]
+    if: ${{ !cancelled() && needs.validate.result == 'success' && needs.sign.result == 'success' }}
     runs-on: ${{ contains(needs.validate.outputs.platforms, 'macos') && 'macos-26' || 'ubuntu-latest' }}
     timeout-minutes: 30
     permissions:
@@ -596,6 +687,28 @@ jobs:
           pattern: linux-*
           merge-multiple: true
           path: ${{ runner.temp }}/linux
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: update-signatures
+          path: ${{ runner.temp }}/signatures
+      # Each update file gets the signature `sign` made of the file of that name; a missing one fails here.
+      - name: Place the signatures
+        run: |
+          place() {
+            for file in "$@"; do
+              [ -f "$file" ] || continue
+              cp "$RUNNER_TEMP/signatures/$(basename "$file").sig" "$file.sig"
+            done
+          }
+          case ",$PLATFORMS," in
+            *,macos,*) place target/universal-apple-darwin/release/bundle/macos/*.app.tar.gz ;;
+          esac
+          case ",$PLATFORMS," in
+            *,windows,*) place "$RUNNER_TEMP"/windows/*-setup.exe ;;
+          esac
+          case ",$PLATFORMS," in
+            *,linux,*) place "$RUNNER_TEMP"/linux/octoboardd_*.tar.gz ;;
+          esac
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}

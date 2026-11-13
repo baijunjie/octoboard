@@ -1,0 +1,93 @@
+name: Linux daemon checks
+
+# The daemon's Linux-only code (the launch cgroups, systemd, the Linux branches of its tests) is not even compiled by
+# the local checks, which run on macOS. These jobs lint it and run its tests on Linux: on glibc with a cgroup v2
+# hierarchy the suite may write in, so that the tests using `test_support::cgroups` run rather than return early, and
+# on musl for each architecture the release links statically. `release.yml` calls this workflow for a release with
+# Linux in it and publishes only once it has passed; `quality.yml` calls it on request.
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "The ref to check out, such as refs/tags/desktop-v0.1.0; empty for the run's own"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  clippy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      # rustup is preinstalled; this installs the toolchain `rust-toolchain.toml` pins.
+      - run: rustup toolchain install
+      - uses: ./.github/actions/rust-cache
+        with:
+          profile: linux-check
+      - run: cargo clippy --locked --all-targets -p octoboardd -- -D warnings
+
+  # The suite on glibc, in a privileged container with a cgroup namespace of its own, whose hierarchy
+  # `.github/daemon-cgroup-tests.sh` hands to a test user; `OCTOBOARD_REQUIRE_CGROUP=1` there fails a test that would
+  # otherwise return early for want of a cgroup from `test_support::cgroups`. The image is pinned by digest; the script
+  # installs the pinned toolchain in it. The script comes from this workflow's own commit, so that a tag made before
+  # it can be checked too.
+  cgroup-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: .workflow
+          sparse-checkout: .github/daemon-cgroup-tests.sh
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Run the tests with a writable cgroup v2 hierarchy
+        run: |
+          docker run --rm --privileged --cgroupns=private --init \
+            -v "$GITHUB_WORKSPACE:/src" -w /src -e TEST_UID="$(id -u)" \
+            -e CARGO_PROFILE_DEV_DEBUG=line-tables-only \
+            rust@sha256:8a4e90c7946b74626488b1446f712c0fe0ed1a596cbd3d871684bc9c5433ae07 \
+            sh .workflow/.github/daemon-cgroup-tests.sh
+
+  # The release links the daemon statically against musl on a runner of each architecture, so its tests run against
+  # musl there too: a dependency or a call that behaves differently there would otherwise show only on a server.
+  # `musl-gcc` compiles the C code of the dependencies for musl.
+  musl:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            runner: ubuntu-24.04
+          - target: aarch64-unknown-linux-musl
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+      - run: rustup toolchain install && rustup target add ${{ matrix.target }}
+      - uses: ./.github/actions/rust-cache
+        with:
+          profile: linux-musl
+      - run: /usr/bin/time -v cargo test --locked -p octoboardd --target ${{ matrix.target }}
+        env:
+          CC_x86_64_unknown_linux_musl: musl-gcc
+          CC_aarch64_unknown_linux_musl: musl-gcc

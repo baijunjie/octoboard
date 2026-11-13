@@ -1,0 +1,8 @@
+{
+  "name": "octoboard-update-signer",
+  "private": true,
+  "description": "The Tauri CLI alone, for the release workflow's sign job: installed with `npm ci --ignore-scripts` from the lockfile next to this file, so the update key never meets the workspace's dependencies.",
+  "dependencies": {
+    "@tauri-apps/cli": "2.12.1"
+  }
+}

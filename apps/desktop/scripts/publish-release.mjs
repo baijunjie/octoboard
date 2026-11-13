@@ -2,9 +2,11 @@
 // Publishes the builds `pnpm release` made, for the in-app updates, the install script and the website to find: creates
 // the versioned GitHub release `desktop-v<version>` with each platform's files (macOS: the disk image and the signed
 // update archive; Windows: the installer; Linux: the daemon's archive for each architecture with its `.sha256`), each
-// update file with its signature, then writes the manifests to the `updater` release: per platform, `beta.json` and
-// `stable.json` for macOS, `beta-windows.json` and `stable-windows.json` for Windows and `beta-linux.json` and
-// `stable-linux.json` for Linux, the beta one always and the stable one unless the version has a prerelease suffix.
+// update file with its signature (each checked first against the update key's public key in `tauri.conf.json`, bound to
+// this version and naming its file, so that one no client would accept is never published), then writes the manifests
+// to the `updater` release: per platform, `beta.json` and `stable.json` for macOS, `beta-windows.json` and
+// `stable-windows.json` for Windows and `beta-linux.json` and `stable-linux.json` for Linux, the beta one always and
+// the stable one unless the version has a prerelease suffix.
 // Until a platform's first stable release, a prerelease goes to its stable manifest too: the first betas follow Stable
 // by default and read only that one (`stableTakesPrereleases` in `release-manifest.mjs`). Run `pnpm release` first
 // (on Linux, once on a host of each architecture), with signed builds. Outward-facing, so it is a separate, explicit
@@ -17,10 +19,11 @@
 // nor touched: its files are not looked for and its manifests are not read or written. The macOS build is
 // `target/universal-apple-darwin/release/bundle`, checked with macOS tools (`PlistBuddy`, `stapler`), so a macOS
 // publish runs on a Mac. The Windows build comes as `--windows-dir`, required with Windows: a directory holding the
-// installer `Octoboard_<version>_x64-setup.exe` and its `.sig`, as the Windows build made and signed them. The Linux
-// builds come as `--linux-dir`, required with Linux: a directory holding, for each architecture, the archive
-// `octoboardd_<version>_linux_<arch>.tar.gz` with its `.sha256` and `.sig`, as `release-linux.mjs` and `sign-update`
-// made them.
+// installer `Octoboard_<version>_x64-setup.exe` and its `.sig`, as the Windows build made the installer and
+// `sign-update` or the release workflow's `sign` job signed it. The Linux builds come as `--linux-dir`, required with
+// Linux: a directory holding, for each architecture, the archive `octoboardd_<version>_linux_<arch>.tar.gz` with its
+// `.sha256` and `.sig`, as `release-linux.mjs` made them and `sign-update` or the release workflow's `sign` job signed
+// them.
 //
 // The version is the one in `apps/desktop/package.json` (which `tauri.conf.json` reads), which must be the one of
 // the builds. The release's tag is created on the current commit, which has to be pushed. `--dry-run` prints what
@@ -58,6 +61,7 @@ import {
   repositorySlug,
   tag,
 } from "./release-manifest.mjs";
+import { verifyUpdateSignature } from "./update-signature.mjs";
 import { windowsReleaseFiles } from "./windows-release.mjs";
 
 const { values: options } = parseArgs({
@@ -88,7 +92,8 @@ const notes = (options.notes ?? readFileSync(options["notes-file"], "utf8")).tri
 if (!notes) throw new Error("The release notes are empty.");
 const dryRun = options["dry-run"];
 
-const { productName } = JSON.parse(readFileSync(path.join(appDir, "src-tauri", "tauri.conf.json"), "utf8"));
+const tauriConfig = JSON.parse(readFileSync(path.join(appDir, "src-tauri", "tauri.conf.json"), "utf8"));
+const { productName } = tauriConfig;
 const { version } = JSON.parse(readFileSync(path.join(appDir, "package.json"), "utf8"));
 const appConfig = JSON.parse(readFileSync(path.join(repoRoot, "config", "app.json"), "utf8"));
 const prerelease = isPrerelease(version);
@@ -174,6 +179,20 @@ if (selected("linux")) {
     digests[path.basename(archive)] = sha256;
   }
   publishing.linux = describe("linux", sources, signatures, digests);
+}
+
+// Every update signature is checked against the update key's public key before anything is published: one made with
+// another key, for other bytes or for another version would make every client refuse the update.
+for (const platform of platforms) {
+  for (const update of publishing[platform].updates) {
+    verifyUpdateSignature({
+      signatureText: update.signature,
+      file: update.file,
+      publicKeyText: tauriConfig.plugins.updater.pubkey,
+      name: path.basename(update.file),
+      version,
+    });
+  }
 }
 
 const pubDate = new Date().toISOString();

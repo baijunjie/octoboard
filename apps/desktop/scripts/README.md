@@ -45,7 +45,12 @@ in the environment wins.
   `.github/release-notes.sh`.
 - `sign-update.mjs` (`pnpm sign-update`) — signs the update artifact `pnpm release --no-sign-update` left (the archive on
   macOS, the installer on Windows, each architecture's archive in `target/linux-release/` on Linux) with the update key
-  and checks that a fresh `.sig` came out (below).
+  and checks that a fresh `.sig` came out (below). The release workflow does not run it: its `sign` job signs the
+  builds' files on a runner of its own ("Release CI", below).
+- `update-signature.mjs` — checks an update file's `.sig` against `plugins.updater.pubkey` in `src-tauri/tauri.conf.json`
+  the way the clients do (the key, the signature over the file and the one over its trusted comment) and that the
+  comment names the file and the release version; `publish-release.mjs` runs it on every update file before anything
+  is published. Tested by `update-signature.test.mjs`.
 - `publish-release.mjs` (`pnpm publish-release`) — publishes what `pnpm release` built, for all three platforms or the
   ones `--platforms` selects: the universal macOS build from the bundle directory, the Windows installer and the Linux
   archives from directories (below).
@@ -114,8 +119,8 @@ be updated again, and with it leaked, anyone can ship an update to every one of 
 and the scripts drop the key variables from the build's environment, so a build script that reads the environment cannot
 get the key. After the build `release.mjs` packs the `.app` into `Octoboard.app.tar.gz` itself and signs that with
 `tauri signer sign`, as the one step that reads the key. `pnpm release --no-sign-update` stops after packing, for a
-caller that signs in a step of its own with `pnpm sign-update` (the release workflow does) and so does not need the key
-until then. The script first deletes the update archives an earlier build left (their names carry no version), then
+caller that signs apart from the build, with `pnpm sign-update` or, as the release workflow does, in a job of its own
+(below), and so does not need the key until then. The script first deletes the update archives an earlier build left (their names carry no version), then
 checks that the archive and, unless signing was left out, its `.sig` exist next to the `.app`.
 
 Verification after the build: the `.app` has the layered icon and the nested `octoboardd` sidecar's signature is
@@ -222,11 +227,11 @@ section is the procedure.
 
 macOS is the universal build in `target/universal-apple-darwin/release/bundle` and is checked with macOS tools, so a
 macOS publish runs on a Mac. Windows comes as `--windows-dir <dir>`, required with Windows (and refused without it): `<dir>` holds
-`Octoboard_<version>_x64-setup.exe` and its `.sig`, as the Windows build and `sign-update` left them (the installer
+`Octoboard_<version>_x64-setup.exe` and its `.sig`, as the Windows build and `sign-update` (or the release workflow's `sign` job) left them (the installer
 named for the version, the `.sig` present and not older than it). Linux comes as `--linux-dir <dir>`, required with Linux
 (and refused without it): `<dir>` holds, for each of x86_64 and aarch64, `octoboardd_<version>_linux_<arch>.tar.gz` with its
 `.sha256` (which must match the archive) and `.sig` (no older than it), as `pnpm release` on a host of each architecture
-and `sign-update` left them, so both architectures' builds are gathered into one directory first. A publish without macOS
+and `sign-update` (or the release workflow's `sign` job) left them, so both architectures' builds are gathered into one directory first. A publish without macOS
 needs no macOS tool and runs on any machine.
 
 1. It refuses unless `gh` is logged in, the working tree is clean and each selected build is this version's. macOS:
@@ -237,7 +242,9 @@ needs no macOS tool and runs on any machine.
    platform's files gets them added in step 2; any other (some of a platform's files, files that belong to neither
    platform, a different build of the same version, a draft, an immutable release when files must be added) is
    refused, since a published file is never replaced: raise the version instead. A platform that is not selected is
-   not compared.
+   not compared. Every selected update file's `.sig` is checked with `update-signature.mjs` against the public key in
+   `tauri.conf.json` and the version, also under `--dry-run`, and one that fails (another key, other bytes, another
+   version) stops the publish before anything is created.
 2. It creates the release `desktop-v<version>` on the current commit (which must be pushed), marked prerelease when the
    version has a suffix, with the selected platforms' files (macOS: the `.dmg` and the update archive; Windows: the
    installer; Linux: each architecture's archive and its `.sha256`), each update file with its signature. When the release exists already, it adds the files of the
@@ -266,10 +273,12 @@ the stable manifest as written only while it announces no stable version yet.
 
 ## Releasing by tag
 
-Pushing a tag `desktop-v<version>` runs `.github/workflows/release.yml`, which validates the tag, builds the macOS
-Windows and Linux releases in parallel on their own runners and publishes them from a job of its own, then starts the
-website's deployment. Application quality
-checks run locally before creating the tag; release CI does not repeat them. The manual `pnpm release` and
+Pushing a tag `desktop-v<version>` runs `.github/workflows/release.yml`, which validates the tag, builds the macOS,
+Windows and Linux releases in parallel on their own runners (with Linux, also running the daemon's Linux checks), signs
+the update files in a job of its own, publishes them from another, then starts the website's deployment. Application
+quality checks run locally before creating the tag; release CI does not repeat them, except that a release with Linux
+in it runs the daemon's Linux checks (`.github/workflows/linux-daemon.yml`) and is signed and published only once they
+pass. The manual `pnpm release` and
 `publish-release` path stays available.
 
 By default a tag releases all three platforms. Two things select some: `release:version --platforms <list>` (such as
@@ -354,8 +363,8 @@ The workflow:
    and be an annotated tag with a non-empty message. The message, minus any signature and its `Platforms:` line, is the
    release notes, which the in-app update notice shows too. The platforms are the `platforms` input of a manual run, else
    the tag message's `Platforms:` line, else all of them; they are the job's output. It also checks that the tagged commit is
-   on `main`, that the repository secrets below are set (the update key always; the Apple ones only for macOS), and
-   that `Cargo.lock` matches the manifests (`cargo metadata --locked`), which the `--locked` build would otherwise
+   on `main`, that the repository secrets below are set (the Apple ones, only for macOS; the update key is an
+   environment secret `validate` cannot see, so `sign` checks it), and that `Cargo.lock` matches the manifests (`cargo metadata --locked`), which the `--locked` build would otherwise
    find after the build starts. With Windows it checks the signing mode too: the repository variable
    `WINDOWS_SIGNING` (`none`, `command` or `signpath`; unset is `none`) and what that mode needs. A manual run checks
    out the tag it names, and every job builds that tag.
@@ -384,57 +393,82 @@ The workflow:
      there only to give the installer's file name under the bundler's naming; `finish` runs on a fresh runner, and
      the signed installer replaces what the bundler would have produced.
 
-   Either way `sign-update` signs the installer in a step of its own, the only one given the update key, and the
-   installer and its `.sig` are uploaded as the artifact `windows-installer`. The Windows build jobs restore the
-   `windows-release` dependency cache.
+   Either way the unsigned installer is uploaded as the artifact `windows-installer`, and no Windows job holds the update
+   key. The Windows build jobs restore the `windows-release` dependency cache.
 3. `macos` restores the universal-build Rust dependency cache, then builds, signs and notarizes with
-   `pnpm --filter @octoboard/desktop release --no-sign-update`. It signs the update archive in a step of its own
-   (`sign-update`), the only step given the update key (no build step has it in its environment; code planted for
-   later steps of the same runner could still read it). The signing certificate and the Developer ID G2 intermediate go
+   `pnpm --filter @octoboard/desktop release --no-sign-update`; it never holds the update key. The signing certificate and the Developer ID G2 intermediate go
    into a keychain that exists for that run only, and the API key is written to a temporary file; both are removed
    right after the build. `validate` learns whether the secrets are set from boolean expressions, without their values
    reaching a step. It then packs `bundle/macos` and `bundle/dmg` of the universal bundle directory into one tar (which
    keeps symlinks, permissions and modification times that an artifact's zip would drop) and uploads it as the artifact
-   `macos-bundle`.
+   `macos-bundle`, and uploads the unsigned `Octoboard.app.tar.gz` apart, as `macos-update`, for `sign`.
 4. `linux` is a matrix of two jobs, `ubuntu-24.04` for x86_64 and `ubuntu-24.04-arm` for aarch64, each installing
    `musl-tools` and restoring the `linux-release` dependency cache, then building with
-   `pnpm --filter @octoboard/desktop release --arch <arch> --no-sign-update` and signing the archive in a step of its
-   own (`sign-update`), the only one given the update key. It uploads `target/linux-release/*` (archive, `.sha256` and
-   `.sig`) as the artifact `linux-<arch>`.
-5. `publish` needs `validate`, `macos`, `windows`, `windows-signpath-finish` and `linux`, and runs when `validate` succeeded and
-   each selected platform's build succeeded (for Windows, the job of the signing mode's route): an unselected
-   platform's jobs, or the route not taken, are skipped, which does not stop it, and a selected one that failed or was
-   cancelled does. It downloads the selected platforms' artifacts (the macOS tar is unpacked into
-   `target/universal-apple-darwin/release`; both Linux artifacts are merged into one directory) and runs
+   `pnpm --filter @octoboard/desktop release --arch <arch> --no-sign-update`. It uploads `target/linux-release/*`
+   (archive and `.sha256`) as the artifact `linux-<arch>`; it never holds the update key.
+5. `linux-daemon`, with Linux selected, calls `.github/workflows/linux-daemon.yml` on the tag, in parallel with the
+   builds: clippy on the daemon, its whole test suite on glibc in a privileged container with a writable cgroup v2
+   hierarchy (`.github/daemon-cgroup-tests.sh`, with `OCTOBOARD_REQUIRE_CGROUP=1` so a test that cannot get a cgroup
+   fails instead of skipping), and its tests on musl for each architecture. These are checks the local macOS ones cannot
+   run, and the only hosted checks that gate a release.
+6. `sign` runs when `validate` succeeded and each selected platform's build and `linux-daemon` succeeded (for Windows,
+   the job of the signing mode's route): an unselected platform's jobs, or the route not taken, are skipped, which does
+   not stop it, and a selected one that failed or was cancelled does. It is the only job given the update key
+   (`TAURI_SIGNING_PRIVATE_KEY` and its password), from the secrets of the `release-signing` environment, whose rules
+   (required reviewers, the refs that may use it) hold each run here until they are met; it fails first if the key is
+   not set. The update key signs the desktop updates and the daemon's self-updates, so the jobs that run the workspace's
+   code (every dependency's install and build scripts) never hold it. `sign` runs none of it: on a fresh runner it reads
+   the tag's checkout only for the version and the product name, takes `.github/signer` from the workflow's own commit
+   (so a tag made before it can still be released by hand), installs the Tauri CLI that directory pins by integrity with
+   `npm ci --ignore-scripts`, downloads `macos-update`, `windows-installer` and the Linux artifacts, and signs exactly
+   the selected platforms' update files by their expected names (`Octoboard.app.tar.gz`, the installer,
+   both architectures' archives) with `tauri signer sign --app-version <version>`, which binds each signature to the
+   version and the file's name. It uploads the `.sig` files as `update-signatures`. `.github/signer` pins the CLI's
+   version; bump it together with the workspace's `@tauri-apps/cli` in `apps/desktop/package.json`, since a signature
+   made by another version fails the publish rather than going out.
+7. `publish` needs `validate` and `sign`, so it runs only when both succeeded. It downloads the selected platforms'
+   artifacts and `update-signatures` (the macOS tar is unpacked into `target/universal-apple-darwin/release`; both
+   Linux artifacts are merged into one directory), places each signature beside its file and runs
    `node apps/desktop/scripts/publish-release.mjs --notes-file ... --platforms <selection>` with `--windows-dir` for
-   Windows and `--linux-dir` for Linux. It is the only job whose token may write (`contents: write`, for `gh`; every other job reads, and
+   Windows and `--linux-dir` for Linux, which checks every signature against the public key before it publishes. It is the only job whose token may write (`contents: write`, for `gh`; every other job reads, and
    checkouts keep no credential in `.git/config`) and has no update key. It installs nothing (the script uses Node's
    built-in modules only) and runs on
    `macos-26` when macOS is selected, whose tools check the disk image, and on `ubuntu-latest` otherwise.
-6. `website` runs after `publish`, in a job of its own that alone may start a workflow (`actions: write`): it runs
+8. `website` runs after `publish`, in a job of its own that alone may start a workflow (`actions: write`): it runs
    `gh workflow run website.yml` on `main`, so the website is generated again and its download links read the manifests
    the publish just wrote. Its failure leaves the release published; start the website's workflow by hand then.
-7. The whole workflow is in one concurrency group, so releases run one at a time. GitHub keeps one pending run, so a
+9. The whole workflow is in one concurrency group, so releases run one at a time. GitHub keeps one pending run, so a
    third run started while one runs and one waits replaces the waiting one, which must then be re-run.
 
 Before the first release, or after dependency or toolchain changes, run **Warm Rust caches** manually on `main` to
 prepare compatible dependency caches. Warming uses an unsigned universal build, an unsigned Windows installer and an
 unsigned Linux archive on each architecture, with no signing credentials, and never publishes an application; its
 `windows` job fills the `windows-release` profile that the Windows jobs of `release.yml` and `windows-bundle` restore,
-and its `linux-release` jobs the profile of the same name that the `linux` jobs restore. Tag runs restore main's caches; different version tags cannot restore one another's caches.
+its `linux-release` jobs the profile of the same name that the `linux` jobs restore, and its `linux-musl` jobs
+(the daemon's musl tests compiled on each architecture) the profile that `linux-daemon.yml`'s musl jobs restore. Tag runs restore main's caches; different version tags cannot restore one another's caches.
 Local release checks still run before tagging. The [Rust cache module](../../../.github/actions/rust-cache/README.md)
 documents the command, profiles, GitHub retention limits and the measurements to inspect before judging a speed change.
 
 The **Code quality** workflow (`.github/workflows/quality.yml`) remains available on request for independent hosted
-frontend, macOS native, Linux compilation, Linux musl (the daemon's tests on the Linux release's target) and Windows
-checks; its `windows-bundle` job builds the unsigned Windows
-installer (`WINDOWS_SIGNING=none`, no update key), the way to see `tauri build` pass on Windows without a release. It is not called by release CI and does not block publication.
-The local macOS release checks do not cover Linux compilation; run that workflow when Linux verification is needed.
+frontend, macOS native, Linux compilation, the daemon's Linux checks (`linux-daemon`, the same reusable workflow release
+CI runs for a release with Linux in it) and Windows checks; its `windows-bundle` job builds the unsigned Windows
+installer (`WINDOWS_SIGNING=none`, no update key), the way to see `tauri build` pass on Windows without a release. It is
+not called by release CI and does not block publication; only its `linux-daemon` job is also run there, through
+`linux-daemon.yml`. The local macOS release checks do not cover Linux compilation; run that workflow when Linux
+compilation needs verifying without a release.
 
 Repository secrets: `APPLE_CERTIFICATE` (base64 of the Developer ID Application `.p12`, private key included),
-`APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_API_KEY`, `APPLE_API_ISSUER`, `APPLE_API_PRIVATE_KEY`
-(the contents of the API key's `.p8`), `TAURI_SIGNING_PRIVATE_KEY` (the key's contents) and
-`TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (not set for a key without a password).
+`APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_API_KEY`, `APPLE_API_ISSUER` and `APPLE_API_PRIVATE_KEY`
+(the contents of the API key's `.p8`).
+
+The update key is not a repository secret. It lives in the GitHub environment `release-signing`, which only `sign`
+uses. Set it up once in the repository settings (Environments): create `release-signing`; add required reviewers, so
+that each release run pauses at `sign` until one approves it; under deployment branches and tags allow only `main`
+(a run by hand is dispatched from main) and the tag pattern `desktop-v*`; add the environment secrets
+`TAURI_SIGNING_PRIVATE_KEY` (the key's contents) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (not set for a key without a
+password), and **delete the repository secrets of those names**: a repository secret stands in for a missing
+environment secret and every workflow can read it, which defeats the separation. Without the environment's key `sign`
+fails, after the builds have run.
 
 Windows code signing, by mode of the repository variable `WINDOWS_SIGNING` (none of it is needed for `none`):
 `command` needs the variable `WINDOWS_SIGN_COMMAND` (the provider's own credentials go into the `windows` job's build
@@ -461,7 +495,7 @@ event when more than three tags are pushed at once.
 
 When a run fails after `gh release create` but before the manifests are uploaded, re-running only the failed jobs
 reuses the artifacts the build jobs already uploaded, so `publish` finds the same build and resumes; a re-run of
-the build jobs rebuilds with a different signature, and `publish-release` refuses it. Delete the release but keep the
+the build jobs (and so of `sign`) makes a different build with a different signature, and `publish-release` refuses it. Delete the release but keep the
 tag (`gh release delete desktop-v<version>`, without `--cleanup-tag`) and re-run the failed jobs. When one platform's
 build fails, `publish` does not run and nothing is published: fix the cause and re-run the failed jobs, or release the
 passing platforms alone by running the workflow by hand for them and the other one later. The script's own messages still

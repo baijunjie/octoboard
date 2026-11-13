@@ -213,6 +213,9 @@ the earlier steps do not run them separately (the related tests a step runs to c
   earlier successful checks, and includes the Windows cross-check of both crates and a link of the daemon's
   executable (`pnpm check:windows`), which fails, naming what to install, on a machine without its toolchain.
   `release.yml` validates and publishes the tag without calling `quality.yml`; the latter remains available on
-  request, including its Linux compilation job, and does not gate publication.
+  request, including its Linux compilation job, and does not gate publication. For a release with Linux in it,
+  `release.yml` runs the daemon's Linux checks itself (`linux-daemon.yml`: clippy, the tests on glibc with a writable
+  cgroup v2 hierarchy and on musl for both architectures, which `pnpm verify` on macOS cannot run), and signs and
+  publishes only once they pass.
 
 <!-- setup-agent:workflow:end -->

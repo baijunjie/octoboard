@@ -14,7 +14,8 @@ daemon code below, since a clean run on macOS says nothing about it:
   revokes nothing, and the reader, the master and the buffers live on until that job goes. A test of a terminal
   outliving its process therefore cannot fail on macOS.
 
-So run `cargo test -p octoboardd`, and `cargo clippy --all-targets` for the Linux-only code, inside a Linux container
+So run `cargo test -p octoboardd`, and `cargo clippy --all-targets -p octoboardd -- -D warnings` for the Linux-only
+code (a warning fails the Linux checks a release runs), inside a Linux container
 (Docker). Start the container with `docker run --init`: without an init that reaps, orphans reparented to PID 1 (here
 cargo) stay zombies, and every test that waits for a process to be gone (`test_support::assert_gone_by`, which waits for
 `ESRCH`) fails, on `main` as on the change. Give cargo there a target directory of its own (a Docker volume), not the
@@ -40,14 +41,18 @@ A plain container's `/sys/fs/cgroup` is read-only, so it exercises only the fall
 with the rest of a passing test's output. When a change
 can affect those groups — the cgroup code, the Unix `Containment`, the process ledger, or how a launch's process is
 started (`apps/daemon/src/platform/term/unix/start.rs`, `apps/daemon/src/platform/proc/server.rs`), since it enters its
-group in the child before its program runs — run the suite a second time in a
-container with a writable cgroup v2 hierarchy: `--privileged --cgroupns=private`, with `/sys/fs/cgroup` remounted
-read-write inside it if it comes up read-only. Groups are made below the test process's own cgroup, so that cgroup has
-to belong to the normal user running the suite. As root: move every pid in the namespace root's
-`/sys/fs/cgroup/cgroup.procs` into a child group (such as `/sys/fs/cgroup/init`), make a group for the test user,
-`chown -R` it to that user, write the shell's pid into its `cgroup.procs`, then `su` to the user (with `umask 022`) and
-run `cargo test -p octoboardd`. Afterwards `ls -d /sys/fs/cgroup/<that group>/octoboard-*` must find nothing: a group
-left there is a launch some test never ended.
+group in the child before its program runs — run the suite a second time with a
+writable cgroup v2 hierarchy, through `.github/daemon-cgroup-tests.sh`, which sets the hierarchy up for a normal user,
+runs the suite with `OCTOBOARD_REQUIRE_CGROUP=1` and fails on a group left behind. Start it as the `cgroup-tests` job of
+`.github/workflows/linux-daemon.yml` does: as root from the checkout, in a container run with
+`--privileged --cgroupns=private --init` and `TEST_UID` set to the uid that owns the checkout there; locally, pass the
+settings above in with `-e`, and give it a target directory that user can write. Without a container runtime, a manual
+run of `quality.yml` on the pushed branch runs the same job. With a setup of your own instead, set
+`OCTOBOARD_REQUIRE_CGROUP=1` yourself: without it a hierarchy you failed to make writable passes as skipped tests. Even
+with it, the tests that skip with their own `eprintln!("skipped: …")` rather than `test_support::cgroups::skip`
+(`apps/daemon/src/processes/ledger/tests.rs`, `apps/daemon/src/platform/proc/contract_tests.rs`,
+`apps/daemon/src/platform/proc/cgroup.rs`) still pass without running: when the change reaches them, run them with
+`-- --nocapture` and check that no `skipped:` line appears.
 
 Without a container runtime, Linux-only code gets a compile check only: copy the Linux-only functions into a scratch
 crate outside the repository that depends only on what they use (typically `libc`), and run

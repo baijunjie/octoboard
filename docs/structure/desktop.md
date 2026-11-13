@@ -47,7 +47,7 @@ and release-publishing scripts, with their shared `bundle.mjs`, `update-archive.
 archive), the testable `release-manifest.mjs` (which manifests each platform writes, the platform selection and the tag message's `Platforms:` line) and the temporary `actool/` shim. `release.mjs` dispatches on the host to
 `release-macos.mjs`, `release-windows.mjs` or `release-linux.mjs` (which builds the daemon's Linux server archive, with the daemon's `self-update` feature on, which no other build turns on; the Linux release has no desktop shell in it); `windows-release.mjs` holds the Windows signing modes, the `signtool`
 checks and the installer inspection, `linux-release.mjs` the Linux release's target, static-link check and archive checksum helpers, and `sign-file.mjs` is the per-file sign command of the `command` mode. `release-desktop.mjs` owns the
-`release:version` command that prepares and pushes a version for CI (`--platforms` for a version of some platforms); `tag-message.mjs` reads a tag message for `.github/release-notes.sh`. `publish-release.mjs` publishes the selected platforms (`--platforms`, all three by default). The module README holds the scripts' interfaces,
+`release:version` command that prepares and pushes a version for CI (`--platforms` for a version of some platforms); `tag-message.mjs` reads a tag message for `.github/release-notes.sh`. `publish-release.mjs` publishes the selected platforms (`--platforms`, all three by default), after `update-signature.mjs` has checked every update signature against the updater's public key. The module README holds the scripts' interfaces,
 the automated and manual release procedures, failure recovery, and the rule that the version lives in two places.
 
 ## IPC surface
