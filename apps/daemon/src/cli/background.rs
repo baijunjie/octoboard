@@ -422,7 +422,7 @@ pub(super) fn start(port: u16) -> Result<i32> {
         return Ok(1);
     }
     let exe = super::launch_path()?;
-    match spawn_and_await_handshake(&exe, port, None) {
+    match spawn_and_await_handshake(&exe, port, None, None) {
         Ok(started) => {
             println!("{}", started.line);
             println!(
@@ -493,22 +493,29 @@ impl From<anyhow::Error> for StartFailure {
 /// background as `start` starts it, with `key`, handed over on its stdin, so that its clients find
 /// it at the same address with the same key, and this daemon's identity after it, which it records
 /// as its predecessor. `exe` is [`launch_path`]'s answer, taken at this
-/// daemon's start (see `installation.rs` for what it follows). Called once this daemon has
-/// released the instance lock and the port. Logs how it went; whether it came up. **Blocks** until
-/// it reports listening, or for at most [`START_WAIT`].
-pub(crate) fn start_successor(port: u16, key: &str, exe: &Path) -> bool {
+/// daemon's start (see `installation.rs` for what it follows). With `listener`, the duplicate of
+/// this daemon's listening socket it kept, the successor takes that socket over rather than bind
+/// the port, which is then never unbound between the two. Called once this daemon has released the
+/// instance lock and stopped serving the port. Logs how it went; whether it came up. **Blocks**
+/// until it reports listening, or for at most [`START_WAIT`].
+pub(crate) fn start_successor(
+    port: u16,
+    key: &str,
+    exe: &Path,
+    listener: Option<&crate::platform::listener_handover::Kept>,
+) -> SuccessorStart {
     let handover = handover_input(key, crate::owner_record::own_identity());
-    match spawn_and_await_handshake(exe, port, Some(&handover)) {
+    match spawn_and_await_handshake(exe, port, Some(&handover), listener) {
         Ok(started) => {
             tracing::info!(pid = started.pid, port, "the next daemon is listening");
             if started.in_starter_job {
                 tracing::warn!("the job this daemon runs in does not let a process break away: the next daemon ends when that job does");
             }
-            true
+            SuccessorStart::Started
         }
         Err(StartFailure::Error(err)) => {
             tracing::error!(err = %format!("{err:#}"), "starting the next daemon failed; the sessions are kept for the next start");
-            false
+            SuccessorStart::Failed
         }
         Err(StartFailure::TimedOut { said }) => {
             tracing::error!(
@@ -516,23 +523,49 @@ pub(crate) fn start_successor(port: u16, key: &str, exe: &Path) -> bool {
                 "the next daemon did not report listening within {} seconds and was killed; the sessions are kept for the next start",
                 START_WAIT.as_secs()
             );
-            false
+            SuccessorStart::Failed
+        }
+        Err(StartFailure::Ended { status, said })
+            if listener.is_some() && refused_listener(status.code(), &said) =>
+        {
+            tracing::warn!(%status, said = %said.trim_end(), "the next daemon refused the listener handed over, as a build from before listeners were handed over does");
+            SuccessorStart::RefusedListener
         }
         Err(StartFailure::Ended { status, said }) => {
             tracing::error!(%status, said = %said.trim_end(), "the next daemon ended while starting; the sessions are kept for the next start");
-            false
+            SuccessorStart::Failed
         }
     }
+}
+
+/// How starting the next daemon went ([`start_successor`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SuccessorStart {
+    /// It reported listening.
+    Started,
+    /// It ended at once refusing the argument that hands it the listener: a build from before
+    /// listeners were handed over, which would come up binding the port itself.
+    RefusedListener,
+    /// It did not come up for any other reason.
+    Failed,
+}
+
+/// Whether a daemon that ended while starting with `status`, having written `said` on stderr,
+/// refused `--listen-fd` as an argument it does not know: the command line's usage error, status 2,
+/// naming it.
+fn refused_listener(status: Option<i32>, said: &str) -> bool {
+    status == Some(2) && said.contains("--listen-fd")
 }
 
 /// Starts the daemon `exe` on `port` in the background and waits for its handshake line, killing it
 /// when none comes in time. With `handover` (the key and the identity of the daemon handing over,
 /// [`handover_input`]), the daemon is told to read its key from its stdin, where that is written;
-/// otherwise it makes one.
+/// otherwise it makes one. With `listener`, it is handed that socket and told to take it over.
 fn spawn_and_await_handshake(
     exe: &Path,
     port: u16,
     handover: Option<&str>,
+    listener: Option<&crate::platform::listener_handover::Kept>,
 ) -> Result<Started, StartFailure> {
     // Its working directory is the data directory, not wherever the starter was, so that it pins
     // no mount that is then busy at unmount.
@@ -546,13 +579,19 @@ fn spawn_and_await_handshake(
     if handover.is_some() {
         command.arg("--key-stdin");
     }
+    if listener.is_some() {
+        command.args([
+            "--listen-fd",
+            &crate::platform::listener_handover::HANDED_FD.to_string(),
+        ]);
+    }
     // The pipes on stdout and stderr carry the handshake and what a failed start wrote, and the one
     // on stdin, with a key, the key. They close when the starter exits, so what the daemon writes
     // to stderr from then on fails; its log tolerates that (see `init_logging`), but a process the
     // daemon starts must set its own stdio, or one that inherited the dead stderr would be killed
     // by SIGPIPE.
     let (mut child, in_starter_job): (proc::BackgroundChild, bool) =
-        proc::spawn_in_background(&mut command, handover.is_some())
+        proc::spawn_in_background(&mut command, handover.is_some(), listener)
             .context("starting the daemon")?;
     let pid = child.id();
     if let Some(handover) = handover {
@@ -1307,5 +1346,23 @@ pub(super) mod tests {
         let now = Instant::now();
         let awaited = awaited_gone_since(&owner, Some(now + Duration::from_secs(1)));
         assert!(earlier_build_may_be_restarted(&owner, &awaited, now));
+    }
+
+    /// A daemon refused the listener's argument when it ended with the command line's usage-error
+    /// status, 2, having named `--listen-fd`: either alone is another failure, and so is an end
+    /// with no status (a signal).
+    #[test]
+    fn only_a_usage_error_naming_the_listener_argument_is_a_refusal_of_it() {
+        let clap =
+            "error: unexpected argument '--listen-fd' found\n\nUsage: octoboardd [OPTIONS]\n";
+        assert!(refused_listener(Some(2), clap));
+        assert!(!refused_listener(
+            Some(2),
+            "error: unexpected argument '--other' found\n"
+        ));
+        assert!(!refused_listener(Some(2), ""));
+        assert!(!refused_listener(Some(1), clap));
+        assert!(!refused_listener(Some(0), clap));
+        assert!(!refused_listener(None, clap));
     }
 }

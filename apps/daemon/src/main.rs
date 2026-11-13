@@ -95,7 +95,12 @@ fn main() -> Result<()> {
         return cli::run(command);
     }
 
-    // While this is still the only thread.
+    // While this is still the only thread, and before anything opens a descriptor: the listener a
+    // predecessor handed over is at a number nothing else may have taken yet.
+    let handed_listener = cli
+        .listen_fd
+        .zip(cli.port)
+        .map(|(fd, port)| platform::listener_handover::adopt(fd, port));
     processes::ledger::forget_inherited_tag();
     let (key, handed_over_from) = if cli.key_stdin {
         let (key, from) = read_key_from_stdin()?;
@@ -112,7 +117,10 @@ fn main() -> Result<()> {
     let state = std::sync::OnceLock::new();
     let exit_status = runtime.block_on(run_daemon(
         cli.parent_pid,
-        cli.port,
+        Listen {
+            port: cli.port,
+            handed: handed_listener,
+        },
         key,
         handed_over_from,
         cli.service_managed,
@@ -205,14 +213,14 @@ fn init_logging() -> log_file::LogFile {
     log_file
 }
 
-/// Runs the daemon on `port` when one is given, else on a port the system assigns, with `key` when
-/// one is given, else a key of its own; `handed_over_from` is the daemon that handed `key` over,
-/// as far as it said. `service_managed` is `--service-managed`. `state_out` is given the daemon's
-/// state once it exists, for `main` to read what is still running after this returns, error or
-/// not. Returns the status to exit with, when it is not 0.
+/// Runs the daemon where `listen` says, with `key` when one is given, else a key of its own;
+/// `handed_over_from` is the daemon that handed `key` over, as far as it said. `service_managed` is
+/// `--service-managed`. `state_out` is given the daemon's state once it exists, for `main` to read
+/// what is still running after this returns, error or not. Returns the status to exit with, when
+/// it is not 0.
 async fn run_daemon(
     parent_pid: Option<u32>,
-    port: Option<u16>,
+    listen: Listen,
     key: Option<String>,
     handed_over_from: Option<owner_record::Predecessor>,
     service_managed: bool,
@@ -231,8 +239,19 @@ async fn run_daemon(
     );
 
     // Bound ahead of anything the daemon changes, so that a port in use fails the start cleanly.
-    let listener = bind(port).await?;
+    let listener = match listen.handed {
+        Some(handed) => adopt_or_bind(handed, listen.port).await?,
+        None => bind(listen.port).await?,
+    };
     let port = listener.local_addr()?.port();
+    // A duplicate of the listener, kept to hand to the successor this daemon may start itself at a
+    // planned restart, so that the port is never unbound in between (see
+    // `platform::listener_handover`). The application's daemon starts none.
+    let kept_listener = if parent_pid.is_none() {
+        platform::listener_handover::Kept::of(&listener)
+    } else {
+        None
+    };
 
     let store = Store::open(&paths::db_path())?;
     let key = match key {
@@ -506,8 +525,9 @@ async fn run_daemon(
     });
     let serve = axum::serve(listener, server::router(state.clone()));
     // The listener goes with `serve` once this ends, and the browser socket's with `browser`
-    // below: the daemon accepts no more connections, and the port and the socket are free for a
-    // successor.
+    // below: the daemon accepts no more connections, and the browser socket is free for a
+    // successor. The port is too, but for a successor this daemon starts itself, which is handed
+    // the port's listener (`kept_listener`).
     let stop = tokio::select! {
         result = serve => {
             if let Err(err) = result {
@@ -531,6 +551,16 @@ async fn run_daemon(
         }
     };
     drop(browser);
+    // Held on only for a successor this daemon starts itself: anything else lets the port go now,
+    // so a client is refused at once rather than left waiting in the backlog for nobody.
+    let mut kept_listener = kept_listener.filter(|_| {
+        matches!(stop, StopKind::Planned { successor: true }) && !state.service_managed()
+    });
+    // Until the successor is started, what arrives on the port held for it is turned away as the
+    // port would refuse it: accepted and closed at once, so that a client counts its request as
+    // not taken, as it did when the port was let go, rather than have it wait for the successor and
+    // be carried out there. A request that arrives once the successor is being started waits for it.
+    let mut turning_away = kept_listener.as_ref().and_then(turn_away);
 
     let successor = match stop {
         StopKind::Ordinary => {
@@ -567,6 +597,11 @@ async fn run_daemon(
                 }
                 if state.ordinary_stop_asked() {
                     tracing::info!("an ordinary stop was asked for during the planned stop; what it was to leave running is ended");
+                    // No successor comes: the port is let go now.
+                    if let Some(turning) = turning_away.take() {
+                        turning.abort();
+                    }
+                    kept_listener = None;
                     stop_all_processes_after_planned(&state, holders).await;
                     false
                 } else {
@@ -605,11 +640,18 @@ async fn run_daemon(
         );
         return Ok(Some(RESTART_EXIT_STATUS));
     }
+    if let Some(turning) = turning_away.take() {
+        turning.abort();
+        // Its accepting has ended once the task has, so nothing meant for the successor is turned
+        // away from here on.
+        let _ = turning.await;
+    }
     let key = state.key.clone();
-    let started =
-        tokio::task::spawn_blocking(move || self_update::start_successor(port, &key, &launch_exe))
-            .await
-            .unwrap_or(false);
+    let started = tokio::task::spawn_blocking(move || {
+        self_update::start_successor(port, &key, &launch_exe, kept_listener)
+    })
+    .await
+    .unwrap_or(false);
     if !started {
         if let Some(owner) = owner {
             owner.withdraw_handover();
@@ -638,6 +680,62 @@ fn spawn_restart_requests(state: Arc<AppState>, mut requests: platform::proc::Re
             }
         }
     });
+}
+
+/// Where the daemon listens: the port asked for (`--port`), else one the system assigns, and the
+/// listener a predecessor handed over for it (`--listen-fd`), as far as taking it over went.
+struct Listen {
+    port: Option<u16>,
+    handed: Option<std::io::Result<std::net::TcpListener>>,
+}
+
+/// Serves the listener a predecessor handed over (`handed`, what taking it over came to), or, where
+/// it could not be taken over, binds the port as [`bind`] does.
+async fn adopt_or_bind(
+    handed: std::io::Result<std::net::TcpListener>,
+    port: Option<u16>,
+) -> Result<tokio::net::TcpListener> {
+    match handed.and_then(tokio::net::TcpListener::from_std) {
+        Ok(listener) => {
+            tracing::info!("took over the listener the previous daemon handed over");
+            Ok(listener)
+        }
+        Err(err) => {
+            tracing::warn!(%err, "the listener handed over cannot be taken over; binding the port");
+            bind(port).await
+        }
+    }
+}
+
+/// Accepts every connection on the port `kept` holds and closes it unread, until the task returned
+/// is aborted: what a client of a stopping daemon gets in place of a refusal while the port is held
+/// for its successor. `None` when no listener of its own can be made, the connections then waiting
+/// for the successor.
+fn turn_away(kept: &platform::listener_handover::Kept) -> Option<tokio::task::JoinHandle<()>> {
+    let listener = kept
+        .listener()
+        .and_then(|listener| {
+            listener.set_nonblocking(true)?;
+            tokio::net::TcpListener::from_std(listener)
+        })
+        .map_err(|err| tracing::warn!(%err, "turning connections away while the port is held failed; they wait for the next daemon"))
+        .ok()?;
+    Some(tokio::spawn(async move {
+        loop {
+            match listener.accept().await {
+                // Closed with a reset, which a client reads as a connection not taken whatever it
+                // was doing, writing its request or waiting for the answer.
+                Ok((connection, _)) => {
+                    let _ = connection.set_zero_linger();
+                    drop(connection);
+                }
+                Err(err) => {
+                    tracing::debug!(%err, "accepting a connection to turn away failed");
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                }
+            }
+        }
+    }))
 }
 
 /// Binds the loopback port `port`, or one the system assigns for `None`.

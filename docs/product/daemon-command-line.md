@@ -197,7 +197,8 @@ free is gone at once.
   forwards the socket to the owner's machine, with the daemon's port, the socket's real path and `<user>@<server>`,
   `<user>` being the login name the system records for the user (just `<server>` where it records none) and `<server>`
   left for the owner to fill in, and says to run it there and open the address there. Before that, it asks the daemon on
-  its socket whether it accepts the key in the address, allowing it **5 seconds**, and adds a warning when the daemon
+  its socket whether it accepts the key in the address, allowing it **5 seconds** to take the connection and as long to
+  answer, and adds a warning when the daemon
   refuses it — `owner.key` changed since the daemon started, say, for which `address --rotate` makes an address it
   accepts — or when the socket cannot be asked, naming the socket and why. For a daemon that does not accept the owner
   key, on Linux and macOS, it says instead that the daemon serves no browser page — it follows the desktop application,

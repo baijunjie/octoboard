@@ -489,6 +489,35 @@ fn ports_of(pid: i32) -> Vec<u16> {
     ports
 }
 
+/// Whether this process's descriptor `fd` is a TCP socket that listens; an error for one that is
+/// not open or not a socket. macOS answers `SO_ACCEPTCONN` with `ENOPROTOOPT`, so the listener
+/// handover reads the socket's TCP state here instead.
+pub(crate) fn own_socket_listens(fd: i32) -> std::io::Result<bool> {
+    let mut buffer = vec![0u8; SOCKET_FDINFO_SIZE];
+    // SAFETY: `buffer` is writable for the size given; it is only read once the call filled all of
+    // it.
+    let got = unsafe {
+        libc::proc_pidfdinfo(
+            libc::getpid(),
+            fd,
+            PROC_PIDFDSOCKETINFO,
+            buffer.as_mut_ptr().cast(),
+            SOCKET_FDINFO_SIZE as libc::c_int,
+        )
+    };
+    if got <= 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    if got as usize != SOCKET_FDINFO_SIZE {
+        return Err(std::io::Error::other(format!(
+            "descriptor {fd}: the socket information is {got} bytes, not {SOCKET_FDINFO_SIZE}"
+        )));
+    }
+    let read_i32 =
+        |at: usize| i32::from_ne_bytes(buffer[at..at + 4].try_into().expect("four bytes"));
+    Ok(read_i32(SOI_KIND) == SOCKINFO_TCP && read_i32(TCPSI_STATE) == TSI_S_LISTEN)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

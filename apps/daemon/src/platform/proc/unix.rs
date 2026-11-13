@@ -340,11 +340,14 @@ pub(crate) type BackgroundChild = std::process::Child;
 /// Spawns `command` as the daemon the command line runs in the background: in a session of its own
 /// with no controlling terminal, to keep running after the login that started it has closed. Its
 /// stdout and stderr are pipes to the caller, and so is its stdin when `pipe_stdin`, null
-/// otherwise, and those are the only descriptors it inherits. The answer says whether the process
-/// stays in the job of whoever started it, which no process on Unix does.
+/// otherwise, and those are the only descriptors it inherits, besides `listener`, when given, as
+/// descriptor [`HANDED_FD`](crate::platform::listener_handover::HANDED_FD), which the caller
+/// announces on the command line. The answer says whether the process stays in the job of whoever
+/// started it, which no process on Unix does.
 pub(crate) fn spawn_in_background(
     command: &mut Command,
     pipe_stdin: bool,
+    listener: Option<&crate::platform::listener_handover::Kept>,
 ) -> io::Result<(BackgroundChild, bool)> {
     let stdin = if pipe_stdin {
         Stdio::piped()
@@ -360,6 +363,14 @@ pub(crate) fn spawn_in_background(
     let bound = descriptors::open_bound();
     // SAFETY: the hook only calls async-signal-safe functions and allocates nothing.
     unsafe { command.pre_exec(move || mark_inherited_descriptors_close_on_exec(bound)) };
+    if let Some(listener) = listener {
+        use crate::platform::listener_handover::{hand_over_in_child, raw, HANDED_FD};
+        // Read here; `listener` outlives the spawn, so the descriptor is open in the child.
+        let fd = raw(listener);
+        // SAFETY: the hook only calls async-signal-safe functions and allocates nothing. It runs
+        // after the one above, so the descriptor it opens is not marked close-on-exec again.
+        unsafe { command.pre_exec(move || hand_over_in_child(fd, HANDED_FD)) };
+    }
     command.spawn().map(|child| (child, false))
 }
 
@@ -914,5 +925,184 @@ mod tests {
     #[test]
     fn a_signal_is_ignored_only_where_its_disposition_is_to_ignore_it() {
         run_helper("dispositions");
+    }
+}
+
+/// The listener a background start hands to the process it starts: what the process finds as
+/// descriptor 3, and that without one it finds none. The processes are this test binary run again
+/// with only [`a_listener_helper`] selected, as `ROLE` says, so that what is asserted about the
+/// descriptors is asserted in the process that inherited them, whose exit status carries it.
+#[cfg(test)]
+mod handed_listener_tests {
+    use std::io::Read;
+    use std::os::fd::AsRawFd;
+    use std::process::{Command, ExitStatus};
+    use std::sync::mpsc;
+
+    use super::spawn_in_background;
+    use crate::platform::listener_handover::{self, Kept, HANDED_FD};
+    use crate::platform::test_helper::{self, ROLE};
+    use crate::test_support::{KillOnDrop, PATIENCE};
+
+    /// The variable that gives [`a_listener_helper`] the port its listener is on.
+    const PORT: &str = "OCTOBOARD_TEST_HANDED_PORT";
+
+    /// Whether `fd` is a socket that listens.
+    fn is_listening(fd: libc::c_int) -> bool {
+        crate::platform::listener_handover::is_listening(fd).unwrap_or(false)
+    }
+
+    /// The flags of `fd`, close-on-exec among them.
+    fn flags_of(fd: libc::c_int) -> libc::c_int {
+        // SAFETY: only reads the flags of a descriptor of this process.
+        unsafe { libc::fcntl(fd, libc::F_GETFD) }
+    }
+
+    /// The helper process: does what `ROLE` names and panics where what it finds is not what is
+    /// expected. A no-op in an ordinary run.
+    ///
+    /// - `adopt-and-accept`: takes the descriptor over as the daemon's successor does, on the
+    ///   port `PORT` names, accepts the connection already waiting on it and reads `hello` from it.
+    /// - `no-listener`: finds no listening socket as descriptor 3.
+    /// - `hand-over`: puts a listener at descriptor 3 as the hook between `fork` and `exec` does,
+    ///   from another descriptor and from descriptor 3 itself.
+    #[test]
+    fn a_listener_helper() {
+        let Ok(role) = std::env::var(ROLE) else {
+            return;
+        };
+        match role.as_str() {
+            "adopt-and-accept" => {
+                let port: u16 = std::env::var(PORT).unwrap().parse().unwrap();
+                let listener = listener_handover::adopt(HANDED_FD, port).expect("taken over");
+                let (mut stream, _) = listener
+                    .accept()
+                    .expect("the connection that waited in the backlog");
+                // The accepted stream may inherit the listener's non-blocking mode.
+                stream.set_nonblocking(false).unwrap();
+                stream.set_read_timeout(Some(PATIENCE)).unwrap();
+                let mut said = [0u8; 5];
+                stream.read_exact(&mut said).expect("what the client sent");
+                assert_eq!(&said, b"hello");
+            }
+            "no-listener" => {
+                assert!(
+                    !is_listening(HANDED_FD),
+                    "a listener was inherited as descriptor {HANDED_FD}"
+                );
+            }
+            "hand-over" => {
+                let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+                // A close-on-exec copy well above the standard descriptors, as the kept duplicate
+                // is.
+                // SAFETY: duplicates a descriptor this process owns, to a number not in use above
+                // 10; the copy is closed with the process.
+                let kept = unsafe { libc::fcntl(listener.as_raw_fd(), libc::F_DUPFD_CLOEXEC, 10) };
+                assert!(kept >= 10);
+                assert_ne!(flags_of(kept) & libc::FD_CLOEXEC, 0);
+                listener_handover::hand_over_in_child(kept, HANDED_FD).unwrap();
+                assert!(is_listening(HANDED_FD));
+                assert_eq!(
+                    flags_of(HANDED_FD) & libc::FD_CLOEXEC,
+                    0,
+                    "open across exec"
+                );
+
+                // Where the descriptor is already the target, it only has to be made inheritable.
+                // SAFETY: only sets the flags of a descriptor of this process.
+                assert_ne!(
+                    unsafe { libc::fcntl(HANDED_FD, libc::F_SETFD, libc::FD_CLOEXEC) },
+                    -1
+                );
+                listener_handover::hand_over_in_child(HANDED_FD, HANDED_FD).unwrap();
+                assert!(is_listening(HANDED_FD));
+                assert_eq!(
+                    flags_of(HANDED_FD) & libc::FD_CLOEXEC,
+                    0,
+                    "open across exec"
+                );
+
+                // A descriptor that is not open is an error, not a silent success.
+                assert!(listener_handover::hand_over_in_child(1000, HANDED_FD).is_err());
+            }
+            other => panic!("no helper role `{other}`"),
+        }
+    }
+
+    /// Starts the helper `role` in the background, handing it `listener`, and waits for it to end
+    /// within [`PATIENCE`]: its exit status and what it wrote.
+    fn run_in_background(role: &str, port: u16, listener: Option<&Kept>) -> (ExitStatus, String) {
+        let mut command = Command::new(test_helper::program());
+        command
+            .args(test_helper::args(
+                "platform::proc::unix::handed_listener_tests::a_listener_helper",
+            ))
+            .env(ROLE, role)
+            .env(PORT, port.to_string());
+        let (mut child, _in_starter_job) =
+            spawn_in_background(&mut command, false, listener).expect("the background start");
+        let mut guard = KillOnDrop(vec![child.id() as i32]);
+        let mut stdout = child.stdout.take().expect("stdout was piped");
+        let mut stderr = child.stderr.take().expect("stderr was piped");
+        let (done, ended) = mpsc::channel();
+        std::thread::spawn(move || {
+            let mut said = String::new();
+            stdout.read_to_string(&mut said).ok();
+            stderr.read_to_string(&mut said).ok();
+            let _ = done.send((child.wait().expect("the helper is reaped"), said));
+        });
+        let outcome = ended
+            .recv_timeout(PATIENCE)
+            .expect("the helper ended within the patience");
+        guard.0.clear();
+        outcome
+    }
+
+    /// A duplicate of a loopback listener, kept as the daemon keeps it, and the port.
+    async fn kept_listener() -> (Kept, u16) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let kept = Kept::of(&listener).expect("a duplicate");
+        // The daemon stops serving before it starts the successor.
+        drop(listener);
+        (kept, port)
+    }
+
+    /// The listener handed to a background start is descriptor 3 of the process it starts: it
+    /// adopts it on the port, and a connection made while nobody served the port, queued in the
+    /// backlog, is accepted from it with what the client sent.
+    #[tokio::test]
+    async fn a_listener_handed_to_a_background_start_is_taken_over_as_descriptor_three() {
+        use std::io::Write;
+
+        let (kept, port) = kept_listener().await;
+        let mut client =
+            std::net::TcpStream::connect(("127.0.0.1", port)).expect("queued, not refused");
+        client.write_all(b"hello").unwrap();
+        let (status, said) = run_in_background("adopt-and-accept", port, Some(&kept));
+        assert!(status.success(), "the helper ended with {status}:\n{said}");
+        // The helper is gone and the starter still holds its duplicate: the port is bound
+        // though nothing serves it.
+        assert!(
+            std::net::TcpListener::bind(("127.0.0.1", port)).is_err(),
+            "the port stayed bound"
+        );
+    }
+
+    /// Without a listener to hand over the process inherits none, though the starter holds one:
+    /// the kept duplicate is close-on-exec, and nothing else is passed on.
+    #[tokio::test]
+    async fn a_background_start_without_a_listener_inherits_none() {
+        let (_kept, port) = kept_listener().await;
+        let (status, said) = run_in_background("no-listener", port, None);
+        assert!(status.success(), "the helper ended with {status}:\n{said}");
+    }
+
+    /// The hook that puts the listener at descriptor 3 does it from another descriptor and from
+    /// descriptor 3 itself, leaving it open across `exec`, and refuses one that is not open.
+    #[test]
+    fn the_hook_puts_the_listener_at_descriptor_three_open_across_exec() {
+        let (status, said) = run_in_background("hand-over", 0, None);
+        assert!(status.success(), "the helper ended with {status}:\n{said}");
     }
 }

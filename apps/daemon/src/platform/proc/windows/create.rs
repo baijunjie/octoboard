@@ -352,6 +352,8 @@ impl BackgroundChild {
 pub(crate) fn spawn_in_background(
     command: &mut Command,
     pipe_stdin: bool,
+    // Windows hands no listener over (`crate::platform::listener_handover`), so none is ever given.
+    _listener: Option<&crate::platform::listener_handover::Kept>,
 ) -> io::Result<(BackgroundChild, bool)> {
     let mut plain = crate::platform::term::Command::new(command.get_program());
     plain.args(command.get_args());

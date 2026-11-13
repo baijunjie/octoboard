@@ -49,7 +49,8 @@ impl Listener {
     }
 }
 
-/// Connects to the socket at `path`, with every read and write bounded by `timeout`.
+/// Connects to the socket at `path`, with the connect and every read and write bounded by
+/// `timeout`.
 pub fn connect(path: &Path, timeout: Duration) -> io::Result<BlockingStream> {
     imp::connect(path, timeout)
 }

@@ -31,7 +31,26 @@ pub(super) async fn accept(listener: &Listener) -> io::Result<Stream> {
 }
 
 pub(super) fn connect(path: &Path, timeout: Duration) -> io::Result<BlockingStream> {
-    let stream = BlockingStream::connect(path)?;
+    // A connect to a listener whose backlog is full waits with no bound on Linux, and `std` has no
+    // connect with a timeout for these sockets: the connect runs on a thread of its own, left to
+    // finish on its own when it outlasts `timeout` (a stream it makes then is dropped, unsent).
+    let (sent, received) = std::sync::mpsc::channel();
+    let target = path.to_path_buf();
+    std::thread::spawn(move || {
+        let _ = sent.send(BlockingStream::connect(&target));
+    });
+    let stream = match received.recv_timeout(timeout) {
+        Ok(connected) => connected?,
+        Err(_) => {
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                format!(
+                    "connecting to {} took longer than {timeout:?}",
+                    path.display()
+                ),
+            ))
+        }
+    };
     stream.set_read_timeout(Some(timeout))?;
     stream.set_write_timeout(Some(timeout))?;
     Ok(stream)
@@ -208,6 +227,107 @@ mod tests {
             .await
             .unwrap()
             .expect("the connection was accepted");
+    }
+
+    /// A socket file nothing listens on is refused as it is, and a path with no socket is not
+    /// found: the error the connect itself gave comes back, not a timeout.
+    #[test]
+    fn a_connect_that_fails_reports_why() {
+        let dir = scratch("connect-error");
+        let path = dir.join("b.sock");
+        let timeout = std::time::Duration::from_secs(30);
+        let missing = connect(&path, timeout).expect_err("no file");
+        assert_eq!(missing.kind(), std::io::ErrorKind::NotFound);
+
+        drop(std::os::unix::net::UnixListener::bind(&path).unwrap());
+        let refused = connect(&path, timeout).expect_err("no listener");
+        assert_eq!(refused.kind(), std::io::ErrorKind::ConnectionRefused);
+    }
+
+    /// The stream a connect returns carries the timeout on its reads and its writes, so a peer
+    /// that never answers is given up on.
+    #[test]
+    fn the_connected_stream_carries_the_timeout_on_reads_and_writes() {
+        let dir = scratch("connect-timeouts");
+        let path = dir.join("b.sock");
+        let _listener = std::os::unix::net::UnixListener::bind(&path).unwrap();
+        let timeout = std::time::Duration::from_secs(7);
+        let stream = connect(&path, timeout).expect("connected");
+        assert_eq!(stream.read_timeout().unwrap(), Some(timeout));
+        assert_eq!(stream.write_timeout().unwrap(), Some(timeout));
+    }
+
+    /// A connect to a listener whose backlog is full waits with no bound on Linux; the connect
+    /// gives up at the timeout with `TimedOut` instead, so a daemon that stopped accepting does not
+    /// hold the caller. The timeout is short here since what is tested is that it fires.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_connect_to_a_full_backlog_gives_up_at_the_timeout() {
+        use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+        use std::os::unix::ffi::OsStrExt;
+
+        /// Connects to `path` without waiting: the descriptor once connected, `WouldBlock` where
+        /// the backlog is full.
+        fn connect_without_waiting(path: &std::path::Path) -> std::io::Result<OwnedFd> {
+            // SAFETY: a new socket, owned from here on.
+            let raw = unsafe {
+                libc::socket(
+                    libc::AF_UNIX,
+                    libc::SOCK_STREAM | libc::SOCK_NONBLOCK | libc::SOCK_CLOEXEC,
+                    0,
+                )
+            };
+            if raw == -1 {
+                return Err(std::io::Error::last_os_error());
+            }
+            // SAFETY: `raw` is open and nothing else owns it.
+            let owned = unsafe { OwnedFd::from_raw_fd(raw) };
+            // SAFETY: a zeroed `sockaddr_un` is a valid value to fill in.
+            let mut address: libc::sockaddr_un = unsafe { std::mem::zeroed() };
+            address.sun_family = libc::AF_UNIX as libc::sa_family_t;
+            let bytes = path.as_os_str().as_bytes();
+            assert!(bytes.len() < address.sun_path.len());
+            for (slot, byte) in address.sun_path.iter_mut().zip(bytes) {
+                *slot = *byte as libc::c_char;
+            }
+            // SAFETY: `address` is a filled-in `sockaddr_un` of the size given.
+            let connected = unsafe {
+                libc::connect(
+                    owned.as_raw_fd(),
+                    (&address as *const libc::sockaddr_un).cast(),
+                    std::mem::size_of::<libc::sockaddr_un>() as libc::socklen_t,
+                )
+            };
+            if connected == -1 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(owned)
+        }
+
+        let dir = scratch("connect-full");
+        let path = dir.join("b.sock");
+        let listener = std::os::unix::net::UnixListener::bind(&path).unwrap();
+        // The smallest backlog, which nothing accepts from.
+        // SAFETY: only changes the backlog of a listening socket this test owns.
+        assert_eq!(unsafe { libc::listen(listener.as_raw_fd(), 0) }, 0);
+        let mut queued = Vec::new();
+        loop {
+            match connect_without_waiting(&path) {
+                Ok(connection) => queued.push(connection),
+                Err(err) if err.kind() == std::io::ErrorKind::WouldBlock => break,
+                Err(err) => panic!("filling the backlog: {err}"),
+            }
+            assert!(queued.len() < 64, "the backlog never filled");
+        }
+
+        let began = std::time::Instant::now();
+        let err = connect(&path, std::time::Duration::from_millis(100))
+            .expect_err("a connect nobody accepts");
+        assert_eq!(err.kind(), std::io::ErrorKind::TimedOut, "{err}");
+        // Rules out a wait without bound, not a tight elapsed time.
+        assert!(began.elapsed() < crate::test_support::PATIENCE);
+        // The thread still connecting ends once the listener is gone.
+        drop(listener);
     }
 
     /// Whether a layout of `data` under `ancestor` is judged by `ancestor` alone: the tree is

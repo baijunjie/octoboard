@@ -1,7 +1,8 @@
 //! The next daemon of a planned restart that no service manager starts, and what happens when it
 //! does not start after an update.
 //!
-//! By then this daemon has handed its sessions over and let go of its lock and port, so it cannot
+//! By then this daemon has handed its sessions over, let go of its lock and stopped serving its
+//! port (which it holds for the next daemon where it can hand it over), so it cannot
 //! simply carry on: the next daemon is all there is. Where the file at the launch path is another
 //! build than this daemon's (an update, or a rollback made under it) and it does not start, while
 //! this daemon's build is the one kept beside it as `<name>.previous`, the two are swapped back, as
@@ -15,33 +16,68 @@ use std::path::Path;
 
 use super::record::Files;
 use super::replace::{previous_path, swap_with_previous};
+use crate::cli::SuccessorStart;
 use crate::platform::{fs, proc};
 
-/// Starts the next daemon from `launch` on `port` with `key` (`crate::cli::start_successor`), and
-/// falls back to the build that ran when that fails after an update (see the module). Whether a
-/// daemon started. Blocking.
-pub(crate) fn start_successor(port: u16, key: &str, launch: &Path) -> bool {
-    if crate::cli::start_successor(port, key, launch) {
-        return true;
+/// Starts the next daemon from `launch` on `port` with `key`, handing it `listener`
+/// (`crate::cli::start_successor`), and falls back to the build that ran when that fails after an
+/// update (see the module). Whether a daemon started. Blocking.
+pub(crate) fn start_successor(
+    port: u16,
+    key: &str,
+    launch: &Path,
+    listener: Option<crate::platform::listener_handover::Kept>,
+) -> bool {
+    start_with(
+        listener,
+        |listener| crate::cli::start_successor(port, key, launch, listener),
+        || {
+            let put_back = cfg!(feature = "self-update")
+                && proc::self_update_host()
+                && fall_back(
+                    launch,
+                    &Files::new(&crate::paths::data_dir()),
+                    &crate::paths::db_path(),
+                    proc::names_running_image,
+                );
+            if put_back {
+                tracing::warn!(
+                    launch = %launch.display(),
+                    "the next daemon did not start; the build that ran was put back and is started \
+                     instead, and the one that did not start is kept as the previous build"
+                );
+            }
+            put_back
+        },
+    )
+}
+
+/// [`start_successor`] over the start of one daemon (`start`, handed the listener or none) and the
+/// fallback that puts the build that ran back (`fall_back`, whether it did).
+///
+/// A first start that refused the listener as an argument it does not know is of a build from
+/// before listeners were handed over, put at the launch path on purpose (a rollback, or by hand):
+/// it is started once more with the listener let go first, binding the port itself, the port free
+/// for that moment, and the build that ran is put back only should that fail too. Any other failure
+/// keeps the port held: the build that ran, put back, is started with the listener; with nothing
+/// put back the start is not repeated, and the port goes only as this daemon ends.
+pub(super) fn start_with(
+    listener: Option<crate::platform::listener_handover::Kept>,
+    mut start: impl FnMut(Option<&crate::platform::listener_handover::Kept>) -> SuccessorStart,
+    fall_back: impl FnOnce() -> bool,
+) -> bool {
+    match start(listener.as_ref()) {
+        SuccessorStart::Started => true,
+        SuccessorStart::RefusedListener => {
+            drop(listener);
+            tracing::warn!("the next daemon does not take the listener handed over; starting it once more to bind the port itself");
+            start(None) == SuccessorStart::Started
+                || (fall_back() && start(None) == SuccessorStart::Started)
+        }
+        SuccessorStart::Failed => {
+            fall_back() && start(listener.as_ref()) == SuccessorStart::Started
+        }
     }
-    if !cfg!(feature = "self-update") || !proc::self_update_host() {
-        return false;
-    }
-    let files = Files::new(&crate::paths::data_dir());
-    if !fall_back(
-        launch,
-        &files,
-        &crate::paths::db_path(),
-        proc::names_running_image,
-    ) {
-        return false;
-    }
-    tracing::warn!(
-        launch = %launch.display(),
-        "the next daemon did not start; the build that ran was put back and is started instead, and \
-         the one that did not start is kept as the previous build"
-    );
-    crate::cli::start_successor(port, key, launch)
 }
 
 /// Puts the build that runs (`is_running_image`) back at `launch` when it was kept as the

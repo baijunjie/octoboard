@@ -69,6 +69,27 @@ path — by an update, or a rollback made under it — and its own build is kept
 its own build back and starts that instead (see "When the update does not start" in
 `docs/product/server-form-updates.md`).
 
+**The port between the two daemons.** Outside Windows, a daemon that starts its next daemon itself keeps its port bound
+until the next daemon holds it, so that no other user of the machine can take the port in between (see "Other users of
+the same machine" in `docs/product/who-can-reach-the-daemon.md`). Once the planned restart begins the daemon serves no
+new connection on the port, but until it starts the next daemon it accepts each one and closes it at once, with a reset,
+so that a client counts its request as not taken, as with a port nothing listens on. Right before starting the next
+daemon it stops doing so, and hands the port's listening socket to the next daemon as an inherited descriptor, announced
+on its command line; the next daemon takes it over instead of binding the port, provided it is a socket listening on
+`127.0.0.1` at the port it was given, and otherwise binds the port as usual. A connection made from then on waits until
+the next daemon accepts it, and is answered by that one. A next daemon that ends at once with status 2, naming the
+option that announces the socket on its error output, is of a build from before the socket was handed over, put at the
+path on purpose (a rollback, say, or by hand): the daemon then lets go of the port and starts the same file once more,
+binding the port itself, the port being free for that moment, and only if that start fails too does it put its own build
+back, where it can, and start that, binding the port as well. Any other failure to come up — the next daemon crashing,
+ending otherwise, or not reporting listening in time — keeps the port held: the daemon's own build, where it is put
+back, is handed the socket; otherwise nothing is started again, and the port goes only as the daemon exits. Each start
+has its 30 seconds, and the daemon exits with status 1 only once the last has failed. On Windows nothing is handed over:
+the daemon lets go of the port as soon as it stops serving it, and the next daemon binds it. So does a daemon that could
+not keep its socket to hand over, as its log says. A daemon a service manager restarts, a planned stop and an ordinary
+stop let go of the port as soon as they stop serving it, and an ordinary stop that cuts a planned restart short lets go
+of it then.
+
 A daemon leaves the next start to a service manager only on evidence, decided once as it starts: the option
 `--service-managed`, which the example systemd unit passes, or systemd naming the daemon's own process as the one it
 started for a unit (`SYSTEMD_EXEC_PID` equal to the daemon's pid, with an `INVOCATION_ID`), which systemd sets from

@@ -99,17 +99,21 @@ holds a key. The MCP bridge's command line does name its session's MCP token, wh
 for and is of no use without the key. A session taken over from an earlier build keeps the key where that build put it
 until it ends: on its helpers' command lines, or in its agent's environment.
 
-**Keeping a key from other users also means keeping it off a port they could take.** Any user of the machine can
-listen on a loopback port the daemon is not holding, and the daemon lets its port go for a moment at a planned restart
-and while a service manager restarts it; whatever a client sends to that port meanwhile reaches whoever took it. A
-browser reconnecting through the owner's forward would send the owner key there, so the owner key is never accepted on
-the TCP port: the browser reaches the daemon only through its socket, which no other user but the superuser can
-create, replace or connect to, nor forward through an SSH login of their own (see "The browser socket" in
-`docs/product/server-form.md`). The launch key is still sent to the TCP port, by the clients that carry it, and keeps a
-narrower exposure there: at a planned restart in which the daemon starts its next daemon itself, the next daemon keeps
-the same launch key, so a client that sends it to the port during that gap could give it to another user who took the
-port, and that user could then open the next daemon with it. Where a service manager starts the next daemon, that one
-makes a new launch key, and the old one opens nothing.
+**Keeping a key from other users also means keeping it off a port they could take.** Any user of the machine can listen
+on a loopback port the daemon is not holding, and the daemon lets its port go for a moment while a service manager
+restarts it, and at some planned restarts (below); whatever a client sends to that port meanwhile reaches whoever took
+it. A browser reconnecting through the owner's forward would send the owner key there, so the owner key is never
+accepted on the TCP port: the browser reaches the daemon only through its socket, which no other user but the superuser
+can create, replace or connect to, nor forward through an SSH login of their own (see "The browser socket" in
+`docs/product/server-form.md`). The launch key is still sent to the TCP port, by the clients that carry it. At a planned
+restart in which the daemon starts its next daemon itself, the next daemon keeps the same launch key, so outside Windows
+the daemon hands its listening socket to the next daemon and the port is never free between the two (see "The port
+between the two daemons" in `docs/product/planned-restart-and-planned-stop.md`). The launch key keeps a narrower
+exposure only where the port is free at such a restart all the same — on Windows, where nothing is handed over, and when
+the build at the daemon's path is one from before the socket was handed over, which refuses it, so that the daemon
+starts it once more binding the port itself: a client that sends the key to the port during that gap could give it to
+another user who took the port, and that user could then open the next daemon with it. Where a service manager starts
+the next daemon, that one makes a new launch key, and the old one opens nothing.
 
 **A web page open in a browser cannot, unless it is Octoboard's own.** Every request, on every route and every
 WebSocket upgrade, passes two checks in turn — except a read of a file of the UI the daemon serves, which passes the

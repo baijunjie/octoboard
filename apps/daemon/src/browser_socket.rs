@@ -129,104 +129,31 @@ pub fn key_accepted(data: &Path, port: u16, key: &str, timeout: Duration) -> std
     }
 }
 
-/// How long `octoboardd address` waits on the daemon's answer to its key check.
-const CHECK_WAIT: Duration = Duration::from_secs(5);
+/// A router that answers a key check as the daemon's does: 204 to the key `good`, 401 to any
+/// other.
+#[cfg(all(test, unix))]
+pub(crate) fn key_check_router() -> axum::Router {
+    use axum::http::StatusCode;
+    use axum::routing::get;
 
-/// What `octoboardd address` says on stderr beside the address of a daemon that serves the browser
-/// on its socket (`data`'s), the address being for `port` with `key`: a warning when the daemon
-/// does not accept `key` there, as after `owner.key` was changed behind its back, or the socket
-/// cannot be asked, and the command that forwards the socket.
-pub fn address_notes(port: u16, data: &Path, key: &str) -> Vec<String> {
-    let mut notes = Vec::new();
-    match key_accepted(data, port, key, CHECK_WAIT) {
-        Ok(true) => {}
-        Ok(false) => notes.push(format!(
-            "the running {} refuses the key in this address (owner.key may have been changed \
-             since it started); `{} address --rotate` makes one it accepts",
-            crate::APP_NAME,
-            crate::APP_NAME
-        )),
-        Err(err) => notes.push(format!(
-            "whether the running {} accepts this address could not be checked on {}: {err}",
-            crate::APP_NAME,
-            path_in(data).display()
-        )),
-    }
-    // The user the daemon's files belong to, which `USER` need not name (under `su` or `sudo`).
-    let user = crate::platform::fs::account_name()
-        .map(|name| name.to_string_lossy().into_owned())
-        .filter(|user| !user.is_empty());
-    notes.push(format!(
-        "forward it to your own machine with `{}`, then open the address there",
-        forward_command(port, &path_in(data), user.as_deref())
-    ));
-    notes
-}
-
-/// What `octoboardd address` says on stderr beside the address of a daemon that serves no browser
-/// on a host where one would be served on a socket: no page opens at that address.
-pub fn no_browser_note() -> String {
-    format!(
-        "this {app} serves no browser page: it follows the desktop application, its build embeds \
-         no UI, or its data directory is not private to its user or its browser socket could not \
-         be opened, as its log says; the address is for programs that take its launch key",
-        app = crate::APP_NAME
+    axum::Router::new().route(
+        "/key-check",
+        get(
+            |axum::extract::RawQuery(query): axum::extract::RawQuery| async move {
+                if query.as_deref() == Some("key=good") {
+                    StatusCode::NO_CONTENT
+                } else {
+                    StatusCode::UNAUTHORIZED
+                }
+            },
+        ),
     )
-}
-
-/// The command a browser's machine forwards the socket with, for `octoboardd address`: the local
-/// port is `port`, the remote end is the socket at `socket`, and the login is `user`'s on a
-/// `<server>` the owner names. `ExitOnForwardFailure` makes `ssh` give up rather than run on when
-/// something else already holds the local port, which would then be what the browser reaches; the
-/// forward binds `127.0.0.1` alone, since with no address `ssh` binds `::1` too and counts a
-/// forward that got only one of the two as made, the other being someone else's.
-pub fn forward_command(port: u16, socket: &Path, user: Option<&str>) -> String {
-    let login = match user {
-        Some(user) => format!("{user}@<server>"),
-        None => "<server>".to_owned(),
-    };
-    format!(
-        "ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:{port}:{} {login}",
-        shell_quoted(&socket.to_string_lossy()),
-    )
-}
-
-/// `text` as one word for a POSIX shell: as it is when it holds nothing the shell would read,
-/// else in single quotes.
-fn shell_quoted(text: &str) -> String {
-    let plain = !text.is_empty()
-        && text
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || "/._-+:@%,=".contains(c));
-    if plain {
-        text.to_owned()
-    } else {
-        format!("'{}'", text.replace('\'', r"'\''"))
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::test_support::{ScratchDir, PATIENCE};
-
-    #[test]
-    fn the_forward_command_names_the_port_the_socket_and_the_login() {
-        assert_eq!(
-            forward_command(
-                3369,
-                Path::new("/home/alice/.octoboard/browser.sock"),
-                Some("alice")
-            ),
-            "ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:3369:/home/alice/.octoboard/browser.sock \
-             alice@<server>"
-        );
-        assert_eq!(
-            forward_command(4000, Path::new("/srv/o b/browser.sock"), None),
-            "ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:4000:'/srv/o b/browser.sock' <server>"
-        );
-        assert_eq!(shell_quoted("it's"), r"'it'\''s'");
-    }
 
     /// A data directory others can enter gets no socket, and nothing is created in it.
     #[cfg(unix)]
@@ -267,27 +194,6 @@ mod tests {
                 assert!(!path_in(&data).exists());
             }
         }
-    }
-
-    /// A router that answers a key check as the daemon's does: 204 to the key `good`, 401 to any
-    /// other.
-    #[cfg(unix)]
-    fn key_check_router() -> axum::Router {
-        use axum::http::StatusCode;
-        use axum::routing::get;
-
-        axum::Router::new().route(
-            "/key-check",
-            get(
-                |axum::extract::RawQuery(query): axum::extract::RawQuery| async move {
-                    if query.as_deref() == Some("key=good") {
-                        StatusCode::NO_CONTENT
-                    } else {
-                        StatusCode::UNAUTHORIZED
-                    }
-                },
-            ),
-        )
     }
 
     /// The key check over the socket tells an accepted key from a refused one, as the router
@@ -340,69 +246,6 @@ mod tests {
             .await
             .unwrap();
         assert!(odd.is_err(), "a 500 is no answer to the question");
-    }
-
-    /// What `octoboardd address` says beside the address, asked of a daemon on its socket: when the
-    /// daemon accepts the key there is only the forward command; when it refuses the key, a warning
-    /// comes first; when the socket cannot be asked, a warning naming the socket comes first. The
-    /// forward command is there each time.
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn the_notes_beside_an_address_warn_of_a_key_the_daemon_refuses() {
-        let dir = ScratchDir::new("bsock-notes");
-        let data = dir.to_path_buf();
-        let notes_for = |key: &'static str| {
-            let data = data.clone();
-            tokio::task::spawn_blocking(move || address_notes(3369, &data, key))
-        };
-        let assert_forward = |note: &str| {
-            assert!(
-                note.contains("ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:3369:"),
-                "{note}"
-            );
-            assert!(note.contains("browser.sock"), "{note}");
-            assert!(note.contains("<server>"), "{note}");
-        };
-
-        // Nothing listens yet.
-        let notes = notes_for("good").await.unwrap();
-        assert_eq!(notes.len(), 2, "{notes:?}");
-        assert!(
-            notes[0].contains(&path_in(&data).display().to_string()),
-            "the warning says which socket: {notes:?}"
-        );
-        assert_forward(&notes[1]);
-
-        let listener = Listener::bind_replacing_stale(&path_in(&dir)).unwrap();
-        let _served = serve(listener, key_check_router());
-
-        let notes = notes_for("good").await.unwrap();
-        assert_eq!(
-            notes.len(),
-            1,
-            "an accepted key warns of nothing: {notes:?}"
-        );
-        assert_forward(&notes[0]);
-
-        let notes = notes_for("bad").await.unwrap();
-        assert_eq!(notes.len(), 2, "{notes:?}");
-        assert!(notes[0].contains("refuses"), "{notes:?}");
-        assert!(notes[0].contains("--rotate"), "{notes:?}");
-        assert_forward(&notes[1]);
-    }
-
-    /// A word is handed to the shell as it is only when the shell would read nothing in it.
-    #[test]
-    fn a_word_the_shell_would_read_is_quoted() {
-        assert_eq!(
-            shell_quoted("/home/a/.octoboard/browser.sock"),
-            "/home/a/.octoboard/browser.sock"
-        );
-        assert_eq!(shell_quoted(""), "''");
-        assert_eq!(shell_quoted("a b"), "'a b'");
-        assert_eq!(shell_quoted("$HOME/x"), "'$HOME/x'");
-        assert_eq!(shell_quoted("a;b"), "'a;b'");
-        assert_eq!(shell_quoted("~/x"), "'~/x'");
     }
 
     /// The daemon's own router, served on a real socket: the owner key, the launch key and no key

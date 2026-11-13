@@ -2,6 +2,7 @@
 //! `address --rotate`, which replaces the owner key first.
 
 use std::path::Path;
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 
@@ -67,7 +68,7 @@ fn print_address_of(rotate: bool, through_unrecorded: bool) -> Result<i32> {
     if rotate {
         return rotate_for_daemon_without_owner_key(&owner, &key, &data);
     }
-    let (address, lasting) = address_to_print(&owner, &key, &data);
+    let (address, shown, lasting) = address_to_print(&owner, &key, &data);
     if !lasting {
         eprintln!(
             "the address printed lasts only until {} restarts, as owner.key is missing or holds no \
@@ -78,10 +79,9 @@ fn print_address_of(rotate: bool, through_unrecorded: bool) -> Result<i32> {
     }
     println!("{address}");
     if owner.takes_owner_key {
-        let shown = crate::owner_key::read_in(&data).unwrap_or_else(|| key.clone());
         note_browser_forward(&owner, &data, &shown);
     } else if crate::browser_socket::AVAILABLE {
-        eprintln!("{}", crate::browser_socket::no_browser_note());
+        eprintln!("{}", no_browser_note());
     }
     Ok(0)
 }
@@ -89,24 +89,23 @@ fn print_address_of(rotate: bool, through_unrecorded: bool) -> Result<i32> {
 /// Says on stderr how the address of `owner`, a daemon that serves the browser on its socket, is
 /// reached from the owner's machine, and whether the daemon accepts `key` there.
 fn note_browser_forward(owner: &Owner, data: &Path, key: &str) {
-    for note in crate::browser_socket::address_notes(owner.port, data, key) {
+    for note in address_notes(owner.port, data, key) {
         eprintln!("{note}");
     }
 }
 
-/// The address `address` prints for `owner`, and whether it is one that outlives the daemon: with
-/// the owner key when the daemon accepts one and `data` holds one, else with the launch key `key`.
-/// A daemon that takes no owner key has no lasting address to lose, so it counts as one.
-fn address_to_print(owner: &Owner, key: &str, data: &Path) -> (String, bool) {
+/// The address `address` prints for `owner`, the key in it, and whether it is one that outlives
+/// the daemon: with the owner key when the daemon accepts one and `data` holds one, else with the
+/// launch key `key`. A daemon that takes no owner key has no lasting address to lose, so it counts
+/// as one.
+fn address_to_print(owner: &Owner, key: &str, data: &Path) -> (String, String, bool) {
     let owner_key = owner
         .takes_owner_key
         .then(|| crate::owner_key::read_in(data))
         .flatten();
     let lasting = owner_key.is_some() || !owner.takes_owner_key;
-    (
-        browser_address(owner.port, owner_key.as_deref().unwrap_or(key)),
-        lasting,
-    )
+    let shown = owner_key.unwrap_or_else(|| key.to_owned());
+    (browser_address(owner.port, &shown), shown, lasting)
 }
 
 /// `address --rotate` for a running daemon that takes no owner key: replaces the owner key in
@@ -187,6 +186,82 @@ fn browser_address(port: u16, key: &str) -> String {
     format!("http://127.0.0.1:{port}/?key={key}")
 }
 
+/// How long `octoboardd address` waits on the daemon's answer to its key check.
+const CHECK_WAIT: Duration = Duration::from_secs(5);
+
+/// What `octoboardd address` says on stderr beside the address of a daemon that serves the browser
+/// on its socket (`data`'s), the address being for `port` with `key`: a warning when the daemon
+/// does not accept `key` there, as after `owner.key` was changed behind its back, or the socket
+/// cannot be asked, and the command that forwards the socket.
+fn address_notes(port: u16, data: &Path, key: &str) -> Vec<String> {
+    let mut notes = Vec::new();
+    match crate::browser_socket::key_accepted(data, port, key, CHECK_WAIT) {
+        Ok(true) => {}
+        Ok(false) => notes.push(format!(
+            "the running {} refuses the key in this address (owner.key may have been changed \
+             since it started); `{} address --rotate` makes one it accepts",
+            crate::APP_NAME,
+            crate::APP_NAME
+        )),
+        Err(err) => notes.push(format!(
+            "whether the running {} accepts this address could not be checked on {}: {err}",
+            crate::APP_NAME,
+            crate::browser_socket::path_in(data).display()
+        )),
+    }
+    // The user the daemon's files belong to, which `USER` need not name (under `su` or `sudo`).
+    let user = crate::platform::fs::account_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .filter(|user| !user.is_empty());
+    notes.push(format!(
+        "forward it to your own machine with `{}`, then open the address there",
+        forward_command(port, &crate::browser_socket::path_in(data), user.as_deref())
+    ));
+    notes
+}
+
+/// What `octoboardd address` says on stderr beside the address of a daemon that serves no browser
+/// on a host where one would be served on a socket: no page opens at that address.
+fn no_browser_note() -> String {
+    format!(
+        "this {app} serves no browser page: it follows the desktop application, its build embeds \
+         no UI, or its data directory is not private to its user or its browser socket could not \
+         be opened, as its log says; the address is for programs that take its launch key",
+        app = crate::APP_NAME
+    )
+}
+
+/// The command a browser's machine forwards the socket with, for `octoboardd address`: the local
+/// port is `port`, the remote end is the socket at `socket`, and the login is `user`'s on a
+/// `<server>` the owner names. `ExitOnForwardFailure` makes `ssh` give up rather than run on when
+/// something else already holds the local port, which would then be what the browser reaches; the
+/// forward binds `127.0.0.1` alone, since with no address `ssh` binds `::1` too and counts a
+/// forward that got only one of the two as made, the other being someone else's.
+fn forward_command(port: u16, socket: &Path, user: Option<&str>) -> String {
+    let login = match user {
+        Some(user) => format!("{user}@<server>"),
+        None => "<server>".to_owned(),
+    };
+    format!(
+        "ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:{port}:{} {login}",
+        shell_quoted(&socket.to_string_lossy()),
+    )
+}
+
+/// `text` as one word for a POSIX shell: as it is when it holds nothing the shell would read,
+/// else in single quotes.
+fn shell_quoted(text: &str) -> String {
+    let plain = !text.is_empty()
+        && text
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "/._-+:@%,=".contains(c));
+    if plain {
+        text.to_owned()
+    } else {
+        format!("'{}'", text.replace('\'', r"'\''"))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -217,23 +292,23 @@ mod tests {
         // No file.
         assert_eq!(
             address_to_print(&owner_taking_key_on(7531), KEY, &dir),
-            (launch.clone(), false)
+            (launch.clone(), KEY.to_owned(), false)
         );
         crate::owner_key::write_in(&dir, OWNER_KEY);
         assert_eq!(
             address_to_print(&owner_taking_key_on(7531), KEY, &dir),
-            (owner, true)
+            (owner, OWNER_KEY.to_owned(), true)
         );
         // A daemon without the token (desktop application, earlier build).
         assert_eq!(
             address_to_print(&owner_on(7531), KEY, &dir),
-            (launch.clone(), true)
+            (launch.clone(), KEY.to_owned(), true)
         );
         // A file that holds no key.
         std::fs::write(crate::owner_key::path_in(&dir), "nonsense\n").unwrap();
         assert_eq!(
             address_to_print(&owner_taking_key_on(7531), KEY, &dir),
-            (launch, false)
+            (launch, KEY.to_owned(), false)
         );
     }
 
@@ -344,5 +419,100 @@ mod tests {
             1
         );
         served.join().unwrap();
+    }
+
+    #[test]
+    fn the_forward_command_names_the_port_the_socket_and_the_login() {
+        assert_eq!(
+            forward_command(
+                3369,
+                std::path::Path::new("/home/alice/.octoboard/browser.sock"),
+                Some("alice")
+            ),
+            "ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:3369:/home/alice/.octoboard/browser.sock \
+             alice@<server>"
+        );
+        assert_eq!(
+            forward_command(4000, std::path::Path::new("/srv/o b/browser.sock"), None),
+            "ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:4000:'/srv/o b/browser.sock' <server>"
+        );
+        assert_eq!(shell_quoted("it's"), r"'it'\''s'");
+    }
+
+    /// What `octoboardd address` says beside the address, asked of a daemon on its socket: when the
+    /// daemon accepts the key there is only the forward command; when it refuses the key, a warning
+    /// comes first; when the socket cannot be asked, a warning naming the socket comes first. The
+    /// forward command is there each time.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn the_notes_beside_an_address_warn_of_a_key_the_daemon_refuses() {
+        let dir = crate::test_support::ScratchDir::new("bsock-notes");
+        let data = dir.to_path_buf();
+        let notes_for = |key: &'static str| {
+            let data = data.clone();
+            tokio::task::spawn_blocking(move || address_notes(3369, &data, key))
+        };
+        let assert_forward = |note: &str| {
+            assert!(
+                note.contains("ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:3369:"),
+                "{note}"
+            );
+            assert!(note.contains("browser.sock"), "{note}");
+            assert!(note.contains("<server>"), "{note}");
+        };
+
+        // Nothing listens yet.
+        let notes = notes_for("good").await.unwrap();
+        assert_eq!(notes.len(), 2, "{notes:?}");
+        assert!(
+            notes[0].contains(&crate::browser_socket::path_in(&data).display().to_string()),
+            "the warning says which socket: {notes:?}"
+        );
+        assert_forward(&notes[1]);
+
+        let listener = crate::platform::local_socket::Listener::bind_replacing_stale(
+            &crate::browser_socket::path_in(&dir),
+        )
+        .unwrap();
+        let _served =
+            crate::browser_socket::serve(listener, crate::browser_socket::key_check_router());
+
+        let notes = notes_for("good").await.unwrap();
+        assert_eq!(
+            notes.len(),
+            1,
+            "an accepted key warns of nothing: {notes:?}"
+        );
+        assert_forward(&notes[0]);
+
+        let notes = notes_for("bad").await.unwrap();
+        assert_eq!(notes.len(), 2, "{notes:?}");
+        assert!(notes[0].contains("refuses"), "{notes:?}");
+        assert!(notes[0].contains("--rotate"), "{notes:?}");
+        assert_forward(&notes[1]);
+    }
+
+    /// A word is handed to the shell as it is only when the shell would read nothing in it.
+    #[test]
+    fn a_word_the_shell_would_read_is_quoted() {
+        assert_eq!(
+            shell_quoted("/home/a/.octoboard/browser.sock"),
+            "/home/a/.octoboard/browser.sock"
+        );
+        assert_eq!(shell_quoted(""), "''");
+        assert_eq!(shell_quoted("a b"), "'a b'");
+        assert_eq!(shell_quoted("$HOME/x"), "'$HOME/x'");
+        assert_eq!(shell_quoted("a;b"), "'a;b'");
+        assert_eq!(shell_quoted("~/x"), "'~/x'");
+    }
+
+    /// The note beside the address of a daemon with no browser page says there is none, and that the
+    /// address is for programs holding the launch key.
+    #[test]
+    fn the_note_for_a_daemon_serving_no_browser_says_no_page_opens() {
+        let note = no_browser_note();
+        assert!(note.contains(crate::APP_NAME), "{note}");
+        assert!(note.contains("serves no browser page"), "{note}");
+        assert!(note.contains("launch key"), "{note}");
     }
 }

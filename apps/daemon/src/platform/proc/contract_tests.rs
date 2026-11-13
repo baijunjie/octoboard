@@ -173,7 +173,7 @@ fn a_process_started_in_the_background_keeps_its_pipes() {
         .env(ROLE, "park")
         .env(PID_FILE, &pid_file);
     let (mut child, _in_starter_job) =
-        spawn_in_background(&mut command, false).expect("the background start spawns");
+        spawn_in_background(&mut command, false, None).expect("the background start spawns");
     let mut guard = KillOnDrop(vec![child.id() as i32]);
 
     // The test binary prints a blank line before "running 1 test": read until that line, which the
@@ -207,7 +207,7 @@ fn a_process_started_in_the_background_keeps_its_pipes() {
 #[test]
 fn a_program_that_cannot_be_started_in_the_background_is_an_error() {
     let mut command = Command::new("/nonexistent/octoboard-background-test");
-    let err = spawn_in_background(&mut command, false).err();
+    let err = spawn_in_background(&mut command, false, None).err();
     assert_eq!(
         err.map(|err| err.kind()),
         Some(std::io::ErrorKind::NotFound)
@@ -257,7 +257,7 @@ fn background_beside_inheritable(pid_file: &Path) {
         .env(ROLE, "park")
         .env(PID_FILE, &background_file);
     let (mut background, _in_starter_job) =
-        spawn_in_background(&mut command, false).expect("the background start spawns");
+        spawn_in_background(&mut command, false, None).expect("the background start spawns");
     wait_for_pid(&plain_file);
     wait_for_pid(&background_file);
     drop(writer);

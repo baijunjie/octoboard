@@ -20,7 +20,7 @@ mod succession;
 pub(crate) mod update;
 mod verify_archive;
 
-pub(crate) use background::start_successor;
+pub(crate) use background::{start_successor, SuccessorStart};
 pub(crate) use installation::launch_path;
 pub(crate) use succession::handed_over_from;
 
@@ -55,6 +55,13 @@ pub(crate) struct Cli {
     /// or the environment, which other processes can read.
     #[arg(long, hide = true)]
     pub(crate) key_stdin: bool,
+
+    /// Take over the listening socket inherited as this descriptor instead of binding the port:
+    /// what a daemon passes the successor it starts after a planned restart, so that the port is
+    /// never unbound between the two. A descriptor that is not a listener on `--port` is left as it
+    /// is and the port bound as usual.
+    #[arg(long, hide = true, requires = "port")]
+    pub(crate) listen_fd: Option<i32>,
 
     /// Exit with status 75 after a planned restart, for the service manager to start the next
     /// daemon, instead of starting it itself. Pass it only from a service that restarts the daemon
@@ -419,6 +426,41 @@ mod tests {
         assert!(cli.key_stdin);
         assert_eq!(cli.port, Some(7531));
         assert!(parse(&["--key-stdin", "status"]).is_err());
+    }
+
+    /// The listener a predecessor hands over is named by its descriptor, only beside the port it is
+    /// a listener on, and with no mode.
+    #[test]
+    fn the_listener_handed_over_is_named_by_descriptor_and_needs_a_port() {
+        assert_eq!(parse(&[]).unwrap().listen_fd, None);
+        let cli = parse(&["--port", "7531", "--key-stdin", "--listen-fd", "3"]).unwrap();
+        assert_eq!(cli.listen_fd, Some(3));
+        assert_eq!(cli.port, Some(7531));
+        assert!(
+            parse(&["--listen-fd", "3"]).is_err(),
+            "no port to check it against"
+        );
+        assert!(parse(&["--port", "7531", "--listen-fd", "not-a-number"]).is_err());
+        assert!(parse(&["--port", "7531", "--listen-fd"]).is_err());
+        assert!(parse(&["--port", "7531", "--listen-fd", "3", "status"]).is_err());
+    }
+
+    /// The option is for the daemon's own successor start: it is not listed in the help.
+    #[test]
+    fn the_listener_option_is_hidden_from_the_help() {
+        use clap::CommandFactory;
+
+        let command = Cli::command();
+        let option = command
+            .get_arguments()
+            .find(|argument| argument.get_id() == "listen_fd")
+            .expect("the option exists");
+        assert!(option.is_hide_set());
+        assert!(!command
+            .clone()
+            .render_help()
+            .to_string()
+            .contains("--listen-fd"));
     }
 
     #[test]

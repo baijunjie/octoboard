@@ -3813,3 +3813,377 @@ mod check_thread {
         assert_eq!(state.daemon_update.status().unwrap().last_check, None);
     }
 }
+
+/// The next daemon of a planned restart, started with the listener handed over and, where that
+/// does not come up, once more binding the port itself. The starter runs as a process of its own
+/// (this test binary, running only [`successor_starter`]) with a scratch home directory, so that
+/// the data directory the start works in is not the user's; the next daemon is a fake build, a
+/// shell script that logs how it was started and what it found, and then comes up or does not.
+#[cfg(unix)]
+mod starting_the_successor {
+    use std::io::Read;
+    use std::process::{Command, Stdio};
+    use std::sync::mpsc;
+
+    use super::*;
+    use crate::platform::listener_handover::Kept;
+    use crate::test_support::{fake_agent, KillOnDrop};
+
+    /// The variable that gives [`successor_starter`] the path of the build to start.
+    const LAUNCH: &str = "OCTOBOARD_TEST_SUCCESSOR_LAUNCH";
+
+    /// The variable that, set, has [`successor_starter`] hand the listener over.
+    const WITH_LISTENER: &str = "OCTOBOARD_TEST_SUCCESSOR_WITH_LISTENER";
+
+    /// What the tests below start as the daemon that restarts: it binds a loopback port and keeps a
+    /// duplicate of the listener, stops serving, starts the successor as the daemon does and says
+    /// `started=<whether it came up>`, then holds the listener no longer.
+    #[test]
+    #[ignore = "started by the tests below as the daemon that starts its successor"]
+    fn successor_starter() {
+        let launch = PathBuf::from(std::env::var_os(LAUNCH).unwrap());
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let (port, kept) = runtime.block_on(async {
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let port = listener.local_addr().unwrap().port();
+            let kept = Kept::of(&listener).expect("a duplicate of the listener");
+            // Serving stops before the successor is started.
+            drop(listener);
+            (port, kept)
+        });
+        let listener = std::env::var_os(WITH_LISTENER).is_some().then_some(kept);
+        let started = super::super::start_successor(port, TEST_KEY_TEXT, &launch, listener);
+        println!("started={started}");
+    }
+
+    /// A key as the daemon hands one over; it is read by nothing in these tests.
+    const TEST_KEY_TEXT: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+    /// What every fake build does first: reads what is handed on its stdin through to the end, so
+    /// that it never ends before the starter has written it, then logs its arguments, whether it
+    /// has a descriptor 3 and whether the port it was started on is held by something listening.
+    const PRELUDE: &str = r#"
+cat > /dev/null
+port="$2"
+if ( : <&3 ) 2>/dev/null; then fd3=open; else fd3=closed; fi
+if /usr/bin/perl -MIO::Socket::INET -e 'exit(IO::Socket::INET->new(Listen=>1,LocalAddr=>"127.0.0.1",LocalPort=>$ARGV[0],ReuseAddr=>1)?0:1)' "$port"; then bound=free; else bound=held; fi
+echo "$* fd3=$fd3 port=$bound" >> "$0.log"
+"#;
+
+    /// A build that comes up.
+    const COMES_UP: &str = "echo listening\nexit 0\n";
+
+    /// A build from before the listener was handed over: it refuses the argument that announces
+    /// one, as `clap` does an unknown flag, and comes up without it.
+    const REFUSES_THE_LISTENER_ARGUMENT: &str = r#"
+case " $* " in
+  *" --listen-fd "*) echo "error: unexpected argument '--listen-fd' found" >&2; exit 2 ;;
+esac
+echo listening
+exit 0
+"#;
+
+    /// A build that never comes up.
+    const NEVER_COMES_UP: &str = "echo 'cannot start' >&2\nexit 1\n";
+
+    /// Starts the build `behavior` describes, the way a daemon that restarts does, with or without
+    /// the listener to hand over: whether a daemon came up, and the lines the build logged, one per
+    /// start.
+    fn start_with(label: &str, behavior: &str, with_listener: bool) -> (bool, Vec<String>) {
+        let dir = ScratchDir::new(label);
+        let env = fake_agent(&dir, "octoboardd", &format!("{PRELUDE}{behavior}"));
+        let launch = dir.join("octoboardd");
+        let mut command = Command::new(std::env::current_exe().unwrap());
+        command
+            .args([
+                "--exact",
+                "self_update::tests::starting_the_successor::successor_starter",
+                "--ignored",
+                "--nocapture",
+            ])
+            .env("HOME", &env["HOME"])
+            .env(LAUNCH, &launch)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        if with_listener {
+            command.env(WITH_LISTENER, "1");
+        }
+        let mut child = command.spawn().expect("the starter runs");
+        let mut guard = KillOnDrop(vec![child.id() as i32]);
+        let mut stdout = child.stdout.take().unwrap();
+        let mut stderr = child.stderr.take().unwrap();
+        let (done, ended) = mpsc::channel();
+        std::thread::spawn(move || {
+            let mut said = String::new();
+            stdout.read_to_string(&mut said).ok();
+            stderr.read_to_string(&mut said).ok();
+            let _ = done.send((child.wait().expect("the starter is reaped"), said));
+        });
+        let (status, said) = ended
+            .recv_timeout(PATIENCE)
+            .expect("the starter ended within the patience");
+        guard.0.clear();
+        assert!(status.success(), "the starter ended with {status}:\n{said}");
+        let started = if said.contains("started=true") {
+            true
+        } else {
+            assert!(said.contains("started=false"), "no answer in:\n{said}");
+            false
+        };
+        let log = std::fs::read_to_string(dir.join("octoboardd.log")).unwrap_or_default();
+        (started, log.lines().map(str::to_owned).collect())
+    }
+
+    /// The first start hands the listener over, as descriptor 3 announced as `--listen-fd 3`, and
+    /// the port is held the whole time by what the starter kept; a build that comes up is the end
+    /// of it.
+    #[test]
+    fn the_listener_is_handed_to_the_first_start() {
+        let (started, log) = start_with("successor-handed", COMES_UP, true);
+        assert!(started);
+        assert_eq!(log.len(), 1, "{log:?}");
+        assert!(log[0].contains("--listen-fd 3"), "{log:?}");
+        assert!(log[0].contains("fd3=open"), "{log:?}");
+        assert!(log[0].contains("port=held"), "{log:?}");
+    }
+
+    /// A build from before listeners were handed over refuses the argument that announces one: it
+    /// is started once more with no listener and the port let go first, and that one comes up.
+    #[test]
+    fn a_build_that_refuses_the_listener_is_started_again_binding_the_port() {
+        let (started, log) = start_with("successor-refusing", REFUSES_THE_LISTENER_ARGUMENT, true);
+        assert!(started);
+        assert_eq!(log.len(), 2, "{log:?}");
+        assert!(log[0].contains("--listen-fd 3"), "{log:?}");
+        assert!(log[0].contains("port=held"), "{log:?}");
+        assert!(!log[1].contains("--listen-fd"), "{log:?}");
+        assert!(log[1].contains("fd3=closed"), "{log:?}");
+        assert!(
+            log[1].contains("port=free"),
+            "the port was let go first: {log:?}"
+        );
+    }
+
+    /// A build that ends while starting for any reason but refusing the listener's argument is
+    /// started once: it is not a build that binds the port itself, so the listener stays held (and
+    /// nothing is lost to the port's being let go) and the start is reported failed. The refusal
+    /// is told by its status 2 and by naming `--listen-fd` on stderr, so each of the two without
+    /// the other is another failure, and so is a crash.
+    #[test]
+    fn a_build_that_fails_otherwise_is_started_once_and_the_listener_stays_held() {
+        let other_usage_error = "echo 'error: unexpected argument' >&2\nexit 2\n";
+        let names_the_flag_in_another_failure =
+            "echo \"cannot start with --listen-fd\" >&2\nexit 1\n";
+        let crashes = "kill -KILL $$\n";
+        for (label, behavior) in [
+            ("successor-broken", NEVER_COMES_UP),
+            ("successor-other-usage-error", other_usage_error),
+            ("successor-other-failure", names_the_flag_in_another_failure),
+            ("successor-crash", crashes),
+        ] {
+            let (started, log) = start_with(label, behavior, true);
+            assert!(!started, "{label}");
+            assert_eq!(log.len(), 1, "{label}: {log:?}");
+            assert!(log[0].contains("--listen-fd 3"), "{label}: {log:?}");
+            assert!(log[0].contains("port=held"), "{label}: {log:?}");
+        }
+    }
+
+    /// With no listener to hand over there is nothing to retry without: a build that does not
+    /// come up is started once and reported not started.
+    #[test]
+    fn with_no_listener_a_failed_start_is_not_repeated() {
+        let (started, log) = start_with("successor-no-listener-broken", NEVER_COMES_UP, false);
+        assert!(!started);
+        assert_eq!(log.len(), 1, "{log:?}");
+        assert!(!log[0].contains("--listen-fd"), "{log:?}");
+        assert!(log[0].contains("fd3=closed"), "{log:?}");
+    }
+
+    /// With no listener the build is started on the port as it always was: no argument, no
+    /// descriptor.
+    #[test]
+    fn with_no_listener_the_start_names_none() {
+        let (started, log) = start_with("successor-no-listener", COMES_UP, false);
+        assert!(started);
+        assert_eq!(log.len(), 1, "{log:?}");
+        assert!(!log[0].contains("--listen-fd"), "{log:?}");
+        assert!(log[0].contains("fd3=closed"), "{log:?}");
+        assert!(log[0].contains("port=free"), "{log:?}");
+    }
+}
+
+/// The order of the starts of the next daemon, over stand-ins for the start and the fallback: which
+/// start is handed the listener, whether the port was let go before one that is not, and when the
+/// start is not repeated.
+mod starting_with_a_fallback {
+    use super::super::successor::start_with;
+    #[cfg(unix)]
+    use crate::cli::SuccessorStart::RefusedListener;
+    use crate::cli::SuccessorStart::{self, Failed, Started};
+    use crate::platform::listener_handover::Kept;
+
+    /// What the stand-in start saw of one call: whether it was handed a listener, and whether the
+    /// port could be bound by anyone at that moment (nothing held it).
+    #[derive(Debug, PartialEq, Eq)]
+    struct Call {
+        handed: bool,
+        port_free: bool,
+    }
+
+    /// A listener kept as the daemon keeps it, and its port, with the daemon's own listener gone.
+    #[cfg(unix)]
+    async fn kept() -> (Kept, u16) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let kept = Kept::of(&listener).expect("a duplicate");
+        drop(listener);
+        (kept, port)
+    }
+
+    /// Runs [`start_with`] over starts that end as `outcomes` say, in turn, and a fallback that
+    /// puts the build back or not as `put_back` says: whether it started, what each start saw, and
+    /// how many times the fallback was asked.
+    fn run(
+        listener: Option<Kept>,
+        port: u16,
+        outcomes: &[SuccessorStart],
+        put_back: bool,
+    ) -> (bool, Vec<Call>, usize) {
+        let mut calls = Vec::new();
+        let mut outcomes = outcomes.iter().copied();
+        let mut asked = 0;
+        let started = start_with(
+            listener,
+            |handed| {
+                calls.push(Call {
+                    handed: handed.is_some(),
+                    port_free: std::net::TcpListener::bind(("127.0.0.1", port)).is_ok(),
+                });
+                outcomes
+                    .next()
+                    .expect("a start more than the test expected")
+            },
+            || {
+                asked += 1;
+                put_back
+            },
+        );
+        (started, calls, asked)
+    }
+
+    #[cfg(unix)]
+    fn handed_and_held() -> Call {
+        Call {
+            handed: true,
+            port_free: false,
+        }
+    }
+
+    /// A start that comes up ends it: no fallback is asked and nothing is started again.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_start_that_comes_up_is_the_only_one() {
+        let (kept, port) = kept().await;
+        let (started, calls, asked) = run(Some(kept), port, &[Started], false);
+        assert!(started);
+        assert_eq!(calls, [handed_and_held()]);
+        assert_eq!(asked, 0);
+    }
+
+    /// Where the build that ran is put back after a failed start, it is started with the listener.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn the_build_put_back_is_started_with_the_listener() {
+        let (kept, port) = kept().await;
+        let (started, calls, asked) = run(Some(kept), port, &[Failed, Started], true);
+        assert!(started);
+        assert_eq!(calls, [handed_and_held(), handed_and_held()]);
+        assert_eq!(asked, 1);
+    }
+
+    /// A start that refuses the listener is followed by one with no listener, the port let go
+    /// before it; where that comes up, the fallback is not asked.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_refusal_is_followed_by_a_start_binding_the_port() {
+        let (kept, port) = kept().await;
+        let (started, calls, asked) = run(Some(kept), port, &[RefusedListener, Started], false);
+        assert!(started);
+        assert_eq!(
+            calls,
+            [
+                handed_and_held(),
+                Call {
+                    handed: false,
+                    port_free: true
+                }
+            ]
+        );
+        assert_eq!(asked, 0);
+    }
+
+    /// Where the start binding the port does not come up either and the build that ran is put
+    /// back, that build is started once more, with no listener, the port being free already.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_put_back_build_is_started_binding_the_port_after_a_refusal() {
+        let (kept, port) = kept().await;
+        let (started, calls, asked) =
+            run(Some(kept), port, &[RefusedListener, Failed, Started], true);
+        assert!(started);
+        let binding = || Call {
+            handed: false,
+            port_free: true,
+        };
+        assert_eq!(calls, [handed_and_held(), binding(), binding()]);
+        assert_eq!(asked, 1);
+    }
+
+    /// Where the start binding the port does not come up and no build is put back, it is reported
+    /// not started, with no further start.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_refusal_followed_by_a_failure_and_no_build_to_put_back_is_not_started() {
+        let (kept, port) = kept().await;
+        let (started, calls, asked) = run(Some(kept), port, &[RefusedListener, Failed], false);
+        assert!(!started);
+        assert_eq!(calls.len(), 2, "{calls:?}");
+        assert_eq!(asked, 1);
+    }
+
+    /// Any other failure with no build to put back is final: one start, the listener still held
+    /// while it ran, and no start without the listener.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn another_failure_is_not_repeated() {
+        let (kept, port) = kept().await;
+        let (started, calls, asked) = run(Some(kept), port, &[Failed], false);
+        assert!(!started);
+        assert_eq!(calls, [handed_and_held()]);
+        assert_eq!(asked, 1);
+    }
+
+    /// With no listener handed over, the start is as it always was: a failure with nothing to put
+    /// back is final, and the build put back is started again.
+    #[test]
+    fn with_no_listener_only_the_build_put_back_is_started_again() {
+        let port = crate::test_support::ClosedPort::new().port;
+        let unhanded = || Call {
+            handed: false,
+            port_free: true,
+        };
+        let (started, calls, asked) = run(None, port, &[Failed], false);
+        assert!(!started);
+        assert_eq!(calls, [unhanded()]);
+        assert_eq!(asked, 1);
+
+        let (started, calls, _) = run(None, port, &[Failed, Started], true);
+        assert!(started);
+        assert_eq!(calls, [unhanded(), unhanded()]);
+    }
+}
