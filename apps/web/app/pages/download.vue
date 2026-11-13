@@ -123,6 +123,7 @@ onBeforeUnmount(() => window.removeEventListener("hashchange", onHashChange));
           <p>{{ t("downloadLinuxRange") }}</p>
           <InstallCommand />
           <CommandMessage keypath="downloadServerRun" />
+          <CommandMessage keypath="downloadPathNote" />
           <CommandMessage keypath="downloadServiceSteps" />
           <CommandMessage keypath="downloadUpgrade" />
           <p class="download-archives">

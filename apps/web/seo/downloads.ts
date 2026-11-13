@@ -33,6 +33,7 @@ export const defaultServerPort: number = appConfig.defaultServerPort;
 // translated; `install.sh` prints the same ones.
 export const linuxCommandParts = {
   start: "octoboardd start",
+  binDir: "~/.local/bin",
   forward: `ssh -L ${defaultServerPort}:127.0.0.1:${defaultServerPort} <server>`,
   address: "octoboardd address",
   plain: "sh",
@@ -80,8 +81,10 @@ export function detectDownloadTab(platform: string, userAgent: string): Download
   return "macos";
 }
 
+// The one-liner the site publishes. `--proto '=https' --tlsv1.2` keeps curl from following a redirect off https or
+// settling for an old TLS version while it fetches the script, which runs before anything of it can check itself.
 export function installCommand(siteUrl: string): string {
-  return `curl -fsSL ${siteUrl}install.sh | sh`;
+  return `curl --proto '=https' --tlsv1.2 -fsSL ${siteUrl}install.sh | sh`;
 }
 
 // Where a download's fixed redirect page lives, relative to the site root.

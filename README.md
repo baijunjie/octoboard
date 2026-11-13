@@ -115,10 +115,12 @@ this design.
 Install `octoboardd`, the daemon with the interface inside it, for your user (no root needed):
 
 ```sh
-curl -fsSL https://octoboard.dev/install.sh | sh
+curl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh | sh
 ```
 
-It installs into `~/.local/bin`, checking the download's SHA-256 (and its signature, when `minisign` is installed).
+It installs into `~/.local/bin`, checking the download's SHA-256 and its signature (with `minisign`, or on an upgrade
+with the installed `octoboardd`; a first install without `minisign` warns that it checked the SHA-256 alone, and
+`sh -s -- --require-signature` refuses to go on without the signature check).
 Then start the daemon and print the address to open:
 
 ```sh
@@ -130,8 +132,8 @@ From your own machine, forward the port with `ssh -L 3369:127.0.0.1:3369 <server
 To have the daemon start at boot as a systemd user service instead, install with `--service`, which needs systemd:
 
 ```sh
-curl -fsSL https://octoboard.dev/install.sh | sh -s -- --service   # Port 3369; add --port <port> for another.
-loginctl enable-linger "$USER"   # Keep the service running after you log out, and start it at boot.
+curl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh | sh -s -- --service   # Port 3369; add --port <port> for another.
+loginctl enable-linger "$USER"   # Only if the script says lingering is off: keeps the service running after logout and starts it at boot.
 ```
 
 - **Upgrade**: run the install command again, then `octoboardd restart`; the sessions keep running.

@@ -15,6 +15,7 @@ mod installation;
 mod key_source_tests;
 mod succession;
 pub(crate) mod update;
+mod verify_archive;
 
 pub(crate) use background::start_successor;
 pub(crate) use installation::launch_path;
@@ -105,6 +106,17 @@ pub(crate) enum Command {
         /// `beta`.
         #[arg(long, value_parser = parse_channel)]
         channel: Option<protocol::DaemonUpdateChannel>,
+    },
+    /// Check that a downloaded release archive is the one the release key signed and that the
+    /// signature names the archive's file name; exits 0 when it is and 1 when it is not, changing
+    /// nothing. This is what the install script runs, with the installed daemon, where `minisign`
+    /// is not installed; it is not meant to be run by hand.
+    #[command(hide = true)]
+    VerifyArchive {
+        /// The archive, saved under the name the release gave it.
+        archive: std::path::PathBuf,
+        /// A file holding the manifest's `signature` (or the minisign signature file).
+        signature: std::path::PathBuf,
     },
     /// Print the address to open the running daemon at in a browser, its key included:
     /// `http://localhost:<port>/?key=<key>`, for an SSH port forward of that port. Exits 3 when
@@ -266,6 +278,9 @@ pub(crate) fn run(command: Command) -> Result<()> {
                 _ => update::Task::Install,
             };
             std::process::exit(update::run(task, channel)?)
+        }
+        Command::VerifyArchive { archive, signature } => {
+            std::process::exit(verify_archive::run(&archive, &signature))
         }
         Command::Address { rotate } => std::process::exit(background::print_address(rotate)?),
         // The hook path must stay silent and must not pay for a runtime: it is on the agent's
@@ -505,6 +520,18 @@ mod tests {
         assert!(update(&["--channel", "nightly"]).is_err());
         assert!(update(&["--channel"]).is_err());
         assert!(parse(&["--port", "1", "update"]).is_err());
+    }
+
+    #[test]
+    fn verify_archive_takes_an_archive_and_a_signature() {
+        assert!(matches!(
+            parse(&["verify-archive", "a.tar.gz", "a.sig"])
+                .unwrap()
+                .command,
+            Some(Command::VerifyArchive { .. })
+        ));
+        assert!(parse(&["verify-archive", "a.tar.gz"]).is_err());
+        assert!(parse(&["--port", "1", "verify-archive", "a.tar.gz", "a.sig"]).is_err());
     }
 
     /// The helpers take the key's file, never the key: a key in arguments is listed by `ps` for

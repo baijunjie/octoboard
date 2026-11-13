@@ -52,8 +52,8 @@ On a headless server the daemon runs on its own, as the owner's user, and listen
 released build, which carries the UI inside it, for your user:
 
 ```sh
-curl -fsSL https://octoboard.dev/install.sh | sh                          # Into ~/.local/bin; run again to upgrade.
-curl -fsSL https://octoboard.dev/install.sh | sh -s -- --service  # Also install and start the user unit (port 3369, or --port N).
+curl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh | sh             # Into ~/.local/bin; run again to upgrade.
+curl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh | sh -s -- --service  # Also install and start the user unit (port 3369, or --port N).
 ```
 
 or put a build of your own on the server (see "Build and run" above). Then:

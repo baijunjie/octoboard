@@ -6,9 +6,10 @@ import { defaultServerPort as port, installCommand, linuxCommandParts } from "..
 // captured with Playwright at a 1280x800 viewport and scale 1, resized to 960x600 with Pillow (Lanczos) and
 // encoded with `cwebp -q 55 -m 6` (about 52 KB). Retake it the same way when the preview changes.
 //
-// Two terminal windows and a browser window, played step by step. The commands and their output are what the real
-// tools print, so they stay in English and read left to right whatever the page language; only the step labels
-// are translated.
+// Two terminal windows and a browser window, played step by step. The commands and their output are lines the real
+// tools print (install.sh's are held to the script by apps/web/test/install-script.test.ts; a warning it prints on
+// stderr is left out), so they stay in English and read left to right whatever the page language; only the step
+// labels are translated.
 type Line = {
   window: 0 | 1;
   kind: "cmd" | "out" | "prompt";

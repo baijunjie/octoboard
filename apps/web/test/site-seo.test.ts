@@ -236,11 +236,15 @@ test("agent documents follow the pages and carry the download and install inform
   assert.match(page, /Canonical: https:\/\/octoboard\.dev\/download\//);
   assert.ok(page.includes(`[Download for macOS](${downloads.macos})`));
   assert.ok(page.includes(`[Download for Windows](${downloads.windows})`));
-  assert.ok(page.includes("curl -fsSL https://octoboard.dev/install.sh | sh"));
+  assert.ok(page.includes("curl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh | sh"));
   assert.ok(page.includes("`sh -s -- --service`"));
   assert.ok(page.includes("`octoboardd start`"));
   assert.ok(page.includes(`\`ssh -L ${port}:127.0.0.1:${port} <server>\``));
   assert.ok(page.includes('`loginctl enable-linger "$USER"`'));
+  // The script turns lingering on itself; the command is for when it says it could not.
+  assert.match(page, /The script then turns on lingering[^\n]*if it says it could not, run `loginctl enable-linger "\$USER"` once/);
+  // octoboardd may not be on the PATH right after the install.
+  assert.ok(page.includes("If the install says `~/.local/bin` is not on your PATH, run `octoboardd start` by the full path it prints"));
   assert.ok(page.includes("`octoboardd restart`"));
   assert.equal(page.includes("your-server"), false);
   assert.ok(page.includes(`[x86_64 archive](${downloads["linux-x86_64"]})`));
@@ -310,7 +314,7 @@ test("agent documents follow the pages and carry the download and install inform
   assert.match(llms, /Windows: Beta/);
   assert.match(llms, /Requirements and installation steps for each system are on the download page\./);
   assert.match(llms, /Linux: Server · Beta/);
-  assert.ok(llms.includes("curl -fsSL https://octoboard.dev/install.sh | sh"));
+  assert.ok(llms.includes("curl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh | sh"));
   assert.ok(llms.includes(downloads["linux-aarch64"]));
   assert.equal(llms.includes("Windows: Planned"), false);
   assert.match(llms, /iOS: Planned/);

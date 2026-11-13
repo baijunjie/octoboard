@@ -83,6 +83,8 @@ const CASES = [
   ["apps/desktop/src-tauri/localizations/ja.json", ["verify", "desktop", "native"]],
   ["apps/desktop/src-tauri/tauri.conf.json", ["verify", "web", "desktop", "daemon", "native"]],
   ["apps/daemon/dist/systemd/octoboardd.service", ["verify", "web", "daemon"]],
+  ["apps/daemon/testdata/self_update/test-release-key.txt", ["verify", "web", "daemon"]],
+  ["apps/desktop/scripts/release-manifest.mjs", ["verify", "web", "desktop"]],
   ["apps/desktop/src-tauri/tauri.windows.conf.json", ["verify", "desktop", "native"]],
   ["apps/desktop/src-tauri/windows/installer-hooks.nsh", ["verify", "desktop", "daemon", "native"]],
   ["apps/desktop/src-tauri/tauri.macos.conf.json", ["verify", "desktop", "native"]],

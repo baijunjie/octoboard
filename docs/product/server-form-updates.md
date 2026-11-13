@@ -130,7 +130,8 @@ percentage when the archive's size is known. `octoboardd update` does the same i
 - **A stop meanwhile**: a stop of any kind that begins during the download — an ordinary or planned stop, a termination
   signal — ends it, and keeps the executable from being replaced.
 - **One at a time**: the daemon and `octoboardd update` never replace the executable together; whichever comes second is
-  refused as busy. A daemon learns of an update `octoboardd update` installed under it at its next check or download
+  refused as busy. The install script takes the same lock where it can, and is refused the same way (see step 4 of "The
+  install script" in `docs/product/installing-the-server-form.md`). A daemon learns of an update `octoboardd update` installed under it at its next check or download
   request, and then shows it as installed.
 
 **Download and install** is refused, saying why in an error alert (see "When something fails" below), while a download is
@@ -203,7 +204,8 @@ running from the executable it replaces runs on as the build it started as until
   install command to upgrade by hand with.
 - **`--check`** only checks, printing what it found: exit status **0** when up to date, **10** when a newer version is
   available, **1** when the check failed.
-- **`--rollback`** puts `octoboardd.previous` back at the executable's path in one step and keeps what was there as
+- **`--rollback`** puts `octoboardd.previous` (kept by the last update, rollback or run of the install script) back at
+  the executable's path in one step and keeps what was there as
   `octoboardd.previous`, so a rollback can itself be rolled back, then says to run `octoboardd restart`. A daemon that
   had an update installed forgets it once its path leads to the running build again. A directory that is not writable,
   or a failure, makes it say so and exit with status 1.

@@ -37,16 +37,19 @@ anyway" passes; and that later versions arrive through the app's own updates.
 
 - that it installs `octoboardd`, the Octoboard daemon, on a Linux server without root, opened in a browser on the
   visitor's own machine, and that it is for x86_64 and aarch64, on any distribution;
-- the install command, `curl -fsSL <site origin>/install.sh | sh` (see "The install script" in
+- the install command, `curl --proto '=https' --tlsv1.2 -fsSL <site origin>/install.sh | sh` (see "The install script" in
   `docs/product/installing-the-server-form.md`), in a horizontally scrollable, focusable block with a Copy button. A
   successful copy turns the button's label to Copied for 2 seconds and announces it to screen readers; a copy the
   browser refuses changes nothing, the command staying selectable;
 - the next steps: run `octoboardd start` on the server, which listens on port 3369 (`--port <port>` picks another); on
   the visitor's own machine run `ssh -L 3369:127.0.0.1:3369 <server>` with the same port, and open the address
   `octoboardd address` prints;
+- the PATH caveat: when the install says `~/.local/bin` is not on the PATH, run `octoboardd start` by the full path it
+  prints, or add the directory to the PATH;
 - the service: replacing the command's final `sh` with `sh -s -- --service` installs it as a systemd user service that
-  starts at once, `--port <port>` choosing another port, and `loginctl enable-linger "$USER"`, run once and possibly
-  needing sudo, keeps it running after logout and starting at boot;
+  starts at once, `--port <port>` choosing another port; the script then turns lingering on, which keeps the service
+  running after logout and starting at boot, and only when it says it could not does the visitor run
+  `loginctl enable-linger "$USER"` once, possibly with sudo;
 - upgrading: run the install command again, then `octoboardd restart`;
 - links to the archive of each architecture, x86_64 and aarch64;
 - the terminal demonstration (below).
@@ -56,11 +59,13 @@ repository's releases page, listing every release.
 
 ### The terminal demonstration
 
-An animation of the Linux steps, with fictional output: a terminal on the server runs the install command, prints the
-download and installation, starts the daemon with `octoboardd start` and prints its address with `octoboardd address`;
+An animation of the Linux steps: a terminal on the server runs the install command, prints the download and
+installation, starts the daemon with `octoboardd start` and prints its address with `octoboardd address`;
 then a terminal on the visitor's own machine appears and forwards the port with `ssh -L`; then a browser window appears,
 open at that address and showing a picture of the Octoboard interface. Each terminal carries a translated caption of
-its step; the commands and output are in English. Commands are typed at an uneven, human pace.
+its step; the commands and output are in English. The output lines are ones the real tools print, with an example
+version, key and process id; the install script's are kept the same as the script's own messages for a first install,
+leaving out the warning it prints on the error output when it cannot check the signature. Commands are typed at an uneven, human pace.
 
 It plays once, from the start, when the page loads, and runs only while it is on screen and the page is visible,
 resuming where it was. A replay button on the server terminal plays it again from the start. With a reduced-motion

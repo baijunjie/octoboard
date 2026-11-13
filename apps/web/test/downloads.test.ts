@@ -174,8 +174,8 @@ test("a redirect page exists for every target and names its resolved download", 
 });
 
 test("the install command points at the site's script", () => {
-  assert.equal(installCommand("https://octoboard.dev/"), "curl -fsSL https://octoboard.dev/install.sh | sh");
-  assert.equal(installCommand("https://example.com/product/"), "curl -fsSL https://example.com/product/install.sh | sh");
+  assert.equal(installCommand("https://octoboard.dev/"), "curl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh | sh");
+  assert.equal(installCommand("https://example.com/product/"), "curl --proto '=https' --tlsv1.2 -fsSL https://example.com/product/install.sh | sh");
 });
 
 test("the redirect page escapes the target and carries a plain link", () => {
@@ -209,7 +209,8 @@ test(
       assert.match(page, /<a href="https:\/\/github\.com\/baijunjie\/octoboard\/releases/);
     }
     const page = readFileSync(new URL("download/index.html", generatedOutput), "utf8");
-    assert.ok(page.includes("curl -fsSL https://octoboard.dev/install.sh | sh"));
+    // The rendered page escapes the single quotes of the command as `&#39;`.
+    assert.ok(page.replaceAll("&#39;", "'").includes("curl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh | sh"));
     assert.ok(page.includes("x86_64 archive"));
     assert.ok(page.includes('<meta name="robots"') === false);
     assert.ok(readFileSync(new URL("download.md", generatedOutput), "utf8").includes("# Download Octoboard"));
