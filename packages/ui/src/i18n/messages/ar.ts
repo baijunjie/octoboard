@@ -1983,8 +1983,6 @@ export const ar: Translation<"zero" | "one" | "two" | "few" | "many" | "other"> 
   "settings.shortcuts.command.closeWindow": "إغلاق النافذة",
   "settings.shortcuts.command.quit": "إنهاء {appName}",
   "settings.shortcuts.fixed": "ثابت",
-  "settings.shortcuts.change": "تغيير",
-  "settings.shortcuts.cancel": "إلغاء",
   "settings.shortcuts.reset": "إعادة تعيين",
   "settings.shortcuts.restoreAll": "استعادة القيم الافتراضية",
   "settings.shortcuts.changeLabel": "تغيير اختصار {command}",

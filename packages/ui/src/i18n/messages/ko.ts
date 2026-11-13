@@ -2133,8 +2133,6 @@ export const ko: Translation<"other"> = {
   "settings.shortcuts.command.closeWindow": "{appWindow} 닫기",
   "settings.shortcuts.command.quit": "{appName} 종료",
   "settings.shortcuts.fixed": "고정됨",
-  "settings.shortcuts.change": "변경",
-  "settings.shortcuts.cancel": "취소",
   "settings.shortcuts.reset": "초기화",
   "settings.shortcuts.restoreAll": "기본값 복원",
   "settings.shortcuts.changeLabel": "{command} 단축키 변경",

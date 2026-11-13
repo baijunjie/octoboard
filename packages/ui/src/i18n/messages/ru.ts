@@ -1983,8 +1983,6 @@ export const ru: Translation<"one" | "few" | "many" | "other"> = {
   "settings.shortcuts.command.closeWindow": "Закрыть окно",
   "settings.shortcuts.command.quit": "Завершить {appName}",
   "settings.shortcuts.fixed": "Не изменяется",
-  "settings.shortcuts.change": "Изменить",
-  "settings.shortcuts.cancel": "Отмена",
   "settings.shortcuts.reset": "Сбросить",
   "settings.shortcuts.restoreAll": "Восстановить стандартные",
   "settings.shortcuts.changeLabel": "Изменить сочетание клавиш для {command}",

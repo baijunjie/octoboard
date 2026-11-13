@@ -123,17 +123,32 @@ viewer are listed too and cannot be, and that the changes apply only to the curr
 browser, the current browser. Beside it, only while at least one shortcut differs from its default, is a **Restore
 defaults** button.
 
-Each group has a heading, and each command a row: its name, then its current key caps, and then either a **Change**
-button — with a **Reset** button after it while the command's shortcut differs from its default — or, for a key that
-cannot be changed, the word **Fixed**.
+Each group has a heading, and each command a row: its name, then its current key caps, and then a slot of fixed width
+at the row's end, so that the key caps of every row line up. That slot holds:
+
+- a **Reset** icon button (a rotate-arrow icon) while the command's shortcut differs from its default and the row is not
+  recording;
+- a **lock** icon for a key that cannot be changed, whose tooltip and name say "Fixed" — the word itself is not shown;
+- nothing otherwise.
+
+A command that can be changed has its key caps as a button: the caps draw no button fill of their own, and darken
+under the pointer and while pressed. Its name says it changes the shortcut for that command, its tooltip says the same,
+and its description is the current combination. A key that cannot be changed shows its key caps only, as text.
+
+For the tooltips of Reset and of the lock see "Tooltips on icon-only controls" and "Tooltips on indicators" in
+`docs/product/labels-and-tooltips.md`.
 
 A group's heading stays pinned at the top of the section's area while the group's rows scroll beneath it, as in
 "Group headings" in `docs/product/settings.md`.
 
 ### Changing a shortcut
 
-**Change** starts recording on that row: the key caps give way to a line asking for the new keys, and Change becomes
-**Cancel**. One row records at a time; starting another row's recording ends the first.
+Pressing a row's key caps — with the pointer, or with Enter or Space while they have keyboard focus — starts recording
+on that row: within the same button the key caps give way to a line asking for the new keys, followed by an X icon, and
+the row's Reset goes away until the recording ends. Pressing the button again cancels the recording; there is no
+separate Cancel button. While recording, the button's name is that line followed by the wording that pressing cancels
+changing the shortcut for the command, and its tooltip says the latter. One row records at a time; starting another
+row's recording ends the first.
 
 While a row records, every key press goes to the recording and to nothing else: no window shortcut runs, Escape does not
 close Settings and the terminal receives nothing. A modifier pressed on its own is the start of a combination and is
@@ -147,30 +162,31 @@ other combination pressed is then taken:
 
 A few keys are not recorded:
 
-- **Escape**, with no modifier, cancels the recording, as **Cancel** does.
+- **Escape**, with no modifier, cancels the recording, as pressing the recording button does.
 - **Tab** held with neither `Ctrl` nor `Cmd` (the Windows key elsewhere) — so `Shift+Tab` and `Option+Tab` too — ends
   the recording and moves keyboard focus as Tab always does. Tab with either of them is recorded, as the
   console-session keys use `Ctrl+Tab`.
-- **Enter** and **Space**, with no modifier, are left to the focused button, so on Cancel they cancel.
+- **Enter** and **Space**, with no modifier, are left to the focused button, so on the recording row's button they
+  cancel.
 
 Ending a recording in any of these ways changes nothing and clears the row's reason.
 
 ### Resetting and restoring the defaults
 
-**Reset** gives the row's command its default back, and keyboard focus moves to that row's Change button. When another
+**Reset** gives the row's command its default back, and keyboard focus moves to that row's key caps button. When another
 command has taken the default meanwhile, the reset is refused: the row says which command holds it, the changed shortcut
 stays, and focus stays on Reset.
 
 **Restore defaults** gives every command its default back at once, ends any recording, and moves keyboard focus to the
-list's first Change button as the button itself goes away — the first one a search in Settings leaves shown, or the
-section's tab while the search shows none (see `docs/product/searching-settings.md`).
+list's first key caps button as the Restore defaults button itself goes away — the first one a search in Settings
+leaves shown, or the section's tab while the search shows none (see `docs/product/searching-settings.md`).
 
 ### What assistive technology is told
 
 The section has one status region of its own, which says that a recording has started and that Escape cancels it, the
 new keys once one is saved, that a change was cancelled, the keys a reset or Restore defaults put back, and every
 reason a combination or a reset was refused — again when the same refusal repeats. A reason shown on a row is also the
-description of that row's Change and Reset buttons.
+description of that row's key caps button, after the current combination while not recording, and of its Reset.
 
 ## Which combinations are refused
 

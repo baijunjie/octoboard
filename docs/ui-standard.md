@@ -1001,6 +1001,12 @@ Every control has an accessible name: its visible text, or an `aria-label` when 
   action) is the instance — its visible message, then an `sr-only` span with the action, giving "No projects yet Add
   project". Such a row also sets an empty `aria-describedby` itself, since `TitledControl` only recognizes a tooltip
   that repeats an `aria-label`.
+  The shortcut button of Settings > Keyboard shortcuts names its recording state the same way: the visible prompt,
+  then an `sr-only` span with the cancel action.
+- **An accepted exception to 2.5.3: a shortcut's key caps as its edit button.** In Settings > Keyboard shortcuts the
+  button shows only the caps of the current combination (symbols such as ⇧⌘G on a Mac), and is named "Change the
+  shortcut for {command}" with the combination as its description, by the user's decision: the caps' symbols cannot be
+  said as written, and the name says what pressing does (`packages/ui/src/settings/ShortcutsSection.tsx`).
 - **A control in a table of fields is named by its column and row headers.** The headers stay visible but are hidden
   from assistive technology, and each control is named with `aria-labelledby` over the two header ids, column first;
   the control then carries no `aria-label` of its own, which react-aria would add to the name and read twice. The
@@ -2264,6 +2270,13 @@ import's settings, take a compact size by the user's decision: 20px tall, 12px t
 HeroUI's 24px, 14px and 8px, which stood out of the 14px text around them. Only the size changes; HeroUI's colours
 stay. Lines holding them are 24px tall, so a wrapped line of caps never touches the next. Key caps on a row of their
 own, as in Settings and menus, keep HeroUI's size.
+
+In Settings > Keyboard shortcuts a changeable shortcut's key caps are themselves its edit button, by the user's
+decision (`packages/ui/src/settings/ShortcutsSection.tsx`). The button is HeroUI's ghost variant with its hover and
+pressed fills made transparent and no padding, so no box is drawn around the caps; hover and press darken the caps
+instead (`--default-hover`, the text taking the foreground colour), and keyboard focus keeps HeroUI's ring around them.
+While recording, the button holds the prompt and an X in muted text, with no hover fill. Each row ends in a fixed
+24px slot holding an icon-only Reset, a lock for a key that cannot be changed, or nothing, so the caps line up.
 
 ### Form controls on a surface
 

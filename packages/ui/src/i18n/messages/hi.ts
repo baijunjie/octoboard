@@ -1982,8 +1982,6 @@ export const hi: Translation<"one" | "other"> = {
   "settings.shortcuts.command.closeWindow": "विंडो बंद करें",
   "settings.shortcuts.command.quit": "{appName} से बाहर निकलें",
   "settings.shortcuts.fixed": "तय है",
-  "settings.shortcuts.change": "बदलें",
-  "settings.shortcuts.cancel": "रद्द करें",
   "settings.shortcuts.reset": "रीसेट करें",
   "settings.shortcuts.restoreAll": "डिफ़ॉल्ट बहाल करें",
   "settings.shortcuts.changeLabel": "{command} का शॉर्टकट बदलें",

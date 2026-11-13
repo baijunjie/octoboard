@@ -80,8 +80,8 @@ collapsed lines" in `docs/product/project-pane-git-change-viewer.md`).
 
 A control shown only as an icon has a tooltip naming it, shown both when the mouse rests on it and when it receives
 keyboard focus. The tooltip's text is the same name assistive technology announces for the control, except on the ⋮
-buttons, the pin buttons, the session Delete or Archive shortcuts and the file viewer's File manager and Default
-application buttons below. These are:
+buttons, the pin buttons, the session Delete or Archive shortcuts, the file viewer's File manager and Default
+application buttons and the Keyboard shortcuts section's Reset buttons below. These are:
 
 - the top bar's controls — Back, Forward, the sidebar toggle at its start and the panel toggles at its end; each
   toggle's tooltip follows its "Show …" / "Hide …" label (see "The sidebar toggle and the panel toggles" in
@@ -111,6 +111,9 @@ application buttons below. These are:
 - the archive view's Close button and each of its rows' Delete button, whose tooltip names the session;
 - the three options of Settings' Appearance row — Light, Dark and System (see "Appearance" in
   `docs/product/settings.md`);
+- the Reset button at the end of a row in Settings' Keyboard shortcuts section, whose tooltip is a short "Reset", while
+  the name announced for it says that it resets the shortcut for that row's command to its default (see "The Keyboard
+  shortcuts section" in `docs/product/keyboard-shortcuts.md`);
 - the report panel's previous-page and next-page buttons;
 - a right pane panel's Close panel button and the Report and Terminal panels' Maximize panel / Restore panel size (see
   "A panel's header" in `docs/product/right-pane-panels.md`);
@@ -307,9 +310,9 @@ On a touch screen a tap on a mark opens its tooltip's content in a popover (see 
 tap has nothing else to do: the status glyph on the top bar's breadcrumb, the status glyph and agent icon of each
 session a confirmation lists, the branch badge in either focus-mode placement (see "The branch badge" in
 `docs/product/project-git-status.md`) and the context-size chip beside the Session history's heading (see "The
-context-size chip" in `docs/product/session-context.md`) and the Conflicted tag in the file viewer's title. On a device
-with a touch screen such a mark answers a press, and a hover, across at least 24 by 24 pixels, even where it is drawn
-smaller. A mark inside a row, a button or an option opens none, as the tap there selects, folds, switches or chooses:
+context-size chip" in `docs/product/session-context.md`), the Conflicted tag in the file viewer's title and the lock on
+a row of Settings' Keyboard shortcuts section. On a device with a touch screen such a mark answers a press, and a
+hover, across at least 24 by 24 pixels, even where it is drawn smaller. A mark inside a row, a button or an option opens none, as the tap there selects, folds, switches or chooses:
 the status glyph, agent icon, context-size chip and binding badge on a sidebar row, a focus mode card or archived row
 and an archive view row, the relative time on a focus mode card or archived row and on an item of a View archive
 submenu, the branch badge on a project's sidebar row, the status marker, and the responsible-session badge in the Git
@@ -354,7 +357,11 @@ These are:
 - a change's status letter on its row in the Git mode's change list, flat or grouped by folder, whose tooltip names
   the status in the same word the file viewer's header carries as the tag of an opened change, and is on the letter
   itself rather than on the row around it, the name and the detail beside it keeping their own tooltips (see "Rows
-  and the keyboard" in `docs/product/project-pane-git-change-list.md`).
+  and the keyboard" in `docs/product/project-pane-git-change-list.md`);
+- the lock at the end of a row in Settings' Keyboard shortcuts section, marking a key that cannot be changed, whose
+  tooltip says "Fixed" and which assistive technology hears by its own name, the same word; the word is not shown as
+  text, so keyboard focus alone does not reveal it (see "The Keyboard shortcuts section" in
+  `docs/product/keyboard-shortcuts.md`).
 
 The warning glyph after the name of an added agent that is not installed, on its tab in Settings' Agent accounts
 section, is a mark too, but not one of these: its tooltip belongs to the tab around it, which is a control, and is

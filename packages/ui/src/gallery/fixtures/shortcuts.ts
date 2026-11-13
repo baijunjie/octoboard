@@ -58,7 +58,7 @@ export const shortcutsScenarios: Scenario[] = [
     category: "normal",
     title: "Keyboard shortcuts in a browser",
     description:
-      "Only what a browser has is listed: under Navigation the two Fixed region keys, then Focus mode with a Change button per command, then Application with Open settings alone, also with a Change button, each key drawn as key caps. Back and Forward, the console-session switch and the native menu's keys (Window and the editing keys of the system) are left out. Editing is listed with only Find in file, Fixed. A line above says shortcut changes apply only to the current browser, and there is no Restore defaults while every key is a default.",
+      "A changeable shortcut shows only its key caps, which are themselves the edit button: they darken on hover, and pressing them records a new combination. Fixed shortcuts have a lock in the reserved trailing slot. Navigation lists only the two region keys, Focus mode lists its three commands, Application lists Open settings and Editing lists Find. The introduction names the current browser as the scope, and Restore defaults is absent while every key is a default.",
     state,
     steps: openSection,
   },
@@ -68,7 +68,7 @@ export const shortcutsScenarios: Scenario[] = [
     category: "normal",
     title: "Keyboard shortcuts in the desktop app",
     description:
-      "The introduction says shortcut changes apply only to the current desktop app. Every group is listed: Navigation (Back and Forward appear only where the window itself reports macOS, then the console-session switch as ⌃⇥ and ⌃⇧⇥ (Tab drawn as the ⇥ symbol), each with a Change button), Focus mode, Application with Open settings, then Editing and Window below it, where the dialog scrolls and every row reads Fixed instead of Change.",
+      "The introduction names the current desktop app as the scope. Navigation includes Back and Forward and the console-session switch, with the key caps of each changeable combination themselves the edit button. Fixed region keys align with those buttons and carry a lock in the trailing slot. Focus mode and Application follow; scroll to Editing and Window to see their fixed keys with the same lock treatment.",
     desktopApp: true,
     host: MAC_HOST,
     state,
@@ -80,7 +80,7 @@ export const shortcutsScenarios: Scenario[] = [
     category: "normal",
     title: "Keyboard shortcuts in the Windows app",
     description:
-      "The Windows app has no native menu bar and its window controls are the system's, so it lists what a browser does plus the console-session switch, under the desktop app's introduction: under Navigation, Next console session as Ctrl and Tab and Previous console session as Ctrl, Shift and Tab sit before the two Fixed region keys, each with a Change button (never Win, and no Back or Forward); the menu's editing and window keys are left out, and Open settings is listed and changeable, as the page itself handles it. The key caps are written as text, in Windows' order: Ctrl, Alt and Shift, never ⌘⌥⇧. Toggle focus mode and New session show their changed keys (Ctrl, Alt, Shift and G; Ctrl, Alt and O) with a Reset button; the rest, the console-session switch among them, keep their defaults (Ctrl+Shift+F, Ctrl+N, Ctrl+Shift+N, Ctrl+,) with no Reset. A menu's key caps are the same (see Menu of a project session on Windows).",
+      "The Windows app lists the console-session switch before the fixed region keys, with no Back, Forward or native-menu commands. The key caps of each changeable combination are the edit button, written with Windows key names in Ctrl, Alt and Shift order rather than Apple glyphs. Toggle focus mode and New session show changed combinations with a reset icon in the reserved trailing slot; unchanged rows leave that slot empty and fixed rows show a lock. Open settings remains changeable, and the introduction names the current desktop app as the scope.",
     desktopApp: true,
     host: WINDOWS_HOST,
     state: snapshotState({ consoles: [console_], projects: [web, api], sessions, ...WINDOWS_MACHINE }),
@@ -93,7 +93,7 @@ export const shortcutsScenarios: Scenario[] = [
     category: "normal",
     title: "Keyboard shortcuts, some changed",
     description:
-      "Toggle focus mode, New session with defaults and New session show their own keys, each with a Reset button after Change that the unchanged rows lack, and Restore defaults sits at the end of the intro line. Choose 560px to see the narrow layout: at 768px and narrower each row stacks its keys and buttons under its name, aligned to the end edge, and the intro line stacks Restore defaults under itself, also at the end edge.",
+      "Toggle focus mode, New session with defaults and New session show their changed key caps, with a reset icon in the reserved trailing slot. Unchanged rows keep the same spacing without a reset icon, and fixed rows use that slot for a lock. Restore defaults sits at the end of the introduction. Choose 560px to see each row stack its controls below its name while preserving their end alignment.",
     state,
     preferences: customisedPreferences(customised),
     steps: openSection,
@@ -104,7 +104,7 @@ export const shortcutsScenarios: Scenario[] = [
     category: "normal",
     title: "Keyboard shortcuts, recording a new key",
     description:
-      "The New session row has \"Press the new keys…\" in place of its key caps, and its button reads Cancel; the other rows stay as they were. Escape or Cancel leaves the row as it was.",
+      "The New session key caps give way to the prompt \"Press the new keys…\" with an X icon for canceling; the other rows keep their key caps and alignment. Press the prompt again or Escape to cancel without changing the shortcut.",
     state,
     steps: [...openSection, recordFor("newSession")],
   },
@@ -124,7 +124,7 @@ export const shortcutsScenarios: Scenario[] = [
     category: "exceptional",
     title: "Keyboard shortcuts, a default another command holds",
     description:
-      "Reset was pressed on Toggle focus mode, whose default New session with defaults now has: the row is not recording, keeps its changed key with Change and Reset beside it, and a danger-coloured line under its name says the combination is already used for that command.",
+      "Resetting Toggle focus mode is refused because New session with defaults now holds its default. The row keeps its changed key caps and reset icon, with a danger-coloured explanation below its name; it is not recording.",
     state,
     preferences: customisedPreferences(defaultTaken),
     steps: [...openSection, (ui) => ui.press(ui.t("settings.shortcuts.resetLabel", { command: ui.t("settings.shortcuts.command.focusMode") }))],

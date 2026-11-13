@@ -2131,8 +2131,6 @@ export const th: Translation<"other"> = {
   "settings.shortcuts.command.closeWindow": "ปิดหน้าต่าง",
   "settings.shortcuts.command.quit": "ออกจาก {appName}",
   "settings.shortcuts.fixed": "เปลี่ยนไม่ได้",
-  "settings.shortcuts.change": "เปลี่ยน",
-  "settings.shortcuts.cancel": "ยกเลิก",
   "settings.shortcuts.reset": "รีเซ็ต",
   "settings.shortcuts.restoreAll": "คืนค่าเริ่มต้น",
   "settings.shortcuts.changeLabel": "เปลี่ยนปุ่มลัดของ {command}",

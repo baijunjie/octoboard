@@ -2382,8 +2382,6 @@ export const en = {
   "settings.shortcuts.command.closeWindow": "Close window",
   "settings.shortcuts.command.quit": "Quit {appName}",
   "settings.shortcuts.fixed": "Fixed",
-  "settings.shortcuts.change": "Change",
-  "settings.shortcuts.cancel": "Cancel",
   "settings.shortcuts.reset": "Reset",
   "settings.shortcuts.restoreAll": "Restore defaults",
   "settings.shortcuts.changeLabel": "Change the shortcut for {command}",

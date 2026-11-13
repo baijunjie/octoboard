@@ -2133,8 +2133,6 @@ export const zhHant: Translation<"other"> = {
   "settings.shortcuts.command.closeWindow": "關閉視窗",
   "settings.shortcuts.command.quit": "結束 {appName}",
   "settings.shortcuts.fixed": "固定",
-  "settings.shortcuts.change": "更改",
-  "settings.shortcuts.cancel": "取消",
   "settings.shortcuts.reset": "重置",
   "settings.shortcuts.restoreAll": "回復預設",
   "settings.shortcuts.changeLabel": "更改「{command}」的快速鍵",

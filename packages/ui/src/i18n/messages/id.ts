@@ -1983,8 +1983,6 @@ export const id: Translation<"other"> = {
   "settings.shortcuts.command.closeWindow": "Tutup jendela",
   "settings.shortcuts.command.quit": "Keluar dari {appName}",
   "settings.shortcuts.fixed": "Tetap",
-  "settings.shortcuts.change": "Ubah",
-  "settings.shortcuts.cancel": "Batal",
   "settings.shortcuts.reset": "Reset",
   "settings.shortcuts.restoreAll": "Pulihkan default",
   "settings.shortcuts.changeLabel": "Ubah pintasan untuk {command}",

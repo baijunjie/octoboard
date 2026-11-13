@@ -2132,8 +2132,6 @@ export const ja: Translation<"other"> = {
   "settings.shortcuts.command.closeWindow": "{appWindow}を閉じる",
   "settings.shortcuts.command.quit": "{appName} を終了",
   "settings.shortcuts.fixed": "変更不可",
-  "settings.shortcuts.change": "変更",
-  "settings.shortcuts.cancel": "キャンセル",
   "settings.shortcuts.reset": "リセット",
   "settings.shortcuts.restoreAll": "デフォルトに戻す",
   "settings.shortcuts.changeLabel": "{command} のショートカットを変更",

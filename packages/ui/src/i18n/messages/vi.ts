@@ -1982,8 +1982,6 @@ export const vi: Translation<"other"> = {
   "settings.shortcuts.command.closeWindow": "Đóng cửa sổ",
   "settings.shortcuts.command.quit": "Thoát {appName}",
   "settings.shortcuts.fixed": "Cố định",
-  "settings.shortcuts.change": "Đổi",
-  "settings.shortcuts.cancel": "Hủy",
   "settings.shortcuts.reset": "Đặt lại",
   "settings.shortcuts.restoreAll": "Khôi phục mặc định",
   "settings.shortcuts.changeLabel": "Đổi phím tắt cho {command}",

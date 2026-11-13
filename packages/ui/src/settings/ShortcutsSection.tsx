@@ -1,6 +1,9 @@
+import { LockKeyhole, RotateCcw, X } from "lucide-react";
 import React, { useContext, useEffect, useId, useRef, useState } from "react";
 
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announce/StatusAnnouncer";
+import { IndicatorTooltip } from "../components/hint/IndicatorTooltip";
+import { TitledControl } from "../components/hint/TitledControl";
 import { useShortcutScopeDescription } from "../components/hooks/useShortcutScopeDescription";
 import { useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
@@ -17,9 +20,9 @@ import { Button } from "../primitives";
 
 /**
  * The keyboard shortcuts: every key the app has, grouped, with the app's own commands rebindable. A
- * row's Change records the next combination pressed (see `recordKeys`): a valid one is saved at
- * once, one that cannot be used says why in the row and keeps recording, and Escape (or Cancel)
- * stops. Everything said is also spoken through the status region. The commands this client does
+ * row's shortcut button records the next combination pressed (see `recordKeys`): a valid one is saved at
+ * once, one that cannot be used says why in the row and keeps recording, and Escape (or pressing the
+ * shortcut button again) stops. Everything said is also spoken through the status region. The commands this client does
  * not have (the desktop app's, in a browser) are left out of the list.
  */
 export function ShortcutsSection(): React.ReactElement {
@@ -85,7 +88,7 @@ export function ShortcutsSection(): React.ReactElement {
         setProblem(undefined);
         return "passed";
       }
-      // Enter and Space on their own press the focused Cancel; they are not keys to bind either.
+      // Enter and Space on their own press the focused shortcut button, which cancels; they are not keys to bind either.
       if ((event.key === "Enter" || event.key === " ") && plain && !event.shiftKey) return "passed";
       // A modifier on its own is the start of a combination.
       if (isModifierCode(event.code)) return "consumed";
@@ -199,10 +202,14 @@ function ShortcutRow({
   const t = useT();
   const { host } = usePlatform();
   const problemId = useId();
+  const bindingDescriptionId = useId();
+  const promptId = useId();
+  const cancelId = useId();
   const changeRef = useRef<HTMLButtonElement>(null);
   const label = t(command.label);
   const id = command.id as CommandId;
   const differs = command.rebindable && !sameKeys(binding, command.binding, host);
+  const actionLabel = t(recording ? "settings.shortcuts.cancelLabel" : "settings.shortcuts.changeLabel", { command: label });
   return (
     <SettingRow
       searchId={`shortcut.${command.id}`}
@@ -213,40 +220,67 @@ function ShortcutRow({
         <span id={problemId} className="block px-1 text-xs wrap-break-word text-danger">{problem}</span>
       )}
     >
-      <div className="flex min-h-6 flex-wrap items-center justify-end gap-2">
-        {recording ? <span className="text-sm text-app-muted">{t("settings.shortcuts.recording")}</span> : <BindingKbd binding={binding} />}
+      <div className="grid grid-cols-[minmax(0,1fr)_1.5rem] items-center gap-2">
         {command.rebindable ? (
           <>
-            <Button
-              ref={changeRef}
-              data-shortcut-change=""
-              size="xs"
-              variant="secondary"
-              label={t(recording ? "settings.shortcuts.cancelLabel" : "settings.shortcuts.changeLabel", { command: label })}
-              describedBy={problem ? problemId : undefined}
-              onPress={() => (recording ? onCancel() : onRecord(id))}
-            >
-              {t(recording ? "settings.shortcuts.cancel" : "settings.shortcuts.change")}
-            </Button>
-            {differs && !recording && (
+            <span id={bindingDescriptionId} hidden>{describeBinding(binding, t, host)}</span>
+            <TitledControl title={actionLabel}>
+              <Button
+                ref={changeRef}
+                data-shortcut-change=""
+                size="sm"
+                variant="ghost"
+                // An approved departure from HeroUI (`docs/ui-standard.md`, "Do not change how a HeroUI component looks"): the ghost button
+                // draws no fill of its own, so only the key caps show; hover and press darken the caps themselves.
+                className="h-auto min-h-6 min-w-0 justify-self-end rounded-md p-0 whitespace-normal [--button-bg-hover:transparent] [--button-bg-pressed:transparent]"
+                // While recording, the visible prompt leads the accessible name, followed by what pressing does.
+                label={recording ? undefined : actionLabel}
+                labelledBy={recording ? `${promptId} ${cancelId}` : undefined}
+                // Never left undefined: an empty value keeps the tooltip, which repeats the name, from being read as
+                // the description too.
+                describedBy={[!recording && bindingDescriptionId, problem && problemId].filter(Boolean).join(" ")}
+                onPress={() => (recording ? onCancel() : onRecord(id))}
+              >
+                {recording ? (
+                  <span className="flex items-center gap-2 px-1.5 text-end text-sm text-app-muted">
+                    <span id={promptId}>{t("settings.shortcuts.recording")}</span>
+                    <span id={cancelId} className="sr-only">{actionLabel}</span>
+                    <X aria-hidden="true" className="size-3.5 shrink-0" />
+                  </span>
+                ) : <BindingKbd binding={binding} className="transition-colors in-ui-hovered:bg-(--default-hover) in-ui-hovered:text-foreground in-ui-pressed:bg-(--default-hover) in-ui-pressed:text-foreground" />}
+              </Button>
+            </TitledControl>
+          </>
+        ) : (
+          <span className="justify-self-end"><BindingKbd binding={binding} /></span>
+        )}
+        <div className="flex size-6 items-center justify-center">
+          {/* A short tooltip, as the row's name sits beside it; the accessible name keeps the full wording. */}
+          {differs && !recording && (
+            <TitledControl title={t("settings.shortcuts.reset")}>
               <Button
                 size="xs"
+                iconOnly
                 variant="ghost"
                 label={t("settings.shortcuts.resetLabel", { command: label })}
-                describedBy={problem ? problemId : undefined}
+                describedBy={problem ? problemId : ""}
                 onPress={() => {
-                  // The button goes away with the change, so focus is handed to this row's Change
-                  // first; a reset that is refused leaves the button where it is.
+                  // Reset removes its own button; keep focus on this row's shortcut instead.
                   if (onReset(id)) changeRef.current?.focus();
                 }}
               >
-                {t("settings.shortcuts.reset")}
+                <RotateCcw aria-hidden="true" className="size-3.5" />
               </Button>
-            )}
-          </>
-        ) : (
-          <span className="text-xs text-app-muted">{t("settings.shortcuts.fixed")}</span>
-        )}
+            </TitledControl>
+          )}
+          {/* "Fixed" is the lock's tooltip and name only, so a sighted keyboard user does not see it; kept on purpose,
+            as the introduction already says these keys cannot be changed. */}
+          {!command.rebindable && (
+            <IndicatorTooltip tooltip={t("settings.shortcuts.fixed")} label={t("settings.shortcuts.fixed")} className="inline-flex text-app-muted">
+              <LockKeyhole aria-hidden="true" className="size-3.5" />
+            </IndicatorTooltip>
+          )}
+        </div>
       </div>
     </SettingRow>
   );

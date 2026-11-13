@@ -1982,8 +1982,6 @@ export const pt: Translation<"one" | "many" | "other"> = {
   "settings.shortcuts.command.closeWindow": "Fechar janela",
   "settings.shortcuts.command.quit": "Encerrar {appName}",
   "settings.shortcuts.fixed": "Fixo",
-  "settings.shortcuts.change": "Alterar",
-  "settings.shortcuts.cancel": "Cancelar",
   "settings.shortcuts.reset": "Redefinir",
   "settings.shortcuts.restoreAll": "Restaurar padrões",
   "settings.shortcuts.changeLabel": "Alterar atalho de {command}",

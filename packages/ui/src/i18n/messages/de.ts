@@ -2010,8 +2010,6 @@ export const de: Translation<"one" | "other"> = {
   "settings.shortcuts.command.closeWindow": "Fenster schließen",
   "settings.shortcuts.command.quit": "{appName} beenden",
   "settings.shortcuts.fixed": "Festgelegt",
-  "settings.shortcuts.change": "Ändern",
-  "settings.shortcuts.cancel": "Abbrechen",
   "settings.shortcuts.reset": "Zurücksetzen",
   "settings.shortcuts.restoreAll": "Standardeinstellungen wiederherstellen",
   "settings.shortcuts.changeLabel": "Kurzbefehl für {command} ändern",

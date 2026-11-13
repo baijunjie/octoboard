@@ -2205,8 +2205,6 @@ export const tr: Translation<"one" | "other"> = {
   "settings.shortcuts.command.closeWindow": "Pencereyi kapat",
   "settings.shortcuts.command.quit": "{appName} uygulamasından çık",
   "settings.shortcuts.fixed": "Sabit",
-  "settings.shortcuts.change": "Değiştir",
-  "settings.shortcuts.cancel": "İptal",
   "settings.shortcuts.reset": "Sıfırla",
   "settings.shortcuts.restoreAll": "Saptanmışları geri yükle",
   "settings.shortcuts.changeLabel": "{command} kestirmesini değiştir",
