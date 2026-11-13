@@ -2873,7 +2873,9 @@ fn ending_a_launch_removes_its_group_and_spares_what_was_kept() {
     let kept = wait_for_pid(&kept_file);
     let mut guard = KillOnDrop(vec![escapee, kept]);
     let Some(members) = containment.members() else {
-        eprintln!("skipped: no writable cgroup v2 subtree to make a launch's group in");
+        crate::test_support::cgroups::skip(
+            "no writable cgroup v2 subtree to make a launch's group in",
+        );
         return;
     };
     assert!(

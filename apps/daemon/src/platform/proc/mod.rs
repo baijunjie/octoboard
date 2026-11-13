@@ -91,6 +91,9 @@ mod contract_tests;
 #[cfg(target_os = "linux")]
 mod cgroup;
 
+#[cfg(all(test, target_os = "linux"))]
+pub(crate) use cgroup::cgroup_dir;
+
 #[cfg(all(unix, not(target_os = "linux")))]
 mod cgroup_stub;
 

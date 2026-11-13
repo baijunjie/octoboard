@@ -12,7 +12,7 @@ use crate::platform::test_helper::{self, write_pid, PID_FILE, ROLE};
 #[cfg(target_os = "linux")]
 use crate::test_support::assert_detached_session_leader;
 #[cfg(target_os = "linux")]
-use crate::test_support::cgroups::{cgroup_of, grouped_launch};
+use crate::test_support::cgroups::{cgroup_of, grouped_launch, skip};
 use crate::test_support::{
     assert_gone_by, is_running, wait_for_pid, KillOnDrop, ScratchDir, PATIENCE,
 };
@@ -822,7 +822,7 @@ fn a_held_launch_placed_with_its_host_ends_what_it_started_like_any_launch() {
     let containment = Containment::for_held_launch("contract", &launch).expect("the containment");
     containment.place_with_host(&own_identity());
     if containment.members().is_none() {
-        eprintln!("skipped: no writable cgroup v2 subtree to make a launch's group in");
+        skip("no writable cgroup v2 subtree to make a launch's group in");
         return;
     }
     assert!(containment.releases_members());

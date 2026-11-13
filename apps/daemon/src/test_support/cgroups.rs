@@ -9,12 +9,12 @@
 use std::ffi::OsStr;
 use std::fs;
 use std::io::{self, Write};
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::Instant;
 
 use super::PATIENCE;
-use crate::platform::proc::Containment;
+use crate::platform::proc::{cgroup_dir, Containment};
 
 /// The environment variable that, set to `1`, turns a cgroup test's skip into a failure: where the
 /// suite is run to exercise the groups, a hierarchy it cannot write in is a broken setup, not a
@@ -66,59 +66,6 @@ fn own_cgroup_dir() -> Option<PathBuf> {
     let procs = fs::read_to_string(dir.join("cgroup.procs")).ok()?;
     let own = std::process::id().to_string();
     procs.lines().any(|line| line.trim() == own).then_some(dir)
-}
-
-/// Where the cgroup at `path` in the cgroup v2 hierarchy is under the first cgroup v2 mount of a
-/// `/proc/self/mountinfo` content, or `None` where that mount does not reach it, as the daemon's
-/// own reading of the hierarchy (`platform::proc::cgroup`) places it.
-fn cgroup_dir(mountinfo: &str, path: &str) -> Option<PathBuf> {
-    let (root, mount) = mountinfo.lines().find_map(|line| {
-        let (fields, after) = line.split_once(" - ")?;
-        if after.split(' ').next()? != "cgroup2" {
-            return None;
-        }
-        let mut fields = fields.split(' ');
-        let root = fields.nth(3)?;
-        let mount = fields.next()?;
-        Some((
-            PathBuf::from(unescape(root)),
-            PathBuf::from(unescape(mount)),
-        ))
-    })?;
-    let inside = Path::new(path).strip_prefix(&root).ok()?;
-    if inside
-        .components()
-        .any(|part| !matches!(part, Component::Normal(_)))
-    {
-        return None;
-    }
-    Some(mount.join(inside))
-}
-
-/// A mountinfo field with its octal escapes (`\040` for a space) spelled out.
-fn unescape(field: &str) -> String {
-    let bytes = field.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut i = 0;
-    while i < bytes.len() {
-        let code = bytes.get(i + 1..i + 4).and_then(|digits| {
-            if !digits.iter().all(|digit| (b'0'..=b'7').contains(digit)) {
-                return None;
-            }
-            u8::from_str_radix(std::str::from_utf8(digits).ok()?, 8).ok()
-        });
-        match code {
-            Some(code) if bytes[i] == b'\\' => {
-                out.push(code);
-                i += 4;
-            }
-            _ => {
-                out.push(bytes[i]);
-                i += 1;
-            }
-        }
-    }
-    String::from_utf8_lossy(&out).into_owned()
 }
 
 /// A cgroup made below the test process's own, removed with what is below it when dropped, once
@@ -216,145 +163,5 @@ mod tests {
         assert!(!required(Some(OsStr::new(""))));
         assert!(!required(Some(OsStr::new("0"))));
         assert!(!required(Some(OsStr::new("true"))));
-    }
-
-    #[test]
-    fn the_own_cgroup_is_found_under_the_cgroup2_mount_of_mountinfo() {
-        let unified = "\
-24 30 0:22 / /sys/fs/cgroup rw,nosuid - cgroup2 cgroup2 rw,nsdelegate";
-        assert_eq!(
-            cgroup_dir(unified, "/user.slice/test.scope"),
-            Some(PathBuf::from("/sys/fs/cgroup/user.slice/test.scope"))
-        );
-        // A hybrid host mounts v1 controllers at the usual place and v2 below it.
-        let hybrid = "\
-25 30 0:23 / /sys/fs/cgroup ro,nosuid - tmpfs tmpfs ro,mode=755
-26 25 0:24 / /sys/fs/cgroup/unified rw,nosuid - cgroup2 cgroup2 rw
-27 25 0:25 / /sys/fs/cgroup/memory rw,nosuid - cgroup cgroup rw,memory";
-        assert_eq!(
-            cgroup_dir(hybrid, "/user.slice"),
-            Some(PathBuf::from("/sys/fs/cgroup/unified/user.slice"))
-        );
-    }
-
-    #[test]
-    fn a_cgroup_outside_the_mounted_root_or_without_a_mount_has_no_dir() {
-        let partial = "\
-24 30 0:22 /kubepods/pod1 /sys/fs/cgroup rw - cgroup2 cgroup2 rw";
-        assert_eq!(
-            cgroup_dir(partial, "/kubepods/pod1/ctr"),
-            Some(PathBuf::from("/sys/fs/cgroup/ctr"))
-        );
-        assert_eq!(cgroup_dir(partial, "/other"), None);
-        assert_eq!(cgroup_dir(partial, "/kubepods/pod1/../x"), None);
-        assert_eq!(
-            cgroup_dir("25 30 0:23 / /sys/fs/cgroup rw - tmpfs tmpfs rw", "/"),
-            None
-        );
-    }
-
-    #[test]
-    fn an_escaped_mount_point_is_spelled_out() {
-        let spaced = "24 30 0:22 / /mnt/cgroup\\040v2 rw - cgroup2 cgroup2 rw";
-        assert_eq!(
-            cgroup_dir(spaced, "/a"),
-            Some(PathBuf::from("/mnt/cgroup v2/a"))
-        );
-    }
-
-    #[test]
-    fn an_escaped_root_is_spelled_out_before_the_path_is_placed_in_it() {
-        let spaced = "24 30 0:22 /pod\\040one /sys/fs/cgroup rw - cgroup2 cgroup2 rw";
-        assert_eq!(
-            cgroup_dir(spaced, "/pod one/ctr"),
-            Some(PathBuf::from("/sys/fs/cgroup/ctr"))
-        );
-        assert_eq!(cgroup_dir(spaced, "/pod\\040one/ctr"), None);
-    }
-
-    #[test]
-    fn the_first_cgroup2_mount_is_the_one_used() {
-        let two = "\
-24 30 0:22 / /sys/fs/cgroup rw - cgroup2 cgroup2 rw
-25 30 0:23 / /mnt/other rw - cgroup2 cgroup2 rw";
-        assert_eq!(
-            cgroup_dir(two, "/a"),
-            Some(PathBuf::from("/sys/fs/cgroup/a"))
-        );
-    }
-
-    #[test]
-    fn optional_mountinfo_fields_before_the_separator_do_not_shift_the_fields() {
-        let shared = "24 30 0:22 / /sys/fs/cgroup rw shared:5 master:2 - cgroup2 cgroup2 rw";
-        assert_eq!(
-            cgroup_dir(shared, "/a"),
-            Some(PathBuf::from("/sys/fs/cgroup/a"))
-        );
-    }
-
-    #[test]
-    fn the_root_of_the_hierarchy_is_the_mount_itself() {
-        let unified = "24 30 0:22 / /sys/fs/cgroup rw - cgroup2 cgroup2 rw";
-        assert_eq!(
-            cgroup_dir(unified, "/"),
-            Some(PathBuf::from("/sys/fs/cgroup"))
-        );
-    }
-
-    #[test]
-    fn a_mountinfo_without_a_cgroup2_mount_has_no_dir() {
-        assert_eq!(cgroup_dir("", "/a"), None);
-        let v1 = "\
-25 30 0:23 / /sys/fs/cgroup ro - tmpfs tmpfs ro
-27 25 0:25 / /sys/fs/cgroup/memory rw - cgroup cgroup rw,memory";
-        assert_eq!(cgroup_dir(v1, "/a"), None);
-        // A line without the separator is not a mount.
-        assert_eq!(cgroup_dir("24 30 0:22 / /sys/fs/cgroup rw", "/a"), None);
-    }
-
-    #[test]
-    fn a_cgroup_beside_the_mounted_root_is_not_inside_it() {
-        // A prefix of the text is not a prefix of the path.
-        let partial = "24 30 0:22 /pod1 /sys/fs/cgroup rw - cgroup2 cgroup2 rw";
-        assert_eq!(cgroup_dir(partial, "/pod10/ctr"), None);
-        assert_eq!(
-            cgroup_dir(partial, "/pod1"),
-            Some(PathBuf::from("/sys/fs/cgroup"))
-        );
-    }
-
-    #[test]
-    fn a_cgroup_path_that_is_not_made_of_plain_names_has_no_dir() {
-        let unified = "24 30 0:22 / /sys/fs/cgroup rw - cgroup2 cgroup2 rw";
-        assert_eq!(cgroup_dir(unified, "/a/../b"), None);
-        assert_eq!(cgroup_dir(unified, "/a/../../etc"), None);
-        assert_eq!(cgroup_dir(unified, "relative"), None);
-    }
-
-    #[test]
-    fn unescape_spells_out_octal_escapes_and_keeps_everything_else() {
-        assert_eq!(unescape("/plain/path"), "/plain/path");
-        assert_eq!(unescape(""), "");
-        assert_eq!(unescape("a\\040b"), "a b");
-        assert_eq!(unescape("a\\011b\\012c"), "a\tb\nc");
-        assert_eq!(unescape("a\\134b"), "a\\b");
-        assert_eq!(unescape("\\040\\040"), "  ");
-        // The escape is three digits, and what follows it is not part of it.
-        assert_eq!(unescape("\\0401"), " 1");
-    }
-
-    #[test]
-    fn unescape_keeps_what_is_not_a_valid_octal_escape() {
-        // Fewer than three digits, a non-octal digit, a value above a byte, a bare or trailing backslash.
-        assert_eq!(unescape("a\\04"), "a\\04");
-        assert_eq!(unescape("a\\0"), "a\\0");
-        assert_eq!(unescape("a\\089"), "a\\089");
-        assert_eq!(unescape("a\\xyz"), "a\\xyz");
-        assert_eq!(unescape("a\\400"), "a\\400");
-        assert_eq!(unescape("a\\"), "a\\");
-        assert_eq!(unescape("\\\\040"), "\\ ");
-        // A sign is not a digit.
-        assert_eq!(unescape("a\\+12"), "a\\+12");
-        assert_eq!(unescape("a\\-12"), "a\\-12");
     }
 }

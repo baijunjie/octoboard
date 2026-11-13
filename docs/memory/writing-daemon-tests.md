@@ -195,8 +195,7 @@ run as root is missing this early return; it is not a regression in the change b
 
 Applies to Linux daemon tests that need a cgroup v2 group the host may not let them make or use (making a group,
 changing its mode, moving a process into it). Before returning, call `test_support::cgroups::skip(reason)` (or take
-the group through `grouped_launch` / `ChildCgroup::new`, which do), not an `eprintln!("skipped: …")` of your own, even
-though older tests in `apps/daemon/src/processes/ledger/tests.rs` and `apps/daemon/src/platform/proc/` still do that:
+the group through `grouped_launch` / `ChildCgroup::new`, which do), not an `eprintln!("skipped: …")` of your own:
 `skip` fails the test where `OCTOBOARD_REQUIRE_CGROUP=1`, as in the CI run that gives the suite a writable hierarchy,
 while a test's own line lets a broken setup pass there without running it.
 

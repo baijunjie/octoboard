@@ -48,11 +48,9 @@ runs the suite with `OCTOBOARD_REQUIRE_CGROUP=1` and fails on a group left behin
 `--privileged --cgroupns=private --init` and `TEST_UID` set to the uid that owns the checkout there; locally, pass the
 settings above in with `-e`, and give it a target directory that user can write. Without a container runtime, a manual
 run of `quality.yml` on the pushed branch runs the same job. With a setup of your own instead, set
-`OCTOBOARD_REQUIRE_CGROUP=1` yourself: without it a hierarchy you failed to make writable passes as skipped tests. Even
-with it, the tests that skip with their own `eprintln!("skipped: …")` rather than `test_support::cgroups::skip`
-(`apps/daemon/src/processes/ledger/tests.rs`, `apps/daemon/src/platform/proc/contract_tests.rs`,
-`apps/daemon/src/platform/proc/cgroup.rs`) still pass without running: when the change reaches them, run them with
-`-- --nocapture` and check that no `skipped:` line appears.
+`OCTOBOARD_REQUIRE_CGROUP=1` yourself: without it a hierarchy you failed to make writable passes as skipped tests. Every
+cgroup test that returns early for want of a group says so through `test_support::cgroups::skip`, so with it a
+skipped test fails instead of passing unrun.
 
 Without a container runtime, Linux-only code gets a compile check only: copy the Linux-only functions into a scratch
 crate outside the repository that depends only on what they use (typically `libc`), and run

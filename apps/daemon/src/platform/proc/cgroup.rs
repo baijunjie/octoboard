@@ -81,16 +81,30 @@ impl Hierarchy {
     /// The directory of the cgroup a process is in by its `/proc/<pid>/cgroup` content, as this
     /// mount shows it, or `None` for one outside it.
     fn dir_of(&self, cgroup_file: &str) -> Option<PathBuf> {
-        let path = Path::new(unified_path(cgroup_file)?);
-        let inside = path.strip_prefix(&self.root).ok()?;
-        if inside
-            .components()
-            .any(|part| !matches!(part, std::path::Component::Normal(_)))
-        {
-            return None;
-        }
-        Some(self.mount.join(inside))
+        place(&self.root, &self.mount, unified_path(cgroup_file)?)
     }
+}
+
+/// Where the cgroup at `path` in the hierarchy is under a mount of it from `root` at `mount`, or
+/// `None` where the mount does not reach it or the path is not made of plain names.
+fn place(root: &Path, mount: &Path, path: &str) -> Option<PathBuf> {
+    let inside = Path::new(path).strip_prefix(root).ok()?;
+    if inside
+        .components()
+        .any(|part| !matches!(part, std::path::Component::Normal(_)))
+    {
+        return None;
+    }
+    Some(mount.join(inside))
+}
+
+/// Where the cgroup at `path` in the cgroup v2 hierarchy is under the first cgroup v2 mount of a
+/// `/proc/self/mountinfo` content, or `None` where there is no such mount or it does not reach
+/// the path.
+#[cfg(test)]
+pub(crate) fn cgroup_dir(mountinfo: &str, path: &str) -> Option<PathBuf> {
+    let (root, mount) = cgroup2_mount(mountinfo)?;
+    place(&root, &mount, path)
 }
 
 /// The hierarchy, read once, or `None` where there is none to be had.
@@ -141,7 +155,9 @@ fn unescape(field: &str) -> String {
     let mut out = Vec::with_capacity(bytes.len());
     let mut at = 0;
     while at < bytes.len() {
-        let escape = bytes.get(at + 1..at + 4).filter(|_| bytes[at] == b'\\');
+        let escape = bytes.get(at + 1..at + 4).filter(|digits| {
+            bytes[at] == b'\\' && digits.iter().all(|digit| (b'0'..=b'7').contains(digit))
+        });
         match escape
             .and_then(|digits| u8::from_str_radix(std::str::from_utf8(digits).ok()?, 8).ok())
         {
@@ -698,7 +714,7 @@ fn remove_tree_by(dir: &Path, deadline: Instant) -> bool {
 mod tests {
     use super::*;
     use crate::platform::proc::Containment;
-    use crate::test_support::cgroups::ChildCgroup;
+    use crate::test_support::cgroups::{skip, ChildCgroup};
     use crate::test_support::{programs, Children};
 
     #[test]
@@ -747,6 +763,48 @@ mod tests {
         );
         assert_eq!(hierarchy.dir_of("0::/system.slice/x\n"), None);
         assert_eq!(hierarchy.dir_of("0::/user.slice/../x\n"), None);
+    }
+
+    #[test]
+    fn a_cgroup_dir_is_placed_under_the_first_cgroup2_mount() {
+        let hybrid = "\
+25 30 0:23 / /sys/fs/cgroup ro,nosuid - tmpfs tmpfs ro,mode=755
+26 25 0:24 / /sys/fs/cgroup/unified rw shared:5 master:2 - cgroup2 cgroup2 rw
+27 25 0:25 / /sys/fs/cgroup/memory rw - cgroup cgroup rw,memory
+28 25 0:26 / /mnt/other rw - cgroup2 cgroup2 rw";
+        assert_eq!(
+            cgroup_dir(hybrid, "/user.slice"),
+            Some("/sys/fs/cgroup/unified/user.slice".into())
+        );
+        assert_eq!(
+            cgroup_dir(hybrid, "/"),
+            Some("/sys/fs/cgroup/unified".into())
+        );
+        let partial = "24 30 0:22 /pod1 /sys/fs/cgroup rw - cgroup2 cgroup2 rw";
+        assert_eq!(cgroup_dir(partial, "/pod10/ctr"), None);
+        assert_eq!(cgroup_dir(partial, "relative"), None);
+        assert_eq!(cgroup_dir("", "/a"), None);
+        // A line without the separator is not a mount.
+        assert_eq!(cgroup_dir("24 30 0:22 / /sys/fs/cgroup rw", "/a"), None);
+    }
+
+    #[test]
+    fn unescape_spells_out_octal_escapes_and_keeps_everything_else() {
+        assert_eq!(unescape("/plain/path"), "/plain/path");
+        assert_eq!(unescape(""), "");
+        assert_eq!(unescape("a\\040b"), "a b");
+        assert_eq!(unescape("a\\011b\\012c"), "a\tb\nc");
+        assert_eq!(unescape("a\\134b"), "a\\b");
+        // The escape is three digits, and what follows it is not part of it.
+        assert_eq!(unescape("\\0401"), " 1");
+        assert_eq!(unescape("\\040\\040"), "  ");
+        // Fewer than three digits, a non-octal digit, a value above a byte, a sign, a bare or
+        // trailing backslash are kept as they are.
+        for kept in [
+            "a\\04", "a\\089", "a\\xyz", "a\\400", "a\\+12", "a\\-12", "a\\",
+        ] {
+            assert_eq!(unescape(kept), kept);
+        }
     }
 
     #[test]
@@ -820,6 +878,7 @@ mod tests {
     #[test]
     fn the_cgroup_of_a_process_is_the_one_it_runs_in() {
         let Some(own) = Subtree::below_own() else {
+            skip("the process's own cgroup v2 directory is not found");
             return;
         };
         let found = Subtree::of_process(&identity_of(std::process::id())).expect("own cgroup");
@@ -855,6 +914,7 @@ mod tests {
     #[test]
     fn all_lists_the_own_cgroup_first_and_each_noted_one_once() {
         let Some(own) = Subtree::below_own() else {
+            skip("the process's own cgroup v2 directory is not found");
             return;
         };
         let count = |dir: &Path| Subtree::all().iter().filter(|base| base.dir == dir).count();
@@ -1015,7 +1075,7 @@ mod tests {
         };
         let dir = host.cgroup.dir().to_path_buf();
         if fs::set_permissions(&dir, fs::Permissions::from_mode(0o555)).is_err() {
-            eprintln!("skipped: the cgroup's mode cannot be changed");
+            skip("the cgroup's mode cannot be changed");
             return;
         }
         let launch = launch_name("refuses");
@@ -1034,10 +1094,12 @@ mod tests {
     #[test]
     fn a_group_dropped_while_a_process_is_in_it_is_removed_once_the_process_goes() {
         let Some(base) = Subtree::below_own() else {
+            skip("the process's own cgroup v2 directory is not found");
             return;
         };
         let launch = launch_name("drop-busy");
         let Some(group) = Group::create(&base, "drop-inst", &launch) else {
+            skip("no writable cgroup v2 subtree to make a group in");
             return;
         };
         let dir = group.dir.clone();
@@ -1045,7 +1107,9 @@ mod tests {
         let id = child.id();
         let mut children = Children(vec![child]);
         if let Err(err) = group.adopt(ProcessId(id)) {
-            eprintln!("skipped: the process cannot be moved into the group ({err})");
+            skip(&format!(
+                "the process cannot be moved into the group ({err})"
+            ));
             return;
         }
         drop(group);
@@ -1067,9 +1131,11 @@ mod tests {
     #[test]
     fn an_empty_group_is_removed_by_its_drop() {
         let Some(base) = Subtree::below_own() else {
+            skip("the process's own cgroup v2 directory is not found");
             return;
         };
         let Some(group) = Group::create(&base, "drop-empty", &launch_name("drop-empty")) else {
+            skip("no writable cgroup v2 subtree to make a group in");
             return;
         };
         let dir = group.dir.clone();
@@ -1083,10 +1149,12 @@ mod tests {
     #[test]
     fn a_joined_group_is_never_removed_by_its_drop() {
         let Some(base) = Subtree::below_own() else {
+            skip("the process's own cgroup v2 directory is not found");
             return;
         };
         let launch = launch_name("drop-joined");
         let Some(owner) = Group::create(&base, "drop-joined", &launch) else {
+            skip("no writable cgroup v2 subtree to make a group in");
             return;
         };
         let dir = owner.dir.clone();
@@ -1103,9 +1171,11 @@ mod tests {
     #[test]
     fn a_group_still_holding_a_process_when_its_removal_window_ends_stays() {
         let Some(base) = Subtree::below_own() else {
+            skip("the process's own cgroup v2 directory is not found");
             return;
         };
         let Some(group) = Group::create(&base, "window", &launch_name("window")) else {
+            skip("no writable cgroup v2 subtree to make a group in");
             return;
         };
         let dir = group.dir.clone();
@@ -1113,7 +1183,9 @@ mod tests {
         let id = child.id();
         let mut children = Children(vec![child]);
         if let Err(err) = group.adopt(ProcessId(id)) {
-            eprintln!("skipped: the process cannot be moved into the group ({err})");
+            skip(&format!(
+                "the process cannot be moved into the group ({err})"
+            ));
             return;
         }
 
@@ -1135,9 +1207,11 @@ mod tests {
     #[test]
     fn ending_a_group_whose_killed_process_is_reaped_a_moment_later_removes_it() {
         let Some(base) = Subtree::below_own() else {
+            skip("the process's own cgroup v2 directory is not found");
             return;
         };
         let Some(group) = Group::create(&base, "end-busy", &launch_name("end-busy")) else {
+            skip("no writable cgroup v2 subtree to make a group in");
             return;
         };
         let dir = group.dir.clone();
@@ -1145,7 +1219,9 @@ mod tests {
         if let Err(err) = group.adopt(ProcessId(child.id())) {
             child.kill().ok();
             child.wait().ok();
-            eprintln!("skipped: the process cannot be moved into the group ({err})");
+            skip(&format!(
+                "the process cannot be moved into the group ({err})"
+            ));
             return;
         }
         // Reaped as soon as the end kills it, which only then lets the kernel release the group.
@@ -1171,6 +1247,7 @@ mod tests {
         host.cgroup.make_launch_dir("noted-inst", &both);
         let in_own = Containment::for_launch("noted-inst", &both).expect("the containment");
         if in_own.members().is_none() {
+            skip("the host makes no group to hold the test's process in");
             return;
         }
 
