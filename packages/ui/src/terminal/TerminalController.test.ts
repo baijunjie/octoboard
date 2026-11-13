@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 // Loaded first, as `main.tsx` loads it, so a guard that swallows the window's focus events fails this test.
 import "../input/focusGuard";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { windowAttention } from "../components/announce/windowTestSupport";
 import type { HostFacts } from "../platform/host";
 import { BROWSER_HOST, MAC_HOST, WINDOWS_HOST } from "../test/hosts";
 import { RESIZE_SETTLE_MS, TerminalController } from "./TerminalController";
+import { resetTerminalFontSize, terminalFontSize } from "./terminalFontSize";
 import { afterQueuedWork, fakeTimers } from "../test/clock";
 
 /** Enough of xterm for the controller: writes are parsed in a later task, in order, as xterm's are,
@@ -655,6 +656,35 @@ describe("telling the daemon the person turned to the terminal", () => {
     await vi.advanceTimersByTimeAsync(RESIZE_SETTLE_MS);
     // The size first, so the activation applies it rather than the one asked for before.
     expect(live.sent.slice(sent + 2)).toEqual([JSON.stringify({ type: "resize", cols: 120, rows: 30 }), ACTIVATE]);
+  });
+});
+
+describe("the font size", () => {
+  it("starts as the user's choice, and changing it redraws the live terminal and tells the daemon the size it now fits", async () => {
+    fakeTimers();
+    expect(term.options.fontSize).toBe(15);
+    controller.attach("a", url("a"), false);
+    const live = lastSocket();
+    live.open();
+    const sent = live.sent.length;
+    controller.setFontSize(15);
+    await vi.advanceTimersByTimeAsync(RESIZE_SETTLE_MS);
+    expect(live.sent.slice(sent)).toEqual([]);
+
+    term.cols = 100;
+    controller.setFontSize(18);
+    expect(term.options.fontSize).toBe(18);
+    await vi.advanceTimersByTimeAsync(RESIZE_SETTLE_MS);
+    expect(live.sent.slice(sent)).toContainEqual(JSON.stringify({ type: "resize", cols: 100, rows: 24 }));
+  });
+});
+
+describe("the font size of a terminal opened later", () => {
+  it("is the size chosen by then", () => {
+    onTestFinished(resetTerminalFontSize);
+    terminalFontSize.set(20);
+    new TerminalController({ onStatusChange: () => {} }, "dark", { host: BROWSER_HOST });
+    expect(FakeTerminal.last.options.fontSize).toBe(20);
   });
 });
 

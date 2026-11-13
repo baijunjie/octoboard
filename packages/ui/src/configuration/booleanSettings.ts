@@ -16,9 +16,9 @@ export type AgentBooleanField = SwitchFields<DocumentAgentSettings>;
 
 export type BooleanField = ApplicationBooleanField | AgentBooleanField;
 
-/** The Settings dialog sections a switch is shown in: the five of the application settings, and the Agent accounts
+/** The Settings dialog sections a switch is shown in: the four of the application settings, and the Agent accounts
  * section, whose settings travel with the accounts. */
-export type SwitchSection = "general" | "appBehavior" | "git" | "agentBehavior" | "cleanup" | "agentAccounts";
+export type SwitchSection = "general" | "git" | "agentBehavior" | "cleanup" | "agentAccounts";
 
 /** One daemon setting that is a switch: its field (see `Settings.<field>` in protocol.generated.ts for what it
  * does), the Settings dialog section it is shown in and its place among that section's lines, the name and the two
@@ -47,14 +47,14 @@ type Copy<F extends BooleanField> = Omit<BooleanSetting<F>, "field" | "section">
  * `DocumentAgentSettings` fails to compile until it has an entry, which gives it its section and so its group below. */
 const COPY: { [F in BooleanField]: Copy<F> } = {
   auto_close_idle_shell_terminals: {
-    section: "appBehavior",
+    section: "general",
     order: 3,
     label: "settings.closeIdleTerminals.label",
     description: { on: "settings.closeIdleTerminals.description.on", off: "settings.closeIdleTerminals.description.off" },
     consequence: "configuration.import.settings.consequence.closeIdleTerminals",
   },
   keep_awake: {
-    section: "appBehavior",
+    section: "general",
     order: 2,
     label: "settings.keepAwake.label",
     description: { on: "settings.keepAwake.description.on", off: "settings.keepAwake.description.off" },
@@ -69,7 +69,7 @@ const COPY: { [F in BooleanField]: Copy<F> } = {
     consequence: "configuration.import.settings.consequence.autoPull",
   },
   resume_sessions_on_start: {
-    section: "appBehavior",
+    section: "general",
     order: 1,
     label: "settings.resumeOnStart.label",
     description: { on: "settings.resumeOnStart.description.on", off: "settings.resumeOnStart.description.off" },
@@ -165,12 +165,8 @@ function switchesIn<F extends BooleanField>(section: SwitchSection): readonly Bo
 export const AGENT_SWITCHES = switchesIn<AgentBooleanField>("agentAccounts");
 
 /** The switches the Settings dialog's General section shows, in its order (the settings of it a client holds sit
- * around them in the import cards). */
+ * around them in the import cards: the background run and the menu bar icon between the first and the second). */
 export const GENERAL_SWITCHES = switchesIn<ApplicationBooleanField>("general");
-
-/** The switches of the App behavior section, in its order (the settings of it a client holds sit between the
- * first and the second in the import cards). */
-export const APP_BEHAVIOR_SWITCHES = switchesIn<ApplicationBooleanField>("appBehavior");
 
 /** The switches of the Git section, in its order. */
 export const GIT_SWITCHES = switchesIn<ApplicationBooleanField>("git");
@@ -181,10 +177,9 @@ export const AGENT_BEHAVIOR_SWITCHES = switchesIn<ApplicationBooleanField>("agen
 /** The switches of the Cleanup section, in its order. */
 export const CLEANUP_SWITCHES = switchesIn<ApplicationBooleanField>("cleanup");
 
-/** The application settings that are a switch: those of the five groups above. */
+/** The application settings that are a switch: those of the four groups above. */
 export const APPLICATION_SWITCHES: readonly BooleanSetting<ApplicationBooleanField>[] = [
   ...GENERAL_SWITCHES,
-  ...APP_BEHAVIOR_SWITCHES,
   ...GIT_SWITCHES,
   ...AGENT_BEHAVIOR_SWITCHES,
   ...CLEANUP_SWITCHES,

@@ -92,7 +92,7 @@ it on to *working*, and sorts as such.
 ## Choosing the sort
 
 The sort is chosen in the **Sorting** group at the end of Settings' General section (see "Sorting" in
-`docs/product/settings.md`), one select per part:
+`docs/product/general-settings.md`), one select per part:
 
 | Row | Orders | Choices |
 |---|---|---|

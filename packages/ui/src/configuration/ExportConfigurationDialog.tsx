@@ -31,7 +31,7 @@ export function exportFileName(console?: Pick<Console, "name">): string {
 
 const SECTION_NOTE: Record<SettingsSection, PlainMessageKey> = {
   general: "configuration.export.general.description",
-  app_behavior: "configuration.export.appBehavior.description",
+  appearance: "configuration.export.appearance.description",
   git: "configuration.export.git.description",
   agent_behavior: "configuration.export.agentBehavior.projectScope.description",
   keyboard_shortcuts: "configuration.export.shortcuts.description",
@@ -52,10 +52,10 @@ const SECTION_NOTE: Record<SettingsSection, PlainMessageKey> = {
  * name it was saved under, or only that it was downloaded where the platform cannot say more. What is added are the
  * settings this client holds, which the daemon does not know of: a document that includes the Keyboard shortcuts
  * section gets this client's shortcut changes (an empty set when none is changed), and with the section they belong to
- * its appearance, Markdown style and session order (General; the language is the daemon's own and is in the document as
- * it holds it) and, where the platform has it, whether it runs in the background, whether it shows its menu bar icon
- * and whether it prevents sleep, and when (App behavior; see `heldClientSettings`). Dismissing the save dialog leaves
- * this one open.
+ * its session order and, where the platform has it, whether it runs in the background and whether it shows its menu bar
+ * icon (General; the language and whether it prevents sleep, and when, are the daemon's own and are in the document as
+ * it holds them), and its appearance, Markdown style and terminal font size (Appearance; see `heldClientSettings`).
+ * Dismissing the save dialog leaves this one open.
  */
 export function ExportConfigurationDialog({
   console: inHand,
@@ -74,7 +74,7 @@ export function ExportConfigurationDialog({
   const [includeAccounts, setIncludeAccounts] = useState(false);
   const [included, setIncluded] = useState<Record<SettingsSection, boolean>>({
     general: false,
-    app_behavior: false,
+    appearance: false,
     git: false,
     agent_behavior: false,
     keyboard_shortcuts: false,
@@ -84,7 +84,7 @@ export function ExportConfigurationDialog({
   const warningId = useId();
   const exported = consoles === "one" ? inHand : undefined;
   const sections = SETTINGS_SECTIONS.filter((section) => included[section]);
-  // The App behavior note lists the settings this client can hold only where the platform has all of them.
+  // The General note lists the settings this client can hold only where the platform has all of them.
   const heldHere = backgroundRun !== undefined && statusItem !== undefined;
   const nothing = consoles === "none" && sections.length === 0 && !includeAccounts;
   // A project's path is the only one the choice is about: with no console exported the option is not shown.
@@ -92,7 +92,7 @@ export function ExportConfigurationDialog({
   const pathsIncluded = includePaths && pathsApply;
 
   const noteOf = (section: SettingsSection): PlainMessageKey =>
-    section === "app_behavior" && !heldHere ? "configuration.export.appBehavior.description.basic" : SECTION_NOTE[section];
+    section === "general" && !heldHere ? "configuration.export.general.description.basic" : SECTION_NOTE[section];
 
   const submit = () => {
     if (!configurationFile || busy || nothing) return;

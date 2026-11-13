@@ -1,47 +1,59 @@
 // @vitest-environment jsdom
 import { expect, it, onTestFinished, vi } from "vitest";
 
+import { format, type Translate } from "../i18n/catalog";
 import { runInBackground } from "../lifecycle/runInBackground";
 import { showMenuBarIcon } from "../lifecycle/showMenuBarIcon";
 import type { SettingsSection } from "../protocol";
 import { sessionOrderPreference } from "../store";
+import { terminalFontSize } from "../terminal/terminalFontSize";
 import { markdownStyle } from "../viewer/markdown/markdownStyle";
 import { applyClientSettings, clientSettingsOf, clientSettingValues, documentClientSettings, heldClientSettings } from "./clientSettings";
 
 const DESKTOP = { backgroundRun: true, menuBarIcon: true };
 const BROWSER = { backgroundRun: false, menuBarIcon: false };
-const ALL: SettingsSection[] = ["general", "app_behavior", "agent_behavior", "git", "keyboard_shortcuts", "cleanup"];
-const FILE = { appearance: "dark", markdown_style: "github", run_in_background: true, show_menu_bar_icon: false };
+const ALL: SettingsSection[] = ["general", "appearance", "agent_behavior", "git", "keyboard_shortcuts", "cleanup"];
+const FILE = { appearance: "dark", markdown_style: "github", terminal_font_size: 18, run_in_background: true, show_menu_bar_icon: false };
 
-it("holds the appearance, Markdown style, and session order of the General section, and the background running, menu bar icon of App behavior only where its platform has them", () => {
+it("holds the session order of the General section and, only where its platform has them, the background running and menu bar icon, and the appearance, Markdown style and terminal font size of the Appearance section", () => {
   onTestFinished(() => {
     markdownStyle.set("tailwind");
+    terminalFontSize.set(15);
     runInBackground.set(false);
     showMenuBarIcon.set(true);
     sessionOrderPreference.set({ sessions: "status", activeProjects: "status", inactiveProjects: "name" });
   });
   markdownStyle.set("latex");
+  terminalFontSize.set(20);
   runInBackground.set(true);
   showMenuBarIcon.set(false);
   sessionOrderPreference.set({ sessions: "started", activeProjects: "used", inactiveProjects: "used" });
-  const general = { appearance: "light", markdown_style: "latex", session_order: { sessions: "started", active_projects: "used", inactive_projects: "used" } };
-  const appBehavior = { run_in_background: true, show_menu_bar_icon: false };
-  expect(heldClientSettings({ appearance: "light" }, DESKTOP, ALL)).toEqual({ ...general, ...appBehavior });
-  expect(heldClientSettings({ appearance: "light" }, BROWSER, ALL)).toEqual(general);
-  expect(heldClientSettings({ appearance: "light" }, DESKTOP, ["general"])).toEqual(general);
-  expect(heldClientSettings({ appearance: "light" }, DESKTOP, ["app_behavior"])).toEqual(appBehavior);
+  const appearance = { appearance: "light", markdown_style: "latex", terminal_font_size: 20 };
+  const order = { session_order: { sessions: "started", active_projects: "used", inactive_projects: "used" } };
+  const window = { run_in_background: true, show_menu_bar_icon: false };
+  expect(heldClientSettings({ appearance: "light" }, DESKTOP, ALL)).toEqual({ ...appearance, ...order, ...window });
+  expect(heldClientSettings({ appearance: "light" }, BROWSER, ALL)).toEqual({ ...appearance, ...order });
+  expect(heldClientSettings({ appearance: "light" }, DESKTOP, ["general"])).toEqual({ ...order, ...window });
+  expect(heldClientSettings({ appearance: "light" }, DESKTOP, ["appearance"])).toEqual(appearance);
   expect(heldClientSettings({ appearance: "light" }, DESKTOP, ["git", "keyboard_shortcuts"])).toEqual({});
 });
 
 it("takes from a document the values this client can stand behind and nothing else", () => {
   expect(clientSettingsOf(FILE, DESKTOP)).toEqual(FILE);
   // A browser has no background running, or menu bar icon.
-  expect(clientSettingsOf(FILE, BROWSER)).toEqual({ appearance: "dark", markdown_style: "github" });
-  expect(clientSettingsOf({ appearance: "sepia", markdown_style: "word", run_in_background: "yes", show_menu_bar_icon: "no" }, DESKTOP)).toEqual({});
+  expect(clientSettingsOf(FILE, BROWSER)).toEqual({ appearance: "dark", markdown_style: "github", terminal_font_size: 18 });
+  expect(clientSettingsOf({ appearance: "sepia", markdown_style: "word", terminal_font_size: "big", run_in_background: "yes", show_menu_bar_icon: "no" }, DESKTOP)).toEqual({});
   for (const settings of [undefined, null, 7, "dark", {}]) expect(clientSettingsOf(settings, DESKTOP), String(settings)).toEqual({});
-  expect(documentClientSettings({ settings: FILE }, BROWSER)).toEqual({ appearance: "dark", markdown_style: "github" });
+  expect(documentClientSettings({ settings: FILE }, BROWSER)).toEqual({ appearance: "dark", markdown_style: "github", terminal_font_size: 18 });
   expect(documentClientSettings({ settings: null }, BROWSER)).toEqual({});
   expect(documentClientSettings(undefined, BROWSER)).toEqual({});
+});
+
+it("holds a document's terminal font size within the range this client offers", () => {
+  expect(clientSettingsOf({ terminal_font_size: 4 }, BROWSER)).toEqual({ terminal_font_size: 10 });
+  expect(clientSettingsOf({ terminal_font_size: 99 }, BROWSER)).toEqual({ terminal_font_size: 24 });
+  expect(clientSettingsOf({ terminal_font_size: 15.6 }, BROWSER)).toEqual({ terminal_font_size: 16 });
+  for (const terminal_font_size of [null, "15", NaN, {}]) expect(clientSettingsOf({ terminal_font_size }, BROWSER), String(terminal_font_size)).toEqual({});
 });
 
 it("takes the parts of a session order this client knows, and none where it knows no part", () => {
@@ -55,12 +67,14 @@ it("takes the parts of a session order this client knows, and none where it know
 it("applies what it is given and leaves the rest as it is", () => {
   onTestFinished(() => {
     markdownStyle.set("tailwind");
+    terminalFontSize.set(15);
     runInBackground.set(false);
     showMenuBarIcon.set(true);
   });
   const setAppearance = vi.fn();
-  applyClientSettings({ markdown_style: "newsprint" }, setAppearance);
+  applyClientSettings({ markdown_style: "newsprint", terminal_font_size: 12 }, setAppearance);
   expect(markdownStyle.get()).toBe("newsprint");
+  expect(terminalFontSize.get()).toBe(12);
   expect(runInBackground.get()).toBe(false);
   expect(showMenuBarIcon.get()).toBe(true);
   expect(setAppearance).not.toHaveBeenCalled();
@@ -69,6 +83,7 @@ it("applies what it is given and leaves the rest as it is", () => {
   expect(runInBackground.get()).toBe(true);
   expect(showMenuBarIcon.get()).toBe(false);
   expect(markdownStyle.get()).toBe("newsprint");
+  expect(terminalFontSize.get()).toBe(12);
 });
 
 it("applies the parts of a session order it is given and leaves the others as they are", () => {
@@ -78,11 +93,18 @@ it("applies the parts of a session order it is given and leaves the others as th
   expect(sessionOrderPreference.get()).toEqual({ sessions: "status", activeProjects: "used", inactiveProjects: "name" });
 });
 
+it("words the terminal font size by the catalog message, with the number in the language's own digits", () => {
+  const worded = (language: "en" | "ar") => clientSettingValues(((key, params) => format(language, key, params)) as Translate, { terminal_font_size: 18 })[0].value;
+  expect(worded("en")).toBe("18 px");
+  expect(worded("ar")).toBe(`${new Intl.NumberFormat("ar").format(18)} px`);
+});
+
 it("words each value as its settings page does, with the one this client has where given", () => {
-  const t = (key: string) => key;
-  expect(clientSettingValues(t, { appearance: "dark", markdown_style: "github", run_in_background: false, show_menu_bar_icon: true })).toEqual([
-    { field: "appearance", label: "settings.appearance.label", value: "settings.appearance.dark" },
+  const t = ((key: string, params?: { size: number }) => (params ? `${key}:${params.size}` : key)) as Translate;
+  expect(clientSettingValues(t, { appearance: "dark", markdown_style: "github", terminal_font_size: 18, run_in_background: false, show_menu_bar_icon: true })).toEqual([
+    { field: "appearance", label: "settings.theme.label", value: "settings.theme.dark" },
     { field: "markdown_style", label: "settings.markdownStyle.label", value: "GitHub", lang: "en" },
+    { field: "terminal_font_size", label: "settings.terminalFontSize.label", value: "configuration.import.value.pixels:18" },
     { field: "run_in_background", label: "settings.background.label", value: "configuration.import.value.off" },
     { field: "show_menu_bar_icon", label: "settings.menuBarIcon.label", value: "configuration.import.value.on" },
   ]);

@@ -16,8 +16,8 @@ is not taken from the list's order.
 
 ## Choosing the language
 
-The language is chosen in the Language row of Settings' General section (see `docs/product/settings.md`). The options
-are the 17 languages in list order; there is no option that follows the system. Each language is named in that
+The language is chosen in the Language row of Settings' General section (see "Language" in
+`docs/product/general-settings.md`). The options are the 17 languages in list order; there is no option that follows the system. Each language is named in that
 language itself (日本語, Deutsch, العربية and so on), so a user can find theirs whatever the UI currently shows. The
 choice is one for every window and is also the language sessions are told to talk to the user in: it is the language
 the daemon holds (see "The language the daemon holds" below). A pick takes effect at once in the window it is made in,

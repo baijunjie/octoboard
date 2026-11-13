@@ -1,8 +1,8 @@
 # Keeping the computer awake
 
 The daemon can keep the computer it runs on — the daemon's host — from sleeping while the user is idle, through the
-**Prevent sleep** setting and its **When to prevent sleep** choice in Settings' App behavior section (the rows
-themselves are described in "Prevent sleep" in `docs/product/app-behavior-settings.md`). Prevent sleep is off to begin with. Here,
+**Prevent sleep** setting and its **When to prevent sleep** choice in Settings' General section (the rows
+themselves are described in "Prevent sleep" in `docs/product/general-settings.md`). Prevent sleep is off to begin with. Here,
 as in the setting's own words, "the computer" is the daemon's host: for a client connected to a daemon on another
 machine, that machine, not the one the client runs on.
 
@@ -82,6 +82,6 @@ The daemon stores Prevent sleep and When to prevent sleep among its application 
 same choice and a change made anywhere takes effect at once. They are changed by the `update_settings` request, which
 refuses any other value of `keep_awake_when`; besides Settings' rows, a console session can read and change them (see
 "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`), and a
-configuration export that includes the App behavior section carries them, an import asked to apply that section
+configuration export that includes the General section carries them, an import asked to apply that section
 setting them on the importing daemon whether or not its host can be held awake (see "The application settings an
 export carries" in `docs/product/settings-in-a-configuration.md`).

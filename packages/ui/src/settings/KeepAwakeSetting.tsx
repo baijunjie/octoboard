@@ -14,7 +14,7 @@ import { useSettingsWrite } from "./useSettingsWrite";
 /** Whether the daemon keeps the computer and its display awake, and when: always, or while a session is working
  * (`Settings.keep_awake` and `keep_awake_when`, changed through `update_settings`, each write based on the version the
  * store holds, as `useSettingsWrite` sends it). Rendered only where the daemon's host can hold the computer awake
- * (`AppBehaviorSection`, from `host.keep_awake`). The choice of when is shown only while the switch is on, its value
+ * (`GeneralSection`, from `host.keep_awake`). The choice of when is shown only while the switch is on, its value
  * kept while it is off. */
 export function KeepAwakeSetting(): React.ReactElement {
   const t = useT();

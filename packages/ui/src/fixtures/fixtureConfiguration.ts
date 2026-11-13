@@ -130,8 +130,8 @@ function exportedSettings(state: State, sections: readonly SettingsSection[]): D
   const { settings } = state;
   const has = (section: SettingsSection) => sections.includes(section);
   return {
-    ...(has("general") && settings.interface_language !== null && { interface_language: settings.interface_language }),
-    ...(has("app_behavior") && {
+    ...(has("general") && {
+      ...(settings.interface_language !== null && { interface_language: settings.interface_language }),
       resume_sessions_on_start: settings.resume_sessions_on_start,
       keep_awake: settings.keep_awake,
       keep_awake_when: settings.keep_awake_when,
@@ -398,11 +398,12 @@ export function importProgressDisagreement(handled: ImportItem[], progress: Impo
  * section it belongs to. */
 const PASSED_THROUGH = {
   keyboard_shortcuts: "keyboard_shortcuts",
-  appearance: "general",
-  markdown_style: "general",
+  appearance: "appearance",
+  markdown_style: "appearance",
+  terminal_font_size: "appearance",
   session_order: "general",
-  run_in_background: "app_behavior",
-  show_menu_bar_icon: "app_behavior",
+  run_in_background: "general",
+  show_menu_bar_icon: "general",
 } as const satisfies Partial<Record<keyof DocumentSettings, SettingsSection>>;
 
 /** The result with the document's client-held settings (see `PASSED_THROUGH`) of the sections asked for echoed in

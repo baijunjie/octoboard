@@ -395,6 +395,13 @@ command onto it — whose `useWindowShortcut`, on the window's capture phase, th
 sees it, while a modal is open too. Matching is exact — no modifier more or less — and the Cmd-on-Apple /
 Ctrl-elsewhere split of a binding is made in `packages/ui/src/shortcuts/binding.ts`.
 
+A matcher that also accepts keys outside the command's binding — the character a keyboard layout types, as the
+terminal font size commands take `+` and `-` (`packages/ui/src/terminal/terminalFontShortcut.ts`) — is outside
+`validate.ts`'s check, and `useWindowShortcut` calls `stopPropagation`, not `stopImmediatePropagation`, so every other
+window listener still sees the press: one press can run two commands. Such a matcher yields when the pressed keys are
+the binding of another command available on this client, and a press that types one command's character is never
+taken as a different command by its key code (the key typing `+` is `Minus` on a Nordic layout).
+
 The one key compared by hand is a `FIXED` key that a view outside `shortcuts/` owns (Find in the file viewer, F6 in
 `packages/ui/src/layout/useRegionCycle.ts`): `viewer/` and `layout/` may not import `shortcuts/` (`docs/structure/ui.md`,
 "Dependency direction"), so the view compares the key itself, through `isPrimaryModifier` below for Cmd / Ctrl. It is

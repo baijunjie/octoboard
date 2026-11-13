@@ -25,6 +25,7 @@ export { activateMenuItem, Menu, MenuChoices, MenuItem, MenuItemCheck, MenuList,
 export { containsText, MenuFilter, useMenuFiltered } from "./MenuFilter";
 export { Meter } from "./Meter";
 export { Modal, ModalBody, ModalCloseButton, ModalFooter, ModalHeader, ModalHeading, ModalStatusIcon } from "./Modal";
+export { NumberField } from "./NumberField";
 export { FloatingPopover, type OverlayPlacement, Popover, PopoverContent, PopoverDialog } from "./Popover";
 export { partSelector, toastStateAttributes } from "./parts";
 export { ProgressBar, ProgressBarOutput, ProgressBarTrack } from "./ProgressBar";

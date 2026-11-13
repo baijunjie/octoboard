@@ -26,6 +26,9 @@ product docs name for parts of the window:
   toward the terminal still widens the pane, and so does the arrow key pointing away from the pane.
 - Settings and the other dialogs are mirrored the same way, and toasts sit at the bottom left. So is the file viewer's
   layout: an image change's Before and After images, side by side, have Before on the right.
+- A number field, such as the Terminal font size row's in Settings, is mirrored with its row: its **−** button at the
+  field's start, on the right, and its **+** button at its end, on the left, with the row's **Reset font size** button
+  before the field, on its right (see "Terminal font size" in `docs/product/settings.md`).
 - A name or breadcrumb too long for its space fades out where it ends in its own direction: a name the user typed is
   laid out in the direction of its own text, so a Latin name in an Arabic window still fades at its right edge. A path
   and a branch name fade where they begin instead (see "Names too long for their space" in

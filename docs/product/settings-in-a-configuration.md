@@ -7,14 +7,16 @@ whose terms this doc uses; how the export dialog and the import's review and res
 
 ## Which settings travel
 
-The **application settings** region carries the settings of Settings' **General**, **App behavior**, **Agent
+The **application settings** region carries the settings of Settings' **General**, **Appearance**, **Agent
 behavior**, **Git**, **Keyboard shortcuts** and **Cleanup** sections (see `docs/product/settings.md`), every setting of them
-except App behavior's **Launch at login**, which is the system's own state rather than a setting Octoboard keeps (see
+except General's **Launch at login**, which is the system's own state rather than a setting Octoboard keeps (see
 `docs/product/launch-at-login.md`). Each of the six is a **section** of the region, chosen on its own: an export
 writes the settings of the sections chosen and nothing of the others, the region standing exactly when at least one
 section was chosen, and an import applies the sections it is asked for alone. A document **carries** a section when
-it holds any of that section's settings. The sections are named on the wire `general`, `app_behavior`, `agent_behavior`,
-`git`, `keyboard_shortcuts` and `cleanup`. The **accounts** region carries every setting of its **Agent
+it holds any of that section's settings. The sections are named on the wire `general`, `appearance`, `agent_behavior`,
+`git`, `keyboard_shortcuts` and `cleanup`. A document names no section, only its keys, so a document saved by a
+release that grouped the settings differently is read by its keys alone: each key counts toward the section it belongs
+to now, as listed below. The **accounts** region carries every setting of its **Agent
 accounts** section: the accounts themselves (see "The accounts" in `docs/product/configuration-export-and-import.md`)
 and the settings that apply to all of an agent's accounts or to every agent (see "The agent account settings an export
 carries" below). The one setting of those sections left out is an account's sharing of the default configuration (see
@@ -34,20 +36,9 @@ language only when the daemon holds one; every other one is in every document wh
 
 **General**
 
-- **Appearance**, under `appearance`: `light`, `dark` or `system` (see `docs/product/appearance.md`).
 - **Language**, under `interface_language`: the tag of the language the exporting daemon holds, which every window
   shows (see "The language the daemon holds" in `docs/product/language.md`).
-- **Markdown style**, under `markdown_style`: `tailwind`, `github`, `newsprint` or `latex` (see
-  `docs/product/markdown-documents.md`).
-- **Sorting**, under `session_order`, an object of its three parts, each the id of a choice (see "Choosing the sort" in
-  `docs/product/order-of-projects-and-sessions.md`): `sessions`, `status` or `started` (Recently started);
-  `active_projects`, `status`, `name` or `used` (Recently used); `inactive_projects`, `name` or `used`. The exporting
-  client writes all three, so an import sets the sort exactly; a part left out, or with a value the importing client
-  does not know, leaves that part as the client has it.
-
-**App behavior**
-
-- **Resume sessions on start** (see that section in `docs/product/app-behavior-settings.md`), under `resume_sessions_on_start`. The
+- **Resume sessions on start** (see that section in `docs/product/general-settings.md`), under `resume_sessions_on_start`. The
   review's line for turning it on says that Octoboard will then resume every interrupted session each time it starts,
   including ones interrupted before it last stopped. A document from a build without the setting has no such key, and
   an import of it leaves this machine's choice as it is.
@@ -55,16 +46,32 @@ language only when the daemon holds one; every other one is in every document wh
   the setting — the desktop application (see "Closing the window" in `docs/product/application-lifecycle.md`).
 - **Show menu bar icon**, under `show_menu_bar_icon`, `true` or `false`, carried only by the desktop application (see
   "Hiding the icon" in `docs/product/menu-bar-icon.md`).
-- **Prevent sleep** (see that section in `docs/product/app-behavior-settings.md`), under `keep_awake`, `true` or `false`, and
+- **Prevent sleep** (see that section in `docs/product/general-settings.md`), under `keep_awake`, `true` or `false`, and
   **When to prevent sleep**, under `keep_awake_when`, `always` or `working` (While sessions work). The daemon holds
-  both, so they are in every document whose export chose App behavior, whoever asked for it, a browser included. The
+  both, so they are in every document whose export chose General, whoever asked for it, a browser included. The
   review's line for turning Prevent sleep on says nothing more than that it turns on. A `keep_awake_when` this build
   does not know leaves this machine's choice as it is. An import applies both whether or not the importing daemon's host
   can be held awake: they are stored there all the same (see "Which computers can be held awake" in
   `docs/product/keeping-the-computer-awake.md`).
-- **Close idle terminals when closing the panel** (see that section in `docs/product/app-behavior-settings.md`), under
+- **Close idle terminals when closing the panel** (see that section in `docs/product/general-settings.md`), under
   `auto_close_idle_shell_terminals`. The review's line for turning it on says that closing the Terminal panel closes
   idle terminals and keeps terminals with running programs.
+- **Sorting**, under `session_order`, an object of its three parts, each the id of a choice (see "Choosing the sort" in
+  `docs/product/order-of-projects-and-sessions.md`): `sessions`, `status` or `started` (Recently started);
+  `active_projects`, `status`, `name` or `used` (Recently used); `inactive_projects`, `name` or `used`. The exporting
+  client writes all three, so an import sets the sort exactly; a part left out, or with a value the importing client
+  does not know, leaves that part as the client has it.
+
+**Appearance**
+
+- **Theme**, under `appearance`: `light`, `dark` or `system` (see `docs/product/appearance.md`).
+- **Markdown style**, under `markdown_style`: `tailwind`, `github`, `newsprint` or `latex` (see
+  `docs/product/markdown-documents.md`).
+- **Terminal font size**, under `terminal_font_size`: the terminals' font size in whole pixels (see
+  `docs/product/terminal-font-size.md`). A number with a fraction is read rounded to the nearest whole pixel; a negative
+  number, one too large for the daemon to hold (above 4294967295), or a value that is not a number is read as absent, so
+  an import leaves the client's own size as it is. The importing client holds a size outside its range of 10 to 24 to
+  that range.
 
 **Agent behavior**
 
@@ -119,8 +126,9 @@ language only when the daemon holds one; every other one is in every document wh
   conversation is gone" in `docs/product/deleting-sessions.md`), under `auto_delete_unresumable_archives`.
 
 A document whose export did not choose a section carries none of its settings, whichever consoles it holds. The
-daemon builds a section of the keys it holds alone, so a document asked of it with Keyboard shortcuts alone has an
-empty application settings region, to which a client adds its shortcuts (see "The settings a client holds" below).
+daemon builds a section of the keys it holds alone, so a document asked of it with only Appearance, Keyboard shortcuts
+or both has an empty application settings region, to which a client adds the settings it holds of them (see "The
+settings a client holds" below).
 
 ## The agent account settings an export carries
 
@@ -154,17 +162,19 @@ holds:
 
 ## The settings a client holds
 
-The appearance, the Markdown style, the sorting, keeping running in the background, showing the menu bar icon and the
-keyboard shortcuts are each client's own, kept in that client rather than by the daemon. So the client adds them to the
-document it saves, for the sections chosen alone — for General the appearance, the Markdown style and the sorting; for
-App behavior, where it has those settings, keeping running in the background and showing the menu bar icon; for
-Keyboard shortcuts its changed shortcuts — and the daemon builds none of them and reads none of them. A document with
+The theme, the Markdown style, the terminal font size, the sorting, keeping running in the background, showing the
+menu bar icon and the keyboard shortcuts are each client's own, kept in that client rather than by the daemon. So the
+client adds them to the document it saves, for the sections chosen alone — for General the sorting and, where it has
+those settings, keeping running in the background and showing the menu bar icon; for Appearance the theme, the Markdown
+style and the terminal font size; for Keyboard shortcuts its changed shortcuts — and the daemon builds none of them and
+applies none of them. A document with
 application settings asked of the daemon by any other program therefore has none of them. The language and Prevent
 sleep with When to prevent sleep are not among them: they are the daemon's, which builds them into the document and
 applies them on import.
 
 On import they are applied by the client that runs the import, to itself alone, and only once the daemon reports the
-application settings applied, from what the daemon passes back as applied — the keys of the sections applied alone;
+application settings applied, from what the daemon passes back as applied — the keys of the sections applied alone, as
+the document had them but for the terminal font size, which comes back rounded as described above;
 when the settings could not be applied, neither are these. Other clients — another browser, or the desktop app — keep their own. A value the importing client
 does not know, or a setting its platform does not have (keeping running in the background or showing the menu bar
 icon, in a browser), is ignored and leaves the client's own as it is.

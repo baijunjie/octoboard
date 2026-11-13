@@ -846,7 +846,7 @@ async fn settings_are_listed_without_directories_and_the_general_switches_are_wr
     .unwrap();
     assert_eq!(resumed["resume_sessions_on_start"], true);
     assert!(state.store.resume_sessions_on_start().unwrap());
-    // Prevent sleep, and when it holds, are App behavior settings an agent may read and change.
+    // Prevent sleep, and when it holds, are General settings an agent may read and change.
     assert_eq!(read["keep_awake"], false);
     assert_eq!(read["keep_awake_when"], "working");
     let kept_awake = call(

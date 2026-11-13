@@ -65,6 +65,7 @@
 @import "@heroui/styles/components/checkbox.css" layer(components);
 @import "@heroui/styles/components/input.css" layer(components);
 @import "@heroui/styles/components/input-group.css" layer(components);
+@import "@heroui/styles/components/number-field.css" layer(components);
 @import "@heroui/styles/components/radio-group.css" layer(components);
 @import "@heroui/styles/components/radio.css" layer(components);
 @import "@heroui/styles/components/textfield.css" layer(components);

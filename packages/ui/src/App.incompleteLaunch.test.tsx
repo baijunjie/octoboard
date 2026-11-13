@@ -23,6 +23,7 @@ vi.mock("./terminal/TerminalController", () => ({
     fit() {}
     syncSize() {}
     setInputLabel() {}
+    setFontSize() {}
     detach() {}
     focus() {}
   },

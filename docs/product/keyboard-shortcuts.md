@@ -72,7 +72,7 @@ Windows key is said as "Windows".
 
 ## What is listed
 
-The section lists the window, system and file-viewer shortcuts in five groups, in this order. Within a group the
+The section lists the window, system, terminal and file-viewer shortcuts in six groups, in this order. Within a group the
 commands that can be changed come first. The defaults are written for an Apple keyboard; elsewhere each modifier is the
 one the table above maps it to, except the console-session keys', which are Control with Tab on every keyboard: `⌃Tab`
 and `⌃⇧Tab` on an Apple keyboard, `Ctrl+Tab` and `Ctrl+Shift+Tab` elsewhere.
@@ -88,6 +88,9 @@ and `⌃⇧Tab` on an Apple keyboard, `Ctrl+Tab` and `Ctrl+Shift+Tab` elsewhere.
 | Focus mode | **Toggle focus mode** | `Shift+Cmd+F` | yes | every client |
 | Focus mode | **New session** | `Cmd+N` | yes | every client |
 | Focus mode | **New session with defaults** | `Shift+Cmd+N` | yes | every client |
+| Terminal | **Increase terminal font size** | `Cmd+=` (also `Cmd++`) | yes | every client, while a terminal has focus |
+| Terminal | **Decrease terminal font size** | `Cmd+-` | yes | every client, while a terminal has focus |
+| Terminal | **Reset terminal font size** | `Cmd+0` | yes | every client, while a terminal has focus |
 | Application | **Open settings** | `Cmd+,` | yes | every client (in the macOS desktop app its native menu takes the key; wherever there is no native menu — the Windows desktop app and a browser — the page does) |
 | Editing | **Undo**, **Redo**, **Cut**, **Copy**, **Paste**, **Select all** | `Cmd+Z`, `Shift+Cmd+Z`, `Cmd+X`, `Cmd+C`, `Cmd+V`, `Cmd+A` | no | the desktop app (its native menu) |
 | Editing | **Find** | `Cmd+F` | no | every client |
@@ -107,10 +110,21 @@ it from the keyboard are turned off there, so none of them reloads, prints, open
 that is one of Octoboard's own, such as Find's `Ctrl+F`, reaches the page as usual. Editing keys in a text
 field — select all, copy, paste and the like — are not browser keys and keep working.
 
+The terminal font size keys act only while a terminal has keyboard focus, so a browser's own page zoom keeps those keys
+everywhere else. They change the same size as the Terminal font size row of Settings' Appearance section (see
+`docs/product/terminal-font-size.md`). `Cmd++` is typed with whatever key the layout has for
+`+`; it and `Cmd+-` typed on another key of a layout work only while the commands keep their default keys and
+the combination is not the keys of another command this client has (on a German keyboard, where `+` is the key Forward
+has, Forward keeps it in the macOS desktop app, the one client that has Forward; elsewhere it is an increase). A
+character typed on the key in the other font size command's position is never that command: `+` on a Nordic layout's
+key in the US `-` position, or `-` on Turkish Q's key in the US `=` position, is its own command while that keeps its
+default keys, and nothing otherwise.
+
 What each command does: Back and Forward in "Keyboard shortcuts" in `docs/product/navigation-history.md`; the
 console-session keys in "The switch strip" in `docs/product/focus-mode.md`; the region keys in
 `docs/product/moving-focus-between-regions.md`; Toggle focus mode in "The focus mode shortcut" and the two New session
-commands in "Creating sessions from the keyboard", both in `docs/product/focus-mode.md`; Open settings in "Opening
+commands in "Creating sessions from the keyboard", both in `docs/product/focus-mode.md`; the three terminal font size
+commands in "The size and how it is changed" in `docs/product/terminal-font-size.md`; Open settings in "Opening
 and closing Settings" in `docs/product/settings.md`; Find, which acts only in the file viewer, where it finds in the
 file (see `docs/product/finding-in-the-file-viewer.md`), and in Settings, where it focuses the search field (see "The
 search field" in `docs/product/searching-settings.md`); and the native menu's keys in `docs/product/application-lifecycle.md`.

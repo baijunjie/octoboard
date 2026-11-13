@@ -14,7 +14,7 @@ Settings before deciding. If you are unsure, ask rather than leave it out.
 Do not take a setting the tools leave out as precedent on its own: settings are not opt-in to the tools, and one is left
 out only because that rule makes it the user's alone.
 
-## A new setting of General, App behavior, Git, Agent behavior, Keyboard shortcuts, Cleanup or Agent accounts travels in a configuration export
+## A new setting of General, Appearance, Git, Agent behavior, Keyboard shortcuts, Cleanup or Agent accounts travels in a configuration export
 
 Every setting of those Settings sections travels and is applied by an import, except one whose turning on itself
 changes files outside `~/.octoboard/` (today only an account's sharing of the default configuration), which the user
@@ -24,7 +24,7 @@ written `~/`-relative), it lets agents act without asking or spend quota, the ag
 Octoboard act on files outside `~/.octoboard/` later as it runs. If you are unsure whether turning it on itself changes
 outside files, ask. In the same change, by where the setting sits:
 
-- An application setting the daemon holds (General, App behavior, Git, Agent behavior, Cleanup): a field of `DocumentSettings` in
+- An application setting the daemon holds (General, Git, Agent behavior, Cleanup): a field of `DocumentSettings` in
   `apps/daemon/src/protocol/configuration.rs`, filled under its Settings section in `build` in
   `apps/daemon/src/config_document/export.rs`; its document and current values in `InspectedSettings`, filled by the
   inspection in `apps/daemon/src/config_document/import/mod.rs`, and `application_settings_changes` there, which
@@ -32,8 +32,8 @@ outside files, ask. In the same change, by where the setting sits:
 - A setting of the Agent accounts section: in the accounts region, `DocumentAgentSettings` and
   `InspectedAgentSettings`, inspected and applied in `apps/daemon/src/config_document/import/accounts.rs` — never in
   `DocumentSettings`.
-- A setting only the client holds (kept in the client, like the appearance, the Markdown style, running in the
-  background, the menu bar icon or the shortcuts): an optional field of `DocumentSettings` that the
+- A setting only the client holds (kept in the client, like the appearance, the Markdown style, the terminal font
+  size, running in the background, the menu bar icon or the shortcuts): an optional field of `DocumentSettings` that the
   daemon neither builds nor reads and passes back as it came, handled on the client beside the others in
   `packages/ui/src/configuration/clientSettings.ts`. The client adds it to a document it saves under its Settings
   section in `heldClientSettings`, so it travels only when the export carries that section, and applies it to itself
@@ -83,8 +83,8 @@ Applies to a setting the daemon holds whose effect happens on the machine the da
 machine can carry out (Prevent sleep, which holds the daemon's host awake). Show it where `snapshot.host` says the
 daemon's host can (add the fact to `HostInfo` in `apps/daemon/src/protocol/host.rs`), not where the client's
 `PlatformAdapter` has a capability: the window may run on another machine than the daemon, and a browser client has
-no native capabilities at all yet must still offer it. Do not copy the gating of the rows around it in Settings' App
-behavior section, which are the client's own (launch at login, the menu bar icon, running in the background) and
+no native capabilities at all yet must still offer it. Do not copy the gating of the rows around it in Settings' General
+section, which are the client's own (launch at login, the menu bar icon, running in the background) and
 rightly go by the platform.
 
 ## A new provider setting is declared only in its provider's schema, with its flags set by whether it is a permission setting

@@ -88,7 +88,7 @@ let daemonExited: ((detail: string) => void) | undefined;
  * `macosSettingsOpenError`), there being no other way to look at those rows than to really change a system setting, a
  * link opener that refuses with the error of a scenario's `externalLinkError` (otherwise the browser's own opener
  * stands, which opens a new tab), `backgroundRun`, `menuBarIcon` and `launchAtLogin` for a scenario that
- * says so (the App behavior switches; none of them reaches a shell, and the login entry is a stub that keeps the last
+ * says so (the General switches; none of them reaches a shell, and the login entry is a stub that keeps the last
  * choice, its list of login items refused when the scenario gives a `launchAtLoginOpenError`), the desktop shell's
  * `notifications` for one that says `desktopNotifications` (nothing is shown or opened; the link to the system's pane
  * only where the scenario's `host` has one), the clipboard taken away for a scenario that says so, and the

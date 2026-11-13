@@ -14,6 +14,7 @@ import { OSC_52, osc52ClipboardText } from "./osc52";
 import { installPathLinks, type PathAnswer, type PathLinkCache, type PathLinkTarget } from "./links/pathLinks";
 import { watchPointerForLinks } from "./links/pointerLinks";
 import { macEditingSequence } from "./terminalKeys";
+import { terminalFontSize } from "./terminalFontSize";
 import {
   brokenUrlLinkProvider,
   cellAtPoint,
@@ -226,6 +227,7 @@ export class TerminalController {
     this.term = new Terminal({
       scrollback: SCROLLBACK_ROWS,
       fontFamily: TERMINAL_FONT_FAMILY,
+      fontSize: terminalFontSize.get(),
       theme: XTERM_THEMES[initialColorTheme],
       // The colours on screen are the agent's own, picked for whichever background its own theme
       // setting assumes, so on the other one some of them all but vanish (a dark theme's pale
@@ -569,6 +571,19 @@ export class TerminalController {
     this.term.options.theme = XTERM_THEMES[mode];
     this.linkColors.reset();
     this.sendDisplay();
+  }
+
+  /**
+   * Draws the running terminal at `size` pixels and fits it anew, which `syncSize` tells the daemon: a cell's size
+   * changes with the font, and so does how many fit. xterm measures the new cell size as the option is set, so the fit
+   * right after already sees it. A link tooltip is dropped, being placed from the old cells.
+   */
+  setFontSize(size: number): void {
+    if (this.term.options.fontSize === size) return;
+    this.term.options.fontSize = size;
+    this.handlers.onLinkHover?.(undefined);
+    this.fit();
+    this.syncSize();
   }
 
   /**

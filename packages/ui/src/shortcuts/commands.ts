@@ -3,7 +3,7 @@ import type { HostFacts } from "../platform/host";
 import type { Binding } from "./binding";
 
 /** Where the shortcuts are listed under, in the order of the list. */
-export const SHORTCUT_GROUPS = ["navigation", "focus", "application", "editing", "window"] as const;
+export const SHORTCUT_GROUPS = ["navigation", "focus", "terminal", "application", "editing", "window"] as const;
 export type ShortcutGroup = (typeof SHORTCUT_GROUPS)[number];
 
 /** Which clients a shortcut exists on: `app` is the desktop app on any system, `macApp` that on macOS, and
@@ -20,7 +20,7 @@ export interface ClientCapabilities {
 }
 
 /** What `clientCapabilities` reads of the platform adapter. */
-type ClientPlatform = { kind: "tauri" | "browser"; appMenu?: object; host: Pick<HostFacts, "os"> };
+export type ClientPlatform = { kind: "tauri" | "browser"; appMenu?: object; host: Pick<HostFacts, "os"> };
 
 /** The capabilities of the client `platform` (the platform adapter) is, for `isAvailable`. */
 export function clientCapabilities(platform: ClientPlatform): ClientCapabilities {
@@ -59,6 +59,9 @@ const REBINDABLE = [
   { id: "focusMode", label: "settings.shortcuts.command.focusMode", group: "focus", binding: primary("KeyF", { shift: true }), availability: "always" },
   { id: "newSession", label: "settings.shortcuts.command.newSession", group: "focus", binding: primary("KeyN"), availability: "always" },
   { id: "quickCreate", label: "settings.shortcuts.command.quickCreate", group: "focus", binding: primary("KeyN", { shift: true }), availability: "always" },
+  { id: "increaseTerminalFontSize", label: "settings.shortcuts.command.increaseTerminalFontSize", group: "terminal", binding: primary("Equal"), availability: "always" },
+  { id: "decreaseTerminalFontSize", label: "settings.shortcuts.command.decreaseTerminalFontSize", group: "terminal", binding: primary("Minus"), availability: "always" },
+  { id: "resetTerminalFontSize", label: "settings.shortcuts.command.resetTerminalFontSize", group: "terminal", binding: primary("Digit0"), availability: "always" },
   { id: "openSettings", label: "settings.shortcuts.command.openSettings", group: "application", binding: primary("Comma"), availability: "always" },
 ] as const satisfies readonly Omit<ShortcutCommand, "rebindable">[];
 

@@ -13,13 +13,14 @@ import { revealPathTarget } from "./links/revealPathTarget";
 import { openPathTarget } from "./links/openPathTarget";
 import type { HoveredTerminalLink } from "./links/terminalLinks";
 import { programCopyHandler } from "./osc52";
+import { terminalFontSize } from "./terminalFontSize";
 import { TerminalController, type TerminalControllerOptions, type TermStatus } from "./TerminalController";
 
 /**
  * The one `TerminalController` of a terminal view, built when the view mounts into `containerRef` and
  * disposed when it goes, with what keeps it in step with the view: links, clipboard and path links
  * (read from the latest render, as the controller is built once), a fit when the container resizes,
- * a single fit when `resizing` ends, the input's label in the UI language and the colour theme.
+ * a single fit when `resizing` ends, the input's label in the UI language, the colour theme and the font size.
  *
  * `controllerRef` is the caller's, so that `useTerminalReconnect` can read the controller before
  * this hook has built it (that hook makes the `onStatusChange` this one needs). Attaching is the
@@ -66,6 +67,7 @@ export function useTerminalController({
   const { links, clipboard, host } = usePlatform();
   const { style: pathStyle } = useHostPaths();
   const { resolved: colorTheme } = useOctoboardTheme();
+  const fontSize = terminalFontSize.useValue();
   const dragging = useResizeDrag();
   const holdingSize = resizing || dragging;
   const resizingRef = useLatest(holdingSize);
@@ -160,4 +162,10 @@ export function useTerminalController({
     appliedColorThemeRef.current = colorTheme;
     controller.setColorTheme(colorTheme);
   }, [colorTheme]);
+
+  // Redraws the running terminal at the user's font size, fitting it anew; a size the controller already has (the one
+  // it was built with) changes nothing.
+  useEffect(() => {
+    controllerRef.current?.setFontSize(fontSize);
+  }, [fontSize]);
 }

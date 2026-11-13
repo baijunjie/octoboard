@@ -3593,7 +3593,7 @@
       "type": "string",
       "enum": [
         "general",
-        "app_behavior",
+        "appearance",
         "git",
         "agent_behavior",
         "keyboard_shortcuts",

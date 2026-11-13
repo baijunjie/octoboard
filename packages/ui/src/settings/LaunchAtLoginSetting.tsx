@@ -11,7 +11,7 @@ import { SettingRow, SettingSwitch } from "./SettingRow";
 import { useSettingsReads } from "./settingsReads";
 
 /** Whether the system opens the app when the user logs in. Rendered only where the shell can register it
- * (`AppBehaviorSection`), and once the dialog's read of the system's state (`useLaunchAtLogin`, which the search
+ * (`GeneralSection`), and once the dialog's read of the system's state (`useLaunchAtLogin`, which the search
  * counts the row by too) has answered (`shown`). What the switch shows is the system's own state. A registration the
  * system holds for the user's approval shows as on, with the description saying where to allow it and a button that
  * opens that list. */

@@ -1,7 +1,7 @@
 # Launch at login
 
 The desktop application can have the system open it when the user logs in, through the **Launch at login** switch in
-Settings' App behavior section (the row itself is described in "Launch at login" in `docs/product/app-behavior-settings.md`). It is
+Settings' General section (the row itself is described in "Launch at login" in `docs/product/general-settings.md`). It is
 offered on Windows and on macOS 13 and later. macOS 11 and 12 have no row for it, and neither does a browser, which has
 nothing to open.
 

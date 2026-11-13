@@ -10,7 +10,7 @@ import type { PlatformAdapter, StatusItemCapability } from "../platform";
 import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
 import { BROWSER_HOST } from "../test/hosts";
 import { mountHost } from "../test/mountHost";
-import { AppBehaviorSection } from "./AppBehaviorSection";
+import { GeneralSection } from "./GeneralSection";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -24,7 +24,7 @@ function statusItem(setVisible: StatusItemCapability["setVisible"]): StatusItemC
 function mount(platform: PlatformAdapter) {
   return mountHost(
     <LanguageProvider>
-      <AppBehaviorSection />
+      <GeneralSection />
     </LanguageProvider>,
     { platform },
   );

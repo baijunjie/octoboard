@@ -145,7 +145,7 @@ pub struct DocumentAccount {
 #[serde(rename_all = "snake_case")]
 pub enum SettingsSection {
     General,
-    AppBehavior,
+    Appearance,
     Git,
     AgentBehavior,
     KeyboardShortcuts,
@@ -157,7 +157,7 @@ impl SettingsSection {
     /// compiler nor the `wire_name` test notices one left out.
     pub const ALL: [SettingsSection; 6] = [
         Self::General,
-        Self::AppBehavior,
+        Self::Appearance,
         Self::Git,
         Self::AgentBehavior,
         Self::KeyboardShortcuts,
@@ -168,7 +168,7 @@ impl SettingsSection {
     pub const fn wire_name(self) -> &'static str {
         match self {
             Self::General => "general",
-            Self::AppBehavior => "app_behavior",
+            Self::Appearance => "appearance",
             Self::Git => "git",
             Self::AgentBehavior => "agent_behavior",
             Self::KeyboardShortcuts => "keyboard_shortcuts",
@@ -210,28 +210,12 @@ pub struct DocumentSessionOrder {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct DocumentSettings {
     // General.
-    /// The window's appearance (`light`, `dark` or `system`), which only the client holds (in its
-    /// `localStorage`), carried like `run_in_background`. A value the importing client does not
-    /// know is ignored.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(test, ts(optional))]
-    pub appearance: Option<String>,
     /// The interface language tag (see `Settings.interface_language`): the daemon writes the one it
     /// holds. An import applies it only when this build offers it. Absent when the daemon held
     /// none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(test, ts(optional))]
     pub interface_language: Option<String>,
-    /// How a rendered Markdown document is styled (the style's id), carried like `appearance`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(test, ts(optional))]
-    pub markdown_style: Option<String>,
-    /// How sessions and projects are sorted, carried like `appearance`. The client writes all three
-    /// parts, so an import sets the sort exactly, and applies each part whose value it knows.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(test, ts(optional))]
-    pub session_order: Option<DocumentSessionOrder>,
-    // App behavior.
     /// Whether the daemon resumes the interrupted sessions when it starts (see
     /// `Settings.resume_sessions_on_start`). Absent in a document from a build that had no such
     /// setting, which an import then leaves as this machine has it.
@@ -253,7 +237,7 @@ pub struct DocumentSettings {
     #[cfg_attr(test, ts(optional))]
     pub show_menu_bar_icon: Option<bool>,
     /// Whether the daemon holds its host awake (Prevent sleep, see `Settings.keep_awake`). The
-    /// daemon builds it when the App behavior section is exported and applies it from an import,
+    /// daemon builds it when the General section is exported and applies it from an import,
     /// whether or not this host can hold: the value is stored either way.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(test, ts(optional))]
@@ -267,6 +251,32 @@ pub struct DocumentSettings {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(test, ts(optional))]
     pub auto_close_idle_shell_terminals: Option<bool>,
+    /// How sessions and projects are sorted, carried like `run_in_background`. The client writes all three
+    /// parts, so an import sets the sort exactly, and applies each part whose value it knows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub session_order: Option<DocumentSessionOrder>,
+    // Appearance.
+    /// The window's appearance (`light`, `dark` or `system`), which only the client holds (in its
+    /// `localStorage`), carried like `run_in_background`. A value the importing client does not
+    /// know is ignored.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub appearance: Option<String>,
+    /// How a rendered Markdown document is styled (the style's id), carried like `appearance`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub markdown_style: Option<String>,
+    /// The terminals' font size in pixels, carried like `appearance`. The importing client
+    /// keeps a value it knows within its own range. A fractional size reads rounded, and anything
+    /// that is not a non-negative number is left out rather than refusing the document.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "lenient_pixel_size"
+    )]
+    #[cfg_attr(test, ts(optional))]
+    pub terminal_font_size: Option<u32>,
     // Git.
     /// The default clone directory as `~/<relative path>` under the exporting machine's home
     /// directory (also `~` for the home directory itself), otherwise the absolute path, whatever
@@ -326,6 +336,7 @@ impl DocumentSettings {
             appearance,
             interface_language,
             markdown_style,
+            terminal_font_size,
             session_order,
             resume_sessions_on_start,
             run_in_background,
@@ -347,18 +358,17 @@ impl DocumentSettings {
         } = self;
         match section {
             SettingsSection::General => {
-                appearance.is_some()
-                    || interface_language.is_some()
-                    || markdown_style.is_some()
-                    || session_order.is_some()
-            }
-            SettingsSection::AppBehavior => {
-                resume_sessions_on_start.is_some()
+                interface_language.is_some()
+                    || resume_sessions_on_start.is_some()
                     || run_in_background.is_some()
                     || show_menu_bar_icon.is_some()
                     || keep_awake.is_some()
                     || keep_awake_when.is_some()
                     || auto_close_idle_shell_terminals.is_some()
+                    || session_order.is_some()
+            }
+            SettingsSection::Appearance => {
+                appearance.is_some() || markdown_style.is_some() || terminal_font_size.is_some()
             }
             SettingsSection::Git => {
                 default_clone_dir.is_some()
@@ -391,7 +401,7 @@ impl DocumentSettings {
     pub fn only(self, sections: &[SettingsSection]) -> Self {
         let keep = |section| sections.contains(&section);
         let general = keep(SettingsSection::General);
-        let app_behavior = keep(SettingsSection::AppBehavior);
+        let appearance_section = keep(SettingsSection::Appearance);
         let git = keep(SettingsSection::Git);
         let agent_behavior = keep(SettingsSection::AgentBehavior);
         let keyboard = keep(SettingsSection::KeyboardShortcuts);
@@ -400,6 +410,7 @@ impl DocumentSettings {
             appearance,
             interface_language,
             markdown_style,
+            terminal_font_size,
             session_order,
             resume_sessions_on_start,
             run_in_background,
@@ -420,17 +431,17 @@ impl DocumentSettings {
             auto_delete_unresumable_archives,
         } = self;
         Self {
-            appearance: appearance.filter(|_| general),
+            appearance: appearance.filter(|_| appearance_section),
             interface_language: interface_language.filter(|_| general),
-            markdown_style: markdown_style.filter(|_| general),
+            markdown_style: markdown_style.filter(|_| appearance_section),
+            terminal_font_size: terminal_font_size.filter(|_| appearance_section),
             session_order: session_order.filter(|_| general),
-            resume_sessions_on_start: resume_sessions_on_start.filter(|_| app_behavior),
-            run_in_background: run_in_background.filter(|_| app_behavior),
-            show_menu_bar_icon: show_menu_bar_icon.filter(|_| app_behavior),
-            keep_awake: keep_awake.filter(|_| app_behavior),
-            keep_awake_when: keep_awake_when.filter(|_| app_behavior),
-            auto_close_idle_shell_terminals: auto_close_idle_shell_terminals
-                .filter(|_| app_behavior),
+            resume_sessions_on_start: resume_sessions_on_start.filter(|_| general),
+            run_in_background: run_in_background.filter(|_| general),
+            show_menu_bar_icon: show_menu_bar_icon.filter(|_| general),
+            keep_awake: keep_awake.filter(|_| general),
+            keep_awake_when: keep_awake_when.filter(|_| general),
+            auto_close_idle_shell_terminals: auto_close_idle_shell_terminals.filter(|_| general),
             default_clone_dir: default_clone_dir.filter(|_| git),
             auto_pull_repositories: auto_pull_repositories.filter(|_| git),
             git_workflow: git_workflow.filter(|_| git),
@@ -983,6 +994,18 @@ pub struct ImportedAccounts {
     pub agent_settings_error: Option<ImportFailure>,
 }
 
+/// Reads a pixel size written by another build: a number rounds to the nearest whole pixel, and
+/// a value that is no such number (negative, text, out of range) reads as absent.
+fn lenient_pixel_size<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<u32>, D::Error> {
+    let value = serde_json::Value::deserialize(deserializer)?;
+    Ok(value
+        .as_f64()
+        .filter(|size| size.is_finite() && *size >= 0.0 && *size <= f64::from(u32::MAX))
+        .map(|size| size.round() as u32))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -993,6 +1016,7 @@ mod tests {
             interface_language: Some("de".to_string()),
             appearance: Some("dark".to_string()),
             markdown_style: Some("github".to_string()),
+            terminal_font_size: Some(18),
             session_order: Some(DocumentSessionOrder {
                 sessions: Some("recent".to_string()),
                 active_projects: None,
@@ -1040,6 +1064,189 @@ mod tests {
         let whole = serde_json::to_value(&document).unwrap();
         assert_eq!(parts, whole.as_object().unwrap().len());
         assert_eq!(serde_json::Value::Object(rebuilt), whole);
+    }
+
+    /// The keys a settings region writes, sorted.
+    fn keys_of(settings: &DocumentSettings) -> Vec<String> {
+        let mut keys: Vec<String> = serde_json::to_value(settings)
+            .unwrap()
+            .as_object()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect();
+        keys.sort();
+        keys
+    }
+
+    #[test]
+    fn general_carries_its_keys_and_appearance_only_the_theme_markdown_style_and_terminal_font_size(
+    ) {
+        assert_eq!(
+            keys_of(&full().only(&[SettingsSection::General])),
+            [
+                "auto_close_idle_shell_terminals",
+                "interface_language",
+                "keep_awake",
+                "keep_awake_when",
+                "resume_sessions_on_start",
+                "run_in_background",
+                "session_order",
+                "show_menu_bar_icon",
+            ]
+        );
+        assert_eq!(
+            keys_of(&full().only(&[SettingsSection::Appearance])),
+            ["appearance", "markdown_style", "terminal_font_size"]
+        );
+    }
+
+    #[test]
+    fn a_document_holding_one_key_carries_the_section_that_key_belongs_to() {
+        let general_keys: Vec<(&str, DocumentSettings)> = vec![
+            (
+                "interface_language",
+                DocumentSettings {
+                    interface_language: Some("de".to_string()),
+                    ..Default::default()
+                },
+            ),
+            (
+                "session_order",
+                DocumentSettings {
+                    session_order: Some(DocumentSessionOrder {
+                        sessions: Some("recent".to_string()),
+                        active_projects: None,
+                        inactive_projects: None,
+                    }),
+                    ..Default::default()
+                },
+            ),
+            (
+                "resume_sessions_on_start",
+                DocumentSettings {
+                    resume_sessions_on_start: Some(false),
+                    ..Default::default()
+                },
+            ),
+            (
+                "run_in_background",
+                DocumentSettings {
+                    run_in_background: Some(false),
+                    ..Default::default()
+                },
+            ),
+            (
+                "show_menu_bar_icon",
+                DocumentSettings {
+                    show_menu_bar_icon: Some(false),
+                    ..Default::default()
+                },
+            ),
+            (
+                "keep_awake",
+                DocumentSettings {
+                    keep_awake: Some(false),
+                    ..Default::default()
+                },
+            ),
+            (
+                "keep_awake_when",
+                DocumentSettings {
+                    keep_awake_when: Some("working".to_string()),
+                    ..Default::default()
+                },
+            ),
+            (
+                "auto_close_idle_shell_terminals",
+                DocumentSettings {
+                    auto_close_idle_shell_terminals: Some(false),
+                    ..Default::default()
+                },
+            ),
+        ];
+        for (key, settings) in general_keys {
+            assert_eq!(
+                settings.carried_sections(),
+                [SettingsSection::General],
+                "{key}"
+            );
+        }
+        let appearance = DocumentSettings {
+            appearance: Some("light".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(appearance.carried_sections(), [SettingsSection::Appearance]);
+        let markdown = DocumentSettings {
+            markdown_style: Some("github".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(markdown.carried_sections(), [SettingsSection::Appearance]);
+        let font_size = DocumentSettings {
+            terminal_font_size: Some(18),
+            ..Default::default()
+        };
+        assert_eq!(font_size.carried_sections(), [SettingsSection::Appearance]);
+        assert!(DocumentSettings::default().carried_sections().is_empty());
+    }
+
+    /// What a document's `terminal_font_size` reads as, the rest of the document being absent.
+    fn font_size_read_from(size: serde_json::Value) -> Option<u32> {
+        serde_json::from_value::<DocumentSettings>(
+            serde_json::json!({ "terminal_font_size": size }),
+        )
+        .expect("the document still parses")
+        .terminal_font_size
+    }
+
+    #[test]
+    fn a_terminal_font_size_reads_rounded_to_a_whole_pixel_and_is_not_clamped() {
+        assert_eq!(font_size_read_from(serde_json::json!(15.6)), Some(16));
+        assert_eq!(font_size_read_from(serde_json::json!(15.4)), Some(15));
+        assert_eq!(font_size_read_from(serde_json::json!(18)), Some(18));
+        assert_eq!(font_size_read_from(serde_json::json!(99)), Some(99));
+        assert_eq!(font_size_read_from(serde_json::json!(0)), Some(0));
+    }
+
+    #[test]
+    fn a_terminal_font_size_that_is_no_non_negative_number_in_range_reads_as_absent() {
+        assert_eq!(font_size_read_from(serde_json::json!(-3)), None);
+        assert_eq!(font_size_read_from(serde_json::json!(-0.4)), None);
+        assert_eq!(font_size_read_from(serde_json::json!("big")), None);
+        assert_eq!(font_size_read_from(serde_json::json!("18")), None);
+        assert_eq!(font_size_read_from(serde_json::json!(null)), None);
+        assert_eq!(font_size_read_from(serde_json::json!(true)), None);
+        assert_eq!(
+            font_size_read_from(serde_json::json!(5_000_000_000_u64)),
+            None
+        );
+        assert_eq!(
+            font_size_read_from(serde_json::json!(u64::from(u32::MAX))),
+            Some(u32::MAX)
+        );
+    }
+
+    #[test]
+    fn a_missing_terminal_font_size_reads_as_absent() {
+        let settings: DocumentSettings = serde_json::from_value(serde_json::json!({})).unwrap();
+        assert_eq!(settings.terminal_font_size, None);
+    }
+
+    #[test]
+    fn the_sections_are_listed_in_settings_order_with_appearance_after_general() {
+        assert_eq!(
+            SettingsSection::ALL,
+            [
+                SettingsSection::General,
+                SettingsSection::Appearance,
+                SettingsSection::Git,
+                SettingsSection::AgentBehavior,
+                SettingsSection::KeyboardShortcuts,
+                SettingsSection::Cleanup,
+            ]
+        );
+        assert_eq!(SettingsSection::Appearance.wire_name(), "appearance");
+        assert!(serde_json::from_str::<SettingsSection>("\"app_behavior\"").is_err());
     }
 
     #[test]

@@ -109,8 +109,8 @@ application buttons and the Keyboard shortcuts section's Cancel and Reset button
   is a short "Delete" or "Archive", while the name announced for it also names the session it acts on (see "Session
   rows" in `docs/product/sidebar-session-rows.md`);
 - the archive view's Close button and each of its rows' Delete button, whose tooltip names the session;
-- the three options of Settings' Appearance row — Light, Dark and System (see "Appearance" in
-  `docs/product/settings.md`);
+- the three options of Settings' Theme row — Light, Dark and System (see "Theme" in `docs/product/settings.md`);
+- the Terminal font size row's **Reset font size** button (see "Terminal font size" in `docs/product/settings.md`);
 - the Reset button at the end of a row in Settings' Keyboard shortcuts section, whose tooltip is a short "Reset", while
   the name announced for it says that it resets the shortcut for that row's command to its default (see "The Keyboard
   shortcuts section" in `docs/product/keyboard-shortcuts.md`);
@@ -155,6 +155,11 @@ commit row there, is an exception too: it has **no tooltip** and no hover fill o
 The row it sits on tints under the pointer, and a press anywhere on that row expands or folds it as the arrow does (see
 "Rows and the keyboard" in `docs/product/project-pane.md`). Assistive technology names the arrow "Expand" or
 "Collapse", followed by the row's name.
+
+The **−** and **+** buttons of a number field, such as the Terminal font size row's in Settings, are an exception too:
+they have **no tooltip**, their glyphs being the convention for stepping a number down and up. Assistive technology
+names each by what it does — "Decrease terminal font size" and "Increase terminal font size" there (see "Terminal font
+size" in `docs/product/settings.md`).
 
 The floating sidebar's width grip and the right pane's resize grips — its width handle and the handles between its
 panels or columns — have a tooltip too, a short "Resize" shown beside the grip only while a mouse pointer rests on
@@ -261,8 +266,8 @@ same doc) and Group by commit (see "Grouped by commit" in the same doc). For all
 - **Nothing about the state is said in colour**: the button in its pressed state is drawn exactly as in its
   unpressed one.
 
-Settings' Appearance choice is not one of these: being a choice among three, it stays a three-way segmented control,
-where the chosen option is marked by a fill of its own rather than by its icon (see "Appearance" in
+Settings' Theme choice is not one of these: being a choice among three, it stays a three-way segmented control,
+where the chosen option is marked by a fill of its own rather than by its icon (see "Theme" in
 `docs/product/settings.md`). Nor are the panel toggles in the top bar: each keeps one icon whatever the state, and an
 open panel is marked by the toggle's pressed fill, besides its name and its expanded state (see "The panel toggles in
 the top bar" in `docs/product/right-pane-panels.md`). Nor are the three switches of the file viewer's find bar, which

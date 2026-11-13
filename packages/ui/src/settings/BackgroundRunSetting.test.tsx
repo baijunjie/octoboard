@@ -9,7 +9,7 @@ import { connectShellSettings } from "../lifecycle/shellSettings";
 import type { PlatformAdapter } from "../platform";
 import { mountHost } from "../test/mountHost";
 import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
-import { AppBehaviorSection } from "./AppBehaviorSection";
+import { GeneralSection } from "./GeneralSection";
 import { BROWSER_HOST } from "../test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -20,7 +20,7 @@ vi.mock("./DaemonSwitchSetting", () => ({ DaemonSwitchSetting: () => null }));
 function mount(platform: PlatformAdapter) {
   return mountHost(
     <LanguageProvider>
-      <AppBehaviorSection />
+      <GeneralSection />
     </LanguageProvider>,
     { platform },
   );

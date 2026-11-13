@@ -8,9 +8,9 @@ import { ToggleButton, ToggleButtonGroup } from "../primitives";
 import { SettingRow } from "./SettingRow";
 
 const OPTIONS = [
-  { key: "light", label: "settings.appearance.light", Icon: Sun },
-  { key: "dark", label: "settings.appearance.dark", Icon: Moon },
-  { key: "system", label: "settings.appearance.system", Icon: Monitor },
+  { key: "light", label: "settings.theme.light", Icon: Sun },
+  { key: "dark", label: "settings.theme.dark", Icon: Moon },
+  { key: "system", label: "settings.theme.system", Icon: Monitor },
 ] as const;
 
 /**
@@ -18,13 +18,13 @@ const OPTIONS = [
  * mode is HeroUI's segmented control, the natural fit for a three-way choice where one option is
  * always current. Each choice is shown by its icon, named and given a tooltip by its label.
  */
-export function AppearanceSetting(): React.ReactElement {
+export function ThemeSetting(): React.ReactElement {
   const t = useT();
   const { choice, setChoice } = useOctoboardTheme();
   return (
-    <SettingRow searchId="appearance" label={t("settings.appearance.label")} description={t("settings.appearance.description")}>
+    <SettingRow searchId="theme" label={t("settings.theme.label")} description={t("settings.theme.description")}>
       <ToggleButtonGroup
-        label={t("settings.appearance.label")}
+        label={t("settings.theme.label")}
         selectedKey={choice}
         onSelectionChange={(key) => {
           if (key === "light" || key === "dark" || key === "system") setChoice(key);

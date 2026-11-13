@@ -20,7 +20,7 @@ const DEFAULT_CHECKED: Record<ImportPart, boolean> = {
  * the file carries unless the user unchecks one. */
 const DEFAULT_SECTIONS_CHECKED: Record<SettingsSection, boolean> = {
   general: true,
-  app_behavior: true,
+  appearance: true,
   git: true,
   agent_behavior: true,
   keyboard_shortcuts: true,

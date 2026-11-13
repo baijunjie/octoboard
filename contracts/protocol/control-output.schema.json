@@ -3189,21 +3189,9 @@
     "DocumentSettings": {
       "type": "object",
       "properties": {
-        "appearance": {
-          "type": "string",
-          "description": "The window's appearance (`light`, `dark` or `system`), which only the client holds (in its\n`localStorage`), carried like `run_in_background`. A value the importing client does not\nknow is ignored."
-        },
         "interface_language": {
           "type": "string",
           "description": "The interface language tag (see `Settings.interface_language`): the daemon writes the one it\nholds. An import applies it only when this build offers it. Absent when the daemon held\nnone."
-        },
-        "markdown_style": {
-          "type": "string",
-          "description": "How a rendered Markdown document is styled (the style's id), carried like `appearance`."
-        },
-        "session_order": {
-          "description": "How sessions and projects are sorted, carried like `appearance`. The client writes all three\nparts, so an import sets the sort exactly, and applies each part whose value it knows.",
-          "$ref": "#/$defs/DocumentSessionOrder"
         },
         "resume_sessions_on_start": {
           "type": "boolean",
@@ -3219,7 +3207,7 @@
         },
         "keep_awake": {
           "type": "boolean",
-          "description": "Whether the daemon holds its host awake (Prevent sleep, see `Settings.keep_awake`). The\ndaemon builds it when the App behavior section is exported and applies it from an import,\nwhether or not this host can hold: the value is stored either way."
+          "description": "Whether the daemon holds its host awake (Prevent sleep, see `Settings.keep_awake`). The\ndaemon builds it when the General section is exported and applies it from an import,\nwhether or not this host can hold: the value is stored either way."
         },
         "keep_awake_when": {
           "type": "string",
@@ -3227,6 +3215,24 @@
         },
         "auto_close_idle_shell_terminals": {
           "type": "boolean"
+        },
+        "session_order": {
+          "description": "How sessions and projects are sorted, carried like `run_in_background`. The client writes all three\nparts, so an import sets the sort exactly, and applies each part whose value it knows.",
+          "$ref": "#/$defs/DocumentSessionOrder"
+        },
+        "appearance": {
+          "type": "string",
+          "description": "The window's appearance (`light`, `dark` or `system`), which only the client holds (in its\n`localStorage`), carried like `run_in_background`. A value the importing client does not\nknow is ignored."
+        },
+        "markdown_style": {
+          "type": "string",
+          "description": "How a rendered Markdown document is styled (the style's id), carried like `appearance`."
+        },
+        "terminal_font_size": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0,
+          "description": "The terminals' font size in pixels, carried like `appearance`. The importing client\nkeeps a value it knows within its own range. A fractional size reads rounded, and anything\nthat is not a non-negative number is left out rather than refusing the document."
         },
         "default_clone_dir": {
           "type": "string",
@@ -9058,7 +9064,7 @@
       "type": "string",
       "enum": [
         "general",
-        "app_behavior",
+        "appearance",
         "git",
         "agent_behavior",
         "keyboard_shortcuts",

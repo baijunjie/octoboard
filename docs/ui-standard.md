@@ -103,6 +103,13 @@ no grey rim. All other styles and component structure stay stock HeroUI 3, as sp
 content". The stock `AlertDescription` keeps its colour on that fill; where it measures below 4.5:1 it is HeroUI's own
 text on HeroUI's own fill, not recoloured.
 
+A number field (`NumberField`, `packages/ui/src/primitives/NumberField.tsx`) centres its number between its − and +
+buttons, where HeroUI starts it at the input's start edge, and shows no unit inside the field: `Intl.NumberFormat`,
+which HeroUI writes the number with, has no unit for every quantity the application sets (no `pixel`), and the user
+chose the bare, centred number over a unit drawn beside it (the user's decision). Where a row's value has a default to
+go back to, its reset button sits before the field and is hidden while the value is the default, its space kept so the
+field does not move as it comes and goes (the Terminal font size row).
+
 Every unselected, enabled HeroUI tab keeps its label fully opaque on hover instead of dimming, by the Tab wrapper
 (`packages/ui/src/primitives/Tabs.tsx`). The tab strips
 in the app also take the foreground colour on hover. Preserve this shared visual treatment as an explicit product
@@ -844,6 +851,11 @@ alone moves at once, from `HandoffOnUnmount` with `ring` false and a `to` that s
 popover waits two frames for that restore, then moves only if focus has fallen to `<body>`: a control that claimed focus
 meanwhile keeps it, and the restore cannot take focus back from the terminal after the handoff.
 
+A reset button that hides itself once pressed (the Terminal font size row's, hidden at the default) is not such a move
+either, but the user's press, so it hands focus on itself, by the input that pressed it: after a mouse press or a key
+to the field the value went back in, its ring following the input; after a tap to the selected section tab, as
+`useFocusRescue` does, since the field would raise the on-screen keyboard.
+
 Selecting another session while focus is in the history on screen is not such a move: a sidebar row's press keeps focus
 where it is, so the history it replaces drops focus to `<body>`, but the user made the switch, whether from a row, Back
 and Forward, the rail or the history's owner link. Selecting none is the user's move too: a console with no session to
@@ -1092,6 +1104,11 @@ shorter of the two is settled per control in the "Tooltips on icon-only controls
 a button whose hover opens a floating panel that shows what its tooltip would say — the rail's Account usage and
 Processes buttons (above), a status mark, the help tip's "?": it carries only its accessible name. So does a Files or
 Git tree chevron, whose whole row does what it does (see "Buttons").
+
+A number field's − and + buttons are a second exception: they are not tab stops, the arrow keys doing the same from the
+field, and the glyphs are the stepper's own convention, so they carry only an accessible name, a whole phrase from the
+catalog ("Increase terminal font size") passed by the field's caller rather than react-aria's verb joined to the
+field's label.
 
 A tap does not open that tooltip, and on such a control it must not: a tap on an icon-only button or a menu trigger runs
 its action, so `TitledControl` has no touch popover. A control whose only action is to show its text is a popover hint

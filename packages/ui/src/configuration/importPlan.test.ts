@@ -387,7 +387,7 @@ describe("the parts of a document", () => {
   });
 
   const unchecked = { consoles: false, accounts: false, settings: false };
-  const allSections = { general: true, app_behavior: true, git: true, agent_behavior: true, keyboard_shortcuts: true, cleanup: true };
+  const allSections = { general: true, appearance: true, git: true, agent_behavior: true, keyboard_shortcuts: true, cleanup: true };
 
   it("imports the checked ones, or the only one a document carries whatever its box says", () => {
     const checked = { ...unchecked, consoles: true, settings: true };

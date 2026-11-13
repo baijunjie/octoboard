@@ -250,9 +250,9 @@ confirmation, bringing a window closed into the background back to ask it, and o
 
 ## Hiding the icon
 
-The **Show menu bar icon** switch in Settings' App behavior section — **Show notification area icon** on Windows — is on
+The **Show menu bar icon** switch in Settings' General section — **Show notification area icon** on Windows — is on
 to begin with; turning it off takes the icon out of the menu bar, or out of the notification area, and turning it back
-on puts it back (see "Show menu bar icon" in `docs/product/app-behavior-settings.md`). Nothing else changes while it is hidden: the
+on puts it back (see "Show menu bar icon" in `docs/product/general-settings.md`). Nothing else changes while it is hidden: the
 menu and the icon's look keep following the sessions, the quota and the keep-awake hold, so the icon comes back as it
 would have been. On macOS the icon keeps its place among the status items rather than being removed and made again.
 
@@ -262,7 +262,7 @@ kept by the desktop application in its settings file, together with keeping Octo
 `docs/product/files-octoboard-owns.md`), and read as it starts: a hidden icon is hidden as the application creates it
 at launch, before the window's UI has loaded, so it stays hidden on the screen shown when the daemon failed to start
 too. Turning the switch takes effect at once and is written straight away. A configuration export that includes the
-App behavior section carries it (see "The settings a client holds" in
+General section carries it (see "The settings a client holds" in
 `docs/product/settings-in-a-configuration.md`).
 
 ## The notification-area icon on Windows

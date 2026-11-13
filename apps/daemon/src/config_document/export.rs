@@ -167,8 +167,6 @@ pub fn build(store: &Store, selection: &Selection) -> Result<ConfigurationDocume
             match section {
                 SettingsSection::General => {
                     settings.interface_language = store.interface_language()?;
-                }
-                SettingsSection::AppBehavior => {
                     settings.auto_close_idle_shell_terminals =
                         Some(store.auto_close_idle_shell_terminals()?);
                     settings.resume_sessions_on_start = Some(store.resume_sessions_on_start()?);
@@ -176,6 +174,8 @@ pub fn build(store: &Store, selection: &Selection) -> Result<ConfigurationDocume
                     settings.keep_awake_when =
                         Some(store.keep_awake_when()?.wire_name().to_string());
                 }
+                // The client holds every key of this section.
+                SettingsSection::Appearance => {}
                 SettingsSection::Git => {
                     settings.auto_pull_repositories = Some(store.auto_pull_repositories()?);
                     settings.git_workflow = Some(store.git_workflow_settings()?);
@@ -1050,7 +1050,7 @@ mod tests {
     #[test]
     fn an_export_of_some_sections_writes_only_their_keys() {
         use SettingsSection::{
-            AgentBehavior, AppBehavior, Cleanup, General, Git, KeyboardShortcuts,
+            AgentBehavior, Appearance, Cleanup, General, Git, KeyboardShortcuts,
         };
         let keys = |sections: Vec<SettingsSection>| {
             let (state, _dir) = crate::test_support::app_state("config-export-sections");
@@ -1079,11 +1079,11 @@ mod tests {
             ]
         );
         assert_eq!(keys(vec![Cleanup]), ["auto_delete_unresumable_archives"]);
-        assert_eq!(keys(vec![General]), ["interface_language"]);
         assert_eq!(
-            keys(vec![AppBehavior]),
+            keys(vec![General]),
             [
                 "auto_close_idle_shell_terminals",
+                "interface_language",
                 "keep_awake",
                 "keep_awake_when",
                 "resume_sessions_on_start"
@@ -1100,7 +1100,8 @@ mod tests {
                 "keep_sessions_in_own_project",
             ]
         );
-        // The client holds every key of this section, so the daemon's region is an empty object.
+        // The client holds every key of these sections, so the daemon's region is an empty object.
+        assert!(keys(vec![Appearance]).is_empty());
         assert!(keys(vec![KeyboardShortcuts]).is_empty());
         assert!(keys(Vec::new()).is_empty());
     }

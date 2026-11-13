@@ -52,8 +52,8 @@ directory afterwards, is in "Starting a shell terminal" in `docs/product/shell-t
 ## Closing the panel
 
 By default, closing the panel keeps every shell terminal. The application-wide **Close idle terminals when closing the
-panel** switch in App behavior changes this (see that section in `docs/product/app-behavior-settings.md`): while it is on, an explicit
-close also closes the project's idle and exited terminals, without confirmation. Busy terminals are kept. The panel
+panel** switch in Settings' General section changes this (see that section in
+`docs/product/general-settings.md`): while it is on, an explicit close also closes the project's idle and exited terminals, without confirmation. Busy terminals are kept. The panel
 closes at once; the terminals are checked and closed in the background, and any failure raises an error alert.
 
 An explicit close is the panel header's **Close panel**, its top bar toggle or its keyboard shortcut while it closes the

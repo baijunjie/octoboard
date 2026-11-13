@@ -8,6 +8,7 @@ import { showMenuBarIcon } from "../lifecycle/showMenuBarIcon";
 import { usePlatform } from "../platform/react";
 import { useOctoboardTheme } from "../preferences/theme";
 import { sessionOrderPreference, useDaemonStore } from "../store";
+import { terminalFontSize } from "../terminal/terminalFontSize";
 import { markdownStyle } from "../viewer/markdown/markdownStyle";
 
 /**
@@ -24,6 +25,7 @@ export function useClientSettingsReview(document: unknown) {
   const language = useCurrentLanguage();
   const heldLanguage = useDaemonStore((s) => s.settings.interface_language);
   const markdown = markdownStyle.useValue();
+  const fontSize = terminalFontSize.useValue();
   const inBackground = runInBackground.useValue();
   const menuBarIconShown = showMenuBarIcon.useValue();
   const sessionOrder = sessionOrderPreference.useValue();
@@ -35,6 +37,7 @@ export function useClientSettingsReview(document: unknown) {
     : [...clientSettingValues(t, documentSettings, {
       appearance,
       markdown_style: markdown,
+      terminal_font_size: fontSize,
       ...(platformSettings.backgroundRun && { run_in_background: inBackground }),
       ...(platformSettings.menuBarIcon && { show_menu_bar_icon: menuBarIconShown }),
     }), ...languageSettingValues(documentLanguage(document), isLanguage(heldLanguage) ? heldLanguage : language)];

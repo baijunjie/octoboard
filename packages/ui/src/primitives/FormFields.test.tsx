@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import React, { act } from "react";
 import { expect, it, vi } from "vitest";
 
 import { Button } from "./Button";
 import { Checkbox } from "./Checkbox";
 import { Label, LOCKED_FIELD_CLASS } from "./Field";
 import { ListBox, ListBoxItem } from "./ListBox";
+import { BusyContext } from "./busy";
+import { NumberField } from "./NumberField";
 import { Radio, RadioGroup } from "./Radio";
 import { Slider } from "./Slider";
 import { Switch } from "./Switch";
@@ -197,4 +199,88 @@ it("draws a locked slider at full strength where a disabled one is dimmed, with 
   expect(root().className).toContain("data-[disabled=true]:opacity-100");
   expect(container.querySelector("input[type=range]")!.hasAttribute("disabled")).toBe(true);
   expect((container.querySelector("input[type=range]") as HTMLInputElement).value).toBe("4");
+});
+
+function NumberFieldHarness({ initial = 5, onChange }: { initial?: number; onChange?: (value: number) => void }): React.ReactElement {
+  const [value, setValue] = React.useState(initial);
+  return <NumberField label="Size" value={value} onChange={(next) => { setValue(next); onChange?.(next); }} min={0} max={10} step={1} incrementLabel="Bigger" decrementLabel="Smaller" />;
+}
+
+it("names a number field and shows only its value, with no unit or description", () => {
+  const { container } = mount(<NumberFieldHarness />);
+  const input = container.querySelector("input")!;
+  expect(input.getAttribute("aria-label")).toBe("Size");
+  expect(input.value).toBe("5");
+  expect(input.hasAttribute("aria-describedby")).toBe(false);
+  expect(container.textContent).toBe("");
+  expect(container.querySelector('[data-slot="number-field-group"]')!.hasAttribute("data-suffixed")).toBe(false);
+});
+
+it("steps a number field by its buttons and arrow keys, and disables a button at its bound", () => {
+  const onChange = vi.fn();
+  const { container } = mount(<NumberFieldHarness initial={9} onChange={onChange} />);
+  const input = container.querySelector("input")!;
+  const increment = container.querySelector<HTMLButtonElement>('[slot="increment"]')!;
+  const decrement = container.querySelector<HTMLButtonElement>('[slot="decrement"]')!;
+  act(() => increment.click());
+  expect(onChange).toHaveBeenLastCalledWith(10);
+  expect(increment.disabled).toBe(true);
+  act(() => decrement.click());
+  expect(onChange).toHaveBeenLastCalledWith(9);
+  act(() => void input.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })));
+  expect(onChange).toHaveBeenLastCalledWith(8);
+  act(() => void input.dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true })));
+  expect(onChange).toHaveBeenLastCalledWith(0);
+  expect(decrement.disabled).toBe(true);
+});
+
+it("commits a typed number on blur, clamped into the range, and never reports an emptied input", () => {
+  const onChange = vi.fn();
+  const { container } = mount(<NumberFieldHarness onChange={onChange} />);
+  const input = container.querySelector("input")!;
+  const type = (text: string) => {
+    act(() => {
+      input.focus();
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, text);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    act(() => input.blur());
+  };
+  type("7");
+  expect(onChange).toHaveBeenLastCalledWith(7);
+  type("40");
+  expect(onChange).toHaveBeenLastCalledWith(10);
+  expect(input.value).toBe("10");
+  onChange.mockClear();
+  type("");
+  expect(onChange).not.toHaveBeenCalled();
+});
+
+it("names the stepper buttons by the labels it is given and leaves them out of the tab order", () => {
+  const { container } = mount(<NumberFieldHarness />);
+  const increment = container.querySelector<HTMLButtonElement>('[slot="increment"]')!;
+  const decrement = container.querySelector<HTMLButtonElement>('[slot="decrement"]')!;
+  expect(increment.getAttribute("aria-label")).toBe("Bigger");
+  expect(decrement.getAttribute("aria-label")).toBe("Smaller");
+  expect(increment.tabIndex).toBe(-1);
+  expect(decrement.tabIndex).toBe(-1);
+});
+
+it("hands the input element to the ref it is given, so a caller can move focus to it", () => {
+  const inputRef = React.createRef<HTMLInputElement>();
+  const { container } = mount(<NumberField label="Size" value={3} onChange={() => {}} min={0} max={10} incrementLabel="Bigger" decrementLabel="Smaller" inputRef={inputRef} />);
+  const input = container.querySelector("input")!;
+  expect(inputRef.current).toBe(input);
+  act(() => inputRef.current!.focus());
+  expect(document.activeElement).toBe(input);
+});
+
+it("disables a number field's input and buttons in a busy modal", () => {
+  const { container } = mount(
+    <BusyContext.Provider value>
+      <NumberField label="Size" value={3} onChange={() => {}} min={0} max={10} incrementLabel="Bigger" decrementLabel="Smaller" />
+    </BusyContext.Provider>,
+  );
+  expect(container.querySelector("input")!.disabled).toBe(true);
+  expect([...container.querySelectorAll("button")].every((button) => button.disabled)).toBe(true);
 });

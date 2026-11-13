@@ -234,10 +234,11 @@ export function SettingLine({ label, badge, tone = "default", values, children }
   );
 }
 
-/** `text` as a name in the language `lang` (a language's own name, a style's English one), so a reader or a speech
- * engine takes it for that language. */
+/** `text` as a value of its own, isolated from the sentence around it so a value of the other direction (a size with a
+ * Latin unit in Arabic) keeps its order, and as a name in the language `lang` where it is one (a language's own name, a
+ * style's English one), so a reader or a speech engine takes it for that language. */
 export function NamedValue({ text, lang }: { text: string; lang?: string }): React.ReactNode {
-  return lang ? <span lang={lang}>{text}</span> : text;
+  return <bdi lang={lang}>{text}</bdi>;
 }
 
 /** A boolean application setting: what applying it would do against `current` (turns it on, off, or leaves it as it

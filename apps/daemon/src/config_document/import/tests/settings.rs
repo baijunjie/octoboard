@@ -1146,6 +1146,7 @@ async fn the_clients_own_values_pass_through_an_import_untouched() {
     for client_held in [
         "appearance",
         "markdown_style",
+        "terminal_font_size",
         "run_in_background",
         "show_menu_bar_icon",
     ] {
@@ -1155,6 +1156,7 @@ async fn the_clients_own_values_pass_through_an_import_untouched() {
     let mut carried = full.clone();
     carried["settings"]["appearance"] = json!("dark");
     carried["settings"]["markdown_style"] = json!("github");
+    carried["settings"]["terminal_font_size"] = json!(18);
     carried["settings"]["run_in_background"] = json!(true);
     carried["settings"]["show_menu_bar_icon"] = json!(false);
     let (target, _target_dir) = app_state("import-client-values-target");
@@ -1175,6 +1177,7 @@ async fn the_clients_own_values_pass_through_an_import_untouched() {
     let echoed = imported.settings_applied.unwrap();
     assert_eq!(echoed.appearance.as_deref(), Some("dark"));
     assert_eq!(echoed.markdown_style.as_deref(), Some("github"));
+    assert_eq!(echoed.terminal_font_size, Some(18));
     assert_eq!(echoed.run_in_background, Some(true));
     assert_eq!(echoed.show_menu_bar_icon, Some(false));
 
@@ -1198,10 +1201,11 @@ async fn the_clients_own_values_pass_through_an_import_untouched() {
         (
             echoed.appearance,
             echoed.markdown_style,
+            echoed.terminal_font_size,
             echoed.run_in_background,
             echoed.show_menu_bar_icon
         ),
-        (None, None, None, None)
+        (None, None, None, None, None)
     );
 }
 
@@ -1848,8 +1852,8 @@ async fn only_the_listed_sections_are_applied_and_echoed() {
         Some("/srv/from-the-file")
     );
     // General's client-held keys come back as they were; the other sections' keys do not.
-    assert_eq!(echoed.appearance.as_deref(), Some("dark"));
     assert!(echoed.session_order.is_some());
+    assert_eq!(echoed.appearance, None);
     assert_eq!(echoed.auto_delete_unresumable_archives, None);
     assert_eq!(echoed.ask_questions_as_choices, None);
     assert_eq!(echoed.keyboard_shortcuts, None);
@@ -1890,14 +1894,14 @@ async fn listing_a_section_the_document_does_not_carry_is_refused_before_anythin
         Vec::new(),
         ApplyOptions {
             consoles: true,
-            ..options(vec![SettingsSection::Git, SettingsSection::AppBehavior])
+            ..options(vec![SettingsSection::Git, SettingsSection::General])
         },
     )
     .await
     .expect_err("refused");
 
     assert_eq!(code_of(&err), error_code::IMPORT_SETTINGS_MISSING);
-    assert_eq!(param_of(&err, "section"), "app_behavior");
+    assert_eq!(param_of(&err, "section"), "general");
     assert!(state.store.list_consoles().unwrap().is_empty());
     assert!(!state.store.auto_pull_repositories().unwrap());
 }
@@ -1914,7 +1918,7 @@ async fn the_inspection_lists_the_sections_the_document_carries() {
         carried(sectioned_document()).await,
         [
             General,
-            AppBehavior,
+            Appearance,
             Git,
             AgentBehavior,
             KeyboardShortcuts,
@@ -1924,7 +1928,7 @@ async fn the_inspection_lists_the_sections_the_document_carries() {
     assert_eq!(carried(document(Vec::new())).await, []);
     let mut partial = document(Vec::new());
     partial["settings"] = json!({ "keep_awake": true, "session_order": { "sessions": "status" } });
-    assert_eq!(carried(partial).await, [General, AppBehavior]);
+    assert_eq!(carried(partial).await, [General]);
 }
 
 #[tokio::test]
@@ -1937,7 +1941,7 @@ async fn a_version_1_and_a_version_2_document_carry_every_section_they_had() {
         let sections = inspect(&state, &older).await.unwrap().settings_sections;
         assert_eq!(
             sections,
-            [AppBehavior, Git, AgentBehavior, Cleanup],
+            [General, Git, AgentBehavior, Cleanup],
             "version {version}"
         );
     }
@@ -1980,4 +1984,202 @@ async fn the_daemons_update_settings_stay_out_of_the_configuration() {
         target.store.daemon_update_channel().unwrap(),
         crate::protocol::DaemonUpdateChannel::Stable
     );
+}
+
+/// A document whose settings are flat keys, the theme and the Markdown style beside the language
+/// and the keys of the rest of General: what a section carries is told from the keys, not named.
+fn document_with_flat_general_and_appearance_keys() -> serde_json::Value {
+    let mut value = document(Vec::new());
+    value["settings"] = json!({
+        "appearance": "dark",
+        "interface_language": "de",
+        "markdown_style": "github",
+        "session_order": { "sessions": "started", "active_projects": "name", "inactive_projects": "used" },
+        "resume_sessions_on_start": false,
+        "run_in_background": true,
+        "show_menu_bar_icon": true,
+        "keep_awake": true,
+        "keep_awake_when": "always",
+        "auto_close_idle_shell_terminals": true,
+    });
+    value
+}
+
+#[tokio::test]
+async fn a_document_with_flat_general_and_appearance_keys_reports_its_sections_from_its_keys() {
+    let (state, _dir) = app_state("import-sections-old-document");
+    use SettingsSection::*;
+    let sections = inspect(&state, &document_with_flat_general_and_appearance_keys())
+        .await
+        .unwrap()
+        .settings_sections;
+    assert_eq!(sections, [General, Appearance]);
+
+    // The theme keys alone are the Appearance section; the other General keys alone, General.
+    let mut only_theme = document(Vec::new());
+    only_theme["settings"] = json!({ "appearance": "light" });
+    assert_eq!(
+        inspect(&state, &only_theme)
+            .await
+            .unwrap()
+            .settings_sections,
+        [Appearance]
+    );
+    let mut only_markdown = document(Vec::new());
+    only_markdown["settings"] = json!({ "markdown_style": "github" });
+    assert_eq!(
+        inspect(&state, &only_markdown)
+            .await
+            .unwrap()
+            .settings_sections,
+        [Appearance]
+    );
+    let mut only_behavior = document(Vec::new());
+    only_behavior["settings"] = json!({ "run_in_background": false });
+    assert_eq!(
+        inspect(&state, &only_behavior)
+            .await
+            .unwrap()
+            .settings_sections,
+        [General]
+    );
+}
+
+#[tokio::test]
+async fn a_document_with_flat_general_and_appearance_keys_imports_with_the_daemons_keys_applied() {
+    let (state, _dir) = app_state("import-old-document-applied");
+    let imported = apply(
+        &state,
+        &document_with_flat_general_and_appearance_keys(),
+        Vec::new(),
+        options(SettingsSection::ALL[..2].to_vec()),
+    )
+    .await
+    .unwrap();
+
+    assert!(state.store.keep_awake().unwrap());
+    assert!(state.store.auto_close_idle_shell_terminals().unwrap());
+    assert!(!state.store.resume_sessions_on_start().unwrap());
+    let echoed = imported.settings_applied.unwrap();
+    assert_eq!(echoed.appearance.as_deref(), Some("dark"));
+    assert_eq!(echoed.markdown_style.as_deref(), Some("github"));
+    assert_eq!(echoed.run_in_background, Some(true));
+}
+
+#[tokio::test]
+async fn applying_only_appearance_carries_the_theme_keys_and_leaves_the_daemons_settings_alone() {
+    let (state, _dir) = app_state("import-sections-appearance-only");
+    let document = document_with_flat_general_and_appearance_keys();
+    let before = (
+        state.store.keep_awake().unwrap(),
+        state.store.resume_sessions_on_start().unwrap(),
+        state.store.auto_close_idle_shell_terminals().unwrap(),
+    );
+
+    let imported = apply(
+        &state,
+        &document,
+        Vec::new(),
+        options(vec![SettingsSection::Appearance]),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        before,
+        (
+            state.store.keep_awake().unwrap(),
+            state.store.resume_sessions_on_start().unwrap(),
+            state.store.auto_close_idle_shell_terminals().unwrap(),
+        )
+    );
+    let echoed = imported.settings_applied.unwrap();
+    assert_eq!(echoed.appearance.as_deref(), Some("dark"));
+    assert_eq!(echoed.markdown_style.as_deref(), Some("github"));
+    assert_eq!(echoed.session_order, None);
+    assert_eq!(echoed.interface_language, None);
+    assert_eq!(echoed.run_in_background, None);
+    assert_eq!(echoed.show_menu_bar_icon, None);
+    assert_eq!(echoed.keep_awake, None);
+    assert_eq!(echoed.keep_awake_when, None);
+    assert_eq!(echoed.resume_sessions_on_start, None);
+    assert_eq!(echoed.auto_close_idle_shell_terminals, None);
+}
+
+#[tokio::test]
+async fn the_terminal_font_size_is_echoed_with_the_appearance_section_alone() {
+    let mut document = document_with_flat_general_and_appearance_keys();
+    document["settings"]["terminal_font_size"] = json!(18);
+
+    let (state, _dir) = app_state("import-sections-font-size-appearance");
+    let imported = apply(
+        &state,
+        &document,
+        Vec::new(),
+        options(vec![SettingsSection::Appearance]),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        imported.settings_applied.unwrap().terminal_font_size,
+        Some(18)
+    );
+
+    let (state, _dir) = app_state("import-sections-font-size-general");
+    let imported = apply(
+        &state,
+        &document,
+        Vec::new(),
+        options(vec![SettingsSection::General]),
+    )
+    .await
+    .unwrap();
+    assert_eq!(imported.settings_applied.unwrap().terminal_font_size, None);
+}
+
+#[tokio::test]
+async fn applying_only_general_carries_its_keys_and_not_the_theme_keys() {
+    let (state, _dir) = app_state("import-sections-general-only");
+    let imported = apply(
+        &state,
+        &document_with_flat_general_and_appearance_keys(),
+        Vec::new(),
+        options(vec![SettingsSection::General]),
+    )
+    .await
+    .unwrap();
+
+    assert!(state.store.keep_awake().unwrap());
+    assert!(state.store.auto_close_idle_shell_terminals().unwrap());
+    assert!(!state.store.resume_sessions_on_start().unwrap());
+    let echoed = imported.settings_applied.unwrap();
+    assert_eq!(echoed.appearance, None);
+    assert_eq!(echoed.markdown_style, None);
+    assert!(echoed.session_order.is_some());
+    assert_eq!(echoed.run_in_background, Some(true));
+    assert_eq!(echoed.show_menu_bar_icon, Some(true));
+    assert_eq!(echoed.keep_awake, Some(true));
+    assert_eq!(echoed.keep_awake_when.as_deref(), Some("always"));
+    assert_eq!(echoed.resume_sessions_on_start, Some(false));
+    assert_eq!(echoed.auto_close_idle_shell_terminals, Some(true));
+}
+
+#[tokio::test]
+async fn listing_appearance_for_a_document_without_its_keys_is_refused() {
+    let (state, _dir) = app_state("import-sections-appearance-missing");
+    let mut document = document(Vec::new());
+    document["settings"] = json!({ "keep_awake": true });
+
+    let err = apply(
+        &state,
+        &document,
+        Vec::new(),
+        options(vec![SettingsSection::Appearance]),
+    )
+    .await
+    .expect_err("refused");
+
+    assert_eq!(code_of(&err), error_code::IMPORT_SETTINGS_MISSING);
+    assert_eq!(param_of(&err, "section"), "appearance");
+    assert!(!state.store.keep_awake().unwrap());
 }

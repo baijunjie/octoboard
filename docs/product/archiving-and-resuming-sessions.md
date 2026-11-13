@@ -148,7 +148,7 @@ there, where it is listed, and that selecting an archived one does not relaunch 
 
 Every daemon start leaves the sessions of the previous run interrupted, apart from those whose process a process
 holder kept running and the start adopted (see "Starting up" in `docs/product/application-lifecycle.md`). While
-**Resume sessions on start** is on (see that section in `docs/product/app-behavior-settings.md`), the start then resumes, on its
+**Resume sessions on start** is on (see that section in `docs/product/general-settings.md`), the start then resumes, on its
 own, every session that is interrupted by then: the ones the previous run had a process for when it ended and that no
 holder kept running, however it ended (a quit, a termination signal, the system ending the user's session, or a crash
 or restart whose holder did not survive or was not taken over), and the ones already

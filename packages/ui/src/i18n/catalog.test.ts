@@ -64,6 +64,16 @@ function formsOf(message: Message): string[] {
   return typeof message === "string" ? [message] : Object.values(message);
 }
 
+it("names the Appearance section and describes it in a configuration export in every language, and no longer names an App behavior section", () => {
+  for (const [language, catalog] of Object.entries(CATALOGS)) {
+    const messages = catalog as Record<string, Message>;
+    expect(formsOf(messages["settings.section.appearance"]!).every((form) => form.trim().length > 0), language).toBe(true);
+    expect(formsOf(messages["configuration.export.appearance.description"]!).every((form) => form.trim().length > 0), language).toBe(true);
+    expect(Object.keys(messages), language).not.toContain("settings.section.appBehavior");
+    expect(Object.keys(messages), language).not.toContain("configuration.export.appBehavior.description");
+  }
+});
+
 /** The placeholders of a message's text; a platform word asked for in a form or capitalised counts as the plain one,
  * which is how the English message names it. */
 function placeholdersOf(text: string): Set<string> {

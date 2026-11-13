@@ -11,7 +11,7 @@ import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 import { BROWSER_HOST } from "../test/hosts";
 import { mountHost } from "../test/mountHost";
 import { testDaemon } from "../test/testDaemon";
-import { AppBehaviorSection } from "./AppBehaviorSection";
+import { GeneralSection } from "./GeneralSection";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -35,7 +35,7 @@ function mount(daemon: ReturnType<typeof testDaemon>, platform: PlatformAdapter 
   return mountHost(
     <LanguageProvider>
       <Sync />
-      <AppBehaviorSection />
+      <GeneralSection />
     </LanguageProvider>,
     { platform, daemon },
   );

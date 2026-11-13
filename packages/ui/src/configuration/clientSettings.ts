@@ -1,10 +1,11 @@
-import type { PlainMessageKey } from "../i18n/catalog";
+import type { PlainMessageKey, Translate } from "../i18n/catalog";
 import type { ThemeChoice } from "../preferences/theme";
 import { runInBackground } from "../lifecycle/runInBackground";
 import { showMenuBarIcon } from "../lifecycle/showMenuBarIcon";
 import type { DocumentSessionOrder, SettingsSection } from "../protocol";
 import { ACTIVE_PROJECT_SORTS, INACTIVE_PROJECT_SORTS, SESSION_SORTS, type SessionOrder } from "../sessions/order";
 import { sessionOrderPreference } from "../store";
+import { clampTerminalFontSize, terminalFontSize } from "../terminal/terminalFontSize";
 import { MARKDOWN_STYLE_NAMES, MARKDOWN_STYLES, markdownStyle, type MarkdownStyle } from "../viewer/markdown/markdownStyle";
 
 /** The application settings only this client holds, as a configuration document's `settings` carries them: the daemon
@@ -14,6 +15,7 @@ import { MARKDOWN_STYLE_NAMES, MARKDOWN_STYLES, markdownStyle, type MarkdownStyl
 export interface ClientSettings {
   appearance?: ThemeChoice;
   markdown_style?: MarkdownStyle;
+  terminal_font_size?: number;
   run_in_background?: boolean;
   show_menu_bar_icon?: boolean;
   /** The parts of the session order the document carries that this client knows. */
@@ -43,15 +45,15 @@ export function clientSettingsPlatform(platform: { backgroundRun?: unknown; stat
 
 const APPEARANCES: readonly ThemeChoice[] = ["light", "dark", "system"];
 
-const APPEARANCE_LABEL: Record<ThemeChoice, PlainMessageKey> = {
-  light: "settings.appearance.light",
-  dark: "settings.appearance.dark",
-  system: "settings.appearance.system",
+const THEME_LABEL: Record<ThemeChoice, PlainMessageKey> = {
+  light: "settings.theme.light",
+  dark: "settings.theme.dark",
+  system: "settings.theme.system",
 };
 
 /** The values this client adds to a document it saves, for the Settings `sections` the document carries: for General
- * the appearance, the Markdown style and the session order (all three parts); for App behavior whether it runs in the
- * background, whether it shows its menu bar icon (each only where the platform has that). */
+ * the session order (all three parts), whether it runs in the background and whether it shows its menu bar icon (each of
+ * the last two only where the platform has that); for Appearance the theme, the Markdown style and the terminal font size. */
 export function heldClientSettings(
   current: { appearance: ThemeChoice },
   platform: ClientSettingsPlatform,
@@ -60,13 +62,14 @@ export function heldClientSettings(
   const order = sessionOrderPreference.get();
   return {
     ...(sections.includes("general") && {
-      appearance: current.appearance,
-      markdown_style: markdownStyle.get(),
       session_order: { sessions: order.sessions, active_projects: order.activeProjects, inactive_projects: order.inactiveProjects },
-    }),
-    ...(sections.includes("app_behavior") && {
       ...(platform.backgroundRun && { run_in_background: runInBackground.get() }),
       ...(platform.menuBarIcon && { show_menu_bar_icon: showMenuBarIcon.get() }),
+    }),
+    ...(sections.includes("appearance") && {
+      appearance: current.appearance,
+      markdown_style: markdownStyle.get(),
+      terminal_font_size: terminalFontSize.get(),
     }),
   };
 }
@@ -79,15 +82,27 @@ export function documentClientSettings(document: unknown, platform: ClientSettin
 /** The client settings `settings` (a document's, or an import's reply) carries that this client can stand behind. */
 export function clientSettingsOf(settings: unknown, platform: ClientSettingsPlatform): ClientSettings {
   if (typeof settings !== "object" || settings === null) return {};
-  const { appearance, markdown_style, run_in_background, show_menu_bar_icon, session_order } = settings as Record<string, unknown>;
+  const { appearance, markdown_style, terminal_font_size, run_in_background, show_menu_bar_icon, session_order } = settings as Record<string, unknown>;
   const order = sessionOrderOf(session_order);
+  const pixelSize = pixelSizeOf(terminal_font_size);
   return {
     ...(APPEARANCES.includes(appearance as ThemeChoice) && { appearance: appearance as ThemeChoice }),
     ...(MARKDOWN_STYLES.includes(markdown_style as MarkdownStyle) && { markdown_style: markdown_style as MarkdownStyle }),
+    ...(pixelSize !== undefined && { terminal_font_size: clampTerminalFontSize(pixelSize) }),
     ...(platform.backgroundRun && typeof run_in_background === "boolean" && { run_in_background }),
     ...(platform.menuBarIcon && typeof show_menu_bar_icon === "boolean" && { show_menu_bar_icon }),
     ...(Object.keys(order).length > 0 && { session_order: order }),
   };
+}
+
+/** The largest pixel size the daemon keeps, a `u32`. */
+const MAX_PIXEL_SIZE = 4294967295;
+
+/** The whole pixel size a document's value stands for, read as the daemon reads one (`lenient_pixel_size`): a number
+ * that is not negative rounds to the nearest pixel, and anything else (text, a negative or a non-finite number, one the
+ * daemon cannot hold) is no size, so the review never promises a change the daemon drops. */
+function pixelSizeOf(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= MAX_PIXEL_SIZE ? Math.round(value) : undefined;
 }
 
 /** The parts of a document's `session_order` whose value this client knows. */
@@ -109,6 +124,7 @@ function sessionOrderOf(value: unknown): Partial<SessionOrder> {
 export function applyClientSettings(values: ClientSettings, setAppearance: (choice: ThemeChoice) => void): void {
   if (values.appearance !== undefined) setAppearance(values.appearance);
   if (values.markdown_style !== undefined) markdownStyle.set(values.markdown_style);
+  if (values.terminal_font_size !== undefined) terminalFontSize.set(values.terminal_font_size);
   if (values.run_in_background !== undefined) runInBackground.set(values.run_in_background);
   if (values.show_menu_bar_icon !== undefined) showMenuBarIcon.set(values.show_menu_bar_icon);
   if (values.session_order !== undefined) sessionOrderPreference.set({ ...sessionOrderPreference.get(), ...values.session_order });
@@ -130,7 +146,7 @@ export interface ClientSettingValue {
 /** The client settings `wanted` carries, in the order of the settings pages, worded as their settings pages word them.
  * With `current` (this client's own values), each carries the value this client has now. */
 export function clientSettingValues(
-  t: (key: PlainMessageKey) => string,
+  t: Translate,
   wanted: ClientSettings,
   current?: ClientSettings,
 ): ClientSettingValue[] {
@@ -138,8 +154,9 @@ export function clientSettingValues(
   // settings pages mark them.
   const onOff = (value: boolean) => t(value ? "configuration.import.value.on" : "configuration.import.value.off");
   const words: { [F in ScalarClientField]-?: [PlainMessageKey, (value: NonNullable<ClientSettings[F]>) => string, ((value: NonNullable<ClientSettings[F]>) => string)?] } = {
-    appearance: ["settings.appearance.label", (value) => t(APPEARANCE_LABEL[value])],
+    appearance: ["settings.theme.label", (value) => t(THEME_LABEL[value])],
     markdown_style: ["settings.markdownStyle.label", (value) => MARKDOWN_STYLE_NAMES[value], () => "en"],
+    terminal_font_size: ["settings.terminalFontSize.label", (value) => t("configuration.import.value.pixels", { size: value })],
     run_in_background: ["settings.background.label", onOff],
     show_menu_bar_icon: ["settings.menuBarIcon.label", onOff],
   };

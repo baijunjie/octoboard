@@ -12,7 +12,7 @@ agent's Permission approval row, on the accounts table's Disable heading, after 
 account details dialog, and on the sharing row of an account's settings dialog (see "Approval modes" in
 `docs/product/per-agent-settings.md`, "The accounts table", "The account details dialog" and "Sharing the default
 configuration" in `docs/product/agent-accounts.md`, and "Explanations in help tips" in
-`docs/product/labels-and-tooltips.md`). The sections, in order, are **General**, **App behavior**, **Agent
+`docs/product/labels-and-tooltips.md`). The sections, in order, are **General**, **Appearance**, **Agent
 behavior**, **Agent accounts**, **Git**, **Trusted folders**, **Permissions**, **Notifications**, **Keyboard shortcuts**,
 **Cleanup**, **Configuration**, **Updates** and **About**; the dialog opens on General unless it was asked to open on
 another section. **Permissions** is there in the macOS application and in a browser running on a Mac, an iPhone or an
@@ -22,10 +22,11 @@ itself: the desktop application, and a browser open on a daemon that updates its
 the settings that match what is typed (see `docs/product/searching-settings.md`).
 
 A console session can read and change the default clone directory, the automatic pulling of repositories, the
-automatic deletion of archived sessions whose conversation is gone, resuming sessions on start, closing idle shell
-terminals with their panel, the application-wide git workflow settings, the language the daemon holds for the user
-(see "The language the daemon holds" in `docs/product/language.md`) and the daemon's own automatic update check and
-update channel. It can read, but not change, automatic account selection, Claude compatibility, Codex compatibility, the agent tags, the agent accounts (without their directories) and the trusted
+automatic deletion of archived sessions whose conversation is gone, resuming sessions on start, Prevent sleep and when
+it holds, closing idle shell terminals with their panel, the application-wide git workflow settings, the language the
+daemon holds for the user (see "The language the daemon holds" in `docs/product/language.md`) and the daemon's own
+automatic update check and update channel. It can read, but not change, automatic account
+selection, Claude compatibility, Codex compatibility, the agent tags, the agent accounts (without their directories) and the trusted
 folders. The switches of Agent behavior, the approval modes, and the switches that switch accounts at the usage limit
 and start usage windows, it can neither read nor change (see "Who reads and changes what" and "Application settings:
 `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`).
@@ -135,7 +136,7 @@ While Settings is open everything under it stays as it was, the terminal include
 
 ## Group headings
 
-A section whose rows fall into groups — General, App behavior, Git and Keyboard shortcuts — heads each group with a
+A section whose rows fall into groups — General, Git and Keyboard shortcuts — heads each group with a
 heading of its own. Once the section is scrolled far enough for a group's heading to reach the top of the section's
 area, the heading stays pinned there, opaque, and the group's rows scroll beneath it, until the next group's heading
 arrives and pushes it out; the top fade then begins below the pinned heading (see "The edge that hides content fades" in
@@ -163,7 +164,7 @@ there, followed by `\` or `/`.
 
 ## How switches save
 
-A row's switch whose value the daemon holds saves when it is turned, on its own: in App behavior, **Resume sessions on
+A row's switch whose value the daemon holds saves when it is turned, on its own: in General, **Resume sessions on
 start**, **Prevent sleep** and **Close idle terminals when closing the panel**; in Git, **Automatically pull
 repositories**, **Squash commits before delivery**, **Rebase before delivery** and **Revert gate**; in Agent accounts,
 **Automatically select an account**, **Automatically switch accounts at the usage limit** and **Start usage windows
@@ -173,7 +174,7 @@ switch always shows the value the daemon has stored, which every window shares: 
 on the press itself. Once a press has sent a save, further presses are ignored until the stored value shows
 that save, or the save fails. Nothing marks that wait — the switch does not look unavailable — and it keeps showing the
 stored value meanwhile. A failed save is shown in an error alert saying the setting could not be saved, the switch
-keeping its position (see "The error alert" in `docs/product/error-alerts.md`). App behavior's **When to prevent
+keeping its position (see "The error alert" in `docs/product/error-alerts.md`). General's **When to prevent
 sleep**, the Git section's **Where sessions develop** and **Delivery** choices and, in such a browser, Updates' **Update
 channel** save the same way. Each save is checked against the setting's version, so a change another window made just
 before it is refused rather than overwritten, the error alert saying so and the control showing that change (see
@@ -185,27 +186,25 @@ while its save is unanswered (see "Provider settings" in `docs/product/per-agent
 settings dialog (see "Sharing the default configuration" in `docs/product/agent-accounts.md`), **Keep running in
 the background** and **Show menu bar icon**, choices the client keeps itself rather than the daemon, which take effect
 as they are turned (see "Keep running in the background" and "Show menu bar icon" in
-`docs/product/app-behavior-settings.md`), the desktop application's **Check for updates automatically**, kept by the
+`docs/product/general-settings.md`), the desktop application's **Check for updates automatically**, kept by the
 client in the same way (see "Check for updates automatically" in `docs/product/update-settings.md`), and **Launch at login**, which shows and changes the system's own state (see
 "Launch at login" in the same document).
 
 ## General
 
-Small app-wide settings: three rows, **Appearance**, **Language** and **Markdown style**, then the **Sorting** group
-(see "Group headings" above).
+App-wide settings: the **Language** row, then the groups **Startup**, **Window**, **Power**, **Terminals** and
+**Sorting**, each under a heading (see "Group headings" above), some of them only in the desktop application. Which rows
+each group holds, where each is shown and what each does are in `docs/product/general-settings.md`.
 
-### Appearance
+## Appearance
+
+How the window looks: three rows, **Theme**, **Markdown style** and **Terminal font size**, under no group heading.
+
+### Theme
 
 The Light / Dark / System choice for the window's appearance, as a three-way segmented control showing each option as
 an icon — a sun for Light, a moon for Dark, a monitor for System — named by its word. What each option means,
 which one is the default and where the choice is kept are in `docs/product/appearance.md`.
-
-### Language
-
-The language of every window, and the one agents talk to the user in, chosen from a drop-down of the offered
-languages, each named in its own language; the row's description says both. What the options are, how a language is
-picked before one is known, what follows the choice, where it is kept, how every window follows it and how it becomes
-the language sessions are told are in `docs/product/language.md`.
 
 ### Markdown style
 
@@ -214,19 +213,24 @@ How a rendered Markdown document in the project pane's file viewer looks, chosen
 names are proper names, the same in every language. What each style looks like, which one is the default and where the
 choice is kept are in `docs/product/markdown-documents.md`.
 
-### Sorting
+### Terminal font size
 
-How sessions and projects are ordered, as three selects, each taking effect as it is chosen: **Sessions** (Status or
-Recently started), **Active projects**, the projects with at least one unarchived session, which always come before the
-inactive ones (Status, Name or Recently used), and **Inactive projects**, the projects with none, which always come
-after the active ones (Name or Recently used). What each choice does, the defaults, everything that follows the sort and
-where it is kept are in "Choosing the sort" in `docs/product/order-of-projects-and-sessions.md`.
+The size of the terminals' text in whole pixels, as a number field: the number centred between a **−** button before it
+and a **+** button after it, with no unit shown. The field's name is the row's, and the two buttons are named **Decrease
+terminal font size** and **Increase terminal font size**, with no tooltip; they are not reached with Tab, and each is
+unavailable at its end of the range. In the field the Up and Down arrow keys step the size by one pixel, Page Up and Page
+Down by ten, and Home and End go to the smallest and largest sizes. A size typed into the field is taken when the field
+loses focus or on `Enter`, held to the range and rounded to a whole pixel; an emptied field goes back to showing the size.
+Every change applies to the terminals as it is taken. The row's description says what the size is and that the font
+size shortcuts change it too while a terminal has focus.
 
-## App behavior
+Before the field stands an icon button, **Reset font size** (its tooltip and its name), which sets the size back to the
+default. It is shown only while the size is not the default; hidden, it keeps its space, so the field does not move as
+it comes and goes. Pressing it moves keyboard focus to the field — or, after a tap, to the selected section's tab, so
+the on-screen keyboard does not come up. Above 768 px the field has a fixed width; at 768 px and below it fills the row
+under the name and the text, the reset button keeping its size (see "In a narrow window" above).
 
-How the application behaves around its window, in four groups — **Startup**, **Window**, **Power** and **Terminals** —
-each under a heading (see "Group headings" above), some of them only in the desktop application. Which rows each group
-holds, where each is shown and what each does are in `docs/product/app-behavior-settings.md`.
+The range, the default, what follows the size and where it is kept are in `docs/product/terminal-font-size.md`.
 
 ## Agent behavior
 

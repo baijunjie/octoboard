@@ -60,12 +60,12 @@ sentence.
   project paths: they can reveal details such as user and folder names; the thing to do is to share the file only with
   people the user trusts.
 - A group headed **Settings**, with a checkbox for each section of Settings whose settings a document can carry, named
-  and ordered as Settings names them: **General**, **App behavior**, **Agent behavior**, **Git**, **Keyboard
+  and ordered as Settings names them: **General**, **Appearance**, **Agent behavior**, **Git**, **Keyboard
   shortcuts** and **Cleanup** (see "Which settings travel" in `docs/product/settings-in-a-configuration.md`). Each has a
-  one-sentence note under it saying what it includes: General the appearance, the language, the Markdown style and the
-  sorting; App behavior resuming sessions on start, preventing sleep and closing idle terminals and, only where this
-  client's platform has both, running in the background and the menu bar icon (named as the system names it);
-  Agent behavior which requests are approved automatically, whether questions are asked as choices and whether sessions
+  one-sentence note under it saying what it includes: General the language, resuming sessions on start, preventing
+  sleep, closing idle terminals and the sorting and, only where this client's platform has both, running in the
+  background and the menu bar icon (named as the system names it); Appearance the theme, the Markdown style and the
+  terminal font size; Agent behavior which requests are approved automatically and whether questions are asked as choices and whether sessions
   are kept to their own project; Git the default
   clone directory, pulling repositories automatically and the Git workflow; Keyboard shortcuts the shortcuts the
   user has changed; Cleanup deleting archived sessions whose conversation is gone. Trusted folders, Permissions and
@@ -81,9 +81,9 @@ Every checkbox of the two groups starts unchecked, and no note changes with the 
 
 **Export** is unavailable while nothing is chosen — Do not export consoles with no checkbox checked — and nothing says
 why, since the boxes that left it so are in view. It asks the daemon for the document with the sections checked, adds
-the settings this client holds of those sections to it — for General its appearance, Markdown style and sorting; for
-App behavior, in the desktop application, keeping running in the background and showing the menu bar icon; for
-Keyboard shortcuts its changed shortcuts (see "The settings a client holds" in
+the settings this client holds of those sections to it — for General its sorting and, in the desktop application,
+keeping running in the background and showing the menu bar icon; for Appearance its theme, Markdown style and terminal
+font size; for Keyboard shortcuts its changed shortcuts (see "The settings a client holds" in
 `docs/product/settings-in-a-configuration.md`) — and opens the save dialog. In the desktop app a
 toast names the file it was saved as. A browser files a download itself, under its own name and wherever its settings
 say, and does not report one that was blocked or cancelled, so there the toast says only that the configuration was
@@ -271,15 +271,16 @@ is not absolute and does not start with `~/` is refused.
 ### Settings in the review
 
 A card for each section of Settings the file carries, each headed by its section's name, in the order of Settings'
-sections: **General**, **App behavior**, **Agent behavior**, **Git**, **Keyboard shortcuts** and **Cleanup** (see
+sections: **General**, **Appearance**, **Agent behavior**, **Git**, **Keyboard shortcuts** and **Cleanup** (see
 `docs/product/settings.md`); a section the file does not carry has no card. The card's title is a checkbox named by the
 section, and every section's checkbox is checked when the review opens. Only the sections checked are imported;
 unchecked, a card collapses to its title row, with a **Left out** outcome at its end. Within a card the lines stand in
 the order of that section's rows:
 
-- **General**: Appearance, Language, Markdown style, then **Sorting**.
-- **App behavior**: the switch Resume sessions on start, then Keep running in the background and Show menu bar icon,
-  then the switch Prevent sleep and When to prevent sleep, then the switch Close idle terminals when closing the panel.
+- **General**: Language, then the switch Resume sessions on start, then Keep running in the background and Show menu
+  bar icon, then the switch Prevent sleep and When to prevent sleep, then the switch Close idle terminals when closing
+  the panel, then **Sorting**.
+- **Appearance**: Theme, Markdown style, then Terminal font size.
 - **Agent behavior**: its six switches.
 - **Git**: the default clone directory, Automatically pull repositories, then one line for the git workflow.
 - **Keyboard shortcuts**: one line, **Changed shortcuts**.
@@ -298,9 +299,12 @@ with what then follows in that setting's own words (see "The application setting
 **When to prevent sleep**, which the daemon holds, is badged **Set to the file's**, with the file's choice and, in
 brackets, the one set now, each by its name as Settings words it; or **No change** when they are the same.
 
-A **setting only a client holds** — Appearance, Markdown style, Keep running in the background, Show menu bar icon — is
-badged **Set to the file's**, with the file's value and, in brackets, the value this client has now, worded as Settings
-words them (a Markdown style by its name, a switch as **On** or **Off**); or **No change** when they are the same.
+A **setting only a client holds** — Theme, Markdown style, Terminal font size, Keep running in the background, Show
+menu bar icon — is badged **Set to the file's**, with the file's value and, in brackets, the value this client has now,
+worded as Settings words them (a Markdown style by its name, a switch as **On** or **Off**, a font size in pixels, as
+"18 px (now 15 px)"); or **No change** when they are the same. The file's terminal font size is given as this client
+would apply it: rounded, and held to the range of 10 to 24 pixels (see "The application settings an export carries"
+in `docs/product/settings-in-a-configuration.md`).
 **Language**, which the daemon holds rather than the client, reads the same way, comparing the file's language with
 the language the daemon holds now — or with the language this window shows, when the daemon holds none or one this
 build does not offer — each by its name in its own language (see "The language the daemon holds" in `docs/product/language.md`).

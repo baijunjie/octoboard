@@ -59,10 +59,10 @@ function gitWorkflowSwitch<I extends "squash_before_delivery" | "rebase_before_d
   return { id: `git_workflow.${item}`, label, description: [description.on, description.off], group, shown };
 }
 
-const STARTUP: PlainMessageKey = "settings.appBehavior.group.startup";
-const WINDOW: PlainMessageKey = "settings.appBehavior.group.window";
-const POWER: PlainMessageKey = "settings.appBehavior.group.power";
-const TERMINALS: PlainMessageKey = "settings.appBehavior.group.terminals";
+const STARTUP: PlainMessageKey = "settings.general.group.startup";
+const WINDOW: PlainMessageKey = "settings.general.group.window";
+const POWER: PlainMessageKey = "settings.general.group.power";
+const TERMINALS: PlainMessageKey = "settings.general.group.terminals";
 const REPOSITORY: PlainMessageKey = "settings.git.group.repository";
 const DEVELOPMENT: PlainMessageKey = "settings.git.group.development";
 const PROTECTION: PlainMessageKey = "settings.git.group.protection";
@@ -80,17 +80,7 @@ const ownBranch = ({ settings }: SettingsSearchContext) => settings.git_workflow
  */
 const INDEX = {
   general: [
-    { id: "appearance", label: "settings.appearance.label", description: ["settings.appearance.description"] },
     { id: "language", label: "settings.language.label", description: ["settings.language.sharedDescription"] },
-    { id: "markdown-style", label: "settings.markdownStyle.label", description: ["settings.markdownStyle.description"] },
-    ...(["sessions", "activeProjects", "inactiveProjects"] as const).map((part): SettingsSearchEntry<`session-order.${typeof part}`> => ({
-      id: `session-order.${part}`,
-      label: SESSION_ORDER_WORDS[part].label,
-      description: [SESSION_ORDER_WORDS[part].description],
-      group: SORTING,
-    })),
-  ],
-  "app-behavior": [
     {
       id: "launch-at-login",
       label: "settings.launchAtLogin.label",
@@ -122,6 +112,17 @@ const INDEX = {
       shown: ({ keepAwake, settings }) => keepAwake && settings.keep_awake,
     },
     daemonSwitch("auto_close_idle_shell_terminals", TERMINALS),
+    ...(["sessions", "activeProjects", "inactiveProjects"] as const).map((part): SettingsSearchEntry<`session-order.${typeof part}`> => ({
+      id: `session-order.${part}`,
+      label: SESSION_ORDER_WORDS[part].label,
+      description: [SESSION_ORDER_WORDS[part].description],
+      group: SORTING,
+    })),
+  ],
+  appearance: [
+    { id: "theme", label: "settings.theme.label", description: ["settings.theme.description"] },
+    { id: "markdown-style", label: "settings.markdownStyle.label", description: ["settings.markdownStyle.description"] },
+    { id: "terminal-font-size", label: "settings.terminalFontSize.label", description: ["settings.terminalFontSize.description"] },
   ],
   git: [
     { id: "clone-dir", label: "settings.cloneDir.label", description: ["settings.cloneDir.description.gitUrl"], group: REPOSITORY },

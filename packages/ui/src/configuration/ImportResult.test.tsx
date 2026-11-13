@@ -13,7 +13,7 @@ import type { Event, ImportedProject } from "../protocol";
 import { mountHost } from "../test/mountHost";
 import { testDaemon } from "../test/testDaemon";
 import type { Overrides } from "../shortcuts/store";
-import { APP_BEHAVIOR_SWITCHES } from "./booleanSettings";
+import { GENERAL_SWITCHES } from "./booleanSettings";
 import { ImportResult } from "./ImportResult";
 import { documentSettings, openTab, settingGroupsOf, settingLinesAcrossGroups, settingLinesOf } from "./testSupport";
 import { fakeTimers } from "../test/clock";
@@ -213,11 +213,11 @@ function settingLines(container: Element): ReturnType<typeof settingLinesOf> {
   return settingLinesAcrossGroups(container);
 }
 
-it("gives every switch of the App behavior section a line in its card", () => {
-  const every = Object.fromEntries(APP_BEHAVIOR_SWITCHES.map(({ field }) => [field, true]));
+it("gives every switch of the General section a line in its card", () => {
+  const every = Object.fromEntries(GENERAL_SWITCHES.map(({ field }) => [field, true]));
   const container = mountHost(<ImportResult result={{ type: "configuration_imported", id: null, consoles: [], settings_applied: documentSettings(every), settings_error: null, accounts: null }} />);
-  const lines = settingGroupsOf(container).find((group) => group.title === "App behavior")!.lines;
-  expect(lines).toEqual(APP_BEHAVIOR_SWITCHES.map(({ label }) => messageText("en", label)));
+  const lines = settingGroupsOf(container).find((group) => group.title === "General")!.lines;
+  expect(lines).toEqual(GENERAL_SWITCHES.map(({ label }) => messageText("en", label)));
 });
 
 it("tells of each application setting that was applied, and lists the values of the git workflow", () => {
@@ -226,7 +226,7 @@ it("tells of each application setting that was applied, and lists the values of 
     container.render(<ImportResult result={{ type: "configuration_imported", id: null, consoles: [], settings_applied: documentSettings(carried), settings_error: null, accounts: null }} />);
   render({ auto_pull_repositories: true, auto_approve_session_requests: true, auto_approve_handoffs: true, ask_questions_as_choices: false, keep_sessions_in_own_project: true });
   expect(settingGroupsOf(container)).toEqual([
-    { title: "App behavior", lines: ["Close idle terminals when closing the panel"] },
+    { title: "General", lines: ["Close idle terminals when closing the panel"] },
     {
       title: "Agent behavior",
       lines: [
@@ -270,9 +270,9 @@ it("tells of the default clone directory only where it was applied, and of the c
     container.render(<ImportResult result={{ type: "configuration_imported", id: null, consoles: [], settings_applied: documentSettings(carried), settings_error: null, accounts: null }} clientSettings={clientSettings} />);
   render({});
   expect(Object.keys(settingLines(container))).not.toContain("Default clone directory");
-  render({ default_clone_dir: "/Users/dev/Code" }, [{ field: "appearance", label: "settings.appearance.label", value: "Dark" }, { field: "interface_language", label: "settings.language.label", value: "日本語", lang: "ja" }]);
+  render({ default_clone_dir: "/Users/dev/Code" }, [{ field: "appearance", label: "settings.theme.label", value: "Dark" }, { field: "interface_language", label: "settings.language.label", value: "日本語", lang: "ja" }]);
   expect(settingLines(container)["Default clone directory"]).toEqual({ badge: "Matches the file", note: "/Users/dev/Code" });
-  expect(settingLines(container)["Appearance"]).toEqual({ badge: "Dark" });
+  expect(settingLines(container)["Theme"]).toEqual({ badge: "Dark" });
   expect(settingLines(container)["Language"]).toEqual({ badge: "日本語" });
   // The language's name is marked as that language, and the directory stands as plain monospace text, not a chip.
   expect(container.querySelector("[lang=ja]")?.textContent).toBe("日本語");
@@ -331,7 +331,7 @@ it("marks a console and a project whose account fell back with a warning mark af
   press(marks[1]);
   expect(document.querySelector("[data-status-mark-popover]")?.textContent).toBe("The Codex account Personal is not set up here, so the default account is used.");
   await openTab("Settings");
-  expect([...container.querySelectorAll("h3")].map((h) => h.textContent)).toEqual(["App behavior", "Agent behavior", "Git", "Cleanup"]);
+  expect([...container.querySelectorAll("h3")].map((h) => h.textContent)).toEqual(["General", "Agent behavior", "Git", "Cleanup"]);
 });
 
 it("writes a failed line's reason under its row, with the raw text behind Details and not in the row", () => {

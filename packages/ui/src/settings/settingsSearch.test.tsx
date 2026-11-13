@@ -145,7 +145,7 @@ describe("before the reads of the system have answered", () => {
   };
 
   it.each([
-    ["app-behavior", "launch-at-login"],
+    ["general", "launch-at-login"],
     ["permissions", "permissions.screenRecording"],
   ] as const)("the %s section renders exactly the entries the index shows, without %s", async (section, waitingId) => {
     const { rendered, indexed } = await renderedMatchesIndex(section, waiting);

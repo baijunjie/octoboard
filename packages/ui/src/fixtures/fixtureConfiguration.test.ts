@@ -149,15 +149,16 @@ describe("withClientValuesEcho", () => {
     expect(withClientValuesEcho(asked({ keyboard_shortcuts: {} }), applied).settings_applied?.keyboard_shortcuts).toEqual({});
   });
 
-  it("hands back the appearance, Markdown style, background running and menu bar icon choices the same way", () => {
+  it("hands back the appearance, Markdown style, terminal font size, background running and menu bar icon choices the same way", () => {
     const echoed = withClientValuesEcho(
-      asked({ appearance: "dark", markdown_style: "github", run_in_background: false, show_menu_bar_icon: false, interface_language: "ja" }),
+      asked({ appearance: "dark", markdown_style: "github", terminal_font_size: 18, run_in_background: false, show_menu_bar_icon: false, interface_language: "ja" }),
       applied,
     ).settings_applied;
     expect(echoed).toEqual({
       ...documentSettings({ auto_pull_repositories: true }),
       appearance: "dark",
       markdown_style: "github",
+      terminal_font_size: 18,
       run_in_background: false,
       show_menu_bar_icon: false,
     });
@@ -168,8 +169,11 @@ describe("withClientValuesEcho", () => {
     const document = { session_order: order, appearance: "dark", keyboard_shortcuts: {} };
     expect(withClientValuesEcho({ ...asked(document), apply_settings: ["general"] }, applied).settings_applied).toEqual({
       ...documentSettings({ auto_pull_repositories: true }),
-      appearance: "dark",
       session_order: order,
+    });
+    expect(withClientValuesEcho({ ...asked(document), apply_settings: ["appearance"] }, applied).settings_applied).toEqual({
+      ...documentSettings({ auto_pull_repositories: true }),
+      appearance: "dark",
     });
     expect(withClientValuesEcho({ ...asked(document), apply_settings: ["git"] }, applied)).toBe(applied);
   });

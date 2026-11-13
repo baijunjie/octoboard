@@ -174,10 +174,10 @@ Where to start, by question:
   regions.
 - [Keyboard shortcuts](product/keyboard-shortcuts.md) — the changeable shortcuts, how they are matched and shown.
 - [Settings](product/settings.md) — the Settings dialog itself: opening and closing, its sections and moving between
-  them, the narrow layout, how switches save, and the short sections (General, Trusted folders, Permissions, Keyboard
+  them, the narrow layout, how switches save, and the short sections (Appearance, Trusted folders, Permissions, Keyboard
   shortcuts, Cleanup, Configuration) with pointers to the docs of the others.
-- [App behavior settings](product/app-behavior-settings.md) — the App behavior section's rows: launch at login, resume
-  sessions, background run, menu bar icon, Prevent sleep, closing idle terminals.
+- [General settings](product/general-settings.md) — the General section's rows: language, launch at login, resume
+  sessions, background run, menu bar icon, Prevent sleep, closing idle terminals, sorting.
 - [Git settings](product/git-settings.md) — the Git section's rows: default clone directory, automatic pull,
   Development and Protection.
 - [Agent behavior settings](product/agent-behavior-settings.md) — the auto-approval switches and Ask questions as
@@ -214,6 +214,8 @@ Where to start, by question:
 - [A terminal shown on several clients](product/terminals-on-several-clients.md) — which client counts as most
   recently active, how a terminal's size is decided while several clients show it, and where its colours come from.
 - [Terminal panel](product/terminal-panel.md) — the right pane's Terminal panel: tabs, actions and the shell terminal.
+- [Terminal font size](product/terminal-font-size.md) — the terminals' font size: the Appearance row, the shortcuts, how
+  every open terminal follows it and where it is kept.
 - [Shell terminals](product/shell-terminals.md) — plain shells the daemon runs for a project: ownership, title and
   closing.
 - [Opening a project terminal](product/project-terminal.md) — which system terminal Open in › System terminal opens for a

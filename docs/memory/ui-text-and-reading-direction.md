@@ -22,6 +22,11 @@ labels — is a message in `packages/ui/src/i18n/messages/en.ts` and in every tr
   visible text, read its file for a hardcoded string, following through to whatever part that file renders in turn, and
   pass your own message over it: `SearchField.ClearButton`'s own file carries no string, and the `aria-label="Close"` it
   showed in every language comes from the `CloseButton` it delegates to.
+- Nor is a name react-aria supplies itself translated everywhere: its built-in strings (the names it gives a part you
+  name nowhere, or builds from its own verb and your label, as a number field's "Increase …" stepper) have no Hindi,
+  Indonesian, Thai or Vietnamese and fall back to English in those four of the app's languages. Pass a whole catalog
+  message through the component's own prop for that name (`incrementAriaLabel`, an `aria-label` on the part) wherever
+  react-aria would otherwise supply it.
 
 Shortening or replacing an existing message drops whatever that message alone said, and the diff shows only that the
 string got shorter. So before cutting a clause, grep the catalog for the fact it carries and read the product doc for

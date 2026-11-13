@@ -100,6 +100,31 @@ fn an_absent_setting_is_read_as_not_carried_but_a_partial_git_workflow_is_refuse
     assert_eq!(code_of(&err), error_code::CONFIGURATION_UNREADABLE);
 }
 
+/// The terminal font size is a client-held value that is never a reason to refuse the whole
+/// document: whatever it holds, the document reads. The daemon rounds a number that is not negative
+/// to the nearest whole pixel (the client then holds it within its range) and drops any other value.
+#[test]
+fn a_terminal_font_size_that_is_not_a_whole_number_does_not_make_the_document_unreadable() {
+    let complete = with_settings(document(vec![console("Hub", Vec::new())]), true, false);
+    let beyond_u32 = json!(u64::from(u32::MAX) + 1);
+    let cases = [
+        (json!(18), Some(18)),
+        (json!(99), Some(99)),
+        (json!(15.6), Some(16)),
+        (json!(-3), None),
+        (json!("big"), None),
+        (beyond_u32, None),
+    ];
+    for (size, read) in cases {
+        let mut value = complete.clone();
+        value["settings"]["terminal_font_size"] = size.clone();
+        let parsed = parse(&value);
+        assert!(parsed.is_ok(), "terminal_font_size {size} is refused");
+        let settings = parsed.unwrap().settings.expect("the settings are read");
+        assert_eq!(settings.terminal_font_size, read, "{size}");
+    }
+}
+
 /// A document may leave an agent's entry out of `accounts` and `launch`: it reads as that
 /// agent being unset, which an agent added to Octoboard after the document was exported is.
 #[test]

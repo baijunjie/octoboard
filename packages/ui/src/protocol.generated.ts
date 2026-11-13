@@ -1581,26 +1581,11 @@ export type DocumentSessionOrder = {
  */
 export type DocumentSettings = {
   /**
-   * The window's appearance (`light`, `dark` or `system`), which only the client holds (in its
-   * `localStorage`), carried like `run_in_background`. A value the importing client does not
-   * know is ignored.
-   */
-  appearance?: string,
-  /**
    * The interface language tag (see `Settings.interface_language`): the daemon writes the one it
    * holds. An import applies it only when this build offers it. Absent when the daemon held
    * none.
    */
   interface_language?: string,
-  /**
-   * How a rendered Markdown document is styled (the style's id), carried like `appearance`.
-   */
-  markdown_style?: string,
-  /**
-   * How sessions and projects are sorted, carried like `appearance`. The client writes all three
-   * parts, so an import sets the sort exactly, and applies each part whose value it knows.
-   */
-  session_order?: DocumentSessionOrder,
   /**
    * Whether the daemon resumes the interrupted sessions when it starts (see
    * `Settings.resume_sessions_on_start`). Absent in a document from a build that had no such
@@ -1623,7 +1608,7 @@ export type DocumentSettings = {
   show_menu_bar_icon?: boolean,
   /**
    * Whether the daemon holds its host awake (Prevent sleep, see `Settings.keep_awake`). The
-   * daemon builds it when the App behavior section is exported and applies it from an import,
+   * daemon builds it when the General section is exported and applies it from an import,
    * whether or not this host can hold: the value is stored either way.
    */
   keep_awake?: boolean,
@@ -1634,6 +1619,27 @@ export type DocumentSettings = {
    */
   keep_awake_when?: string,
   auto_close_idle_shell_terminals?: boolean,
+  /**
+   * How sessions and projects are sorted, carried like `run_in_background`. The client writes all three
+   * parts, so an import sets the sort exactly, and applies each part whose value it knows.
+   */
+  session_order?: DocumentSessionOrder,
+  /**
+   * The window's appearance (`light`, `dark` or `system`), which only the client holds (in its
+   * `localStorage`), carried like `run_in_background`. A value the importing client does not
+   * know is ignored.
+   */
+  appearance?: string,
+  /**
+   * How a rendered Markdown document is styled (the style's id), carried like `appearance`.
+   */
+  markdown_style?: string,
+  /**
+   * The terminals' font size in pixels, carried like `appearance`. The importing client
+   * keeps a value it knows within its own range. A fractional size reads rounded, and anything
+   * that is not a non-negative number is left out rather than refusing the document.
+   */
+  terminal_font_size?: number,
   /**
    * The default clone directory as `~/<relative path>` under the exporting machine's home
    * directory (also `~` for the home directory itself), otherwise the absolute path, whatever
@@ -5801,7 +5807,7 @@ export type Settings = {
  * A section of Settings whose application settings an export can carry and an import apply on
  * its own; the Agent accounts section is the accounts region instead.
  */
-export type SettingsSection = "general" | "app_behavior" | "git" | "agent_behavior" | "keyboard_shortcuts" | "cleanup";
+export type SettingsSection = "general" | "appearance" | "git" | "agent_behavior" | "keyboard_shortcuts" | "cleanup";
 
 /**
  * Why something could not be brought in line, for a client to explain it in plain words; the

@@ -22,6 +22,7 @@ import { currentLanguage, setLanguage } from "../i18n/language";
 import type { Language } from "../i18n/languages";
 import { MAX_AUTO_RECONNECT_ATTEMPTS, reconnectDelay } from "./reconnectPolicy";
 import { PAST_ANY_RETRY_MS } from "./reconnectTestSupport";
+import { resetTerminalFontSize, terminalFontSize } from "./terminalFontSize";
 import type { TermStatus } from "./TerminalController";
 import { LOADING_LIMIT_MS, TerminalPane, type TerminalPaneHandle } from "./TerminalPane";
 import { BROWSER_HOST } from "../test/hosts";
@@ -51,6 +52,10 @@ const { FakeController } = vi.hoisted(() => {
     inputLabel: string | undefined;
     setInputLabel(label: string): void {
       this.inputLabel = label;
+    }
+    fontSize: number | undefined;
+    setFontSize(size: number): void {
+      this.fontSize = size;
     }
     fits = 0;
     fit(): void {
@@ -261,6 +266,16 @@ it("recovers a terminal that gave up when a fresh snapshot arrives", () => {
   setState({ snapshotEpoch: 1 });
   render(root);
   expect(FakeController.last.attaches).toBe(attaches + 1);
+});
+
+it("redraws a running terminal when the font size changes, and at the chosen size when it opens", () => {
+  onTestFinished(resetTerminalFontSize);
+  mount();
+  expect(FakeController.last.fontSize).toBe(15);
+  act(() => terminalFontSize.set(19));
+  expect(FakeController.last.fontSize).toBe(19);
+  mount();
+  expect(FakeController.last.fontSize).toBe(19);
 });
 
 it("holds its size while a docked pane eases, then fits once", () => {

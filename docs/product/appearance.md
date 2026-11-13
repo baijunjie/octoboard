@@ -2,8 +2,8 @@
 
 ## Light, dark and follow the system
 
-The window has three appearances, chosen in the Appearance row of Settings' General section (see
-`docs/product/settings.md`): **Light**, **Dark** and **System**. One of the three is always current.
+The window has three appearances, chosen in the Theme row of Settings' Appearance section (see "Theme"
+in `docs/product/settings.md`): **Light**, **Dark** and **System**. One of the three is always current.
 
 **The default is System**, which follows the operating system's own appearance and switches with it while
 the window is open — the user does not have to come back to the control after changing the system setting.
@@ -93,6 +93,6 @@ in `docs/product/terminal-queries.md`).
 
 So the choice itself does not travel between clients. A desktop window and a browser tab, or two machines reaching the
 same daemon, each keep their own; a client whose storage has been cleared is back to System. A configuration export
-that includes the General section carries the exporting client's choice, and an import asked to apply that section sets
+that includes the Appearance section carries the exporting client's choice, and an import asked to apply that section sets
 it on the client that runs the import alone (see "The settings a client holds" in
 `docs/product/settings-in-a-configuration.md`).

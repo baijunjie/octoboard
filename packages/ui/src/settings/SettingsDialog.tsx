@@ -1,4 +1,4 @@
-import { AppWindow, Bell, BrushCleaning, CircleArrowUp, FileCog, FolderCheck, GitBranch, Info, Keyboard, KeyRound, SearchX, Settings2, ShieldCheck, ShieldUser, type LucideIcon } from "lucide-react";
+import { Bell, BrushCleaning, CircleArrowUp, FileCog, FolderCheck, GitBranch, Info, Keyboard, KeyRound, Palette, SearchX, Settings2, ShieldCheck, ShieldUser, type LucideIcon } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
@@ -20,7 +20,7 @@ import { isImeKey } from "../input/imeKey";
 import { useHost } from "../platform/react";
 import { useIsNarrow } from "../components/hooks/breakpoint";
 import { AboutSection } from "./AboutSection";
-import { AppBehaviorSection } from "./AppBehaviorSection";
+import { AppearanceSection } from "./AppearanceSection";
 import { AccountsNavigationContext } from "./accounts/AccountsNavigationContext";
 import { AgentAccountsSection, AGENT_STRIP_HEIGHT } from "./accounts/AgentAccountsSection";
 import { AgentBehaviorSection } from "./AgentBehaviorSection";
@@ -54,7 +54,7 @@ interface Section {
 /** What each section of `SETTINGS_SECTION_IDS` shows; a section missing here does not compile. */
 const SECTIONS: Record<SettingsSectionId, Section> = {
   general: { label: "settings.section.general", Icon: Settings2, Content: GeneralSection, stickyHeadingHeight: STICKY_HEADING_HEIGHT.group },
-  "app-behavior": { label: "settings.section.appBehavior", Icon: AppWindow, Content: AppBehaviorSection, stickyHeadingHeight: STICKY_HEADING_HEIGHT.group },
+  appearance: { label: "settings.section.appearance", Icon: Palette, Content: AppearanceSection },
   git: { label: "settings.section.git", Icon: GitBranch, Content: GitSection, stickyHeadingHeight: STICKY_HEADING_HEIGHT.group },
   accounts: { label: "settings.section.accounts", Icon: KeyRound, Content: AgentAccountsSection, stickyHeadingHeight: AGENT_STRIP_HEIGHT },
   "agent-permissions": { label: "settings.section.agentPermissions", Icon: ShieldUser, Content: AgentBehaviorSection },

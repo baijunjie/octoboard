@@ -12,6 +12,7 @@ import { showMenuBarIcon } from "../lifecycle/showMenuBarIcon";
 import type { SavedConfigurationFile } from "../platform";
 import type { ConfigurationDocument, Event, ClientRequestBody } from "../protocol";
 import { shortcutOverrides } from "../shortcuts/store";
+import { resetTerminalFontSize, terminalFontSize } from "../terminal/terminalFontSize";
 import { markdownStyle } from "../viewer/markdown/markdownStyle";
 import { ExportConfigurationDialog, exportFileName } from "./ExportConfigurationDialog";
 import { documentSettings, mountDialog, press } from "./testSupport";
@@ -142,7 +143,7 @@ const box = (label: string) =>
   Array.from(document.body.querySelectorAll<HTMLInputElement>("input[type=checkbox]")).find((input) => input.labels?.[0]?.textContent === label)!;
 const exportButton = () => Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Export")!;
 
-const SECTIONS = ["General", "App behavior", "Agent behavior", "Git", "Keyboard shortcuts", "Cleanup"];
+const SECTIONS = ["General", "Appearance", "Agent behavior", "Git", "Keyboard shortcuts", "Cleanup"];
 const OPTIONS = [...SECTIONS, "Include agent accounts"];
 
 it("offers a checkbox for each Settings section that carries something, named as Settings names it and in Settings order, then one for the Agent accounts, all unchecked", () => {
@@ -154,7 +155,7 @@ it("offers a checkbox for each Settings section that carries something, named as
 it("notes under each section what it includes", () => {
   mount();
   const note = (label: string) => document.getElementById(box(label).getAttribute("aria-describedby")!)!.textContent;
-  expect(note("General")).toBe("Includes appearance, language, Markdown style and sorting.");
+  expect(note("Appearance")).toBe("Includes the theme, Markdown style and terminal font size.");
   expect(note("Git")).toContain("default clone directory");
   expect(note("Agent behavior")).toBe(
     "Includes which requests are approved automatically, whether questions are asked as choices, and whether sessions are kept to their own project.",
@@ -163,17 +164,17 @@ it("notes under each section what it includes", () => {
   expect(note("Include agent accounts")).toContain("login credentials are not included");
 });
 
-it("notes under App behavior the settings every platform holds", () => {
-  const note = () => document.getElementById(box("App behavior").getAttribute("aria-describedby")!)!.textContent;
+it("notes under General the settings every platform holds", () => {
+  const note = () => document.getElementById(box("General").getAttribute("aria-describedby")!)!.textContent;
   mount();
-  expect(note()).toBe("Includes resuming sessions on start, preventing sleep and closing idle terminals.");
+  expect(note()).toBe("Includes language, resuming sessions on start, preventing sleep, closing idle terminals and sorting.");
 });
 
-it("notes under App behavior the background run and the host's name for its icon where its platform has them", () => {
+it("notes under General the background run and the host's name for its icon where its platform has them", () => {
   const statusItem = { setMenu: async () => {}, setVisible: async () => {}, onSessionChosen: () => () => {}, onOpened: () => () => {} };
   mount(undefined, main, { backgroundRun: { set: vi.fn(async () => {}) }, statusItem });
-  expect(document.getElementById(box("App behavior").getAttribute("aria-describedby")!)!.textContent).toBe(
-    "Includes resuming sessions on start, running in the background, the notification area icon, preventing sleep and closing idle terminals.",
+  expect(document.getElementById(box("General").getAttribute("aria-describedby")!)!.textContent).toBe(
+    "Includes language, resuming sessions on start, running in the background, the notification area icon, preventing sleep, closing idle terminals and sorting.",
   );
 });
 
@@ -252,33 +253,51 @@ it("adds this client's changed keyboard shortcuts to a full export, and to nothi
   expect(saved).toMatchObject({ ...full.settings, keyboard_shortcuts: { focusMode: FOCUS } });
 });
 
-it("adds the client's settings of the sections checked only, each under its own section", async () => {
+/** Gives this client a changed shortcut, the background run on and the Markdown style GitHub, restored when the test ends. */
+function holdClientSettings() {
   shortcutOverrides.set({ focusMode: FOCUS });
   runInBackground.set(true);
   markdownStyle.set("github");
+  terminalFontSize.set(18);
   onTestFinished(() => {
     shortcutOverrides.set({});
     runInBackground.set(false);
     markdownStyle.set("tailwind");
+    resetTerminalFontSize();
   });
-  const capabilities = { backgroundRun: { set: vi.fn(async () => {}) } };
+  return { backgroundRun: { set: vi.fn(async () => {}) } };
+}
+
+it("adds the client's session order and background run with General only, not its appearance, Markdown style or terminal font size", async () => {
+  const capabilities = holdClientSettings();
   const general = (await savedSettings("de", capabilities, ["General"])).saved;
-  expect(general).toMatchObject({ markdown_style: "github", interface_language: "de", session_order: { sessions: "status", active_projects: "status", inactive_projects: "name" } });
-  expect(general).not.toHaveProperty("run_in_background");
+  expect(general).toMatchObject({ interface_language: "de", run_in_background: true, session_order: { sessions: "status", active_projects: "status", inactive_projects: "name" } });
+  expect(general).not.toHaveProperty("markdown_style");
+  expect(general).not.toHaveProperty("terminal_font_size");
+  expect(general).not.toHaveProperty("appearance");
   expect(general).not.toHaveProperty("keyboard_shortcuts");
 });
 
-it("adds the app behavior settings of its platform and the keyboard shortcuts only with their sections", async () => {
+it("adds the client's appearance, Markdown style and terminal font size with Appearance only, and no other section's keys", async () => {
+  const capabilities = holdClientSettings();
+  const appearance = (await savedSettings("de", capabilities, ["Appearance"])).saved;
+  expect(appearance).toMatchObject({ appearance: expect.any(String), markdown_style: "github", terminal_font_size: 18 });
+  expect(appearance).not.toHaveProperty("session_order");
+  expect(appearance).not.toHaveProperty("run_in_background");
+  expect(appearance).not.toHaveProperty("keyboard_shortcuts");
+});
+
+it("adds the general settings of its platform and the keyboard shortcuts only with their sections", async () => {
   shortcutOverrides.set({ focusMode: FOCUS });
   runInBackground.set(true);
   onTestFinished(() => {
     shortcutOverrides.set({});
     runInBackground.set(false);
   });
-  const behavior = (await savedSettings(undefined, { backgroundRun: { set: vi.fn(async () => {}) } }, ["App behavior"])).saved;
+  const behavior = (await savedSettings(undefined, { backgroundRun: { set: vi.fn(async () => {}) } }, ["General"])).saved;
   expect(behavior.run_in_background).toBe(true);
   expect(behavior).not.toHaveProperty("appearance");
-  expect(behavior).not.toHaveProperty("session_order");
+  expect(behavior).not.toHaveProperty("markdown_style");
   expect(behavior).not.toHaveProperty("keyboard_shortcuts");
 });
 
@@ -301,6 +320,16 @@ it("adds the appearance and Markdown style this client has to a full export and 
   expect(saved).toMatchObject({ appearance: "dark", markdown_style: "github", interface_language: "de" });
   // A browser has no background running to report.
   expect(saved).not.toHaveProperty("run_in_background");
+});
+
+it("adds the terminal font size this client has to a full export", async () => {
+  terminalFontSize.set(20);
+  onTestFinished(resetTerminalFontSize);
+  expect((await savedSettings("de")).saved.terminal_font_size).toBe(20);
+});
+
+it("adds the default terminal font size to a full export when this client has not changed it", async () => {
+  expect((await savedSettings("de")).saved.terminal_font_size).toBe(15);
 });
 
 it("adds whether this client runs in the background only where its platform has that", async () => {

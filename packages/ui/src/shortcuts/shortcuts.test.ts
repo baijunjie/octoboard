@@ -159,6 +159,25 @@ describe.each<[string, HostFacts]>([["a macOS host", MAC_HOST], ["a Windows host
     });
   });
 
+  describe("the terminal font size commands", () => {
+    const FONT = ["increaseTerminalFontSize", "decreaseTerminalFontSize", "resetTerminalFontSize"] as const;
+
+    it("are rebindable, in the Terminal group, on every client, with the shortcut modifier and = - 0 as their keys", () => {
+      const found = FONT.map((id) => REBINDABLE_COMMANDS.find((command) => command.id === id)!);
+      expect(found.map((command) => command.group)).toEqual(["terminal", "terminal", "terminal"]);
+      expect(found.map((command) => command.availability)).toEqual(["always", "always", "always"]);
+      expect(FONT.map(defaultBinding)).toEqual([
+        { code: "Equal", primary: true },
+        { code: "Minus", primary: true },
+        { code: "Digit0", primary: true },
+      ]);
+    });
+
+    it("hold defaults that stand beside every other command's", () => {
+      for (const id of FONT) expect(validateBindingFor(id, defaultBinding(id), defaults, host), id).toBeUndefined();
+    });
+  });
+
   describe("validation", () => {
     const check = (binding: Binding) => validateBinding("focusMode", binding, defaults);
 
@@ -284,6 +303,21 @@ describe.each<[string, HostFacts]>([["a macOS host", MAC_HOST], ["a Windows host
       expect(overrides).toEqual({ focusMode: { code: "KeyK", primary: true, shift: true } });
       expect(skipped).toBe(4);
       expect(sanitizeOverrides("not an object")).toEqual({ overrides: {}, skipped: 0 });
+    });
+
+    it("carry the terminal font size commands, rebound or not, through an export and an import", () => {
+      const rebound = {
+        increaseTerminalFontSize: { code: "KeyK", primary: true, alt: true },
+        decreaseTerminalFontSize: { code: "KeyL", primary: true, alt: true },
+        resetTerminalFontSize: { code: "KeyM", primary: true, alt: true },
+      };
+      expect(sanitizeOverrides(rebound)).toEqual({ overrides: rebound, skipped: 0 });
+      for (const [id, binding] of Object.entries(rebound)) expect(setBinding(id as keyof typeof rebound, binding)).toBeUndefined();
+      const exported = JSON.parse(JSON.stringify(shortcutOverrides.get()));
+      expect(exported).toEqual(rebound);
+      restoreAllBindings();
+      expect(replaceOverrides(exported)).toMatchObject({ applied: 3, skipped: 0 });
+      expect(bindingFor("increaseTerminalFontSize")).toEqual(rebound.increaseTerminalFontSize);
     });
 
     it("are judged as a whole, so a swap stands whatever order it is written in", () => {

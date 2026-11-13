@@ -26,7 +26,7 @@ const withSettings = (changes: Partial<Settings>): Settings => ({ ...DEFAULT_SET
 
 const SECTION_LABELS: Record<SettingsSectionId, Parameters<typeof sectionMatches>[1]> = {
   general: "settings.section.general",
-  "app-behavior": "settings.section.appBehavior",
+  appearance: "settings.section.appearance",
   git: "settings.section.git",
   accounts: "settings.section.accounts",
   "agent-permissions": "settings.section.agentPermissions",
@@ -63,17 +63,24 @@ describe("queryWords", () => {
 
 describe("sectionMatches", () => {
   it("finds an entry by its name, whatever the case of either side", () => {
-    // "Appearance" is worded with a capital in the catalog; the query is folded by `queryWords`.
-    expect([...find("general", "appearance").ids]).toEqual(["appearance"]);
-    expect([...find("general", "APPEARANCE").ids]).toEqual(["appearance"]);
+    // "Markdown style" is worded with a capital in the catalog; the query is folded by `queryWords`.
+    expect([...find("appearance", "markdown style").ids]).toEqual(["markdown-style"]);
+    expect([...find("appearance", "MARKDOWN STYLE").ids]).toEqual(["markdown-style"]);
   });
 
   it("finds an entry by a word of its description", () => {
-    expect(find("general", "operating system").ids.has("appearance")).toBe(true);
+    expect(find("appearance", "operating system").ids.has("theme")).toBe(true);
+  });
+
+  it("finds the terminal font size row by font, size or terminal, alone or together, and no other Appearance row by them", () => {
+    for (const query of ["font", "size", "terminal", "terminal font size", "FONT SIZE"]) {
+      expect([...find("appearance", query).ids], query).toEqual(["terminal-font-size"]);
+    }
   });
 
   it("finds every entry of a section by the section's name", () => {
-    expect(find("general", "general").ids.size).toBe(SETTINGS_SEARCH_INDEX.general.length);
+    // The rows the context shows: a browser has no launch at login, background run or menu bar icon.
+    expect(find("general", "general").ids.size).toBe(SETTINGS_SEARCH_INDEX.general.filter((entry) => !entry.shown || entry.shown(context())).length);
   });
 
   it("finds the entries of a group by its heading, and reports the group", () => {
@@ -83,17 +90,17 @@ describe("sectionMatches", () => {
   });
 
   it("reports no group for an entry that sits in none", () => {
-    expect(find("general", "appearance").groups.size).toBe(0);
+    expect(find("appearance", "markdown").groups.size).toBe(0);
   });
 
   it("matches only an entry that has every word, wherever each is found in its text", () => {
     // Section name and group heading together.
     expect(find("general", "general sorting").ids.size).toBe(3);
     // A word of the name and one of the description.
-    expect(find("general", "appearance light").ids.has("appearance")).toBe(true);
+    expect(find("appearance", "appearance light").ids.has("theme")).toBe(true);
     // The Appearance row has no group, so it cannot have "sorting" in its text.
-    expect(find("general", "appearance sorting").ids.size).toBe(0);
-    expect(find("general", "appearance zzzznope").ids.size).toBe(0);
+    expect(find("appearance", "appearance sorting").ids.size).toBe(0);
+    expect(find("appearance", "appearance zzzznope").ids.size).toBe(0);
   });
 
   it("finds nothing for a word that is nowhere in the section", () => {
@@ -104,11 +111,11 @@ describe("sectionMatches", () => {
 
   describe("an entry that is shown only on some platforms or conditions", () => {
     it("is counted only where the platform gives it", () => {
-      expect(find("app-behavior", "launch at login", context({ platform: BROWSER })).ids.has("launch-at-login")).toBe(false);
-      expect(find("app-behavior", "launch at login", context({ platform: DESKTOP })).ids.has("launch-at-login")).toBe(true);
+      expect(find("general", "launch at login", context({ platform: BROWSER })).ids.has("launch-at-login")).toBe(false);
+      expect(find("general", "launch at login", context({ platform: DESKTOP })).ids.has("launch-at-login")).toBe(true);
       // Nor is it counted before the system has said what it is (the row is not on screen until then).
       const unread = { launchAtLogin: false, macosPermissions: false, macosPermissionsUnreadable: false };
-      expect(find("app-behavior", "launch at login", context({ platform: DESKTOP, reads: unread })).ids.has("launch-at-login")).toBe(false);
+      expect(find("general", "launch at login", context({ platform: DESKTOP, reads: unread })).ids.has("launch-at-login")).toBe(false);
     });
 
     describe("the macOS permissions", () => {
@@ -144,10 +151,10 @@ describe("sectionMatches", () => {
     });
 
     it("counts the sleep switch only on a host that can be held awake, and its choice only while it is on", () => {
-      expect(find("app-behavior", "prevent sleep", context({ keepAwake: false })).ids.has("keep_awake")).toBe(false);
-      expect(find("app-behavior", "prevent sleep", context({ keepAwake: true })).ids.has("keep_awake")).toBe(true);
-      expect(find("app-behavior", "when to prevent sleep", context({ keepAwake: true, settings: withSettings({ keep_awake: false }) })).ids.has("keep_awake_when")).toBe(false);
-      expect(find("app-behavior", "when to prevent sleep", context({ keepAwake: true, settings: withSettings({ keep_awake: true }) })).ids.has("keep_awake_when")).toBe(true);
+      expect(find("general", "prevent sleep", context({ keepAwake: false })).ids.has("keep_awake")).toBe(false);
+      expect(find("general", "prevent sleep", context({ keepAwake: true })).ids.has("keep_awake")).toBe(true);
+      expect(find("general", "when to prevent sleep", context({ keepAwake: true, settings: withSettings({ keep_awake: false }) })).ids.has("keep_awake_when")).toBe(false);
+      expect(find("general", "when to prevent sleep", context({ keepAwake: true, settings: withSettings({ keep_awake: true }) })).ids.has("keep_awake_when")).toBe(true);
     });
 
     it("counts the git items that shape a branch only while sessions work on a branch of their own", () => {
@@ -183,16 +190,16 @@ describe("sectionMatches", () => {
       const { description } = booleanSetting("resume_sessions_on_start");
       for (const value of [true, false]) {
         const given = context({ settings: withSettings({ resume_sessions_on_start: value }) });
-        expect(find("app-behavior", t(description.on), given).ids.has("resume_sessions_on_start")).toBe(true);
-        expect(find("app-behavior", t(description.off), given).ids.has("resume_sessions_on_start")).toBe(true);
+        expect(find("general", t(description.on), given).ids.has("resume_sessions_on_start")).toBe(true);
+        expect(find("general", t(description.off), given).ids.has("resume_sessions_on_start")).toBe(true);
       }
     });
 
     it("is found by the description of every sleep choice, whichever is made", () => {
       for (const when of ["always", "working"] as const) {
         const given = context({ keepAwake: true, settings: withSettings({ keep_awake: true, keep_awake_when: when }) });
-        expect(find("app-behavior", t("settings.keepAwake.when.description.always"), given).ids.has("keep_awake_when")).toBe(true);
-        expect(find("app-behavior", t("settings.keepAwake.when.description.working"), given).ids.has("keep_awake_when")).toBe(true);
+        expect(find("general", t("settings.keepAwake.when.description.always"), given).ids.has("keep_awake_when")).toBe(true);
+        expect(find("general", t("settings.keepAwake.when.description.working"), given).ids.has("keep_awake_when")).toBe(true);
       }
     });
 
@@ -258,5 +265,52 @@ describe("sectionMatches", () => {
       for (const command of available) expect([...found.ids]).toContain(`shortcut.${command.id}`);
       expect([...found.groups]).toContain("settings.shortcuts.group.navigation");
     });
+
+    it("finds the three font size commands under the Terminal group, by its heading and by their names", () => {
+      const ids = ["increaseTerminalFontSize", "decreaseTerminalFontSize", "resetTerminalFontSize"] as const;
+      const byHeading = find("shortcuts", t("settings.shortcuts.group.terminal"), context({ platform: BROWSER }));
+      expect([...byHeading.ids].sort()).toEqual(ids.map((id) => `shortcut.${id}`).sort());
+      expect([...byHeading.groups]).toEqual(["settings.shortcuts.group.terminal"]);
+      const byName = find("shortcuts", "terminal font size", context({ platform: BROWSER }));
+      for (const id of ids) expect([...byName.ids]).toContain(`shortcut.${id}`);
+    });
+  });
+});
+
+describe("which section each row is indexed under", () => {
+  const ids = (section: SettingsSectionId) => SETTINGS_SEARCH_INDEX[section].map((entry) => entry.id);
+
+  it("lists the theme, the Markdown style and the terminal font size under Appearance, in no group, and nothing else", () => {
+    expect(ids("appearance")).toEqual(["theme", "markdown-style", "terminal-font-size"]);
+    expect(SETTINGS_SEARCH_INDEX.appearance.every((entry) => entry.group === undefined)).toBe(true);
+  });
+
+  it("lists the language, the startup, window, power and terminal rows and the sorting rows under General, and not the theme or the Markdown style", () => {
+    expect(ids("general")).toEqual([
+      "language",
+      "launch-at-login",
+      "resume_sessions_on_start",
+      "run-in-background",
+      "menu-bar-icon",
+      "keep_awake",
+      "keep_awake_when",
+      "auto_close_idle_shell_terminals",
+      "session-order.sessions",
+      "session-order.activeProjects",
+      "session-order.inactiveProjects",
+    ]);
+  });
+
+  it("finds the idle terminals row from General and not from Appearance, and the theme and the Markdown style from Appearance and not from General", () => {
+    const given = context({ platform: DESKTOP, keepAwake: true });
+    expect(find("general", "idle terminals", given).ids.has("auto_close_idle_shell_terminals")).toBe(true);
+    expect(find("appearance", "idle terminals", given).ids.size).toBe(0);
+    expect(find("appearance", "markdown", given).ids.has("markdown-style")).toBe(true);
+    expect(find("general", "markdown", given).ids.size).toBe(0);
+  });
+
+  it("names the General section's groups by its own headings", () => {
+    const groups = new Set(SETTINGS_SEARCH_INDEX.general.map((entry) => entry.group));
+    expect(groups).toEqual(new Set([undefined, "settings.general.group.startup", "settings.general.group.window", "settings.general.group.power", "settings.general.group.terminals", "settings.sort.group"]));
   });
 });

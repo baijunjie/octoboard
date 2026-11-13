@@ -1,19 +1,27 @@
-# App behavior settings
+# General settings
 
-Settings' **App behavior** section (see "App behavior" in `docs/product/settings.md`): how the application behaves
-around its window, in four groups, each under a heading (see "Group headings" in `docs/product/settings.md`):
+Settings' **General** section (see "General" in `docs/product/settings.md`): app-wide settings, the **Language** row
+first, on its own, then five groups, each under a heading (see "Group headings" in `docs/product/settings.md`):
 
 - **Startup**: **Launch at login**, in the desktop application where the system offers it (see "Launch at login"
   below), then **Resume sessions on start**, in every client;
 - **Window**, in the desktop application only: **Keep running in the background**, then **Show menu bar icon**;
 - **Power**, in every client, where the daemon's host can be held awake: **Prevent sleep**, and under it, while it is
   on, **When to prevent sleep**;
-- **Terminals**: **Close idle terminals when closing the panel**, in every client.
+- **Terminals**: **Close idle terminals when closing the panel**, in every client;
+- **Sorting**: **Sessions**, **Active projects** and **Inactive projects**, in every client.
 
-A group with nothing to show in the client is left out, so a browser shows Startup with Resume sessions on start alone,
-Power where the daemon's host can be held awake, and Terminals.
+A group with nothing to show in the client is left out, so a browser shows Language, then Startup with Resume sessions
+on start alone, Power where the daemon's host can be held awake, Terminals and Sorting.
 
 How each of these switches saves is in "How switches save" in `docs/product/settings.md`.
+
+## Language
+
+The language of every window, and the one agents talk to the user in, chosen from a drop-down of the offered
+languages, each named in its own language; the row's description says both. What the options are, how a language is
+picked before one is known, what follows the choice, where it is kept, how every window follows it and how it becomes
+the language sessions are told are in `docs/product/language.md`.
 
 ## Launch at login
 
@@ -35,7 +43,7 @@ A switch, **off to begin with**: whether Octoboard resumes the interrupted sessi
 previous run left and any interrupted before it last stopped. While the switch is off the row's description says what
 turning it on will do, and while it is on it says what is happening now, the same in every client. The daemon stores it as
 `resume_sessions_on_start` and keeps it, so every window shows the same. A console session may read and change it, and a
-configuration export that includes the App behavior section carries it (see "Application settings: `get_settings` and
+configuration export that includes the General section carries it (see "Application settings: `get_settings` and
 `update_settings`" in `docs/product/agent-settings-tools.md` and "The application settings an export carries" in
 `docs/product/settings-in-a-configuration.md`). Turning it on or off resumes nothing at once: it is read when the daemon
 next starts. Which sessions are resumed, and how, is in "Resuming the interrupted sessions at start" in
@@ -67,7 +75,7 @@ icon's menu lists the sessions waiting for the user, paused, done or awaiting in
 it is off, that once it is on the icon's menu does so — or, while Octoboard keeps running in the background, that once
 it is on the icon's menu opens the window and that meanwhile opening Octoboard again or clicking one of its
 notifications brings the window back. The choice is kept per client, as Keep running in the background is, and a
-configuration export that includes the App behavior section carries it (see "The settings a client holds" in
+configuration export that includes the General section carries it (see "The settings a client holds" in
 `docs/product/settings-in-a-configuration.md`). What hiding the icon does is in "Hiding the icon" in
 `docs/product/menu-bar-icon.md`.
 
@@ -89,7 +97,7 @@ import, say — focus moves to the switch. The drop-down saves a choice as it is
 stored; a failed save is shown in an error alert saying the setting could not be saved.
 
 The daemon stores both, as `keep_awake` and `keep_awake_when`, so every client shows the same. A console session may
-read and change them, and a configuration export that includes the App behavior section carries them (see
+read and change them, and a configuration export that includes the General section carries them (see
 "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md` and "The
 application settings an export carries" in `docs/product/settings-in-a-configuration.md`). What is held, and exactly
 when, is in `docs/product/keeping-the-computer-awake.md`.
@@ -102,6 +110,14 @@ terminals with running programs stay open. Which closes count and which terminal
 in `docs/product/terminal-panel.md`. Turning it on closes nothing at once; it applies to later panel closes.
 
 The daemon stores it as `auto_close_idle_shell_terminals` and keeps it, so every window shows the same. A console
-session may read and change it, and a configuration export that includes the App behavior section carries it (see
+session may read and change it, and a configuration export that includes the General section carries it (see
 "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md` and "The
 application settings an export carries" in `docs/product/settings-in-a-configuration.md`).
+
+## Sorting
+
+How sessions and projects are ordered, as three selects, each taking effect as it is chosen: **Sessions** (Status or
+Recently started), **Active projects**, the projects with at least one unarchived session, which always come before the
+inactive ones (Status, Name or Recently used), and **Inactive projects**, the projects with none, which always come
+after the active ones (Name or Recently used). What each choice does, the defaults, everything that follows the sort and
+where it is kept are in "Choosing the sort" in `docs/product/order-of-projects-and-sessions.md`.

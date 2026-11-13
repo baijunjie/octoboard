@@ -20,6 +20,7 @@ import { ConfigurationFileError } from "../platform";
 import type { Event, GitWorkflowSettings, ClientRequestBody } from "../protocol";
 import { bindingFor, shortcutOverrides } from "../shortcuts/store";
 import { sessionOrderPreference } from "../store";
+import { resetTerminalFontSize, terminalFontSize } from "../terminal/terminalFontSize";
 import { markdownStyle } from "../viewer/markdown/markdownStyle";
 import { FOCUS_GRACE_MS, ImportConfigurationDialog } from "./ImportConfigurationDialog";
 import { agentSettingLinesOf, cardTitled, mountDialog, openTab, press, settingGroupsOf, settingLinesAcrossGroups, settingLinesOf } from "./testSupport";
@@ -56,7 +57,7 @@ const consoleCard = (name: string) => Array.from(document.body.querySelectorAll(
 /** The checkbox that includes a region of the file in the import. */
 const regionBox = (label: string) =>
   Array.from(document.body.querySelectorAll<HTMLInputElement>("input[type=checkbox]")).find((input) => input.labels?.[0]?.textContent === label)!;
-const SECTIONS = ["General", "App behavior", "Agent behavior", "Git", "Keyboard shortcuts", "Cleanup"];
+const SECTIONS = ["General", "Appearance", "Agent behavior", "Git", "Keyboard shortcuts", "Cleanup"];
 /** Checks the Settings, which brings every section the file carries with it. */
 async function checkSettings(): Promise<void> {
   await act(async () => regionBox("Settings").click());
@@ -558,12 +559,12 @@ it("does not read the preview again for a setting the import does not write", as
 it("applies the settings of the sections checked and no other", async () => {
   const mounted = await reviewingSettings();
   await press("Import");
-  expect(mounted.sent().at(-1)).toMatchObject({ type: "import_configuration", apply_settings: ["general", "app_behavior", "agent_behavior", "git", "keyboard_shortcuts", "cleanup"] });
+  expect(mounted.sent().at(-1)).toMatchObject({ type: "import_configuration", apply_settings: ["general", "appearance", "agent_behavior", "git", "keyboard_shortcuts", "cleanup"] });
 });
 
 it("sends the sections still checked in Settings order, whichever order the others were unchecked in", async () => {
   const mounted = await reviewingSettings();
-  for (const label of ["Keyboard shortcuts", "Git", "Agent behavior", "App behavior"]) await act(async () => regionBox(label).click());
+  for (const label of ["Keyboard shortcuts", "Git", "Agent behavior", "Appearance"]) await act(async () => regionBox(label).click());
   await press("Import");
   expect(mounted.sent().at(-1)).toMatchObject({ type: "import_configuration", apply_settings: ["general", "cleanup"] });
   expect(mounted.sent().at(-1)).not.toHaveProperty("apply_clone_dir");
@@ -576,7 +577,7 @@ const FOCUS = { code: "KeyK", primary: true, shift: true };
 const echoing = (settings: Record<string, unknown> = {}) => (body: ClientRequestBody): Promise<Event> => {
   if (body.type !== "import_configuration") return reply(body);
   const document = (body.document as { settings?: Record<string, unknown> }).settings ?? {};
-  const passedThrough = Object.fromEntries(["keyboard_shortcuts", "appearance", "markdown_style", "run_in_background", "show_menu_bar_icon", "interface_language", "session_order"].flatMap((field) => (document[field] === undefined || document[field] === null ? [] : [[field, document[field]]])));
+  const passedThrough = Object.fromEntries(["keyboard_shortcuts", "appearance", "markdown_style", "terminal_font_size", "run_in_background", "show_menu_bar_icon", "interface_language", "session_order"].flatMap((field) => (document[field] === undefined || document[field] === null ? [] : [[field, document[field]]])));
   const applied = { ...MIXED_RESULT.settings_applied!, ...passedThrough, ...settings };
   return Promise.resolve({ type: "configuration_imported", ...MIXED_RESULT, settings_applied: body.apply_settings?.length ? applied : null });
 };
@@ -602,9 +603,9 @@ it("groups the application settings as the Settings dialog does, each group in t
   onTestFinished(() => shortcutOverrides.set({}));
   await reviewingSettings({ text: withShortcuts({ focusMode: FOCUS }) });
   const groups = settingGroupsOf(document.body.querySelector("[role=tabpanel]")!);
-  expect(groups.map((group) => group.title)).toEqual(["General", "App behavior", "Agent behavior", "Git", "Keyboard shortcuts", "Cleanup"]);
-  expect(groups[0].lines).toEqual([]);
-  expect(groups[1].lines).toEqual(["Resume sessions on start", "Prevent sleep", "When to prevent sleep", "Close idle terminals when closing the panel"]);
+  expect(groups.map((group) => group.title)).toEqual(["General", "Appearance", "Agent behavior", "Git", "Keyboard shortcuts", "Cleanup"]);
+  expect(groups[0].lines).toEqual(["Resume sessions on start", "Prevent sleep", "When to prevent sleep", "Close idle terminals when closing the panel"]);
+  expect(groups[1].lines).toEqual([]);
   expect(groups[2].lines).toEqual([
     "Automatically approve session requests",
     "Automatically approve resume requests",
@@ -618,7 +619,7 @@ it("groups the application settings as the Settings dialog does, each group in t
   expect(groups[5].lines).toEqual(["Automatically delete archived sessions whose conversation is gone"]);
 });
 
-it("lists the App behavior card in the order of the section on a desktop app, the settings this client holds among the daemon's", async () => {
+it("lists the General card in the order of the section on a desktop app, the settings this client holds among the daemon's", async () => {
   onTestFinished(() => localStorage.clear());
   mountDialog(
     (onClose) => <ImportConfigurationDialog onClose={onClose} />,
@@ -639,8 +640,8 @@ it("lists the App behavior card in the order of the section on a desktop app, th
   await press("Choose file");
   await checkSettings();
   await openTab("Settings");
-  const appBehavior = settingGroupsOf(document.body.querySelector("[role=tabpanel]")!).find((group) => group.title === "App behavior");
-  expect(appBehavior!.lines).toEqual([
+  const general = settingGroupsOf(document.body.querySelector("[role=tabpanel]")!).find((group) => group.title === "General");
+  expect(general!.lines).toEqual([
     "Resume sessions on start",
     "Keep running in the background when the window is closed",
     "Show notification area icon",
@@ -724,6 +725,7 @@ describe("the settings only this client holds, and the language", () => {
   const restoreOnFinish = () =>
     onTestFinished(() => {
       markdownStyle.set("tailwind");
+      resetTerminalFontSize();
       setLanguage("en");
       runInBackground.set(false);
       showMenuBarIcon.set(true);
@@ -734,7 +736,7 @@ describe("the settings only this client holds, and the language", () => {
     restoreOnFinish();
     await reviewingSettings({ text: carrying(FILE) });
     const lines = settingLines();
-    expect(lines["Appearance"]).toEqual({ badge: "Set to the file's", note: "Dark (now System)" });
+    expect(lines["Theme"]).toEqual({ badge: "Set to the file's", note: "Dark (now System)" });
     expect(lines["Markdown style"]).toEqual({ badge: "Set to the file's", note: "GitHub (now Tailwind)" });
     expect(lines["Language"]).toEqual({ badge: "Set to the file's", note: "日本語 (now English)" });
     // Each name is marked as the language it is written in; the Markdown style names are English.
@@ -749,7 +751,7 @@ describe("the settings only this client holds, and the language", () => {
     await reviewingSettings({ text: carrying({ markdown_style: "tailwind", appearance: "sepia", interface_language: "tlh" }) });
     const lines = settingLines();
     expect(lines["Markdown style"]).toEqual({ badge: "No change" });
-    for (const unlisted of ["Appearance", "Language", "Keep running in the background when the window is closed"]) expect(lines[unlisted]).toBeUndefined();
+    for (const unlisted of ["Theme", "Language", "Keep running in the background when the window is closed"]) expect(lines[unlisted]).toBeUndefined();
     expect(Object.keys(lines).filter((label) => /^Show .* icon$/.test(label))).toEqual([]);
   });
 
@@ -766,12 +768,78 @@ describe("the settings only this client holds, and the language", () => {
     // Not a platform that runs in the background: the value is not taken.
     expect(runInBackground.get()).toBe(false);
     const lines = resultSettingLines();
-    expect(lines["Appearance"]).toEqual({ badge: "Dark" });
+    expect(lines["Theme"]).toEqual({ badge: "Dark" });
     expect(lines["Markdown style"]).toEqual({ badge: "GitHub" });
     expect(lines["Language"]).toEqual({ badge: "日本語" });
     expect(Object.keys(lines)).not.toContain("Keep running in the background when the window is closed");
     expect(Object.keys(lines).filter((label) => /^Show .* icon$/.test(label))).toEqual([]);
     expect(showMenuBarIcon.get()).toBe(true);
+  });
+
+  describe("the terminal font size", () => {
+    it("is reviewed against this client's size, and applied and told in the result from what the daemon says it applied", async () => {
+      restoreOnFinish();
+      await reviewingSettings({ text: carrying({ terminal_font_size: 18 }), reply: echoing() });
+      expect(settingLines()["Terminal font size"]).toEqual({ badge: "Set to the file's", note: "18 px (now 15 px)" });
+      await press("Import");
+      expect(terminalFontSize.get()).toBe(18);
+      await openTab("Settings");
+      expect(resultSettingLines()["Terminal font size"]).toEqual({ badge: "18 px" });
+    });
+
+    it("says nothing changes where the file's size is this client's", async () => {
+      restoreOnFinish();
+      await reviewingSettings({ text: carrying({ terminal_font_size: 15 }) });
+      expect(settingLines()["Terminal font size"]).toEqual({ badge: "No change" });
+    });
+
+    it("is held within the range this client offers, and rounded to whole pixels", async () => {
+      restoreOnFinish();
+      await reviewingSettings({ text: carrying({ terminal_font_size: 99 }), reply: echoing() });
+      expect(settingLines()["Terminal font size"]).toEqual({ badge: "Set to the file's", note: "24 px (now 15 px)" });
+      await press("Import");
+      expect(terminalFontSize.get()).toBe(24);
+    });
+
+    it("is rounded to the nearest whole pixel in the review", async () => {
+      restoreOnFinish();
+      await reviewingSettings({ text: carrying({ terminal_font_size: 18.4 }), reply: echoing() });
+      expect(settingLines()["Terminal font size"]).toEqual({ badge: "Set to the file's", note: "18 px (now 15 px)" });
+    });
+
+    it("is shown as a value of its own, isolated from the sentence around it", async () => {
+      restoreOnFinish();
+      await reviewingSettings({ text: carrying({ terminal_font_size: 18 }), reply: echoing() });
+      const bdis = Array.from(document.body.querySelectorAll("[role=tabpanel] bdi")).map((element) => element.textContent);
+      expect(bdis).toEqual(expect.arrayContaining(["18 px", "15 px"]));
+    });
+
+    it.each([[-3], [5_000_000_000]])("is not listed, and not applied, where the file's size is %s, which the daemon cannot hold", async (size) => {
+      restoreOnFinish();
+      terminalFontSize.set(20);
+      await reviewingSettings({ text: carrying({ terminal_font_size: size }), reply: echoing() });
+      expect(settingLines()["Terminal font size"]).toBeUndefined();
+      await press("Import");
+      expect(terminalFontSize.get()).toBe(20);
+    });
+
+    it("is not listed, and not applied, where the file has none or a value that is not a number", async () => {
+      restoreOnFinish();
+      terminalFontSize.set(20);
+      await reviewingSettings({ text: carrying({ terminal_font_size: "big" }), reply: echoing() });
+      expect(settingLines()["Terminal font size"]).toBeUndefined();
+      await press("Import");
+      expect(terminalFontSize.get()).toBe(20);
+    });
+
+    it("is left as it is by a file that does not carry it", async () => {
+      restoreOnFinish();
+      terminalFontSize.set(20);
+      await reviewingSettings({ text: carrying(FILE), reply: echoing() });
+      expect(settingLines()["Terminal font size"]).toBeUndefined();
+      await press("Import");
+      expect(terminalFontSize.get()).toBe(20);
+    });
   });
 
   describe("the sorting", () => {

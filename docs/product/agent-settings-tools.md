@@ -70,9 +70,9 @@ that rule. What is the user's alone is never changed through these tools, by any
 Each of those stays the user's own, in the UI. A project's directory, source, host and remote URL are not settings of
 either kind: they are chosen when the project is associated, by the user or by `add_project`, and nobody, the user
 included, can edit them afterwards (see "Editing a project" in `docs/product/projects.md`). Nor do the tools reach what a
-window keeps for itself rather than the daemon, such as the appearance, Markdown style, the window's own language,
-keyboard shortcuts, keeping running in the background, showing the menu bar icon and the desktop application's own
-update channel and automatic update check, nor what the system keeps, such as Launch at login.
+window keeps for itself rather than the daemon, such as the theme, Markdown style, terminal font size, the window's own
+language, keyboard shortcuts, keeping running in the background, showing the menu bar icon and the desktop application's
+own update channel and automatic update check, nor what the system keeps, such as Launch at login.
 
 The console session's instructions tell it that projects, its console and the application settings belong to the
 user: it changes one only when asked to, says what it changed, and treats accounts and trusted folders as read-only.
@@ -225,8 +225,8 @@ working directory. Neither the avatar itself nor the console's console session i
 | `auto_close_idle_shell_terminals` | Whether explicitly closing a Terminal panel closes its idle terminals (see "Closing the panel" in `docs/product/terminal-panel.md`). |
 | `auto_pull_repositories` | Whether projects behind their upstream are pulled (fast-forwarded) on their own (see "Automatically pulling repositories" in `docs/product/project-git-status.md`). |
 | `auto_delete_unresumable_archives` | Whether archived sessions whose conversation is gone are deleted on their own (see "Deleting archived sessions whose conversation is gone" in `docs/product/deleting-sessions.md`). |
-| `resume_sessions_on_start` | Whether, when the daemon starts, the interrupted sessions are resumed on their own (see "Resume sessions on start" in `docs/product/app-behavior-settings.md` and "Resuming the interrupted sessions at start" in `docs/product/archiving-and-resuming-sessions.md`). |
-| `keep_awake` | Prevent sleep: whether the daemon keeps the computer it runs on awake (see "Prevent sleep" in `docs/product/app-behavior-settings.md`). |
+| `resume_sessions_on_start` | Whether, when the daemon starts, the interrupted sessions are resumed on their own (see "Resume sessions on start" in `docs/product/general-settings.md` and "Resuming the interrupted sessions at start" in `docs/product/archiving-and-resuming-sessions.md`). |
+| `keep_awake` | Prevent sleep: whether the daemon keeps the computer it runs on awake (see "Prevent sleep" in `docs/product/general-settings.md`). |
 | `keep_awake_when` | When Prevent sleep holds: `always`, or `working` for while any session is working (see "When the computer is kept awake" in `docs/product/keeping-the-computer-awake.md`). |
 | `daemon_update_check` | Whether a daemon that updates itself checks for a newer release by itself, `true` unless the user turned it off (see "Check for updates automatically" in `docs/product/update-settings.md` and "When the daemon checks" in `docs/product/server-form-updates.md`). Held by every daemon, but only a daemon that updates itself acts on it. |
 | `daemon_update_channel` | The release channel that daemon follows, `stable` (the default) or `beta` (see "Channels" in `docs/product/server-form-updates.md`). |

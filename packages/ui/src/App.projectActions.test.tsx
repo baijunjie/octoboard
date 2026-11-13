@@ -55,6 +55,7 @@ vi.mock("./terminal/TerminalController", () => ({
     paste() {}
     syncSize() {}
     setInputLabel() {}
+    setFontSize() {}
     detach() {}
   },
 }));

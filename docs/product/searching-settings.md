@@ -39,7 +39,7 @@ only the desktop application has, **Prevent sleep** where the daemon's host can 
 sleep** while it is on, the Git rows shown while sessions work on a branch or in a worktree of their own, the
 Permissions rows, the Configuration rows where files can be saved and opened — matches only while it is shown.
 
-**Rows that wait on a read of the system** — **Launch at login** in App behavior and the Screen Recording and
+**Rows that wait on a read of the system** — **Launch at login** in General and the Screen Recording and
 Accessibility rows in Permissions — appear only once Settings has read the system's state, and the search counts and
 lists them only from that answer on, so a row and its count appear together and a count never takes in a row that is not
 on screen. A launch-at-login read that fails still shows the row, off, and it is counted. When the reads are made is in

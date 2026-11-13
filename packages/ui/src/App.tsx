@@ -65,6 +65,7 @@ import { useSidebarView } from "./sidebar/sidebarView";
 import { useDaemon, useDaemonStore, useDaemonStoreEqual, useProviders } from "./store";
 import { terminalEmptyState } from "./app/emptyState";
 import { TerminalPane } from "./terminal/TerminalPane";
+import { useTerminalFontShortcuts } from "./terminal/terminalFontShortcut";
 import { WelcomeScreen } from "./WelcomeScreen";
 import { useAnnouncement } from "./app/useAnnouncement";
 import { useAppNavigation } from "./app/useAppNavigation";
@@ -405,6 +406,8 @@ export function App(): React.ReactElement {
       sidebarView.setFocus(undefined);
     }
   }, [selectedSession?.id, selectedSession?.status, selectedSession?.bound_to, consoleSessionAboveSelection]);
+
+  useTerminalFontShortcuts();
 
   const { stableFocus } = useFocusMode({
     focus: sidebarView.focus,

@@ -21,7 +21,7 @@ at the end, under a heading only assistive technology is given; a reference move
 back link moves to the reference, both scrolling within the document rather than taking the viewer anywhere.
 
 **How the document looks.** The document is drawn in one of four styles, chosen in the Markdown style row of Settings'
-General section (see "Markdown style" in `docs/product/settings.md`):
+Appearance section (see "Markdown style" in `docs/product/settings.md`):
 
 - **Tailwind** — **the default**: Tailwind Typography's prose styling.
 - **GitHub** — modelled on GitHub's own rendering of Markdown: a sans-serif face, the first two heading levels ruled
@@ -42,7 +42,7 @@ text. Changing the choice restyles a document that is already open at once.
 
 The choice is remembered **per client**, in that client's own browser storage, under the same rules as the appearance
 choice (see "Where the choice is stored" in `docs/product/appearance.md`): the daemon neither stores it nor carries it,
-so it does not travel between clients. A configuration export that includes the General section carries the
+so it does not travel between clients. A configuration export that includes the Appearance section carries the
 exporting client's style, and an import asked to apply that section sets it on the client that runs the import alone (see "The
 settings a client holds" in `docs/product/settings-in-a-configuration.md`). Where nothing is stored, or what is stored
 names no style, the style is Tailwind.

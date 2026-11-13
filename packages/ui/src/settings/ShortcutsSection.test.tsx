@@ -122,6 +122,26 @@ it.each(["Enter", " "] as const)("starts recording on the shortcut and cancels i
   expect(text(container)).not.toContain("Press the new keys…");
 });
 
+it("lists the font size commands in a Terminal group, between Focus and Application, each rebindable", () => {
+  const browser = mount();
+  const headings = Array.from(browser.querySelectorAll("h3")).map((heading) => heading.textContent);
+  expect(headings.indexOf("Terminal")).toBeGreaterThan(-1);
+  expect(headings.indexOf("Terminal")).toBeGreaterThan(headings.indexOf("Focus mode"));
+  expect(headings.indexOf("Terminal")).toBeLessThan(headings.indexOf("Application"));
+  for (const name of ["Increase terminal font size", "Decrease terminal font size", "Reset terminal font size"]) {
+    expect(text(browser), name).toContain(name);
+    expect(button(browser, `Change the shortcut for ${name}`), name).not.toBeNull();
+  }
+});
+
+it("records a new combination for a font size command and saves it", () => {
+  const container = mount();
+  act(() => button(container, "Change the shortcut for Increase terminal font size")!.click());
+  press({ code: "KeyK", primary: true, alt: true });
+  expect(bindingFor("increaseTerminalFontSize")).toEqual({ code: "KeyK", primary: true, alt: true });
+  expect(button(container, "Reset the shortcut for Increase terminal font size to its default")).not.toBeNull();
+});
+
 it("lists the Find key as Find, a fixed one, not as Find in file", () => {
   const browser = mount();
   expect(text(browser)).not.toContain("Find in file");

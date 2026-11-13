@@ -133,18 +133,18 @@ describe("while a query is entered", () => {
     expect(shownEntries()).toEqual(["session-order.sessions", "session-order.activeProjects", "session-order.inactiveProjects"]);
     // The others are hidden, not taken out.
     expect(entries().map((element) => element.dataset.settingsSearchId)).toEqual(all);
-    expect(panel()!.querySelector('[data-settings-search-id="appearance"]')!.closest("[hidden]")).not.toBeNull();
+    expect(panel()!.querySelector('[data-settings-search-id="language"]')!.closest("[hidden]")).not.toBeNull();
   });
 
   it("words a single match in the singular", async () => {
-    await open({ section: "general" });
+    await open({ section: "appearance" });
     await search("markdown");
-    expect(tabNames()).toEqual(["General, 1 matching setting"]);
+    expect(tabNames()).toEqual(["Appearance, 1 matching setting"]);
     expect(shownEntries()).toEqual(["markdown-style"]);
   });
 
   it("matches in any case and ignores the space around the query", async () => {
-    await open({ section: "general" });
+    await open({ section: "appearance" });
     await search("  MARKDOWN  ");
     expect(shownEntries()).toEqual(["markdown-style"]);
   });
@@ -199,7 +199,7 @@ describe("while a query is entered", () => {
     expect(field().value).toBe("");
     expect(selectedTab()?.textContent).toContain("General");
     expect(tabs().length).toBeGreaterThan(5);
-    expect(shownEntries()).toContain("appearance");
+    expect(shownEntries()).toContain("language");
   });
 
   it("keeps the selected section when it has a match", async () => {
@@ -349,7 +349,7 @@ describe("clearing the field", () => {
     await search("sorting");
     await click(clearButton());
     expect(field().value).toBe("");
-    expect(shownEntries()).toContain("appearance");
+    expect(shownEntries()).toContain("language");
   });
 
   it("clears on Escape, without closing the dialog", async () => {
@@ -398,7 +398,7 @@ describe("a navigation request", () => {
     await search("sorting");
     await show({ nonce: 2, section: "general", addAgent: false });
     expect(field().value).toBe("");
-    expect(shownEntries()).toContain("appearance");
+    expect(shownEntries()).toContain("language");
   });
 
   it("keeps the section on screen when the request names none", async () => {
@@ -645,7 +645,7 @@ describe("a row that waits on a read of the system", () => {
       launchAtLogin: { status: () => read.promise, set: async () => "disabled", openSystemSettings: async () => {} },
     };
     fakeTimers();
-    await open({ section: "app-behavior", platform });
+    await open({ section: "general", platform });
     await act(async () => void vi.advanceTimersByTime(FIRST_WRITE_DELAY_MS));
     await search("launch at login");
     // No tab and no count for a row that is not on screen: the search finds nothing yet.
@@ -653,7 +653,7 @@ describe("a row that waits on a read of the system", () => {
     expect(status()).toBe("No setting matches the search.");
     expect(shownEntries()).toEqual([]);
     await read.resolve("disabled");
-    expect(tabNames()).toEqual(["App behavior, 1 matching setting"]);
+    expect(tabNames()).toEqual(["General, 1 matching setting"]);
     expect(shownEntries()).toEqual(["launch-at-login"]);
     expect(panel()!.querySelector('[data-settings-search-id="launch-at-login"]')).not.toBeNull();
   });
@@ -710,9 +710,9 @@ describe("a launch-at-login read that fails", () => {
       host: MAC_HOST,
       launchAtLogin: { status: () => Promise.reject(new Error("no such command")), set: async () => "disabled", openSystemSettings: async () => {} },
     };
-    await open({ section: "app-behavior", platform });
+    await open({ section: "general", platform });
     await search("launch at login");
-    expect(tabNames()).toEqual(["App behavior, 1 matching setting"]);
+    expect(tabNames()).toEqual(["General, 1 matching setting"]);
     expect(shownEntries()).toEqual(["launch-at-login"]);
     const toggle = panel()!.querySelector<HTMLInputElement>('[data-settings-search-id="launch-at-login"] input[role="switch"]');
     expect(toggle).not.toBeNull();
@@ -885,14 +885,14 @@ describe("when the permissions are read again", () => {
 });
 
 describe("the launch-at-login read", () => {
-  it("is made once for the dialog when it opens on App behavior, and not again by moving between sections", async () => {
+  it("is made once for the dialog when it opens on General, and not again by moving between sections", async () => {
     const status = vi.fn<LaunchAtLoginCapability["status"]>(async () => "disabled");
     const platform: PlatformAdapter = { kind: "tauri", host: MAC_HOST, launchAtLogin: { status, set: async () => "disabled", openSystemSettings: async () => {} } };
-    await open({ section: "app-behavior", platform });
+    await open({ section: "general", platform });
     expect(status).toHaveBeenCalledTimes(1);
     expect(shownEntries()).toContain("launch-at-login");
+    await click(tabLabelled("Appearance"));
     await click(tabLabelled("General"));
-    await click(tabLabelled("App behavior"));
     expect(shownEntries()).toContain("launch-at-login");
     expect(status).toHaveBeenCalledTimes(1);
   });

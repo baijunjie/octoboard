@@ -1,7 +1,7 @@
 /** The settings dialog's sections, in the order its tabs list them. */
 export const SETTINGS_SECTION_IDS = [
   "general",
-  "app-behavior",
+  "appearance",
   "agent-permissions",
   "accounts",
   "git",

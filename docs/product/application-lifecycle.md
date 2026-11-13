@@ -183,8 +183,8 @@ in a browser quits anything (see "The daemon on its own" in `docs/product/server
 **The window's close button, `Cmd+W` and the Window menu's Close Window item are one gesture**, and so, in the Windows
 application, which has no application menu, are the close button of the system's title bar and `Alt+F4`. They all do
 the same thing, deliberately, and what they do is the user's choice: the **Keep running in the background when the
-window is closed** switch in Settings' App behavior section, which is **off to begin with** (see "Keep running in the
-background" in `docs/product/app-behavior-settings.md`).
+window is closed** switch in Settings' General section, which is **off to begin with** (see "Keep running in the
+background" in `docs/product/general-settings.md`).
 
 **With the switch off, closing the window quits.** It is an ordinary quit gesture, taking exactly the path `Cmd+Q` takes
 (see "Quitting" below): with a session starting, working, waiting for the user, dormant or working in background, or a
@@ -217,7 +217,7 @@ happens when the file is missing, unreadable or cannot be written): the daemon n
 is not among the files under `~/.octoboard`. The application reads it as it starts, before the window's UI has loaded,
 so it holds from the first moment of a launch; turning the switch takes effect at once and is written straight away. It
 does not travel between two machines reaching the same daemon, and clearing the window's browser storage leaves it as it
-is. A configuration export that includes the App behavior section carries the exporting application's choice, and an
+is. A configuration export that includes the General section carries the exporting application's choice, and an
 import asked to apply that section sets it on the application that runs the import, as turning the switch would; a
 browser, which has no such choice, neither writes nor applies it (see "The settings a client holds" in
 `docs/product/settings-in-a-configuration.md`).

@@ -14,6 +14,7 @@ import { testDaemon } from "../../test/testDaemon";
 import type { TermStatus } from "../TerminalController";
 import { MAX_AUTO_RECONNECT_ATTEMPTS } from "../reconnectPolicy";
 import { PAST_ANY_RETRY_MS } from "../reconnectTestSupport";
+import { resetTerminalFontSize, terminalFontSize } from "../terminalFontSize";
 import { ShellTerminalView, type ShellTerminalViewHandle } from "./ShellTerminalView";
 import { fakeTimers } from "../../test/clock";
 
@@ -42,6 +43,10 @@ const { FakeController } = vi.hoisted(() => {
     }
     setInputLabel(label: string): void {
       this.inputLabel = label;
+    }
+    fontSize: number | undefined;
+    setFontSize(size: number): void {
+      this.fontSize = size;
     }
     fit(): void {
       this.fits += 1;
@@ -348,6 +353,16 @@ it("does not fit a hidden tab as the ease ends", () => {
   const fits = FakeController.last.fits;
   show({ shown: false, resizing: false });
   expect(FakeController.last.fits).toBe(fits);
+});
+
+it("draws a shell at the chosen terminal font size as it opens, and redraws it when the size changes", () => {
+  onTestFinished(resetTerminalFontSize);
+  mount();
+  expect(FakeController.last.fontSize).toBe(15);
+  act(() => terminalFontSize.set(21));
+  expect(FakeController.last.fontSize).toBe(21);
+  mount();
+  expect(FakeController.last.fontSize).toBe(21);
 });
 
 it("names the terminal's input in the UI language, and follows a language change", () => {
