@@ -1,4 +1,4 @@
-# 03 QR code and setup guide
+# 04 QR code and setup guide
 
 > Goal: the owner sets a device up from the connection details shown on the remote machine, scanned or typed.
 > Completion criteria: `octoboardd` prints a QR code and the same details as text in the Linux terminal; the details

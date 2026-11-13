@@ -1,4 +1,4 @@
-# 01 Connecting to a remote daemon over SSH
+# 02 Connecting to a remote daemon over SSH
 
 > Goal: the macOS and Windows applications connect to a daemon on another machine over SSH and are used as they are
 > with their own daemon.

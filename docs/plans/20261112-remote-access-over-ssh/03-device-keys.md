@@ -1,4 +1,4 @@
-# 02 Device keys
+# 03 Device keys
 
 > Goal: after its first login, a device connects with an SSH key of its own and needs no password again.
 > Completion criteria: after one login with the user's password, the application installs its own public key for the
@@ -14,5 +14,5 @@
 
 ## Notes for the developer
 
-- **Development notes**: installing the key is an `ssh-copy-id`-style append over the connection milestone 01 opens;
+- **Development notes**: installing the key is an `ssh-copy-id`-style append over the connection milestone 02 opens;
   the remote user's existing keys and file permissions are left as they were.

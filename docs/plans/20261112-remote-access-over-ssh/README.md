@@ -32,19 +32,30 @@ daemon, so that login is the credential: a device is let in by its SSH key and r
   shown in the Linux terminal by `octoboardd` and in the desktop application, with the same details as text for a
   device without a camera.
 - **The desktop form can be a host too.** The application checks whether the computer's SSH server is on (macOS
-  Remote Login, Windows OpenSSH Server) and guides the owner to turn it on.
-- **Clients.** The macOS and Windows applications connect through this plan. A browser cannot build an SSH tunnel; it
-  reaches a daemon through the owner's own SSH port forward, outside this plan. A phone connects the same way as the
+  Remote Login, Windows OpenSSH Server) and guides the owner to turn it on. Everything about reaching the desktop
+  daemon from elsewhere lives in one Remote access section of Settings, which each milestone adds to.
+- **A browser reaches the desktop daemon through the owner's own SSH port forward** (`ssh -L`), so the desktop
+  application's daemon can be used from a browser on another machine without the server form, as the server form's
+  daemon already is. This is opt-in: an Allow browser access setting, off by default and confirmed explicitly when
+  turned on, makes the daemon serve the UI the application bundles, accept the persistent owner key and listen at a
+  fixed port, still on loopback only. It needs nothing of the tunnel the applications build, only the owner key that
+  already exists, so it comes first. Quitting the desktop application still stops its daemon, so remote use needs the
+  application kept running.
+- **Clients.** The macOS and Windows applications connect through the tunnel they build themselves. A browser cannot
+  build an SSH tunnel; it reaches a daemon through the owner's own SSH port forward, which milestone 01 makes possible
+  for the desktop daemon. A phone connects the same way as the
   applications once a mobile client exists. Reaching a daemon without SSH, through a relay as a remote-desktop tool
   does, is a separate plan.
 
 ## Milestones
 
-- [01 Connecting to a remote daemon over SSH](01-remote-daemon-over-ssh.md) — needs the daemon running on Linux and
+- [01 Browser access to the desktop daemon](01-browser-access-to-the-desktop-daemon.md) — needs the owner key, which
+  exists
+- [02 Connecting to a remote daemon over SSH](02-remote-daemon-over-ssh.md) — needs the daemon running on Linux and
   the `octoboardd` command printing its address and key
-- [02 Device keys](02-device-keys.md) — needs 01
-- [03 QR code and setup guide](03-qr-code-and-setup-guide.md) — needs 01
-- [04 The desktop form as a host](04-desktop-form-as-host.md) — needs 03
+- [03 Device keys](03-device-keys.md) — needs 02
+- [04 QR code and setup guide](04-qr-code-and-setup-guide.md) — needs 02
+- [05 The desktop form as a host](05-desktop-form-as-host.md) — needs 01 and 04
 
 ## Open
 
@@ -57,3 +68,13 @@ daemon, so that login is the credential: a device is let in by its SSH key and r
 - Which mobile client a phone uses; no mobile client exists yet.
 - How a host typed in by hand, with no fingerprint, is trusted on first connection.
 - Where the application keeps passwords and private keys.
+- How the desktop daemon serves the UI: the application bundles its UI inside its executable rather than as separate
+  files, so serving "the application's own files" means either the application writing its UI out for the daemon,
+  which costs no download size but needs the setting known before the daemon starts, or the daemon carrying a
+  compressed copy of the UI, which adds a few megabytes to every download.
+- Whether turning browser access on or off, and changing its port, take effect at once or need the daemon restarted;
+  and whether turning it off, or rotating the key, also drops browser pages already connected.
+- The default port, and what Settings shows when that port is already in use.
+- How the server form's page for a refused key words its way back (today: run `octoboardd address` on the server) when
+  the daemon is the desktop application's.
+- Whether the Remote access section shows anything in a browser opened on the desktop daemon.
