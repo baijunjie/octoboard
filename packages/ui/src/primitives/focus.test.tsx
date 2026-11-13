@@ -2,9 +2,10 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { setInteractionModality } from "react-aria";
+import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { expect, it, onTestFinished } from "vitest";
 
-import { useArrivalFocusProps } from "./focus";
+import { setPointerModality, useArrivalFocusProps } from "./focus";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -82,4 +83,12 @@ it("decides again when focus is handed to another element inside, as a cover han
   // An automatic handoff inside the container: the keyboard modality set, then focus moved (the cover removed first).
   act(() => { setInteractionModality("keyboard"); input.focus(); });
   expect(ring()).toBe(true);
+});
+
+it("takes the input modality back to the pointer's from the keyboard's", () => {
+  onTestFinished(() => void act(() => setInteractionModality("pointer")));
+  act(() => setInteractionModality("keyboard"));
+  expect(getInteractionModality()).toBe("keyboard");
+  act(() => setPointerModality());
+  expect(getInteractionModality()).toBe("pointer");
 });

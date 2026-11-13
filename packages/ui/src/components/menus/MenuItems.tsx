@@ -16,7 +16,7 @@ import { MODAL_DIALOG, TABBABLE } from "../focus/selectors";
 import { useResolvedMenuEntries } from "./useResolvedMenuEntries";
 import { MenuShortcutScope } from "./menuShortcutScope";
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuPanelContext } from "./menuEntries";
-import { activateMenuItem, Description, Kbd, KbdContent, Label, MenuChoices, MenuItem, MenuItemCheck, MenuList, MenuPopover, MenuSeparator, Submenu, SubmenuIndicator, useSubmenuPanel } from "../../primitives";
+import { activateMenuItem, containsText, Description, Kbd, KbdContent, Label, MenuChoices, MenuItem, MenuItemCheck, MenuList, MenuPopover, MenuSeparator, Submenu, SubmenuIndicator, useMenuFiltered, useSubmenuPanel } from "../../primitives";
 
 /** HeroUI's menu item label ignores the pointer, and its content inherits that, so a clipped label never sees
  * the hover that opens its tooltip. The label's content takes the pointer back, a disabled item's too (see
@@ -95,11 +95,14 @@ function PanelBody({ children }: { children: (context: ActionMenuPanelContext) =
 }
 
 /** `autoFocus` is the root menu's, for a menu opened on its context target: the keyboard's focuses its first item
- * as a menu opened from its trigger with the keyboard does, a right-click's the menu itself. */
-export function MenuItems({ entries: source, autoFocus }: { entries: ActionMenuEntry[]; autoFocus?: "first" | "menu" }): React.ReactElement {
+ * as a menu opened from its trigger with the keyboard does, a right-click's the menu itself. `noMatch` is for a menu
+ * a `MenuFilter` narrows to the items whose label contains `query`: `message` is what the menu says while none does. */
+export function MenuItems({ entries: source, autoFocus, noMatch }: { entries: ActionMenuEntry[]; autoFocus?: "first" | "menu"; noMatch?: { query: string; message: string } }): React.ReactElement {
   const entries = useResolvedMenuEntries(source);
   const t = useT();
-  const shortcutsActive = useContext(MenuShortcutScope);
+  // A filtered menu runs no shortcut letter, so it draws no key cap for one either.
+  const filtered = useMenuFiltered();
+  const shortcutsActive = useContext(MenuShortcutScope) && !filtered;
   const prefix = useId();
   const root = useRef<HTMLDivElement>(null);
   const itemRefs = useRef(new Map<number, HTMLElement>());
@@ -170,7 +173,7 @@ export function MenuItems({ entries: source, autoFocus }: { entries: ActionMenuE
           {entry.description && <Description className="sr-only">{entry.description}</Description>}
           {entry.reason && <span aria-hidden="true" className="text-xs text-app-muted"><ReasonText reason={entry.reason} /></span>}
         </span>
-        {!entry.reason && (entry.shortcut ? <MenuShortcut letter={entry.shortcut} /> : entry.end)}
+        {!entry.reason && (entry.shortcut ? (filtered ? null : <MenuShortcut letter={entry.shortcut} />) : entry.end)}
         {entry.selected !== undefined && <MenuItemCheck />}
       </MenuItem>
     );
@@ -247,7 +250,21 @@ export function MenuItems({ entries: source, autoFocus }: { entries: ActionMenuE
       <MenuList onAction={run} autoFocus={autoFocus}>
         {nodes}
       </MenuList>
+      {noMatch && <NoMatchLine message={noMatch.message} nothingMatches={!entries.some((entry) => entry !== "separator" && containsText(entry.label, noMatch.query))} />}
     </div>
+  );
+}
+
+/** What a filtered menu says while no item matches: quiet text on the column of the items' labels, with no glyph,
+ * drawn after the menu rather than as its empty state, which react-aria would wrap in a menu item with no name. Focus
+ * stays in the filter field, so a status region speaks the sentence, which lives as long as the menu so that it exists
+ * before the list empties, and the text itself is hidden from assistive technology. */
+function NoMatchLine({ message, nothingMatches }: { message: string; nothingMatches: boolean }): React.ReactElement {
+  return (
+    <>
+      <StatusAnnouncer text={nothingMatches ? message : undefined} />
+      {nothingMatches && <p aria-hidden="true" className="ps-11 pe-2.5 py-2 text-sm text-app-muted">{message}</p>}
+    </>
   );
 }
 

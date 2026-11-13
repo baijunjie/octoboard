@@ -9,6 +9,7 @@
 @custom-variant ui-keyboard-focus (&[data-focus-visible]);
 @custom-variant ui-pressed (&[data-pressed="true"]);
 @custom-variant ui-hovered (&[data-hovered="true"]);
+@custom-variant ui-focused (&[data-focused="true"]);
 @custom-variant ui-selected (&[data-selected="true"]);
 @custom-variant ui-disabled (&[data-disabled="true"]);
 @custom-variant ui-empty (&[data-empty="true"]);

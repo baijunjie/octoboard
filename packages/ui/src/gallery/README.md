@@ -127,7 +127,10 @@ new reply, are in [`../fixtures/README.md`](../fixtures/README.md).
 - **Held modifier.** `held: true` opens a scenario with the shortcut modifier held, for a view that exists only while it
   is held: the new-session "+" buttons' quick form. The viewer can still choose Released with the page's Modifier
   control; like a width, that choice stays on scenarios that carry none and is dropped on picking one that carries its
-  own. The modifier is pressed after the steps, so they find those buttons by their plain names.
+  own. The modifier is pressed after the steps, so they find those buttons by their plain names; `held: "from-start"`
+  presses it before them, for a menu the steps open (it locks its quick or plain form as it opens); the steps then
+  press the buttons by their quick names, and because the viewer can still choose Released, by either name (a
+  matcher accepting the plain and the quick one), so the scenario still opens.
 - **Markdown style.** The style chosen with the Markdown style control carries over to viewer scenarios that set no
   `preferences.markdownStyle` and is dropped on picking a viewer scenario that sets its own.
 - **Live changes.** They are written with the builders in `fixtures/liveChanges.ts` (`accountAdded`, `accountRemoved`,

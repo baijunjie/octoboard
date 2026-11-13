@@ -65,6 +65,11 @@ draws it (`StaticTag`, `GroupFieldError`), marks and all.
   element, or one given `useFocusVisibleProps`, with them and never writes `data-pressed`, `data-focus-visible` and the
   like. A state the application's own code sets on its own element (`data-current`, `data-selected` on a `TreeRow`) is
   the application's, and is named as it is with Tailwind's `data-*`.
+- **A menu with a filter field is one wrapper, `MenuFilter`** (`MenuFilter.tsx`): react-aria's autocomplete around a
+  `SearchField` and a `MenuList`. It draws the field's row, tells the menu's items and popover (`MenuPopover`'s
+  `filtered`, `MenuItem`) they are filtered (`useMenuFiltered`; a submenu's content is reset to unfiltered), and
+  exports `containsText`, the match it applies, for a caller that must know from outside whether any item remains.
+  Feature code gets a filtered menu through `ActionMenu`'s `filter` prop, which builds on it.
 - **Class and style helpers.** Where a consumer has to give its own element the look of a wrapped component (a button
   drawn as a link, a scroller with HeroUI's scroll shadow, a tooltip's surface), the layer exports the helper instead
   of the class names: `buttonClassName`, `scrollShadowClassName`, `scrollShadowStripStyle`, `scrollShadowAutoProps`,
@@ -79,7 +84,8 @@ draws it (`StaticTag`, `GroupFieldError`), marks and all.
   behaviour it must keep); the component's own behaviour is HeroUI's to test. `testSupport.tsx` holds the helpers they
   share (`mount`, `pressWithMouse`), self-contained like the rest of the layer.
 - **Internal modules stay off the barrel.** `props.ts` (`DataAttributes`, `definedProps`) is what the wrappers share
-  among themselves; a consumer has no use for it.
+  among themselves; a consumer has no use for it. So are `UnfilteredMenu` (`MenuFilter.tsx`) and `setPointerModality`
+  (`focus.ts`), which `Menu.tsx` and `MenuFilter.tsx` use between themselves.
 
 Tests and test support, the gallery, the shared fixtures and the website preview may import the libraries directly;
 they are not application source.

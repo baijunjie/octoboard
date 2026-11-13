@@ -1,6 +1,5 @@
 import { FolderOpen, Plus, Zap } from "lucide-react";
 import React, { useRef, useState } from "react";
-import { flushSync } from "react-dom";
 import { useShallow } from "zustand/react/shallow";
 
 import { ActionMenu } from "../components/menus/ActionMenu";
@@ -42,20 +41,24 @@ export function NewSessionMenu({
   const t = useT();
   const host = useHost();
   const { quick: heldQuick, blocked } = useNewSessionMode();
-  // A shortcut chooses the action before the project picker opens; releasing its keys must not
-  // change that choice. Pointer-opened menus keep following the held modifier.
-  const [shortcutMode, setShortcutMode] = useState<"newSession" | "quickCreate">();
-  const quick = shortcutMode === undefined ? heldQuick : shortcutMode === "quickCreate";
+  // The form the menu has as it opens holds until it closes: a shortcut chooses it (`armedRef`, taken as the menu opens),
+  // and otherwise a pointer takes the one the held modifier gives. Releasing the keys must not change it, since typing
+  // in the menu's filter means letting go of them.
+  const [lockedForm, setLockedForm] = useState<"newSession" | "quickCreate">();
+  const armedRef = useRef<"newSession" | "quickCreate">(undefined);
+  const quick = lockedForm === undefined ? heldQuick : lockedForm === "quickCreate";
   const triggerRef = useRef<HTMLButtonElement>(null);
   useWindowShortcut((event) => {
     const action = matchCreateShortcut(event, host);
     return action === undefined ? undefined : { action, repeat: event.repeat };
   }, ({ action, repeat }) => {
     if (repeat || blocked || projects.length === 0) return;
-    flushSync(() => setShortcutMode(action));
+    armedRef.current = action;
     setKeyboardModality();
     triggerRef.current?.focus();
+    // The click opens the menu at once, which takes the armed form; one that does not open it leaves none behind.
     triggerRef.current?.click();
+    armedRef.current = undefined;
   });
   // In the quick form, the projects whose agent has no account that can open a session (each used up, not logged in
   // or turned off) cannot be chosen. The time is read as the store is: the modifier is held only for a
@@ -69,14 +72,19 @@ export function NewSessionMenu({
     }
     return ids;
   }));
-  if (projects.length === 0 || blocked) return <RowIconButton icon={Plus} label={label} onPress={() => {}} isDisabled />;
+  const disabled = projects.length === 0 || blocked;
+  // The menu is gone with this branch and reports no close, so the form it locked goes too.
+  if (disabled && lockedForm !== undefined) setLockedForm(undefined);
+  if (disabled) return <RowIconButton icon={Plus} label={label} onPress={() => {}} isDisabled />;
   const name = quick ? quickLabel : label;
   return (
     <ActionMenu
       label={name}
       tooltip={<ShortcutTooltip action={quick ? "quickCreate" : "newSession"}>{name}</ShortcutTooltip>}
       triggerRef={triggerRef}
-      onClosed={() => setShortcutMode(undefined)}
+      onOpened={() => setLockedForm(armedRef.current ?? (heldQuick ? "quickCreate" : "newSession"))}
+      onClosed={() => setLockedForm(undefined)}
+      filter={{ label: t("sidebar.filter.field"), emptyMessage: t("sidebar.filter.noMatch") }}
       trigger={quick ? <Zap aria-hidden="true" className="size-4" /> : <Plus aria-hidden="true" className="size-4" />}
       items={sortProjects(projects, () => [], new Set(), new Set()).map((project) => {
         const reason = unavailable.has(project.id) ? { state: t("sidebar.project.openSessionQuickUnavailable") } : undefined;

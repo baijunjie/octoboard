@@ -2,6 +2,7 @@ import { EllipsisVertical } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
 import { isSecondaryPress } from "../../input/keys";
+import { interactionIsTouch } from "../../input/lastInput";
 import { useT } from "../../i18n/react";
 import { useHost } from "../../platform/react";
 import { TitledControl } from "../hint/TitledControl";
@@ -18,6 +19,7 @@ import {
 } from "../focus/menuFocus";
 import { endKeyContextMenuSkip, skipKeyContextMenu } from "./keyContextMenuSkip";
 import type { ActionMenuEntry } from "./menuEntries";
+import { type ActionMenuFilter, FilteredMenuItems } from "./FilteredMenuItems";
 import { MenuItems } from "./MenuItems";
 import { MenuShortcutScope } from "./menuShortcutScope";
 import { usePointerFocusReturn } from "./usePointerFocusReturn";
@@ -25,12 +27,16 @@ import { BadgedControl, Menu, MenuPopover, MenuTrigger, partSelector } from "../
 
 /** The entries of a menu given as a function, read when the menu opens (the popover mounts its content
  * then), so that what they judge against the clock is the time they are looked at. */
-function ResolvedMenuItems({ source, onGone, autoFocus }: { source: ActionMenuEntry[] | (() => ActionMenuEntry[]); onGone: () => void; autoFocus?: "first" | "menu" }): React.ReactElement {
+function ResolvedMenuItems({ source, onGone, children }: {
+  source: ActionMenuEntry[] | (() => ActionMenuEntry[]);
+  onGone: () => void;
+  children: (entries: ActionMenuEntry[]) => React.ReactElement;
+}): React.ReactElement {
   // The popover unmounts its content only once its exit animation has run, which is when the menu
   // has really left the page.
   const goneRef = useLatest(onGone);
   useEffect(() => () => goneRef.current(), [goneRef]);
-  return <MenuItems entries={typeof source === "function" ? source() : source} autoFocus={autoFocus} />;
+  return children(typeof source === "function" ? source() : source);
 }
 
 export function ActionMenu({
@@ -46,6 +52,8 @@ export function ActionMenu({
   onContextOpen,
   leavesContextToBrowser,
   onClosed,
+  onOpened,
+  filter,
 }: {
   label: string;
   /** The entries, or a function that makes them when the menu opens. */
@@ -82,6 +90,16 @@ export function ActionMenu({
    * from the keyboard, that is while the trigger held focus, and no pointer press came before the
    * popover was gone; `null` otherwise. Not called when this menu unmounts first. */
   onClosed?: (keyboardTrigger: HTMLElement | null) => void;
+  /** Called as the menu opens, however it was opened. */
+  onOpened?: () => void;
+  /** Puts a text field at the top of the menu that narrows the items to those whose label contains what is typed,
+   * case-insensitively. It takes focus as the menu opens (read-only after a tap, so that no on-screen keyboard rises
+   * over the list until the field is tapped or a key that types is pressed), the arrow keys move through the items that
+   * remain, and Enter chooses the highlighted one; it starts empty for each opening. For a menu with too many items to
+   * scan. A filtered menu takes no single-letter shortcuts, as react-aria hands each key typed in the field on to the
+   * highlighted item: its entries take no `shortcut` letters (they are not run, and none is drawn or announced) and no
+   * `commandShortcut` (focus is in the field, not the menu). */
+  filter?: ActionMenuFilter;
 }): React.ReactElement {
   const t = useT();
   const host = useHost();
@@ -96,16 +114,23 @@ export function ActionMenu({
   // the menu for every context open, since react-aria would otherwise reuse the focus its trigger's
   // last opening chose (the first item after a key or a screen reader's press).
   const [openedByKey, setOpenedByKey] = useState(false);
-  // Counts the context opens, which remount the menu's content: a menu opened again while its popover is still
-  // mounted (a second right-click, which closes and opens it within one gesture) would otherwise keep the content
-  // that took focus at its first open, and none would take it now that the surface behind is inert again.
+  // Counts the openings, each of which remounts the menu's content: a menu opened again while its popover is still
+  // mounted (a second right-click, which closes and opens it within one gesture, or a reopening during the exit
+  // animation) would otherwise keep the content that took focus at its first open, and none would take it now that the
+  // surface behind is inert again; a filter field would keep how it opened the time before.
   const [openCount, setOpenCount] = useState(0);
+  // The text of the menu's filter field; each opening starts it empty.
+  const [query, setQuery] = useState("");
+  // How the filter field takes focus as the menu opens: for browsing after a tap, since the field's on-screen keyboard
+  // would cover the list (see "Focus moved by a change the user did not make" in `docs/ui-standard.md`).
+  const [fieldMode, setFieldMode] = useState<"typing" | "browsing">("typing");
   // Set only for a pointer-opened menu: react-aria returns focus to the trigger when a menu closes,
   // which is right for the keyboard but would pull it off the terminal for the mouse.
   const pointerFocus = usePointerFocusReturn();
   const wrapperRef = useRef<HTMLDivElement>(null);
   const isOpenRef = useRef(false);
   const onClosedRef = useLatest(onClosed);
+  const onOpenedRef = useLatest(onOpened);
   // For `onClosed`: the trigger, while the menu (open, or closing) was opened from it with the keyboard,
   // and the listener that drops it at a pointer press.
   const keyboardOpenRef = useRef<{ trigger: HTMLElement; listeners: AbortController } | null>(null);
@@ -150,6 +175,10 @@ export function ActionMenu({
     countOpen(open);
     const restore = pointerFocus.opened(open);
     if (open) {
+      setQuery("");
+      setFieldMode(interactionIsTouch() ? "browsing" : "typing");
+      setOpenCount((count) => count + 1);
+      onOpenedRef.current?.();
       takeMenuFocusToRestore();
       settleKeyboardOpen();
       // Opened from the keyboard, the menu opens from its focused trigger. react-aria focuses the
@@ -187,7 +216,8 @@ export function ActionMenu({
 
   // Listens natively, on the target itself: a React handler would also hear the right-clicks of this
   // menu's own portalled popover, which bubble through the component tree. The handlers only use
-  // state setters and refs, so the ones from the render that set the effect up stay valid.
+  // state setters and refs, and reach the props that change through `useLatest` refs, so the ones from
+  // the render that set the effect up stay valid.
   useEffect(() => {
     const target = contextTargetRef?.current;
     if (!target) return;
@@ -217,7 +247,6 @@ export function ActionMenu({
       pointerFocus.notePress(adopt);
       setPointerAt({ x: event.clientX, y: event.clientY });
       setOpenedByKey(byKey);
-      setOpenCount((count) => count + 1);
       onOpenChange(true);
     };
     // The Menu key and Shift+F10 are handled here rather than left to the `contextmenu` event they
@@ -292,9 +321,18 @@ export function ActionMenu({
         </BadgedControl>
         {/* Key caps spelled out (Ctrl Shift F, off an Apple keyboard) are wider than macOS's glyphs; a menu that has
             them is that much wider, so the label beside them keeps the room it has next to glyphs. */}
-        <MenuPopover className="min-w-48 max-w-72 has-[[data-kbd-spelled]]:max-w-82" at={pointerAt ?? undefined}>
+        <MenuPopover className="min-w-48 max-w-72 has-[[data-kbd-spelled]]:max-w-82" at={pointerAt ?? undefined} filtered={filter !== undefined}>
           <MenuShortcutScope value={isOpen}>
-            <ResolvedMenuItems key={openCount} source={items} onGone={onPopoverGone} autoFocus={pointerAt ? (openedByKey ? "first" : "menu") : undefined} />
+            <ResolvedMenuItems key={openCount} source={items} onGone={onPopoverGone}>
+              {(entries) => {
+                const autoFocus = pointerAt ? (openedByKey ? "first" : "menu") : undefined;
+                return filter ? (
+                  <FilteredMenuItems entries={entries} filter={filter} query={query} onQueryChange={setQuery} fieldMode={fieldMode} autoFocus={autoFocus} />
+                ) : (
+                  <MenuItems entries={entries} autoFocus={autoFocus} />
+                );
+              }}
+            </ResolvedMenuItems>
           </MenuShortcutScope>
         </MenuPopover>
       </Menu>

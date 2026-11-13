@@ -87,8 +87,11 @@ export interface Scenario extends Fixture {
   /** The shortcut modifier (⌘ / Ctrl) is held down when it opens, for a view that exists only while it is: the
    * quick-create form of the new-session buttons. Not a copy of another scenario made to see it held: the
    * shell's Modifier control holds it for any scenario. The page's own choice (`held` in the URL) stands over
-   * it, and like a width stays on scenarios that carry none and is dropped on picking one that does. */
-  held?: boolean;
+   * it, and like a width stays on scenarios that carry none and is dropped on picking one that does. It is pressed
+   * after the steps, which find the buttons by their plain names; `"from-start"` presses it before them instead, for a
+   * view the steps open with it held (a menu locks its form as it opens). Its steps then find the buttons by their
+   * quick names, or by either name where the viewer may choose Released. */
+  held?: boolean | "from-start";
   /** Shown in place of the app; without it the real `App` is rendered over `state`. */
   startup?: Startup;
   /** Shows the real code wrappers against the alert tones instead of the application. */

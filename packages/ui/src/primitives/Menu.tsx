@@ -4,8 +4,14 @@ import { MenuContext, useSlottedContext } from "react-aria-components";
 
 import { useDisabled } from "./busy";
 import { setKeyboardModality } from "./focus";
+import { FILTER_SCROLL_PADDING_CLASS, FILTERED_ITEM_CLASS, UnfilteredMenu, useMenuFiltered } from "./MenuFilter";
 import { type DataAttributes, definedProps } from "./props";
 import { mergeRefs } from "./refs";
+
+/** The class names given, space-separated, or `undefined` where there is none. */
+function joinClasses(...names: (string | undefined)[]): string | undefined {
+  return names.filter(Boolean).join(" ") || undefined;
+}
 
 /** HeroUI's dropdown: a `MenuTrigger` and the `MenuPopover` it opens. The caller holds the open state. */
 export function Menu({ open, onOpenChange, children }: {
@@ -45,18 +51,26 @@ export function MenuTrigger({ ref, label, describedBy, hidden, focusOnPress, cla
  * react-aria names the popover's dialog role after the trigger, as it does the menu inside it, so a screen reader would
  * speak the name twice. The dialog goes without one, a deliberate departure from the ARIA rule that a dialog has a
  * name: it only wraps the named menu, so a name would just repeat it. The empty value wins over react-aria's and
- * refers to nothing. */
-export function MenuPopover({ at, className, children }: {
+ * refers to nothing.
+ *
+ * `filtered` is for a popover that holds a `MenuFilter`: the field's row sticks to the top of the popover, which is the
+ * scroller, so the popover keeps the row's height (and a few pixels) clear at its top for the highlighted item the
+ * arrow keys scroll to; the usual few pixels would leave it under the row (see "Focus scrolled to the edge of a scroller
+ * that fades there" in `docs/ui-standard.md`). Its content is an unfiltered menu unless it holds a `MenuFilter` itself,
+ * so a submenu's popover is not narrowed by the filter of the menu it opens from. */
+export function MenuPopover({ at, filtered, className, children }: {
   at?: { x: number; y: number };
+  filtered?: boolean;
   className?: string;
   children: React.ReactNode;
 }): React.ReactElement {
+  const classes = joinClasses(filtered ? FILTER_SCROLL_PADDING_CLASS : undefined, className);
   return (
     <Dropdown.Popover
       aria-labelledby=""
-      {...definedProps({ className, getTargetRect: at && (() => new DOMRect(at.x, at.y, 0, 0)) })}
+      {...definedProps({ className: classes, getTargetRect: at && (() => new DOMRect(at.x, at.y, 0, 0)) })}
     >
-      {children as React.ReactElement}
+      <UnfilteredMenu>{children}</UnfilteredMenu>
     </Dropdown.Popover>
   );
 }
@@ -88,7 +102,8 @@ export function MenuList({ onAction, autoFocus, children }: {
 
 /** HeroUI's dropdown item: `id` is what `onAction` is told, `textValue` what typing to it matches, `label` its accessible
  * name where its content does not give the right one. `ref` is the item's element. `shortcut` is the key that runs the
- * item, announced as its `aria-keyshortcuts` (the caller handles the key, and runs the item with `activateMenuItem`).
+ * item, announced as its `aria-keyshortcuts` (the caller handles the key, and runs the item with `activateMenuItem`);
+ * in a filtered menu no key runs an item, so none is announced.
  * `danger` draws a destructive item; `closeOnSelect={false}` keeps the menu open after it runs. */
 export function MenuItem({ ref, id, textValue, label, shortcut, danger, disabled, closeOnSelect, className, children, ...data }: DataAttributes & {
   ref?: React.Ref<HTMLDivElement>;
@@ -102,10 +117,12 @@ export function MenuItem({ ref, id, textValue, label, shortcut, danger, disabled
   className?: string;
   children: React.ReactNode;
 }): React.ReactElement {
+  const filtered = useMenuFiltered();
+  const classes = joinClasses(filtered ? FILTERED_ITEM_CLASS : undefined, className);
   // react-aria filters `aria-keyshortcuts` out of a menu item's props, so it is set on the element.
   const announceShortcut = (node: HTMLDivElement | null) => {
     if (!node) return;
-    if (shortcut) node.setAttribute("aria-keyshortcuts", shortcut);
+    if (shortcut && !filtered) node.setAttribute("aria-keyshortcuts", shortcut);
     else node.removeAttribute("aria-keyshortcuts");
   };
   return (
@@ -114,7 +131,7 @@ export function MenuItem({ ref, id, textValue, label, shortcut, danger, disabled
       ref={mergeRefs(ref, announceShortcut)}
       id={id}
       textValue={textValue}
-      {...definedProps({ "aria-label": label, className, isDisabled: disabled, shouldCloseOnSelect: closeOnSelect })}
+      {...definedProps({ "aria-label": label, className: classes, isDisabled: disabled, shouldCloseOnSelect: closeOnSelect })}
       variant={danger ? "danger" : "default"}
     >
       {children as React.ReactElement}

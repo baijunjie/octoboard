@@ -15,6 +15,12 @@ export function setKeyboardModality(): void {
   setInteractionModality("keyboard");
 }
 
+/** Sets the input modality to the pointer's, for a handler that hears the pointer arrive before react-aria's own
+ * listener does, so that what reacts to the pointer by modality (a hovered menu item taking the highlight) does. */
+export function setPointerModality(): void {
+  setInteractionModality("pointer");
+}
+
 export type FocusVisibleProps = React.DOMAttributes<Element> & { "data-focus-visible"?: true };
 
 /**

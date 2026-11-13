@@ -22,6 +22,7 @@ export { type PrimitiveLabels, PrimitiveLabelsProvider } from "./labels";
 export { ListBox, ListBoxItem, ListBoxItemLabel } from "./ListBox";
 export { LocaleProvider } from "./locale";
 export { activateMenuItem, Menu, MenuChoices, MenuItem, MenuItemCheck, MenuList, menuOfTrigger, MenuPopover, MenuSeparator, MenuTrigger, Submenu, SubmenuIndicator, useSubmenuPanel } from "./Menu";
+export { containsText, MenuFilter, useMenuFiltered } from "./MenuFilter";
 export { Meter } from "./Meter";
 export { Modal, ModalBody, ModalCloseButton, ModalFooter, ModalHeader, ModalHeading, ModalStatusIcon } from "./Modal";
 export { FloatingPopover, type OverlayPlacement, Popover, PopoverContent, PopoverDialog } from "./Popover";

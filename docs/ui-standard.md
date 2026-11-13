@@ -293,6 +293,25 @@ the fades give way to its ring (see "Visible focus"), so a keyboard user finds t
 it. At the breakpoint and below the sections are the shared content-fit tab strip with HeroUI's look (and the
 search-time override under "Conformance level and exceptions").
 
+#### A menu's filter field
+
+A menu with a filter field (`MenuFilter` in `packages/ui/src/primitives/MenuFilter.tsx`, reached through
+`ActionMenu`'s `filter`) draws the field as the menu's own first row, not as a form control set into it, by the user's
+decision. The row departs from HeroUI's search field look, an exception to "Form controls on a surface" and to the ring
+rule under "Visible focus": the field has no fill, border, shadow or focus ring, the caret showing where typing goes.
+The muted search glyph sits 16px from the popover's start edge on the items' icon column and the text on their label
+column; the clear button's glyph sits 16px from the end edge. The field is as tall as an item (36px), and the row
+sticks to the popover's top on the popover's own fill, with a `--separator` rule under it.
+
+Focus stays in the field, so the item its Enter would choose (the one react-aria has focused) is marked by HeroUI's
+hover fill (`--default`) and never by the keyboard ring, which would read as a second focus. It is the only row
+filled: the pointer moves that mark to the item it enters, HeroUI's hover fill is cancelled on the other items, and a
+disabled item the arrow keys reach keeps the fill under the pointer. Like the other row fills it is a shape, not held to
+a contrast threshold. A submenu opened from a filtered menu is an ordinary menu. While nothing matches, one muted line
+of text on the label column, with no glyph, is drawn after the (empty) menu rather than as react-aria's empty state,
+which would be an unnamed menu item; the line is `aria-hidden`, and its sentence is spoken by a `StatusAnnouncer` that
+the menu mounts from its first render (see "Announcing a change"). (Source: user decision.)
+
 ## Third-party UI components come through the wrapper layer
 
 Every component of `@heroui/react` and `react-aria-components` reaches the application through the project's wrapper
@@ -360,6 +379,13 @@ using the standard menu key caps. Entries that open a submenu or a custom panel 
 act only while that menu is open, on the item the menu belongs to; a key pressed inside a submenu never activates a
 parent action. Disabled actions remain unavailable from their keys too. These temporary keys are separate from the
 window's configurable shortcuts and do not appear in Settings.
+
+A menu with a filter field is an exception: its items take no single-letter shortcuts and no window command shortcuts,
+and show no key caps or `aria-keyshortcuts`, since the keys typed go to the field (react-aria hands each one on to the
+highlighted item). Focus stays in the field; the arrow, Home, End and Page keys move the highlight among the items left
+and Enter chooses it. Escape first clears the text, then closes the menu, and Backspace and Delete only edit the
+field. The field starts empty at each opening, and matching is a case-insensitive "contains" with the spaces around
+the typed text ignored. (Source: user decision.)
 
 The Focus mode entry in the selected session's menu is an exception: it shows the current configurable window
 shortcut instead of a single letter. Other sessions' menus omit that entry. The focus view's exit button shows the
@@ -863,6 +889,12 @@ and a tapped session pick does not focus the terminal. The file filter field's i
 completes, hands focus to the field's input, but after a tap to the filter toggle instead. A tap on a text field still
 focuses it, and form dialogs still focus their first field, since the user opened them to fill in.
 
+A menu with a filter field opened by a tap puts focus in its field read-only: a named control the arrow keys and Enter
+work from, which raises no on-screen keyboard. A tap on the field, or a key that types (an input method's included),
+makes it take text, the field let go of and focused again so the keyboard rises. Each opening decides afresh. Two side
+effects are accepted with it: the field is announced as read-only, and with a hardware keyboard nothing marks focus
+until a key is pressed. (Source: user decision.)
+
 A separator of collapsed lines taken off the screen is such a move: the bar for the run past a diff's last hunk goes
 once the daemon's reply says that hunk reaches the end of the file, and the handoff to the code frame applies the ring
 rule itself. `handFocusOff` cannot be used there, since it looks at `document.activeElement` and cannot see into a
@@ -943,6 +975,9 @@ Where a sticky heading occupies the top of a faded list, the top scroll padding 
 and the fade's size, so a focused row is visible below them. A heading held at its pinned position stays clear of the
 fade. When its section pushes it above that position, its contents fade out at that boundary while its background
 stays opaque over the list. The incoming heading stays clear as it reaches its pinned position.
+
+A filtered menu's popover is such a scroller under its sticky filter row (see "A menu's filter field" under "Confirmed
+visual choices"): its top scroll padding is the row's 47px plus 5px, so the highlighted item stays below the row.
 
 The same holds sideways for a table with a pinned column: the Settings accounts table pins its Actions column to the
 end of a horizontal scroller, so the scroller's end scroll padding is the fade's size plus the pinned column's measured
@@ -2724,6 +2759,9 @@ items (a tab strip) grows or shrinks on its own, surviving items that change pos
 shared list-motion implementation. This applies to navigation lists, settings records, tab strips, selected tags,
 wrapping chips and virtualized file and change collections. Use stable item identities, not array indices or
 translated labels. Horizontal and wrapping collections move on both axes, including under RTL.
+
+A menu with a filter field is the exception, by the user's decision: its items appear and go at once as the text
+changes, with no list motion.
 
 Use a 300 ms ease with `cubic-bezier(0.2, 0, 0, 1)` for position changes. In nonvirtualized collections, new items fade
 in from the left while removed items fade out to the right as inert, accessibility-hidden visual copies. These effects

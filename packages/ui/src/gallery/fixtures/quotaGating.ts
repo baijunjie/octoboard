@@ -2,7 +2,7 @@ import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import { type Account, type AccountQuota, type Agent, type AgentAvailability, type Console, type Project, type Settings } from "../../protocol";
 import { FIXTURE_AGENTS } from "../../fixtures/fixtureProviders";
 import type { Scenario } from "../scenario";
-import type { Ui } from "../../fixtures/interact";
+import { describing, type Ui } from "../../fixtures/interact";
 import { accountOf, SAMPLE, accountSharingOf, minutesFromNow, projectOf, projectWith, sessionOf, snapshotState, switchingAccount } from "../../fixtures/builders";
 import { quotaFailure, quotaOf, quotaWindow } from "../../fixtures/quotas";
 
@@ -462,11 +462,12 @@ export const quotaGatingScenarios: Scenario[] = [
     id: "focus-console-session-quota-quick-menu",
     group: FOCUS_GROUP,
     category: "exceptional",
-    held: true,
+    held: "from-start",
     title: "Quick create menu with an agent's accounts at their limit",
     description: "With the modifier held, the project chooser opened from the focus header is in its quick form: Search API, whose default agent (Codex) has all its accounts at their limit, is greyed out and cannot be chosen, with the short reason \"No available account\" under its name, while Website, which can fall back to Default, is offered.",
     state: launchState([onWork, searchApi], [...claudeQuotas, ...codexSpent]),
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub.id}` },
-    steps: [(ui) => ui.press(ui.t("sidebar.focus.newSession"))],
+    // Named plain or quick: the viewer's Released choice leaves the modifier up, which names it plain.
+    steps: [(ui) => ui.press(describing("The focus header's new-session button, plain or quick", (name) => name === ui.t("sidebar.focus.newSession") || name === ui.t("sidebar.focus.newSessionQuick")))],
   },
 ];

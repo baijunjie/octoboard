@@ -39,7 +39,13 @@ applyDocumentTheme(document, theme);
 installFakeTerminal();
 // The shell's Held control: the new-session "+" buttons as they are while the shortcut modifier is down.
 // A scenario that asks for it opens with the modifier held; `held=0` is the shell's Released over that.
-const heldModifier = (params.get("held") ?? (scenario?.held ? "1" : "0")) === "1" ? holdPrimaryModifier(scenario?.host ?? readHost()) : undefined;
+const heldParam = params.get("held") ?? (scenario?.held ? "1" : "0");
+const heldModifier = heldParam === "1" ? holdPrimaryModifier(scenario?.host ?? readHost()) : undefined;
+// A scenario that asks for `"from-start"` has the modifier down before its steps, which then find the quick forms by
+// their quick names (or either name, where the viewer's Released leaves it up): what opens with the modifier (a menu
+// locks its form as it opens) cannot be opened with it afterwards. Any other is pressed after the steps, which find the
+// "+" buttons by their plain names.
+const heldFromStart = heldModifier !== undefined && scenario?.held === "from-start";
 
 // The app's modules are imported dynamically, after `prepareStorage` above: they read stored preferences (the
 // language among them) as they load, so the scenario's own choices have to be in storage first. The converse binds
@@ -293,6 +299,7 @@ const live = new LiveChanges(ui);
 document.addEventListener(LIVE_CHANGE_EVENT, (event) => void live.apply(String((event as CustomEvent<unknown>).detail)));
 try {
   await ui.wait(300);
+  if (heldFromStart) heldModifier.press();
   for (const step of scenario?.steps ?? []) await step(ui);
   if (scenario?.quitRequested) {
     if (requestQuit) {
@@ -310,7 +317,7 @@ try {
   live.release();
   for (const id of (params.get("live") ?? "").split(",").filter(Boolean)) await live.apply(id);
   // After the steps, which find the "+" buttons by their plain names, not the held form's.
-  heldModifier?.press();
+  if (!heldFromStart) heldModifier?.press();
   await reportStuckExit();
 } catch (error) {
   galleryFailure(`Scenario step failed: ${(error as Error).message}`, error);

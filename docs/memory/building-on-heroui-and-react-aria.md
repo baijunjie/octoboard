@@ -270,3 +270,17 @@ any scroll of an element that contains its trigger or anchor, the window include
 - A gallery scenario or a test whose list closes only in a short window, or only with the control near a scroller's
   edge, is showing this defect in the app: fix the component, and never add a step that scrolls or focuses the control
   into view first, which hides the defect from every later check.
+
+## Inside react-aria's `Autocomplete`, every key typed in the field is sent on to the collection
+
+react-aria's `Autocomplete` re-dispatches each key pressed in its field as a new `KeyboardEvent`, built from the native
+one, on the collection's virtually focused item, or on the collection itself. This holds for any collection wrapped in
+an `Autocomplete`: a filtered menu goes through `MenuFilter` (`packages/ui/src/primitives/MenuFilter.tsx`), which
+already handles it; a filter over any other collection has to handle it itself:
+
+- The collection and its items take no single-key shortcuts: a letter typed into the field would run the item it
+  belongs to.
+- Keep Backspace and Delete from reaching react-aria's field handler with `stopPropagation()` in a capture-phase
+  `keydown` handler on an element around the field, and never `preventDefault()` them while the field is editable, or
+  they stop deleting. In WebKit the re-dispatched Backspace still carries the legacy key identifier `U+0008`, and on its
+  non-editable target its default action navigates the history back.

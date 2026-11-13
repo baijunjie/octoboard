@@ -154,8 +154,13 @@ export function TextArea({ rows, placeholder, dir, required }: { rows?: number; 
 /** HeroUI's search field: a search icon, the input, and at its end `trailing` (a status mark, kept apart from the
  * field's own clear behaviour) and `clearButton`, a layer `Button` that becomes the field's clear action and is
  * seated at the end of the field. The field clears itself on Escape and calls `onSubmit` on Enter. `inputRef` holds
- * its input, and `controls` names what the search filters (`aria-controls`). */
-export function SearchField({ inputRef, placeholder, controls, onSubmit, trailing, clearButton, value, onChange, onBlur, label, describedBy, disabled, autoFocus, variant, fullWidth, className }: Omit<TextFieldBaseProps, "children"> & {
+ * its input, and `controls` names what the search filters (`aria-controls`). `value` and `onChange` are left out
+ * where a parent's context supplies them. */
+export function SearchField({ inputRef, placeholder, controls, onSubmit, trailing, clearButton, value, onChange, onBlur, label, describedBy, disabled, readOnly, autoFocus, variant, fullWidth, className }: Omit<TextFieldBaseProps, "children" | "value" | "onChange"> & {
+  /** Takes no edit while still focusable, as a `TextField`'s, which on a touch device raises no on-screen keyboard. */
+  readOnly?: boolean;
+  value?: string;
+  onChange?: (value: string) => void;
   inputRef?: React.Ref<HTMLInputElement>;
   placeholder?: string;
   controls?: string;
@@ -173,6 +178,7 @@ export function SearchField({ inputRef, placeholder, controls, onSubmit, trailin
       aria-describedby={describedBy}
       aria-controls={controls}
       isDisabled={useDisabled(disabled)}
+      isReadOnly={readOnly}
       autoFocus={autoFocus}
       variant={variant}
       fullWidth={fullWidth}

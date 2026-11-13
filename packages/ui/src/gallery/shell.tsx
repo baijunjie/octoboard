@@ -253,7 +253,7 @@ function Gallery(): React.ReactElement {
           <div className="group">
             Modifier (⌘ / Ctrl)
             {([false, true] as const).map((held) => (
-              <button key={String(held)} aria-pressed={(view.held ?? scenario.held ?? false) === held} onClick={() => update({ held })}>
+              <button key={String(held)} aria-pressed={Boolean(view.held ?? scenario.held) === held} onClick={() => update({ held })}>
                 {held ? "Held" : "Released"}
               </button>
             ))}

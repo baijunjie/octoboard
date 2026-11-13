@@ -188,14 +188,15 @@ empty row instead explains why no agent is available, with the same icon and no 
   coordinator that is still live, are not in it; with none in the share, the submenu shows only the disabled item saying
   there are none. Its **View all**, offered whenever the share is nonempty, opens this console session's archive view —
   the one **View all** under **Archived (n)** below opens — not the project's. The project's row in the full sidebar
-  keeps the project's whole archive in its menu. The project list's filter is not part of this view.
+  keeps the project's whole archive in its menu. The project list's filter (see "Filtering the project list" in
+  `docs/product/sidebar.md`) does not narrow this view, and is separate from the new-session menu's own filter below.
 - **New session**: the header's **+** opens a menu of the console's projects, so that a project with nothing bound yet
-  can be reached; choosing one opens the new-session dialog for it. The dialog has no "Report to" field, and shows a
-  line saying the session reports to this console session, which it will be bound to. With the primary modifier held,
-  this menu and each project's own **+** open the session at once without the dialog, bound to this console session all
-  the same (see "Opening a session with defaults" in `docs/product/opening-sessions.md`). With no agent both added and
-  installed, the header's **+** and each project's own **+** are disabled (see "When no agent can open a session" in
-  `docs/product/opening-sessions.md`).
+  can be reached; choosing one opens the new-session dialog for it (see "The new-session menu" below). The dialog has no
+  "Report to" field, and shows a line saying the session reports to this console session, which it will be bound to.
+  With the primary modifier held as it opens, this menu, and each project's own **+** as it is pressed, open the
+  session at once without the dialog, bound to this console session all the same (see "Opening a session with
+  defaults" in `docs/product/opening-sessions.md`). With no agent both added and installed, the header's **+** and each
+  project's own **+** are disabled (see "When no agent can open a session" in `docs/product/opening-sessions.md`).
 - **With no project in the console at all** there is nothing to open a session in: the header's **+** is disabled, and
   in place of the sessions a compact row says the console has no projects yet; clicking it opens **Add project**.
 - **Archived (n)** counts the archived sessions under this console session — bound to it, or bound to an archived
@@ -204,6 +205,33 @@ empty row instead explains why no agent is available, with the same icon and no 
   the archive view scoped to them, including the sessions of archived coordinators, which the preview leaves out
   (see "The archive view" in `docs/product/archive-view.md`). An archived session of a coordinator that is still live
   is not here: it is in the coordinator's project's archive alone.
+
+## The new-session menu
+
+The menu the header's **+** opens in a console session's focus mode lists the console's projects under a filter field,
+its first row. The field is named for matching a project's name and shows a search placeholder.
+
+- **Typing narrows the projects** to those whose name contains the text, ignoring case and the text's surrounding
+  spaces. The field starts empty at each opening. It is separate from the project list's filter (see "Filtering the
+  project list" in `docs/product/sidebar.md`): neither changes the other.
+- **Focus stays in the field** while the up and down arrow keys move the highlight among the projects that remain; as
+  the text changes, the first project that remains is highlighted. Enter chooses the highlighted project, and does
+  nothing while none remains. Moving the pointer onto a project highlights it too, so exactly one project is
+  highlighted at a time; clicking a project chooses it.
+- **Escape** clears the text first; with the field empty, it closes the menu.
+- **With no project matching**, a muted line in place of the projects says no project matches, and it is announced to
+  screen readers.
+- **Opened with the mouse or the keyboard**, the field has focus and takes typing at once. **Opened by a tap**, the
+  field has focus but is read-only, so no on-screen keyboard rises over the list; the arrow keys and Enter work as
+  above, and tapping the field, or typing on a hardware keyboard (through an input method too), lets it take text.
+- The menu has no single-letter shortcuts.
+
+**The menu's form is fixed as it opens and holds until it closes**: it chooses either to open the dialog or to open with
+defaults (see "Opening a session with defaults" in `docs/product/opening-sessions.md`), and the header's button shows
+the bolt for as long as a menu in the latter form is open. Opened with the pointer, it takes the form from whether the
+primary modifier is held at that moment; opened by New session or New session with defaults (see "Creating sessions
+from the keyboard" below), it takes that shortcut's form. Pressing or releasing the modifier while the menu is open
+does not change it, so the modifier can be let go of to type in the field.
 
 ## The switch strip
 
@@ -281,8 +309,8 @@ shortcuts are available only in focus mode.
 In a project's focus mode, the normal shortcut opens its new-session dialog and the quick shortcut creates an
 independent project coordinator in that project. In a console session's focus mode, either shortcut opens the header's
 project menu; choosing a project opens its dialog or creates with defaults, bound to the console session in focus.
-Releasing the shortcut keys before choosing the project does not change which action was requested. A menu opened with
-the pointer continues to follow the held modifier instead.
+Releasing the shortcut keys before choosing the project does not change which action was requested (see "The
+new-session menu" above).
 
 The shortcuts match the physical key whatever the keyboard layout, work across the window including the terminal,
 and do nothing while a dialog or menu is open or during input-method composition. Holding the keys does not repeat

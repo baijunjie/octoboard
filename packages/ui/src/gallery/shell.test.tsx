@@ -8,6 +8,7 @@ vi.mock("./fixtures", () => {
     { id: "first", title: "First preview", group: "Processes", category: "normal", description: "The first preview's full explanation." },
     { id: "second", title: "Second preview", group: "Processes", category: "exceptional", description: "The second preview's full explanation." },
     { id: "brief", title: "Brief preview", group: "Processes", category: "normal" },
+    { id: "menu", title: "Menu held from the start", group: "Processes", category: "normal", held: "from-start" },
   ];
   return { DEFAULT_SCENARIO: scenarios[0], SCENARIOS: scenarios, GROUPS: [{ title: "Processes", icon: () => null }] };
 });
@@ -70,4 +71,35 @@ it("collapses a preview's description by default, preserves its expansion across
   expect(description()).toBeNull();
   expect(title().textContent).toBe("Brief preview");
   expect(controls()).not.toBeNull();
+});
+
+it("shows a scenario that holds the modifier from the start as Held, and lets the viewer switch it to Released", async () => {
+  const previousAddress = window.location.href;
+  window.history.replaceState(null, "", "/gallery.html?scenario=menu");
+  const container = document.body.appendChild(document.createElement("div"));
+  container.id = "root";
+  const createRoot = vi.spyOn(ReactDOM, "createRoot");
+  onTestFinished(() => {
+    const root = createRoot.mock.results.find((result) => result.type === "return")?.value;
+    if (root) act(() => root.unmount());
+    createRoot.mockRestore();
+    container.remove();
+    window.history.replaceState(null, "", previousAddress);
+  });
+  vi.resetModules();
+  await act(async () => { await import("./shell"); });
+  const control = (name: string) => [...container.querySelectorAll<HTMLButtonElement>('header[aria-label="Preview controls"] button')].find((button) => button.textContent === name)!;
+  const frameAddress = () => new URL(container.querySelector("iframe")!.getAttribute("src")!, window.location.href);
+
+  expect(control("Held").getAttribute("aria-pressed")).toBe("true");
+  expect(control("Released").getAttribute("aria-pressed")).toBe("false");
+  expect(frameAddress().searchParams.get("scenario")).toBe("menu");
+  expect(frameAddress().searchParams.has("held")).toBe(false);
+
+  act(() => control("Released").click());
+  expect(control("Held").getAttribute("aria-pressed")).toBe("false");
+  expect(control("Released").getAttribute("aria-pressed")).toBe("true");
+  expect(frameAddress().searchParams.get("scenario")).toBe("menu");
+  expect(frameAddress().searchParams.get("held")).toBe("0");
+  expect(container.querySelector("main h1")?.textContent).toBe("Menu held from the start");
 });

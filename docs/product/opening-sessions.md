@@ -274,17 +274,18 @@ dialog. These are:
 - each project row's **+** (see "Project rows" in `docs/product/sidebar-project-rows.md`);
 - the header's **+** in a project's focus mode (see "A project's focus mode" in `docs/product/focus-mode.md`);
 - in a console session's focus mode, each project's own **+** and the header's **+** menu of projects, where the project
-  chosen is opened with defaults (see "A console session's focus mode" in `docs/product/focus-mode.md`).
+  chosen from a menu opened in this form is opened with defaults (see "A console session's focus mode" in
+  `docs/product/focus-mode.md`).
 
 The empty rows' and the terminal's **New session** and **New console session** offers have no quick form; they always
 open the dialog.
 
-A **+** button pressed with the modifier opens with defaults even when the hold had not been noticed before the press. A
-project chosen from the console session focus mode's menu opened with the pointer follows whether the modifier is held
-at the moment it is chosen. Keyboard creation in focus mode follows "Creating sessions from the keyboard" in
-`docs/product/focus-mode.md`. The hold ends when the key is released, when the window loses focus and when the page is
-hidden; a modifier already down while the window was in the background is picked up once the pointer moves or a key is
-pressed.
+A **+** button pressed with the modifier opens with defaults even when the hold had not been noticed before the press.
+The console session focus mode's menu of projects takes its form as it opens and keeps it until it closes, whatever the
+modifier does meanwhile (see "The new-session menu" in `docs/product/focus-mode.md`). Keyboard creation in focus mode
+follows "Creating sessions from the keyboard" in `docs/product/focus-mode.md`. The hold ends when the key is released,
+when the window loses focus and when the page is hidden; a modifier already down while the window was in the background
+is picked up once the pointer moves or a key is pressed.
 
 The session opened is the one the dialog would open if submitted untouched:
 
@@ -323,7 +324,7 @@ in, turned off or changing its sharing of the default configuration — nothing 
 - pressing it — or pressing a **+** with the modifier before the hold was noticed — sends nothing and shows a known
   failure (`quick_create_unavailable`) saying only that no account is currently available to open a session. It has
   an acknowledgement button, with no recovery instructions, account-management button or request to report an issue;
-- in the **+** menu of projects in a console session's focus mode, held in its quick form, each such project is
+- in the **+** menu of projects in a console session's focus mode, opened in its quick form, each such project is
   disabled, with a short note under its name saying no account is available; it stays reachable with the arrow keys,
   and its accessible name ends with that note.
 

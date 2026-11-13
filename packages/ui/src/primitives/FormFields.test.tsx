@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { act } from "react";
 import { expect, it, vi } from "vitest";
 
 import { Button } from "./Button";
@@ -69,6 +70,18 @@ it("keeps a search field's clear button out of the tab order", () => {
   const { container } = mount(<SearchField label="Filter" value="abc" onChange={() => {}} clearButton={<Button label="Clear" />} />);
   const clear = container.querySelector<HTMLElement>('[aria-label="Clear"]')!;
   expect(clear.getAttribute("tabindex")).toBe("-1");
+});
+
+it("makes a search field's input read-only while it stays focusable, and editable again without the prop", () => {
+  const field = (readOnly: boolean) => <SearchField label="Filter" value="abc" onChange={() => {}} readOnly={readOnly} />;
+  const { container, render } = mount(field(true));
+  const input = container.querySelector("input")!;
+  expect(input.readOnly).toBe(true);
+  expect(input.value).toBe("abc");
+  act(() => input.focus());
+  expect(document.activeElement).toBe(input);
+  render(field(false));
+  expect(input.readOnly).toBe(false);
 });
 
 it("marks an unavailable switch's input aria-disabled and its opening focus, following the props", () => {
