@@ -2024,11 +2024,12 @@ fn a_restart_claim_is_refused_while_a_holder_in_the_daemons_service_runs_a_progr
     .expect("holders");
     let terminal = holders.spawn(sleeping_spec()).expect("the terminal starts");
     assert!(
-        !holders.claim_planned_stop(),
+        holders.claim_planned_stop().is_none(),
         "a running terminal was claimed over"
     );
-    assert!(
-        !locked(&holders.shared.in_service).stop_claimed,
+    assert_eq!(
+        locked(&holders.shared.in_service).stop_claims,
+        0,
         "a refused claim was kept"
     );
     let second = holders
@@ -2045,7 +2046,7 @@ fn a_restart_claim_is_refused_while_a_holder_in_the_daemons_service_runs_a_progr
         std::thread::sleep(Duration::from_millis(20));
     }
     assert!(
-        holders.claim_planned_stop(),
+        holders.claim_planned_stop().is_some(),
         "nothing runs, yet the claim is refused"
     );
 }
@@ -2068,7 +2069,7 @@ fn nothing_is_linked_or_used_in_the_daemons_service_once_a_stop_is_claimed() {
         launch: Box::new(|_, _, _| Ok(Placement::InDaemonService)),
     })
     .expect("holders");
-    assert!(holders.claim_planned_stop());
+    let _claim = holders.claim_planned_stop().expect("claimed");
     let err = holders.link().err().expect("the start is refused");
     assert_eq!(code_of(&err), error_code::DAEMON_SHUTTING_DOWN, "{err:#}");
     assert!(locked(&holders.shared.in_service).holders.is_empty());
@@ -2085,10 +2086,9 @@ fn nothing_is_linked_or_used_in_the_daemons_service_once_a_stop_is_claimed() {
     )
     .expect("holders");
     holders.link().expect("the holder starts");
-    assert!(
-        holders.claim_planned_stop(),
-        "a holder with nothing to run was claimed over"
-    );
+    let _claim = holders
+        .claim_planned_stop()
+        .expect("a holder with nothing to run was claimed over");
     let err = holders
         .spawn(sleeping_spec())
         .err()
@@ -2098,6 +2098,85 @@ fn nothing_is_linked_or_used_in_the_daemons_service_once_a_stop_is_claimed() {
         !holders.any_in_daemon_service(),
         "a refused terminal was recorded"
     );
+}
+
+/// A claim dropped without being committed is released: a program is admitted, and a holder
+/// linked to, in the service again. A claim committed stays for good, and so does one of two
+/// claims when only the other is dropped, as a release never reopens what another closed.
+#[cfg(unix)]
+#[test]
+fn a_claim_dropped_uncommitted_reopens_the_daemons_service_only_when_no_other_holds_it() {
+    // No holder is linked to yet: a start is refused while the claim stands, and goes on (to
+    // fail for the placeholder executable, not as the daemon shutting down) once it is dropped.
+    let fresh_dir = ScratchDir::new("client-claim-release-start");
+    let fresh = Holders::new(ClientConfig {
+        registry_dir: fresh_dir.join("holders"),
+        exe: PathBuf::from("/x"),
+        builds: None,
+        range: Range::current(),
+        relay: Arc::new(Unavailable),
+        launch: Box::new(|_, _, _| Ok(Placement::InDaemonService)),
+    })
+    .expect("holders");
+    let claim = fresh.claim_planned_stop().expect("claimed");
+    let err = fresh.link().err().expect("the start is refused");
+    assert_eq!(code_of(&err), error_code::DAEMON_SHUTTING_DOWN, "{err:#}");
+    drop(claim);
+    let err = fresh.link().err().expect("the placeholder never starts");
+    assert_ne!(
+        err.downcast_ref::<crate::protocol::CodedError>()
+            .map(|coded| coded.code),
+        Some(error_code::DAEMON_SHUTTING_DOWN),
+        "a released claim still refused the start: {err:#}"
+    );
+    drop((fresh, fresh_dir));
+
+    let dir = ScratchDir::new("client-claim-release");
+    let holders = test_holders::in_process_placed(
+        dir.join("holders"),
+        Arc::new(Unavailable),
+        env!("CARGO_PKG_VERSION"),
+        Range::current(),
+        Placement::InDaemonService,
+    )
+    .expect("holders");
+    holders.link().expect("the holder starts");
+
+    // Dropped: admission stays open for a program.
+    let claim = holders.claim_planned_stop().expect("claimed");
+    let err = holders
+        .spawn(sleeping_spec())
+        .err()
+        .expect("refused while claimed");
+    assert_eq!(code_of(&err), error_code::DAEMON_SHUTTING_DOWN, "{err:#}");
+    drop(claim);
+    let released = holders
+        .spawn(sleeping_spec())
+        .expect("a program is admitted after a claim was released");
+    released.end();
+    drop(released);
+    let deadline = Instant::now() + PATIENCE;
+    while holders.any_in_daemon_service() {
+        assert!(Instant::now() < deadline, "the terminal still counts");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+
+    // One dropped, one committed: still closed.
+    let dropped = holders.claim_planned_stop().expect("claimed");
+    let committed = holders.claim_planned_stop().expect("claimed again");
+    drop(dropped);
+    let err = holders
+        .spawn(sleeping_spec())
+        .err()
+        .expect("still refused while another claim stands");
+    assert_eq!(code_of(&err), error_code::DAEMON_SHUTTING_DOWN, "{err:#}");
+    committed.commit();
+    let err = holders
+        .spawn(sleeping_spec())
+        .err()
+        .expect("a committed claim stays");
+    assert_eq!(code_of(&err), error_code::DAEMON_SHUTTING_DOWN, "{err:#}");
+    assert_eq!(locked(&holders.shared.in_service).stop_claims, 1);
 }
 
 /// A holder in a unit of its own, or detached outside the service, is not the claim's concern: it
@@ -2116,10 +2195,9 @@ fn a_restart_claim_leaves_holders_outside_the_daemons_service_alone() {
         )
         .expect("holders");
         let first = holders.spawn(sleeping_spec()).expect("the terminal starts");
-        assert!(
-            holders.claim_planned_stop(),
-            "a holder started as {placement:?} was counted"
-        );
+        let _claim = holders
+            .claim_planned_stop()
+            .unwrap_or_else(|| panic!("a holder started as {placement:?} was counted"));
         let second = holders
             .spawn(sleeping_spec())
             .expect("a holder started outside the service admits a program after the claim");

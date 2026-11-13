@@ -420,7 +420,7 @@ impl Drop for HeldRelays {
 }
 
 /// The holders started inside the daemon's own systemd service ([`Placement::InDaemonService`])
-/// and whether a planned stop or restart has been claimed, which the service's stop would end
+/// and how many planned stops or restarts have been claimed, which the service's stop would end
 /// them for.
 #[derive(Default)]
 struct InService {
@@ -428,11 +428,14 @@ struct InService {
     /// the link that was made, which `current` or `adopted` keeps alive: a link dropped is lost.
     /// Pruned as a holder is lost or its start fails.
     holders: HashMap<String, Option<Weak<Link>>>,
-    /// A planned stop or restart was accepted: no program is admitted to a holder in the service,
-    /// and no holder is linked to or used in it, until the restart completes. A holder process
-    /// may still be started then, as the launch comes before the refusal, and ends with the
-    /// service.
-    stop_claimed: bool,
+    /// The planned stops and restarts claimed and not released ([`StopClaim`]): while any is, no
+    /// program is admitted to a holder in the service, and no holder is linked to or used in it.
+    /// A claim committed is never released, as its stop is made and the restart completes only
+    /// with the daemon's end. A holder process may still be started then, as the launch comes
+    /// before the refusal: it ends with the service, or on its own once no daemon links to it in
+    /// time (`FIRST_LINK_DEADLINE`), as a claim can be released without a stop. A count, so that a claim released never
+    /// reopens admission another claim closed.
+    stop_claims: usize,
 }
 
 impl InService {
@@ -452,7 +455,7 @@ impl InService {
     /// The refusal of a program, or a holder in the service, once a stop or restart is claimed:
     /// coded as the daemon shutting down, so that it does not read as an unexpected failure.
     fn admit(&self) -> Result<()> {
-        if self.stop_claimed {
+        if self.stop_claims > 0 {
             return Err(CodedError::raised(
                 error_code::DAEMON_SHUTTING_DOWN,
                 "the daemon is stopping or restarting, and what runs in its systemd unit ends \
@@ -461,6 +464,32 @@ impl InService {
             ));
         }
         Ok(())
+    }
+}
+
+/// A claim of a planned stop or restart on the holders in the daemon's service
+/// ([`Holders::claim_planned_stop`]). Dropped, it releases the claim; [`Self::commit`] keeps it
+/// for the daemon's remaining life, once the stop it is for has been made.
+#[must_use = "a claim dropped is released"]
+pub struct StopClaim {
+    in_service: Arc<Mutex<InService>>,
+    committed: bool,
+}
+
+impl StopClaim {
+    /// Keeps the claim: the stop is made, and no program is admitted in the service again.
+    pub fn commit(mut self) {
+        self.committed = true;
+    }
+}
+
+impl Drop for StopClaim {
+    fn drop(&mut self) {
+        if !self.committed {
+            let mut service = locked(&self.in_service);
+            debug_assert!(service.stop_claims > 0, "a claim released twice");
+            service.stop_claims = service.stop_claims.saturating_sub(1);
+        }
     }
 }
 
@@ -507,7 +536,7 @@ struct Shared {
     /// [`Self::pending`] where both are.
     parted: Mutex<Vec<(String, Option<ProcessIdentity>)>>,
     /// The holders started inside the daemon's own systemd service ([`Placement::InDaemonService`])
-    /// that still run, and whether a planned stop or restart has been claimed
+    /// that still run, and the planned stops or restarts claimed and not released
     /// ([`Holders::claim_planned_stop`]). Locked after [`Holders::current`] and the build copies'
     /// lock where those are held (a start
     /// holds both while it records its holder); a link's `terminals`, then its `companions`, are
@@ -833,7 +862,8 @@ impl Holders {
                 // From here until the start fails or the link is lost, a planned restart is
                 // refused: the holder is in no other list while it is waited for. A claim made
                 // already leaves the holder process, launched before this refusal, unlinked and
-                // unused, to end with the service.
+                // unused, to end with the service, or on its own once no daemon links to it in time
+                // (`FIRST_LINK_DEADLINE`), as that claim may be released without a stop.
                 let mut service = locked(&self.shared.in_service);
                 service.admit().context("starting the holder")?;
                 service.holders.insert(holder_id.clone(), None);
@@ -961,19 +991,24 @@ impl Holders {
         locked(&self.shared.in_service).runs_programs()
     }
 
-    /// Claims a planned stop or restart: false, with nothing claimed, where the service has a
+    /// Claims a planned stop or restart: `None`, with nothing claimed, where the service has a
     /// holder to end (a holder being started, or linked to and running a terminal or a companion
-    /// of this daemon), and otherwise true, after which a holder is not linked to or used in the
-    /// service (one may still be launched, and ends with it) and no program is admitted to one in
-    /// it. Decided under the lock the programs are admitted under, so that none slips in between
-    /// the check and the stop.
-    pub fn claim_planned_stop(&self) -> bool {
+    /// of this daemon), and otherwise the claim, while which a holder is not linked to or used in
+    /// the service (one may still be launched, and ends with it) and no program is admitted to
+    /// one in it. Dropped uncommitted, as when the stop it was taken for is not made, the claim is
+    /// released; [`StopClaim::commit`] keeps it once that stop is made. Decided under the lock the programs are admitted under, so
+    /// that none slips in between the check and the stop.
+    #[must_use = "a claim dropped is released"]
+    pub fn claim_planned_stop(&self) -> Option<StopClaim> {
         let mut service = locked(&self.shared.in_service);
         if service.runs_programs() {
-            return false;
+            return None;
         }
-        service.stop_claimed = true;
-        true
+        service.stop_claims += 1;
+        Some(StopClaim {
+            in_service: Arc::clone(&self.shared.in_service),
+            committed: false,
+        })
     }
 
     /// The version each holder known to this daemon reports, by holder id: the holders linked to

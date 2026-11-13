@@ -27,6 +27,7 @@
 use std::sync::atomic::Ordering;
 
 use super::AppState;
+use crate::holder::client::StopClaim;
 
 /// How the daemon's run is to end, as `main` carries it out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -93,24 +94,51 @@ impl RestartRefusal {
     }
 }
 
+/// What claiming a restart from the holders came to.
+enum HolderClaim<C> {
+    /// A holder with a program to run is inside the daemon's own service.
+    Refused,
+    /// The restart is claimed, until `C` is dropped uncommitted.
+    Claimed(C),
+    /// There are no holders to claim it from.
+    NothingToClaim,
+}
+
 /// Why a planned restart is refused, given whether the daemon follows an application, whether a
 /// service manager restarts it, and `claim_holders`, which claims the restart where no holder
-/// with a program to run is inside the daemon's own service and tells whether it did. The claim
-/// is made only where it matters (a service manager restarts the daemon: elsewhere the stop is the
-/// daemon's own) and after the other refusals, as it makes the restart one that no new program in
-/// the service is admitted to.
-fn restart_refusal(
+/// with a program to run is inside the daemon's own service. Where it is not refused, the claim
+/// that was made, if any. The claim is made only where it matters (a service manager restarts the
+/// daemon: elsewhere the stop is the daemon's own) and after the other refusals, as it makes the
+/// restart one that no new program in the service is admitted to.
+fn claim_unless_refused<C>(
     follows_application: bool,
     service_managed: bool,
-    claim_holders: impl FnOnce() -> bool,
-) -> Option<RestartRefusal> {
+    claim_holders: impl FnOnce() -> HolderClaim<C>,
+) -> Result<Option<C>, RestartRefusal> {
     if follows_application {
-        return Some(RestartRefusal::FollowsApplication);
+        return Err(RestartRefusal::FollowsApplication);
     }
-    if service_managed && !claim_holders() {
-        return Some(RestartRefusal::HoldersInService);
+    if !service_managed {
+        return Ok(None);
     }
-    None
+    match claim_holders() {
+        HolderClaim::Refused => Err(RestartRefusal::HoldersInService),
+        HolderClaim::Claimed(claim) => Ok(Some(claim)),
+        HolderClaim::NothingToClaim => Ok(None),
+    }
+}
+
+/// Settles a claim once the stop it was taken for has been asked: committed through `commit`
+/// when the stop was made, and dropped, so released, in every other outcome, a refusal included.
+fn settle<C>(
+    claim: Option<C>,
+    asked: Result<bool, RestartRefusal>,
+    commit: impl FnOnce(C),
+) -> Result<bool, RestartRefusal> {
+    if let (Ok(true), Some(claim)) = (&asked, claim) {
+        commit(claim);
+    }
+    asked
 }
 
 impl AppState {
@@ -133,19 +161,19 @@ impl AppState {
     /// manager runs the daemon and a holder with a program to run is inside its own service: the
     /// daemon exits 0 after the stop, the unit stops, and the service's stop ends that holder. The
     /// claim is the restart's ([`Self::claim_restart`]), so no new program is admitted in the
-    /// service from then on either.
+    /// service from then on either, once the stop is made.
     pub fn request_planned_stop_unless_holders_in_service(&self) -> Result<(), RestartRefusal> {
-        self.claim_planned_stop()?;
+        let claim = self.claim_planned_stop()?;
         // Never refused for an agent CLI update: only a restart is.
-        let _ = self.ask_planned(false);
+        let _ = settle(claim, self.ask_planned(false), StopClaim::commit);
         Ok(())
     }
 
     /// Asks for a planned restart, which is refused as [`RestartRefusal`] says. A stop asked for
     /// already, of either kind, stays the one made.
     pub fn request_planned_restart(&self) -> Result<(), RestartRefusal> {
-        self.claim_restart()?;
-        self.ask_planned(true)?;
+        let claim = self.claim_restart()?;
+        settle(claim, self.ask_planned(true), StopClaim::commit)?;
         Ok(())
     }
 
@@ -153,8 +181,8 @@ impl AppState {
     /// for already, instead of leaving that one as the stop made: what a client that is told
     /// "restarting" must not be given when the daemon is stopping for another reason.
     pub fn request_planned_restart_unless_stopping(&self) -> Result<(), RestartRefusal> {
-        self.claim_restart()?;
-        if self.ask_planned(true)? {
+        let claim = self.claim_restart()?;
+        if settle(claim, self.ask_planned(true), StopClaim::commit)? {
             Ok(())
         } else {
             Err(RestartRefusal::StopInProgress)
@@ -195,27 +223,33 @@ impl AppState {
 
     /// Refuses a planned restart as [`RestartRefusal`] says; where it is not refused, claims the
     /// restart from the holders, which admit no new program inside the daemon's service from then
-    /// on ([`crate::holder::client::Holders::claim_planned_stop`]). A claim stays when the stop
-    /// that follows is not made because another was asked for first: the daemon is stopping then.
-    fn claim_restart(&self) -> Result<(), RestartRefusal> {
-        restart_refusal(
+    /// on ([`crate::holder::client::Holders::claim_planned_stop`]). The claim is released when
+    /// dropped, so a stop that is then not made (refused, or another asked for first) leaves
+    /// admission as it was; [`settle`] keeps it once the stop is made.
+    fn claim_restart(&self) -> Result<Option<StopClaim>, RestartRefusal> {
+        claim_unless_refused(
             self.follows_application(),
             self.service_managed(),
             Self::claim_holders,
         )
-        .map_or(Ok(()), Err)
     }
 
     /// [`Self::claim_restart`] without the refusal for following an application, which a
     /// planned stop has no use for: the stop a following daemon makes is its own.
-    fn claim_planned_stop(&self) -> Result<(), RestartRefusal> {
-        restart_refusal(false, self.service_managed(), Self::claim_holders).map_or(Ok(()), Err)
+    fn claim_planned_stop(&self) -> Result<Option<StopClaim>, RestartRefusal> {
+        claim_unless_refused(false, self.service_managed(), Self::claim_holders)
     }
 
-    /// Claims the stop or restart from the holders, true where none has a program to run inside
+    /// Claims the stop or restart from the holders, refused where one has a program to run inside
     /// the daemon's own service.
-    fn claim_holders() -> bool {
-        crate::holder::client::current().is_none_or(|holders| holders.claim_planned_stop())
+    fn claim_holders() -> HolderClaim<StopClaim> {
+        match crate::holder::client::current() {
+            None => HolderClaim::NothingToClaim,
+            Some(holders) => match holders.claim_planned_stop() {
+                Some(claim) => HolderClaim::Claimed(claim),
+                None => HolderClaim::Refused,
+            },
+        }
     }
 
     /// Whether the stop asked for is a planned restart, accepted: after it no agent CLI update is
@@ -650,25 +684,91 @@ mod tests {
             let claimed = &claimed;
             move || {
                 claimed.set(claimed.get() + 1);
-                granted
+                if granted {
+                    HolderClaim::Claimed(())
+                } else {
+                    HolderClaim::Refused
+                }
             }
         };
-        assert_eq!(restart_refusal(false, false, claim(false)), None);
-        assert_eq!(restart_refusal(false, true, claim(true)), None);
+        assert_eq!(claim_unless_refused(false, false, claim(false)), Ok(None));
+        assert_eq!(claim_unless_refused(false, true, claim(true)), Ok(Some(())));
         assert_eq!(
-            restart_refusal(false, true, claim(false)),
-            Some(RestartRefusal::HoldersInService)
+            claim_unless_refused(false, true, claim(false)),
+            Err(RestartRefusal::HoldersInService)
+        );
+        assert_eq!(
+            claim_unless_refused(false, true, || HolderClaim::<()>::NothingToClaim),
+            Ok(None)
         );
         assert_eq!(claimed.get(), 2, "only a service-managed restart claims");
         assert_eq!(
-            restart_refusal(true, false, claim(false)),
-            Some(RestartRefusal::FollowsApplication)
+            claim_unless_refused(true, false, claim(false)),
+            Err(RestartRefusal::FollowsApplication)
         );
         assert_eq!(
-            restart_refusal(true, true, claim(false)),
-            Some(RestartRefusal::FollowsApplication)
+            claim_unless_refused(true, true, claim(false)),
+            Err(RestartRefusal::FollowsApplication)
         );
         assert_eq!(claimed.get(), 2, "a refused restart claims nothing");
+    }
+
+    /// A claim that records whether it was committed or released, standing in for the holders'
+    /// (the process-wide holders cannot be reached from an `AppState` under test).
+    struct FakeClaim<'a> {
+        released: &'a std::cell::Cell<u32>,
+    }
+
+    impl Drop for FakeClaim<'_> {
+        fn drop(&mut self) {
+            self.released.set(self.released.get() + 1);
+        }
+    }
+
+    /// The claim is kept only when the stop it was taken for is made: a stop refused (an agent CLI
+    /// update runs), or not made because another was asked for first, releases it. The outcomes
+    /// are the ones `ask_planned` gives, settled with a fake claim.
+    #[tokio::test]
+    async fn a_claim_is_kept_only_when_the_stop_is_made() {
+        use crate::protocol::AgentId;
+        use std::cell::Cell;
+        let released = Cell::new(0);
+        let committed = Cell::new(0);
+        let settled = |asked| {
+            settle(
+                Some(FakeClaim {
+                    released: &released,
+                }),
+                asked,
+                |claim| {
+                    committed.set(committed.get() + 1);
+                    std::mem::forget(claim);
+                },
+            )
+        };
+        let (state, _dir) = app_state("stop-claim-settled");
+        let update = state
+            .agent_clis
+            .begin_update(&state, AgentId::CODEX, Duration::from_secs(60))
+            .unwrap();
+        assert_eq!(
+            settled(state.ask_planned(true)),
+            Err(RestartRefusal::AgentUpdateRunning)
+        );
+        assert_eq!((committed.get(), released.get()), (0, 1), "refused");
+        drop(update);
+        assert_eq!(settled(state.ask_planned(true)), Ok(true));
+        assert_eq!((committed.get(), released.get()), (1, 1), "made");
+        for successor in [true, false] {
+            assert_eq!(settled(state.ask_planned(successor)), Ok(false));
+        }
+        assert_eq!(
+            (committed.get(), released.get()),
+            (1, 3),
+            "already stopping"
+        );
+        // Nothing claimed, nothing to settle.
+        assert_eq!(settle(None::<FakeClaim>, Ok(true), |_| panic!()), Ok(true));
     }
 
     /// Once a planned stop has raised its handover barrier, no launch or switch is claimed, and no
