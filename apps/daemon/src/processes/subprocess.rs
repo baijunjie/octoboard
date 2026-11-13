@@ -696,6 +696,8 @@ pub fn run_exchange_traced(
     let _ = stdin.flush();
 
     let mut pending: Vec<u8> = Vec::new();
+    // The leading bytes of `pending` known to hold no newline; see `take_reply`.
+    let mut scanned = 0;
     let outcome = loop {
         if cancel.load(std::sync::atomic::Ordering::Relaxed) {
             break Err(ExchangeFailure::Cancelled);
@@ -709,7 +711,7 @@ pub fn run_exchange_traced(
         match stdout_rx.recv_timeout(left.min(BOUNDED_POLL)) {
             Ok(BoundedChunk::Data(bytes)) => {
                 pending.extend_from_slice(&bytes);
-                if let Some(reply) = take_reply(&mut pending, &mut is_reply) {
+                if let Some(reply) = take_reply(&mut pending, &mut scanned, &mut is_reply) {
                     break Ok(reply);
                 }
             }
@@ -723,7 +725,7 @@ pub fn run_exchange_traced(
             Err(mpsc::RecvTimeoutError::Disconnected) => {
                 // The last line may come without its newline.
                 pending.push(b'\n');
-                break match take_reply(&mut pending, &mut is_reply) {
+                break match take_reply(&mut pending, &mut scanned, &mut is_reply) {
                     Some(reply) => Ok(reply),
                     None => Err(ExchangeFailure::ClosedWithoutReply {
                         status: None,
@@ -774,9 +776,18 @@ pub fn run_exchange_traced(
 }
 
 /// Removes the complete lines from the front of `pending` one at a time and returns the first
-/// that `is_reply` accepts; what follows it, and any partial line, stays.
-fn take_reply(pending: &mut Vec<u8>, is_reply: &mut impl FnMut(&str) -> bool) -> Option<String> {
-    while let Some(end) = pending.iter().position(|byte| *byte == b'\n') {
+/// that `is_reply` accepts; what follows it, and any partial line, stays. The first `scanned`
+/// bytes of `pending` are known to hold no newline and are not searched again; it is left
+/// covering what this call searched, so the cost of a line stays linear in its length however
+/// many chunks it arrives in.
+fn take_reply(
+    pending: &mut Vec<u8>,
+    scanned: &mut usize,
+    is_reply: &mut impl FnMut(&str) -> bool,
+) -> Option<String> {
+    while let Some(offset) = pending[*scanned..].iter().position(|byte| *byte == b'\n') {
+        let end = *scanned + offset;
+        *scanned = 0;
         let line: Vec<u8> = pending.drain(..=end).collect();
         let line = String::from_utf8_lossy(&line);
         let line = line.trim();
@@ -784,6 +795,7 @@ fn take_reply(pending: &mut Vec<u8>, is_reply: &mut impl FnMut(&str) -> bool) ->
             return Some(line.to_string());
         }
     }
+    *scanned = pending.len();
     None
 }
 
@@ -1594,5 +1606,173 @@ mod tests {
             assert_stops_running(helper);
             guard.0.clear();
         }
+    }
+
+    /// Feeds `chunks` to [`take_reply`] one at a time as the exchange's read loop does,
+    /// accepting lines that start with `reply`, and returns what each call returned, with the
+    /// `pending` and `scanned` it was left with.
+    fn replies_taken_from(chunks: &[&[u8]]) -> (Vec<Option<String>>, Vec<u8>, usize) {
+        let mut pending = Vec::new();
+        let mut scanned = 0;
+        let mut taken = Vec::new();
+        for chunk in chunks {
+            pending.extend_from_slice(chunk);
+            taken.push(take_reply(&mut pending, &mut scanned, &mut |line| {
+                line.starts_with("reply")
+            }));
+        }
+        (taken, pending, scanned)
+    }
+
+    #[test]
+    fn a_line_arriving_in_many_chunks_is_returned_whole_once_its_newline_comes() {
+        let (taken, pending, scanned) =
+            replies_taken_from(&[b"re", b"p", b"ly spl", b"it acr", b"oss", b"\n"]);
+        assert_eq!(
+            taken,
+            vec![
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some("reply split across".to_string())
+            ]
+        );
+        assert!(pending.is_empty());
+        assert_eq!(scanned, 0);
+    }
+
+    #[test]
+    fn a_newline_that_begins_the_next_chunk_ends_the_line_scanned_so_far() {
+        // The newline is the very first byte after what was already scanned: a scan that
+        // starts one byte too late would skip it and wait for a later newline.
+        let (taken, pending, _) = replies_taken_from(&[b"reply abc", b"\n"]);
+        assert_eq!(taken, vec![None, Some("reply abc".to_string())]);
+        assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn several_lines_in_one_chunk_give_the_first_reply_and_keep_what_follows() {
+        let mut pending = b"reply one\nreply two\npartial".to_vec();
+        let mut scanned = 0;
+        let mut accept = |line: &str| line.starts_with("reply");
+
+        assert_eq!(
+            take_reply(&mut pending, &mut scanned, &mut accept),
+            Some("reply one".to_string())
+        );
+        assert_eq!(pending, b"reply two\npartial");
+        assert_eq!(scanned, 0);
+
+        assert_eq!(
+            take_reply(&mut pending, &mut scanned, &mut accept),
+            Some("reply two".to_string())
+        );
+        assert_eq!(pending, b"partial");
+        assert_eq!(scanned, 0);
+
+        assert_eq!(take_reply(&mut pending, &mut scanned, &mut accept), None);
+        assert_eq!(pending, b"partial");
+        assert_eq!(scanned, pending.len());
+    }
+
+    #[test]
+    fn lines_the_caller_rejects_are_skipped_up_to_the_first_it_accepts() {
+        let mut pending = b"noise\nmore noise\nreply ok\nreply later\n".to_vec();
+        let mut scanned = 0;
+        let mut seen = Vec::new();
+        let reply = take_reply(&mut pending, &mut scanned, &mut |line| {
+            seen.push(line.to_string());
+            line.starts_with("reply")
+        });
+        assert_eq!(reply, Some("reply ok".to_string()));
+        assert_eq!(seen, ["noise", "more noise", "reply ok"]);
+        assert_eq!(
+            pending, b"reply later\n",
+            "what follows the reply is left alone"
+        );
+    }
+
+    #[test]
+    fn a_rejected_line_ending_in_a_later_chunk_leaves_the_following_reply_findable() {
+        // The first chunk leaves `scanned` past the length of what the second chunk's drain
+        // leaves behind: a scan that is not restarted at the front of the remainder would
+        // start beyond its end and miss, or fail on, the reply there.
+        let (taken, pending, scanned) =
+            replies_taken_from(&[b"a rejected line that is fairly long", b"\nreply x\n"]);
+        assert_eq!(taken, vec![None, Some("reply x".to_string())]);
+        assert!(pending.is_empty());
+        assert_eq!(scanned, 0);
+    }
+
+    #[test]
+    fn a_partial_line_after_a_reply_is_completed_by_later_chunks() {
+        let (taken, pending, scanned) =
+            replies_taken_from(&[b"reply a\nreply b", b" and c", b"\n"]);
+        assert_eq!(
+            taken,
+            vec![
+                Some("reply a".to_string()),
+                None,
+                Some("reply b and c".to_string())
+            ]
+        );
+        assert!(pending.is_empty());
+        assert_eq!(scanned, 0);
+    }
+
+    #[test]
+    fn blank_lines_are_skipped_without_asking_the_caller_and_lines_are_trimmed() {
+        let mut pending = b"\n   \r\n  reply padded \r\n".to_vec();
+        let mut scanned = 0;
+        let mut seen = Vec::new();
+        let reply = take_reply(&mut pending, &mut scanned, &mut |line| {
+            seen.push(line.to_string());
+            true
+        });
+        assert_eq!(reply, Some("reply padded".to_string()));
+        assert_eq!(seen, ["reply padded"]);
+    }
+
+    #[test]
+    fn a_character_split_across_chunks_is_returned_intact() {
+        let line = "reply caf\u{e9} \u{1f600}";
+        let bytes = line.as_bytes();
+        // Cut inside the two-byte and the four-byte characters.
+        let (first, rest) = bytes.split_at(bytes.len() - 5);
+        let (second, third) = rest.split_at(2);
+        let (taken, _, _) = replies_taken_from(&[first, second, third, b"\n"]);
+        assert_eq!(taken.last().cloned().flatten(), Some(line.to_string()));
+        assert!(taken[..3].iter().all(Option::is_none));
+    }
+
+    #[test]
+    fn a_nine_mebibyte_line_in_pipe_sized_chunks_is_returned_whole_and_judged_once() {
+        let line = format!("reply {}", "x".repeat(9 * 1024 * 1024));
+        let mut input = line.clone().into_bytes();
+        input.push(b'\n');
+
+        let mut pending = Vec::new();
+        let mut scanned = 0;
+        let mut judged = 0;
+        let mut taken = None;
+        for chunk in input.chunks(8 * 1024) {
+            pending.extend_from_slice(chunk);
+            taken = take_reply(&mut pending, &mut scanned, &mut |_| {
+                judged += 1;
+                true
+            });
+            if taken.is_none() {
+                assert_eq!(
+                    scanned,
+                    pending.len(),
+                    "a chunk with no newline is searched once and not again"
+                );
+            }
+        }
+        assert_eq!(taken.as_deref(), Some(line.as_str()));
+        assert_eq!(judged, 1);
+        assert!(pending.is_empty());
     }
 }
