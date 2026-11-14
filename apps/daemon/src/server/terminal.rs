@@ -984,9 +984,9 @@ mod tests {
         drop((live, dir));
     }
 
-    /// A stand-in session `id` that writes `READY` and then echoes what it reads, byte for byte:
-    /// a native process on Windows (`test_support::fixture`), whose echo is the console host's
-    /// pace alone.
+    /// A stand-in session `id` that writes `READY` once it reads raw, and then echoes what it
+    /// reads, byte for byte: a native process on Windows (`test_support::fixture`), whose echo is
+    /// the console host's pace alone.
     fn raw_echo(id: &str) -> crate::test_support::StandIn {
         #[cfg(unix)]
         return crate::test_support::fake_live_session(
@@ -1003,6 +1003,7 @@ mod tests {
             80,
             24,
             &crate::test_support::fixture::Steps::new()
+                .raw_input()
                 .print("READY")
                 .echo_raw()
                 .program("echo"),
@@ -1265,9 +1266,11 @@ mod tests {
         state.register_live(live.clone());
         printed_since(&live, 0, b"READY").await;
 
+        // The cursor is placed first: what the stand-in printed before `READY` is not the same on
+        // every host (on Windows its fixture process's harness writes a line first).
         let mark = live.output_total();
-        live.on_output(b"\x1b[6n");
-        printed_since(&live, mark, b"\x1b[1;6R").await;
+        live.on_output(b"\x1b[2;6H\x1b[6n");
+        printed_since(&live, mark, b"\x1b[2;6R").await;
 
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();

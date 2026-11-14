@@ -124,7 +124,7 @@ const RECORDS_ITS_LAUNCH: &str = r#"
 "#;
 
 fn sleeping() -> String {
-    format!("echo {SHELL_PID} > \"$HOME/pid\"; sleep 30")
+    crate::test_support::records_pid_then_waits("\"$HOME/pid\"")
 }
 
 #[tokio::test]

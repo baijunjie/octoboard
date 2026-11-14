@@ -1808,7 +1808,7 @@ fn options(settings: Vec<SettingsSection>) -> ApplyOptions {
 /// General and Keyboard shortcuts.
 fn sectioned_document() -> serde_json::Value {
     let mut value = with_settings(document(Vec::new()), true, true);
-    value["settings"]["default_clone_dir"] = json!("/srv/from-the-file");
+    value["settings"]["default_clone_dir"] = json!(host_path("/srv/from-the-file"));
     value["settings"]["appearance"] = json!("dark");
     value["settings"]["session_order"] =
         json!({ "sessions": "started", "active_projects": "name", "inactive_projects": "used" });
@@ -1843,13 +1843,13 @@ async fn only_the_listed_sections_are_applied_and_echoed() {
     );
     assert_eq!(
         state.store.default_clone_dir().unwrap(),
-        "/srv/from-the-file"
+        host_path("/srv/from-the-file")
     );
     let echoed = imported.settings_applied.unwrap();
     assert_eq!(echoed.auto_pull_repositories, Some(true));
     assert_eq!(
-        echoed.default_clone_dir.as_deref(),
-        Some("/srv/from-the-file")
+        echoed.default_clone_dir,
+        Some(host_path("/srv/from-the-file"))
     );
     // General's client-held keys come back as they were; the other sections' keys do not.
     assert!(echoed.session_order.is_some());

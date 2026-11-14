@@ -343,7 +343,17 @@ mod tests {
         let fetcher = UreqFetcher::command_line();
         assert!(matches!(fetcher.environment, Environment::Process));
         let env = fetcher.environment.read().unwrap();
-        assert_eq!(env.get("PATH"), std::env::var("PATH").ok().as_ref());
+        // Spelled as the process has it, which on Windows is usually `Path`; Windows matches a
+        // variable's name without regard to case, and `std::env::var` with it.
+        let path = env.iter().find_map(|(name, value)| {
+            let same = if cfg!(windows) {
+                name.eq_ignore_ascii_case("PATH")
+            } else {
+                name == "PATH"
+            };
+            same.then_some(value)
+        });
+        assert_eq!(path, std::env::var("PATH").ok().as_ref());
         assert!(matches!(
             UreqFetcher::daemon().environment,
             Environment::Snapshot

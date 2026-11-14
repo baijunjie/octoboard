@@ -14,7 +14,10 @@ const CLAIM_TIMEOUT: Duration = Duration::from_secs(60);
 /// A registry that answers a fixed way, so a test makes no request.
 pub(super) enum Stub {
     Version(&'static str),
+    // The lookups that fail are only driven by the tests that run an agent CLI, which are Unix's.
+    #[cfg(unix)]
     Fails,
+    #[cfg(unix)]
     Unreadable,
 }
 
@@ -26,7 +29,9 @@ impl Registry for Stub {
     ) -> std::result::Result<String, Failure> {
         match self {
             Stub::Version(version) => Ok((*version).to_owned()),
+            #[cfg(unix)]
             Stub::Fails => Err(Failure::Failed("the registry is unreachable".to_owned())),
+            #[cfg(unix)]
             Stub::Unreadable => Err(Failure::Unreadable),
         }
     }
@@ -46,7 +51,9 @@ impl Registry for NoRegistry {
 }
 
 static LATEST_0_170: Stub = Stub::Version("0.170.0");
+#[cfg(unix)]
 static UNREACHABLE: Stub = Stub::Fails;
+#[cfg(unix)]
 static UNREADABLE: Stub = Stub::Unreadable;
 
 fn codex() -> &'static CliPackaging {

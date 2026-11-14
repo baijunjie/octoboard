@@ -333,6 +333,38 @@ fn show(var: &str) -> String {
     format!("printf '%s' \"${var}\"")
 }
 
+/// The parts of a stand-in script that print the capture `var` again, in a single write, as an
+/// agent draws a frame, as soon as the stand-in has read the key before: what goes before that
+/// key's read, and what goes right after it. The file `drawn` in `dir` is made once it is printed,
+/// `failed` if it could not be.
+///
+/// Git Bash writes to a Windows console in pieces some milliseconds apart, which the daemon reads
+/// apart, so there a program prints it at once ([`crate::test_support::console_writer`]). That
+/// program is started before the key, with the capture in hand, and prints it once the stand-in
+/// makes a file with a builtin after the read: an exec right after the key could land in a short
+/// window the test gives the agent to answer it. Only where it matters: the program passes on the
+/// escape sequences Git Bash's own console writes leave out, among them the colour queries of
+/// Codex's screen, whose answers would then reach a stand-in still reading keys.
+fn whole_after_the_key(var: &str, dir: &Path) -> (String, String) {
+    let (drawn, failed) = (quoted(&dir.join("drawn")), quoted(&dir.join("failed")));
+    #[cfg(windows)]
+    {
+        let go = quoted(&dir.join("go"));
+        (
+            format!(
+                "{{ {} {go} <<<\"${var}\" && : > {drawn} || : > {failed}; }} & :",
+                quoted(crate::test_support::console_writer())
+            ),
+            format!(": > {go}"),
+        )
+    }
+    #[cfg(unix)]
+    (
+        ":".to_string(),
+        format!("{} && : > {drawn} || : > {failed}", show(var)),
+    )
+}
+
 /// Reads `count` bytes of what the stand-in is sent and appends them to `received`. `read -n`
 /// is the builtin that takes bytes rather than a line; it is bash's, which is what the stand-in
 /// runs under. While it reads, bash turns the terminal's `ICRNL`, `ISIG` and `IEXTEN` on,
@@ -947,21 +979,35 @@ fn a_hook_seen_before_the_enter_ends_the_press_without_sending_it() {
     );
 }
 
-/// Presses a stand-in that plays the shell command `after_enter` once it has the Enter and sends
-/// no hook, and asserts that the press fails as the confirmation not having gone away, and is not
-/// counted.
-fn assert_not_dismissed_after_the_enter(scratch_name: &str, after_enter: &str) {
+/// What [`not_dismissed_after_the_enter`] leaves for the test to look at.
+struct NotDismissed {
+    live: StandIn,
+    /// How much the stand-in had printed once the press had failed.
+    printed_by_then: u64,
+    dir: ScratchDir,
+}
+
+/// Presses a stand-in that plays the shell command `before_enter` before it reads the Enter and
+/// `after_enter` once it has it, and sends no hook, and asserts that the press fails as the
+/// confirmation not having gone away, giving it a short wait to go, and is not counted.
+/// `script_parts` makes the two parts, given the scratch directory for the files they name.
+fn not_dismissed_after_the_enter(
+    scratch_name: &str,
+    script_parts: impl FnOnce(&Path) -> (String, String),
+) -> NotDismissed {
     let _dismissal = ShortDismissal::hold();
     let dir = scratch(scratch_name);
     let received = dir.join("received");
     let r = quoted(&received);
+    let (before_enter, after_enter) = script_parts(&dir);
     let script = [
         load_captures(),
+        before_enter,
         show("SCREEN"),
         take(3, &r),
         show("AFTER_DOWN"),
         take(1, &r),
-        after_enter.to_string(),
+        after_enter,
         "sleep 30".to_string(),
     ]
     .join("; ");
@@ -970,6 +1016,7 @@ fn assert_not_dismissed_after_the_enter(scratch_name: &str, after_enter: &str) {
     assert!(wait_for(PATIENCE, || sightings.try_recv().is_ok()));
 
     let err = answer(&live).expect_err("not dismissed");
+    let printed_by_then = live.output_total();
     let coded = err.downcast_ref::<CodedError>().expect("a coded error");
     assert_eq!(coded.code, error_code::TRUST_ANSWER_FAILED);
     assert_eq!(
@@ -979,19 +1026,124 @@ fn assert_not_dismissed_after_the_enter(scratch_name: &str, after_enter: &str) {
     assert!(!live.trust.pressed.load(Ordering::Acquire));
     // The Enter may still be on its way through the PTY when the short wait runs out.
     assert!(wait_for(PATIENCE, || sent(&received) == answer_keys()));
+    NotDismissed {
+        live,
+        printed_by_then,
+        dir,
+    }
 }
 
 /// A screen cleared and nothing drawn in its place, with no hook, is not the agent seen past the
 /// screen: the press failed, and the screen is left to the person.
 #[test]
 fn a_cleared_screen_with_nothing_drawn_and_no_hook_fails_the_press() {
-    assert_not_dismissed_after_the_enter("cleared-after-enter", "printf '\\033[2J\\033[H'");
+    not_dismissed_after_the_enter("cleared-after-enter", |_| {
+        (":".to_string(), "printf '\\033[2J\\033[H'".to_string())
+    });
 }
 
-/// The same confirmation drawn again after the Enter means the key did not act on it.
+/// The same confirmation drawn again after the Enter means the key did not act on it. The stand-in
+/// draws it in one write, as an agent draws a frame ([`whole_after_the_key`]): drawn in pieces, its
+/// first could show the screen gone, and the press would fail as the screen drawn again, or pass
+/// if the rest came after its second look. A drawing that reached the daemon only after the short
+/// window the press gives the screen to go tested nothing, as nothing drawn at all fails the same
+/// way, so once the drawing has reached the daemon (its cursor back on the option that declines,
+/// as the press reads the terminal) the test checks that nothing came after the press gave up;
+/// where something did, it runs the scenario again until `PATIENCE` has passed, though always at
+/// least once more.
 #[test]
 fn the_same_screen_drawn_again_after_the_enter_fails_the_press() {
-    assert_not_dismissed_after_the_enter("redrawn-after-enter", &show("SCREEN"));
+    let deadline = std::time::Instant::now() + PATIENCE;
+    for attempt in 0.. {
+        let pressed =
+            not_dismissed_after_the_enter(&format!("redrawn-after-enter-{attempt}"), |dir| {
+                whole_after_the_key("SCREEN", dir)
+            });
+        let live = &pressed.live;
+        let (failed, drawn) = (pressed.dir.join("failed"), pressed.dir.join("drawn"));
+        assert!(
+            wait_for(PATIENCE, || drawn.exists() || failed.exists()),
+            "the stand-in never drew the screen again"
+        );
+        assert!(
+            !failed.exists(),
+            "the stand-in could not draw the screen again"
+        );
+        assert!(
+            wait_for(PATIENCE, || CLAUDE.cursor_on(&as_the_press_reads(live))
+                == Some(Cursor::Decline)),
+            "the screen drawn again never reached the daemon"
+        );
+        assert!(crate::session::wait::wait_quiet(live, PATIENCE));
+        if live.output_total() == pressed.printed_by_then {
+            return;
+        }
+        assert!(
+            attempt == 0 || std::time::Instant::now() < deadline,
+            "the screen was never drawn again within the press's window"
+        );
+    }
+}
+
+/// The terminal as a press reads it: the parsed screen where the host renders what is drawn
+/// (`TrustState::reads_screen`), the recent output otherwise.
+fn as_the_press_reads(live: &LiveSession) -> Vec<u8> {
+    if live.trust.reads_screen() {
+        live.screen_text().into_bytes()
+    } else {
+        live.recent_output(WINDOW)
+    }
+}
+
+/// The screen seen gone after the Enter and then drawn again before the press looks a second time
+/// fails the press as the confirmation drawn again, and it is not counted. The stand-in shows the
+/// screen that follows it once it has the Enter, and once all of that has been read, the screen is
+/// put back on the terminal at the moment the press has seen it gone.
+#[test]
+fn the_screen_seen_gone_and_then_drawn_again_fails_the_press_as_redrawn() {
+    let dir = scratch("gone-then-redrawn");
+    let received = dir.join("received");
+    let shown = dir.join("shown");
+    let r = quoted(&received);
+    let script = [
+        load_captures(),
+        show("SCREEN"),
+        take(3, &r),
+        show("AFTER_DOWN"),
+        take(1, &r),
+        show("DISMISSED"),
+        format!(": > {}", quoted(&shown)),
+        "sleep 30".to_string(),
+    ]
+    .join("; ");
+    let live = stand_in("s", AgentId::CLAUDE, &script);
+    let mut sightings = live.trust.take_sightings().expect("receiver");
+    assert!(wait_for(PATIENCE, || sightings.try_recv().is_ok()));
+    let redraw = live.clone();
+    press::ON_SEEN_GONE.with(|hook| {
+        *hook.borrow_mut() = Some(Box::new(move || {
+            // Git Bash prints the next screen in pieces, and a host that renders what it is drawn
+            // repaints the rest over a screen put back after the first. So the screen is put back
+            // once the stand-in has printed all of it, the press can read its last line, and the
+            // stand-in has gone quiet: its reader thread is idle then, so the screen put back
+            // here, as output the stand-in printed (`on_output` takes each chunk under the
+            // terminal's lock), comes last.
+            assert!(wait_for(PATIENCE, || shown.exists()));
+            assert!(wait_for(PATIENCE, || {
+                String::from_utf8_lossy(&as_the_press_reads(&redraw)).contains("auto mode on")
+            }));
+            assert!(crate::session::wait::wait_quiet(&redraw, PATIENCE));
+            redraw.on_output(&as_printed(SCREEN));
+        }));
+    });
+
+    let err = answer(&live).expect_err("drawn again");
+    let coded = err.downcast_ref::<CodedError>().expect("a coded error");
+    assert_eq!(coded.code, error_code::TRUST_ANSWER_FAILED);
+    assert_eq!(coded.params["reason_code"], trust_reason::SCREEN_REDRAWN);
+    assert!(!live.trust.pressed.load(Ordering::Acquire));
+    assert!(press::ON_SEEN_GONE.with(|hook| hook.borrow().is_none()));
+    assert_eq!(sent(&received), answer_keys());
 }
 
 /// An attached terminal reports focus and answers the agent's queries on its own, which says

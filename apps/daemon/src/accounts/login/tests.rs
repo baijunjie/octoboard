@@ -183,7 +183,7 @@ async fn cancelling_ends_the_login_and_kills_the_cli() {
     let setup = setup(
         "login-cancel",
         AgentId::CLAUDE,
-        &format!("echo {SHELL_PID} > \"$HOME/pid\"; sleep 30"),
+        &crate::test_support::records_pid_then_waits("\"$HOME/pid\""),
     );
     let mut events = setup.state.subscribe();
     setup.start(AgentId::CLAUDE, None, LOGIN_TIMEOUT).unwrap();
@@ -363,7 +363,7 @@ async fn stopping_every_login_kills_its_cli_without_announcing_anything() {
     let setup = setup(
         "login-stop-all",
         AgentId::CLAUDE,
-        &format!("echo {SHELL_PID} > \"$HOME/pid\"; sleep 30"),
+        &crate::test_support::records_pid_then_waits("\"$HOME/pid\""),
     );
     let mut events = setup.state.subscribe();
     setup.start(AgentId::CLAUDE, None, LOGIN_TIMEOUT).unwrap();

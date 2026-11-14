@@ -299,6 +299,7 @@ impl Running {
 
     /// Reads fresh welcomes until the holder has recorded `done`; process exits reach its
     /// snapshot asynchronously, so a welcome taken just after a kill can still list them alive.
+    #[cfg(unix)]
     async fn link_when(&self, mut done: impl FnMut(&Daemon) -> bool) -> Daemon {
         let mut last = None;
         let result = tokio::time::timeout(PATIENCE, async {
@@ -378,6 +379,9 @@ impl Running {
     }
 }
 
+/// The terminal helper of the contract tests, as `role`. A line written to it ends in a carriage
+/// return, the Enter key: a Windows console ends a line it edits there only, and takes a line
+/// feed for a character of the line, where a Unix terminal turns the return into a line feed.
 fn helper(role: &str) -> Command {
     let mut command = Command::new(crate::platform::test_helper::program());
     command
@@ -535,7 +539,7 @@ async fn input_reaches_the_program_and_a_resize_reaches_its_terminal() {
         .send(ToHolder::Write {
             id: "t1".into(),
             req: 1,
-            bytes: b"\n".to_vec(),
+            bytes: b"\r".to_vec(),
         })
         .await;
     assert!(matches!(
@@ -577,7 +581,7 @@ async fn input_reaches_the_program_and_a_resize_reaches_its_terminal() {
         .send(ToHolder::Write {
             id: "t1".into(),
             req: 4,
-            bytes: b"\n".to_vec(),
+            bytes: b"\r".to_vec(),
         })
         .await;
     daemon.reply_to(4).await;
@@ -789,7 +793,7 @@ async fn a_newer_link_takes_the_holder_over_and_is_handed_each_terminals_tail() 
         .send(ToHolder::Write {
             id: "t1".into(),
             req: 1,
-            bytes: b"after\n".to_vec(),
+            bytes: b"after\r".to_vec(),
         })
         .await;
     second.output_until("t1", "got:\"after\"").await;
@@ -846,7 +850,7 @@ async fn output_printed_while_no_daemon_is_linked_is_kept_in_the_tail() {
         .send(ToHolder::Write {
             id: "t1".into(),
             req: 1,
-            bytes: b"unattended\n".to_vec(),
+            bytes: b"unattended\r".to_vec(),
         })
         .await;
     daemon.output_until("t1", "got:\"unattended\"").await;
@@ -1042,7 +1046,7 @@ async fn a_handover_marks_each_followed_terminal_after_its_output_and_keeps_its_
         .send(ToHolder::Write {
             id: "t2".into(),
             req: 5,
-            bytes: b"two\n".to_vec(),
+            bytes: b"two\r".to_vec(),
         })
         .await;
     daemon.output_until("t2", "got:\"two\"").await;
@@ -1050,7 +1054,7 @@ async fn a_handover_marks_each_followed_terminal_after_its_output_and_keeps_its_
         .send(ToHolder::Write {
             id: "t1".into(),
             req: 1,
-            bytes: b"before\n".to_vec(),
+            bytes: b"before\r".to_vec(),
         })
         .await;
     daemon.output_until("t1", "got:\"before\"").await;
@@ -1060,7 +1064,7 @@ async fn a_handover_marks_each_followed_terminal_after_its_output_and_keeps_its_
         .send(ToHolder::Write {
             id: "t1".into(),
             req: 2,
-            bytes: b"pending\n".to_vec(),
+            bytes: b"pending\r".to_vec(),
         })
         .await;
     daemon
@@ -1091,7 +1095,7 @@ async fn a_handover_marks_each_followed_terminal_after_its_output_and_keeps_its_
         .send(ToHolder::Write {
             id: "t1".into(),
             req: 4,
-            bytes: b"after\n".to_vec(),
+            bytes: b"after\r".to_vec(),
         })
         .await;
     let mut later = daemon

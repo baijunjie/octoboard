@@ -224,7 +224,7 @@ impl PtyCore {
             .expect("exit watch lock poisoned") = Some(task);
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub(crate) async fn await_exit_watch(&self) {
         let task = self
             .exit_watch_task
@@ -238,7 +238,7 @@ impl PtyCore {
             .expect("exit watcher failed");
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub(crate) fn repaint_nudges(&self) -> usize {
         self.repaint_nudges.load(Ordering::Acquire)
     }
@@ -1895,8 +1895,14 @@ mod tests {
         held.holders.shutdown();
         wait_until("the terminal never read as exited", || core.poll_exit());
         assert_eq!(core.write(b"x").expect_err("the holder is gone").written, 0);
-        // The holder keeps what it runs for the daemon that links next.
-        assert!(is_running(pid));
+        if crate::platform::proc::holder_ends_at_ordinary_parting() {
+            // On Windows an ordinary parting ends the holder, and the holder what it runs; it
+            // does so after the link is gone, so the end is waited for.
+            crate::test_support::assert_stops_running(pid);
+        } else {
+            // The holder keeps what it runs for the daemon that links next.
+            assert!(is_running(pid));
+        }
     }
 
     /// A program that reads nothing takes only what the terminal buffers, and the write that does

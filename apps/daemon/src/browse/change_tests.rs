@@ -13,7 +13,8 @@ use crate::protocol::{
     SideRead, SideRef,
 };
 use crate::test_support::{
-    fixture_git, git, git_has_show_ref_exists, git_stdin, repo_with, symlink, ScratchDir,
+    commit_holding, fixture_git, git, git_has_show_ref_exists, git_stdin, repo_with, symlink,
+    ScratchDir,
 };
 use crate::wire_path;
 
@@ -1674,89 +1675,103 @@ fn a_staged_rename_into_or_out_of_a_path_below_itself_is_the_diff_between_its_tw
 
 /// A path `git` holds but Windows cannot create (`CON`, `a:b`) is listed and read from `git` on
 /// every host; only a read of it from the disk is refused there, as nothing on that disk has it.
-/// `a:b` is also what Windows `git` takes for a drive when it is handed over as given, so every
-/// read that names it to `git` — the index, a commit, each group's change — is made here.
+/// Each is held where `git` on every host can hold it. `CON` is in the index too, put there with
+/// `core.protectNTFS` off, as a Windows user would have to turn it off: Windows `git` refuses it
+/// otherwise. `a:b` is in commits, as in one made on another host: Windows `git` never takes into
+/// an index a name it reads as a drive, so there it is a staged deletion, and only on Unix is it
+/// staged too. That is also why every read that names `a:b` to `git` — a commit, a branch, a
+/// staged deletion — is made here: it is what Windows `git` takes for a drive when it is handed
+/// over as given.
 #[test]
 fn a_path_the_host_cannot_name_is_listed_and_read_from_git() {
     let fixture = Fixture::new();
     let repo = ScratchDir::new("changes-unnameable");
     git(&repo, &["init", "-q"]);
-    let held = ScratchDir::new("changes-unnameable-blob");
-    write(held.join("text"), b"held by git\n");
-    let oid = String::from_utf8(git(
-        &repo,
-        &["hash-object", "-w", held.join("text").to_str().unwrap()],
-    ))
-    .unwrap();
-    for path in ["CON", "a:b"] {
-        let entry = format!("100644,{},{path}", oid.trim());
-        git(&repo, &["update-index", "--add", "--cacheinfo", &entry]);
-    }
+    let blobs = ScratchDir::new("changes-unnameable-blob");
+    let blob = |text: &[u8]| {
+        write(blobs.join("text"), text);
+        let path = blobs.join("text");
+        let oid = git(&repo, &["hash-object", "-w", path.to_str().unwrap()]);
+        String::from_utf8(oid).unwrap().trim().to_string()
+    };
+    let stage = |oid: &str| {
+        let entry = format!("100644,{oid},CON");
+        let protect = ["-c", "core.protectNTFS=false"];
+        git(
+            &repo,
+            &[
+                &protect[..],
+                &["update-index", "--add", "--cacheinfo", &entry],
+            ]
+            .concat(),
+        );
+    };
+    // Different content each, so that no deletion and addition pair up as a rename.
+    let (held, indexed) = (blob(b"held by git\n"), blob(b"kept in the index\n"));
+    let commit = commit_holding(&repo, &[(&held, "a:b")], &[]);
+    stage(&indexed);
     let project = fixture.project("p", &repo);
     let (_, changes, _) = fixture.changes(&project, None).unwrap();
     assert_eq!(
         summary(&changes),
-        [
-            "staged - CON",
-            "staged - a:b",
-            "unstaged CON -",
-            "unstaged a:b -"
-        ]
+        ["staged - CON", "staged a:b -", "unstaged CON -"]
     );
-    let diff = fixture
-        .change(
-            &project,
-            None,
+    for (group, old, new, expected) in [
+        (
+            ChangeGroup::Staged,
+            present("a:b"),
+            SideRef::Absent,
+            "-held by git\n",
+        ),
+        (
             ChangeGroup::Staged,
             SideRef::Absent,
-            present("a:b"),
-        )
-        .unwrap();
-    assert!(diff.patch.unwrap().contains("+held by git\n"));
-    let diff = fixture
-        .change(
-            &project,
-            None,
+            present("CON"),
+            "+kept in the index\n",
+        ),
+        (
             ChangeGroup::Unstaged,
-            present("a:b"),
+            present("CON"),
             SideRef::Absent,
-        )
+            "-kept in the index\n",
+        ),
+    ] {
+        let diff = fixture.change(&project, None, group, old, new).unwrap();
+        let patch = diff.patch.unwrap();
+        assert!(patch.contains(expected), "{group:?} {patch}");
+    }
+    let (_, file) = fixture
+        .read(&project, None, "CON", crate::protocol::ReadFrom::Index)
         .unwrap();
-    assert!(diff.patch.unwrap().contains("-held by git\n"));
-    for path in ["CON", "a:b"] {
-        let (_, file) = fixture
-            .read(&project, None, path, crate::protocol::ReadFrom::Index)
-            .unwrap();
-        assert_eq!(bytes_of(&file), b"held by git\n", "{path}");
+    assert_eq!(bytes_of(&file), b"kept in the index\n");
+    let branch = String::from_utf8(git(&repo, &["symbolic-ref", "--short", "HEAD"])).unwrap();
+    for from in [
+        crate::protocol::ReadFrom::Branch {
+            branch: branch.trim().to_string(),
+        },
+        crate::protocol::ReadFrom::Commit { commit },
+    ] {
+        let (_, file) = fixture.read(&project, None, "a:b", from).unwrap();
+        assert_eq!(bytes_of(&file), b"held by git\n");
     }
 
-    // A commit's version, both read alone and as the old side of a staged change.
-    git(&repo, &["commit", "-q", "-m", "held"]);
-    write(held.join("text"), b"staged over it\n");
-    let staged = String::from_utf8(git(
-        &repo,
-        &["hash-object", "-w", held.join("text").to_str().unwrap()],
-    ))
-    .unwrap();
-    let entry = format!("100644,{},a:b", staged.trim());
-    git(&repo, &["update-index", "--cacheinfo", &entry]);
-    let branch = String::from_utf8(git(&repo, &["symbolic-ref", "--short", "HEAD"])).unwrap();
-    let from = crate::protocol::ReadFrom::Branch {
-        branch: branch.trim().to_string(),
-    };
-    let (_, file) = fixture.read(&project, None, "a:b", from).unwrap();
-    assert_eq!(bytes_of(&file), b"held by git\n");
+    // A commit's version as the old side of a staged change.
+    commit_holding(&repo, &[(&indexed, "CON"), (&held, "a:b")], &["HEAD"]);
+    stage(&blob(b"staged over it\n"));
     let diff = fixture
         .change(
             &project,
             None,
             ChangeGroup::Staged,
-            present("a:b"),
-            present("a:b"),
+            present("CON"),
+            present("CON"),
         )
         .unwrap();
     let patch = diff.patch.unwrap();
-    assert!(patch.contains("-held by git\n+staged over it\n"), "{patch}");
+    assert!(
+        patch.contains("-kept in the index\n+staged over it\n"),
+        "{patch}"
+    );
     let live = fixture.read(&project, None, "CON", crate::protocol::ReadFrom::Live);
     let expected = if cfg!(windows) {
         crate::protocol::error_code::INVALID_PATH
@@ -1764,4 +1779,34 @@ fn a_path_the_host_cannot_name_is_listed_and_read_from_git() {
         crate::protocol::error_code::FILE_NOT_FOUND
     };
     assert_eq!(code(live), expected);
+
+    // Where `git` takes `a:b` into an index, it is read from the index too, and as each side of
+    // a change of either group.
+    #[cfg(unix)]
+    {
+        let entry = format!("100644,{},a:b", blob(b"a:b in the index\n"));
+        git(&repo, &["update-index", "--add", "--cacheinfo", &entry]);
+        let (_, file) = fixture
+            .read(&project, None, "a:b", crate::protocol::ReadFrom::Index)
+            .unwrap();
+        assert_eq!(bytes_of(&file), b"a:b in the index\n");
+        for (group, old, new, expected) in [
+            (
+                ChangeGroup::Staged,
+                present("a:b"),
+                present("a:b"),
+                "-held by git\n+a:b in the index\n",
+            ),
+            (
+                ChangeGroup::Unstaged,
+                present("a:b"),
+                SideRef::Absent,
+                "-a:b in the index\n",
+            ),
+        ] {
+            let diff = fixture.change(&project, None, group, old, new).unwrap();
+            let patch = diff.patch.unwrap();
+            assert!(patch.contains(expected), "{group:?} {patch}");
+        }
+    }
 }

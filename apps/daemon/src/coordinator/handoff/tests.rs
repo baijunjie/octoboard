@@ -95,14 +95,7 @@ impl Fixture {
         during: impl FnOnce() + Send + 'static,
     ) -> impl FnOnce(term::LaunchRequest) -> Result<term::Launch> + Send + 'static {
         // The combined prompt exceeds the cooked terminal's echo buffer; drain it like an agent.
-        let launch =
-            stand_in_launch_echoing(&self.started, &self.launches, "handoff-input-ready", during);
-        move |request| {
-            let launched = launch(request)?;
-            let ready = output_containing(&launched.session, "handoff-input-ready");
-            assert!(ready.contains("handoff-input-ready"), "{ready}");
-            Ok(launched)
-        }
+        stand_in_launch_echoing(&self.started, &self.launches, "handoff-input-ready", during)
     }
 
     async fn handoff(&self, session: &str) -> Result<Session> {

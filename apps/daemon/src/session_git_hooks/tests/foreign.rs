@@ -389,8 +389,10 @@ fn served() -> (Fixture, ScratchDir, Daemon) {
     (fixture, other, daemon)
 }
 
+/// The working tree `dir` as git names it to a hook it runs there: resolved through any link, and
+/// on Windows in its plain form, with no verbatim prefix.
 fn worktree_of(dir: &Path) -> PathBuf {
-    std::fs::canonicalize(dir).unwrap()
+    crate::hostfs::canonical(dir).unwrap()
 }
 
 #[test]

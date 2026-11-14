@@ -385,6 +385,9 @@ Where to start, by question:
   bounding waits by `PATIENCE` and waiting for the condition itself, signal windows in fixtures, stand-in markers,
   seeded model lists, keeping tests off the real agent CLI and the user's live data directory, testing budgets by
   lowering them.
+- [Writing daemon tests for Windows](memory/writing-daemon-tests-for-windows.md) — what passes on the Mac and fails on
+  native Windows CI: canonical and host paths, names Windows git cannot hold, console stand-ins that are not Unix
+  terminals, byte-compared committed files.
 - [Writing daemon code](memory/writing-daemon-code.md) — which session state is stored and which lives in memory, where
   live state lives, store writes, raising versions only between releases, timing, linting, and provider interface
   defaults that claim nothing.

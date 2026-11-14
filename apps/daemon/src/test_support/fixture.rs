@@ -68,8 +68,10 @@ enum Op {
     },
     /// Ends once the process that started it has.
     EndWithParent,
-    /// Ends the last child it started, and itself, when its console closes or takes Ctrl-C: what
-    /// a process does when it is asked to terminate, and takes a child with it.
+    /// Ends the last child it started, and itself, when its console closes, or when Ctrl-C reaches
+    /// it as a signal: what a process does when it is asked to terminate, and takes a child with
+    /// it. A later step that reads the console raw ([`Op::EchoAsTerminal`]) takes Ctrl-C as a byte
+    /// instead, so the signal never comes.
     EndChildOnClose,
     /// Writes `text` and a line break to its output.
     Say {
@@ -86,10 +88,32 @@ enum Op {
     ReadInput,
     /// Reads a line of its input and writes `reply `, the line and a line break.
     Reply,
+    /// Has its console hand it its input as written ([`raw_input`]). Until then the console takes
+    /// what is written into it as typed keys, a paste's markers lost and a line held until its
+    /// Enter, so a process that says it is ready to read says so after this.
+    RawInput,
     /// Copies its input to its output, byte for byte, until the input closes, with its console's
     /// line editing, echo and Ctrl-C handling off: what `stty raw -echo; cat` is on a Unix
     /// terminal.
     EchoRaw,
+    /// [`Op::EchoRaw`], drawing after each paste an input box that shows it, as Codex does, and
+    /// clearing the screen at the Enter that follows, as Codex empties its box when it sends the
+    /// message ([`PasteBox`]). Where the terminal hands a paste over as keys, the daemon writes
+    /// Codex's Enter only once its box shows the whole message (`session::paste_apart`), so a
+    /// stand-in for Codex that drew none would never be sent it.
+    EchoRawDrawingPastes,
+    /// Copies its input to its output as a Unix terminal echoes what is written into it
+    /// ([`as_echoed`]), until the input closes, with its console's line editing and echo off, and
+    /// ends at a Ctrl-C: what a process that never reads its input shows on a Unix terminal, whose
+    /// interrupt key ends it. The console's own echo shows only what a process reads, and is drawn
+    /// by the host rather than passed on: a line break comes out as a cursor move, a paste's
+    /// markers not at all, and what scrolls out of the window between two of the host's frames is
+    /// lost. Ctrl-C is read as a byte rather than left to the console, which, handling it, also
+    /// takes a paste's markers out of the input. Makes the file `ready` once the console hands it
+    /// its input as written, for the test to wait on before it writes anything.
+    EchoAsTerminal {
+        ready: PathBuf,
+    },
     Exit,
 }
 
@@ -215,8 +239,33 @@ impl Steps {
         self.with(Op::Reply)
     }
 
+    pub(crate) fn raw_input(self) -> Self {
+        self.with(Op::RawInput)
+    }
+
     pub(crate) fn echo_raw(self) -> Self {
         self.with(Op::EchoRaw)
+    }
+
+    pub(crate) fn echo_raw_drawing_pastes(self) -> Self {
+        self.with(Op::EchoRawDrawingPastes)
+    }
+
+    /// Echoes as a Unix terminal does ([`Op::EchoAsTerminal`]), saying it is ready to be written
+    /// to through a file of its own, which [`Self::echo_ready`] names.
+    pub(crate) fn echo_as_terminal(self) -> Self {
+        self.with(Op::EchoAsTerminal {
+            ready: unique_temp_file("octoboardd-echoing"),
+        })
+    }
+
+    /// The file the steps' [`Op::EchoAsTerminal`] makes once it is ready to be written to, if they
+    /// have one.
+    pub(crate) fn echo_ready(&self) -> Option<&Path> {
+        self.0.iter().find_map(|op| match op {
+            Op::EchoAsTerminal { ready } => Some(ready.as_path()),
+            _ => None,
+        })
     }
 
     pub(crate) fn exit(self) -> Self {
@@ -257,17 +306,27 @@ fn entry_args(name: &str, steps: &[Op]) -> Vec<String> {
     .to_vec()
 }
 
+/// A path in the temporary directory, starting with `prefix`, that no other test names: it holds
+/// this test binary's pid, a count of the paths it made and the time, so neither a test running
+/// alongside nor a file an earlier run left behind can be taken for it.
+fn unique_temp_file(prefix: &str) -> PathBuf {
+    static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    std::env::temp_dir().join(format!(
+        "{prefix}-{}-{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |since| since.as_nanos())
+    ))
+}
+
 /// Runs `program` with `args` in `cwd`, with `env` set or, for `None`, removed, as a process whose
 /// parent has already exited, and answers its pid: what an agent's leftover is, which no
 /// process of the test's holds. The process that starts it gets no pipe to write its answer to,
 /// since a pipe it gave to the process would stay open until that ended: the answer is a file.
 fn detached(cwd: &Path, program: &Path, args: &[&str], env: &[(&str, Option<&str>)]) -> i32 {
-    static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-    let pid_file = std::env::temp_dir().join(format!(
-        "octoboardd-detached-{}-{}",
-        std::process::id(),
-        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-    ));
+    let pid_file = unique_temp_file("octoboardd-detached");
     let steps = vec![
         Op::Run {
             program: program.into(),
@@ -303,13 +362,7 @@ pub(crate) fn detached_sleep(cwd: &Path, seconds: u32) -> i32 {
     let exe = std::env::current_exe().expect("the test binary");
     // Answered once the process runs, which is when it holds its directory: before, a directory
     // could still be removed from under it.
-    let started = std::env::temp_dir().join(format!(
-        "octoboardd-detached-sleep-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_or(0, |since| since.as_nanos())
-    ));
+    let started = unique_temp_file("octoboardd-detached-sleep");
     let steps = [
         Op::WritePid {
             file: started.clone(),
@@ -351,9 +404,7 @@ fn run(steps: &[Op]) {
                     Whose::Own => std::process::id(),
                     Whose::LastChild => child.as_ref().expect("a child was started").id(),
                 };
-                let partial = file.with_extension("tmp");
-                std::fs::write(&partial, pid.to_string()).expect("write the pid");
-                std::fs::rename(&partial, file).expect("rename the pid file into place");
+                write_whole(file, &pid.to_string());
             }
             Op::WaitFor { file } => {
                 while !file.exists() {
@@ -391,9 +442,7 @@ fn run(steps: &[Op]) {
             Op::Listen { file } => {
                 let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("listen");
                 let port = listener.local_addr().expect("the address").port();
-                let partial = file.with_extension("tmp");
-                std::fs::write(&partial, port.to_string()).expect("write the port");
-                std::fs::rename(&partial, file).expect("rename the port file into place");
+                write_whole(file, &port.to_string());
                 listeners.push(listener);
             }
             Op::EndWithParent => {
@@ -441,10 +490,28 @@ fn run(steps: &[Op]) {
                 std::io::stdin().read_line(&mut line).expect("read a line");
                 println!("reply {}", line.trim_end_matches(['\r', '\n']));
             }
-            Op::EchoRaw => echo_raw(),
+            Op::RawInput => raw_input(),
+            Op::EchoRaw => echo(None, |read| (read.to_vec(), false)),
+            Op::EchoRawDrawingPastes => {
+                let mut paste_box = PasteBox::default();
+                echo(None, |read| (paste_box.echo(read), false))
+            }
+            Op::EchoAsTerminal { ready } => echo(Some(ready), as_echoed),
             Op::Exit => std::process::exit(0),
         }
     }
+}
+
+/// Writes `text` to `file` whole: into a file beside it first, then renamed into place, so that a
+/// test reading `file` never finds it partly written. The file beside it is named after the whole
+/// of `file`'s name: two processes writing files that differ only in their extension, as the
+/// helpers of one test do, would otherwise write through the same one, and one of them would
+/// write the other's text or find it gone when it renames it.
+fn write_whole(file: &Path, text: &str) {
+    let mut partial = file.as_os_str().to_owned();
+    partial.push(".tmp");
+    std::fs::write(&partial, text).expect("write the file");
+    std::fs::rename(&partial, file).expect("rename the file into place");
 }
 
 /// Starts `command` as a process that outlives the one starting it, as `how` says: detached, with
@@ -468,9 +535,9 @@ fn start(command: &mut Command, cwd: &Option<PathBuf>, how: Start) -> std::proce
     command.spawn().expect("start the process")
 }
 
-/// What [`Op::EchoRaw`] runs.
-fn echo_raw() {
-    use std::io::{Read, Write};
+/// Turns this process's console's line editing, echo and Ctrl-C handling off, and has it hand the
+/// keys over as escape sequences, so that what is written into it is read as written.
+fn raw_input() {
     use windows_sys::Win32::System::Console::{
         GetConsoleMode, GetStdHandle, SetConsoleMode, ENABLE_ECHO_INPUT, ENABLE_LINE_INPUT,
         ENABLE_PROCESSED_INPUT, ENABLE_VIRTUAL_TERMINAL_INPUT, STD_INPUT_HANDLE,
@@ -488,6 +555,19 @@ fn echo_raw() {
             | ENABLE_VIRTUAL_TERMINAL_INPUT;
         assert_ne!(SetConsoleMode(input, raw), 0, "the input is made raw");
     }
+}
+
+/// What the ops that echo their input run: reads its input as it arrives, as written
+/// ([`raw_input`]), and writes what `shown` makes of each read, until the input closes; where
+/// `shown` says a read ends the process, the process ends once that read's output is written, as
+/// one interrupted by Ctrl-C does. Makes the file `ready`, if any, once the console hands the
+/// input over so.
+fn echo(ready: Option<&Path>, mut shown: impl FnMut(&[u8]) -> (Vec<u8>, bool)) {
+    use std::io::{Read, Write};
+    raw_input();
+    if let Some(ready) = ready {
+        std::fs::write(ready, "").expect("make the ready file");
+    }
     let (mut input, mut output) = (std::io::stdin().lock(), std::io::stdout().lock());
     let mut buf = vec![0u8; 64 * 1024];
     loop {
@@ -495,9 +575,106 @@ fn echo_raw() {
         if read == 0 {
             return;
         }
-        output.write_all(&buf[..read]).expect("write the output");
+        let (shown, ended) = shown(&buf[..read]);
+        output.write_all(&shown).expect("write the output");
         output.flush().expect("flush the output");
+        if ended {
+            // SAFETY: ends this process, whose output is written.
+            unsafe {
+                ExitProcess(windows_sys::Win32::Foundation::STATUS_CONTROL_C_EXIT as u32);
+            }
+        }
     }
+}
+
+/// `bytes` roughly as a Unix terminal in its usual cooked mode echoes them as they are written
+/// into it: a carriage return turned into a line feed (`ICRNL`), each line feed echoed as a
+/// carriage return and a line feed (`ONLCR`), and other control characters but a tab in caret
+/// notation (`ECHOCTL`), an escape as `^[`. A Ctrl-C ends the process (`ISIG`) once what came
+/// before it and its own `^C` are shown, which the second value says. Line editing is not
+/// modelled: an erase (DEL), a kill (Ctrl-U) or a word erase (Ctrl-W), which a Unix terminal acts
+/// on by rubbing characters out, shows in caret notation like any other control character.
+fn as_echoed(bytes: &[u8]) -> (Vec<u8>, bool) {
+    let mut echoed = Vec::with_capacity(bytes.len());
+    for &byte in bytes {
+        match byte {
+            b'\r' | b'\n' => echoed.extend_from_slice(b"\r\n"),
+            b'\t' => echoed.push(byte),
+            0x03 => {
+                echoed.extend_from_slice(b"^C");
+                return (echoed, true);
+            }
+            0..=0x1f => echoed.extend_from_slice(&[b'^', byte + 0x40]),
+            0x7f => echoed.extend_from_slice(b"^?"),
+            _ => echoed.push(byte),
+        }
+    }
+    (echoed, false)
+}
+
+/// What [`Op::EchoRawDrawingPastes`] makes of its input: the input itself, followed, once a paste
+/// is complete, by Codex's input box drawn over a cleared screen showing it, and, at the next
+/// carriage return, by the screen cleared again. The box is in the shape `adapter::codex::screen`
+/// reads a composer by: `› ` on its first row, then an empty row and Codex's status line. The paste
+/// shows as the placeholder Codex shows a large one as, naming its length in characters, whatever
+/// its length: drawn as itself, its text would be in the output twice, and a test counting it there
+/// would read the box as a second copy of the message.
+#[derive(Default)]
+struct PasteBox {
+    /// What was read and not yet taken as a whole paste or a carriage return after one.
+    held: Vec<u8>,
+    /// Whether the box shows a paste and waits for its Enter.
+    shown: bool,
+}
+
+impl PasteBox {
+    const START: &[u8] = b"\x1b[200~";
+    const END: &[u8] = b"\x1b[201~";
+
+    fn echo(&mut self, read: &[u8]) -> Vec<u8> {
+        let mut shown = read.to_vec();
+        self.held.extend_from_slice(read);
+        loop {
+            if self.shown {
+                let Some(enter) = self.held.iter().position(|&byte| byte == b'\r') else {
+                    break;
+                };
+                self.held.drain(..=enter);
+                self.shown = false;
+                shown.extend_from_slice(b"\x1b[2J\x1b[H");
+                continue;
+            }
+            let Some(start) = find(&self.held, Self::START) else {
+                // Only what could begin a paste's marker is worth keeping.
+                let keep = self.held.len().min(Self::START.len() - 1);
+                self.held.drain(..self.held.len() - keep);
+                break;
+            };
+            let text = start + Self::START.len();
+            let Some(end) = find(&self.held[text..], Self::END) else {
+                break;
+            };
+            let paste = String::from_utf8_lossy(&self.held[text..text + end]).into_owned();
+            self.held.drain(..text + end + Self::END.len());
+            self.shown = true;
+            let length = paste.chars().count();
+            shown.extend_from_slice(
+                format!(
+                    "\x1b[2J\x1b[H\u{203a} [Pasted Content {length} chars]\r\n\r\n  \
+                     gpt-5.5 high \u{b7} ~/project"
+                )
+                .as_bytes(),
+            );
+        }
+        shown
+    }
+}
+
+/// Where `needle` first starts in `haystack`.
+fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    haystack
+        .windows(needle.len())
+        .position(|window| window == needle)
 }
 
 /// How long [`Op::HoldOnClose`] holds on: past the grace the host gives a process whose console

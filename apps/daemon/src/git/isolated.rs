@@ -274,7 +274,8 @@ impl IsolatedGit {
 pub(crate) mod tests {
     use super::*;
     use crate::test_support::{
-        git, isolated_git_env, redirecting_overrides, repo_pair, repo_with, CommandLine, SYSTEM_GIT,
+        commit_holding, git, isolated_git_env, redirecting_overrides, repo_pair, repo_with,
+        CommandLine, SYSTEM_GIT,
     };
 
     /// A `IsolatedGit` over [`isolated_git_env`] plus `extra`, running [`SYSTEM_GIT`].
@@ -478,23 +479,32 @@ pub(crate) mod tests {
     /// An exact path is taken from the repository's root as given, never checked for an absolute
     /// one: what this host takes for one (a leading `/`; on Windows also a leading `a:`, which a
     /// name such as `a:b` has) would otherwise fail the command as outside the repository. The
-    /// positive control is the same path with the magic `top` takes out.
+    /// positive control is a path of the same kind with the magic `top` takes out.
+    ///
+    /// Windows `git` refuses `a:b` in an index, so a commit holds it, made as one from another
+    /// host is, and the index does not: it is a staged deletion on every host.
     #[test]
     fn an_exact_path_is_never_taken_for_an_absolute_one() {
-        let absolute: &[u8] = if cfg!(windows) { b"a:b" } else { b"/a" };
+        let absolute: &[u8] = if cfg!(windows) { b"b:a" } else { b"/a" };
         let repo = repo_with("git-exact-absolute", &[(b"a.txt", b"plain\n")]);
-        let blob = git(&repo, &["hash-object", "-w", "a.txt"]);
-        let entry = format!("100644,{},a:b", String::from_utf8(blob).unwrap().trim());
-        git(&repo, &["update-index", "--add", "--cacheinfo", &entry]);
+        let blob = String::from_utf8(git(&repo, &["hash-object", "-w", "a.txt"])).unwrap();
+        let entries = [(blob.trim(), "a.txt"), (blob.trim(), "a:b")];
+        commit_holding(&repo, &entries, &["HEAD"]);
         let env = test_env(&[]);
+        let staged = |path: &[u8]| {
+            env.run_exact(
+                &repo,
+                "diff",
+                &[b"--cached", b"--name-only", b"-z"],
+                &[path],
+                1024,
+                &never(),
+            )
+            .unwrap()
+        };
 
-        let listed = env
-            .run_exact(&repo, "ls-files", &[b"-z"], &[b"a:b"], 1024, &never())
-            .unwrap();
-        assert_eq!(listed, b"a:b\0");
-        let listed = env
-            .run_exact(&repo, "ls-files", &[b"-z"], &[absolute], 1024, &never())
-            .unwrap();
+        assert_eq!(staged(b"a:b"), b"a:b\0");
+        let listed = staged(absolute);
         assert!(listed.is_empty(), "{listed:?}");
 
         let unchecked = [b":(literal)".as_slice(), absolute].concat();

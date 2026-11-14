@@ -105,22 +105,100 @@ pub(crate) fn show_agents_view(live: &LiveSession) {
 /// lives until its guard terminates it: a fixed lifetime can expire while a process-heavy test is
 /// still preparing the messages it expects the stand-in to receive.
 ///
-/// On Windows what is written into a console shows only once a process reads it, where a Unix
-/// terminal echoes it as it arrives, so the stand-in reads its input. It is a native process
-/// rather than a Git Bash script: Git Bash starting under load can fail to set up its mount table
-/// and end at once, which a test reads as a session that never took its message.
-fn idle_command() -> crate::platform::term::Command {
+/// On Windows what is written into a console shows only once a process reads it, and then as the
+/// console's host draws it, where a Unix terminal echoes it as it arrives, so the stand-in echoes
+/// its input itself as a Unix terminal would ([`super::fixture::Steps::echo_as_terminal`]). It is
+/// a native process rather than a Git Bash script: Git Bash starting under load can fail to set
+/// up its mount table and end at once, which a test reads as a session that never took its
+/// message.
+fn idle_command() -> StandInCommand {
     #[cfg(unix)]
     {
         let mut cmd = crate::platform::term::Command::new(super::bash());
         cmd.args(["-c", "exec /usr/bin/perl -e 'sleep 3600 while 1'"]);
-        cmd
+        StandInCommand {
+            command: cmd,
+            ready: Ready::Now,
+        }
     }
     #[cfg(windows)]
-    super::fixture::Steps::new()
-        .read_input()
-        .program("idle")
-        .term_command()
+    StandInCommand::of(&super::fixture::Steps::new().echo_as_terminal(), "idle")
+}
+
+/// A stand-in's command, and when the stand-in can be written to.
+struct StandInCommand {
+    command: crate::platform::term::Command,
+    ready: Ready,
+}
+
+/// When a stand-in can be written to: a Unix terminal echoes what is written into it from the
+/// moment it is opened, while a Windows console takes what comes before its program reads it raw
+/// as typed keys, losing a paste's markers.
+enum Ready {
+    /// As soon as it is started.
+    Now,
+    /// Once the file exists, which the stand-in makes ([`super::fixture::Steps::echo_ready`]).
+    #[cfg_attr(
+        unix,
+        allow(dead_code, reason = "only Windows stand-ins announce themselves so")
+    )]
+    File(std::path::PathBuf),
+    /// Once it has printed the text, which needs its output read.
+    Says(String),
+}
+
+#[cfg(windows)]
+impl StandInCommand {
+    /// The fixture process `steps` make, called `name`, ready once their echo as a terminal
+    /// ([`super::fixture::Steps::echo_as_terminal`]) says so, if they have one.
+    fn of(steps: &super::fixture::Steps, name: &str) -> Self {
+        Self {
+            command: steps.program(name).term_command(),
+            ready: steps
+                .echo_ready()
+                .map_or(Ready::Now, |file| Ready::File(file.to_path_buf())),
+        }
+    }
+}
+
+impl Ready {
+    /// Waits until the stand-in `live` is ready. One that says so in its output has to have its
+    /// output read by then.
+    fn wait(self, live: &LiveSession) {
+        match self {
+            Ready::Now => {}
+            Ready::File(file) => {
+                assert!(
+                    crate::session::wait::wait_for(PATIENCE, || file.exists()),
+                    "the stand-in never set its console up"
+                );
+                std::fs::remove_file(&file).ok();
+            }
+            Ready::Says(text) => {
+                let said = output_containing(live, &text);
+                assert!(said.contains(&text), "{said}");
+            }
+        }
+    }
+}
+
+/// A stand-in on a PTY of 80 by 24 running `command`, for the launch `tag` names if any, with its
+/// trust watch ended, once it is ready to be written to. Its output is read where `read` asks for
+/// it, and always where it says it is ready in its output.
+fn started(
+    id: &str,
+    agent: AgentId,
+    command: StandInCommand,
+    tag: Option<&crate::processes::ledger::ProcessTag>,
+    read: bool,
+) -> StandIn {
+    let live = stand_in_of(id, agent, 80, 24, command.command, None, tag);
+    live.trust.end_watch();
+    if read || matches!(command.ready, Ready::Says(_)) {
+        crate::session::spawn_reader_thread(live.clone(), 8 * 1024);
+    }
+    command.ready.wait(&live);
+    live
 }
 
 /// A stand-in live session that stays idle on a PTY until its guard drops, with nothing reading it.
@@ -130,9 +208,7 @@ pub(crate) fn idle_stand_in(id: &str) -> StandIn {
 
 /// [`idle_stand_in`] standing in for `agent`.
 pub(crate) fn idle_stand_in_of(id: &str, agent: AgentId) -> StandIn {
-    let live = stand_in_of(id, agent, 80, 24, idle_command(), None, None);
-    live.trust.end_watch();
-    live
+    started(id, agent, idle_command(), None, false)
 }
 
 /// A stand-in session for `id` that is registered with `state` and has its output read, so a test
@@ -165,14 +241,21 @@ pub(crate) fn stand_in_starting(id: &str, commands: Vec<Background>) -> StandIn 
             .fold(super::fixture::Steps::new(), |steps, command| {
                 command.start(steps)
             });
-        stand_in_running_steps(id, steps.read_input())
+        stand_in_running_steps(id, steps.echo_as_terminal())
     }
 }
 
-/// A stand-in agent for session `id` that runs `steps`, as a Windows process of its own.
+/// A stand-in agent for session `id` that runs `steps`, as a Windows process of its own, once it
+/// is ready to be written to.
 #[cfg(windows)]
 pub(crate) fn stand_in_running_steps(id: &str, steps: super::fixture::Steps) -> StandIn {
-    fake_live_session_running(id, AgentId::CLAUDE, 80, 24, &steps.program("agent"))
+    started(
+        id,
+        AgentId::CLAUDE,
+        StandInCommand::of(&steps, "agent"),
+        None,
+        false,
+    )
 }
 
 /// A stand-in process for the stored session `id` whose shell command leaves one process running
@@ -267,7 +350,7 @@ pub(crate) fn running_leaving_two(
             )
             .end_child_on_close()
             .write_pid(&ready_file)
-            .read_input();
+            .echo_as_terminal();
         stand_in_running_steps(id, steps)
     };
     state.register_live(live.clone());
@@ -528,10 +611,13 @@ pub(crate) fn stand_in_launch(
 ) -> impl FnOnce(crate::session::term::LaunchRequest) -> anyhow::Result<crate::session::term::Launch>
        + Send
        + 'static {
-    launch_with(started, launches, idle_command, during)
+    launch_with(started, launches, |_| idle_command(), during)
 }
 
-/// [`stand_in_launch`] with a stand-in that runs `script`.
+/// [`stand_in_launch`] with a stand-in that runs `script`. Unix only: under Git Bash a program a
+/// script runs is a process of its own, so a Windows test starts a native fixture instead
+/// ([`stand_in_launch_echoing`], [`stand_in_running_steps`]).
+#[cfg(unix)]
 pub(crate) fn stand_in_launch_running(
     started: &Arc<std::sync::Mutex<Vec<StandIn>>>,
     launches: &Arc<std::sync::Mutex<Vec<Launched>>>,
@@ -541,15 +627,29 @@ pub(crate) fn stand_in_launch_running(
        + Send
        + 'static {
     let script = script.to_string();
-    launch_with(started, launches, move || bash_command(&script), during)
+    launch_with(
+        started,
+        launches,
+        move |_| StandInCommand {
+            command: bash_command(&script),
+            ready: Ready::Now,
+        },
+        during,
+    )
 }
 
 /// [`stand_in_launch`] with a stand-in that says `ready` and then reads everything written to it,
 /// which shows in its output as it is read: one process that starts nothing, so what the ledger
-/// lists for its launch is only what a test started. On Unix it reads raw, as an agent drains a
-/// prompt longer than the cooked terminal's echo buffer; on Windows it is a native process, since
-/// under Git Bash a program a script runs, `exec`'d or not, is a process of its own, as is the
-/// shell Git's `bin\bash.exe` launcher starts.
+/// lists for its launch is only what a test started. It reads raw and copies what it reads, as an
+/// agent drains a prompt longer than the cooked terminal's echo buffer, and as a Windows console's
+/// own echo does not: that loses what scrolls out of the window between two of its host's frames.
+/// It says `ready` once it reads raw, and the launch returns once it has said so.
+///
+/// On Windows it is a native process, since under Git Bash a program a script runs, `exec`'d or
+/// not, is a process of its own, as is the shell Git's `bin\bash.exe` launcher starts. Standing in
+/// for an agent whose Enter waits for its input box to show the paste, on a host that hands a paste
+/// over as keys (as `session::paste_apart` decides), it draws that box
+/// ([`super::fixture::Steps::echo_raw_drawing_pastes`]).
 pub(crate) fn stand_in_launch_echoing(
     started: &Arc<std::sync::Mutex<Vec<StandIn>>>,
     launches: &Arc<std::sync::Mutex<Vec<Launched>>>,
@@ -558,48 +658,53 @@ pub(crate) fn stand_in_launch_echoing(
 ) -> impl FnOnce(crate::session::term::LaunchRequest) -> anyhow::Result<crate::session::term::Launch>
        + Send
        + 'static {
-    #[cfg(unix)]
-    let command = {
-        let script = format!("stty raw -echo; printf '{ready}\\n'; exec cat");
-        move || bash_command(&script)
-    };
-    #[cfg(windows)]
-    let command = {
-        let program = super::fixture::Steps::new()
-            .say(ready)
-            .read_input()
-            .program("echoing");
-        move || program.term_command()
+    let ready = ready.to_string();
+    let command = move |agent: AgentId| {
+        #[cfg(unix)]
+        let command = {
+            let _ = agent;
+            bash_command(&format!("stty raw -echo; printf '{ready}\\n'; exec cat"))
+        };
+        #[cfg(windows)]
+        let command = {
+            let steps = super::fixture::Steps::new().raw_input().say(&ready);
+            let steps = if crate::session::submits_paste_apart_for(agent) {
+                steps.echo_raw_drawing_pastes()
+            } else {
+                steps.echo_raw()
+            };
+            steps.program("echoing").term_command()
+        };
+        StandInCommand {
+            command,
+            ready: Ready::Says(ready),
+        }
     };
     launch_with(started, launches, command, during)
 }
 
-/// The launch [`stand_in_launch`] and [`stand_in_launch_running`] make, of a stand-in running
-/// `command`.
+/// The launch each of the `stand_in_launch` functions makes, of a stand-in running what `command`
+/// makes for the agent asked for, once that is ready to be written to.
 fn launch_with(
-    started: &Arc<std::sync::Mutex<Vec<StandIn>>>,
+    started_in: &Arc<std::sync::Mutex<Vec<StandIn>>>,
     launches: &Arc<std::sync::Mutex<Vec<Launched>>>,
-    command: impl FnOnce() -> crate::platform::term::Command + Send + 'static,
+    command: impl FnOnce(AgentId) -> StandInCommand + Send + 'static,
     during: impl FnOnce() + Send + 'static,
 ) -> impl FnOnce(crate::session::term::LaunchRequest) -> anyhow::Result<crate::session::term::Launch>
        + Send
        + 'static {
-    let (started, launches) = (started.clone(), launches.clone());
+    let (started_in, launches) = (started_in.clone(), launches.clone());
     move |request| {
         during();
-        let live = stand_in_of(
+        let live = started(
             &request.session_id,
             request.agent,
-            80,
-            24,
-            command(),
-            None,
+            command(request.agent),
             Some(&request.process_tag),
+            true,
         );
-        live.trust.end_watch();
-        crate::session::spawn_reader_thread(live.clone(), 8 * 1024);
         let process = (*live).clone();
-        started.lock().unwrap().push(live);
+        started_in.lock().unwrap().push(live);
         launches
             .lock()
             .unwrap()
@@ -644,9 +749,7 @@ pub(crate) fn tagged_idle_live_session(
     agent: AgentId,
     tag: &crate::processes::ledger::ProcessTag,
 ) -> StandIn {
-    let live = stand_in_of(id, agent, 80, 24, idle_command(), None, Some(tag));
-    live.trust.end_watch();
-    live
+    started(id, agent, idle_command(), Some(tag), false)
 }
 
 fn stand_in(
@@ -757,24 +860,97 @@ pub(crate) fn fake_agent(dir: &Path, binary: &str, body: &str) -> HashMap<String
     ])
 }
 
-/// On Windows the fake is `dir/<binary>.cmd`, which runs the body with Git Bash, and the `PATH`
-/// is `dir` and the system directories.
+/// The one program every fake agent CLI on Windows is a hard link to, compiled once from
+/// `fake_agent_dispatcher.cs` ([`compiled`]). It runs the companion file beside the name it was
+/// started by (`<name>.body`) with [`super::bash`], as the Unix dispatcher does. A program rather
+/// than a batch file, since an agent's install on Windows starts a program: the daemon refuses to
+/// start Codex through a script shim whose package it cannot find.
+#[cfg(windows)]
+fn fake_agent_dispatcher() -> &'static Path {
+    static DISPATCHER: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+    DISPATCHER.get_or_init(|| {
+        compiled(
+            "fake-agent-dispatcher",
+            &include_str!("fake_agent_dispatcher.cs")
+                .replace("BASH_PATH", &super::bash().display().to_string()),
+        )
+    })
+}
+
+/// A program that writes what it reads on its standard input to its console in one write, less a
+/// final line feed, compiled once from `console_writer.cs` ([`compiled`]): what a Bash stand-in
+/// draws a screen with when the screen has to arrive whole, as an agent's frame does. Git Bash's
+/// own console writes cut it into pieces some milliseconds apart. Given a file's path, it writes
+/// only once that file exists, so that it can be started ahead of the moment to draw; it exits
+/// with 1 when it could not write, or the file never came.
+#[cfg(windows)]
+pub(crate) fn console_writer() -> &'static Path {
+    static WRITER: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+    WRITER.get_or_init(|| compiled("console-writer", include_str!("console_writer.cs")))
+}
+
+/// The C# program `source` compiled with Windows PowerShell's `Add-Type`, which every Windows host
+/// has together with the .NET Framework compiler it calls. Named `octoboardd-<label>-<hash>.exe`
+/// in the temporary directory by a hash of its source, so the test binaries of other runs and
+/// worktrees share it, and installed by compiling a file of the process's own and renaming it into
+/// place, since one of them may be executing it.
+#[cfg(windows)]
+fn compiled(label: &str, source: &str) -> std::path::PathBuf {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    source.hash(&mut hasher);
+    let path =
+        std::env::temp_dir().join(format!("octoboardd-{label}-{:016x}.exe", hasher.finish()));
+    if path.is_file() {
+        return path;
+    }
+    let staging = path.with_extension(format!("{}.exe", std::process::id()));
+    let script = format!(
+        "Add-Type -Language CSharp -OutputType ConsoleApplication -OutputAssembly '{}' \
+         -TypeDefinition @'\n{source}\n'@",
+        staging.display().to_string().replace('\'', "''")
+    );
+    let output = std::process::Command::new("powershell.exe")
+        .args(["-NoProfile", "-NonInteractive", "-EncodedCommand"])
+        .arg(super::programs::encoded_powershell(&script))
+        .output()
+        .expect("run Windows PowerShell");
+    assert!(
+        output.status.success() && staging.is_file(),
+        "compile the {label}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    if std::fs::rename(&staging, &path).is_err() {
+        std::fs::remove_file(&staging).ok();
+        assert!(path.is_file(), "install the {label}");
+    }
+    path
+}
+
+/// On Windows the fake is `dir/<binary>.exe`, a hard link of the shared dispatcher (a copy where
+/// `dir` is on another volume), which runs `body` with Git Bash; the `PATH` is `dir` and the
+/// system directories, and `SystemRoot` and `ComSpec` are the test process's, as every Windows
+/// environment holds them: Git Bash runs a batch file through `ComSpec`.
 #[cfg(windows)]
 pub(crate) fn fake_agent(dir: &Path, binary: &str, body: &str) -> HashMap<String, String> {
     std::fs::write(dir.join(format!("{binary}.body")), body).expect("write fake agent body");
-    std::fs::write(
-        dir.join(format!("{binary}.cmd")),
-        format!(
-            "@\"{}\" \"%~dp0{binary}.body\" %*\r\n",
-            crate::test_support::bash().display()
-        ),
-    )
-    .expect("write fake agent");
-    let system = std::path::PathBuf::from(std::env::var_os("SystemRoot").expect("SystemRoot"));
+    let program = dir.join(format!("{binary}.exe"));
+    std::fs::remove_file(&program).ok();
+    let dispatcher = fake_agent_dispatcher();
+    if std::fs::hard_link(dispatcher, &program).is_err() {
+        std::fs::copy(dispatcher, &program).expect("copy fake agent");
+    }
+    let system_root = std::env::var("SystemRoot").expect("SystemRoot");
+    let system = std::path::PathBuf::from(&system_root);
     let path =
         std::env::join_paths([dir.to_path_buf(), system.join("System32"), system]).expect("a PATH");
     HashMap::from([
         ("PATH".to_string(), path.to_string_lossy().into_owned()),
         ("HOME".to_string(), dir.to_string_lossy().into_owned()),
+        ("SystemRoot".to_string(), system_root),
+        (
+            "ComSpec".to_string(),
+            std::env::var("ComSpec").expect("ComSpec"),
+        ),
     ])
 }

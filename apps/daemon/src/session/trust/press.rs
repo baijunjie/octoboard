@@ -43,6 +43,11 @@ thread_local! {
         const { std::cell::Cell::new(None) };
     pub(super) static DISMISS_OVERRIDE: std::cell::Cell<Option<Duration>> =
         const { std::cell::Cell::new(None) };
+    /// Run once when the screen is first seen gone after the Enter and before the press looks
+    /// again: where a test draws the screen again at that very point. A thread-local, so only a
+    /// press running on the thread that set it runs it.
+    pub(super) static ON_SEEN_GONE: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+        const { std::cell::RefCell::new(None) };
 }
 
 /// How long the screen has to go after the Enter, or a hook to come: [`response_timeout`], except
@@ -284,6 +289,10 @@ pub(super) fn enter_until_gone(
     }
     if hooked() {
         return Ok(());
+    }
+    #[cfg(test)]
+    if let Some(seen_gone) = ON_SEEN_GONE.with(|hook| hook.borrow_mut().take()) {
+        seen_gone();
     }
     std::thread::sleep(quiet());
     if !hooked() && !gone(live, screen, &mark) {

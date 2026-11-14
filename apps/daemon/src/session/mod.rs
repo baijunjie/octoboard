@@ -38,6 +38,8 @@ pub(crate) mod wait;
 mod rendered_tests;
 
 use draft::Draft;
+#[cfg(all(test, windows))]
+pub(crate) use paste_apart::submits_paste_apart_for;
 pub(crate) use paste_apart::NotSubmitted;
 use std::io;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};

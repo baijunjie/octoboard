@@ -9,13 +9,21 @@ which does run `pnpm check:windows`) refuses to tag a version. Run `pnpm check:w
 machine missing its toolchain is told what to install; `pnpm check:windows daemon` or `desktop` checks one crate)
 before handing the change over.
 
-It compiles both crates and links the daemon's executable, nothing more. Windows-only code, and the tests that run
+It compiles both crates and links the daemon's executable, nothing more. It is `cargo check`, not clippy, and does not
+deny warnings, while the `windows-check` job runs clippy on the daemon with `--all-targets` and `-D warnings`: treat
+every warning it prints as a failure (a test helper only Unix tests use is gated to Unix, as they are), and expect
+clippy-only lints in Windows-only code to surface only there. Windows-only code, and the tests that run
 only on Windows, never run on the Mac: they run on the `windows-check` job of `.github/workflows/quality.yml`, which
 runs only when started by hand, or on a Windows machine.
 Until one of those has run them, say when reporting that such code is compile-checked only. A Windows machine needs no
 Rust toolchain to run them: build the test binary on the Mac with
 `cargo xwin test --target x86_64-pc-windows-msvc -p octoboardd --no-run`, copy the `octoboardd-<hash>.exe` it names
-under `target/x86_64-pc-windows-msvc/debug/deps/` across, and run it there with a test-path filter.
+under `target/x86_64-pc-windows-msvc/debug/deps/` across, and run it there with a test-path filter. Put the x64
+`conpty.dll` and `OpenConsole.exe` beside it (`node scripts/fetch-conpty.mjs --arch x64 --into <dir>`), as the
+`windows-check` job does: without them the daemon runs on the inbox console host, where the Git Bash trust-screen
+stand-ins fail whatever the change. Tests that read repository files through `env!("CARGO_MANIFEST_DIR")` (test data,
+captured screens, the protocol files) look for them at the Mac checkout's path and fail there unless the files are
+copied to that path; neither failure says anything about the change.
 
 The desktop crate is compile-checked only: nothing on the Mac links its executable, so a change that can affect its
 link — linker arguments or `cargo:rustc-link-*` lines in its `build.rs`, linker flags, embedded resources, a new native

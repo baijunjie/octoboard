@@ -496,7 +496,11 @@ mod tests {
     async fn messages_written_while_a_turn_runs_are_counted_for_it() {
         let (state, dir) = app_state("state-written-mid-turn");
         insert_record(&state, &dir, "s", SessionStatus::Working);
-        let live = fake_live_session("s", AgentId::CODEX, 80, 24, "sleep 30");
+        // The count is the same for every agent. A stand-in for one that declares nothing of its
+        // own takes a message as soon as it is written: one for Codex, on a host that hands a
+        // paste over as keys, would have to draw its input box showing the message before its
+        // Enter is written (`session::paste_apart`).
+        let live = fake_live_session("s", AgentId::TEST, 80, 24, "sleep 30");
         state.register_live(live.clone());
         state.turn_started("s", None);
 

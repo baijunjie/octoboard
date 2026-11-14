@@ -15,6 +15,9 @@ dispatcher sources, reached through a symlink — creating and resolving a symli
 the first-exec cost. Give the dispatcher a fixed name in the temp directory, and install it by
 writing a file of the process's own and renaming it into place: test binaries from other worktrees
 run at the same time and may be executing it, and a plain overwrite truncates it under them.
+On Windows the dispatcher is a compiled program each fake is a hard link to (`test_support::fake_agent`), never a
+`.cmd` or `.bat` shim: the daemon refuses to start Codex through a script shim whose npm package it cannot find, so a
+test with such a fake fails before the fake runs.
 
 The symptom points the wrong way, so suspect this before changing a timeout or calling a test
 flaky: a test that fails only when the suite runs in parallel reads as a too-short timeout in the

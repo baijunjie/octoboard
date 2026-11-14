@@ -471,7 +471,8 @@ async fn a_link_spelled_through_a_link_to_a_missing_default_entry_is_repaired() 
     fixture.share(AgentId::CLAUDE, true).await.unwrap();
     let home_spelling = fixture.dir.join("home-claude");
     crate::test_support::symlink(&default, &home_spelling).unwrap();
-    std::fs::remove_file(account.join("todos")).ok();
+    // A link to a directory, which on Windows only a directory's removal takes away.
+    crate::platform::fs::remove_file_or_link(&account.join("todos")).unwrap();
     std::fs::remove_dir_all(default.join("todos")).ok();
     crate::test_support::symlink(home_spelling.join("todos"), account.join("todos")).unwrap();
     fixture.session("s", AgentId::CLAUDE);

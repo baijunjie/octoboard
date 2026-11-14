@@ -144,6 +144,16 @@ pub(crate) const SHELL_PID: &str = if cfg!(windows) {
     "$$"
 };
 
+/// Shell text for a fake CLI that writes its pid ([`SHELL_PID`]) to `pid_file` (a shell word, such
+/// as `"$HOME/pid"`) and then waits 30 s, for a test that kills it as soon as the pid is there. The
+/// sleep is started before the write, so the kill finds the shell only waiting: under Git Bash a
+/// command is forked in steps, and a process still being forked when its parent is killed escapes
+/// the kill of the CLI's console and can hold the CLI's output open long after. The sleep's
+/// streams are closed, so that whatever becomes of it holds none of them.
+pub(crate) fn records_pid_then_waits(pid_file: &str) -> String {
+    format!("sleep 30 </dev/null >/dev/null 2>&1 & echo {SHELL_PID} > {pid_file}; wait")
+}
+
 /// Ends `pid` at once, without a chance to clean up; a pid already gone is no error.
 pub(crate) fn kill(pid: i32) {
     host::kill(pid);
@@ -183,7 +193,8 @@ impl Drop for KillOnDrop {
 }
 
 /// Whether `pid` is a running process rather than gone or a zombie, which `kill(pid, 0)` alone
-/// cannot tell apart.
+/// cannot tell apart; on Windows, whether its process is not signalled yet, as the daemon's
+/// process table tells it.
 pub(crate) fn is_running(pid: i32) -> bool {
     host::is_running(pid)
 }
@@ -262,7 +273,7 @@ mod host {
 
 #[cfg(windows)]
 mod host {
-    use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, STILL_ACTIVE, WAIT_OBJECT_0};
+    use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, WAIT_OBJECT_0};
     use windows_sys::Win32::System::Threading::{
         GetExitCodeProcess, OpenProcess, TerminateProcess, WaitForSingleObject,
         PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE, PROCESS_TERMINATE,
@@ -289,14 +300,12 @@ mod host {
         });
     }
 
+    /// Whether `pid` runs: its process is not signalled yet. Its exit code is no answer: it can
+    /// read as exited while the process is still on its way out, still listed by the daemon's
+    /// process table and still holding what it held.
     pub(super) fn is_running(pid: i32) -> bool {
-        with_process(pid, PROCESS_QUERY_LIMITED_INFORMATION, |handle| {
-            let mut code = 0u32;
-            // SAFETY: the handle is open for the query, and `code` outlives the call.
-            let read = unsafe { GetExitCodeProcess(handle, &mut code) };
-            read != 0 && code == STILL_ACTIVE as u32
-        })
-        .unwrap_or(false)
+        crate::platform::proc_table::Process::query(pid as u32)
+            .is_some_and(|process| process.is_running())
     }
 
     /// Whether `pid` still exists: Windows keeps no zombie, so a process that exited is gone.

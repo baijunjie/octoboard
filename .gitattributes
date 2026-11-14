@@ -1,0 +1,6 @@
+# Files the daemon renders from its wire types and whose committed copy its tests compare byte
+# for byte with the rendering (`protocol::bindings`, `protocol::schema`): checked out with the
+# line ends the renderer writes, whatever `core.autocrlf` says, as on a Windows runner, which
+# turns it on.
+/packages/ui/src/protocol.generated.ts text eol=lf
+/contracts/protocol/*.schema.json text eol=lf

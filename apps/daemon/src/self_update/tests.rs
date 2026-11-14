@@ -10,10 +10,14 @@ use sha2::{Digest, Sha256};
 
 use super::check::{check, Checked};
 use super::fetch::{FetchError, Fetcher, Sink};
-use super::install::{install, replaceable, InstallError, Sources};
+#[cfg(unix)]
+use super::install::replaceable;
+use super::install::{install, InstallError, Sources};
 use super::manifest::{self, archive_name, manifest_url, parse, platform_key, Release};
 use super::record::Files;
-use super::replace::{replace, swap_with_previous, ReplaceError};
+use super::replace::replace;
+#[cfg(unix)]
+use super::replace::{swap_with_previous, ReplaceError};
 use super::task::{due, restart_refused, scheduled_check, Throttle};
 use super::unpack::{daemon_entry, unpack_entry, UnpackError};
 use super::verify::{decode_signature, verify_archive, PUBLIC_KEY};
@@ -23,7 +27,9 @@ use crate::protocol::{
     DaemonUpdateInstallState, DaemonUpdateManualReason, DaemonUpdatePhase,
 };
 use crate::state::{AppState, RestartRefusal};
-use crate::test_support::{app_state, code_of, param_of, ScratchDir, PATIENCE};
+#[cfg(unix)]
+use crate::test_support::param_of;
+use crate::test_support::{app_state, code_of, ScratchDir, PATIENCE};
 
 const ARCH: &str = "x86_64";
 const VERSION: &str = "9.9.9";
@@ -1159,7 +1165,10 @@ mod installing {
         )
         .unwrap_err();
         std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755)).unwrap();
-        assert!(matches!(err, InstallError::NotWritable(path) if path == installation.exe));
+        // The path is the executable's as resolved: where the scratch directory is reached through a
+        // link (macOS's /var to /private/var), that is not the spelling the test made it under.
+        let real = crate::hostfs::canonical(&installation.exe).unwrap();
+        assert!(matches!(err, InstallError::NotWritable(path) if path == real));
         assert!(host.asked().is_empty());
     }
 

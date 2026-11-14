@@ -482,14 +482,19 @@ fn after_press(
     }
 }
 
+/// Whether a message's keys after its paste wait for the paste to be taken, for a session of
+/// `agent` on this host; see the module header.
+pub(crate) fn submits_paste_apart_for(agent: crate::protocol::AgentId) -> bool {
+    term::facts().paste_as_keys
+        && crate::adapter::provider(agent)
+            .screen()
+            .joins_enter_to_key_paste()
+}
+
 impl LiveSession {
-    /// Whether a message's keys after its paste wait for the paste to be taken; see the module
-    /// header.
+    /// [`submits_paste_apart_for`] this session's agent.
     pub(super) fn submits_paste_apart(&self) -> bool {
-        term::facts().paste_as_keys
-            && crate::adapter::provider(self.agent)
-                .screen()
-                .joins_enter_to_key_paste()
+        submits_paste_apart_for(self.agent)
     }
 
     /// Writes `rest`, what [`split`] left of a message after `now` was written into a box found

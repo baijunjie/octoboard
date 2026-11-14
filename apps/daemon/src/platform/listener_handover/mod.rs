@@ -43,6 +43,9 @@ impl Kept {
     pub fn listener(&self) -> io::Result<std::net::TcpListener> {
         imp::listener_of(&self.0)
     }
+
+    /// Closes this duplicate, so that the port goes once nothing else holds the socket.
+    pub fn let_go(self) {}
 }
 
 /// The listener handed over as descriptor `fd` (which must be [`HANDED_FD`]), once it is found to

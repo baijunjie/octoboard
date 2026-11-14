@@ -297,8 +297,7 @@ mod tests {
     };
     use crate::protocol::{AgentId, Event, SessionRequestAction, SessionStatus};
     use crate::test_support::{
-        heard_after_marker, output_containing, running, stand_in_launch, stand_in_launch_running,
-        StandIn,
+        heard_after_marker, running, stand_in_launch, stand_in_launch_echoing, StandIn,
     };
 
     /// Every session of the store with its status and owner, for what a refusal must leave alone.
@@ -332,12 +331,7 @@ mod tests {
         let _original = running(&state, "of-a");
         let (launches, started) = (Launches::default(), Started::default());
         // A complete bootstrap needs a reader rather than the cooked terminal's bounded echo.
-        let launch = stand_in_launch_running(
-            &started,
-            &launches,
-            "stty raw -echo; printf 'handoff-input-ready\\n'; exec cat",
-            || {},
-        );
+        let launch = stand_in_launch_echoing(&started, &launches, "handoff-input-ready", || {});
 
         let result = handoff_session(
             &state,
@@ -352,10 +346,7 @@ mod tests {
                     request.task.is_none(),
                     "handoff work must wait for the completed transfer"
                 );
-                let launched = launch(request)?;
-                let ready = output_containing(&launched.session, "handoff-input-ready");
-                assert!(ready.contains("handoff-input-ready"), "{ready}");
-                Ok(launched)
+                launch(request)
             },
         )
         .await

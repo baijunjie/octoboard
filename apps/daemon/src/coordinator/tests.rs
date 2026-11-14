@@ -518,18 +518,13 @@ async fn information_kept_for_an_interrupted_session_is_deleted_only_once_it_is_
     let started = Arc::new(std::sync::Mutex::new(Vec::new()));
     let launches = Arc::new(std::sync::Mutex::new(Vec::new()));
     let claim = state.begin_launch("codex").unwrap();
-    relaunch_session_with(
-        &state,
-        &claim,
-        "codex",
-        None,
-        true,
-        None,
-        None,
-        crate::test_support::stand_in_launch(&started, &launches, || {}),
-    )
-    .await
-    .unwrap();
+    // A stand-in that reads what it is sent, as an agent does: on a host that hands a paste over
+    // as keys, Codex's Enter is written only once its input box shows the paste, which this one
+    // draws, so the first message is sent and the second follows it.
+    let launch = crate::test_support::stand_in_launch_echoing(&started, &launches, "ready", || {});
+    relaunch_session_with(&state, &claim, "codex", None, true, None, None, launch)
+        .await
+        .unwrap();
     drop(claim);
     assert_eq!(state.store.kept_messages("codex").unwrap().len(), 2);
     let live = state.live_session("codex").expect("running");

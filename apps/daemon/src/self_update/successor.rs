@@ -76,7 +76,9 @@ pub(super) fn start_with(
     match start(listener.as_ref()) {
         SuccessorStart::Started => true,
         SuccessorStart::RefusedListener => {
-            drop(listener);
+            if let Some(listener) = listener {
+                listener.let_go();
+            }
             tracing::warn!("the next daemon does not take the listener handed over; starting it once more to bind the port itself");
             start(None) == SuccessorStart::Started
                 || (fall_back() && start(None) == SuccessorStart::Started)

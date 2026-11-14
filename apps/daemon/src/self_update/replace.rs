@@ -178,7 +178,7 @@ fn copy_new(target: &Path, kept: &Path) -> io::Result<()> {
 }
 
 /// [`copy_new`], for the test of the fallback no file system of the tests' makes necessary.
-#[cfg(test)]
+#[cfg(all(test, unix))]
 pub(super) fn keep_copy_for_test(target: &Path, kept: &Path) -> io::Result<()> {
     copy_new(target, kept)
 }

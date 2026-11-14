@@ -1141,11 +1141,7 @@ fn reconcile_leaves_a_tagged_process_in_a_kept_session_whose_leader_exited() {
     std::fs::write(&go, "").unwrap();
     let later = wait_for_pid(&later_file);
     let _later_guard = KillOnDrop(vec![later]);
-    let deadline = Instant::now() + PATIENCE;
-    while leader_id.is_running() {
-        assert!(Instant::now() < deadline, "the leader never exited");
-        std::thread::sleep(Duration::from_millis(20));
-    }
+    assert_stops_running(leader);
     wait_for_tag(later);
 
     ledger.reconcile();
@@ -1287,7 +1283,9 @@ fn a_working_directory_that_does_not_answer_does_not_hold_the_scanner() {
     let looks = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let counted = looks.clone();
     *ledger.cwd_look.lock().unwrap() = Some(Arc::new(move |report: &table::CwdReport| {
-        if report.path() == work {
+        // The system reports the directory as the process spells it, which need not be the
+        // canonical spelling: on Windows a temporary directory may come in its short (8.3) form.
+        if crate::hostfs::canonical(report.path()).is_ok_and(|path| path == work) {
             counted.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             held.lock().unwrap().recv().ok();
         }
@@ -2144,11 +2142,7 @@ fn reconcile_stops_what_sits_in_a_session_the_previous_run_recorded() {
     std::fs::write(&go, "").unwrap();
     let later = wait_for_pid(&later_file);
     let _later_guard = KillOnDrop(vec![later]);
-    let deadline = Instant::now() + PATIENCE;
-    while leader_id.is_running() {
-        assert!(Instant::now() < deadline, "the leader never exited");
-        std::thread::sleep(Duration::from_millis(20));
-    }
+    assert_stops_running(leader);
 
     ledger.reconcile();
     assert_stops_running(named);

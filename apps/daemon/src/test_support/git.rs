@@ -223,25 +223,56 @@ pub(crate) fn git_bytes(dir: &Path, args: &[&[u8]]) -> Vec<u8> {
     output.stdout
 }
 
-/// [`git`] with `input` on its stdin, for a subcommand that reads one. Its own output is left to
-/// the test's, so a failure reports the arguments alone rather than `git`'s complaint.
+/// [`git`] with `input` on its stdin, for a subcommand that reads one; what it prints is
+/// dropped. A failure reports the arguments alone, its complaint going to the test's output.
 pub(crate) fn git_stdin(dir: &Path, args: &[&str], input: &[u8]) {
-    git_stdin_env(dir, args, &[], input);
+    git_stdin_output(dir, args, input);
 }
 
-/// [`git_stdin`] with `env` set for that one `git`, for a fixture that needs a variable the
-/// isolated environment leaves out: a committer date, which is the time a reflog entry `git`
-/// writes carries.
-pub(crate) fn git_stdin_env(dir: &Path, args: &[&str], env: &[(&str, &str)], input: &[u8]) {
+/// [`git_stdin`], returning what `git` printed. The whole of `input` is written before anything
+/// is read, so input and output that both outgrow a pipe's buffer would hold each other up: a
+/// fixture's input and output are both small, as a tree listing in and its id out are.
+pub(crate) fn git_stdin_output(dir: &Path, args: &[&str], input: &[u8]) -> Vec<u8> {
     use std::io::Write as _;
     let mut child = fixture_git(dir)
         .args(args)
-        .envs(env.iter().copied())
         .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
         .spawn()
         .unwrap();
     child.stdin.take().unwrap().write_all(input).unwrap();
-    assert!(child.wait().unwrap().success(), "git {args:?}");
+    let output = child.wait_with_output().unwrap();
+    assert!(output.status.success(), "git {args:?}");
+    output.stdout
+}
+
+/// The tree object, written into the repository at `dir`, that holds each `(blob, name)` of
+/// `entries` as a plain file. `git mktree` checks a name for nothing but a `/`, so this holds one
+/// that Windows `git` refuses to put in an index (`a:b`, which it reads as a drive), as a commit
+/// made on another host does.
+pub(crate) fn tree_holding(dir: &Path, entries: &[(&str, &str)]) -> String {
+    let listing: String = entries
+        .iter()
+        .map(|(blob, name)| format!("100644 blob {blob}\t{name}\n"))
+        .collect();
+    let tree = git_stdin_output(dir, &["mktree"], listing.as_bytes());
+    String::from_utf8(tree).unwrap().trim().to_string()
+}
+
+/// The commit, made HEAD of the repository at `dir`, whose tree is [`tree_holding`] `entries`
+/// and whose parents are `parents` (revisions, none for a root commit). Returns its id.
+pub(crate) fn commit_holding(dir: &Path, entries: &[(&str, &str)], parents: &[&str]) -> String {
+    let tree = tree_holding(dir, entries);
+    let mut args = vec!["commit-tree", tree.as_str(), "-m", "held"];
+    for parent in parents {
+        args.extend(["-p", parent]);
+    }
+    let commit = String::from_utf8(git(dir, &args))
+        .unwrap()
+        .trim()
+        .to_string();
+    git(dir, &["update-ref", "HEAD", &commit]);
+    commit
 }
 
 /// A repository in a scratch directory with one commit holding `files`.

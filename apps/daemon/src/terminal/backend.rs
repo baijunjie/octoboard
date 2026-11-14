@@ -444,8 +444,8 @@ mod tests {
     }
 
     /// Where the terminals run in this process the launch's credentials are the daemon's own, and
-    /// there is no holder to place the launch's group with: its containment stays unplaced, so the
-    /// launch is told by its tag alone.
+    /// there is no holder to place the launch's group with: its containment stays unplaced, so on
+    /// Unix the launch is told by its tag alone.
     #[test]
     fn without_holders_the_credentials_are_the_daemons_and_the_launch_is_left_unplaced() {
         let containment = Containment::for_held_launch("test", "backend-issue").unwrap();
@@ -464,7 +464,14 @@ mod tests {
         assert_eq!(helpers.key, "daemon-key");
         assert_eq!(helpers.exe, "/daemon/octoboardd");
         assert!(helpers.issued.is_none());
-        assert_eq!(containment.members(), None);
+        // A Unix launch's group is made only where a holder places it; a Windows launch's job is
+        // made with its containment, and holds nothing until the launch starts.
+        let unplaced = if cfg!(windows) {
+            Some(Vec::new())
+        } else {
+            None
+        };
+        assert_eq!(containment.members(), unplaced);
         assert!(!containment.releases_members());
     }
 }
