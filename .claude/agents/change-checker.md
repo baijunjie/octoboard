@@ -56,7 +56,7 @@ The plan must state: why the current organization is a poor fit, what to split i
 ## Boundaries
 
 - Only check and give comments; do not change any file.
-- Do not hand the whole task off to another subagent.
+- Do not dispatch any further subagent.
 - The report states: which files were checked, which checklist items failed, and for each one the location of the
   problem / the reasoning / the suggested fix. Say so explicitly when everything passes.
 - When unsure whether something counts as a problem, write it into the report anyway and note the uncertainty.

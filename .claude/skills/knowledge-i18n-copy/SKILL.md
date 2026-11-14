@@ -175,9 +175,11 @@ language; when the app renames something, go back and sync it.
 
 - Make examples concrete enough to be really usable, and keep examples across fields consistent in meaning (if the
   name is a charger, the keyword is a power adapter, not something else).
-- A search field does not correspond to a field to fill in, so it does not follow the example pattern; its placeholder
-  is the standard word "Search" in each language (搜索 in zh-Hans), shared through the one catalog key, and its
-  accessible label names what is searched.
+- A search field does not correspond to a field to fill in, so it does not follow the example pattern. By default it
+  uses the standard word the language's UI is used to (搜索 / 検索 / Search); what is searched is told by the area it
+  sits in, and where that is unclear, by its accessible label. Only when searching is the page's main action, and the
+  field still fits a question at the narrowest display width, is it written as a guiding question (找什么？ / What are
+  you looking for?).
 
 ### Reference and scope
 
@@ -431,7 +433,10 @@ are now wrong or it leaves out one thing, the meaning has changed.
 | Old translation under the new source text | What to do |
 |---|---|
 | Still holds (polish) | Keep the original key and every language's old translation, so the UI keeps showing the old translation; mark the key for re-review; prefer changing only the language that has the problem |
-| Facts wrong or one thing missing (the meaning changed) | Use a new key and don't overwrite the old one; one key carries one meaning and is not reused across pages; every language is retranslated, and the old sentence does not stay in the UI |
+| Facts wrong or one thing missing (the meaning changed) | Use a new key and don't overwrite the old one; every language is retranslated, and the old sentence does not stay in the UI |
+
+- When only some uses of a shared key need changing, whether polish or a change of meaning, move those uses to a new
+  key and leave the rest on the original: changing the original key directly affects every use.
 
 - Translations already delivered are matched by key; don't rename keys for tidiness, since changing one makes every
   language's translation fail to match.
@@ -456,6 +461,9 @@ are now wrong or it leaves out one thing, the meaning has changed.
 - A sentence is one key with placeholders; don't concatenate sentence fragments in code: a concatenated sentence breaks
   on ko particles, de cases, tr vowel harmony and ja word order. Only independent phrases (labels, buttons) get their
   own keys.
+- An independent phrase that has only one meaning in the same context across the whole app becomes a shared key; a
+  word interpreted differently in different business scenarios gets a separate key per scenario. Different contexts
+  (such as an action and a state) are different keys anyway.
 - Give plurals all their CLDR categories (ar has zero, one, two, few, many, other; ru has one, few, many, other), not
   just one / other; never hand-append an English plural s after a placeholder.
 - In Android strings, write an apostrophe as `\'` and a double quote as `\"` (aapt resource escaping); don't add another

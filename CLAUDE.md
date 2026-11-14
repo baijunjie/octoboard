@@ -13,12 +13,17 @@ template, gets translated to English before it is committed. Conversation with t
 
 ## Dispatching subagents
 
-**The test: a task that will eat a lot of context — exploring, debugging, researching, bulk search-and-replace,
-repeated trial — should go to a subagent wherever you can; you take only the conclusion.**
+**The test: by default, do the work yourself. Only in a long task (carrying out a development plan, a large batch of
+changes or an investigation spanning several modules) hand a whole block of work that would eat a lot of context to a
+subagent, and take only the conclusion: briefing a subagent on a small task costs more than finishing it yourself.**
+The self-checks before delivery (adding tests, the change check, updating the docs and the like) are dispatched as the
+workflow and their skills say, and this test does not limit them.
 
-- Make small edits yourself: briefing a subagent costs more than making the change.
-- Dispatch one when you need a clean perspective too: reviewing code you just wrote, or writing docs, where the
-  context you are holding carries bias.
+- When you are a subagent, do the work yourself and hand it back: dispatch no further subagents, and skip the
+  self-checks before delivery in the instruction file's workflow; before starting, only read the project context, with
+  no fetch and no branch alignment. Self-checks such as adding tests, the change check and updating the docs are
+  arranged by whoever dispatched you, once you hand back. Subagents that each dispatch again and each self-check do so
+  uncoordinated, and together saturate the machine.
 - One task per dispatch, with the completion criteria spelled out; give the full background (it knows none of the
   premises you did not write down); ask it for conclusions, not a replay of its process.
 - Never let several subagents change the same place at once, and never dispatch several to do the same thing
@@ -33,7 +38,7 @@ repeated trial — should go to a subagent wherever you can; you take only the c
 
 | agent | Use for |
 |---|---|
-| `mechanical` | Bulk search, locating code, bulk replacement, formatting, simple text and data processing |
+| `mechanical` | Bulk search, bulk replacement, formatting, simple text and data processing within a long task |
 | `implement` | Writing concrete logic, implementing a settled design, refactors and bug fixes with a clear target. The default value-for-money choice |
 | `investigate` | Hard cross-module debugging, root-cause analysis, large-scale refactors |
 | `architect` | Architecture design, cross-module rework plans, technology choices. Only when the strongest reasoning is genuinely needed |
@@ -49,12 +54,6 @@ repeated trial — should go to a subagent wherever you can; you take only the c
 
 <!-- setup-agent:subagents:end -->
 
-## Dispatching subagents in this project
-
-- The rule on blocking for a result reaches any dispatch a subagent makes in turn — the change check, the
-  writers — not only your own.
-- The UI state gallery is written only through its own skill, which dispatches the subagent that owns it.
-
 ## Repository checks
 
 - Do not add `--no-verify`, set skip environment variables (such as `REVERT_GATE_SKIP`), or change the hook
@@ -69,6 +68,12 @@ skip a step; how each step is done is up to the corresponding skill.
 When unsure, report back: stop, spell out what needs deciding (with the options) or what information is missing,
 together with what you have already found out, and let the recipient of the report (the user, or the dispatcher
 passing it on to the user) decide before going on; do not decide for yourself.
+
+- When you are a subagent, do the work yourself and hand it back: dispatch no further subagents, and skip the
+  self-checks before delivery in the instruction file's workflow; before starting, only read the project context, with
+  no fetch and no branch alignment. Self-checks such as adding tests, the change check and updating the docs are
+  arranged by whoever dispatched you, once you hand back. Subagents that each dispatch again and each self-check do so
+  uncoordinated, and together saturate the machine.
 
 ### Before starting work
 

@@ -8,7 +8,7 @@ description: Reading and maintaining project docs (documentation index, project 
 | Category | Answers | Location | Maintained by |
 |------|------|------|--------|
 | documentation index | which docs live under `docs/` and what each one covers | `docs/README.md` | you (the main agent) |
-| project map | where the code is, what this part does, which structure rules each end follows | `docs/project-map.md` + `docs/structure/<end>.md` + a nearby `README.md` for each single-function module in the code tree | `map-writer` |
+| project map | where the code is, what this part does | `docs/project-map.md` + a nearby `README.md` for each module in the code tree | `map-writer` |
 | product docs | what the system looks like now | `docs/product/` | `product-writer` |
 | development memory | how a developer should work in this project | `docs/memory/` | `memory-writer` |
 

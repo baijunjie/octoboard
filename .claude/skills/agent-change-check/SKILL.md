@@ -1,9 +1,11 @@
 ---
 name: agent-change-check
-description: Change check entry point — dispatch the change-checker subagent to review this round's changes and iterate on its feedback until it passes; this should come to mind once this round's changes are done, before delivery. Use when the user says "review this round of changes", "wrap-up review", "check the changes I just made".
+description: Review this round's changes and work through the comments until it passes; this should come to mind once the changes are done, before delivery. Use when the user says "review this round of changes", "wrap-up review", "check the changes I just made".
 ---
 
 # Change check
+
+When you are a subagent, do not follow this skill: finish and hand back, and let whoever dispatched you arrange it.
 
 1. **Dispatch the `change-checker` subagent to review this round of changes; do not review what you wrote
    yourself**: your own context treats the structure you just wrote as settled fact. Its checklist and judgment

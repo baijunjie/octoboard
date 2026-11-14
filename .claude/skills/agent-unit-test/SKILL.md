@@ -107,6 +107,8 @@ Whether the framework is newly installed or already in the project, its configur
 
 ## Wrap-up: add tests
 
+When you are a subagent, do not follow this skill: finish and hand back, and let whoever dispatched you arrange it.
+
 1. List the source files changed this round, new, renamed and deleted ones included.
 2. **Dispatch the `test-writer` subagent to add the tests; when there is a subagent mechanism, do not write them
    yourself** (for the case without one see below the table): whoever wrote the code writes assertions that follow
