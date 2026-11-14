@@ -16,22 +16,13 @@ const press = (pointerType: string) => document.dispatchEvent(new PointerEvent("
 // The module has seen no interaction yet only until one is dispatched, and the other tests dispatch them, so this test
 // loads a fresh instance of the module with the react-aria state it writes to (one graph, so the modality it reads is
 // the one the module sets).
-it("takes the device's lack of hover before any interaction, then each interaction's own input", async () => {
+it("takes the device's lack of hover before any interaction for a tap, then each interaction's own input", async () => {
   vi.resetModules();
   const fresh = await import("./lastInput");
-  const { setInteractionModality } = await import("react-aria");
-  const { getInteractionModality } = await import("react-aria/private/interactions/useFocusVisible");
   vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(hover: none)" }));
   expect(fresh.interactionIsTouch()).toBe(true);
-  // With no input yet the ring shows for a focus move the user did not ask for, unless the device cannot hover.
-  const before = getInteractionModality();
-  act(() => setInteractionModality("pointer"));
-  fresh.ringForAutomaticFocus();
-  expect(getInteractionModality()).toBe("pointer");
   vi.stubGlobal("matchMedia", () => ({ matches: false }));
-  fresh.ringForAutomaticFocus();
-  expect(getInteractionModality()).toBe("keyboard");
-  act(() => Reflect.apply(setInteractionModality, undefined, [before]));
+  expect(fresh.interactionIsTouch()).toBe(false);
   vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(hover: none)" }));
   press("mouse");
   expect(fresh.interactionIsTouch()).toBe(false);
@@ -40,6 +31,26 @@ it("takes the device's lack of hover before any interaction, then each interacti
   // A hardware keyboard on a touch device keeps the desktop's behaviour.
   document.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
   expect(fresh.interactionIsTouch()).toBe(false);
+});
+
+// A ring is shown only once a keyboard is known to be in use: before any input there is none, on a device that can hover
+// and on one that cannot alike. The module is loaded fresh, so no input has been seen.
+it.each([
+  ["a device that can hover", false],
+  ["a device that cannot hover", true],
+])("settles the modality at load to the pointer's, and shows no ring for a focus move before any input, on %s", async (_, cannotHover) => {
+  vi.resetModules();
+  const aria = await import("react-aria");
+  const state = await import("react-aria/private/interactions/useFocusVisible");
+  const before = state.getInteractionModality();
+  // Nothing has been settled in this graph yet: its react-aria has had no input.
+  act(() => Reflect.apply(aria.setInteractionModality, undefined, [null]));
+  vi.stubGlobal("matchMedia", (query: string) => ({ matches: cannotHover && query === "(hover: none)" }));
+  const fresh = await import("./lastInput");
+  expect(state.getInteractionModality()).toBe("pointer");
+  fresh.ringForAutomaticFocus();
+  expect(state.getInteractionModality()).toBe("pointer");
+  act(() => Reflect.apply(aria.setInteractionModality, undefined, [before]));
 });
 
 it.each([

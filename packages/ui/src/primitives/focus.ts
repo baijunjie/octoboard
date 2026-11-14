@@ -1,6 +1,7 @@
 import type React from "react";
 import { useLayoutEffect, useRef, useState } from "react";
 import { setInteractionModality, useFocusRing, useFocusVisible, useObjectRef as useAriaObjectRef } from "react-aria";
+import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 
 /** Whether the current input modality is the keyboard's (react-aria's interaction modality), so focus arriving now is
  * to be shown; read in the render after focus arrives, since the key press that changes it may move focus first. */
@@ -19,6 +20,18 @@ export function setKeyboardModality(): void {
  * listener does, so that what reacts to the pointer by modality (a hovered menu item taking the highlight) does. */
 export function setPointerModality(): void {
   setInteractionModality("pointer");
+}
+
+/**
+ * Settles react-aria's input modality as the pointer's while it is still unknown. react-aria leaves it unknown until
+ * the first input and treats unknown as the keyboard's, so focus the application places at launch would draw a focus
+ * ring with no keyboard in use. Its "virtual" modality (a screen reader's activation or cursor) is left alone: react-aria
+ * builds its assistive-technology handling on it, such as the modal focus scopes that let TalkBack's cursor leave them.
+ * Reads the modality from react-aria's private module, as no public API returns it: to check again when react-aria is
+ * upgraded.
+ */
+export function settleUnknownModality(): void {
+  if (getInteractionModality() === null) setInteractionModality("pointer");
 }
 
 export type FocusVisibleProps = React.DOMAttributes<Element> & { "data-focus-visible"?: true };

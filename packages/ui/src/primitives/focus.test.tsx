@@ -3,9 +3,9 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { setInteractionModality } from "react-aria";
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
-import { expect, it, onTestFinished } from "vitest";
+import { expect, it, onTestFinished, vi } from "vitest";
 
-import { setPointerModality, useArrivalFocusProps } from "./focus";
+import { setPointerModality, settleUnknownModality, useArrivalFocusProps } from "./focus";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -91,4 +91,41 @@ it("takes the input modality back to the pointer's from the keyboard's", () => {
   expect(getInteractionModality()).toBe("keyboard");
   act(() => setPointerModality());
   expect(getInteractionModality()).toBe("pointer");
+});
+
+type Modality = "keyboard" | "pointer" | "virtual" | null;
+const setModality = (modality: Modality) =>
+  act(() => void Reflect.apply(setInteractionModality, undefined, [modality]));
+
+it.each([
+  { from: null, settled: "pointer" },
+  { from: "virtual", settled: "virtual" },
+  { from: "keyboard", settled: "keyboard" },
+  { from: "pointer", settled: "pointer" },
+] as const)("settles $from to $settled, leaving every modality but the unknown one as it is", ({ from, settled }) => {
+  onTestFinished(() => setModality("pointer"));
+  setModality(from);
+  act(() => settleUnknownModality());
+  expect(getInteractionModality()).toBe(settled);
+});
+
+it("registers no listeners, so a modality react-aria sets later is never touched", () => {
+  const onWindow = vi.spyOn(window, "addEventListener");
+  const onDocument = vi.spyOn(document, "addEventListener");
+  onTestFinished(() => {
+    onWindow.mockRestore();
+    onDocument.mockRestore();
+    setModality("pointer");
+  });
+  setModality(null);
+  act(() => settleUnknownModality());
+  expect(onWindow).not.toHaveBeenCalled();
+  expect(onDocument).not.toHaveBeenCalled();
+  // Focus with no input before it, and a click with no pointer, leave react-aria's virtual modality as it is.
+  const button = document.body.appendChild(document.createElement("button"));
+  onTestFinished(() => button.remove());
+  setModality("virtual");
+  act(() => button.focus());
+  act(() => button.click());
+  expect(getInteractionModality()).toBe("virtual");
 });

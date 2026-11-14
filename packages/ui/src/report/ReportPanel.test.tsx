@@ -81,6 +81,8 @@ const noteField = (container: ParentNode) => container.querySelector<HTMLInputEl
 it.each([1, 2])("hands a focused field of a page that goes to a surviving report control with keyboard modality (%i prior pages)", async (count) => {
   const { container, append } = renderReport(count);
   const oldField = noteField(container);
+  // The last input was a hardware key, which is what shows a ring on the control that takes the focus.
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
   act(() => {
     setInteractionModality("pointer");
     oldField.focus();

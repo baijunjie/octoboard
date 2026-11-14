@@ -766,6 +766,12 @@ value and raw submission unchanged.
 
 ## Visible focus
 
+A focus ring is drawn only while the input under way is a keyboard's, or an assistive technology's: react-aria's
+"virtual" modality, which a screen reader's activation and cursor set, as does any press with no pointer behind it, a
+script's included. A pointer's draws none. Focus the application places at launch, before any input, draws none:
+react-aria would take the unknown input as the keyboard's, so `settleUnknownModality`
+(`packages/ui/src/primitives/focus.ts`) settles it as the pointer's at load.
+
 HeroUI controls draw their own focus ring.
 
 A scrollable tab list leaves enough inner padding for the full focus ring and its offset on every side.
@@ -815,7 +821,7 @@ A handoff that runs because what held focus went away — a pane hidden, a panel
 event — calls `ringForAutomaticFocus()` before it focuses the destination, not `setKeyboardModality()` itself. The
 user did not ask for the move, so the ring follows the last input: after a key (`F6`, `Tab`, a shortcut) the destination
 shows its ring, so they can see where focus went; after a press of a mouse, a trackpad, a finger or a pen it never does,
-as a focus ring never results from a mouse operation. Before any input it shows one unless the device cannot hover.
+as a focus ring never results from a mouse operation. Before any input it never does either (see the opening of "Visible focus").
 `handFocusOff` takes a `showRing` flag for the handoff whose trigger is a press, where the ring follows how the press
 came; `HandoffOnUnmount` sets it by default, its trigger being a render, and so does `useFocusHandoff`, whose trigger is
 the render that took the control away. Both go through the same rule, so a pane or panel closed with the mouse hands

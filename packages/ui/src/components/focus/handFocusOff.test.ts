@@ -21,6 +21,8 @@ beforeEach(() => {
 const destination = () => holder.querySelector("button");
 
 it("hands focus to the holder's button when `from` holds it", () => {
+  // The last input was a hardware key, which is what shows the destination's ring.
+  document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
   from.querySelector("button")?.focus();
   handFocusOff(from, holder, true);
   expect(document.activeElement).toBe(destination());

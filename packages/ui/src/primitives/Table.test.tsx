@@ -42,9 +42,11 @@ function controls(after = true) {
   return { container, button };
 }
 
+// Focus lands and React commits its effects before the key is pressed, as it does for a person: the table notes the
+// cell that took focus when the modality is not the keyboard's, and the effect that follows must find focus where it is.
 function tab(from: HTMLElement, init: KeyboardEventInit = {}): void {
+  act(() => from.focus());
   act(() => {
-    from.focus();
     from.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true, ...init }));
   });
 }

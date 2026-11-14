@@ -96,7 +96,8 @@ part holding it goes away (a panel or a pane closing, a record removed, a dialog
 action fails — the destination shows its focus ring only when the last input was a key of a hardware keyboard; after a
 press with a mouse, a trackpad, a finger or a pen it shows none. Typing on a touch screen's on-screen keyboard does not
 count as a key, and a press with no pointer behind it, such as a screen reader's or a script's, leaves the last input
-as it was. Before any input at all, the ring shows unless the device's primary input cannot hover.
+as it was. Before any input at all no focus ring shows, on any device: neither on what the window focuses as it opens
+(the terminal, for one) nor after a focus move it makes on its own.
 
 ## Focus after a tap
 

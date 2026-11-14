@@ -15,7 +15,7 @@ export { ComboBox, ComboBoxInputGroup, ComboBoxPopover, ComboBoxTrigger } from "
 export { Disclosure, DisclosureBody, DisclosureContent, DisclosureHeading, DisclosureIndicator, DisclosureTrigger } from "./Disclosure";
 export { EmptyState } from "./EmptyState";
 export { Description, disabledGroupProps, FieldError, GroupFieldError, Label, OutsideFieldParts } from "./Field";
-export { type FocusVisibleProps, hasKeyboardFocus, onFocusScopeRestore, openingFocus, setKeyboardModality, useArrivalFocusProps, useFocusVisibleProps, useKeyboardModality, useObjectRef } from "./focus";
+export { type FocusVisibleProps, hasKeyboardFocus, onFocusScopeRestore, openingFocus, setKeyboardModality, settleUnknownModality, useArrivalFocusProps, useFocusVisibleProps, useKeyboardModality, useObjectRef } from "./focus";
 export { clearTopLayer, closestTopLayer, liveAnnouncerProps, topLayerProps } from "./hideOutside";
 export { Kbd, KbdAbbr, KbdContent, type KbdKey } from "./Kbd";
 export { type PrimitiveLabels, PrimitiveLabelsProvider } from "./labels";

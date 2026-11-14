@@ -298,7 +298,13 @@ export const quotaGatingScenarios: Scenario[] = [
     title: "Settings opened from the question about an account's unfinished sharing change",
     description: "Search API runs on Team, a Codex account whose last sharing change did not finish. Open asked first, and View in Settings was pressed: the launch is cancelled, the question and the session dialog beneath it are gone, and Settings is open on Agent accounts with the Codex tab selected and Team's Account settings in front. Team's Share default configuration switch, shown on, its position before the change, has the focus ring on it (as when View in Settings was pressed from the keyboard; after a mouse press or a tap there is no ring), and a warning triangle named \"Last sharing change\", for the last attempt to turn sharing off that did not finish, sits after it.",
     state: { ...launchState([onTeam], []), settings: teamIncomplete },
-    steps: [openSessionDialog, (ui) => ui.confirm(), (ui) => ui.press(ui.t("dialog.incompleteLaunch.viewSettings"))],
+    steps: [
+      openSessionDialog,
+      (ui) => ui.confirm(),
+      // A scripted press is no keyboard input, so the automatic move to the switch would draw no ring.
+      (ui) => ui.focusControl(ui.t("dialog.incompleteLaunch.viewSettings")),
+      (ui) => ui.key("Enter"),
+    ],
   },
   {
     id: "dialog-new-session-quota-refused",

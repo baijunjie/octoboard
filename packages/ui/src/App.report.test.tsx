@@ -257,6 +257,8 @@ it("takes back an open Report card revealed by hover when the last page is delet
   expect(reportCard()).not.toBeNull();
   expect(reportCard()!.closest("[data-pane=aside]")!.hasAttribute("inert")).toBe(false);
   act(() => reportCard()!.querySelector<HTMLElement>("[data-in-report]")!.focus());
+  // The last input was a hardware key, so the ring follows the handoff; a press would leave it off.
+  act(() => { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true })); });
   act(() => setInteractionModality("pointer"));
 
   await receive({ type: "pages_deleted", session_id: "s-one", pages: ["page-1"] });
@@ -272,6 +274,8 @@ it("takes back a floating Report panel at once when its last page is deleted, ha
   await pressElement(toggle("Show report panel"));
   expect(reportCard()).not.toBeNull();
   act(() => reportCard()!.querySelector<HTMLElement>("[data-in-report]")!.focus());
+  // The last input was a hardware key, so the ring follows the handoff; a press would leave it off.
+  act(() => { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true })); });
   act(() => setInteractionModality("pointer"));
 
   await receive({ type: "pages_deleted", session_id: "s-one", pages: ["page-1"] });

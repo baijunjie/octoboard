@@ -1,4 +1,4 @@
-import { setKeyboardModality } from "../primitives";
+import { setKeyboardModality, settleUnknownModality } from "../primitives";
 
 import { CANNOT_HOVER, TEXT_ENTRY } from "./touchInput";
 
@@ -54,26 +54,27 @@ if (typeof window !== "undefined") {
   window.addEventListener("keydown", (event) => {
     if (fromHardwareKeyboard(event)) lastInput = "key";
   }, true);
+  // Every entry loads this module at startup, ahead of any focus the application places.
+  settleUnknownModality();
 }
 
 /** Whether the interaction under way is a tap: its press came from a finger or a pen, not a mouse,
  * a trackpad or a hardware keyboard's key (an iPad's keyboard keeps the desktop's behaviour; typing
  * on an on-screen one keeps the tap's). Before any
  * interaction, whether the device cannot hover. A tap never moves focus into a field that takes
- * text, as that raises the on-screen keyboard over what was just shown, and never turns a focus
- * ring on (`ringForAutomaticFocus`). */
+ * text, as that raises the on-screen keyboard over what was just shown. */
 export function interactionIsTouch(): boolean {
   return lastInput === undefined ? (window.matchMedia?.(CANNOT_HOVER).matches ?? false) : lastInput === "touch";
 }
 
 /** Called before a focus move the user did not ask for (a handoff as something goes away, a
  * return after a press elsewhere): the ring follows the last input. After a hardware keyboard's key
- * its destination shows a focus ring; after a press, of a finger, a pen or a mouse, it never does,
- * as a ring is for finding one's place with the keyboard, and on a tap shows nothing a finger can
- * use while the tooltip it opens would stay up with nothing to send it away. Before any input it
- * shows one unless the device cannot hover. Call it right before the `focus()` that actually happens, after every
+ * its destination shows a focus ring; otherwise, after a press of a finger, a pen or a mouse or
+ * before any input at all, it never does, as a ring is for finding one's place with the keyboard,
+ * and on a tap shows nothing a finger can use while the tooltip it opens would stay up with nothing
+ * to send it away. Call it right before the `focus()` that actually happens, after every
  * guard: called earlier, it sets the keyboard modality even when nothing moves, and a dialog's later
  * restore after a pointer close then shows a ring. */
 export function ringForAutomaticFocus(): void {
-  if (lastInput === undefined ? !interactionIsTouch() : lastInput === "key") setKeyboardModality();
+  if (lastInput === "key") setKeyboardModality();
 }
