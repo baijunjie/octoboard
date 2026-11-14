@@ -330,7 +330,8 @@ main() {
   printf '%s' "$signature" > "$tmp/signature"
   verify_signature "$archive" "$tmp/signature"
   mkdir "$tmp/unpacked"
-  tar -xzf "$archive" -C "$tmp/unpacked"
+  tar -xzf "$archive" -C "$tmp/unpacked" \
+    || fail "could not unpack the archive; nothing was installed. If tar says it cannot run gzip, install gzip and run this again."
   unpacked="$tmp/unpacked/octoboardd_${version}_linux_$arch"
   [ -f "$unpacked/octoboardd" ] || fail "the archive does not hold octoboardd."
 

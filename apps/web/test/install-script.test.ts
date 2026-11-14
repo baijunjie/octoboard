@@ -41,8 +41,9 @@ type Arch = "x86_64" | "aarch64";
 const ARCHES = LINUX_ARCHES as Arch[];
 
 // The tools the script (and the stubs here) call by name; `curl`, `wget`, `systemctl`, `loginctl`, `flock` and
-// `minisign` are added per test, and `id` is replaced by a stub that calls the real one.
-const BASE_TOOLS = ["awk", "base64", "cat", "chmod", "cmp", "cp", "cut", "grep", "head", "id", "ln", "ls", "mkdir", "mktemp", "mv", "rm", "sed", "tar"];
+// `minisign` are added per test, and `id` is replaced by a stub that calls the real one. `gzip` is there for GNU tar,
+// which runs it to unpack a .tar.gz (the BSD tar of macOS does that itself).
+const BASE_TOOLS = ["awk", "base64", "cat", "chmod", "cmp", "cp", "cut", "grep", "gzip", "head", "id", "ln", "ls", "mkdir", "mktemp", "mv", "rm", "sed", "tar"];
 const HASH_TOOLS = ["sha256sum", "shasum"];
 const SYSTEM_DIRECTORIES = ["/usr/bin", "/bin"];
 // Where a minisign the host has might be (the shim's PATH holds only what a test puts in it).
@@ -473,6 +474,21 @@ test("a download whose SHA-256 differs from the manifest's is refused, and the i
   const result = run(world, []);
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /does not match its SHA-256; nothing was installed/);
+  assert.equal(output(installed(world)), "the old binary");
+  assert.deepEqual(readdirSync(world.binDir), ["octoboardd"]);
+  assert.deepEqual(readdirSync(world.tmp), []);
+});
+
+test("an archive tar cannot unpack is refused with the script's own message, and the installed binary is left alone", { skip }, (t) => {
+  const world = makeWorld(t);
+  publish(world);
+  writeOldBinary(world);
+  // A tar that fails to unpack, as GNU tar does where gzip is not installed.
+  rmSync(path.join(world.shim, "tar"));
+  writeExecutable(path.join(world.shim, "tar"), ["echo 'tar (child): gzip: Cannot exec: No such file or directory' >&2", "exit 2"]);
+  const result = run(world, []);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /octoboardd install: could not unpack the archive; nothing was installed\. If tar says it cannot run gzip, install gzip and run this again\./);
   assert.equal(output(installed(world)), "the old binary");
   assert.deepEqual(readdirSync(world.binDir), ["octoboardd"]);
   assert.deepEqual(readdirSync(world.tmp), []);

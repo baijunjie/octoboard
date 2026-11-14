@@ -151,6 +151,11 @@ status 1:
    `octoboardd_<version>_linux_<arch>.tar.gz`, so that an older release's archive, which the same key signed, cannot
    stand in for it. A signature that does not verify, or names another file, is refused and nothing is installed; one
    that verifies makes it say so (and, when the installed `octoboardd` checked it, that it did).
+
+   Then it unpacks the archive with `tar`. When `tar` cannot unpack it, the script says that it could not unpack the
+   archive and that nothing was installed, and that if `tar` reports it cannot run `gzip`, installing `gzip` and running
+   the script again is the remedy; `tar`'s own message is printed before it. An archive that does not hold `octoboardd`
+   is an error too, and nothing is installed.
 4. **Installs the binary** as `octoboardd` in the install directory, creating it, by copying it beside the old one and
    renaming it into place in one step: nothing ever sees half a file, and a daemon running from the old file keeps
    running on it until it restarts. The file it replaces is kept beside it as `octoboardd.previous` (a second link to
