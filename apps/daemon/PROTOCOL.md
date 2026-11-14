@@ -2200,7 +2200,7 @@ announced as `daemon_update_status_updated` with the whole of it.
 | Field | Meaning |
 |---|---|
 | `phase` | `idle`, `checking` (reading the manifest), `downloading` (the archive is downloaded, checked and the executable replaced; `install` and `progress` say how far) or `installed` (the executable has been replaced and the update awaits the restart). A check and a download never run together |
-| `available` | The newer release the last check found and none has replaced: `version`, `notes` (Markdown, or null), `holder_floor` (or null) and the `channel` it was read from; null when there is none |
+| `available` | The newer release the last check found and none has replaced: `version`, `holder_floor` (or null) and the `channel` it was read from; null when there is none |
 | `progress` | `downloaded` bytes and the archive's `total` (or null) while `phase` is `downloading`; null otherwise |
 | `installed` | Once `phase` is `installed`: the `version` and `holder_floor` of what replaced the executable, both null when something else replaced it (an install script run meanwhile) and the daemon did not write it |
 | `last_check` | The last check that ended: `outcome` (`up_to_date`, `available` or `failed`), `at` (milliseconds since the epoch), `error` (`daemon_update_check_failed` for a failed one) and `detail` (the English text of the failure, cut to 300 characters); null until one has ended |
@@ -2209,7 +2209,7 @@ announced as `daemon_update_status_updated` with the whole of it.
 | `updated_from` | The version this daemon replaced when it started, as an update left it (the version recorded in `daemon.version` by the daemon before it was older than this one); null otherwise. It holds until the daemon stops, so a window that opens later is told too; a client shows "Updated to vX" once per version |
 
 **Checking.** The check reads `<repository>/releases/download/updater/<channel>-linux.json`, the release manifest of the
-channel the setting `daemon_update_channel` names (`stable`, the default, or `beta`): the `version`, the `notes`, the
+channel the setting `daemon_update_channel` names (`stable`, the default, or `beta`): the `version`, the
 `holder_floor` and, under the platform key `linux-x86_64` or `linux-aarch64`, the archive's `url`, its `sha256` and the
 `signature` (the content of the `.sig` file `tauri signer sign` writes). A release is offered when its version is
 strictly greater than the daemon's, by semantic-version precedence. Only a 404 means there is nothing; any other HTTP

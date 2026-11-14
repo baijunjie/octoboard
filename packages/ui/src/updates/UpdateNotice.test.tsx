@@ -38,7 +38,7 @@ afterEach(() => {
   localStorage.clear();
 });
 
-const FOUND: AvailableUpdate = { version: "0.2.0", notes: "Fixes and more fixes." };
+const FOUND: AvailableUpdate = { version: "0.2.0" };
 
 function fakeUpdater() {
   let progress: (progress: UpdateProgress) => void = () => {};
@@ -120,7 +120,7 @@ it("tells the user a newer version is available and offers it without taking it"
   expect(updater.check).toHaveBeenCalledExactlyOnceWith("beta");
 });
 
-it.each([FOUND, { version: "0.2.0-beta.2" }])("opens the offered version's release page with or without inline notes: %j", async (update) => {
+it.each([FOUND, { version: "0.2.0-beta.2" }])("opens the offered version's release page from a link, not a disclosure: %j", async (update) => {
   const { updater } = fakeUpdater();
   updater.check = vi.fn(async () => update);
   const open = vi.fn(async () => {});
@@ -131,10 +131,8 @@ it.each([FOUND, { version: "0.2.0-beta.2" }])("opens the offered version's relea
   expect(link.textContent).toContain("What is new");
   expect(link.getAttribute("href")).toBe(address);
   expect(link.hasAttribute("aria-expanded")).toBe(false);
-  expect(container.textContent).not.toContain("Fixes and more fixes.");
   await act(async () => link.click());
   expect(open).toHaveBeenCalledExactlyOnceWith(address);
-  expect(container.textContent).not.toContain("Fixes and more fixes.");
 });
 
 it("hides the notice on Later", async () => {

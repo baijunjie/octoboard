@@ -56,8 +56,6 @@ pub enum DaemonUpdatePhase {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct DaemonUpdateAvailable {
     pub version: String,
-    /// The release's notes as the manifest carries them, Markdown; null when it has none.
-    pub notes: Option<String>,
     /// The oldest holder version the new daemon adopts the terminals of (`handover_check`'s
     /// `holder_floor`); null when the manifest names none.
     pub holder_floor: Option<String>,

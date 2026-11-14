@@ -5,7 +5,7 @@ import { effectiveUpdateChannel } from "./updateChannel";
 import { CHECK_INTERVAL_MS, createUpdateStore, createUpdateStoreBase, FIRST_CHECK_DELAY_MS, type UpdateFailure, type UpdateState } from "./updateStore";
 import { fakeTimers } from "../test/clock";
 
-const FOUND: AvailableUpdate = { version: "0.2.0", notes: "Fixes." };
+const FOUND: AvailableUpdate = { version: "0.2.0" };
 
 /** An updater whose calls the test settles itself. */
 function fakeUpdater(currentVersion: () => Promise<string> = async () => "0.1.0") {

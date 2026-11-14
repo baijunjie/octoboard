@@ -15,7 +15,7 @@ import type { UpdateFailure } from "./updateStore";
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const IDLE: DaemonUpdateStatus = { phase: "idle", available: null, progress: null, installed: null, last_check: null, install: null, manual: null, updated_from: null };
-const AVAILABLE = { version: "0.2.0", notes: null, holder_floor: "0.1.0", channel: "stable" } as const;
+const AVAILABLE = { version: "0.2.0", holder_floor: "0.1.0", channel: "stable" } as const;
 
 const UI_VERSION = "0.1.0";
 

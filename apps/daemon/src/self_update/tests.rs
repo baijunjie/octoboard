@@ -52,6 +52,7 @@ fn sha256_of(bytes: &[u8]) -> String {
 fn manifest_text(version: &str, floor: &str, sha256: &str) -> String {
     serde_json::json!({
         "version": version,
+        // Real manifests carry the release notes, which the check ignores.
         "notes": "What is new",
         "pub_date": "2026-11-01T00:00:00Z",
         "holder_floor": floor,
@@ -519,7 +520,6 @@ mod manifests {
         )
         .unwrap();
         assert_eq!(release.version, VERSION);
-        assert_eq!(release.notes.as_deref(), Some("What is new"));
         assert_eq!(release.holder_floor.as_deref(), Some("0.1.0"));
         assert_eq!(release.url, ARCHIVE_URL);
         assert_eq!(release.sha256, sha256_of(ARCHIVE));
@@ -1540,7 +1540,6 @@ mod requests {
         assert_eq!(status.phase, DaemonUpdatePhase::Idle);
         let available = status.available.unwrap();
         assert_eq!(available.version, VERSION);
-        assert_eq!(available.notes.as_deref(), Some("What is new"));
         assert_eq!(available.holder_floor.as_deref(), Some("99.0.0"));
         assert_eq!(available.channel, DaemonUpdateChannel::Stable);
         let check = status.last_check.unwrap();

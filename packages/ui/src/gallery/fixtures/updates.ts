@@ -24,20 +24,11 @@ const workingAndIdle = snapshotState({ consoles: [console_], projects: [web], se
 const manyRunning = snapshotState({ consoles: [console_], projects: [web], sessions: manySessions });
 const reconnecting = snapshotState({ consoles: [console_], projects: [web], sessions: idle, connectionState: "reconnecting" });
 
-const NOTES = [
-  "- Sessions start faster after the window opens.",
-  "- A terminal closed while its agent was still writing no longer ends the session.",
-  "- The report panel keeps its scroll position when a page is replaced.",
-  "- Settings lists which accounts share their conversations.",
-  "- Archived sessions whose conversation is gone can be deleted in one step.",
-  "- Several smaller fixes to the file viewer and the Git panel.",
-].join("\n");
-
-const newer: AvailableUpdate = { version: "0.2.0", notes: NOTES };
+const newer: AvailableUpdate = { version: "0.2.0" };
 
 // The daemon's own update, for a browser tab whose daemon updates itself: the same offer as the desktop updater's, as the
 // daemon's status holds it.
-const daemonOffer: DaemonUpdateAvailable = { version: newer.version, notes: NOTES, holder_floor: "0.1.0", channel: "stable" };
+const daemonOffer: DaemonUpdateAvailable = { version: newer.version, holder_floor: "0.1.0", channel: "stable" };
 const foundOffer: DaemonUpdateCheck = { outcome: "available", at: minutesAgo(25), error: null, detail: null };
 // Where a daemon that cannot write to its own folder would have put the new executable, and the command it hands over
 // for installing by hand: the install script from the site the daemon was built with, told that folder.
@@ -73,7 +64,7 @@ export const updateScenarios: Scenario[] = [
     category: "normal",
     title: "Update notice, a newer version found",
     description:
-      "A strip along the bottom edge under the terminal, in the accent colour: a download icon, the sentence naming the version, What is new (an external-link icon, opening the offered version's GitHub release page), Download and install and an X icon named Later (its tooltip says so) that puts the notice off. The link stays available even when the update has no notes. Choose Phone (390px) to see the sentence and controls wrap without an expanded notes box.",
+      "A strip along the bottom edge under the terminal, in the accent colour: a download icon, the sentence naming the version, What is new (an external-link icon, opening the offered version's GitHub release page), Download and install and an X icon named Later (its tooltip says so) that puts the notice off. Choose Phone (390px) to see the sentence and controls wrap.",
     state: quiet,
     updater: { check: newer, checked: true },
     steps: [openSession],

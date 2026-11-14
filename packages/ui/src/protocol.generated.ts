@@ -1176,10 +1176,6 @@ export type ConversationLocation = {
 export type DaemonUpdateAvailable = {
   version: string,
   /**
-   * The release's notes as the manifest carries them, Markdown; null when it has none.
-   */
-  notes: string | null,
-  /**
    * The oldest holder version the new daemon adopts the terminals of (`handover_check`'s
    * `holder_floor`); null when the manifest names none.
    */

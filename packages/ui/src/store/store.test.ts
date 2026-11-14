@@ -230,7 +230,7 @@ it("keeps the daemon's own update from the snapshot and from daemon_update_statu
   expect(held).toEqual(idle);
   client.onEvents!([snapshotOf({ ...idle })]);
   expect(daemon.store.getState().daemonUpdate).toBe(held);
-  const downloading = { ...idle, phase: "downloading" as const, available: { version: "0.2.0", notes: null, holder_floor: null, channel: "stable" as const }, progress: { downloaded: 1, total: 10 } };
+  const downloading = { ...idle, phase: "downloading" as const, available: { version: "0.2.0", holder_floor: null, channel: "stable" as const }, progress: { downloaded: 1, total: 10 } };
   client.onEvents!([{ type: "daemon_update_status_updated", status: downloading }]);
   expect(daemon.store.getState().daemonUpdate).toEqual(downloading);
   client.onEvents!([{ type: "daemon_update_status_updated", status: { ...downloading } }]);

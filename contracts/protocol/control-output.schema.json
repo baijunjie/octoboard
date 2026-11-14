@@ -2402,13 +2402,6 @@
         "version": {
           "type": "string"
         },
-        "notes": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "description": "The release's notes as the manifest carries them, Markdown; null when it has none."
-        },
         "holder_floor": {
           "type": [
             "string",
@@ -2423,7 +2416,6 @@
       },
       "required": [
         "version",
-        "notes",
         "holder_floor",
         "channel"
       ],

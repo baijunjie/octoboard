@@ -4,7 +4,7 @@ name: Release
 # (macOS, Windows and Linux), or for the ones a last line such as `Platforms: macos` or `Platforms: macos,linux` of the
 # tag's message selects. Running the workflow by hand releases an existing tag the same way, for the platform(s) its
 # `platforms` input names: how a platform that a version's tag left out is added later. Application checks run locally
-# before tagging. The tag's message is the release notes, which the in-app update notice shows too.
+# before tagging. The tag's message is the release notes, shown on the version's GitHub release page.
 # The builds run in parallel, each only for a selected platform: `macos` builds, signs and notarizes the universal
 # build; the Windows build makes the x64 installer and code-signs it as the repository variable `WINDOWS_SIGNING` says
 # (none, command or signpath; unset is none), in the one job `windows` for none and command and in the

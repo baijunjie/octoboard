@@ -3,7 +3,7 @@
 //!
 //! The UI owns when to look and what to say (`packages/ui/src/updates/`); this module only does
 //! what needs the shell. Two commands cross IPC from here, both carrying display values:
-//! `check_for_update` answers the version and notes of what it found, and `install_update` reports
+//! `check_for_update` answers the version of what it found, and `install_update` reports
 //! download progress through a channel. Relaunching is not here: it goes through the exit flow's
 //! `confirm_quit` (`exit.rs`), so the user is asked first about the sessions a restart ends.
 //!
@@ -97,8 +97,6 @@ fn manifest_url(repository_url: &str, channel: UpdateChannel, suffix: &str) -> S
 #[derive(Serialize)]
 pub struct AvailableUpdate {
     version: String,
-    /// The release notes, when the manifest has any.
-    notes: Option<String>,
     /// The oldest version whose process holders the new build adopts (the manifest's `holder_floor`), when
     /// the manifest names one: a session whose holder is older would be interrupted by the restart.
     holder_floor: Option<String>,
@@ -311,7 +309,6 @@ pub async fn check_for_update(
         Ok(Some(update)) => {
             let found = AvailableUpdate {
                 version: update.version.clone(),
-                notes: update.body.clone().filter(|notes| !notes.trim().is_empty()),
                 holder_floor: holder_floor(&update.raw_json),
             };
             inner.found = Some(update);
@@ -466,12 +463,11 @@ mod tests {
     fn a_found_update_reaches_the_page_with_its_holder_floor() {
         let found = AvailableUpdate {
             version: "0.2.0".into(),
-            notes: None,
             holder_floor: Some("0.1.0".into()),
         };
         assert_eq!(
             serde_json::to_string(&found).unwrap(),
-            r#"{"version":"0.2.0","notes":null,"holder_floor":"0.1.0"}"#
+            r#"{"version":"0.2.0","holder_floor":"0.1.0"}"#
         );
     }
 

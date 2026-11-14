@@ -361,7 +361,7 @@ The workflow:
 
 1. `validate` runs `.github/release-notes.sh`: the tag must equal `desktop-v<version>` from `apps/desktop/package.json`
    and be an annotated tag with a non-empty message. The message, minus any signature and its `Platforms:` line, is the
-   release notes, which the in-app update notice shows too. The platforms are the `platforms` input of a manual run, else
+   release notes, shown on the version's GitHub release page. The platforms are the `platforms` input of a manual run, else
    the tag message's `Platforms:` line, else all of them; they are the job's output. It also checks that the tagged commit is
    on `main`, that the repository secrets below are set (the Apple ones, only for macOS; the update key is an
    environment secret `validate` cannot see, so `sign` checks it), and that `Cargo.lock` matches the manifests (`cargo metadata --locked`), which the `--locked` build would otherwise

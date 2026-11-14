@@ -42,7 +42,7 @@ afterEach(() => {
 /** The command the daemon hands over for an upgrade by hand: its own, not one the application makes up. */
 const MANUAL_COMMAND = "curl -fsSL https://example.test/install.sh | sh -s -- --bin-dir /opt/octoboard --beta";
 const IDLE: DaemonUpdateStatus = { phase: "idle", available: null, progress: null, installed: null, last_check: null, install: null, manual: null, updated_from: null };
-const AVAILABLE = { version: "0.2.0", notes: null, holder_floor: null, channel: "stable" } as const;
+const AVAILABLE = { version: "0.2.0", holder_floor: null, channel: "stable" } as const;
 
 function mount(status: DaemonUpdateStatus, clipboard?: PlatformAdapter["clipboard"], agentCliStatuses?: State["agentCliStatuses"]) {
   const request = vi.fn(answerDaemonUpdateRequest);

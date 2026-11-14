@@ -285,7 +285,6 @@ impl DaemonUpdates {
             Ok(Some(release)) => {
                 inner.status.available = Some(DaemonUpdateAvailable {
                     version: release.version.clone(),
-                    notes: release.notes.clone(),
                     holder_floor: release.holder_floor.clone(),
                     channel: release.channel,
                 });

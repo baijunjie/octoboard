@@ -375,8 +375,8 @@ function tauriKeepAwake(): KeepAwakeCapability {
   };
 }
 
-/** Through the shell's own commands (`updater/`), which carry a channel's name in and a version, its notes and
- * the download's progress out. The shell rejects with `{ kind, detail? }`. */
+/** Through the shell's own commands (`updater/`), which carry a channel's name in and a version and the
+ * download's progress out. The shell rejects with `{ kind, detail? }`. */
 function tauriUpdater(): UpdaterCapability {
   const failure = (err: unknown): UpdaterError => {
     const { kind, detail } = shellFailure(err);
@@ -390,10 +390,10 @@ function tauriUpdater(): UpdaterCapability {
     },
     async check(channel) {
       const { invoke } = await import("@tauri-apps/api/core");
-      const found = await invoke<{ version: string; notes: string | null; holder_floor?: string | null } | null>("check_for_update", { channel }).catch((err) => {
+      const found = await invoke<{ version: string; holder_floor?: string | null } | null>("check_for_update", { channel }).catch((err) => {
         throw failure(err);
       });
-      return found ? { version: found.version, notes: found.notes ?? undefined, holderFloor: found.holder_floor ?? null } : undefined;
+      return found ? { version: found.version, holderFloor: found.holder_floor ?? null } : undefined;
     },
     async install(onProgress) {
       const { Channel, invoke } = await import("@tauri-apps/api/core");

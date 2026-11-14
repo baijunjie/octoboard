@@ -83,7 +83,6 @@ pub fn archive_name(version: &str, arch: &str) -> String {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Release {
     pub version: String,
-    pub notes: Option<String>,
     pub holder_floor: Option<String>,
     /// Where the archive is, an `https` address.
     pub url: String,
@@ -124,8 +123,6 @@ impl Release {
 #[derive(Deserialize)]
 struct Manifest {
     version: String,
-    #[serde(default)]
-    notes: Option<String>,
     #[serde(default)]
     holder_floor: Option<String>,
     platforms: std::collections::HashMap<String, Entry>,
@@ -173,7 +170,6 @@ pub fn parse(body: &str, key: &str, channel: DaemonUpdateChannel) -> Result<Rele
         .filter(|floor| Version::parse(floor).is_some());
     Ok(Release {
         version: manifest.version,
-        notes: manifest.notes.filter(|notes| !notes.trim().is_empty()),
         holder_floor,
         url: entry.url.clone(),
         signature: entry.signature.trim().to_owned(),

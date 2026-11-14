@@ -314,8 +314,6 @@ export interface AvailableUpdate {
    * daemon: a restart into the update leaves the ones held by an older build interrupted. `null` when the shell does
    * not say, which counts every running one as interrupted. */
   holderFloor?: string | null;
-  /** The release notes, when the release has any. */
-  notes?: string;
 }
 
 /** How much of the update has been downloaded so far. */

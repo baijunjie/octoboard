@@ -75,7 +75,7 @@ export function createDaemonUpdateStore({
     const next: UpdateState = {
       currentVersion: version,
       phase: installing ? "downloading" : status?.phase ?? "idle",
-      update: available && { version: available.version, holderFloor: available.holder_floor, notes: available.notes ?? undefined },
+      update: available && { version: available.version, holderFloor: available.holder_floor },
       updateChannel: available?.channel,
       progress: progress ? { downloaded: progress.downloaded, total: progress.total ?? undefined } : installing ? { downloaded: 0 } : undefined,
       installedVersion: installed?.version ?? undefined,

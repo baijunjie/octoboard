@@ -159,7 +159,7 @@ show. Its row wraps onto more lines in a narrow window. It says one of three thi
 The notice names the version, with:
 
 - **What is new**, a link drawn as a button with an external-link icon, which opens the offered version's GitHub
-  release page in the browser, whether or not the update includes release notes (see "Where updates come from" above);
+  release page in the browser (see "Where updates come from" above);
 - **Download and install**, which starts the download (see "Downloading and installing" below);
 - **Later**, an icon button, which hides the notice. The update is still offered in Settings. The notice comes back
   when a later check finds a different version, or when an update is found after the channel was switched; the same

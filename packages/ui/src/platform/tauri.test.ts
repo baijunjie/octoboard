@@ -135,12 +135,12 @@ it("asks the shell to relaunch only when told to", async () => {
   ]);
 });
 
-it("hands the shell the channel to check and answers the version, notes and holder floor it found", async () => {
-  invoke.mockResolvedValue({ version: "0.2.0", notes: "Fixes.", holder_floor: "0.2.0" });
-  await expect(tauriPlatform().updater!.check("stable")).resolves.toEqual({ version: "0.2.0", notes: "Fixes.", holderFloor: "0.2.0" });
+it("hands the shell the channel to check and answers the version and holder floor it found", async () => {
+  invoke.mockResolvedValue({ version: "0.2.0", holder_floor: "0.2.0" });
+  await expect(tauriPlatform().updater!.check("stable")).resolves.toEqual({ version: "0.2.0", holderFloor: "0.2.0" });
   expect(invoke).toHaveBeenCalledWith("check_for_update", { channel: "stable" });
-  invoke.mockResolvedValue({ version: "0.3.0", notes: null });
-  await expect(tauriPlatform().updater!.check("beta")).resolves.toEqual({ version: "0.3.0", notes: undefined, holderFloor: null });
+  invoke.mockResolvedValue({ version: "0.3.0" });
+  await expect(tauriPlatform().updater!.check("beta")).resolves.toEqual({ version: "0.3.0", holderFloor: null });
 });
 
 it("answers nothing for a check that found no newer version", async () => {
