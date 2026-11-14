@@ -22,7 +22,7 @@ const SIDES = {
     grow: 1,
     centre: "0px",
     appearance: "line",
-    layout: "hidden sidebar-docked:block w-1.5 translate-x-[3px]",
+    layout: "hidden sidebar-docked:block w-1.5 translate-x-[3px] [&>div]:ml-0 [&>div]:mr-auto",
   },
   aside: {
     label: "pane.resizeAside",
