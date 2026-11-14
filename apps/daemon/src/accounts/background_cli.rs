@@ -127,7 +127,11 @@ impl Process {
     /// Kills the CLI's whole session and waits for the CLI to be gone, so that what it held
     /// (Codex's login port) is free when this returns. The session is swept once the CLI has
     /// exited, found out without reaping it (`WNOWAIT`), while its zombie keeps the session id
-    /// from passing to another process.
+    /// from passing to another process. On Windows the CLI is often itself one of what the sweep
+    /// ends: a binary found as a `.cmd` (an npm install's shim) runs through `cmd.exe`, so the
+    /// process started is `cmd.exe` and the CLI its child on the same console. The promise holds
+    /// there through the sweep's wait for what it ended to be gone ([`proc::PendingSweep::wait`]),
+    /// which is bounded, and made on a blocking thread when there is anything to wait for.
     pub(crate) async fn stop(&mut self) {
         // `id` is `None` once the child has been reaped, when its pid may be someone else's.
         if self.child.id().is_some() {
@@ -137,7 +141,21 @@ impl Process {
                 match child.exited_unreaped() {
                     Some(false) => tokio::time::sleep(EXIT_POLL).await,
                     Some(true) => {
-                        child.kill_leftovers(&[]).log(child.pid(), self.label);
+                        let pending = child.start_kill_leftovers(&[]);
+                        let (pid, label) = (child.pid(), self.label);
+                        if pending.needs_wait() {
+                            match tokio::task::spawn_blocking(move || pending.wait()).await {
+                                Ok(swept) => swept.log(pid, label),
+                                Err(err) => tracing::warn!(
+                                    process = label,
+                                    pid = pid.0,
+                                    %err,
+                                    "waiting for what the sweep of the session ended failed"
+                                ),
+                            }
+                        } else {
+                            pending.wait().log(pid, label);
+                        }
                         break;
                     }
                     // `waitid` cannot tell, which it also says of a child already reaped, whose
@@ -175,9 +193,24 @@ impl Drop for Process {
         // starts while the kill is landing is missed.
         if self.child.id().is_some() {
             self.handle.kill();
-            self.handle
-                .kill_leftovers(&[])
-                .log(self.handle.pid(), self.label);
+            let pending = self.handle.start_kill_leftovers(&[]);
+            let (pid, label) = (self.handle.pid(), self.label);
+            if !pending.needs_wait() {
+                pending.wait().log(pid, label);
+                return;
+            }
+            let wait = move || pending.wait().log(pid, label);
+            // What the sweep ended is ended already; only the wait for it to be gone is left. A
+            // drop on the runtime (a flow's timeout, the daemon's exit) hands that to a blocking
+            // thread rather than hold a worker for it, one off the runtime waits in place. So on
+            // Windows the flow's scratch directory, removed as best it can be when the flow is
+            // dropped, may meet a file a process still running down holds, and stay.
+            match tokio::runtime::Handle::try_current() {
+                Ok(runtime) => {
+                    runtime.spawn_blocking(wait);
+                }
+                Err(_) => wait(),
+            }
         }
     }
 }

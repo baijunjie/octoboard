@@ -10,8 +10,8 @@ pub(crate) use super::systemd::{
 };
 
 use super::{
-    tag_value, Polite, ProcessId, ProcessIdentity, Sent, SetEnv, Signal, Swept, Unreaped,
-    TAG_VARIABLE,
+    tag_value, PendingSweep, Polite, ProcessId, ProcessIdentity, Sent, SetEnv, Signal, Swept,
+    Unreaped, TAG_VARIABLE,
 };
 use crate::platform::descriptors;
 use crate::platform::proc_table::{self, pids};
@@ -255,7 +255,16 @@ impl ChildHandle {
     /// processes `keep` names. Best made once the child has exited, since what it starts after
     /// the sweep is missed.
     pub fn kill_leftovers(&self, keep: &[ProcessIdentity]) -> Swept {
-        kill_members(self.pid, keep)
+        self.start_kill_leftovers(keep).wait()
+    }
+
+    /// [`Self::kill_leftovers`], leaving the wait for what it killed to [`PendingSweep::wait`];
+    /// nothing is waited for on Unix.
+    pub fn start_kill_leftovers(&self, keep: &[ProcessIdentity]) -> PendingSweep {
+        PendingSweep {
+            swept: kill_members(self.pid, keep),
+            waiter: Waiter,
+        }
     }
 
     /// Whether the process group the child leads has a member other than the child, or `None`
@@ -556,6 +565,7 @@ fn kill_members(leader: ProcessId, keep: &[ProcessIdentity]) -> Swept {
             return Swept {
                 killed: signalled.len(),
                 complete: false,
+                stuck: 0,
             };
         };
         let before = signalled.len();
@@ -586,6 +596,21 @@ fn kill_members(leader: ProcessId, keep: &[ProcessIdentity]) -> Swept {
     Swept {
         killed: signalled.len(),
         complete: true,
+        stuck: 0,
+    }
+}
+
+/// What [`PendingSweep::wait`] waits on: nothing on Unix, where a sweep's `SIGKILL` is not waited
+/// for.
+pub(crate) struct Waiter;
+
+impl Waiter {
+    pub(super) fn needs_wait(&self) -> bool {
+        false
+    }
+
+    pub(super) fn wait(self) -> usize {
+        0
     }
 }
 

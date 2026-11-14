@@ -47,6 +47,15 @@ on using — a login that opens a browser, which `xdg-open` on a Linux desktop s
 sweep only when the daemon ends the CLI (cancel, timeout, daemon exit) and just reap one that exits by itself, as the
 account login flows in `apps/daemon/src/accounts/login/flows.rs` do.
 
+## On Windows a process is gone only once its handle is signalled, not once its exit code reads exited
+
+Applies to daemon code and tests that end a process on Windows, or wait for one to end, and then rely on it being gone:
+a port or file handle it held is free, its scratch directory can be removed, the daemon's process table no longer lists
+it. `TerminateProcess` only starts the end, and the exit code can read as exited while the process still runs down,
+still listed and still holding its handles. So wait, bounded, until the process handle (opened with `SYNCHRONIZE`) is
+signalled. End a launch's leftovers through `platform::proc` (`kill_leftovers`, or `start_kill_leftovers` and then
+`PendingSweep::wait` off the runtime and outside any lock), which waits so; a test asks `test_support::is_running` or
+`assert_stops_running`, which answer as the process table does, never the exit code.
 
 ## A process that may have a controlling terminal never takes a login-shell snapshot
 

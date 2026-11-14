@@ -26,7 +26,7 @@ use std::sync::Arc;
 use windows_sys::Wdk::System::Threading::{NtQueryInformationProcess, PROCESSINFOCLASS};
 use windows_sys::Win32::Foundation::{
     DuplicateHandle, GetLastError, DUPLICATE_SAME_ACCESS, ERROR_ACCESS_DENIED,
-    ERROR_INVALID_PARAMETER, ERROR_MORE_DATA, HANDLE, INVALID_HANDLE_VALUE,
+    ERROR_INVALID_PARAMETER, ERROR_MORE_DATA, HANDLE, INVALID_HANDLE_VALUE, WAIT_TIMEOUT,
 };
 use windows_sys::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, Thread32First, Thread32Next, TH32CS_SNAPTHREAD, THREADENTRY32,
@@ -51,7 +51,8 @@ pub(crate) use create::{spawn_in_background, start_detached, BackgroundChild};
 
 use super::{tag_value, TAG_VARIABLE};
 use super::{
-    Polite, ProcessId, ProcessIdentity, Reach, Sent, SetEnv, Signal, Swept, UnitState, Unreaped,
+    PendingSweep, Polite, ProcessId, ProcessIdentity, Reach, Sent, SetEnv, Signal, Swept,
+    UnitState, Unreaped,
 };
 use crate::platform::proc_table::{is_running, start_of_handle, Process};
 
@@ -65,6 +66,22 @@ const PROCESS_CONSOLE_HOST_PROCESS: PROCESSINFOCLASS = 49;
 /// The exit code a process the daemon ends is given: 1, as `kill` gives a process it ends on
 /// Unix a status that is not success.
 const KILLED: u32 = 1;
+
+/// How long [`PendingSweep::wait`] waits for the processes a sweep ended to be gone.
+/// `TerminateProcess` only starts the end: the process still runs down, still listed and still
+/// holding its handles, a port among them, after its exit code says it exited. That takes
+/// milliseconds; one still there after this is stuck in the kernel, and is not waited for any
+/// longer.
+const ENDED_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// [`ENDED_WAIT`], under test widened to [`crate::test_support::PATIENCE`]: the wait ends as soon
+/// as the processes are gone, so a passing test pays nothing for it.
+fn ended_wait() -> std::time::Duration {
+    #[cfg(test)]
+    return ENDED_WAIT.max(crate::test_support::PATIENCE);
+    #[cfg(not(test))]
+    ENDED_WAIT
+}
 
 /// How many bytes of arguments a caller hands one program it starts, with room to spare below
 /// the 32767 UTF-16 units a command line holds: an argument's UTF-8 bytes are never fewer than its
@@ -468,36 +485,59 @@ impl ChildHandle {
         }
     }
 
-    /// Ends the child, and for a group what it started too.
+    /// Ends the child, and for a group what it started too: every member of the reach, the child
+    /// among them, and then it **blocks** until they are gone, the child included where the reach
+    /// could be listed, for [`ended_wait`] at most ([`PendingSweep::wait`]).
     pub fn kill(&self) -> Sent {
         if self.session {
             return terminate(self.process());
         }
-        let swept = terminate_members(&self.reach, &[], None, None);
+        let pending = terminate_members(&self.reach, &[], None, None);
+        // Not a repeat of the sweep's end of the child where the reach could not be listed: the
+        // sweep then ended nothing, and this ends the child (unwaited). Otherwise it finds the
+        // child ended already, and what it answers is used only when the sweep killed nothing.
         let ended = terminate(self.process());
-        if swept.killed > 0 {
-            Sent::Delivered
-        } else {
-            ended
+        let swept = pending.wait();
+        if swept.stuck > 0 {
+            tracing::warn!(
+                pid = self.pid.0,
+                stuck = swept.stuck,
+                "processes of a group the kill waited for had not ended within the wait"
+            );
+        }
+        match ended {
+            _ if swept.killed > 0 => Sent::Delivered,
+            // Refused while it was on its way out, and gone since, as the wait saw.
+            Sent::Failed(_) if !is_running(self.process()) => Sent::Gone,
+            ended => ended,
         }
     }
 
     /// Ends what the child started that is still on its console, its session, wherever it went
-    /// in the reach, other than the child itself and the processes `keep` names. What was started
-    /// detached or on a console of its own has left the session and is not reached. The child's
-    /// console is still known once it has exited, so the sweep is best made then.
+    /// in the reach, other than the child itself and the processes `keep` names, and **blocks**
+    /// until they are gone, for [`ended_wait`] at most. What was started detached or on a console
+    /// of its own has left the session and is not reached. The child's console is still known
+    /// once it has exited, so the sweep is best made then.
     pub fn kill_leftovers(&self, keep: &[ProcessIdentity]) -> Swept {
+        self.start_kill_leftovers(keep).wait()
+    }
+
+    /// [`Self::kill_leftovers`], leaving the wait for what it ended to [`PendingSweep::wait`]: for
+    /// a caller that holds a lock, or runs on the async runtime, while it ends them.
+    pub fn start_kill_leftovers(&self, keep: &[ProcessIdentity]) -> PendingSweep {
+        let nothing = |complete| PendingSweep {
+            swept: Swept {
+                killed: 0,
+                complete,
+                stuck: 0,
+            },
+            waiter: Waiter(Vec::new()),
+        };
         match console_of(self.process()) {
             Console::Host(host) => terminate_members(&self.reach, keep, Some(self.pid), Some(host)),
             // A child that never connected to a console can have started nothing on one.
-            Console::None => Swept {
-                killed: 0,
-                complete: true,
-            },
-            Console::Unknown => Swept {
-                killed: 0,
-                complete: false,
-            },
+            Console::None => nothing(true),
+            Console::Unknown => nothing(false),
         }
     }
 
@@ -590,25 +630,31 @@ fn terminate(process: HANDLE) -> Sent {
 /// serves, one by one: a pid the job listed is opened and checked to be in the job still before it
 /// is ended, so it is never another process's. A console host serves every process on its console,
 /// a kept one among them, and ends by itself once none is left. Passes repeat while one ends a
-/// process the last did not, since a process may start another just before it is ended.
+/// process the last did not, since a process may start another just before it is ended. What it
+/// ended, and what it found already on its way out, is left for [`PendingSweep::wait`] to wait on.
 fn terminate_members(
     job: &Job,
     keep: &[ProcessIdentity],
     spared: Option<ProcessId>,
     on_console: Option<u32>,
-) -> Swept {
+) -> PendingSweep {
     const MAX_PASSES: usize = 3;
-    let mut ended = std::collections::HashSet::new();
+    let mut killed = 0;
+    // The handles on what was ended or found ending, kept open to wait on (the pid stays theirs
+    // meanwhile), and their pids, so a pass finding one again does not take it twice; and the
+    // pids that could not be ended, so none is tried and warned about again.
+    let mut ending = Vec::new();
+    let mut waited = std::collections::HashSet::new();
+    let mut refused = std::collections::HashSet::new();
+    let mut complete = true;
     for _ in 0..MAX_PASSES {
         let Ok(pids) = job.pids() else {
-            return Swept {
-                killed: ended.len(),
-                complete: false,
-            };
+            complete = false;
+            break;
         };
-        let before = ended.len();
+        let before = killed;
         for pid in pids {
-            if Some(ProcessId(pid)) == spared || ended.contains(&pid) {
+            if Some(ProcessId(pid)) == spared || waited.contains(&pid) || refused.contains(&pid) {
                 continue;
             }
             let Some(process) = Process::open(
@@ -633,17 +679,64 @@ fn terminate_members(
             {
                 continue;
             }
-            if terminate(process.raw()).delivered() {
-                ended.insert(pid);
+            match terminate(process.raw()) {
+                Sent::Delivered => {
+                    killed += 1;
+                    waited.insert(pid);
+                    ending.push(process);
+                }
+                Sent::Gone => {}
+                // Ending a process already on its way out is refused while it is not signalled
+                // yet; it is waited for all the same, as it still holds what it held.
+                Sent::Failed(err) if err.raw_os_error() == Some(ERROR_ACCESS_DENIED as i32) => {
+                    waited.insert(pid);
+                    ending.push(process);
+                }
+                Sent::Failed(err) => {
+                    refused.insert(pid);
+                    tracing::warn!(pid, %err, "ending a process left in the reach failed");
+                }
             }
         }
-        if ended.len() == before {
+        if killed == before {
             break;
         }
     }
-    Swept {
-        killed: ended.len(),
-        complete: true,
+    PendingSweep {
+        swept: Swept {
+            killed,
+            complete,
+            stuck: 0,
+        },
+        waiter: Waiter(ending),
+    }
+}
+
+/// What [`PendingSweep::wait`] waits on: handles on the processes a sweep ended, or found already
+/// on their way out. `TerminateProcess` only starts the end: an ended process still runs down,
+/// still listed and still holding its handles, a port among them, after its exit code says it
+/// exited.
+pub(crate) struct Waiter(Vec<Process>);
+
+impl Waiter {
+    pub(super) fn needs_wait(&self) -> bool {
+        !self.0.is_empty()
+    }
+
+    /// Waits until each process is gone, for [`ended_wait`] at most in all, and returns how many
+    /// had not ended by then. A process the wait could not be made on is not counted.
+    pub(super) fn wait(self) -> usize {
+        let deadline = std::time::Instant::now() + ended_wait();
+        let mut stuck = 0;
+        for process in &self.0 {
+            let left = deadline.saturating_duration_since(std::time::Instant::now());
+            let millis = u32::try_from(left.as_millis()).unwrap_or(INFINITE - 1);
+            // SAFETY: the handle is open, with `SYNCHRONIZE`, for the call.
+            if unsafe { WaitForSingleObject(process.raw(), millis) } == WAIT_TIMEOUT {
+                stuck += 1;
+            }
+        }
+        stuck
     }
 }
 

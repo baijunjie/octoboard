@@ -476,7 +476,9 @@ fn run_version(binary: &ResolvedBinary, environment: &Environment) -> Option<Str
     };
     let Some(mut stdout) = child.stdout.take() else {
         handle.kill();
-        handle.kill_leftovers(&[]);
+        handle
+            .kill_leftovers(&[])
+            .log_stuck(handle.pid(), &binary.program.to_string_lossy());
         let _ = child.wait();
         return None;
     };
@@ -495,7 +497,9 @@ fn run_version(binary: &ResolvedBinary, environment: &Environment) -> Option<Str
     if text.is_none() {
         handle.kill();
     }
-    handle.kill_leftovers(&[]);
+    handle
+        .kill_leftovers(&[])
+        .log_stuck(handle.pid(), &binary.program.to_string_lossy());
     let _ = child.wait();
     Some(String::from_utf8_lossy(&text?).into_owned()).filter(|text| !text.trim().is_empty())
 }

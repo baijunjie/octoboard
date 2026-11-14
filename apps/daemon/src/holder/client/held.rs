@@ -367,13 +367,20 @@ impl HeldTerminal {
                 identities: keep.iter().map(ProcessIdentity::key).collect(),
             });
         match reply {
+            // The holder waits for what it killed itself, and reports no count of what it gave
+            // up waiting on.
             Some(FromHolder::Answer {
                 answer: Answer::Swept { killed, complete },
                 ..
-            }) => Swept { killed, complete },
+            }) => Swept {
+                killed,
+                complete,
+                stuck: 0,
+            },
             _ => Swept {
                 killed: 0,
                 complete: false,
+                stuck: 0,
             },
         }
     }

@@ -311,12 +311,18 @@ pub struct Swept {
     pub killed: usize,
     /// `false` when listing the processes failed, so some may be left.
     pub complete: bool,
+    /// How many processes the sweep waited for had not ended within the wait: on Windows, where a
+    /// process ended still runs down for a while ([`PendingSweep::wait`]). Those include
+    /// processes it found already on their way out, which it did not kill, so this can exceed
+    /// `killed`. Always 0 on Unix, where nothing is waited for.
+    pub stuck: usize,
 }
 
 impl Swept {
     /// Logs the sweep of the session `leader` leads, named `process` in the log, when it killed
-    /// anything or could not finish.
+    /// anything, could not finish, or waited in vain for processes to end ([`Self::log_stuck`]).
     pub fn log(&self, leader: ProcessId, process: &str) {
+        self.log_stuck(leader, process);
         if !self.complete {
             tracing::warn!(
                 process,
@@ -331,6 +337,52 @@ impl Swept {
                 killed = self.killed,
                 "killed processes left in the process's session"
             );
+        }
+    }
+
+    /// Logs, of the sweep of the session `leader` leads, only the processes it waited for that
+    /// had not ended within the wait: for a caller whose sweep is logged in full elsewhere, or not
+    /// at all.
+    pub fn log_stuck(&self, leader: ProcessId, process: &str) {
+        if self.stuck > 0 {
+            tracing::warn!(
+                process,
+                pid = leader.0,
+                killed = self.killed,
+                stuck = self.stuck,
+                "processes the sweep of the process's session waited for had not ended in time"
+            );
+        }
+    }
+}
+
+/// A sweep whose processes are ended but not yet waited for, from
+/// [`ChildHandle::start_kill_leftovers`]: [`Self::wait`] waits for them, so a caller holding a
+/// lock or running on the async runtime can do it after letting go of the lock, or on a blocking
+/// thread. Dropped without the wait, what it ended is ended all the same; only nothing waits for it
+/// to be gone, and what had not ended is not counted.
+#[must_use = "the processes are ended, but nothing waits for them to be gone"]
+pub struct PendingSweep {
+    swept: Swept,
+    waiter: Waiter,
+}
+
+impl PendingSweep {
+    /// Whether [`Self::wait`] has anything to wait for: never on Unix, and on Windows only once the
+    /// sweep ended a process or found one on its way out. A caller that would move the wait off
+    /// the runtime can make it in place when there is none.
+    pub fn needs_wait(&self) -> bool {
+        self.waiter.needs_wait()
+    }
+
+    /// Waits until the processes the sweep ended, and those it found already on their way out, are
+    /// gone, for a bounded time (on Windows, where a process ended still runs down, holding what it
+    /// held; on Unix it returns at once), and says what the sweep did. **Blocks.**
+    pub fn wait(self) -> Swept {
+        let stuck = self.waiter.wait();
+        Swept {
+            stuck,
+            ..self.swept
         }
     }
 }

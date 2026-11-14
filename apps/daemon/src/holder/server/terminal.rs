@@ -754,16 +754,28 @@ impl Terminal {
         child.handle.group_has_members()
     }
 
-    /// Kills what the program started, wherever it went, other than the processes `keep` names.
+    /// Kills what the program started, wherever it went, other than the processes `keep` names,
+    /// and **blocks** until they are gone, for a bounded time ([`PendingSweep::wait`]); the wait is
+    /// made after letting go of the program's lock, which the requests served on the runtime take.
+    ///
+    /// [`PendingSweep::wait`]: crate::platform::proc::PendingSweep::wait
     pub(super) fn kill_leftovers(&self, keep: &[ProcessIdentity]) -> crate::platform::proc::Swept {
-        let child = self.child();
-        if child.reaped {
-            return crate::platform::proc::Swept {
-                killed: 0,
-                complete: true,
-            };
-        }
-        child.handle.kill_leftovers(keep)
+        let pending = {
+            let child = self.child();
+            if child.reaped {
+                return crate::platform::proc::Swept {
+                    killed: 0,
+                    complete: true,
+                    stuck: 0,
+                };
+            }
+            child.handle.start_kill_leftovers(keep)
+        };
+        // The daemon logs the sweep it asked for, but the answer has no room for what had not
+        // ended within the wait: that is logged here.
+        let swept = pending.wait();
+        swept.log_stuck(self.pid, &self.id);
+        swept
     }
 
     /// Reaps the program if it has exited. It leaves the crash cleanup first, which signals by
@@ -782,11 +794,16 @@ impl Terminal {
     }
 
     /// Ends the program and what it left, for a holder with no daemon to answer to. **Blocks**
-    /// for up to a second or two while the program is reaped.
+    /// while what it left runs down (on Windows, for a bounded time: [`PendingSweep::wait`]) and
+    /// then for up to two seconds more while the program is reaped.
+    ///
+    /// [`PendingSweep::wait`]: crate::platform::proc::PendingSweep::wait
     pub(super) fn end(self: &Arc<Self>) {
-        {
+        let pending = {
             let child = self.child();
-            if !child.reaped {
+            if child.reaped {
+                None
+            } else {
                 if self.exited.load(Ordering::Acquire)
                     || child.handle.exited_unreaped() == Some(true)
                 {
@@ -794,10 +811,13 @@ impl Terminal {
                 } else if let Sent::Failed(err) = child.handle.kill() {
                     tracing::warn!(terminal = %self.id, %err, "killing the process failed");
                 }
-                if self.kill_session_leftovers {
-                    child.handle.kill_leftovers(&[]).log(self.pid, &self.id);
-                }
+                self.kill_session_leftovers
+                    .then(|| child.handle.start_kill_leftovers(&[]))
             }
+        };
+        // Waited for outside the program's lock, which the requests served on the runtime take.
+        if let Some(pending) = pending {
+            pending.wait().log(self.pid, &self.id);
         }
         self.hang_up();
         let deadline = Instant::now() + Duration::from_secs(2);

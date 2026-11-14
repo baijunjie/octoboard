@@ -105,7 +105,8 @@ pub(crate) struct Flow {
 }
 
 /// A scratch directory removed on drop, so that a flow dropped by a timeout or the daemon's exit
-/// leaves nothing behind either.
+/// leaves nothing behind either, as far as the removal can go: on Windows a CLI process still
+/// running down when the flow is dropped can hold a file in it, and the directory then stays.
 struct Scratch(PathBuf);
 
 impl Drop for Scratch {

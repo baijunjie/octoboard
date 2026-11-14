@@ -413,6 +413,33 @@ fn a_session_sweep_reaches_what_a_group_kill_misses() {
     let swept = leader_handle.kill_leftovers(&[]);
     assert!(swept.complete);
     assert!(swept.killed >= 1);
+    // On Windows the sweep returns once what it ended is gone, not only told to end: a process
+    // ended there still runs down, holding what it held, after its exit code says it exited.
+    #[cfg(windows)]
+    assert!(
+        !is_running(helper),
+        "the sweep returned before the helper was gone"
+    );
+    assert_gone_by(helper, Instant::now() + PATIENCE);
+    assert!(!wait_for_exit(&mut leader).success());
+    guard.0.clear();
+}
+
+/// A sweep dropped before its wait has still ended what it found: only nothing waits for it.
+#[test]
+fn a_sweep_dropped_unwaited_still_ends_what_it_found() {
+    let dir = ScratchDir::new("proc-unwaited");
+    let pid_file = dir.join("leader");
+    let mut leader = start("lead_own_group", &pid_file, |command| {
+        Reach::Session.lead(command)
+    });
+    let leader_handle = handle_of(&leader, Reach::Session);
+    let helper = wait_for_pid(&pid_file);
+    let mut guard = KillOnDrop(vec![leader.id() as i32, helper]);
+
+    assert!(leader_handle.kill().delivered());
+    wait_for_unreaped_exit(&leader_handle);
+    drop(leader_handle.start_kill_leftovers(&[]));
     assert_gone_by(helper, Instant::now() + PATIENCE);
     assert!(!wait_for_exit(&mut leader).success());
     guard.0.clear();
