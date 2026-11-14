@@ -507,7 +507,7 @@ impl ChildHandle {
         }
         match ended {
             _ if swept.killed > 0 => Sent::Delivered,
-            // Refused while it was on its way out, and gone since, as the wait saw.
+            // Refused while it was on its way out, and gone since.
             Sent::Failed(_) if !is_running(self.process()) => Sent::Gone,
             ended => ended,
         }

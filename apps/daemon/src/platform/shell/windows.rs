@@ -492,9 +492,11 @@ fn run_version(binary: &ResolvedBinary, environment: &Environment) -> Option<Str
     let text = receiver
         .recv_timeout(deadline.saturating_duration_since(Instant::now()))
         .ok();
-    // A binary that printed and exited is reaped; one that did not is ended rather than left, and
-    // so is whatever either left on its console.
-    if text.is_none() {
+    // A binary that printed and exited is reaped; one still running is ended rather than left (one
+    // that is silent, or still printing past what is read, or that closed its output and goes on),
+    // and so is whatever either left on its console. The sweep spares the binary itself, which
+    // nothing else would end before the wait for it.
+    if handle.exited_unreaped() != Some(true) {
         handle.kill();
     }
     handle
@@ -880,6 +882,45 @@ mod tests {
                 "{value:?}"
             );
         }
+    }
+
+    /// A binary that goes on printing past what the probe reads, as one that takes `--version`
+    /// for something else may, is ended: the probe answers what it read rather than wait for an
+    /// exit that never comes.
+    #[test]
+    fn a_binary_still_printing_past_what_is_read_is_ended() {
+        let dir = ScratchDir::new("probe-version-endless");
+        let shim = dir.join("agent.cmd");
+        let line = "0123456789".repeat(8);
+        // It also stops once `stop` is there: if the probe failed to end it, nothing else would.
+        let script = format!(
+            "@echo off\r\n:again\r\nif exist \"%~dp0stop\" exit /b\r\necho {line}\r\ngoto again\r\n"
+        );
+        std::fs::write(&shim, script).unwrap();
+        let environment: Environment = std::env::vars().collect();
+        let (sender, receiver) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = sender.send(run_version(&ResolvedBinary::new(&shim), &environment));
+        });
+
+        /// Makes the batch file's `stop` when dropped, whatever the outcome.
+        struct Stop(PathBuf);
+        impl Drop for Stop {
+            fn drop(&mut self) {
+                let _ = std::fs::write(&self.0, "");
+            }
+        }
+        let printed = {
+            let _stop = Stop(dir.join("stop"));
+            receiver.recv_timeout(crate::test_support::PATIENCE)
+        }
+        .expect("the probe waited for a binary that never exits");
+        assert!(
+            printed
+                .as_deref()
+                .is_some_and(|text| text.starts_with(&line)),
+            "{printed:?}"
+        );
     }
 
     #[test]
