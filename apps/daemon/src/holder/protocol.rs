@@ -520,6 +520,8 @@ pub enum FromHolder {
         #[serde(default)]
         draining: bool,
     },
+    /// The terminal has started. Its output goes to the link from the start, so some of it may
+    /// arrive before this reply does.
     Spawned {
         id: String,
         pid: u32,
@@ -529,16 +531,20 @@ pub enum FromHolder {
         id: String,
         error: String,
     },
-    /// The terminal's process has exited and everything it printed up to now has been sent.
+    /// The terminal's process has exited, and, unless `output_open` says otherwise, everything it
+    /// printed has been sent.
     Exited {
         id: String,
-        /// The PTY is still open, held by something the program left behind, so more output may
-        /// follow, until the terminal is hung up or released.
+        /// The reader had not reached the end of the PTY's output when the exit was reported, so
+        /// more output may follow, until the terminal is hung up or released: something the
+        /// program left behind holds the PTY open, or the reader had not yet read what the
+        /// program printed last within the holder's bounded wait for it.
         #[serde(default)]
         output_open: bool,
     },
     /// How a write ended: how many bytes went in, and why the rest did not. The count is only
     /// meant for a write that failed; one that went in whole has gone in whole.
+    /// What the program prints in answer to the write may arrive before this reply does.
     Written {
         req: u64,
         written: usize,

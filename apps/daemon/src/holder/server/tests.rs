@@ -1,6 +1,7 @@
 //! The holder run in this process against a registry directory of its own, driven over its daemon
 //! link by a plain WebSocket client, with real programs on real terminals.
 
+use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
 use futures_util::{SinkExt, StreamExt};
@@ -31,6 +32,9 @@ struct Daemon {
     welcome: FromHolder,
     /// The terminals this link had started, for [`Self::end_terminals`].
     started: Vec<String>,
+    /// Frames read while waiting for a reply, handed out again before the link's next: a
+    /// program's output can arrive before the reply to its spawn, or to a write into it, does.
+    held: VecDeque<Frame>,
 }
 
 /// The terminals the welcome of `daemon` lists.
@@ -49,6 +53,9 @@ impl Daemon {
 
     /// The next frame, or `None` once the link is closed.
     async fn next(&mut self) -> Option<Frame> {
+        if let Some(frame) = self.held.pop_front() {
+            return Some(frame);
+        }
         loop {
             match tokio::time::timeout(PATIENCE, self.socket.next())
                 .await
@@ -80,22 +87,33 @@ impl Daemon {
         panic!("the link closed before the frame expected: {seen:?}");
     }
 
-    /// The reply to the request `req`, whatever else arrives meanwhile.
+    /// The first reply that `done` accepts. What arrives before it is held for the reads that
+    /// follow, rather than lost to them.
+    async fn reply_holding_the_rest(
+        &mut self,
+        mut done: impl FnMut(&FromHolder) -> bool,
+    ) -> FromHolder {
+        let mut frames = VecDeque::from(
+            self.until(|frame| matches!(frame, Frame::Reply(reply) if done(reply)))
+                .await,
+        );
+        let Some(Frame::Reply(reply)) = frames.pop_back() else {
+            unreachable!("`until` ends on the frame `done` accepted");
+        };
+        frames.append(&mut self.held);
+        self.held = frames;
+        reply
+    }
+
+    /// The reply to the request `req`; what arrives meanwhile is held for the reads that follow.
     async fn reply_to(&mut self, req: u64) -> FromHolder {
-        let frames = self
-            .until(|frame| match frame {
-                Frame::Reply(
-                    FromHolder::Written { req: got, .. }
-                    | FromHolder::Done { req: got, .. }
-                    | FromHolder::Answer { req: got, .. },
-                ) => *got == req,
-                _ => false,
-            })
-            .await;
-        match frames.into_iter().last() {
-            Some(Frame::Reply(reply)) => reply,
-            other => panic!("{other:?}"),
-        }
+        self.reply_holding_the_rest(|reply| match reply {
+            FromHolder::Written { req: got, .. }
+            | FromHolder::Done { req: got, .. }
+            | FromHolder::Answer { req: got, .. } => *got == req,
+            _ => false,
+        })
+        .await
     }
 
     /// The key the holder issues for the launch of terminal `id`.
@@ -139,22 +157,17 @@ impl Daemon {
     async fn spawn_spec(&mut self, spec: SpawnSpec) -> FromHolder {
         let id = spec.id.clone();
         self.send(ToHolder::Spawn(Box::new(spec))).await;
-        let frames = self
-            .until(|frame| {
-                matches!(frame, Frame::Reply(
+        let reply = self
+            .reply_holding_the_rest(|reply| {
+                matches!(reply,
                     FromHolder::Spawned { id: got, .. } | FromHolder::SpawnFailed { id: got, .. }
-                ) if *got == id)
+                    if *got == id)
             })
             .await;
-        match frames.into_iter().last() {
-            Some(Frame::Reply(reply)) => {
-                if matches!(reply, FromHolder::Spawned { .. }) {
-                    self.started.push(id);
-                }
-                reply
-            }
-            other => panic!("{other:?}"),
+        if matches!(reply, FromHolder::Spawned { .. }) {
+            self.started.push(id);
         }
+        reply
     }
 
     /// Ends the terminals this link started, as the daemon's ordinary stop does, so that the
@@ -350,6 +363,7 @@ impl Running {
             socket,
             welcome,
             started: Vec::new(),
+            held: VecDeque::new(),
         })
     }
 
@@ -460,21 +474,34 @@ async fn a_link_without_the_secret_is_refused() {
     holder.ended().await;
 }
 
+/// An exit reported with the output closed comes after everything the program printed; one
+/// reported with it still open is followed by the rest of what the program printed.
 #[tokio::test(flavor = "multi_thread")]
-async fn a_program_prints_and_its_exit_is_reported_only_after_its_output() {
+async fn a_program_prints_and_its_output_arrives_before_an_exit_that_reports_it_closed() {
     let holder = Running::start().await;
     let mut daemon = holder.link().await;
     let reply = daemon
         .spawn("t1", programs::echo("hello from the holder").term_command())
         .await;
     assert!(pid_of(&reply) > 0);
-    let (printed, frames) = daemon.output_until_exit("t1").await;
-    assert!(printed.contains("hello from the holder"), "{printed:?}");
-    // Nothing the program printed comes after the exit report that ended the wait.
-    assert!(matches!(
-        frames.last(),
-        Some(Frame::Reply(FromHolder::Exited { .. }))
-    ));
+    let (mut printed, mut frames) = daemon.output_until_exit("t1").await;
+    let Some(Frame::Reply(FromHolder::Exited { output_open, .. })) = frames.last() else {
+        panic!("{frames:?}");
+    };
+    if *output_open {
+        // The exit waits for the reader's end of stream only for `FINAL_OUTPUT_DRAIN` of real
+        // time; a reader that a loaded machine has not let reach it by then has the exit reported
+        // with the output still open, and what it reads afterwards follows the report. Whether that
+        // happens depends on how fast the machine runs, so the test takes either outcome and holds
+        // the late output to arriving.
+        while !printed.contains("hello from the holder") {
+            frames.extend(daemon.until(|_| true).await);
+            printed = output_of(&frames, "t1");
+        }
+    } else {
+        // An exit reported with the output closed comes after everything the program printed.
+        assert!(printed.contains("hello from the holder"), "{frames:?}");
+    }
     daemon.end_terminals().await;
     drop(daemon);
     holder.ended().await;

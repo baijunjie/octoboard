@@ -1581,9 +1581,9 @@ impl Link {
                 let routed = locked(&self.terminals).get(id).cloned();
                 match routed {
                     Some(routed) => {
-                        // Output a program's leftovers still print goes on reaching the reader,
-                        // as it does from a PTY the daemon owns, until the terminal is hung up
-                        // or released.
+                        // Output still to come (what the program printed last, not yet read, or
+                        // what its leftovers print) goes on reaching the reader, as it does from a
+                        // PTY the daemon owns, until the terminal is hung up or released.
                         if !output_open {
                             routed.close_output();
                         }
