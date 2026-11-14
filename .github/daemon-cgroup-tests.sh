@@ -13,7 +13,9 @@ set -eu
 cg=/sys/fs/cgroup
 uid=${TEST_UID:?TEST_UID names the uid that owns the checkout}
 
-if ! grep -q " $cg [^ ]* .* - cgroup2 " /proc/self/mountinfo; then
+# A mountinfo line is: ID, parent ID, major:minor, root, mount point, options, any number of optional fields
+# (none in a container whose mounts are private), the separator `-`, then the filesystem type.
+if ! grep -Eq "^([^ ]+ ){4}$cg [^ ]+( [^ ]+)* - cgroup2 " /proc/self/mountinfo; then
   echo "::error::$cg is not a cgroup v2 mount in this container."
   exit 1
 fi
