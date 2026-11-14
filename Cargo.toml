@@ -13,7 +13,7 @@ members = ["apps/daemon", "apps/desktop/src-tauri"]
 # `rust-version` matches the toolchain pinned in `rust-toolchain.toml`: the project is built and
 # checked on that one release only, so it claims no older one.
 [workspace.package]
-version = "0.1.0-beta.5"
+version = "0.1.0-beta.6"
 # Generated from config/app.json by pnpm identity:sync.
 authors = ["BaiJunjie"]
 license = "MIT"

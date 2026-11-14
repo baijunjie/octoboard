@@ -4,7 +4,7 @@
   "title": "Octoboard control socket: daemon to client",
   "description": "One text frame the daemon sends on `/ws/control`. See `apps/daemon/PROTOCOL.md`.",
   "x-octoboard-protocol": {
-    "generation": 3,
+    "generation": 4,
     "channel": "control",
     "direction": "output"
   },
@@ -774,6 +774,16 @@
       ],
       "description": "One entry of a project directory listing."
     },
+    "CalloutTone": {
+      "type": "string",
+      "enum": [
+        "info",
+        "success",
+        "warning",
+        "danger"
+      ],
+      "description": "What a callout says of itself: neutral information, a success, a warning or a danger."
+    },
     "Capabilities": {
       "type": "object",
       "properties": {
@@ -820,6 +830,20 @@
         "delivery"
       ],
       "description": "What a provider can do that not every provider can, declared so that code and the UI branch\non it rather than on which provider it is."
+    },
+    "CellValue": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "description": "A plain value a report shows: a string, a number or a boolean, as a table cell or a key–value\npair's value holds it."
     },
     "ChangeEntry": {
       "oneOf": [
@@ -1009,6 +1033,21 @@
       ],
       "description": "One side of a change in a change listing. See \"Changes and comparisons\" in\n`apps/daemon/PROTOCOL.md`."
     },
+    "ChoiceOption": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "description": "One option of a choice: the `value` that is submitted, shown as `label` where there is one."
+    },
     "CliInstallMethod": {
       "oneOf": [
         {
@@ -1042,6 +1081,14 @@
         "failed"
       ],
       "description": "Where an update of a CLI is."
+    },
+    "ColumnAlign": {
+      "type": "string",
+      "enum": [
+        "start",
+        "end"
+      ],
+      "description": "Which side of its cells a table column's values sit on, in the reading direction."
     },
     "CommitChanges": {
       "type": "object",
@@ -1095,6 +1142,881 @@
         "commit"
       ],
       "description": "One end of a branch comparison: the branch, as a wire path, and the full id of the commit it was\nresolved to. A comparison reply reports both; a read of one of its changes names both back, with\nthe comparison's `base`, and the commits alone decide what is read. `remote` says the branch is\na remote-tracking one, named below `refs/remotes/`, rather than a local one."
+    },
+    "Component": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "children": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Component"
+              }
+            },
+            "heading": {
+              "type": "string"
+            },
+            "visible_when": {
+              "$ref": "#/$defs/VisibleWhen"
+            },
+            "type": {
+              "type": "string",
+              "const": "section"
+            }
+          },
+          "required": [
+            "type",
+            "children"
+          ],
+          "description": "Groups components under an optional heading."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "visible_when": {
+              "$ref": "#/$defs/VisibleWhen"
+            },
+            "type": {
+              "type": "string",
+              "const": "markdown"
+            }
+          },
+          "required": [
+            "type",
+            "text"
+          ],
+          "description": "GitHub-flavoured Markdown. Raw HTML is shown as plain text, an image shows only from a `data:`\nURL and an external link opens in the system browser."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "visible_when": {
+              "$ref": "#/$defs/VisibleWhen"
+            },
+            "default": {
+              "type": "string"
+            },
+            "placeholder": {
+              "type": "string"
+            },
+            "pattern": {
+              "type": "string"
+            },
+            "min_length": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "max_length": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "text"
+            }
+          },
+          "required": [
+            "type",
+            "name",
+            "label"
+          ],
+          "description": "A single-line text field; `pattern` is the source of a JavaScript regular expression the\nwhole value must match."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "visible_when": {
+              "$ref": "#/$defs/VisibleWhen"
+            },
+            "default": {
+              "type": "string"
+            },
+            "placeholder": {
+              "type": "string"
+            },
+            "min_length": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "max_length": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "rows": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "textarea"
+            }
+          },
+          "required": [
+            "type",
+            "name",
+            "label"
+          ],
+          "description": "A multi-line text field."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "visible_when": {
+              "$ref": "#/$defs/VisibleWhen"
+            },
+            "default": {
+              "type": "number"
+            },
+            "min": {
+              "type": "number"
+            },
+            "max": {
+              "type": "number"
+            },
+            "step": {
+              "type": "number"
+            },
+            "type": {
+              "type": "string",
+              "const": "number"
+            }
+          },
+          "required": [
+            "type",
+            "name",
+            "label"
+          ],
+          "description": "A number field."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "visible_when": {
+              "$ref": "#/$defs/VisibleWhen"
+            },
+            "default": {
+              "type": "string"
+            },
+            "min": {
+              "type": "string"
+            },
+            "max": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "date"
+            }
+          },
+          "required": [
+            "type",
+            "name",
+            "label"
+          ],
+          "description": "A date field; `default`, `min` and `max` are `YYYY-MM-DD`. Also a time field (`HH:MM`) and a\ndate-and-time field (`YYYY-MM-DDTHH:MM`, local, with no zone)."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "visible_when": {
+              "$ref": "#/$defs/VisibleWhen"
+            },
+            "default": {
+              "type": "string"
+            },
+            "min": {
+              "type": "string"
+            },
+            "max": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "time"
+            }
+          },
+          "required": [
+            "type",
+            "name",
+            "label"
+          ],
+          "description": "A date field; `default`, `min` and `max` are `YYYY-MM-DD`. Also a time field (`HH:MM`) and a\ndate-and-time field (`YYYY-MM-DDTHH:MM`, local, with no zone)."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "visible_when": {
+              "$ref": "#/$defs/VisibleWhen"
+            },
+            "default": {
+              "type": "string"
+            },
+            "min": {
+              "type": "string"
+            },
+            "max": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "datetime"
+            }
+          },
+          "required": [
+            "type",
+            "name",
+            "label"
+          ],
+          "description": "A date field; `default`, `min` and `max` are `YYYY-MM-DD`. Also a time field (`HH:MM`) and a\ndate-and-time field (`YYYY-MM-DDTHH:MM`, local, with no zone)."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "options": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ChoiceOption"
+              }
+            },
+            "description": {
+              "type": "string"
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "visible_when": {
+              "$ref": "#/$defs/VisibleWhen"
+            },
+            "default": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "radio"
+            }
+          },
+          "required": [
+            "type",
+            "name",
+            "label",
+            "options"
+          ],
+          "description": "A single choice shown as radio buttons, one option selected."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "options": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ChoiceOption"
+              }
+            },
+            "description": {
+              "type": "string"
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "visible_when": {
+              "$ref": "#/$defs/VisibleWhen"
+            },
+            "default": {
+              "type": "string"
+            },
+            "placeholder": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "select"
+            }
+          },
+          "required": [
+            "type",
+            "name",
+            "label",
+            "options"
+          ],
+          "description": "A single choice shown as a drop-down."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "options": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ChoiceOption"
+              }
+            },
+            "description": {
+              "type": "string"
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "visible_when": {
+              "$ref": "#/$defs/VisibleWhen"
+            },
+            "default": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "min_selected": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "max_selected": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "type": {
+              "type": "string",
+              "const": "checkboxes"
+            }
+          },
+          "required": [
+            "type",
+            "name",
+            "label",
+            "options"
+          ],
+          "description": "A multiple choice; the submitted array keeps the options' order. `required` means at least\none is selected."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "visible_when": {
+              "$ref": "#/$defs/VisibleWhen"
+            },
+            "default": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "toggle"
+            }
+          },
+          "required": [
+            "type",
+            "name",
+            "label"
+          ],
+          "description": "An on/off switch, submitted as a boolean."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "min": {
+              "type": "number"
+            },
+            "max": {
+              "type": "number"
+            },
+            "description": {
+              "type": "string"
+            },
+            "visible_when": {
+              "$ref": "#/$defs/VisibleWhen"
+            },
+            "step": {
+              "type": "number"
+            },
+            "default": {
+              "type": "number"
+            },
+            "type": {
+              "type": "string",
+              "const": "slider"
+            }
+          },
+          "required": [
+            "type",
+            "name",
+            "label",
+            "min",
+            "max"
+          ],
+          "description": "A range slider, submitted as a number."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            },
+            "visible_when": {
+              "$ref": "#/$defs/VisibleWhen"
+            },
+            "type": {
+              "type": "string",
+              "const": "submit"
+            }
+          },
+          "description": "Submits the form. Named, it adds `name: value` to the submission.",
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "options": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ChoiceOption"
+              }
+            },
+            "label": {
+              "type": "string"
+            },
+            "visible_when": {
+              "$ref": "#/$defs/VisibleWhen"
+            },
+            "type": {
+              "type": "string",
+              "const": "choices"
+            }
+          },
+          "required": [
+            "type",
+            "name",
+            "options"
+          ],
+          "description": "A group of buttons, each of which submits the form with one press and adds `name: <the\npressed option's value>` to the submission."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "children": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Component"
+              }
+            },
+            "visible_when": {
+              "$ref": "#/$defs/VisibleWhen"
+            },
+            "type": {
+              "type": "string",
+              "const": "columns"
+            }
+          },
+          "required": [
+            "type",
+            "children"
+          ],
+          "description": "Lays its children side by side, each child one column; the columns stack where the panel is\nnarrow."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tabs": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/TabPane"
+              }
+            },
+            "visible_when": {
+              "$ref": "#/$defs/VisibleWhen"
+            },
+            "type": {
+              "type": "string",
+              "const": "tabs"
+            }
+          },
+          "required": [
+            "type",
+            "tabs"
+          ],
+          "description": "Tabs, one of which shows at a time. A tab holds no input field and no submitter."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "visible_when": {
+              "$ref": "#/$defs/VisibleWhen"
+            },
+            "type": {
+              "type": "string",
+              "const": "divider"
+            }
+          },
+          "description": "A thin horizontal rule between blocks, with an optional label on it.",
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "tone": {
+              "$ref": "#/$defs/CalloutTone"
+            },
+            "visible_when": {
+              "$ref": "#/$defs/VisibleWhen"
+            },
+            "type": {
+              "type": "string",
+              "const": "callout"
+            }
+          },
+          "required": [
+            "type",
+            "text"
+          ],
+          "description": "A highlighted note in a tone, its `text` Markdown as a Markdown block's."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "items": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/KeyValueItem"
+              }
+            },
+            "visible_when": {
+              "$ref": "#/$defs/VisibleWhen"
+            },
+            "type": {
+              "type": "string",
+              "const": "key_values"
+            }
+          },
+          "required": [
+            "type",
+            "items"
+          ],
+          "description": "A list of keys, each with its value."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "label": {
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/StatValue"
+            },
+            "change": {
+              "type": "string"
+            },
+            "trend": {
+              "$ref": "#/$defs/StatTrend"
+            },
+            "sentiment": {
+              "$ref": "#/$defs/StatSentiment"
+            },
+            "visible_when": {
+              "$ref": "#/$defs/VisibleWhen"
+            },
+            "type": {
+              "type": "string",
+              "const": "stat"
+            }
+          },
+          "required": [
+            "type",
+            "label",
+            "value"
+          ],
+          "description": "A figure with its label and an optional change since some earlier figure."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string"
+            },
+            "language": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "visible_when": {
+              "$ref": "#/$defs/VisibleWhen"
+            },
+            "type": {
+              "type": "string",
+              "const": "code"
+            }
+          },
+          "required": [
+            "type",
+            "code"
+          ],
+          "description": "A block of code, highlighted for its `language`, with a button that copies it."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "diff": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "visible_when": {
+              "$ref": "#/$defs/VisibleWhen"
+            },
+            "type": {
+              "type": "string",
+              "const": "diff"
+            }
+          },
+          "required": [
+            "type",
+            "diff"
+          ],
+          "description": "A unified diff, its added and removed lines marked, with a button that copies it."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "monospace": {
+              "type": "boolean"
+            },
+            "visible_when": {
+              "$ref": "#/$defs/VisibleWhen"
+            },
+            "type": {
+              "type": "string",
+              "const": "copyable"
+            }
+          },
+          "required": [
+            "type",
+            "text"
+          ],
+          "description": "A block of text with a button that copies exactly that text; monospaced unless `monospace`\nis false."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "columns": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/TableColumn"
+              }
+            },
+            "rows": {
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/CellValue"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            },
+            "caption": {
+              "type": "string"
+            },
+            "sortable": {
+              "type": "boolean"
+            },
+            "filterable": {
+              "type": "boolean"
+            },
+            "visible_when": {
+              "$ref": "#/$defs/VisibleWhen"
+            },
+            "type": {
+              "type": "string",
+              "const": "table"
+            }
+          },
+          "required": [
+            "type",
+            "columns",
+            "rows"
+          ],
+          "description": "A table of plain values, one cell per column in each row (`null` for an empty one), which\nthe user can sort by a column and filter unless `sortable` or `filterable` is false."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "option": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "The ECharts option, as the schema of the `chart` kind allows it."
+            },
+            "height": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0,
+              "description": "The height of the drawing in pixels; the width is the page's."
+            },
+            "summary": {
+              "type": "string",
+              "description": "What the chart shows, in words: its accessible name."
+            },
+            "visible_when": {
+              "$ref": "#/$defs/VisibleWhen"
+            },
+            "type": {
+              "type": "string",
+              "const": "chart"
+            }
+          },
+          "required": [
+            "type",
+            "option"
+          ],
+          "description": "A chart: an ECharts option within the subset of [`chart`], drawn in the user's appearance."
+        }
+      ],
+      "description": "One component of a page: an object of the kind its `type` names, with that kind's properties\nbeside it. Every kind takes an optional `visible_when`."
     },
     "ConfigurationDocument": {
       "type": "object",
@@ -1473,6 +2395,340 @@
         }
       ],
       "description": "Where a conversation is held, as `locate_conversation_to_resume` reports it."
+    },
+    "DaemonUpdateAvailable": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "holder_floor": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The oldest holder version the new daemon adopts the terminals of (`handover_check`'s\n`holder_floor`); null when the manifest names none."
+        },
+        "channel": {
+          "$ref": "#/$defs/DaemonUpdateChannel",
+          "description": "The channel the manifest was read from."
+        }
+      },
+      "required": [
+        "version",
+        "holder_floor",
+        "channel"
+      ],
+      "description": "A release newer than the daemon that the last check found."
+    },
+    "DaemonUpdateChannel": {
+      "oneOf": [
+        {
+          "type": "string",
+          "const": "stable",
+          "description": "Releases that are not marked as prereleases."
+        },
+        {
+          "type": "string",
+          "const": "beta",
+          "description": "Every release, prereleases included."
+        }
+      ],
+      "description": "Which release line the daemon's update check follows (`Settings.daemon_update_channel`)."
+    },
+    "DaemonUpdateCheck": {
+      "type": "object",
+      "properties": {
+        "outcome": {
+          "$ref": "#/$defs/DaemonUpdateCheckOutcome"
+        },
+        "at": {
+          "type": "integer",
+          "format": "int64",
+          "description": "When it ended, in milliseconds since the epoch."
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Why a `failed` check failed, `daemon_update_check_failed`; null otherwise."
+        },
+        "detail": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The English text of the failure behind `error`, trimmed and cut to a bounded length."
+        }
+      },
+      "required": [
+        "outcome",
+        "at",
+        "error",
+        "detail"
+      ],
+      "description": "The last check that ended."
+    },
+    "DaemonUpdateCheckOutcome": {
+      "type": "string",
+      "enum": [
+        "up_to_date",
+        "available",
+        "failed"
+      ],
+      "description": "How the last check ended."
+    },
+    "DaemonUpdateInstall": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/DaemonUpdateInstallState"
+        },
+        "started_at": {
+          "type": "integer",
+          "format": "int64",
+          "description": "When it started, in milliseconds since the epoch."
+        },
+        "finished_at": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64",
+          "description": "When it ended; null while it runs."
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Why a `failed` one failed: `daemon_update_download_failed`, `daemon_update_unverified` or\n`daemon_update_replace_failed`; null otherwise."
+        },
+        "detail": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The English text of the failure behind `error`, trimmed and cut to a bounded length."
+        }
+      },
+      "required": [
+        "state",
+        "started_at",
+        "finished_at",
+        "error",
+        "detail"
+      ],
+      "description": "The download and replacement of the update as the daemon last made one. Runtime state: never\nstored."
+    },
+    "DaemonUpdateInstallState": {
+      "type": "string",
+      "enum": [
+        "running",
+        "succeeded",
+        "failed"
+      ],
+      "description": "Where the download and replacement of an update is."
+    },
+    "DaemonUpdateInstalled": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Its version; null when the file was replaced by something else (an install script run\nmeanwhile) and the daemon did not write it, so the version is not known."
+        },
+        "holder_floor": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Its holder floor, null where `version` is."
+        }
+      },
+      "required": [
+        "version",
+        "holder_floor"
+      ],
+      "description": "The release the executable was replaced with."
+    },
+    "DaemonUpdateManual": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "$ref": "#/$defs/DaemonUpdateManualReason"
+        },
+        "path": {
+          "type": "string",
+          "description": "The executable that would be replaced, as a path on the daemon's host."
+        },
+        "command": {
+          "type": "string",
+          "description": "The shell command that installs the update over it by hand: the install script, told the\nexecutable's directory and the channel the daemon follows. For `not_writable`, it has to be\nrun by a user who may write to that directory (its owner)."
+        }
+      },
+      "required": [
+        "reason",
+        "path",
+        "command"
+      ],
+      "description": "An update the daemon found and cannot install itself."
+    },
+    "DaemonUpdateManualReason": {
+      "oneOf": [
+        {
+          "type": "string",
+          "const": "not_writable",
+          "description": "The user the daemon runs as may not replace its executable: the directory it lives in is\nnot writable by them."
+        }
+      ],
+      "description": "Why the daemon does not update itself and the user has to."
+    },
+    "DaemonUpdatePhase": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "idle"
+          ]
+        },
+        {
+          "type": "string",
+          "const": "checking",
+          "description": "Reading the release manifest."
+        },
+        {
+          "type": "string",
+          "const": "downloading",
+          "description": "Downloading the archive, checking it and replacing the executable: `install` says how far."
+        },
+        {
+          "type": "string",
+          "const": "installed",
+          "description": "The executable has been replaced; the update takes effect when the daemon restarts, and no\nmore checks are made until it has."
+        }
+      ],
+      "description": "What the daemon's update is doing. A check and a download never run together."
+    },
+    "DaemonUpdateProgress": {
+      "type": "object",
+      "properties": {
+        "downloaded": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "description": "Bytes received so far."
+        },
+        "total": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0,
+          "description": "The archive's size in bytes, when the server said it."
+        }
+      },
+      "required": [
+        "downloaded",
+        "total"
+      ],
+      "description": "How much of the archive has been downloaded."
+    },
+    "DaemonUpdateStatus": {
+      "type": "object",
+      "properties": {
+        "phase": {
+          "$ref": "#/$defs/DaemonUpdatePhase"
+        },
+        "available": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DaemonUpdateAvailable"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The newer release the last check found and none has replaced yet; null otherwise."
+        },
+        "progress": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DaemonUpdateProgress"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "How far the archive has come while `phase` is `downloading`; null otherwise."
+        },
+        "installed": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DaemonUpdateInstalled"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "What replaced the executable, once `phase` is `installed`; null otherwise."
+        },
+        "last_check": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DaemonUpdateCheck"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The last check that ended since the daemon started; null when none has."
+        },
+        "install": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DaemonUpdateInstall"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The last download and replacement since the daemon started; null when none ran."
+        },
+        "manual": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DaemonUpdateManual"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Set while an update is available that the user has to install by hand."
+        },
+        "updated_from": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The version this daemon replaced when it started, as an update left it; null when it\nreplaced none. Held until the daemon stops, so a window that opens later is told too."
+        }
+      },
+      "required": [
+        "phase",
+        "available",
+        "progress",
+        "installed",
+        "last_check",
+        "install",
+        "manual",
+        "updated_from"
+      ],
+      "description": "The daemon's own update as it stands. Runtime state: never stored, and `null` in the snapshot\nwhere the daemon does not update itself (a build without the feature, the desktop\napplication's daemon, a host it has no release for)."
     },
     "DefaultModelSource": {
       "oneOf": [
@@ -1930,21 +3186,9 @@
     "DocumentSettings": {
       "type": "object",
       "properties": {
-        "appearance": {
-          "type": "string",
-          "description": "The window's appearance (`light`, `dark` or `system`), which only the client holds (in its\n`localStorage`), carried like `run_in_background`. A value the importing client does not\nknow is ignored."
-        },
         "interface_language": {
           "type": "string",
           "description": "The interface language tag (see `Settings.interface_language`): the daemon writes the one it\nholds. An import applies it only when this build offers it. Absent when the daemon held\nnone."
-        },
-        "markdown_style": {
-          "type": "string",
-          "description": "How a rendered Markdown document is styled (the style's id), carried like `appearance`."
-        },
-        "session_order": {
-          "description": "How sessions and projects are sorted, carried like `appearance`. The client writes all three\nparts, so an import sets the sort exactly, and applies each part whose value it knows.",
-          "$ref": "#/$defs/DocumentSessionOrder"
         },
         "resume_sessions_on_start": {
           "type": "boolean",
@@ -1960,7 +3204,7 @@
         },
         "keep_awake": {
           "type": "boolean",
-          "description": "Whether the daemon holds its host awake (Prevent sleep, see `Settings.keep_awake`). The\ndaemon builds it when the App behavior section is exported and applies it from an import,\nwhether or not this host can hold: the value is stored either way."
+          "description": "Whether the daemon holds its host awake (Prevent sleep, see `Settings.keep_awake`). The\ndaemon builds it when the General section is exported and applies it from an import,\nwhether or not this host can hold: the value is stored either way."
         },
         "keep_awake_when": {
           "type": "string",
@@ -1968,6 +3212,24 @@
         },
         "auto_close_idle_shell_terminals": {
           "type": "boolean"
+        },
+        "session_order": {
+          "description": "How sessions and projects are sorted, carried like `run_in_background`. The client writes all three\nparts, so an import sets the sort exactly, and applies each part whose value it knows.",
+          "$ref": "#/$defs/DocumentSessionOrder"
+        },
+        "appearance": {
+          "type": "string",
+          "description": "The window's appearance (`light`, `dark` or `system`), which only the client holds (in its\n`localStorage`), carried like `run_in_background`. A value the importing client does not\nknow is ignored."
+        },
+        "markdown_style": {
+          "type": "string",
+          "description": "How a rendered Markdown document is styled (the style's id), carried like `appearance`."
+        },
+        "terminal_font_size": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0,
+          "description": "The terminals' font size in pixels, carried like `appearance`. The importing client\nkeeps a value it knows within its own range. A fractional size reads rounded, and anything\nthat is not a non-negative number is left out rather than refusing the document."
         },
         "default_clone_dir": {
           "type": "string",
@@ -1993,6 +3255,9 @@
           "type": "boolean"
         },
         "ask_questions_as_choices": {
+          "type": "boolean"
+        },
+        "keep_sessions_in_own_project": {
           "type": "boolean"
         },
         "keyboard_shortcuts": {
@@ -2459,6 +3724,17 @@
               },
               "description": "The installed CLI of every agent checked since the daemon started\n(`check_agent_clis`), the update of one that runs or ran included; empty until the\nfirst check ends. Runtime state, not stored."
             },
+            "daemon_update": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/DaemonUpdateStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The daemon's own update as it stands (`check_daemon_update`, `update_daemon`); null\nwhere this daemon does not update itself. Runtime state, not stored."
+            },
             "home_dir": {
               "type": [
                 "string",
@@ -2501,6 +3777,7 @@
             "account_logins",
             "account_sharing",
             "agent_cli_statuses",
+            "daemon_update",
             "home_dir",
             "host",
             "keep_awake_held",
@@ -2580,6 +3857,23 @@
             "status"
           ],
           "description": "A check of an agent's installed CLI ended, or an update of it started, moved on or ended:\nthe agent's whole status, like every other upsert. Every agent's last one is also in a\n`snapshot`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "status": {
+              "$ref": "#/$defs/DaemonUpdateStatus"
+            },
+            "type": {
+              "type": "string",
+              "const": "daemon_update_status_updated"
+            }
+          },
+          "required": [
+            "type",
+            "status"
+          ],
+          "description": "The daemon's own update moved on: a check started or ended, a download made progress,\nended or failed, or the executable was replaced. The whole status, like every other upsert;\nit is also in a `snapshot`. Never sent by a daemon that does not update itself."
         },
         {
           "$ref": "#/$defs/AccountSharing",
@@ -3537,7 +4831,7 @@
             "session_id",
             "pages"
           ],
-          "description": "The reply to `list_pages`, oldest first. Pages are not in `snapshot`: a page carries a whole\nHTML document, and only the session the user is looking at needs its pages, so the\npanel asks for them instead — and asks again after every `snapshot`, which is what keeps it\ncorrect across a `page_created` the client was too far behind to receive. A\nlagging client is sent a fresh snapshot in place of the events it missed, on the socket it\nalready has, so nothing else tells it that its list is now short."
+          "description": "The reply to `list_pages`, oldest first. Pages are not in `snapshot`: a page carries its whole\ncomponent tree, and only the session the user is looking at needs its pages, so the\npanel asks for them instead — and asks again after every `snapshot`, which is what keeps it\ncorrect across a `page_created` the client was too far behind to receive. A\nlagging client is sent a fresh snapshot in place of the events it missed, on the socket it\nalready has, so nothing else tells it that its list is now short."
         },
         {
           "type": "object",
@@ -3555,6 +4849,42 @@
             "page"
           ],
           "description": "A page a session just pushed. The panel showing that session refreshes to it."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session_id": {
+              "type": "string"
+            },
+            "page": {
+              "type": "string"
+            },
+            "submission": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": {
+                "$ref": "#/$defs/SubmittedValue"
+              }
+            },
+            "submission_revision": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "type": {
+              "type": "string",
+              "const": "page_submission"
+            }
+          },
+          "required": [
+            "type",
+            "session_id",
+            "page",
+            "submission",
+            "submission_revision"
+          ],
+          "description": "A page's form was submitted, or the submission was taken back. `submission` is what it was\nsubmitted with, sent when the daemon accepts it for delivery to the session, before the\nmessage is written; `null` when the delivery certainly failed and the page can be submitted\nagain. `submission_revision` is the page's revision of it (`Page::submission_revision`):\nannouncements of one page can arrive out of order, and a client keeps whichever of this and\nwhat it holds has the higher revision, including for a page whose `page_list` it is still\nwaiting for."
         },
         {
           "type": "object",
@@ -4275,6 +5605,63 @@
             "type",
             "id"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "started": {
+              "type": "boolean"
+            },
+            "last_check_at": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            },
+            "type": {
+              "type": "string",
+              "const": "daemon_update_check"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "started",
+            "last_check_at"
+          ],
+          "description": "The reply to `check_daemon_update`: whether it started a check (`started`), and, when it\ndid, the `last_check.at` of the status as the check started (null for none), so that the\nend of this check is the status whose `last_check.at` is another. A check that did not start\nchanges nothing; `last_check_at` is then null."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "started_at": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "type": {
+              "type": "string",
+              "const": "daemon_update_started"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "started_at"
+          ],
+          "description": "The reply to `update_daemon`, once the download has started: the `install.started_at` the\nstatus gives it, by which a client tells this install's end from another's."
         },
         {
           "type": "object",
@@ -5613,6 +7000,12 @@
         "current_ask_questions_as_choices": {
           "type": "boolean"
         },
+        "keep_sessions_in_own_project": {
+          "type": "boolean"
+        },
+        "current_keep_sessions_in_own_project": {
+          "type": "boolean"
+        },
         "resume_sessions_on_start": {
           "type": "boolean",
           "description": "The document's value, or this machine's own when the document carries none, so the line\nreads as no change."
@@ -5673,6 +7066,8 @@
         "current_auto_approve_handoffs",
         "ask_questions_as_choices",
         "current_ask_questions_as_choices",
+        "keep_sessions_in_own_project",
+        "current_keep_sessions_in_own_project",
         "resume_sessions_on_start",
         "current_resume_sessions_on_start",
         "keep_awake",
@@ -5701,6 +7096,22 @@
         }
       ],
       "description": "When Prevent sleep holds the daemon's host awake (`Settings.keep_awake`)."
+    },
+    "KeyValueItem": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/CellValue"
+        }
+      },
+      "required": [
+        "key",
+        "value"
+      ],
+      "description": "One pair of a [`KeyValueList`]."
     },
     "Launch": {
       "type": "object",
@@ -6130,8 +7541,23 @@
         "session_id": {
           "type": "string"
         },
-        "html": {
-          "type": "string"
+        "content": {
+          "$ref": "#/$defs/PageContent"
+        },
+        "submission": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/SubmittedValue"
+          },
+          "description": "What the page's form was submitted with, or `null` while it has not been: set when the\nsubmission is accepted for delivery, before the message is written, and cleared again only\nwhen the delivery certainly failed (`page_submission`)."
+        },
+        "submission_revision": {
+          "type": "integer",
+          "format": "int64",
+          "description": "How many times `submission` has changed: 0 for a page never submitted, raised by one with\neach mark and each clearing. A client that hears of the submission twice, from `page_list`\nand `page_submission` in either order, keeps the one with the higher revision."
         },
         "created_at": {
           "type": "integer",
@@ -6141,10 +7567,30 @@
       "required": [
         "id",
         "session_id",
-        "html",
+        "content",
+        "submission",
+        "submission_revision",
         "created_at"
       ],
       "description": "One page a session pushed to its report panel: a console session, or a project session that\nfaces the user (`show_page`). It belongs to that session, not to its console or project:\n`session_id` is the session that pushed it, of either kind. Every page is kept, so the\npanel can be paged back through."
+    },
+    "PageContent": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "body": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Component"
+          }
+        }
+      },
+      "required": [
+        "body"
+      ],
+      "description": "A page: an optional title and the components that make up its body, top to bottom."
     },
     "PathLink": {
       "type": "object",
@@ -7503,6 +8949,10 @@
           "type": "boolean",
           "description": "Whether the instructions given to every session at launch ask it to put each question that\nneeds the user's decision or answer as options to pick from. On unless the user turned it\noff. Fixed per session when it starts, so a change reaches only sessions begun afterwards\n(a console session's file is rewritten at each launch, so it follows at the next one). Only\nthe user's own client changes it."
         },
+        "keep_sessions_in_own_project": {
+          "type": "boolean",
+          "description": "Whether a project session is kept to its own project: its git is refused a ref update in\nthe repository of another registered project, and its file-edit tools are refused a path\nin one. Off unless the user turned it on. The git check reads it at every ref update, so a\nchange reaches running sessions at once; the edit check keeps the value a session was\nlaunched with, so a change reaches it only in sessions launched afterwards. Only the\nuser's own client changes it."
+        },
         "interface_language": {
           "type": [
             "string",
@@ -7533,6 +8983,14 @@
         "resume_sessions_on_start": {
           "type": "boolean",
           "description": "Whether the daemon, once it has started, resumes the sessions that are interrupted then,\nwhichever run interrupted them (see `coordinator::resume_on_start`). Off unless the user\nturned it on; read at each start."
+        },
+        "daemon_update_check": {
+          "type": "boolean",
+          "description": "Whether a daemon that updates itself (`snapshot.daemon_update` is not null) checks for a\nnewer release on its own: once shortly after it starts, every six hours, and at once when\nthis is turned on or the channel changes. On unless the user turned it off. Off leaves only\nthe check the user asks for (`check_daemon_update`); nothing is ever downloaded or restarted\non its own either way."
+        },
+        "daemon_update_channel": {
+          "$ref": "#/$defs/DaemonUpdateChannel",
+          "description": "The release line the daemon's update check follows. `stable` unless the user chose `beta`."
         },
         "default_clone_dir": {
           "type": "string",
@@ -7633,6 +9091,7 @@
         "auto_approve_account_switches",
         "auto_approve_handoffs",
         "ask_questions_as_choices",
+        "keep_sessions_in_own_project",
         "interface_language",
         "keep_awake",
         "keep_awake_when",
@@ -7640,6 +9099,8 @@
         "auto_switch_on_usage_limit",
         "auto_start_quota_windows",
         "resume_sessions_on_start",
+        "daemon_update_check",
+        "daemon_update_channel",
         "default_clone_dir",
         "accounts",
         "account_order",
@@ -7657,7 +9118,7 @@
       "type": "string",
       "enum": [
         "general",
-        "app_behavior",
+        "appearance",
         "git",
         "agent_behavior",
         "keyboard_shortcuts",
@@ -8003,6 +9464,55 @@
       ],
       "description": "One side of a change as `read_project_change` or `read_project_comparison_change` read it."
     },
+    "StatSentiment": {
+      "type": "string",
+      "enum": [
+        "positive",
+        "negative",
+        "neutral"
+      ],
+      "description": "Whether a stat's change is good news, bad news or neither, shown as its colour."
+    },
+    "StatTrend": {
+      "type": "string",
+      "enum": [
+        "up",
+        "down",
+        "flat"
+      ],
+      "description": "Which way a stat's change went, shown as an arrow."
+    },
+    "StatValue": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "description": "A stat's figure: a number, or a string carrying its unit."
+    },
+    "SubmittedValue": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ],
+      "description": "One value of a [`Submission`]: the text of a text-like field or the pressed button's value, a\nnumber, a toggle, or the chosen values of a multiple choice in the order of its options."
+    },
     "SwitchDefault": {
       "type": "string",
       "enum": [
@@ -8010,6 +9520,40 @@
         "off"
       ],
       "description": "What a switch is while the user has made no choice for it."
+    },
+    "TabPane": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Component"
+          }
+        }
+      },
+      "required": [
+        "label",
+        "children"
+      ],
+      "description": "One tab of a [`TabsLayout`]: its label and what it shows."
+    },
+    "TableColumn": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "align": {
+          "$ref": "#/$defs/ColumnAlign"
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "description": "One column of a [`DataTable`]."
     },
     "UnkeepableReason": {
       "oneOf": [
@@ -8079,6 +9623,36 @@
         "commit"
       ],
       "description": "A branch's upstream: the remote-tracking branch, as a wire path below `refs/remotes/` (such as\n`origin/main`), and the object id its reference names."
+    },
+    "VisibleEquals": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "description": "What a [`VisibleWhen`] compares a field's value with."
+    },
+    "VisibleWhen": {
+      "type": "object",
+      "properties": {
+        "field": {
+          "type": "string"
+        },
+        "equals": {
+          "$ref": "#/$defs/VisibleEquals"
+        }
+      },
+      "required": [
+        "field",
+        "equals"
+      ],
+      "description": "Shows its component only while the input field named `field` holds `equals`: a multiple\nchoice while its selection contains it, a toggle while it is that boolean."
     },
     "WorktreeInfo": {
       "type": "object",

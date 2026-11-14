@@ -4,7 +4,7 @@
   "title": "Octoboard terminal stream: daemon to client",
   "description": "One text frame the daemon sends on `/ws/term/:session`; binary frames are raw terminal output. See `apps/daemon/PROTOCOL.md`.",
   "x-octoboard-protocol": {
-    "generation": 3,
+    "generation": 4,
     "channel": "terminal",
     "direction": "output"
   },

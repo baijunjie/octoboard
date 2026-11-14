@@ -3101,7 +3101,7 @@ dependencies = [
 
 [[package]]
 name = "octoboard"
-version = "0.1.0-beta.5"
+version = "0.1.0-beta.6"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -3131,7 +3131,7 @@ dependencies = [
 
 [[package]]
 name = "octoboardd"
-version = "0.1.0-beta.5"
+version = "0.1.0-beta.6"
 dependencies = [
  "alacritty_terminal",
  "anyhow",

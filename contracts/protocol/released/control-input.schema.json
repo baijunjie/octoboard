@@ -4,7 +4,7 @@
   "title": "Octoboard control socket: client to daemon",
   "description": "One text frame a client sends on `/ws/control`: a request, or a browse request, told apart by `type`. See `apps/daemon/PROTOCOL.md`.",
   "x-octoboard-protocol": {
-    "generation": 3,
+    "generation": 4,
     "channel": "control",
     "direction": "input"
   },
@@ -614,6 +614,21 @@
         }
       ],
       "description": "What a file body was actually read from, so a reply identifies the content it carries."
+    },
+    "DaemonUpdateChannel": {
+      "oneOf": [
+        {
+          "type": "string",
+          "const": "stable",
+          "description": "Releases that are not marked as prereleases."
+        },
+        {
+          "type": "string",
+          "const": "beta",
+          "description": "Every release, prereleases included."
+        }
+      ],
+      "description": "Which release line the daemon's update check follows (`Settings.daemon_update_channel`)."
     },
     "DirectoryChoice": {
       "oneOf": [
@@ -2463,6 +2478,9 @@
             "ask_questions_as_choices": {
               "type": "boolean"
             },
+            "keep_sessions_in_own_project": {
+              "type": "boolean"
+            },
             "interface_language": {
               "type": "string",
               "description": "A tag the interface offers (`interface_language::display_name` knows it); any other\nis refused."
@@ -2484,6 +2502,12 @@
             },
             "resume_sessions_on_start": {
               "type": "boolean"
+            },
+            "daemon_update_check": {
+              "type": "boolean"
+            },
+            "daemon_update_channel": {
+              "$ref": "#/$defs/DaemonUpdateChannel"
             },
             "default_clone_dir": {
               "type": "string",
@@ -3041,6 +3065,45 @@
         {
           "type": "object",
           "properties": {
+            "type": {
+              "type": "string",
+              "const": "check_daemon_update"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "description": "Checks the release manifest of the daemon's channel for a newer daemon, in the background.\nAnswered with `daemon_update_check` once it is known whether the check started; the result\nfollows as `daemon_update_status_updated`, which also announces that the check started. A\ncheck is not started while one or the download runs, while one ended in the last 30\nseconds, or once an update has been installed; the request then changes nothing and is\nanswered with `started` false. Refused with `daemon_update_unavailable` where this daemon\ndoes not update itself (`snapshot.daemon_update` is null). The user's own check; the\nautomatic ones follow `Settings.daemon_update_check`. See \"Daemon updates\" in `PROTOCOL.md`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "update_daemon"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "description": "Downloads the daemon update the last check found, checks it and replaces the daemon's\nexecutable with it, in the background; the daemon keeps running the build it started as\nuntil `restart_daemon`. Answered with `daemon_update_started` once it has started; its\nprogress and outcome follow as `daemon_update_status_updated` (`progress`, `install`,\n`phase`), the install's `started_at` being the one the reply gives. Refused with\n`daemon_update_unavailable` where this daemon does not update itself,\n`daemon_update_running` while a download or an update from the command line runs,\n`daemon_update_installed` once one has been installed, `daemon_update_nothing_to_install`\nwhen the last check found none, `daemon_update_not_writable` (`path`) when the daemon may\nnot replace its executable, and `daemon_shutting_down` once the daemon is stopping. The\ndaemon never does this on its own."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "restart_daemon"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "description": "Restarts the daemon in place, the planned restart `octoboardd restart` makes: every session\nkeeps running under the daemon that takes over, on the same address. Answered with `ack`;\nthe connection then closes and comes back to the new daemon. Refused with\n`daemon_update_unavailable` where this daemon does not update itself,\n`daemon_update_running` while it downloads an update, `daemon_shutting_down` while a stop,\nrestart or handover is under way, `holders_in_service` where a service manager runs the\ndaemon and a holder running programs is inside the daemon's own systemd service, and\n`agent_update_running` while an update of an agent's CLI runs. A client that restarts after\nan update asks `handover_check` first, to tell the user which sessions the restart\ninterrupts."
+        },
+        {
+          "type": "object",
+          "properties": {
             "console": {
               "type": "string"
             },
@@ -3390,7 +3453,7 @@
           "required": [
             "type"
           ],
-          "description": "Stops the daemon with every terminal handed over to its holder, the sessions left running\nfor the next daemon to adopt with their screens exact; starts no successor. Answered with\n`ack`; never refused."
+          "description": "Stops the daemon with every terminal handed over to its holder, the sessions left running\nfor the next daemon to adopt with their screens exact; starts no successor. Answered with\n`ack`; refused with `holders_in_service` where a service manager runs the daemon and a\nholder running programs is inside the daemon's own systemd service."
         },
         {
           "type": "object",
@@ -3530,7 +3593,7 @@
       "type": "string",
       "enum": [
         "general",
-        "app_behavior",
+        "appearance",
         "git",
         "agent_behavior",
         "keyboard_shortcuts",
