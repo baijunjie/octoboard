@@ -10,8 +10,10 @@ shortcut" below. The two views are built alike, and differ in what they list.
 Session titles throughout either view follow "Displayed names" in `docs/product/session-titles.md`.
 
 **The header**, in both: a back button, **Leave focus mode**, which returns to the full sidebar and shows Toggle focus
-mode's current shortcut in its tooltip; the view's heading; and a **+** button for a new session. A project's header
-shows the console's name on a smaller first line above the project's name, which is the heading. A console session's
+mode's current shortcut in its tooltip; the view's heading; and a **+** button for a new session, whose action New
+session and New session with defaults take from the keyboard while the sidebar holds the view (see "Creating sessions
+from the keyboard" in `docs/product/sidebar.md`). A project's header shows the console's name on a smaller first line
+above the project's name, which is the heading. A console session's
 header shows the console's name alone, on one line, as the heading, immediately followed by the console session's colour
 dot. The dot stays visible when a long console name is clipped; it is decorative, with no tooltip or tab stop. The
 console session's title is on its own card below. The heading is a heading only: pressing it selects nothing. The header
@@ -230,8 +232,8 @@ its first row. The field is named for matching a project's name and shows a sear
 defaults (see "Opening a session with defaults" in `docs/product/opening-sessions.md`), and the header's button shows
 the bolt for as long as a menu in the latter form is open. Opened with the pointer, it takes the form from whether the
 primary modifier is held at that moment; opened by New session or New session with defaults (see "Creating sessions
-from the keyboard" below), it takes that shortcut's form. Pressing or releasing the modifier while the menu is open
-does not change it, so the modifier can be let go of to type in the field.
+from the keyboard" in `docs/product/sidebar.md`), it takes that shortcut's form. Pressing or releasing the modifier
+while the menu is open does not change it, so the modifier can be let go of to type in the field.
 
 ## The switch strip
 
@@ -296,25 +298,6 @@ live and under it — bound to it, or bound to a coordinator bound to it (see "C
 it, or bound to a coordinator that is archived too. For archived sessions the rule is the narrower one, so an archived
 session of a coordinator that is **still live** belongs to its project's focus mode only, and selecting it from the
 console session's focus mode leaves that focus mode.
-
-## Creating sessions from the keyboard
-
-In either focus mode, **New session** — `Cmd+N` on an Apple keyboard or `Ctrl+N` elsewhere, unless the user has changed
-it — takes the header's **+** action, and **New session with defaults** — `Shift+Cmd+N` or `Ctrl+Shift+N` unless changed
-— takes its quick form, opening a session with defaults (see "Opening a session with defaults" in
-`docs/product/opening-sessions.md`). How either is changed is in `docs/product/keyboard-shortcuts.md`. The header's
-tooltip shows New session's shortcut, or New session with defaults' while the primary modifier is held. These creation
-shortcuts are available only in focus mode.
-
-In a project's focus mode, the normal shortcut opens its new-session dialog and the quick shortcut creates an
-independent project coordinator in that project. In a console session's focus mode, either shortcut opens the header's
-project menu; choosing a project opens its dialog or creates with defaults, bound to the console session in focus.
-Releasing the shortcut keys before choosing the project does not change which action was requested (see "The
-new-session menu" above).
-
-The shortcuts match the physical key whatever the keyboard layout, work across the window including the terminal,
-and do nothing while a dialog or menu is open or during input-method composition. Holding the keys does not repeat
-creation. The header's existing availability and quick-creation refusals apply to the shortcuts too.
 
 ## The focus mode shortcut
 

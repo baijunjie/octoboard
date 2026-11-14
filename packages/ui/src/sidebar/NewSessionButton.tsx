@@ -37,7 +37,8 @@ export function NewSessionButton({
   target: () => NewSessionRequest | undefined;
   onOpen: (target: NewSessionRequest) => void;
   onQuickCreate: (target: NewSessionRequest) => void;
-  /** Registers the focus header's creation shortcuts. */
+  /** Registers the creation shortcuts and shows their key in the tooltip; set on the one mounted header that owns
+   * them, since a second would answer the same press. */
   shortcut?: boolean;
   /** The element around the button, for focus to be handed to. */
   ref?: React.Ref<HTMLDivElement>;

@@ -282,8 +282,8 @@ open the dialog.
 
 A **+** button pressed with the modifier opens with defaults even when the hold had not been noticed before the press.
 The console session focus mode's menu of projects takes its form as it opens and keeps it until it closes, whatever the
-modifier does meanwhile (see "The new-session menu" in `docs/product/focus-mode.md`). Keyboard creation in focus mode
-follows "Creating sessions from the keyboard" in `docs/product/focus-mode.md`. The hold ends when the key is released,
+modifier does meanwhile (see "The new-session menu" in `docs/product/focus-mode.md`). Creating from the keyboard
+follows "Creating sessions from the keyboard" in `docs/product/sidebar.md`. The hold ends when the key is released,
 when the window loses focus and when the page is hidden; a modifier already down while the window was in the background
 is picked up once the pointer moves or a key is pressed.
 

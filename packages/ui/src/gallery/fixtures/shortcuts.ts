@@ -58,7 +58,7 @@ export const shortcutsScenarios: Scenario[] = [
     category: "normal",
     title: "Keyboard shortcuts in a browser",
     description:
-      "A changeable shortcut shows only its key caps, which are themselves the edit button: they darken on hover, and pressing them records a new combination. Fixed shortcuts have a lock in the reserved trailing slot. Navigation lists only the two region keys, Focus mode lists its three commands, Terminal lists Increase, Decrease and Reset terminal font size (the shortcut modifier with =, - and 0), Application lists Open settings and Editing lists Find. The introduction names the current browser as the scope, and Restore defaults is absent while every key is a default.",
+      "A changeable shortcut shows only its key caps, which are themselves the edit button: they darken on hover, and pressing them records a new combination. Fixed shortcuts have a lock in the reserved trailing slot. Navigation lists only the two region keys, Focus mode lists only Toggle focus mode, Terminal lists Increase, Decrease and Reset terminal font size (the shortcut modifier with =, - and 0), Application lists New session, New session with defaults and Open settings, in that order, and Editing lists Find. The introduction names the current browser as the scope, and Restore defaults is absent while every key is a default.",
     state,
     steps: openSection,
   },
@@ -68,7 +68,7 @@ export const shortcutsScenarios: Scenario[] = [
     category: "normal",
     title: "Keyboard shortcuts in the desktop app",
     description:
-      "The introduction names the current desktop app as the scope. Navigation includes Back and Forward and the console-session switch, with the key caps of each changeable combination themselves the edit button. Fixed region keys align with those buttons and carry a lock in the trailing slot. Focus mode, Terminal (the three font size commands, as ⌘=, ⌘- and ⌘0) and Application follow; scroll to Editing and Window to see their fixed keys with the same lock treatment.",
+      "The introduction names the current desktop app as the scope. Navigation includes Back and Forward and the console-session switch, with the key caps of each changeable combination themselves the edit button. Fixed region keys align with those buttons and carry a lock in the trailing slot. Focus mode (Toggle focus mode alone), Terminal (the three font size commands, as ⌘=, ⌘- and ⌘0) and Application (the two New session commands, then Open settings) follow; scroll to Editing and Window to see their fixed keys with the same lock treatment.",
     desktopApp: true,
     host: MAC_HOST,
     state,
@@ -80,7 +80,7 @@ export const shortcutsScenarios: Scenario[] = [
     category: "normal",
     title: "Keyboard shortcuts in the Windows app",
     description:
-      "The Windows app lists the console-session switch before the fixed region keys, with no Back, Forward or native-menu commands. The key caps of each changeable combination are the edit button, written with Windows key names in Ctrl, Alt and Shift order rather than Apple glyphs. Toggle focus mode and New session show changed combinations with a reset icon in the reserved trailing slot; unchanged rows leave that slot empty and fixed rows show a lock. Open settings remains changeable, the Terminal group's three font size commands follow Focus mode as the Ctrl key cap with =, - or 0, and the introduction names the current desktop app as the scope.",
+      "The Windows app lists the console-session switch before the fixed region keys, with no Back, Forward or native-menu commands. The key caps of each changeable combination are the edit button, written with Windows key names in Ctrl, Alt and Shift order rather than Apple glyphs. Toggle focus mode and New session show changed combinations with a reset icon in the reserved trailing slot; unchanged rows leave that slot empty and fixed rows show a lock. Open settings remains changeable, the Terminal group's three font size commands follow Focus mode as the Ctrl key cap with =, - or 0, the New session commands sit in Application above Open settings, and the introduction names the current desktop app as the scope.",
     desktopApp: true,
     host: WINDOWS_HOST,
     state: snapshotState({ consoles: [console_], projects: [web, api], sessions, ...WINDOWS_MACHINE }),
@@ -93,7 +93,7 @@ export const shortcutsScenarios: Scenario[] = [
     category: "normal",
     title: "Keyboard shortcuts, some changed",
     description:
-      "Toggle focus mode, New session with defaults and New session show their changed key caps, with a reset icon in the reserved trailing slot. Unchanged rows keep the same spacing without a reset icon, and fixed rows use that slot for a lock. Restore defaults sits at the end of the introduction. Choose 560px to see each row stack its controls below its name while preserving their end alignment.",
+      "Toggle focus mode under Focus mode, and New session and New session with defaults under Application, show their changed key caps, with a reset icon in the reserved trailing slot. Unchanged rows keep the same spacing without a reset icon, and fixed rows use that slot for a lock. Restore defaults sits at the end of the introduction. Choose 560px to see each row stack its controls below its name while preserving their end alignment.",
     state,
     preferences: customisedPreferences(customised),
     steps: openSection,

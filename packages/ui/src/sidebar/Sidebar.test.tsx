@@ -17,7 +17,9 @@ import { testDaemon } from "../test/testDaemon";
 import { Sidebar } from "./Sidebar";
 import type { FocusTarget, SidebarHandlers } from "./types";
 import { TEST_AGENTS } from "../test/testProviders";
-import { FAKE_FRAME_MS, fakeTimers } from "../test/clock";
+import { FAKE_FRAME_MS, fakeTimers, runOutTimers } from "../test/clock";
+import { closeOpenTooltip, enter, openTooltip } from "../components/hint/tooltipTestSupport";
+import { IS_MAC } from "../test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -67,10 +69,14 @@ function toggleProject(container: HTMLElement, projectId: string): void {
  * other props. */
 function mountSidebar(initial: SidebarTestProps, beside?: React.ReactNode) {
   const daemon = testDaemon({ state: { sessions: sessionMap(sessions) } });
-  const handlers = { onFocus: vi.fn(), onOpenDialog: vi.fn(), onOpenArchive: vi.fn(), onSelectSession: vi.fn(), onSwitchConsoleSession: vi.fn() } as unknown as SidebarHandlers;
+  const handlers = { onFocus: vi.fn(), onOpenDialog: vi.fn(), onQuickCreateSession: vi.fn(), onOpenArchive: vi.fn(), onSelectSession: vi.fn(), onSwitchConsoleSession: vi.fn() } as unknown as SidebarHandlers;
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
+    // A tooltip left open would leave react-aria's warm-up set with no cooldown armed.
+    closeOpenTooltip();
+    // A held modifier outlives the sidebar, so a test that leaves it down must not carry it on.
+    act(() => void window.dispatchEvent(new Event("blur")));
     act(() => root.unmount());
     container.remove();
   });
@@ -714,4 +720,91 @@ it("orders the inactive projects by when an archived session of each ended last,
   expect(projectOrder(container)).toEqual(["p-alpha", "p-beta"]);
   act(() => sessionOrderPreference.set({ ...DEFAULT_SESSION_ORDER, inactiveProjects: "used" }));
   expect(projectOrder(container)).toEqual(["p-beta", "p-alpha"]);
+});
+
+const createKey = (init: { shift?: boolean } = {}): KeyboardEvent => {
+  const event = new KeyboardEvent("keydown", {
+    key: "n", code: "KeyN", ...(IS_MAC ? { metaKey: true } : { ctrlKey: true }),
+    shiftKey: init.shift ?? false, cancelable: true, bubbles: true,
+  });
+  act(() => void window.dispatchEvent(event));
+  // The modifier is let go again, which would otherwise leave every "+" in its quick form.
+  act(() => void window.dispatchEvent(new KeyboardEvent("keyup")));
+  return event;
+};
+
+const consoleTarget = { kind: "new-console-session", console: main };
+
+it("creates a console session in the shown console from the creation shortcuts outside focus mode, once per press", () => {
+  const { handlers } = mountSidebar({ sessions: [hub1] });
+  expect(createKey().defaultPrevented).toBe(true);
+  expect(handlers.onOpenDialog).toHaveBeenCalledExactlyOnceWith(consoleTarget);
+  expect(handlers.onQuickCreateSession).not.toHaveBeenCalled();
+  expect(createKey({ shift: true }).defaultPrevented).toBe(true);
+  expect(handlers.onQuickCreateSession).toHaveBeenCalledExactlyOnceWith(consoleTarget);
+  expect(handlers.onOpenDialog).toHaveBeenCalledTimes(1);
+});
+
+it("targets the console the sidebar shows when it switches", () => {
+  const other = consoleOf("c-2", "Other");
+  const { handlers, render } = mountSidebar({});
+  render({ shownConsole: other });
+  createKey();
+  expect(handlers.onOpenDialog).toHaveBeenCalledExactlyOnceWith({ kind: "new-console-session", console: other });
+});
+
+it("creates in a project from the creation shortcuts in its focus mode alone, with no console header registering a second time", () => {
+  const { container, handlers } = mountSidebar({ focus: { project: web } });
+  expect(container.querySelector('button[aria-label="New console session"]')).toBeNull();
+  createKey();
+  expect(handlers.onOpenDialog).toHaveBeenCalledExactlyOnceWith({ kind: "new-session", console: main, project: web, binding: { kind: "unbound" } });
+  createKey({ shift: true });
+  expect(handlers.onQuickCreateSession).toHaveBeenCalledExactlyOnceWith({ kind: "new-session", console: main, project: web, binding: { kind: "unbound" } });
+});
+
+it("hands the creation shortcuts to a console session's focus mode, not to the console header", () => {
+  const { container, handlers } = mountSidebar({ sessions: [hub1], focus: { consoleSession: hub1 } });
+  expect(container.querySelector('button[aria-label="New console session"]')).toBeNull();
+  expect(document.querySelector('[role="menu"]')).toBeNull();
+  createKey();
+  // The focus header's project menu answered the press: it is the only registration.
+  expect(document.querySelector('[role="menu"]')).not.toBeNull();
+  expect(handlers.onOpenDialog).not.toHaveBeenCalled();
+  expect(handlers.onQuickCreateSession).not.toHaveBeenCalled();
+});
+
+it("gives the shortcut back to the console header once focus mode is left, and takes it away when it is entered", () => {
+  const { handlers, render } = mountSidebar({ sessions: [hub1], focus: { project: web } });
+  render({ sessions: [hub1], focus: undefined });
+  createKey();
+  expect(handlers.onOpenDialog).toHaveBeenCalledExactlyOnceWith(consoleTarget);
+  render({ sessions: [hub1], focus: { project: web } });
+  createKey();
+  expect(handlers.onOpenDialog).toHaveBeenCalledTimes(2);
+  expect(handlers.onOpenDialog).toHaveBeenLastCalledWith(expect.objectContaining({ kind: "new-session", project: web }));
+});
+
+it.each([false, true])("shows the creation shortcut in the console header's tooltip (modifier held: %s)", (held) => {
+  const { container } = mountSidebar({});
+  // The hover is put on the plain button first: the helper's pointer carries no modifier, which would let the hold go.
+  enter(container.querySelector('button[aria-label="New console session"]')!);
+  runOutTimers();
+  if (held) act(() => void window.dispatchEvent(new KeyboardEvent("keydown", IS_MAC ? { metaKey: true } : { ctrlKey: true })));
+  const tooltip = openTooltip();
+  // The label alone: "New console session" is also a prefix of the quick label.
+  expect(tooltip?.firstElementChild?.firstElementChild?.textContent).toBe(held ? "New console session with defaults" : "New console session");
+  const keys = tooltip?.querySelector("kbd")?.getAttribute("aria-label") ?? "";
+  expect(keys.endsWith("+N")).toBe(true);
+  expect(keys.includes("Shift")).toBe(held);
+});
+
+it("shows no creation shortcut in a project row's \"+\" tooltip", () => {
+  const { container } = mountSidebar({ sessions: [hub1] });
+  const plus = container.querySelector<HTMLElement>('button[aria-label="New session"]');
+  expect(plus).not.toBeNull();
+  enter(plus!);
+  runOutTimers();
+  const tooltip = openTooltip();
+  expect(tooltip?.textContent).toBe("New session");
+  expect(tooltip?.querySelector("kbd")).toBeNull();
 });

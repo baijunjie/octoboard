@@ -84,6 +84,14 @@ function withoutIsolates(text: string): string {
   return text.replace(/[\u2066-\u2069]/g, "");
 }
 
+/** What a tooltip says in words: its text without the key caps (`kbd`) of a shortcut it shows beside its label, which
+ * follow the platform and the user's bindings, so a step names the words and not the keys. */
+function tooltipWords(tooltip: Element): string {
+  const copy = tooltip.cloneNode(true) as Element;
+  copy.querySelectorAll("kbd").forEach((cap) => cap.remove());
+  return withoutIsolates(copy.textContent ?? "").trim();
+}
+
 /** The text of a session agent mark's tooltip that has no list: the agent's name, then the account as
  * a badge, whose comma only assistive technology reads (`StatusBadge`). */
 function agentTooltipText(agent: string, account: string | undefined): string {
@@ -333,7 +341,8 @@ export interface Ui {
    * fails unless the tooltip that opens is the control's name, so hovering one whose tooltip stays shut (a rail avatar
    * while the hidden sidebar can float in, where the pointer floats the sidebar instead) is not passed over. `tooltip`
    * is for a control whose tooltip says something else than its name (an unavailable button's reason, which it also
-   * reaches): the step then fails unless the tooltip that opens reads it. */
+   * reaches): the step then fails unless the tooltip that opens reads it. A shortcut's key caps shown beside the words
+   * are not part of what is compared. */
   hoverTitledControl: (matcher: Matcher, tooltip?: string) => Promise<void>;
   /** Moves the pointer onto the first control named `host` and leaves it there, for a control that
    * floats a panel in while the pointer rests on it (the rail's quota entry), and returns once the
@@ -1055,7 +1064,7 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
       const expected = tooltip ?? nameOf(control);
       await tooltipWhere(
         "[role=tooltip]",
-        (shown) => withoutIsolates(shown.textContent ?? "").trim() === expected,
+        (shown) => tooltipWords(shown) === expected,
         (last) => `The control matching ${String(matcher)} has no tooltip ${tooltip === undefined ? "of its name" : `"${tooltip}"`}: its last tooltip is ${quoted(last)}`,
       );
     },

@@ -1,4 +1,5 @@
 import type { Scenario } from "../scenario";
+import { describing } from "../../fixtures/interact";
 import { consoleOf, minutesAgo, projectOf, sessionOf, snapshotState } from "../../fixtures/builders";
 
 const GROUP = "Sidebar sessions";
@@ -58,6 +59,16 @@ export const consoleSessionsScenarios: Scenario[] = [
     description: "The headings show Console sessions (5) and Projects (4), each counting only its own rows. Agent task titles come before the original session names. Hub 3, the release-plan task under Hub, Preview server, Hub 2 and Hub 4 show Waiting for you, Child sessions working, Working in background, Working and Interrupted in that order, Hub being the one whose sessions are working. The older Preview server stays ahead of the newer Hub 2. Website follows the same order: Update the dependencies, with a watcher still running, precedes the newer Explain the differences. Its pinging hollow green ring differs from the filled accent Working dot, and its hovered glyph says Working in background. Bound sessions carry their owner's colour; unbound ones carry none. Nested sessions stay under their coordinator without a badge, with Measure the first paint first, then the older Watch the gallery build ahead of the newer Chase the flaky test. The pinned, interrupted Old layout draft stays on top of Website. Projects are ranked by their most pressing session too: Search API and Website, both with a session waiting, come before Billing, whose only session is Done, though Billing comes first by name, and the dimmed Admin console, with only an archived session, ends the list. Collapse and reopen Website to watch its sessions fade and move toward or away from the project heading as one block, while the following projects slide into place.",
     state,
     steps: [(ui) => ui.hoverRowStatus(ui.session("Update the dependencies"))],
+  },
+  {
+    id: "console-new-session-shortcut-tooltip",
+    group: GROUP,
+    category: "normal",
+    title: "New console session button tooltip with its shortcut",
+    description: "The pointer rests on the sidebar header's plus: its tooltip says New console session and shows the New session shortcut as key caps at its end, the same as the focus header's plus. Set Modifier to Held to see it read New console session with defaults with the quick-create shortcut.",
+    state,
+    // Named plain or quick: the viewer's Held choice names the button for its quick form.
+    steps: [(ui) => ui.hoverTitledControl(describing("The sidebar header's new-session button, plain or quick", (name) => name === ui.t("sidebar.consoleSessions.new") || name === ui.t("sidebar.consoleSessions.newQuick")))],
   },
   {
     id: "console-session-colour-submenu",

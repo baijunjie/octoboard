@@ -48,6 +48,7 @@ export function ConsoleHeader({ handlers, current }: { handlers: SidebarHandlers
       </RowLabel>
       <RowIconGroup>
         <NewSessionButton
+          shortcut
           label={t("sidebar.consoleSessions.new")}
           quickLabel={t("sidebar.consoleSessions.newQuick")}
           target={() => ({ kind: "new-console-session", console: current })}

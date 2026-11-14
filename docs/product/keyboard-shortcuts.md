@@ -86,19 +86,19 @@ and `⌃⇧Tab` on an Apple keyboard, `Ctrl+Tab` and `Ctrl+Shift+Tab` elsewhere.
 | Navigation | **Next region of the window** | `F6` | no | every client |
 | Navigation | **Previous region of the window** | `Shift+F6` | no | every client |
 | Focus mode | **Toggle focus mode** | `Shift+Cmd+F` | yes | every client |
-| Focus mode | **New session** | `Cmd+N` | yes | every client |
-| Focus mode | **New session with defaults** | `Shift+Cmd+N` | yes | every client |
 | Terminal | **Increase terminal font size** | `Cmd+=` (also `Cmd++`) | yes | every client, while a terminal has focus |
 | Terminal | **Decrease terminal font size** | `Cmd+-` | yes | every client, while a terminal has focus |
 | Terminal | **Reset terminal font size** | `Cmd+0` | yes | every client, while a terminal has focus |
+| Application | **New session** | `Cmd+N` | yes | every client |
+| Application | **New session with defaults** | `Shift+Cmd+N` | yes | every client |
 | Application | **Open settings** | `Cmd+,` | yes | every client (in the macOS desktop app its native menu takes the key; wherever there is no native menu — the Windows desktop app and a browser — the page does) |
 | Editing | **Undo**, **Redo**, **Cut**, **Copy**, **Paste**, **Select all** | `Cmd+Z`, `Shift+Cmd+Z`, `Cmd+X`, `Cmd+C`, `Cmd+V`, `Cmd+A` | no | the desktop app (its native menu) |
 | Editing | **Find** | `Cmd+F` | no | every client |
 | Window | **Hide Octoboard**, **Hide others**, **Toggle full screen**, **Minimize**, **Close window**, **Quit Octoboard** | `Cmd+H`, `Option+Cmd+H`, `Ctrl+Cmd+F`, `Cmd+M`, `Cmd+W`, `Cmd+Q` | no | the desktop app (its native menu) |
 
 **A command the client does not have is not listed**: in a browser, Back and Forward, the console-session keys and the
-native menu's keys are left out, and so is the Window group, which holds nothing else; the Application group holds only
-Open settings and the Editing group only Find there. The Windows desktop app, which has no native menu, leaves
+native menu's keys are left out, and so is the Window group, which holds nothing else; the Editing group holds only Find
+there. The Windows desktop app, which has no native menu, leaves
 out the same commands but the console-session keys, which it lists. Undo, Redo, Cut, Copy, Paste and Select all, and
 the Window group's keys, are the macOS menu's: elsewhere the engine or the system keeps them (and Ctrl+C interrupts the terminal's program), so the
 page does not take them. Such a command keeps its key all the same, and that key cannot
@@ -122,8 +122,9 @@ default keys, and nothing otherwise.
 
 What each command does: Back and Forward in "Keyboard shortcuts" in `docs/product/navigation-history.md`; the
 console-session keys in "The switch strip" in `docs/product/focus-mode.md`; the region keys in
-`docs/product/moving-focus-between-regions.md`; Toggle focus mode in "The focus mode shortcut" and the two New session
-commands in "Creating sessions from the keyboard", both in `docs/product/focus-mode.md`; the three terminal font size
+`docs/product/moving-focus-between-regions.md`; Toggle focus mode in "The focus mode shortcut" in
+`docs/product/focus-mode.md`; the two New session commands in "Creating sessions from the keyboard" in
+`docs/product/sidebar.md`; the three terminal font size
 commands in "The size and how it is changed" in `docs/product/terminal-font-size.md`; Open settings in "Opening
 and closing Settings" in `docs/product/settings.md`; Find, which acts only in the file viewer, where it finds in the
 file (see `docs/product/finding-in-the-file-viewer.md`), and in Settings, where it focuses the search field (see "The
@@ -243,7 +244,7 @@ Where a configurable shortcut is shown it is the command's current one, and it c
 
 - the selected session menu's Focus mode item and the Leave focus mode button's tooltip;
 - the tooltips that name a shortcut: the **+** that the New session commands act on, which shows the shortcut of
-  whichever of the two it would take (see "Creating sessions from the keyboard" in `docs/product/focus-mode.md`);
+  whichever of the two it would take (see "Creating sessions from the keyboard" in `docs/product/sidebar.md`);
 - the macOS desktop app's native menu, whose **Settings…** item carries Open settings' shortcut.
 
 ## Where the shortcuts are kept
@@ -273,9 +274,9 @@ its default.
 { "focusMode": { "code": "KeyK", "primary": true, "shift": true }, "back": { "code": "BracketLeft", "primary": true, "alt": true } }
 ```
 
-The command ids are `back`, `forward`, `nextConsoleSession`, `previousConsoleSession`, `focusMode`, `newSession`,
-`quickCreate` (New session with defaults) and `openSettings`. The fixed window keys and menu letters have
-none.
+The command ids are `back`, `forward`, `nextConsoleSession`, `previousConsoleSession`, `focusMode`,
+`increaseTerminalFontSize`, `decreaseTerminalFontSize`, `resetTerminalFontSize`, `newSession`, `quickCreate` (New
+session with defaults) and `openSettings`. The fixed window keys and menu letters have none.
 
 **Such an object is judged as a whole set**, against the bindings the whole set would leave, so that two commands
 swapping their shortcuts, or a chain of moves, stands whatever order the entries are written in. An entry is dropped

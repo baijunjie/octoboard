@@ -47,7 +47,7 @@ function mount(initial: Partial<State> = {}, shortcut = false) {
 
 const noAgent = new Map(TEST_AGENTS.map((value) => [value, { agent: value, availability: "unavailable" as const, default_account_dir: null }]));
 
-it("does not register creation shortcuts outside a focus header", () => {
+it("does not register creation shortcuts without the shortcut flag", () => {
   const { onOpen, onQuickCreate } = mount();
   const event = new KeyboardEvent("keydown", { code: "KeyN", key: "n", ...MODIFIER, cancelable: true });
   act(() => void window.dispatchEvent(event));
@@ -56,10 +56,29 @@ it("does not register creation shortcuts outside a focus header", () => {
   expect(onQuickCreate).not.toHaveBeenCalled();
 });
 
-it("does not run creation shortcuts without an available agent", () => {
+it("ignores the repeats of a held creation shortcut, which it still takes from the page, and answers the next press", () => {
+  const { onOpen, onQuickCreate } = mount({}, true);
+  const press = (shiftKey: boolean, repeat: boolean) => {
+    const event = new KeyboardEvent("keydown", { code: "KeyN", key: "n", ...MODIFIER, shiftKey, repeat, cancelable: true });
+    act(() => void window.dispatchEvent(event));
+    return event;
+  };
+  for (const shiftKey of [false, true]) expect(press(shiftKey, true).defaultPrevented).toBe(true);
+  expect(onOpen).not.toHaveBeenCalled();
+  expect(onQuickCreate).not.toHaveBeenCalled();
+  // The same keys without the repeat flag run, so the refusal above came from the repeat guard.
+  press(false, false);
+  press(true, false);
+  expect(onOpen).toHaveBeenCalledExactlyOnceWith(request);
+  expect(onQuickCreate).toHaveBeenCalledExactlyOnceWith(request);
+});
+
+it("does not run creation shortcuts without an available agent, though it still takes the keys from the page", () => {
   const { onOpen, onQuickCreate } = mount({ agentAvailability: noAgent }, true);
   for (const shiftKey of [false, true]) {
-    act(() => void window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyN", key: "n", ...MODIFIER, shiftKey })));
+    const event = new KeyboardEvent("keydown", { code: "KeyN", key: "n", ...MODIFIER, shiftKey, cancelable: true });
+    act(() => void window.dispatchEvent(event));
+    expect(event.defaultPrevented).toBe(true);
   }
   expect(onOpen).not.toHaveBeenCalled();
   expect(onQuickCreate).not.toHaveBeenCalled();

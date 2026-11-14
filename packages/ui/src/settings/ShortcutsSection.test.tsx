@@ -134,6 +134,20 @@ it("lists the font size commands in a Terminal group, between Focus and Applicat
   }
 });
 
+it.each([["a browser", undefined], ["the desktop app", APP]] as const)("lists the creation commands under Application, before Open settings, and leaves only Toggle focus mode under Focus mode, in %s", (_name, platform) => {
+  const container = mount(platform);
+  const rebindable = (heading: string) => {
+    const group = Array.from(container.querySelectorAll("h3")).find((node) => node.textContent === heading)?.closest("section");
+    expect(group, heading).toBeTruthy();
+    return [...group!.querySelectorAll<HTMLButtonElement>("button")]
+      .map(nameOf)
+      .filter((name) => name.startsWith("Change the shortcut for "))
+      .map((name) => name.slice("Change the shortcut for ".length));
+  };
+  expect(rebindable("Focus mode")).toEqual(["Toggle focus mode"]);
+  expect(rebindable("Application")).toEqual(["New session", "New session with defaults", "Open settings"]);
+});
+
 it("records a new combination for a font size command and saves it", () => {
   const container = mount();
   act(() => button(container, "Change the shortcut for Increase terminal font size")!.click());

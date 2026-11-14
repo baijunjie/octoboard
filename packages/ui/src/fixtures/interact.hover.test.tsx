@@ -340,13 +340,14 @@ it("hoverTitledControl fails for a control that is not there", async () => {
 });
 
 /** A control whose tooltip the test puts in the page itself, `after` ms from now, as a loaded page opens one later than
- * the hover step's fixed wait. */
-function mountProbe(tooltip: string, after: number, unavailable = false): void {
+ * the hover step's fixed wait. `tooltip` is its text, or a function that fills the tooltip with other markup. */
+function mountProbe(tooltip: string | ((shown: HTMLElement) => void), after: number, unavailable = false): void {
   mountForTooltip(<div role="button" aria-label="Probe" aria-disabled={unavailable || undefined}>Probe</div>);
   const timer = setTimeout(() => {
     const shown = document.body.appendChild(document.createElement("div"));
     shown.setAttribute("role", "tooltip");
-    shown.textContent = tooltip;
+    if (typeof tooltip === "string") shown.textContent = tooltip;
+    else tooltip(shown);
   }, after);
   onTestFinished(() => {
     clearTimeout(timer);
@@ -368,6 +369,11 @@ it("a hover step fails, naming the last tooltip, only once its patience has run 
   const done = expect(createUi(document, "en").hoverTitledControl("Probe")).rejects.toThrow(/has no tooltip of its name: its last tooltip is "Other"/);
   await settleInAct(done);
   expect(Date.now() - started).toBeGreaterThanOrEqual(TOOLTIP_DELAY_MS + TOOLTIP_SHOW_MS + TIMEOUT_MS);
+});
+
+it("hoverTitledControl compares the words of a tooltip, not the key caps of the shortcut beside them", async () => {
+  mountProbe((shown) => { shown.innerHTML = "<span><span>Probe</span><kbd>\u2318N</kbd></span>"; }, 0);
+  await settleInAct(createUi(document, "en").hoverTitledControl("Probe"));
 });
 
 it("hoverTitledControl with a tooltip passes for a control whose tooltip reads it, though it is not the control's name", async () => {

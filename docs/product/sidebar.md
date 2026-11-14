@@ -38,6 +38,39 @@ While the console's action menu is open, its top-level actions have fixed letter
 including when opened from its avatar on the rail, under "Menu keyboard shortcuts" in
 `docs/product/keyboard-shortcuts.md`. View archive is a submenu and has no temporary letter shortcut.
 
+## Creating sessions from the keyboard
+
+**New session** — `Cmd+N` on an Apple keyboard or `Ctrl+N` elsewhere, unless the user has changed it — takes the
+**+** action of the header the sidebar holds, and **New session with defaults** — `Shift+Cmd+N` or `Ctrl+Shift+N`
+unless changed — takes that **+**'s quick form, opening a session with defaults (see "Opening a session with defaults"
+in `docs/product/opening-sessions.md`). How either is changed is in `docs/product/keyboard-shortcuts.md`. One header
+owns the keys at a time:
+
+- **Outside focus mode**, the console header (see "The console header" above): New session opens the session dialog
+  for a new console session in the console the sidebar shows, and New session with defaults opens a console session
+  there with defaults.
+- **In a project's focus mode**, its header: New session opens the project's new-session dialog, and New session with
+  defaults creates an independent project coordinator in that project (see "A project's focus mode" in
+  `docs/product/focus-mode.md`).
+- **In a console session's focus mode**, its header: either key opens the header's menu of the console's projects, in
+  that key's form; choosing a project opens its dialog or creates with defaults, bound to the console session in focus.
+  Releasing the keys before choosing the project does not change which was requested (see "The new-session menu" in
+  `docs/product/focus-mode.md`).
+
+The keys act on what the sidebar holds whether it is shown or hidden. While the sidebar floats in to preview another
+console from the rail, showing that console's own view and never a focus mode (see "Previewing a console from the
+rail" in `docs/product/console-switcher.md`), they act on the previewed console's header and create a console session
+in that console. With no console at all, where the welcome screen stands in for the sidebar, they do nothing.
+
+The owning header's **+** shows New session's shortcut in its tooltip, or New session with defaults' while the primary
+modifier is held; no other **+** shows either.
+
+The keys match the physical key whatever the keyboard layout and work across the window, the terminal included, where
+they are taken before the terminal sees them: off an Apple keyboard the program in the terminal never receives
+`Ctrl+N` or `Ctrl+Shift+N` while the commands keep their default keys. They do nothing while a dialog or a menu is open
+or during input-method composition, and holding them does not repeat creation. The owning **+**'s availability and
+quick-creation refusals apply to the keys too: where the **+** is disabled they do nothing.
+
 ## The console sessions section and the project list
 
 Under the header comes the **console sessions** section: every console session of the console that is not archived,
