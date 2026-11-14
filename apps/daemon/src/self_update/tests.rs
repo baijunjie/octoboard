@@ -214,6 +214,14 @@ impl Installation {
     }
 }
 
+/// Whether `take` succeeds once the update lock is free, asked again until then. The lock is an
+/// `flock`, held by the open file description: a child another test forks in the meantime shares
+/// the descriptor until it execs, so a lock just let go can stay held for a moment under the
+/// suite's load.
+fn once_the_update_lock_is_free(take: impl FnMut() -> bool) -> bool {
+    crate::session::wait::wait_for(PATIENCE, take)
+}
+
 /// Whether the process may write where a mode refuses it: as root it may, and a test of that
 /// refusal has nothing to show.
 #[cfg(unix)]
@@ -2872,13 +2880,14 @@ mod hardening {
         assert!(part.exists(), "another process's download is not touched");
         drop(lock);
 
-        assert!(installation.files.sweep_updates());
+        let sweep = || installation.files.sweep_updates();
+        assert!(once_the_update_lock_is_free(sweep));
         assert!(!part.exists());
         assert!(dir.is_dir());
         // Nothing to sweep, and no folder, is no failure.
-        assert!(installation.files.sweep_updates());
+        assert!(once_the_update_lock_is_free(sweep));
         std::fs::remove_dir(&dir).unwrap();
-        assert!(installation.files.sweep_updates());
+        assert!(once_the_update_lock_is_free(sweep));
     }
 }
 
@@ -3294,7 +3303,9 @@ mod falling_back {
             "the record no longer describes the file"
         );
         // The update lock was let go again.
-        assert!(crate::platform::fs::try_lock_file(&installation.files.lock()).is_ok());
+        assert!(once_the_update_lock_is_free(|| {
+            crate::platform::fs::try_lock_file(&installation.files.lock()).is_ok()
+        }));
     }
 
     #[test]
