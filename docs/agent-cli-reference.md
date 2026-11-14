@@ -912,10 +912,12 @@ observe must emit no JSON at all.
 **A `PreToolUse` deny blocks a write, over HTTP too** (1.0.77, `grok -p` in `acceptEdits`, a hook file in
 `GROK_HOME/hooks/`, a probe printing a `deny` decision with a reason). A `command` hook's deny blocks `search_replace`
 (Grok's file edit) and `run_terminal_command`, and so does an `http` hook to `http://127.0.0.1:<port>`, which the probe
-reached. The model sees `Hook denied: <reason>`, the reason cut to about its first 270 characters and followed by `… [+N
-chars]`, and did not retry the write another way. An unreachable hook URL lets the call through, but with `"failClosed":
-true` it denies with `Hook denied: fail-closed hook '<name>' failed: HTTP request failed for <url>: error sending
-request`.
+reached. The model sees `Hook denied: <reason>`, the reason cut to its first 256 characters (the prefix not counted;
+characters, not bytes: a reason holding CJK text kept 256 characters, 276 bytes; measured on 1.0.77 in real sessions
+on macOS and Windows) and followed by `… [+N chars]`, and did not retry the write another way. On Windows a hook's
+`command` that is a bare path to a `.cmd` script runs through `cmd.exe` (`grok.exe` → `cmd.exe` → the script's
+program). An unreachable hook URL lets the call through, but with `"failClosed": true` it denies with
+`Hook denied: fail-closed hook '<name>' failed: HTTP request failed for <url>: error sending request`.
 
 **Project configuration layering**: hooks are additive across the global, project and managed layers, and
 byte-identical handlers are deduplicated across them.

@@ -28,10 +28,6 @@ use crate::hostfs::place::Place;
 /// How much of a payload is read: a write call carries the whole file it writes.
 const PAYLOAD_LIMIT: u64 = 32 * 1024 * 1024;
 
-/// The most characters of the reason an agent is sure to show the model: Grok shows about the
-/// first 270.
-const REASON_LIMIT: usize = 270;
-
 /// Runs the guard over stdin with the list in `list_file`, printing the decision if there is one.
 pub fn run(list_file: &Path) {
     let mut payload = Vec::new();
@@ -171,7 +167,7 @@ struct Places<'a> {
     projects: Vec<(&'a GuardedProject, Place)>,
 }
 
-/// A refused path and the project it is in, with the project's root, for showing the path short.
+/// A refused path and the project it is in.
 struct Refused<'a> {
     path: PathBuf,
     project: &'a GuardedProject,
@@ -235,52 +231,17 @@ fn place_of_target(path: &Path) -> Option<(Place, PathBuf)> {
     resolved.ancestors().skip(1).find_map(Place::resolved)
 }
 
-/// The refusal, kept within [`REASON_LIMIT`] by shortening the path alone: a long one is shown
-/// relative to the project's root first, and then cut from its start. A project or tool name long
-/// enough to overflow by itself is not cut, so the end of the hand-over can still fall past what
-/// Grok shows.
+/// The refusal: the hand-over first and the target's full path last, since Grok shows the model
+/// only the first 256 characters of a reason; a project or tool name long enough to push the end of
+/// the hand-over past that is not cut.
 fn reason(refused: &Refused<'_>, tool: &str) -> String {
     let name = &refused.project.name;
-    let build = |path: &str| {
-        format!(
-            "Blocked: {path} is in project \"{name}\", not this session's. Don't write it \
-             another way. Keep any changes there as they are and call {tool} for a \"{name}\" \
-             session, listing the changed files and where they are, so it reviews them and \
-             takes over."
-        )
-    };
-    let full = refused.path.to_string_lossy();
-    let text = build(&full);
-    if text.chars().count() <= REASON_LIMIT {
-        return text;
-    }
-    // The root is told by its key, since the path is in the case the payload gave; what is shown
-    // is the path's own text below as many components as the root has.
-    let root = Path::new(&refused.project.root);
-    let relative = crate::hostfs::lexically_within(&refused.path, root).then(|| {
-        refused
-            .path
-            .components()
-            .skip(
-                crate::hostfs::lexically_normalise(root)
-                    .components()
-                    .count(),
-            )
-            .collect::<PathBuf>()
-            .to_string_lossy()
-            .into_owned()
-    });
-    let shown = relative.as_deref().unwrap_or(&full);
-    let text = build(shown);
-    let over = text.chars().count().saturating_sub(REASON_LIMIT);
-    if over == 0 {
-        return text;
-    }
-    // The path's own tail is what names the file; the start is what is given up, and an ellipsis
-    // stands for it.
-    let keep = shown.chars().count().saturating_sub(over + 1).max(1);
-    let tail: String = shown.chars().skip(shown.chars().count() - keep).collect();
-    build(&format!("\u{2026}{tail}"))
+    format!(
+        "Blocked: this file is in project \"{name}\", not yours. Don't write it another way; \
+         leave changes there as they are. Call {tool} for a \"{name}\" session, listing the \
+         changed files and where, so it reviews and takes over. Path: {}",
+        refused.path.display()
+    )
 }
 
 #[cfg(test)]

@@ -80,36 +80,27 @@ fn denial(decision: Option<Value>) -> Option<String> {
     )
 }
 
-/// The refusal as the contract words it.
+/// The refusal as the contract words it: the hand-over first, then the full path.
 fn reason_for(path: &str, project: &str, tool: &str) -> String {
+    format!("{} Path: {path}", hand_over(project, tool))
+}
+
+/// The part of the refusal that comes before the path: the part that has to fit in what Grok
+/// shows the model.
+fn hand_over(project: &str, tool: &str) -> String {
     format!(
-        "Blocked: {path} is in project \"{project}\", not this session's. Don't write it another \
-         way. Keep any changes there as they are and call {tool} for a \"{project}\" session, \
-         listing the changed files and where they are, so it reviews them and takes over."
+        "Blocked: this file is in project \"{project}\", not yours. Don't write it another way; \
+         leave changes there as they are. Call {tool} for a \"{project}\" session, listing the \
+         changed files and where, so it reviews and takes over."
     )
 }
 
-/// The longest a reason may be, which Grok's display of it sets.
-const LIMIT: usize = 270;
+/// How much of a reason Grok Build shows the model, after its own prefix.
+const SHOWN: usize = 256;
 
-/// What the reason has to be for a refusal of `path`: the contract's text where it fits, and
-/// where it does not (the scratch directory's path can be long) a path shown short with the
-/// hand-over in full and the whole within the limit.
+/// The reason is the contract's text with the whole path, however long the path is.
 fn assert_reason(reason: &str, path: &str, project: &str, tool: &str) {
-    let full = reason_for(path, project, tool);
-    if full.chars().count() <= LIMIT {
-        assert_eq!(reason, full);
-        return;
-    }
-    assert!(reason.chars().count() <= LIMIT, "{reason}");
-    assert!(reason.starts_with("Blocked: "), "{reason}");
-    let wording = reason_for("", project, tool);
-    let hand_over = wording.split_once(" is in project").unwrap().1;
-    assert!(
-        reason.contains(&format!(" is in project \"{project}\"")),
-        "{reason}"
-    );
-    assert!(reason.ends_with(hand_over), "{reason}");
+    assert_eq!(reason, reason_for(path, project, tool));
 }
 
 /// Two project directories side by side, the session's own and another's.
@@ -205,12 +196,8 @@ fn a_relative_target_is_resolved_against_the_payloads_directory() {
 
     let reason = denial(decide_for(&pair.list(), &payload)).expect("denied");
 
-    assert!(reason.starts_with("Blocked: "), "{reason}");
-    assert!(reason.contains("\"Beta\""), "{reason}");
-    assert!(
-        !reason.contains(".."),
-        "the path is shown normalised: {reason}"
-    );
+    // Shown normalised.
+    assert_reason(&reason, &text(&pair.other.join("file.txt")), "Beta", TOOL);
     let payload = json!({
         "cwd": text(&pair.other),
         "tool_input": { "file_path": "../own/file.txt" },
@@ -288,7 +275,12 @@ fn a_file_that_does_not_exist_yet_is_judged_by_its_nearest_existing_directory() 
     let pair = pair();
     let list = pair.list();
 
-    let new_in_other = pair.other.join("not/yet/there/new.txt");
+    let new_in_other = pair
+        .other
+        .join("not")
+        .join("yet")
+        .join("there")
+        .join("new.txt");
     let reason = denial(decide_for(&list, &write_payload(&new_in_other, &pair.own)));
     assert_reason(&reason.expect("denied"), &text(&new_in_other), "Beta", TOOL);
     assert_eq!(
@@ -565,10 +557,8 @@ fn the_refusal_shows_the_path_normalised_and_in_the_case_the_payload_gave() {
 
     let reason = denial(decide_for(&pair.list(), &payload)).expect("denied");
 
+    // Normalised, and in the payload's case.
     assert_reason(&reason, &text(&target), "Beta", TOOL);
-    assert!(!reason.contains(".."), "{reason}");
-    // The case is the payload's: a long path is cut at its start, so the end is what shows.
-    assert!(reason.contains("TXT is in project"), "{reason}");
 }
 
 // -- the reason -----------------------------------------------------------------
@@ -578,74 +568,52 @@ fn long_name(piece: &str, length: usize) -> String {
 }
 
 #[test]
-fn a_long_path_is_shown_relative_to_the_project_and_the_hand_over_is_kept_whole() {
-    let scratch = ScratchDir::new("guard-hook-reason-relative");
-    let own = dir(&scratch, "own");
-    // A root deep enough that its absolute path alone would overrun the limit.
-    let deep = dir(&dir(&scratch, &long_name("p", 120)), &long_name("q", 120));
-    let root = dir(&deep, "proj");
-    let list = GuardList {
-        tool: "t".to_string(),
-        ..list(&[&own], vec![guarded("Beta", &root)], &[])
-    };
-    let target = root.join("src/lib.rs");
-    assert!(reason_for(&text(&target), "Beta", "t").chars().count() > LIMIT);
-
-    let reason = denial(decide_for(&list, &write_payload(&target, &own))).expect("denied");
-
-    assert_eq!(reason, reason_for("src/lib.rs", "Beta", "t"));
-    assert!(reason.chars().count() <= LIMIT);
-}
-
-#[test]
-fn a_path_too_long_even_relative_is_cut_at_its_start_never_the_hand_over() {
-    let scratch = ScratchDir::new("guard-hook-reason-cut");
-    let own = dir(&scratch, "own");
-    let root = dir(&scratch, "proj");
-    let list = list(&[&own], vec![guarded("Beta", &root)], &[]);
-    let nested = format!(
-        "{}/{}/{}",
-        long_name("a", 140),
-        long_name("b", 140),
-        "name.rs"
-    );
-    let target = root.join(&nested);
-
-    let reason = denial(decide_for(&list, &write_payload(&target, &own))).expect("denied");
-
-    assert!(
-        reason.chars().count() <= LIMIT,
-        "{}",
-        reason.chars().count()
-    );
-    assert!(reason.starts_with("Blocked: \u{2026}"), "{reason}");
-    assert!(
-        reason.contains("name.rs is in project \"Beta\""),
-        "{reason}"
-    );
-    let wording = reason_for("", "Beta", TOOL);
-    let hand_over = wording.split_once(" is in project").unwrap().1;
-    assert!(reason.ends_with(hand_over), "{reason}");
-    assert!(reason.contains(TOOL), "{reason}");
-}
-
-#[test]
-fn a_short_path_is_shown_as_it_is() {
+fn the_hand_over_comes_first_and_the_full_path_last() {
     let pair = pair();
     let target = pair.other.join("file.txt");
 
+    let reason = denial(decide_for(&pair.list(), &write_payload(&target, &pair.own))).unwrap();
+
+    let (before, path) = reason.split_once(" Path: ").expect("the path comes last");
+    assert_eq!(before, hand_over("Beta", TOOL));
+    assert_eq!(path, text(&target));
+    // Grok shows the model only the start of a reason; the hand-over fits in it for a short name.
+    assert!(before.chars().count() <= SHOWN, "{before}");
+}
+
+#[test]
+fn a_long_path_is_shown_whole_never_shortened() {
+    let scratch = ScratchDir::new("guard-hook-reason-long-path");
+    let own = dir(&scratch, "own");
+    let root = dir(&dir(&scratch, &long_name("p", 120)), "proj");
+    let list = list(&[&own], vec![guarded("Beta", &root)], &[]);
+    let target = root
+        .join(long_name("a", 140))
+        .join(long_name("b", 140))
+        .join("name.rs");
+    assert!(text(&target).chars().count() > SHOWN);
+
+    let reason = denial(decide_for(&list, &write_payload(&target, &own))).expect("denied");
+
+    assert_reason(&reason, &text(&target), "Beta", TOOL);
+}
+
+#[test]
+fn a_long_project_or_tool_name_is_not_cut() {
+    let pair = pair();
+    let project = long_name("project ", 200);
+    let tool = format!("mcp__{}__request_session", long_name("x", 100));
     let list = GuardList {
-        tool: "t".to_string(),
+        tool: tool.clone(),
+        projects: vec![guarded(&project, &pair.other)],
         ..pair.list()
     };
-    if reason_for(&text(&target), "Beta", "t").chars().count() > LIMIT {
-        eprintln!("the scratch directory's path is too long for a path to be shown whole");
-        return;
-    }
+    let target = pair.other.join("file.txt");
 
-    let reason = denial(decide_for(&list, &write_payload(&target, &pair.own))).unwrap();
+    let reason = denial(decide_for(&list, &write_payload(&target, &pair.own))).expect("denied");
 
-    assert_eq!(reason, reason_for(&text(&target), "Beta", "t"));
+    assert!(hand_over(&project, &tool).chars().count() > SHOWN);
+    assert_reason(&reason, &text(&target), &project, &tool);
 }
 
 // -- failing open ---------------------------------------------------------------

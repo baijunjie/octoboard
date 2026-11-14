@@ -74,12 +74,12 @@ These pass whatever project holds them:
 
 ### What the agent is told
 
-A refused call does not run. The agent is given a refusal that names the target and the project it is in, says not to
-write it another way, to keep any changes already made there as they are, and to call `request_session` (under the
-agent's own name for it) for a session of that project, listing the changed files and where they are, so that session
-reviews them and takes the work over. The refusal is kept within about 270 characters, the part Grok Build shows, by
-shortening the target alone: past that length it is shown relative to the project's directory, and then cut from its
-start, an ellipsis standing for what is left out. A project or tool name long enough to overflow on its own is not cut.
+A refused call does not run. The agent is given a refusal that names the project the target is in, says not to write
+it another way, to keep any changes already made there as they are, and to call `request_session` (under the agent's
+own name for it) for a session of that project, listing the changed files and where they are, so that session reviews
+them and takes the work over. The target's full path comes last. Grok Build shows the model only the first 256
+characters of the refusal, so the hand-over comes first and, for a project name of up to about 15 characters, fits
+within them, leaving only the path to be lost; a longer name is not cut.
 
 ### When it cannot decide
 
@@ -92,12 +92,12 @@ cannot be built or written at launch, the session launches without the edit chec
 
 ### What it refuses
 
-While the switch is on, a git run inside a project session is refused an update that moves an existing branch —
-a commit on a branch, a merge, a rebase, a reset, a forced `git branch -f` or `git update-ref` — in a repository that
-another project is in and the session's own project is not. The refusal comes when the transaction is prepared, after the
-user's own `reference-transaction` hook has passed it (see "The session's git hooks" in
-`docs/product/branch-responsible-session.md`), and fails the git command with exit status 3; the revert gate is not run
-for it.
+While the switch is on, a git run inside a project session is refused an update that moves an existing branch — a commit
+on a branch, a merge, a rebase, a reset, a forced `git branch -f` or `git update-ref` — in a repository that another
+project is in and the session's own project is not. The refusal comes when the transaction is prepared, after the user's
+own `reference-transaction` hook has passed it (see "The session's git hooks" in
+`docs/product/branch-responsible-session.md`), and fails the git command (the hook exits with status 3, a commit with
+128); the revert gate is not run for it.
 
 These pass:
 
