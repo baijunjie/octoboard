@@ -57,6 +57,23 @@ pub(crate) fn names_an_executable(title: &str) -> bool {
     absolute && extension.is_some_and(|extension| extension.eq_ignore_ascii_case(b".exe"))
 }
 
+/// Whether `title` is one the console host gives a console of its own accord rather than one the
+/// program on it set: the path of an executable ([`names_an_executable`]), alone or after the
+/// one-word label the console of an elevated process carries (`Administrator: `, in the system's
+/// language). The bundled host hands its terminal the title of the console it was started from as
+/// it starts (on a machine where that is an elevated PowerShell, `Administrator: C:\…\powershell.exe`),
+/// which the raw output passes on as a title sequence like any other. A program could set such a
+/// title too, but a shell or an agent naming its work never does so.
+pub(crate) fn is_host_title(title: &str) -> bool {
+    names_an_executable(title)
+        || title.split_once(": ").is_some_and(|(label, rest)| {
+            let label = label.trim();
+            !label.is_empty()
+                && !label.contains(|c: char| c.is_whitespace() || matches!(c, '\\' | '/' | ':'))
+                && names_an_executable(rest)
+        })
+}
+
 /// A change of the title as the parsed screen reports it: a title set, or the title reset to none
 /// (`None`).
 pub(crate) type TitleChange = Option<String>;
@@ -74,15 +91,38 @@ enum Mode {
     StringEscape,
 }
 
+/// What a [`Parser`] makes of a title the console host gave ([`is_host_title`]).
+#[derive(Default)]
+enum HostTitles {
+    /// Passed over, as if it had not been set: an agent's title is what tells its turns, which a
+    /// title of the host's does not.
+    #[default]
+    PassedOver,
+    /// Read as the title reset: a shell that sets the console's title back to the one it found,
+    /// as cmd.exe does once a command ends, has given up a title of its own.
+    Reset,
+}
+
 #[derive(Default)]
 pub(crate) struct Parser {
     mode: Mode,
     osc: Vec<u8>,
     glyph: Option<char>,
+    host_titles: HostTitles,
 }
 
 impl Parser {
-    /// Returns only the last completed title in a chunk. An empty title clears the stored title.
+    /// A parser that reads a title the console host gave as the title reset rather than passing
+    /// it over (the default), as a shell's titles are read.
+    pub(crate) fn resetting_at_host_titles() -> Self {
+        Self {
+            host_titles: HostTitles::Reset,
+            ..Self::default()
+        }
+    }
+
+    /// Returns only the last completed title in a chunk. An empty title clears the stored title. A
+    /// title the console host gave is passed over or read as a reset, as the parser was made.
     pub(crate) fn feed(&mut self, data: &[u8]) -> Option<Option<String>> {
         let mut latest = None;
         for &byte in data {
@@ -168,32 +208,38 @@ impl Parser {
         for change in changes {
             let text = change.as_deref().unwrap_or("");
             if text.len() <= MAX_TITLE_BYTES {
-                complete(text, &mut self.glyph, &mut latest);
+                self.complete(text, &mut latest);
             }
         }
         latest
     }
 
     fn finish(&mut self, latest: &mut Option<Option<String>>) {
-        if let Some(bytes) = self
-            .osc
-            .strip_prefix(b"0;")
-            .or_else(|| self.osc.strip_prefix(b"2;"))
-        {
+        let mut osc = std::mem::take(&mut self.osc);
+        if let Some(bytes) = osc.strip_prefix(b"0;").or_else(|| osc.strip_prefix(b"2;")) {
             if let Ok(text) = std::str::from_utf8(bytes) {
-                complete(text, &mut self.glyph, latest);
+                self.complete(text, latest);
             }
         }
-        self.osc.clear();
+        // The buffer is kept for the next sequence.
+        osc.clear();
+        self.osc = osc;
     }
-}
 
-/// Takes `text` as the latest title, and `glyph` as the activity glyph it starts with, unless it
-/// holds a control character.
-fn complete(text: &str, glyph: &mut Option<char>, latest: &mut Option<Option<String>>) {
-    if !text.chars().any(char::is_control) {
+    /// Takes `text` as the latest title, and the activity glyph it starts with as the last title's,
+    /// unless it holds a control character; a title the console host gave is taken as the parser
+    /// was made to take it ([`HostTitles`]).
+    fn complete(&mut self, text: &str, latest: &mut Option<Option<String>>) {
+        if text.chars().any(char::is_control) {
+            return;
+        }
+        let text = match self.host_titles {
+            _ if !is_host_title(text.trim()) => text,
+            HostTitles::PassedOver => return,
+            HostTitles::Reset => "",
+        };
         let title = without_spinner_glyphs(text.trim());
-        *glyph = text.trim().chars().next().filter(|c| is_spinner_glyph(*c));
+        self.glyph = text.trim().chars().next().filter(|c| is_spinner_glyph(*c));
         *latest = Some((!title.is_empty()).then(|| title.to_owned()));
     }
 }
@@ -277,6 +323,54 @@ mod tests {
         assert!(parser.osc.len() <= MAX_TITLE_BYTES + 2);
         assert_eq!(parser.feed(b"\x1b]2;hidden\x07"), None);
         assert_eq!(parser.feed(b"\x1b]2;next\x07"), Some(Some("next".into())));
+    }
+
+    #[test]
+    fn an_executable_alone_or_after_an_elevated_consoles_label_is_the_hosts_title() {
+        for title in [
+            r"C:\Program Files\PowerShell\7\pwsh.exe",
+            r"Administrator: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe",
+            "\u{7ba1}\u{7406}\u{5458}: C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+            r"Administrateur : C:\Windows\System32\cmd.exe",
+        ] {
+            assert!(is_host_title(title), "{title}");
+        }
+        for title in [
+            "Administrator: npm test",
+            r"npm: run C:\Windows\System32\cmd.exe",
+            r": C:\Windows\System32\cmd.exe",
+            r"Build output: C:\out\app.exe",
+            r"tools\a: C:\Windows\System32\cmd.exe",
+            r"bin/x: C:\Windows\System32\cmd.exe",
+            "MINGW64:/c/Users/me",
+            "\u{2733} Claude Code",
+            "",
+        ] {
+            assert!(!is_host_title(title), "{title}");
+        }
+    }
+
+    #[test]
+    fn a_host_title_is_passed_over_by_default_and_read_as_a_reset_for_a_shell() {
+        let host = "\x1b]2;Administrator: C:\\Windows\\System32\\cmd.exe\x07";
+        let mut parser = Parser::default();
+        assert_eq!(parser.feed(host.as_bytes()), None);
+        // An earlier title of the same chunk is still the chunk's.
+        assert_eq!(
+            parser.feed(format!("\x1b]2;\u{2733} mine\x07{host}").as_bytes()),
+            Some(Some("mine".into()))
+        );
+        assert_eq!(parser.leading_glyph(), Some('\u{2733}'));
+        let changes = [
+            Some("theirs".to_string()),
+            Some(r"C:\Windows\System32\cmd.exe".to_string()),
+        ];
+        assert_eq!(parser.take(&changes), Some(Some("theirs".into())));
+
+        let mut shell = Parser::resetting_at_host_titles();
+        assert_eq!(shell.feed(b"\x1b]2;mine\x07"), Some(Some("mine".into())));
+        assert_eq!(shell.feed(host.as_bytes()), Some(None));
+        assert_eq!(shell.take(&changes), Some(None));
     }
 
     #[test]

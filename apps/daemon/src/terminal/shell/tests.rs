@@ -286,6 +286,40 @@ async fn the_title_follows_the_shell_until_the_terminal_is_renamed() {
     close(&state, &created.id).await.unwrap();
 }
 
+/// A title the console host gives a console of its own accord, as the bundled host passes on the
+/// one of the console it was started from (an elevated PowerShell's on a CI runner), is not the
+/// shell's: it resets the title to the shell's name, as cmd.exe setting the console's title back
+/// once a command ends gives up its own.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_title_the_console_host_gives_is_not_the_shells() {
+    let (state, _dir, _project) = with_project("shell-title-host");
+    let created = create(&state, "p1".to_string(), None, String::new())
+        .await
+        .unwrap();
+    let shell = process(&state, &created);
+    shell
+        .write(&typed(
+            "printf '\\033]2;from the shell\\007'",
+            "[Console]::Write([char]27 + ']2;from the shell' + [char]7)",
+        ))
+        .unwrap();
+    record_where(&state, &created.id, |record| {
+        record.title == "from the shell"
+    })
+    .await;
+
+    shell
+        .write(&typed(
+            r"printf '\033]2;Administrator: C:\\Windows\\System32\\cmd.exe\007'; echo after-the-host-$((40+2))",
+            r#"[Console]::Write([char]27 + ']2;Administrator: C:\Windows\System32\cmd.exe' + [char]7); "after-the-host-$(40+2)""#,
+        ))
+        .unwrap();
+    // Printed only once the command ran: the echo of the command line has the sum unworked.
+    output_containing(&shell, "after-the-host-42\r\n").await;
+    record_where(&state, &created.id, |record| record.title == shell_name()).await;
+    close(&state, &created.id).await.unwrap();
+}
+
 /// Read off the parsed screen's titles, as a host that renders what the program draws has them
 /// read, the shell's own title still names the terminal.
 #[tokio::test(flavor = "multi_thread")]

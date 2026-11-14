@@ -147,13 +147,23 @@ pub struct ShellProcess {
     host_renders: AtomicBool,
 }
 
-#[derive(Default)]
 struct TitleWatch {
+    /// Reads a title the console host gave as the title reset: the shell's name shows then.
     parser: crate::terminal::title::Parser,
     /// The last non-blank title the shell set; `None` before it sets one or once it clears it.
     latest: Option<String>,
     /// Where a new title goes, once the terminal is registered there.
     state: Weak<AppState>,
+}
+
+impl Default for TitleWatch {
+    fn default() -> Self {
+        Self {
+            parser: crate::terminal::title::Parser::resetting_at_host_titles(),
+            latest: None,
+            state: Weak::new(),
+        }
+    }
 }
 
 impl std::ops::Deref for ShellProcess {

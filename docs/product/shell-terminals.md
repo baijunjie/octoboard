@@ -76,7 +76,10 @@ A shell terminal's title follows the title the shell sets with OSC 0 or OSC 2, r
 terminal title: surrounding whitespace is trimmed, the leading activity glyphs are dropped (see "Leading activity
 glyphs" in `docs/product/session-titles.md`), and a title holding a control character is ignored. Before the shell
 sets a title, and whenever what it sets is blank under those rules, the title is the shell's name, such as `zsh`
-(`pwsh.exe` on Windows).
+(`pwsh.exe` on Windows). On Windows, a title the console host sets of its own accord (the path of an executable, alone
+or after the one-word label of an elevated console, such as `Administrator: C:\…\powershell.exe`) is read as the
+title reset, so the shell's name shows: cmd.exe, which sets the console's title back to the one it found once a
+command ends, shows its name again rather than the finished command's title.
 
 **Renaming** gives the terminal the user's own title, stored trimmed; a blank title is refused. From then on the
 shell's titles no longer change it. The name is kept with the terminal: a daemon start that restores the terminal

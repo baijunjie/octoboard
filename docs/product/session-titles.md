@@ -68,7 +68,10 @@ one, and the session shows what the records give, or the created name alone when
 
 The terminal title comes from OSC 0 or OSC 2 with a BEL or ST terminator. Octoboard accepts valid UTF-8 titles of at
 most 4096 bytes without control characters. Other terminal strings and malformed or oversized titles leave the
-saved title unchanged. Title observation does not remove or change the output shown in the terminal.
+saved title unchanged. On Windows, a title the console host sets of its own accord is not the agent's and is passed
+over too: the path of an executable (`C:\…\codex.exe`), alone or after the one-word label of an elevated console
+(`Administrator: C:\…\powershell.exe`, in the system's language). Title observation does not remove or change the
+output shown in the terminal.
 
 ## Leading activity glyphs
 

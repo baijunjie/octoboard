@@ -51,7 +51,6 @@ use crate::protocol::AgentId;
 use crate::session::trust::{TrustCarrier, TrustState};
 use crate::terminal::input_class::is_terminal_protocol;
 use crate::terminal::pty::{NewPty, PtyCore, PtyOwner};
-use crate::terminal::title::names_an_executable;
 use dialogs::{Dialog, Sighting};
 use title_activity::TitleActivity;
 
@@ -419,10 +418,8 @@ impl LiveSession {
         // Before the screen takes the chunk in, so that a reading which finds the chunk on the
         // screen also finds it noted (`Self::composer_for_draft`).
         self.note_output_pace(data);
-        self.pty.push_output(data, |total, mut titles| {
+        self.pty.push_output(data, |total, titles| {
             if rendered {
-                // The host's own title naming the agent's executable is not the agent's.
-                titles.retain(|title| !title.as_deref().is_some_and(names_an_executable));
                 titled = self.observe_title(|parser| parser.take(&titles));
             }
             // The count without its lock: a writer holds that lock while the agent may be waiting
