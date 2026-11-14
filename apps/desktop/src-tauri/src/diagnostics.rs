@@ -152,11 +152,24 @@ mod tests {
 
     #[test]
     fn the_home_directory_is_absolute() {
-        let system = || Some(PathBuf::from("/Users/db"));
+        // An absolute path on the platform the test runs on: Windows' needs a drive.
+        let (me, db) = if cfg!(windows) {
+            (r"C:\Users\me", r"C:\Users\db")
+        } else {
+            ("/Users/me", "/Users/db")
+        };
+        let system = || Some(PathBuf::from(db));
         let home = |value: &str| home_dir(Some(OsStr::new(value)), system);
-        assert_eq!(home("/Users/me"), Some(PathBuf::from("/Users/me")));
+        assert_eq!(home(me), Some(PathBuf::from(me)));
         // Unset: the system's record.
-        assert_eq!(home_dir(None, system), Some(PathBuf::from("/Users/db")));
+        assert_eq!(home_dir(None, system), Some(PathBuf::from(db)));
+        // A path rooted without a drive is not absolute on Windows, and is passed over there.
+        if cfg!(windows) {
+            assert_eq!(
+                home_dir(Some(OsStr::new("/Users/me")), system),
+                Some(PathBuf::from(db))
+            );
+        }
         assert_eq!(home_dir(None, || Some(PathBuf::from("db"))), None);
         // Set but relative: what `std::env::home_dir` returns is that same relative path.
         assert_eq!(
