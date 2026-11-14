@@ -1,6 +1,7 @@
 //! The macOS side of the application's life: AppKit's own ways in and out of it (the Dock icon's
 //! Quit and a logout, a reopen, an activation), and the Dock the app leaves while the close button
-//! has the window hidden and comes back into when it is shown.
+//! has the window hidden and comes back into when it is shown; and the relaunch of an update
+//! restart, which opens the bundle again only once this process has ended.
 
 use std::sync::atomic::Ordering;
 use std::sync::{Mutex, OnceLock};
@@ -43,6 +44,89 @@ pub fn install(app: &AppHandle) {
     // delegate this installs onto already exists by now. See the function's own doc
     // comment for why the Dock icon's own Quit needs this at all.
     install_application_should_terminate_override(app);
+}
+
+/// The script the relaunch runs: it waits for the process whose id is `$0` to end, then opens the
+/// bundle with the arguments after it (`open <bundle> [--args ...]`).
+const RELAUNCH_SCRIPT: &str =
+    r#"while /bin/kill -0 "$0" 2>/dev/null; do /bin/sleep 0.1; done; exec /usr/bin/open "$@""#;
+
+/// Ends the application and starts it again once this process is gone.
+///
+/// Tauri's own restart (2.12.4, `restart_macos_app`) runs `open -n` on the bundle while this
+/// process still runs: `-n` makes a second instance, which the Dock shows as an icon of its own
+/// beside the one kept in the Dock, and that one stays inactive for as long as the new instance
+/// runs. A detached shell started here waits for this process to end and only then opens the
+/// bundle, which LaunchServices then treats as the ordinary launch of the application the kept
+/// icon stands for. Where the shell cannot be started, Tauri's restart still relaunches, with the
+/// second icon.
+///
+/// The shell is started before the exit is decided, so the exit has to go through: the caller has
+/// confirmed it (`ExitState::confirmed`) and stopped the daemon, which `on_exit_requested` lets
+/// through.
+pub fn relaunch(app: &AppHandle) {
+    match spawn_relaunch_after_exit(app) {
+        Ok(()) => app.exit(0),
+        Err(err) => {
+            diagnostic!("cannot start the relaunch after exit ({err}); restarting through Tauri");
+            app.request_restart();
+        }
+    }
+}
+
+fn spawn_relaunch_after_exit(app: &AppHandle) -> std::io::Result<()> {
+    use std::os::unix::process::CommandExt;
+    use std::process::{Command, Stdio};
+
+    let env = app.env();
+    let binary = tauri::process::current_binary(&env)?;
+    let bundle = bundle_of(&binary).ok_or_else(|| {
+        std::io::Error::other(format!("{} is not inside an app bundle", binary.display()))
+    })?;
+    Command::new("/bin/sh")
+        .args(relaunch_arguments(
+            std::process::id(),
+            bundle,
+            env.args_os.iter().skip(1).cloned(),
+        ))
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        // Its own process group, so that nothing sent to this one's on the way out reaches it.
+        .process_group(0)
+        .spawn()
+        .map(drop)
+}
+
+/// The `.app` directory an executable at `<bundle>/Contents/MacOS/<name>` belongs to.
+fn bundle_of(binary: &std::path::Path) -> Option<&std::path::Path> {
+    let macos = binary.parent()?;
+    let contents = macos.parent()?;
+    if macos.file_name()? != "MacOS" || contents.file_name()? != "Contents" {
+        return None;
+    }
+    contents.parent()
+}
+
+/// `/bin/sh`'s arguments for `RELAUNCH_SCRIPT`, passing the application's own arguments on to the
+/// new instance.
+fn relaunch_arguments(
+    pid: u32,
+    bundle: &std::path::Path,
+    args: impl Iterator<Item = std::ffi::OsString>,
+) -> Vec<std::ffi::OsString> {
+    let mut arguments: Vec<std::ffi::OsString> = vec![
+        "-c".into(),
+        RELAUNCH_SCRIPT.into(),
+        pid.to_string().into(),
+        bundle.into(),
+    ];
+    let mut args = args.peekable();
+    if args.peek().is_some() {
+        arguments.push("--args".into());
+        arguments.extend(args);
+    }
+    arguments
 }
 
 pub fn on_run_event(app: &AppHandle, event: &RunEvent) {
@@ -357,6 +441,8 @@ unsafe extern "C-unwind" fn application_should_terminate(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::ffi::OsString;
+    use std::path::Path;
 
     #[test]
     fn the_reasons_the_system_ends_a_session_with_are_told_from_the_rest() {
@@ -372,5 +458,152 @@ mod tests {
     #[test]
     fn no_current_event_is_no_reason() {
         assert_eq!(current_quit_reason(), None);
+    }
+
+    fn os(values: &[&str]) -> Vec<OsString> {
+        values.iter().map(OsString::from).collect()
+    }
+
+    #[test]
+    fn the_bundle_is_the_app_directory_around_contents_macos() {
+        assert_eq!(
+            bundle_of(Path::new(
+                "/Applications/Octoboard.app/Contents/MacOS/octoboard"
+            )),
+            Some(Path::new("/Applications/Octoboard.app"))
+        );
+        assert_eq!(
+            bundle_of(Path::new(
+                "/Users/me/My Apps/Octo board.app/Contents/MacOS/octo board"
+            )),
+            Some(Path::new("/Users/me/My Apps/Octo board.app"))
+        );
+    }
+
+    #[test]
+    fn a_binary_outside_contents_macos_has_no_bundle() {
+        for binary in [
+            // Not in a bundle at all.
+            "target/debug/octoboard",
+            // `Contents`, but not `MacOS`.
+            "/Applications/Octoboard.app/Contents/Resources/octoboard",
+            // `MacOS`, but not inside `Contents`.
+            "/Applications/Octoboard.app/Foo/MacOS/octoboard",
+            // Too short to have a `Contents/MacOS` around it.
+            "octoboard",
+        ] {
+            assert_eq!(bundle_of(Path::new(binary)), None, "{binary}");
+        }
+    }
+
+    #[test]
+    fn the_relaunch_arguments_carry_the_script_the_pid_and_the_bundle() {
+        let arguments = relaunch_arguments(
+            4242,
+            Path::new("/Applications/Octoboard.app"),
+            std::iter::empty(),
+        );
+        assert_eq!(
+            arguments,
+            vec![
+                OsString::from("-c"),
+                OsString::from(RELAUNCH_SCRIPT),
+                OsString::from("4242"),
+                OsString::from("/Applications/Octoboard.app"),
+            ]
+        );
+    }
+
+    #[test]
+    fn the_applications_own_arguments_follow_args_each_as_one_argument() {
+        let arguments = relaunch_arguments(
+            7,
+            Path::new("/Users/me/My Apps/Octo board.app"),
+            os(&["--flag", "a file.txt"]).into_iter(),
+        );
+        assert_eq!(
+            arguments[3..],
+            os(&[
+                "/Users/me/My Apps/Octo board.app",
+                "--args",
+                "--flag",
+                "a file.txt"
+            ])[..]
+        );
+        assert_eq!(arguments.len(), 7);
+    }
+
+    /// Runs `RELAUNCH_SCRIPT` through `/bin/sh` for the process `pid`, pointed at a bundle that
+    /// does not exist, so that the `open` it ends in launches nothing: it only reports the missing
+    /// path on its stderr and fails. The path has a space, so that the script's quoting is what
+    /// keeps it one argument. The stderr is read once the script has ended.
+    fn spawn_script_for(pid: u32) -> std::process::Child {
+        use std::process::{Command, Stdio};
+
+        Command::new("/bin/sh")
+            .args(relaunch_arguments(
+                pid,
+                Path::new(MISSING_BUNDLE),
+                std::iter::empty(),
+            ))
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("start the relaunch script")
+    }
+
+    const MISSING_BUNDLE: &str = "/nonexistent octoboard relaunch test/Missing.app";
+
+    /// Waits for the script and asserts that it ended in `open` of the missing bundle: `open`'s
+    /// own error names that path whole.
+    fn assert_script_ended_in_open(script: std::process::Child) {
+        let output = script.wait_with_output().expect("wait for the script");
+        assert!(!output.status.success());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains(MISSING_BUNDLE),
+            "the script did not end in `open` of the bundle: {stderr:?}"
+        );
+    }
+
+    /// The script ends in `open` only once the process it waits for is gone. That it is still
+    /// waiting before is checked once, right after the start: no test can tell "still waiting"
+    /// from "not there yet" without a real-time wait.
+    #[test]
+    fn the_relaunch_script_waits_for_the_process_to_end_before_it_opens() {
+        use std::io::Write;
+        use std::process::{Command, Stdio};
+
+        let mut watched = Command::new("/bin/sh")
+            .args(["-c", "read line"])
+            .stdin(Stdio::piped())
+            .spawn()
+            .expect("start the process to wait for");
+        let mut script = spawn_script_for(watched.id());
+
+        // The watched process cannot end before it is told to, so the script cannot have ended.
+        assert!(script.try_wait().expect("poll the script").is_none());
+
+        // The script ends only once the watched process is gone and reaped: a zombie still counts
+        // as existing to `kill -0`.
+        writeln!(watched.stdin.take().expect("its stdin"), "go").expect("tell it to end");
+        watched.wait().expect("reap the watched process");
+
+        assert_script_ended_in_open(script);
+    }
+
+    /// A process that is already gone is not waited for.
+    #[test]
+    fn the_relaunch_script_does_not_wait_for_a_process_that_is_gone() {
+        use std::process::Command;
+
+        let mut gone = Command::new("/usr/bin/true")
+            .spawn()
+            .expect("start a process");
+        let pid = gone.id();
+        gone.wait().expect("reap it");
+
+        assert_script_ended_in_open(spawn_script_for(pid));
     }
 }

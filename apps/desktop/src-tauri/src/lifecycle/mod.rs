@@ -6,6 +6,7 @@
 //! - `register_first`: the plugins that have to come before every other one.
 //! - `install`: from `setup`, once the event loop is up.
 //! - `on_run_event`: a `RunEvent` neither the exit flow nor the window state answers.
+//! - `relaunch`: ending the application and starting it again, for an update restart.
 //! - `hide_after_leaving_fullscreen`: whether the window has to leave fullscreen before it hides.
 //! - `window_hidden` and `before_show`: around the close button's hide and every show of the
 //!   window.
@@ -22,6 +23,6 @@ mod windows;
 use windows as platform;
 
 pub use platform::{
-    before_show, hide_after_leaving_fullscreen, install, on_run_event, register_first,
+    before_show, hide_after_leaving_fullscreen, install, on_run_event, register_first, relaunch,
     window_hidden, LifecycleState,
 };

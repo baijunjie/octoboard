@@ -26,6 +26,12 @@ pub fn register_first(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
     }))
 }
 
+/// Ends the application and starts it again, through Tauri's restart, which starts the
+/// executable itself once the event loop has exited.
+pub fn relaunch(app: &AppHandle) {
+    app.request_restart();
+}
+
 pub fn install(_app: &AppHandle) {
     #[cfg(windows)]
     if let Err(err) = set_session_end_order() {

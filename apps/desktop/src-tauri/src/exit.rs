@@ -221,10 +221,11 @@ pub fn begin_quit(app: AppHandle) {
 /// request), and the sessions are handed over to their process holders for the new instance's
 /// daemon to adopt rather than interrupted. No quit note is written then (`skip_quit_note`). Where
 /// the platform holds a downloaded update its installer then ends the process
-/// (`updater::install_for_restart`), saving the window state first, and otherwise the relaunch goes
-/// through the event loop like any exit, so `RunEvent::Exit` saves it on the way out. A plain quit
-/// writes the quit note, and while a downloaded update waits (Windows) it stops the daemon with the
-/// ordinary stop and installs the update without the relaunch (`quit_installing`).
+/// (`updater::install_for_restart`), saving the window state first, and otherwise the relaunch
+/// (`lifecycle::relaunch`) goes through the event loop like any exit, so `RunEvent::Exit` saves it
+/// on the way out. A plain quit writes the quit note, and while a downloaded update waits (Windows)
+/// it stops the daemon with the ordinary stop and installs the update without the relaunch
+/// (`quit_installing`).
 #[tauri::command]
 pub fn confirm_quit(app: AppHandle, state: tauri::State<ExitState>, restart: Option<bool>) {
     state.confirmed.store(true, Ordering::SeqCst);
@@ -249,7 +250,7 @@ pub fn confirm_quit(app: AppHandle, state: tauri::State<ExitState>, restart: Opt
             // the confirmation of meanwhile.
             state.confirmed.store(true, Ordering::SeqCst);
             drop(installing);
-            app.request_restart();
+            crate::lifecycle::relaunch(&app);
         });
         return;
     }

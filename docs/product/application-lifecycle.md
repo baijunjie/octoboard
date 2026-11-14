@@ -414,6 +414,10 @@ is interrupted, no preview is frozen, and nothing a session started is stopped.
   running **30 seconds** after that is killed; its sessions and shell terminals are then left running in their holders
   as after a daemon crash, and the new version's daemon takes them over with their screens rebuilt and marked inexact
   (see "The screen of a terminal taken over" in `docs/product/process-holders.md`).
+- **On macOS the new launch waits for the old process to end**, so it is the ordinary launch of the application and
+  keeps its one Dock icon, the one kept in the Dock. Only when that wait cannot be set up is the new version launched
+  while the old process is still ending, as a separate instance: it then shows a Dock icon of its own for as long as it
+  runs, and the icon kept in the Dock stays inactive meanwhile.
 - **The new version's daemon takes everything over.** On macOS the update has already replaced the application, and
   the new application's daemon adopts the holders, those of the previous build included, within its compatible range.
   On Windows the update's installer runs only after the planned stop, while the holders run on from their copy of the
