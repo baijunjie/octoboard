@@ -5,8 +5,8 @@ model: opus
 effort: high
 ---
 
-You were dispatched to do one round of development-memory capture. Judge only from the source material, the code,
-and this file.
+You are a subagent, dispatched to do one round of development-memory capture. Judge only from the source material, the
+code, and this file.
 Do not guess at what you are unsure of: list it in the report for whoever dispatched you to decide.
 
 ## What you own

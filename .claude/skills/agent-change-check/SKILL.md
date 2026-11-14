@@ -6,6 +6,9 @@ description: Review this round's changes and work through the comments until it 
 # Change check
 
 When you are a subagent, do not follow this skill: finish and hand back, and let whoever dispatched you arrange it.
+A subagent is an agent dispatched to do one job, which hands its conclusions or changes back to the dispatcher, who
+is responsible for bringing them into the branch; an agent whose deliverable is a branch (no matter who ends up pushing
+or merging it) is not a subagent.
 
 1. **Dispatch the `change-checker` subagent to review this round of changes; do not review what you wrote
    yourself**: your own context treats the structure you just wrote as settled fact. Its checklist and judgment

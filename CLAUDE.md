@@ -16,14 +16,17 @@ template, gets translated to English before it is committed. Conversation with t
 **The test: by default, do the work yourself. Only in a long task (carrying out a development plan, a large batch of
 changes or an investigation spanning several modules) hand a whole block of work that would eat a lot of context to a
 subagent, and take only the conclusion: briefing a subagent on a small task costs more than finishing it yourself.**
-The self-checks before delivery (adding tests, the change check, updating the docs and the like) are dispatched as the
-workflow and their skills say, and this test does not limit them.
+The self-checks before delivery (adding tests, the change check, updating the docs and the like) and the fixes they
+call for are dispatched as the workflow, their skills and the rules below say, and this test does not limit them.
 
 - When you are a subagent, do the work yourself and hand it back: dispatch no further subagents, and skip the
   self-checks before delivery in the instruction file's workflow; before starting, only read the project context, with
   no fetch and no branch alignment. Self-checks such as adding tests, the change check and updating the docs are
   arranged by whoever dispatched you, once you hand back. Subagents that each dispatch again and each self-check do so
   uncoordinated, and together saturate the machine.
+  A subagent is an agent dispatched to do one job, which hands its conclusions or changes back to the dispatcher, who is
+  responsible for bringing them into the branch; an agent whose deliverable is a branch (no matter who ends up pushing
+  or merging it) is not a subagent.
 - One task per dispatch, with the completion criteria spelled out; give the full background (it knows none of the
   premises you did not write down); ask it for conclusions, not a replay of its process.
 - Never let several subagents change the same place at once, and never dispatch several to do the same thing
@@ -33,6 +36,13 @@ workflow and their skills say, and this test does not limit them.
   report never reaches you, and your turn is handed back the moment it stops.
 - Do not hand back without a result: a report that says "dispatched, waiting on it" in place of a conclusion counts
   as not done.
+- Where the code that a self-check's findings or a failed check call for changing was written by a subagent, hand it
+  back to that subagent to fix: resume the original one where you can, otherwise dispatch a new one with the findings
+  and the original task description; in that case, where a self-check skill says "you fix" or "you fix the source", it
+  means you arrange the fix. You only judge whether each item gets fixed (giving your reasons where you disagree) and
+  which go to the user to decide; where you need to look at the code to judge, look only at the few relevant places, and
+  do not make the fix yourself: the context of writing the code would come back to you, and dispatching the subagent
+  would have been for nothing.
 - If a dedicated subagent owns the job, give it to them; otherwise pick by task difficulty from the table below,
   and do not reach for the strongest every time.
 
@@ -74,6 +84,9 @@ passing it on to the user) decide before going on; do not decide for yourself.
   no fetch and no branch alignment. Self-checks such as adding tests, the change check and updating the docs are
   arranged by whoever dispatched you, once you hand back. Subagents that each dispatch again and each self-check do so
   uncoordinated, and together saturate the machine.
+  A subagent is an agent dispatched to do one job, which hands its conclusions or changes back to the dispatcher, who is
+  responsible for bringing them into the branch; an agent whose deliverable is a branch (no matter who ends up pushing
+  or merging it) is not a subagent.
 
 ### Before starting work
 
@@ -85,7 +98,9 @@ passing it on to the user) decide before going on; do not decide for yourself.
 ### Before delivery
 
 The self-check targets one **complete delivery** covering all of this round's changes, not every single edit —
-an intermediate commit does not count either; a user request to push, open a PR or merge counts as delivery too.
+an intermediate commit does not count either; changes a subagent hands back count as this round's changes too, and the
+self-check runs even when you did not touch the code yourself. A user request to push, open a PR or merge counts as
+delivery too.
 At delivery:
 
 - If anything needs the user (a decision awaiting sign-off, a question to ask, a change the user said they
@@ -106,7 +121,7 @@ At delivery:
    update them via the `agent-docs` skill.
 6. **Formatting and checks**: first run the project's agreed formatting commands to rewrite the code, then run the
    checks by the scope of the change and confirm they all pass; if they do not, fix, then re-determine the scope from
-   the changes as they now stand and run again (a fix that changes behavior, logic or UI goes through "You changed
+   the changes as they now stand and run again (a fix that changes behavior, logic or UI goes through "Changed
    behavior, logic or UI again" below).
    Where this delivery goes through the project's merge flow and that flow aligns the branch with the latest target
    branch, only format and commit this round's changes here, and run the checks once, after it aligns and before the
@@ -114,7 +129,7 @@ At delivery:
    again after. Whatever the merge flow's own verification after aligning covers is not run separately; checks it does
    not cover are run right after, before the user is asked to confirm the merge or push.
    Where behavior, logic or UI is changed within the merge flow to pass the checks or resolve conflicts, stop before
-   the merge or push, go through "You changed behavior, logic or UI again" below, then return to the merge flow.
+   the merge or push, go through "Changed behavior, logic or UI again" below, then return to the merge flow.
    Without a merge flow, or with one that does not align, run them here; checks deferred to the merge flow that did
    not get run there (the flow was aborted, or delivery no longer goes through it) are run here before delivery —
    formatting and committing alone do not count as having run the checks. Scope:
@@ -150,9 +165,9 @@ At delivery:
 Formatting and checks run only as the "Formatting and checks" step sets out, before delivery (push, PR or merge);
 the earlier steps do not run them separately (the related tests a step runs to confirm its own change do not count).
 
-- **You changed behavior, logic or UI again** (in response to the change check, to preview feedback, to pass the
-  checks, or while resolving conflicts): walk this new change through again from the first relevant step; purely
-  mechanical fixes such as formatting or type annotations do not go through again.
+- **Changed behavior, logic or UI again** (in response to the change check, to preview feedback, to pass the checks,
+  or while resolving conflicts, including changes handed to a subagent): walk this new change through again from the
+  first relevant step; purely mechanical fixes such as formatting or type annotations do not go through again.
 - **The same content is not re-run**: if the content has not changed since the self-check (such as only
   squashing), a later push, PR or merge does not redo it; if a rebase or merge brought in new code from the target
   branch after the checks, re-run the checks (the scope above sets what to run and the cases that need no re-run).

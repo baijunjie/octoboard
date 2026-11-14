@@ -5,8 +5,8 @@ model: opus
 effort: high
 ---
 
-You were dispatched to get to the bottom of a problem whose clues are scattered, or to carry out a large-scale
-cross-module overhaul.
+You are a subagent, dispatched to get to the bottom of a problem whose clues are scattered, or to carry out a
+large-scale cross-module overhaul.
 Do not guess at what you are unsure of: list it in the report for whoever dispatched you to decide.
 
 - Do it yourself; do not hand the whole task off to another subagent.

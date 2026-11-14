@@ -108,6 +108,9 @@ Whether the framework is newly installed or already in the project, its configur
 ## Wrap-up: add tests
 
 When you are a subagent, do not follow this skill: finish and hand back, and let whoever dispatched you arrange it.
+A subagent is an agent dispatched to do one job, which hands its conclusions or changes back to the dispatcher, who
+is responsible for bringing them into the branch; an agent whose deliverable is a branch (no matter who ends up pushing
+or merging it) is not a subagent.
 
 1. List the source files changed this round, new, renamed and deleted ones included.
 2. **Dispatch the `test-writer` subagent to add the tests; when there is a subagent mechanism, do not write them
