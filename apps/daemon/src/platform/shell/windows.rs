@@ -8,6 +8,9 @@ use std::time::{Duration, Instant};
 use super::{split_path, Arg, Dialect, Environment, ResolvedBinary, ShellCommand, Shim, Stderr};
 use crate::platform::registry::{read_values, Hive, Value};
 
+/// Windows names environment variables without regard to case: `Path` is `PATH`.
+pub const ENV_NAMES_FOLD_CASE: bool = true;
+
 /// The registry key that holds the machine's environment variables.
 const MACHINE_ENVIRONMENT: &str = r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment";
 /// The registry key that holds the user's.

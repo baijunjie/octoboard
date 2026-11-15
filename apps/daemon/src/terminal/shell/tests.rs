@@ -466,6 +466,31 @@ async fn a_shell_that_exits_leaves_its_terminal_exited_with_its_output_until_clo
     assert!(state.shell_terminals.list().is_empty());
 }
 
+/// The watcher polls the shell off the async runtime: the poll that finds the shell gone runs its
+/// exit cleanup, which the runtime's other tasks must not wait behind. The runtime here has one
+/// thread, which the test's own task and the watcher share; a watcher that ran the cleanup on it
+/// would leave the hook waiting for a release the test task could never give.
+#[tokio::test]
+async fn the_exit_cleanup_of_a_shell_runs_off_the_runtime() {
+    let (state, dir, _project) = with_project("shell-exit-cleanup-off-runtime");
+    let created = create(&state, "p1".to_string(), None, String::new())
+        .await
+        .unwrap();
+    let shell = process(&state, &created);
+    // Before the watcher's first poll, which comes after this task next yields.
+    let hook = crate::test_support::HeldExitHook::install(&shell, &dir);
+
+    shell.write(b"exit\r").unwrap();
+    hook.release_once_entered().await;
+    record_where(&state, &created.id, |record| {
+        record.state == ShellTerminalState::Exited
+    })
+    .await;
+    assert!(hook.was_released(), "the runtime waited on the exit hook");
+
+    close(&state, &created.id).await.unwrap();
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn removing_a_project_or_its_console_ends_its_terminals_and_no_other() {
     let (state, dir, _project) = with_project("shell-removal");

@@ -146,6 +146,25 @@ enum ToProgram {
     Update(Vec<u8>),
 }
 
+/// [`PtyCore::poll_exit`] for a task on the async runtime, which runs it on the blocking pool:
+/// the poll that reaps the child runs its exit cleanup — the exit hook, the sweep of what it left
+/// in its session (which on Windows waits for those processes to be gone), the removal of its
+/// scratch directory — and any poll can wait on the child lock while another poller runs that
+/// sweep. Once the exit is complete it answers without leaving the runtime. A poll that unwound
+/// (a panicking hook) reads as not exited yet; the next one finds the exit complete.
+pub async fn poll_exit_off_runtime<P>(process: &Arc<P>) -> bool
+where
+    P: std::ops::Deref<Target = PtyCore> + Send + Sync + 'static,
+{
+    if let Some(complete) = process.exit_observed() {
+        return complete;
+    }
+    let process = process.clone();
+    tokio::task::spawn_blocking(move || process.poll_exit())
+        .await
+        .unwrap_or(false)
+}
+
 /// Everything a [`PtyCore`] is built from: a process just started on a terminal, named for the
 /// log, with the scratch directory that goes when it does.
 pub struct NewPty {
@@ -897,21 +916,59 @@ impl PtyCore {
 
     /// Polls the child, returning `true` only after its exit hook and scratch removal finish.
     /// The observer that reaps it runs that cleanup; concurrent pollers return `false` while it
-    /// is in progress, without waiting on the hook.
+    /// is in progress, without waiting on the hook. **Blocks**: the reaping poll runs the cleanup
+    /// (the hook, the sweep of what the child left in its session, which on Windows waits for
+    /// those processes to be gone, the scratch removal), and any poll can wait on the child lock
+    /// while another runs that sweep. From the async runtime call [`poll_exit_off_runtime`]; to
+    /// ask only whether the process has exited, [`Self::has_exited`], which reaps nothing.
     pub fn poll_exit(&self) -> bool {
-        if self.reaped.load(Ordering::Acquire) {
-            return self.exit_complete.load(Ordering::Acquire);
+        if let Some(complete) = self.exit_observed() {
+            return complete;
         }
         let child = self.child.lock().expect("child mutex poisoned");
         self.poll_exit_locked(child)
+    }
+
+    /// Whether the child has exited, without reaping it or running its exit cleanup, so cheap
+    /// enough for a check on the async runtime that only asks whether the process is still the
+    /// one it was. Where the host cannot tell an exited child it has not reaped, it reads as
+    /// running until a poll reaps it.
+    pub fn has_exited(&self) -> bool {
+        // Asked again after the host: a poller that reaps the child in between leaves the host
+        // unable to tell, which would otherwise read as running.
+        self.reaped.load(Ordering::Acquire)
+            || self.backend.exited_unreaped() == Some(true)
+            || self.reaped.load(Ordering::Acquire)
+    }
+
+    /// Puts in the scratch directory and the hook [`NewPty`] would have given, for a test whose
+    /// process a helper built without them. Set before anything polls the process.
+    #[cfg(test)]
+    pub(crate) fn set_exit_cleanup(
+        &self,
+        scratch_dir: std::path::PathBuf,
+        hook: Box<dyn FnOnce() + Send>,
+    ) {
+        *self.scratch_dir.lock().expect("scratch dir mutex poisoned") = Some(scratch_dir);
+        *self
+            .before_scratch_removal
+            .lock()
+            .expect("scratch hook mutex poisoned") = Some(hook);
+    }
+
+    /// Once the child is reaped, whether its exit cleanup has finished; `None` before.
+    fn exit_observed(&self) -> Option<bool> {
+        self.reaped
+            .load(Ordering::Acquire)
+            .then(|| self.exit_complete.load(Ordering::Acquire))
     }
 
     /// The body of `poll_exit`, taking the already-held `child` lock. Reaping and the flag that
     /// records it happen under that lock, which is what lets `signal` hold it to keep the child
     /// from being reaped between its check and its `kill`.
     fn poll_exit_locked(&self, child: MutexGuard<'_, ()>) -> bool {
-        if self.reaped.load(Ordering::Acquire) {
-            return self.exit_complete.load(Ordering::Acquire);
+        if let Some(complete) = self.exit_observed() {
+            return complete;
         }
         // The crash cleanup signals by number, so the child leaves it while it is exited but not
         // yet reaped, its pid still reserved. When the host cannot tell, reaping decides, and the
@@ -1331,8 +1388,11 @@ mod tests {
             "the reader waited on the input lock"
         );
         drop(paste);
-        // The answer has no line break of its own for a program reading lines to take it by.
-        owner.0.write(b"\r\n").expect("the write");
+        // The answer has no line break of its own for a program reading lines to take it by. The
+        // break goes through the answers' writer, behind the answer: written straight in, it could
+        // go in first and end lines `cat` prints while the terminal echoes the answer, which on
+        // Linux can land inside the echo.
+        owner.0.tell(super::ToProgram::Update(b"\r".to_vec()));
         let heard = loop {
             let heard = String::from_utf8_lossy(&owner.0.recent_output(1024)).into_owned();
             if heard.contains("?6c") || started.elapsed() >= crate::test_support::PATIENCE {
@@ -1383,8 +1443,12 @@ mod tests {
         let before = heard("marker");
         assert!(!before.contains("?6c"), "{before:?}");
 
+        // The line's end goes through the answers' writer, behind the answer: written straight
+        // in, it could go in first, ending a line `cat` then prints while the terminal echoes the
+        // answer, and on Linux that print can land inside the echo (`^[[?6\r\nc`). Behind it,
+        // no line ends before the answer is echoed whole, and `cat` prints the answer whole.
         super::PtyOwner::on_output(&*owner, b"\x1b[c");
-        owner.0.write(b"\r\n").expect("the write");
+        owner.0.tell(super::ToProgram::Update(b"\r".to_vec()));
         let after = heard("?6c");
         assert!(after.contains("?6c"), "{after:?}");
 
@@ -1756,6 +1820,209 @@ mod tests {
             "cleanup was announced prematurely"
         );
         assert!(core.poll_exit());
+    }
+
+    /// A [`super::PtyCore`] that dereferences to itself, as the processes the exit pollers take do.
+    struct Polled(super::PtyCore);
+
+    impl std::ops::Deref for Polled {
+        type Target = super::PtyCore;
+
+        fn deref(&self) -> &super::PtyCore {
+            &self.0
+        }
+    }
+
+    /// A process running `program` on a terminal, with the scratch directory and exit hook given.
+    fn polled(
+        label: &str,
+        program: crate::test_support::programs::Program,
+        scratch_dir: Option<std::path::PathBuf>,
+        before_scratch_removal: Option<Box<dyn FnOnce() + Send>>,
+    ) -> std::sync::Arc<Polled> {
+        let spawned = term::spawn(program.term_command(), SIZE, None).expect("process");
+        std::sync::Arc::new(Polled(super::PtyCore::new(super::NewPty {
+            label: label.to_string(),
+            spawned: spawned.into(),
+            scratch_dir,
+            kill_session_leftovers: false,
+            before_scratch_removal,
+            display: Default::default(),
+        })))
+    }
+
+    /// Waits, up to `PATIENCE`, for `core` to have exited.
+    fn wait_until_exited(core: &super::PtyCore) {
+        let deadline = Instant::now() + crate::test_support::PATIENCE;
+        while !core.has_exited() {
+            assert!(Instant::now() < deadline, "the process never exited");
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
+
+    /// Whether the child has exited is told without reaping it: its exit hook and the removal of
+    /// its scratch directory wait for the poll that reaps it.
+    #[test]
+    fn has_exited_tells_an_exit_without_reaping_or_cleaning_up() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+
+        let dir = crate::test_support::ScratchDir::new("has-exited");
+        let scratch = dir.join("session");
+        std::fs::create_dir(&scratch).expect("session scratch");
+        let hook_ran = Arc::new(AtomicBool::new(false));
+        let on_exit = hook_ran.clone();
+        let core = polled(
+            "has-exited",
+            crate::test_support::programs::sleep(0),
+            Some(scratch.clone()),
+            Some(Box::new(move || on_exit.store(true, Ordering::Release))),
+        );
+
+        wait_until_exited(&core);
+        assert!(core.has_exited(), "asking again says the same");
+        assert!(!core.reaped.load(Ordering::Acquire), "asking reaped it");
+        assert!(!hook_ran.load(Ordering::Acquire));
+        assert!(scratch.exists());
+
+        let deadline = Instant::now() + crate::test_support::PATIENCE;
+        while !core.poll_exit() {
+            assert!(Instant::now() < deadline, "the poll never reaped it");
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert!(hook_ran.load(Ordering::Acquire));
+        assert!(!scratch.exists());
+        assert!(core.has_exited(), "a reaped child has exited");
+    }
+
+    #[test]
+    fn has_exited_is_false_while_the_process_runs_and_true_once_it_is_stopped() {
+        let core = polled(
+            "has-exited-running",
+            crate::test_support::programs::sleep(600),
+            None,
+            None,
+        );
+        assert!(!core.has_exited());
+        core.stop(Polite::Terminate);
+        assert!(core.has_exited());
+    }
+
+    /// The poll that reaps the process, and so runs its exit cleanup, runs on the blocking pool:
+    /// not on the thread the runtime's tasks run on.
+    #[tokio::test]
+    async fn the_exit_cleanup_of_an_off_runtime_poll_runs_off_the_runtime() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use std::sync::{Arc, Mutex};
+
+        let dir = crate::test_support::ScratchDir::new("off-runtime-poll");
+        let scratch = dir.join("session");
+        std::fs::create_dir(&scratch).expect("session scratch");
+        let (hook_thread, hook_runs) = (Arc::new(Mutex::new(None)), Arc::new(AtomicUsize::new(0)));
+        let (thread_of_hook, runs_of_hook) = (hook_thread.clone(), hook_runs.clone());
+        let core = polled(
+            "off-runtime-poll",
+            crate::test_support::programs::sleep(0),
+            Some(scratch.clone()),
+            Some(Box::new(move || {
+                *thread_of_hook.lock().expect("hook thread") = Some(std::thread::current().id());
+                runs_of_hook.fetch_add(1, Ordering::AcqRel);
+            })),
+        );
+
+        let deadline = Instant::now() + crate::test_support::PATIENCE;
+        while !super::poll_exit_off_runtime(&core).await {
+            assert!(Instant::now() < deadline, "the process never exited");
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        let ran_on = hook_thread
+            .lock()
+            .expect("hook thread")
+            .expect("the hook ran");
+        assert_ne!(ran_on, std::thread::current().id());
+        assert!(
+            !scratch.exists(),
+            "the exit cleanup is done when it answers"
+        );
+        assert!(super::poll_exit_off_runtime(&core).await);
+        assert_eq!(hook_runs.load(Ordering::Acquire), 1);
+    }
+
+    #[tokio::test]
+    async fn an_off_runtime_poll_of_a_running_process_says_it_is_running() {
+        let core = polled(
+            "off-runtime-running",
+            crate::test_support::programs::sleep(600),
+            None,
+            None,
+        );
+        assert!(!super::poll_exit_off_runtime(&core).await);
+        assert!(!core.poll_exit());
+        core.stop(Polite::Terminate);
+        assert!(super::poll_exit_off_runtime(&core).await);
+    }
+
+    /// Once the exit is complete the answer needs nothing of the blocking pool: here its only
+    /// thread is held, so a poll that went there would never be answered.
+    #[test]
+    fn an_off_runtime_poll_of_a_complete_exit_does_not_leave_the_runtime() {
+        let core = polled(
+            "off-runtime-complete",
+            crate::test_support::programs::sleep(600),
+            None,
+            None,
+        );
+        core.stop(Polite::Terminate);
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .max_blocking_threads(1)
+            .enable_all()
+            .build()
+            .expect("runtime");
+        runtime.block_on(async {
+            let (held, release) = std::sync::mpsc::channel::<()>();
+            let (entered, running) = tokio::sync::oneshot::channel();
+            let hold = tokio::task::spawn_blocking(move || {
+                entered.send(()).ok();
+                release.recv().ok();
+            });
+            running.await.expect("the blocking pool's thread is held");
+            let answered = tokio::time::timeout(
+                crate::test_support::PATIENCE,
+                super::poll_exit_off_runtime(&core),
+            )
+            .await;
+            held.send(()).ok();
+            hold.await.expect("the held job");
+            assert_eq!(answered.ok(), Some(true));
+        });
+    }
+
+    /// A poll whose hook unwound answers that the process is not gone yet; the exit is complete
+    /// for the next one, as the hook that unwound still lets observers see it.
+    #[tokio::test]
+    async fn an_off_runtime_poll_whose_hook_panicked_reads_as_running_and_the_next_finds_the_exit()
+    {
+        let dir = crate::test_support::ScratchDir::new("off-runtime-panic");
+        let scratch = dir.join("session");
+        std::fs::create_dir(&scratch).expect("session scratch");
+        let core = polled(
+            "off-runtime-panic",
+            crate::test_support::programs::sleep(0),
+            Some(scratch),
+            Some(Box::new(|| panic!("the exit hook unwound"))),
+        );
+        // Waited for without reaping, so the poll below is the one that reaps it and runs the hook.
+        let core_for_wait = core.clone();
+        assert!(
+            crate::test_support::within(crate::test_support::PATIENCE, move || {
+                core_for_wait.has_exited()
+            })
+            .await,
+            "the process never exited"
+        );
+
+        assert!(!super::poll_exit_off_runtime(&core).await);
+        assert!(super::poll_exit_off_runtime(&core).await);
     }
 
     /// A [`super::PtyCore`] on a program run in a holder of this process, with its reader running.

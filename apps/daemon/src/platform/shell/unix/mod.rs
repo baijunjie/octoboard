@@ -10,6 +10,9 @@ use super::{
 
 mod snapshot;
 
+/// A Unix environment variable's name is its exact bytes: `PATH` and `Path` are two variables.
+pub const ENV_NAMES_FOLD_CASE: bool = false;
+
 pub use snapshot::snapshot;
 
 /// The user's login shell: `$SHELL`, else the one the system user database records for the user,

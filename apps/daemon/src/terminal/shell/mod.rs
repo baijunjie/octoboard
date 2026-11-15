@@ -746,7 +746,7 @@ fn watch(state: Arc<AppState>, process: Arc<ShellProcess>) {
             if !state.shell_terminals.holds(&process) || state.is_handing_over() {
                 return;
             }
-            if process.poll_exit() {
+            if crate::terminal::pty::poll_exit_off_runtime(&process).await {
                 break;
             }
             // Off the runtime's workers: the check reads each descendant's descriptors, and on a

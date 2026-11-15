@@ -25,6 +25,7 @@ use crate::session::term;
 use crate::session::trust;
 use crate::session::LiveSession;
 use crate::state::{session_archived, AppState};
+use crate::terminal::pty::poll_exit_off_runtime;
 
 use super::bindings::owner_of;
 use super::resume::resumable_agent_session_id;
@@ -793,15 +794,15 @@ pub(crate) async fn wait_until_down_within(
 }
 
 /// Whether the relaunched process is still running after `settle`.
-pub(super) async fn came_up(live: &LiveSession, settle: Duration) -> bool {
+pub(super) async fn came_up(live: &Arc<LiveSession>, settle: Duration) -> bool {
     let deadline = Instant::now() + settle;
     while Instant::now() < deadline {
-        if live.poll_exit() {
+        if poll_exit_off_runtime(live).await {
             return false;
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
-    !live.poll_exit()
+    !poll_exit_off_runtime(live).await
 }
 
 fn session_cwd(state: &Arc<AppState>, session: &Session) -> Result<PathBuf> {

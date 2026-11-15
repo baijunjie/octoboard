@@ -1,11 +1,11 @@
 use super::*;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::adapter::CliPackaging;
 use crate::platform::shell::ResolvedBinary;
 use crate::protocol::Code;
-use crate::test_support::PATIENCE;
+use crate::test_support::{host_path, PATIENCE};
 use latest::Failure;
 
 /// The time an update claim taken directly by a test is given.
@@ -14,10 +14,7 @@ const CLAIM_TIMEOUT: Duration = Duration::from_secs(60);
 /// A registry that answers a fixed way, so a test makes no request.
 pub(super) enum Stub {
     Version(&'static str),
-    // The lookups that fail are only driven by the tests that run an agent CLI, which are Unix's.
-    #[cfg(unix)]
     Fails,
-    #[cfg(unix)]
     Unreadable,
 }
 
@@ -29,9 +26,7 @@ impl Registry for Stub {
     ) -> std::result::Result<String, Failure> {
         match self {
             Stub::Version(version) => Ok((*version).to_owned()),
-            #[cfg(unix)]
             Stub::Fails => Err(Failure::Failed("the registry is unreachable".to_owned())),
-            #[cfg(unix)]
             Stub::Unreadable => Err(Failure::Unreadable),
         }
     }
@@ -51,9 +46,7 @@ impl Registry for NoRegistry {
 }
 
 static LATEST_0_170: Stub = Stub::Version("0.170.0");
-#[cfg(unix)]
 static UNREACHABLE: Stub = Stub::Fails;
-#[cfg(unix)]
 static UNREADABLE: Stub = Stub::Unreadable;
 
 fn codex() -> &'static CliPackaging {
@@ -242,17 +235,46 @@ fn program_of(command: &ToolCommand) -> String {
         .into_owned()
 }
 
-#[cfg(unix)]
 fn executable(path: &Path) {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     std::fs::write(path, "#!/bin/sh\n").unwrap();
     crate::test_support::make_executable(path);
 }
 
-#[cfg(unix)]
 fn env_with_path(dirs: &[&Path]) -> HashMap<String, String> {
-    let path: Vec<String> = dirs.iter().map(|dir| dir.display().to_string()).collect();
-    HashMap::from([("PATH".to_string(), path.join(":"))])
+    let path = std::env::join_paths(dirs).unwrap();
+    HashMap::from([("PATH".to_string(), path.to_string_lossy().into_owned())])
+}
+
+/// What `npm` is called where a `PATH` lookup finds it: a batch file on Windows.
+const NPM: &str = if cfg!(windows) { "npm.cmd" } else { "npm" };
+
+/// A global npm install of Codex under `prefix`, laid out as npm lays one out on this host, and
+/// the directory on a `PATH` that holds its launcher. On Unix that is `bin/codex`, a link to the
+/// package's script; on Windows `codex.cmd` beside `node_modules`, with the native program the
+/// package ships, which is what the daemon starts in the shim's place.
+fn npm_codex(prefix: &Path) -> PathBuf {
+    #[cfg(unix)]
+    {
+        let script = prefix.join("lib/node_modules/@openai/codex/bin/codex.js");
+        executable(&script);
+        std::fs::create_dir_all(prefix.join("bin")).unwrap();
+        crate::test_support::symlink(&script, prefix.join("bin/codex")).unwrap();
+        prefix.join("bin")
+    }
+    #[cfg(windows)]
+    {
+        let package = prefix.join("node_modules/@openai/codex");
+        let program = package
+            .join("node_modules/@openai/codex-platform/vendor")
+            .join(format!("{}-pc-windows-msvc", std::env::consts::ARCH))
+            .join("bin/codex.exe");
+        std::fs::create_dir_all(program.parent().unwrap()).unwrap();
+        std::fs::write(&program, "").unwrap();
+        std::fs::write(package.join("package.json"), "{}").unwrap();
+        std::fs::write(prefix.join("codex.cmd"), "").unwrap();
+        prefix.to_path_buf()
+    }
 }
 
 #[test]
@@ -271,30 +293,35 @@ fn a_native_install_updates_itself_with_its_own_binary() {
     assert!(command.is_agent_cli());
 }
 
-#[cfg(unix)]
 #[test]
 fn an_npm_install_is_updated_in_its_own_prefix_with_the_npm_on_the_path() {
     let dir = crate::test_support::ScratchDir::new("cli-npm-command");
-    let npm = dir.join("node/bin/npm");
+    let npm = dir.join("node/bin").join(NPM);
     executable(&npm);
     let install = Install::of_path(
         codex(),
-        Path::new("/opt/node/lib/node_modules/@openai/codex/bin/codex.js"),
+        Path::new(&host_path(
+            "/opt/node/lib/node_modules/@openai/codex/bin/codex.js",
+        )),
     );
-    let binary = ResolvedBinary::new("/opt/node/bin/codex");
+    let binary = ResolvedBinary::new(host_path("/opt/node/bin/codex"));
 
     let command = install
         .update_command(codex(), &binary, &env_with_path(&[&dir.join("node/bin")]))
         .expect("an npm install is updated");
 
-    assert_eq!(program_of(&command), npm.to_string_lossy());
+    // By the file it names: Windows finds `npm` with the extension `PATHEXT` spells (`.CMD`).
+    assert_eq!(
+        crate::hostfs::canonical(program_of(&command)).unwrap(),
+        crate::hostfs::canonical(&npm).unwrap()
+    );
     assert_eq!(
         args_of(&command),
         [
             "install",
             "-g",
             "--prefix",
-            "/opt/node",
+            host_path("/opt/node").as_str(),
             "@openai/codex@latest"
         ]
     );
@@ -318,6 +345,7 @@ fn a_volta_install_is_updated_without_a_prefix_and_one_with_no_npm_not_at_all() 
     );
 }
 
+// Homebrew exists only on macOS and Linux, so an install of it is never met on Windows.
 #[cfg(unix)]
 #[test]
 fn a_homebrew_install_is_upgraded_by_the_brew_of_its_own_prefix() {
@@ -342,6 +370,7 @@ fn a_homebrew_install_is_upgraded_by_the_brew_of_its_own_prefix() {
     assert_eq!(args_of(&cask), ["upgrade", "--cask", "claude-code"]);
 }
 
+// Homebrew exists only on macOS and Linux, so an install of it is never met on Windows.
 #[cfg(unix)]
 #[test]
 fn a_homebrew_install_falls_back_to_the_brew_on_the_path() {
@@ -377,9 +406,13 @@ fn an_unknown_install_has_no_update() {
 
 // -- installs on disk, links followed -----------------------------------------------------------
 
-#[cfg(unix)]
 #[test]
 fn the_install_of_a_binary_is_told_after_following_every_link() {
+    // A Windows user makes a file link only with Developer Mode on or the privilege to; every
+    // other host always can.
+    if !crate::platform::fs::file_links_available() {
+        return;
+    }
     let dir = crate::test_support::ScratchDir::new("cli-links");
     let real = dir.join(".codex/packages/standalone/releases/0.166.0/bin/codex");
     executable(&real);
@@ -409,16 +442,16 @@ fn the_install_of_a_binary_is_told_after_following_every_link() {
 // -- checks and updates against stand-in CLIs ---------------------------------------------------
 
 /// A fake CLI under a scratch directory, laid out where an install of `layout` puts its binary,
-/// so that following its links ends in that layout: a hard link of the shared stand-in
-/// executable (a link is followed no further, a symlink would end in the temporary directory) with
-/// a symlink `bin/<binary>` to it, which is what the shell finds.
-#[cfg(unix)]
+/// with an environment whose `PATH` finds it.
 struct Cli {
     state: Arc<AppState>,
     dir: crate::test_support::ScratchDir,
     env: HashMap<String, String>,
 }
 
+/// On Unix the fake is laid out so that following its links ends in the layout: a hard link of the
+/// shared stand-in executable (a link is followed no further, a symlink would end in the temporary
+/// directory) with a symlink `bin/<binary>` to it, which is what the shell finds.
 #[cfg(unix)]
 fn cli(name: &str, agent: AgentId, layout: &str, body: &str) -> Cli {
     let (state, dir) = crate::test_support::app_state(name);
@@ -448,8 +481,20 @@ fn cli(name: &str, agent: AgentId, layout: &str, body: &str) -> Cli {
     Cli { state, dir, env }
 }
 
+/// The fake is a program of its own in the layout, which the `PATH` finds there: a link to it
+/// would need a privilege a Windows user may not have, so these tests would run only where links
+/// can be made.
+#[cfg(windows)]
+fn cli(name: &str, agent: AgentId, layout: &str, body: &str) -> Cli {
+    let (state, dir) = crate::test_support::app_state(name);
+    let install = dir.join(layout);
+    std::fs::create_dir_all(&install).unwrap();
+    let mut env = crate::test_support::fake_agent(&install, agent.descriptor().binary, body);
+    env.insert("HOME".to_string(), dir.to_string_lossy().into_owned());
+    Cli { state, dir, env }
+}
+
 /// A fake Codex that is at version 0.166.0 until its `update` runs, which moves it to 0.167.0.
-#[cfg(unix)]
 const CODEX_UPDATING: &str = r#"
     version_file="$HOME/codex.version"
     [ -f "$version_file" ] || echo 0.166.0 > "$version_file"
@@ -459,10 +504,8 @@ const CODEX_UPDATING: &str = r#"
     esac
 "#;
 
-#[cfg(unix)]
 const NATIVE_CODEX: &str = ".codex/packages/standalone/releases/0.166.0/bin";
 
-#[cfg(unix)]
 async fn next_status(
     events: &mut tokio::sync::broadcast::Receiver<Event>,
     until: impl Fn(&AgentCliStatus) -> bool,
@@ -480,7 +523,6 @@ async fn next_status(
     .expect("the status never came")
 }
 
-#[cfg(unix)]
 fn ended(status: &AgentCliStatus) -> bool {
     status
         .update
@@ -488,7 +530,6 @@ fn ended(status: &AgentCliStatus) -> bool {
         .is_some_and(|update| update.state != CliUpdateState::Running)
 }
 
-#[cfg(unix)]
 #[test]
 fn a_check_reads_the_version_the_method_and_the_latest_version() {
     let cli = cli("cli-check", AgentId::CODEX, NATIVE_CODEX, CODEX_UPDATING);
@@ -502,7 +543,6 @@ fn a_check_reads_the_version_the_method_and_the_latest_version() {
     assert_eq!(status.update, None);
 }
 
-#[cfg(unix)]
 #[test]
 fn a_lookup_that_fails_is_a_reason_beside_a_status_that_is_otherwise_whole() {
     let cli = cli(
@@ -532,7 +572,6 @@ fn a_lookup_that_fails_is_a_reason_beside_a_status_that_is_otherwise_whole() {
     assert_eq!(unreadable.latest_detail, None);
 }
 
-#[cfg(unix)]
 #[test]
 fn an_install_that_is_not_recognised_shows_its_version_and_looks_up_nothing() {
     let cli = cli(
@@ -563,7 +602,6 @@ fn an_agent_that_does_not_resolve_has_nothing_to_show() {
     assert_eq!(status.latest_error, None);
 }
 
-#[cfg(unix)]
 #[test]
 fn groks_own_check_gives_the_latest_version_of_a_native_install() {
     let body = r#"
@@ -584,7 +622,6 @@ fn groks_own_check_gives_the_latest_version_of_a_native_install() {
     );
 }
 
-#[cfg(unix)]
 #[test]
 fn an_error_in_the_cli_s_own_check_is_the_failure_of_the_lookup() {
     let body = r#"
@@ -602,7 +639,6 @@ fn an_error_in_the_cli_s_own_check_is_the_failure_of_the_lookup() {
     assert_eq!(status.latest_detail.as_deref(), Some("offline"));
 }
 
-#[cfg(unix)]
 #[test]
 fn a_failed_own_check_gives_its_error_field_never_a_line_of_its_json() {
     let body = r#"
@@ -637,6 +673,7 @@ fn a_failed_own_check_gives_its_error_field_never_a_line_of_its_json() {
     assert!(detail.starts_with("the check ended with"), "{detail}");
 }
 
+// Homebrew exists only on macOS and Linux, so an install of it is never met on Windows.
 #[cfg(unix)]
 #[test]
 fn homebrew_latest_is_the_stable_version_of_its_record() {
@@ -660,7 +697,6 @@ fn homebrew_latest_is_the_stable_version_of_its_record() {
     assert_eq!(version, Some(Ok("0.168.1".to_owned())));
 }
 
-#[cfg(unix)]
 #[tokio::test]
 async fn an_update_runs_the_native_command_and_announces_the_new_versions() {
     let cli = cli("cli-update", AgentId::CODEX, NATIVE_CODEX, CODEX_UPDATING);
@@ -695,7 +731,6 @@ async fn an_update_runs_the_native_command_and_announces_the_new_versions() {
     assert_eq!(cli.state.agent_clis.statuses(), vec![done]);
 }
 
-#[cfg(unix)]
 #[tokio::test]
 async fn a_failed_update_says_why_with_the_last_line_it_printed() {
     let body = r#"
@@ -726,7 +761,6 @@ async fn a_failed_update_says_why_with_the_last_line_it_printed() {
     assert_eq!(done.installed_version.as_deref(), Some("0.166.0"));
 }
 
-#[cfg(unix)]
 #[tokio::test]
 async fn an_update_that_ends_during_shutdown_records_its_outcome_and_checks_nothing() {
     let body = r#"
@@ -776,7 +810,6 @@ async fn an_update_that_ends_during_shutdown_records_its_outcome_and_checks_noth
     assert!(!refreshed.load(std::sync::atomic::Ordering::SeqCst));
 }
 
-#[cfg(unix)]
 #[tokio::test]
 async fn an_update_is_refused_while_the_daemon_shuts_down() {
     let cli = cli(
@@ -814,7 +847,6 @@ async fn an_update_is_refused_while_the_daemon_shuts_down() {
     assert!(cli.state.agent_clis.statuses().is_empty());
 }
 
-#[cfg(unix)]
 #[tokio::test]
 async fn an_update_that_outruns_its_time_is_stopped_and_says_so() {
     let body = r#"
@@ -844,7 +876,6 @@ async fn an_update_that_outruns_its_time_is_stopped_and_says_so() {
     assert_eq!(update.detail, None);
 }
 
-#[cfg(unix)]
 #[tokio::test]
 async fn an_update_writes_its_output_to_a_file_of_its_own_and_not_to_a_pipe() {
     let body = r#"
@@ -875,7 +906,6 @@ async fn an_update_writes_its_output_to_a_file_of_its_own_and_not_to_a_pipe() {
     assert!(written.contains("to stdout") && written.contains("to stderr"));
 }
 
-#[cfg(unix)]
 #[tokio::test]
 async fn a_second_update_of_an_agent_is_refused_until_the_first_ends() {
     let body = r#"
@@ -934,7 +964,6 @@ async fn a_second_update_of_an_agent_is_refused_until_the_first_ends() {
     next_status(&mut events, ended).await;
 }
 
-#[cfg(unix)]
 #[tokio::test]
 async fn an_update_judges_the_agents_availability_again_on_the_refreshed_environment() {
     let cli = cli(
@@ -986,7 +1015,6 @@ async fn an_update_judges_the_agents_availability_again_on_the_refreshed_environ
     );
 }
 
-#[cfg(unix)]
 #[tokio::test]
 async fn an_update_whose_refresh_fails_reads_the_status_on_the_environment_it_had() {
     let cli = cli(
@@ -1012,7 +1040,6 @@ async fn an_update_whose_refresh_fails_reads_the_status_on_the_environment_it_ha
     assert_eq!(done.installed_version.as_deref(), Some("0.167.0"));
 }
 
-#[cfg(unix)]
 #[test]
 fn an_update_through_npm_runs_npm_in_the_installs_prefix() {
     let body = r#"
@@ -1020,22 +1047,17 @@ fn an_update_through_npm_runs_npm_in_the_installs_prefix() {
     "#;
     let dir = crate::test_support::ScratchDir::new("cli-npm-update");
     let prefix = dir.join("prefix");
-    let package_dir = prefix.join("lib/node_modules/@openai/codex/bin");
-    let script = package_dir.join("codex.js");
-    executable(&script);
-    std::fs::create_dir_all(prefix.join("bin")).unwrap();
-    crate::test_support::symlink(&script, prefix.join("bin/codex")).unwrap();
+    let launcher_dir = npm_codex(&prefix);
     let tools = dir.join("tools");
     std::fs::create_dir(&tools).unwrap();
     let mut env = crate::test_support::fake_agent(&tools, "npm", body);
-    env.insert(
-        "PATH".to_string(),
-        format!(
-            "{}:{}:/usr/bin:/bin",
-            prefix.join("bin").display(),
-            tools.display()
-        ),
-    );
+    let path = std::env::join_paths(
+        [launcher_dir, tools.clone()]
+            .into_iter()
+            .chain(std::env::split_paths(&env["PATH"])),
+    )
+    .unwrap();
+    env.insert("PATH".to_string(), path.to_string_lossy().into_owned());
     env.insert("HOME".to_string(), dir.to_string_lossy().into_owned());
 
     let prepared = prepare(AgentId::CODEX, env.clone()).expect("an npm install is updated");
@@ -1107,7 +1129,6 @@ fn an_agent_that_is_not_installed_is_refused() {
     );
 }
 
-#[cfg(unix)]
 #[test]
 fn an_install_that_is_not_recognised_is_refused_and_nothing_is_run() {
     let body = r#"
@@ -1129,21 +1150,12 @@ fn an_install_that_is_not_recognised_is_refused_and_nothing_is_run() {
     assert!(!cli.dir.join("ran").exists());
 }
 
-#[cfg(unix)]
 #[test]
 fn an_npm_install_with_no_npm_to_run_is_refused() {
     let dir = crate::test_support::ScratchDir::new("cli-refuse-no-npm");
-    let script = dir.join("prefix/lib/node_modules/@openai/codex/bin/codex.js");
-    executable(&script);
-    std::fs::create_dir_all(dir.join("prefix/bin")).unwrap();
-    crate::test_support::symlink(&script, dir.join("prefix/bin/codex")).unwrap();
-    let env = HashMap::from([
-        (
-            "PATH".to_string(),
-            dir.join("prefix/bin").display().to_string(),
-        ),
-        ("HOME".to_string(), dir.to_string_lossy().into_owned()),
-    ]);
+    let launcher_dir = npm_codex(&dir.join("prefix"));
+    let mut env = env_with_path(&[&launcher_dir]);
+    env.insert("HOME".to_string(), dir.to_string_lossy().into_owned());
 
     let err = prepare(AgentId::CODEX, env).err().expect("refused");
 
@@ -1392,6 +1404,8 @@ fn a_socks_proxy_that_refuses_is_a_failed_lookup_and_not_a_panic() {
     assert!(started.elapsed() < Duration::from_secs(10));
 }
 
+// An output file is made private by its mode on Unix; on Windows it inherits the directory's
+// access rules.
 #[cfg(unix)]
 #[test]
 fn an_updates_output_file_is_private_to_its_owner() {

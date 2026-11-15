@@ -20,7 +20,34 @@ pub fn proxy_for(
     shell_env: &HashMap<String, String>,
     host: &str,
 ) -> Result<Option<ureq::Proxy>, String> {
-    let value = |name: &str| shell_env.get(name).map(|value| value.trim());
+    proxy_in(shell_env, host, crate::platform::shell::ENV_NAMES_FOLD_CASE)
+}
+
+/// [`proxy_for`], with variable names matched without regard to case where `fold_case`.
+fn proxy_in(
+    shell_env: &HashMap<String, String>,
+    host: &str,
+    fold_case: bool,
+) -> Result<Option<ureq::Proxy>, String> {
+    // The exact spelling first; failing that, of the spellings that differ only in case, the
+    // least, so an environment that holds several (a snapshot can, a Windows process cannot)
+    // resolves the same way every time, whatever order the map keeps them in.
+    let value = |name: &str| {
+        shell_env
+            .get(name)
+            .or_else(|| {
+                fold_case
+                    .then(|| {
+                        shell_env
+                            .iter()
+                            .filter(|(key, _)| key.eq_ignore_ascii_case(name))
+                            .min_by_key(|(key, _)| key.as_str())
+                            .map(|(_, value)| value)
+                    })
+                    .flatten()
+            })
+            .map(|value| value.trim())
+    };
     let no_proxy = value("NO_PROXY")
         .or_else(|| value("no_proxy"))
         .unwrap_or("");
@@ -128,6 +155,96 @@ mod tests {
                 HOST
             ),
             None
+        );
+    }
+
+    /// Where names fold case, a variable is found however it is spelled, `NO_PROXY` too; where
+    /// they do not, only the two spellings tools read count.
+    #[test]
+    fn a_variable_spelled_in_mixed_case_counts_only_where_names_fold_case() {
+        let mixed = env(&[("Https_Proxy", "http://secure:2")]);
+        let host = |fold| {
+            proxy_in(&mixed, HOST, fold)
+                .unwrap()
+                .map(|p| p.host().to_owned())
+        };
+        assert_eq!(host(true), Some("secure".to_owned()));
+        assert_eq!(host(false), None);
+        let exempt = env(&[("HTTPS_PROXY", "http://secure:2"), ("No_Proxy", HOST)]);
+        assert!(proxy_in(&exempt, HOST, true).unwrap().is_none());
+        assert!(proxy_in(&exempt, HOST, false).unwrap().is_some());
+    }
+
+    /// Folding case changes which spelling is found, not which variable comes first: HTTPS, then
+    /// ALL, then HTTP, and the exact spellings still count.
+    #[test]
+    fn the_variables_apply_in_the_same_order_however_they_are_spelled_where_names_fold_case() {
+        let host = |pairs: &[(&str, &str)]| {
+            proxy_in(&env(pairs), HOST, true)
+                .unwrap()
+                .map(|p| p.host().to_owned())
+        };
+        assert_eq!(
+            host(&[
+                ("Http_Proxy", "http://plain:1"),
+                ("All_Proxy", "http://all:3"),
+                ("Https_Proxy", "http://secure:2"),
+            ]),
+            Some("secure".to_owned())
+        );
+        assert_eq!(
+            host(&[
+                ("Http_Proxy", "http://plain:1"),
+                ("All_Proxy", "http://all:3"),
+            ]),
+            Some("all".to_owned())
+        );
+        assert_eq!(
+            host(&[("http_proxy", "http://plain:1")]),
+            Some("plain".to_owned())
+        );
+        assert_eq!(
+            host(&[("HTTPS_PROXY", "http://secure:2")]),
+            Some("secure".to_owned())
+        );
+        assert_eq!(host(&[("HTTPS_PROXY_EXTRA", "http://other:4")]), None);
+    }
+
+    /// Where names fold case and several spellings of one name are there, the exact spelling
+    /// wins, and without it the least of the others, whatever order the map keeps them in.
+    #[test]
+    fn several_spellings_of_one_name_resolve_the_same_way_every_time_where_names_fold_case() {
+        let both = env(&[
+            ("https_proxy", "http://lower:1"),
+            ("Https_Proxy", "http://mixed:3"),
+            ("HTTPS_PROXY", "http://upper:2"),
+        ]);
+        for _ in 0..8 {
+            let host = proxy_in(&both, HOST, true)
+                .unwrap()
+                .map(|p| p.host().to_owned());
+            assert_eq!(host, Some("upper".to_owned()));
+        }
+        for _ in 0..8 {
+            let inexact = env(&[
+                ("https_proxy", "http://lower:1"),
+                ("Https_Proxy", "http://mixed:3"),
+                ("hTTPS_PROXY", "http://odd:4"),
+            ]);
+            let host = proxy_in(&inexact, HOST, true)
+                .unwrap()
+                .map(|p| p.host().to_owned());
+            assert_eq!(host, Some("mixed".to_owned()), "`Https_Proxy` sorts first");
+        }
+    }
+
+    /// Windows names its variables without regard to case, and so does the daemon there.
+    #[cfg(windows)]
+    #[test]
+    fn on_windows_a_proxy_variable_counts_whatever_its_case() {
+        assert_eq!(
+            proxy_host(&[("Https_Proxy", "http://secure:2")], HOST),
+            Some("secure".to_owned())
         );
     }
 

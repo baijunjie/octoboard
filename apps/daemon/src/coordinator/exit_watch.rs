@@ -65,7 +65,7 @@ pub fn watch_exit(state: &Arc<AppState>, live: Arc<LiveSession>) {
             if state.is_handing_over() {
                 return;
             }
-            if live.poll_exit() {
+            if crate::terminal::pty::poll_exit_off_runtime(&live).await {
                 break;
             }
         }
@@ -260,6 +260,28 @@ mod tests {
             SessionStatus::Interrupted
         );
         assert!(!state.last_turn_abnormal("s"));
+    }
+
+    /// The process is polled off the async runtime: the poll that finds it gone runs its exit
+    /// cleanup, which the runtime's other tasks must not wait behind.
+    #[tokio::test]
+    async fn the_exit_cleanup_runs_off_the_runtime() {
+        let (state, dir) = app_state("exit-watch-cleanup-off-runtime");
+        insert_record(&state, &dir, "s", SessionStatus::Working);
+        let live = crate::test_support::fake_live_session_running(
+            "s",
+            AgentId::CLAUDE,
+            80,
+            24,
+            &crate::test_support::programs::sleep(0),
+        );
+        let hook = crate::test_support::HeldExitHook::install(&live, &dir);
+        state.register_live(live.clone());
+        watch_exit(&state, live.clone());
+
+        hook.release_once_entered().await;
+        until_unregistered(&state, "s").await;
+        assert!(hook.was_released(), "the runtime waited on the exit hook");
     }
 
     /// Waits, up to `PATIENCE`, for the exit watcher to let go of the session.

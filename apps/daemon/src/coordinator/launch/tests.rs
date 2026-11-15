@@ -440,6 +440,28 @@ async fn a_relaunched_process_that_ends_at_once_did_not_come_up() {
     assert!(came_up(&up, settle).await);
 }
 
+/// Whether a relaunch came up is polled off the async runtime: the poll that finds the process
+/// gone runs its exit cleanup, which the runtime's other tasks must not wait behind.
+#[tokio::test]
+async fn watching_a_relaunch_come_up_runs_its_exit_cleanup_off_the_runtime() {
+    let dir = crate::test_support::ScratchDir::new("relaunch-exit-cleanup");
+    let gone = crate::test_support::fake_live_session_running(
+        "gone",
+        AgentId::CLAUDE,
+        80,
+        24,
+        &crate::test_support::programs::sleep(0),
+    );
+    let hook = crate::test_support::HeldExitHook::install(&gone, &dir);
+
+    let (up, ()) = tokio::join!(
+        came_up(&gone, crate::test_support::PATIENCE),
+        hook.release_once_entered()
+    );
+    assert!(!up);
+    assert!(hook.was_released(), "the runtime waited on the exit hook");
+}
+
 /// An archive that lands before the relaunch writes anything is not undone by the switch: the
 /// relaunch refuses an archived session unless it is a resume reopening one, and leaves it
 /// archived.

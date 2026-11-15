@@ -954,3 +954,74 @@ pub(crate) fn fake_agent(dir: &Path, binary: &str, body: &str) -> HashMap<String
         ),
     ])
 }
+
+/// How long a [`HeldExitHook`] waits to be released before it gives up.
+const HELD_EXIT_HOOK_WAIT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// An exit hook that holds a process's exit cleanup until the test releases it, for tests that
+/// check the async runtime goes on while that cleanup runs. It waits at most
+/// `HELD_EXIT_HOOK_WAIT`, so a runtime that cannot run the release meanwhile shows as a hook never
+/// released, not a hang.
+pub(crate) struct HeldExitHook {
+    entered: Arc<std::sync::atomic::AtomicBool>,
+    released: Arc<std::sync::atomic::AtomicBool>,
+    release: std::sync::mpsc::Sender<()>,
+}
+
+impl HeldExitHook {
+    /// Installs the hook on `pty`, whose process nothing has polled yet, with a scratch directory
+    /// of its own in `dir`: the hook runs only for a process that has one.
+    pub(crate) fn install(pty: &crate::terminal::pty::PtyCore, dir: &super::ScratchDir) -> Self {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let entered = Arc::new(AtomicBool::new(false));
+        let released = Arc::new(AtomicBool::new(false));
+        let (release, wait) = std::sync::mpsc::channel();
+        let (on_enter, on_release) = (entered.clone(), released.clone());
+        let scratch = dir.join("session-scratch");
+        std::fs::create_dir(&scratch).expect("the session's scratch directory");
+        pty.set_exit_cleanup(
+            scratch,
+            Box::new(move || {
+                on_enter.store(true, Ordering::Release);
+                if wait.recv_timeout(HELD_EXIT_HOOK_WAIT).is_ok() {
+                    on_release.store(true, Ordering::Release);
+                }
+            }),
+        );
+        Self {
+            entered,
+            released,
+            release,
+        }
+    }
+
+    /// Waits on the runtime, up to [`super::PATIENCE`], for the hook to be running, then releases
+    /// it.
+    pub(crate) async fn release_once_entered(&self) {
+        let deadline = std::time::Instant::now() + super::PATIENCE;
+        while !self.entered.load(std::sync::atomic::Ordering::Acquire) {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the exit hook never ran"
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        self.release();
+    }
+
+    /// Releases the hook, now if it is waiting, or as soon as it runs.
+    pub(crate) fn release(&self) {
+        // The hook may have given up waiting already; that is what `was_released` tells.
+        let _ = self.release.send(());
+    }
+
+    /// Whether the hook has started.
+    pub(crate) fn has_run(&self) -> bool {
+        self.entered.load(std::sync::atomic::Ordering::Acquire)
+    }
+
+    /// Whether the hook was released while it was waiting, rather than giving up.
+    pub(crate) fn was_released(&self) -> bool {
+        self.released.load(std::sync::atomic::Ordering::Acquire)
+    }
+}

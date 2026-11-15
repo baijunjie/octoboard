@@ -40,9 +40,12 @@ Only the npm registry lookup reaches the network, over HTTPS, at `https://regist
 time limit of **20 seconds**; `grok update --check` and `brew info` are given the same limit. The lookup goes out as the
 user's own network does:
 
-- through the proxy the login shell environment names, `HTTPS_PROXY`, `ALL_PROXY` or `HTTP_PROXY` (in upper or lower
-  case, the first set in that order), with `NO_PROXY` exempting a host; HTTP proxies and SOCKS proxies (`socks://`,
-  `socks4://`, `socks4a://`, `socks5://`, `socks5h://`) both work;
+- through the proxy the login shell environment names, `HTTPS_PROXY`, `ALL_PROXY` or `HTTP_PROXY` (the first set in
+  that order), with `NO_PROXY` exempting a host; HTTP proxies and SOCKS proxies (`socks://`, `socks4://`, `socks4a://`,
+  `socks5://`, `socks5h://`) both work. Each name counts in upper or lower case, the upper-case spelling winning where
+  both are set. On Windows, which names its variables without regard to case, a name counts in any case (`Https_Proxy`,
+  `No_Proxy`); where the environment holds several spellings of one name and neither the upper- nor the lower-case one,
+  the spelling that sorts first by character code wins;
 - trusting the system's certificate store, so a corporate certificate authority that inspects TLS is accepted;
 - always to the public registry: a custom registry set in an `.npmrc` is not read.
 
