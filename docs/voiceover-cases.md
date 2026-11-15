@@ -400,6 +400,7 @@ proxy and VoiceOver were stopped afterwards; `cleanup.json` records the exact ow
 | [Known not to work](#known-not-to-work) | fourteen failing or negative observations (KNW-1 to KNW-14; each names the case that replaced it) | **Fail** (history) |
 | [OPEN-1 Import result dialog rename](#open-1-import-result-dialog-rename) | focus move onto a renamed dialog | Unconfirmed |
 | [OPEN-2 Startup failure page alert](#open-2-startup-failure-page-alert) | delayed `EmptyPanel` alert on a page with no focus move | Unconfirmed |
+| [OPEN-3 Unprompted question turned failed in place](#open-3-unprompted-question-turned-failed-in-place) | focus relayed off a dialog and back as its content becomes a failure | Unconfirmed |
 
 ### NAME-1 Retained picker trigger
 
@@ -2321,6 +2322,21 @@ tree equal to main `505f1c2fc`, with the holder-runtime repair `30eb3e434`) and 
   and whether the alert is spoken at all for a page with no focus move, has not been listened to yet.
 - **Reuse scope.** None until confirmed.
 
+### OPEN-3 Unprompted question turned failed in place
+
+- **Location and state change.** A question the user did not ask for (a session request) holds focus on the dialog
+  itself when its subject fails, for example a switch request whose session is archived meanwhile, or when it moves on
+  to another queued question that has failed too: the dialog's content becomes its failure form (danger icon, the
+  failure as its title and body, OK), in the same dialog element.
+- **Mechanism.** Focus passes through a hidden, `aria-hidden` span inside the dialog and back to the dialog, so the
+  dialog takes focus anew under its new title and description, with no `StatusAnnouncer`.
+  `packages/ui/src/components/dialog/Dialog.tsx` (`Dialog`, failure form) through
+  `packages/ui/src/components/dialog/dialogHooks.ts` (`useFocusWhenShown`, `relay`).
+- **ARIA wiring, capture, environment, date.** Not recorded: this case has not been listened to.
+- **Result.** Unconfirmed. That VoiceOver reads the dialog's new title and description on this relayed focus move, and
+  says nothing for the hidden span, has not been listened to yet.
+- **Reuse scope.** None until confirmed.
+
 ## Existing `StatusAnnouncer` callers and the case each matches
 
 Compared strictly against the rules above, from the code and the recordings. Paths are relative to `packages/ui/src`.
@@ -2426,6 +2442,7 @@ Hand-built `role="status"` elements, which are not `StatusAnnouncer`:
 - Import result dialog rename: not yet listened to (OPEN-1).
 - Startup failure page alert (daemon-failed and crash pages): not yet listened to (OPEN-2). No case matches an alert
   inserted after the first paint on a page the window opens on, with no focus move.
+- Unprompted question turned failed in place (focus relayed off the dialog and back): not yet listened to (OPEN-3).
 - A choice-consequence warning (`ErrorAlert` with `announce` and `announceDelayMs` of `AFTER_FOCUS_MOVE_DELAY_MS`,
   mounted under a checkbox as it is ticked inside a dialog, focus kept on the checkbox, and added to the checkbox's
   `aria-describedby`): the export dialog's full-paths option and the trust prompt's folder option. No case matches it;

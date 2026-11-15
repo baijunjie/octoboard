@@ -14,7 +14,7 @@ import { focusAfterLoss, MODAL_CLOSE_SETTLE_MS, setFocusAfterModalLoss } from ".
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { ConfirmDialog } from "../components/dialog/ConfirmDialog";
 import { Dialog } from "../components/dialog/Dialog";
-import { framesAsTimers, openable, settleFrames, trackMountRefocus } from "../components/dialog/dialogTestSupport";
+import { failureOf, framesAsTimers, openable, settleFrames, trackMountRefocus } from "../components/dialog/dialogTestSupport";
 import { OpensAnotherDialog } from "../components/dialog/nestedDialogTestSupport";
 import { ErrorAlerts } from "./ErrorAlerts";
 import { issueUrl } from "../components/alerts/useIssueReport";
@@ -26,7 +26,7 @@ import { issueReportUrl, recordNames } from "../errors/issueReport";
 import { registerSettingsLauncher } from "../settings/settingsLauncher";
 import { registerSessionModelLauncher } from "../dialogs/sessionModelLauncher";
 import { BROWSER_HOST } from "../test/hosts";
-import { fakeTimers } from "../test/clock";
+import { fakeTimers, fakeTimersKeepingFrames } from "../test/clock";
 
 vi.mock("../errors/issueReport", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../errors/issueReport")>();
@@ -547,6 +547,35 @@ describe.each([{ strict: false }, { strict: true }])("acknowledged over a dialog
     await settleFrames();
     await vi.waitFor(() => expect(document.activeElement).toBe(cancel), { timeout: REAL_TIMER_WAIT_MS });
   });
+});
+
+// An error alert acknowledged with focus left on `<body>` hands focus to the window's fallback, which puts it where the
+// dialog under it opens: OK of an ordinary failure form, which marks it as its opening focus; the dialog itself for an
+// unprompted question's, whose OK does not.
+it.each([
+  ["an ordinary failure form, on its OK", false, "button"],
+  ["an unprompted failure form, on the dialog itself", true, "[role=alertdialog]"],
+])("returns focus to %s once an alert raised over it is acknowledged with focus on the page body", async (_case, unprompted, landed) => {
+  framesAsTimers();
+  onTestFinished(setFocusAfterModalLoss(() => focusAfterLoss(() => {})));
+  mount(<Dialog title="Rename" onClose={() => {}} submitLabel="Save" onSubmit={() => {}} focusesItselfOnOpen={unprompted} failure={failureOf("Gone.")}><span>body</span></Dialog>);
+  const mountRefocused = trackMountRefocus();
+  await settleFrames();
+  // Past react-aria's half-second refocus of a dialog that finds focus on `<body>`, which the next step leaves it on.
+  await mountRefocused();
+  const failed = document.querySelector<HTMLElement>('[role="alertdialog"]')!;
+  act(() => (document.activeElement as HTMLElement).blur());
+  act(() => errorAlerts.report({ message: "Refused" }));
+  await settleFrames();
+  expect(document.activeElement?.closest('[role="alertdialog"]')?.textContent).toContain("Refused");
+  // The fallback that follows the alert's close waits MODAL_CLOSE_SETTLE_MS from the acknowledgement.
+  fakeTimersKeepingFrames();
+  act(() => errorAlerts.acknowledge());
+  await settleFrames();
+  act(() => void vi.advanceTimersByTime(MODAL_CLOSE_SETTLE_MS));
+  await settleFrames();
+  expect(document.activeElement).toBe(unprompted ? failed : failed.querySelector("button[data-opening-focus]"));
+  expect(document.activeElement?.matches(landed)).toBe(true);
 });
 
 it("shows foreign-realm diagnostic stacks and an accurate manual Issue fallback", () => {

@@ -435,7 +435,9 @@ focus on the dialog itself, so an Enter pressed before the user has moved focus 
 destructive one, and a question the user did not ask for (a folder trust prompt, a session request), which can come up
 while they are typing elsewhere. The latter starts on the dialog again for each queued question it moves on to, and
 starts on the dialog, not on its first control (its close button), also when it comes up over a dialog that a press
-without a pointer opened (an assistive technology's press). A
+without a pointer opened (an assistive technology's press). Its failure form (see "A failure that ends a dialog's
+purpose") keeps that start, whether it opens already failed or turns failed while open: focus is on the dialog, not on
+its acknowledgement. A
 destructive confirmation (removing, deleting, archiving) is a warning modal: the warning icon in its header, the
 consequences as its body text (the sessions it ends or takes along listed in that body; a confirmation sectioned by
 topic, as archiving, removing a project and deleting a console are, puts each section's consequences under that
@@ -953,7 +955,8 @@ A dialog opened from a control that never took focus, is disabled, or is gone by
 focus back to it: React Aria restores focus to what held it when the dialog opened, which is not the control after an
 accessibility activation or a `focusOnPress={false}` press, and finds nothing that takes it when the control is disabled
 or gone, so focus ends on `<body>`, where VoiceOver reads the whole web area instead of the control the user was on.
-Four handoffs repair it. The login handoff (`useLoginFocusReturn` in
+Four handoffs repair it, and acknowledging a dialog's failure form hands such focus to the window's fallback (see "A
+failure that ends a dialog's purpose"). The login handoff (`useLoginFocusReturn` in
 `packages/ui/src/settings/accounts/AccountLoginButton.tsx`): the row's own Log in button is shown only while the account
 reads as signed out and is not turned off, and is disabled while a login runs, so after a success focus goes to the
 row's actions, and after a cancel to the Log in button once it is enabled again, else to the actions. The console
@@ -1646,14 +1649,21 @@ archive's Delete all confirmation closes this way once another window or client 
 from an owner does once the binding is already gone.
 
 **A failure that ends a dialog's purpose** — the dialog can no longer do what it was opened for — turns the dialog
-itself into a failure modal in the error alert dialog's form, never an ordinary modal with a danger Alert inside it:
-the danger icon in its header, a title naming the failure, the explanation as sentences in its body, the raw text
-behind **Error details**, and its footer trailing-aligned like the error alert dialog's, secondary buttons first and
-the primary at the trailing edge. It replaces the dialog's content in the same modal; no second dialog opens over a
-dialog that has nothing left to offer. It takes the error alert dialog's dismissal too: a close button (×), and no
-Escape or outside press. A login that failed or timed out is one: its footer is Close then Log in again, which takes
-focus, or Report issue then Log in again for an unexpected failure, the × standing for Close. The alert dialog's mounting and the focus move announce a
-failure modal, with no further live announcement.
+itself into a failure modal in the error alert dialog's form, never an ordinary modal with a danger Alert inside it: the
+danger icon in its header, a title naming the failure, the explanation as sentences in its body, the raw text behind
+**Error details**, and its footer trailing-aligned like the error alert dialog's, secondary buttons first and the
+primary at the trailing edge. It replaces the dialog's content in the same modal; no second dialog opens over a dialog
+that has nothing left to offer. It takes the error alert dialog's dismissal too: a close button (×), and no Escape or
+outside press. A login that failed or timed out is one: its footer is Close then Log in again, which takes focus, or
+Report issue then Log in again for an unexpected failure, the × standing for Close. Otherwise the acknowledgement takes
+focus, however the dialog was opened, except in a question the user did not ask for, which starts on the dialog itself
+(see "Keyboard"); one that turns failed while focus is already on the dialog moves focus off it and back, so the failure
+is read (not yet listened to: OPEN-3 in `docs/voiceover-cases.md`). A failure that turns up in a dialog already open
+moves focus the user did not move, so the ring on its acknowledgement follows the last input (see "Focus moved by a
+change the user did not make"). Closing one, by its acknowledgement or its ×, in a way that leaves focus on `<body>`
+(the control that opened the dialog gone with its subject, as the focus view's New session goes with an archived console
+session) hands focus to the window's fallback, as acknowledging an error alert does. The alert dialog's mounting and the
+focus move announce a failure modal, with no further live announcement.
 
 The error alert dialog owns the announcement of the failures it shows; nothing else announces them again. A failure
 shown on the screen announces itself, once, when it appears after the view has first painted (`role="alert"` on its

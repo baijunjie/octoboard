@@ -172,6 +172,21 @@ error alert, a close button (×) at its top trailing corner acknowledges it exac
 press outside do not dismiss it. Acknowledging it closes the dialog, and what the dialog would have done is not done. It is announced as an alert dialog, with its explanation. It stays as it was when it appeared
 until it is acknowledged, even if the state that caused it passes.
 
+**Keyboard focus in a failure modal** starts on its acknowledgement button, however the dialog was opened — by the
+mouse, the keyboard, or a press without a pointer such as one from assistive technology — whether the dialog opens
+already as a failure modal or turns into one while open. When it turns into one while open, the acknowledgement button
+shows its focus ring only when the last input was a key (see "The focus ring after a focus move the window makes on its
+own" in `docs/product/moving-focus-between-regions.md`). The failure modal of a question the user did not ask for (see
+"Where keyboard focus starts in a confirmation" in `docs/product/dialogs.md`) starts with focus on the dialog itself
+instead, so an Enter typed elsewhere does nothing: as it opens already failed, as it turns failed while open, and as it
+moves on to another waiting question that has failed too. Where focus is already on such a dialog as it turns into a
+failure modal, focus leaves the dialog and comes back to it, so the dialog takes focus anew under its failure.
+
+When acknowledging a failure modal leaves keyboard focus with nowhere to return to — the control that opened the dialog
+gone with what the dialog was about, as a console session's focus mode, with its **New session**, goes when that console
+session is archived — focus goes where it goes when the last error alert is acknowledged with nowhere to return to (see
+"The error alert" above). Where focus has a control to return to, it goes back there.
+
 | Dialog | Title | Why |
 |---|---|---|
 | The session dialog | That a session cannot be opened | No agent can be picked any more, or the console session it was opened to report to is archived or gone (see "Opening a session" in `docs/product/sessions.md`) |

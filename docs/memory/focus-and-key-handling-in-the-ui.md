@@ -113,21 +113,11 @@ that can close with nowhere to return focus to does the same after trying the de
 closing with no dialog under it does (`packages/ui/src/settings/useSettingsDialog.ts`).
 
 Code that moves focus into such a modal by hand as it mounts (`dialogAround(ref)?.focus()` and the like), where the
-modal can open over another dialog — an alert or a question raised while one is open — focuses it from a layout
-effect of the render after the mount: a mount `useLayoutEffect` sets a state value, and a second
-`useLayoutEffect` keyed on that state does the focusing, as `ErrorAlertHost` in `packages/ui/src/shell/ErrorAlerts.tsx`
-does. The trouble is a dialog underneath with no focused element of its own yet — one opened by a press without a
-pointer (assistive technology, a script), whose opening focus react-aria defers to a frame. Both obvious timings lose to
-it:
-
-- a layout or passive effect at mount focuses the modal before react-aria has turned its containment on (that happens
-  in the render a mount effect of its own forces), so the dialog underneath reads the focus as escaping and moves it to
-  the modal's first control, where Enter then presses it;
-- a `setTimeout(..., 0)` races that deferred frame: the browser may render first, the dialog underneath takes focus
-  and becomes react-aria's active scope, and its containment pulls focus back off the modal once the timer focuses it.
-
-The state-driven second layout effect runs after the containment render, in the same task, before any frame. Do not
-answer either failure with a timer that takes focus back after a delay: it pulls back a user who has already tabbed on.
+modal can open over another dialog — an alert or a question raised while one is open — does it through
+`useFocusWhenShown` (`packages/ui/src/components/dialog/dialogHooks.ts`), as `ErrorAlertHost` and an `unprompted`
+`ConfirmDialog` do, never from a mount effect or a `setTimeout`: both lose to a dialog underneath opened by a press
+without a pointer (the hook's comment says how). Do not answer a lost focus with a timer that takes focus back after a
+delay either: it pulls back a user who has already tabbed on.
 
 The second-render focus is still too late for the modal's own react-aria dialog: `useDialog` checks from a passive
 mount effect, which React flushes before that render, whether focus is inside it, and when it is not, it takes focus
@@ -155,12 +145,13 @@ which does not stop focus: a test that asserts only where focus is passes agains
 raise the modal in the same `act` as opening the dialog underneath (`openable(dialog, true)`), and assert that it is not
 inside `[aria-hidden="true"], [inert]` as well as holding focus, as that file's `alertHoldsFocus` does.
 
-## A dialog's opening focus comes from react-aria's `autoFocus` or a mount layout effect, and nothing else focuses at mount
+## A dialog's opening focus comes from react-aria's `autoFocus` or a mount layout effect, and nothing else focuses at mount; content that replaces another in an open dialog is focused by `useFocusWhenShown`
 
-Applies to `packages/ui`, to every dialog (and modal popover) and to any code that runs as one mounts. After a press
-without a pointer (assistive technology, a script's `click()`) on a control that takes no focus when pressed, a dialog
-mounts with focus on `<body>`; react-aria puts its opening focus — a react-aria `autoFocus`, or the dialog itself — off
-to a frame, and drops it if focus has moved by then. So:
+Applies to `packages/ui`, to every dialog (and modal popover) and to any code that runs as one mounts or replaces its
+content. After a press without a pointer (assistive technology, a script's `click()`, the gallery's `ui.press`) on a
+control that takes no focus when pressed, a dialog mounts with focus on `<body>`; react-aria puts its opening focus — a
+react-aria `autoFocus`, or the dialog itself — off past a frame and any running transition, and drops it if focus has
+moved by then. So:
 
 - Focus nothing at mount but the control the dialog opens on. A "put focus back if it fell to `<body>`" check that runs
   at mount, even one that only focuses the dialog element, silently cancels the first field's opening focus. That is why
@@ -173,12 +164,18 @@ to a frame, and drops it if focus has moved by then. So:
   inserts the node, before the new dialog's focus scope exists, so a dialog opened over another one loses it to the
   outer dialog's containment, which pulls focus back to its trigger, and then focuses its own dialog element. Such a
   control is also marked as `docs/ui-standard.md`, "The error alert dialog", sets out.
+- A control in content that replaces other content while the dialog stays open — a new subject under `resetKey`, a
+  dialog turning into its failure form — never takes focus through `autoFocus`, which only works at the dialog's own
+  mount: the content that held focus goes, focus falls to `<body>`, the frame's `useRefocusIfLost` moves it to the
+  dialog, and a react-aria `autoFocus` deferred by a press without a pointer is then dropped, leaving focus on the
+  dialog. Focus it with `useFocusWhenShown` keyed on the subject, as `Dialog`'s failure form does, and mark it as the
+  previous bullet says.
 
-The two failures show under opposite presses, so test both: the mount refocus only after a press without a pointer
-(`framesAsTimers()` from `packages/ui/src/components/dialog/dialogTestSupport.ts`, under `StrictMode` as well), the DOM
-`autoFocus` only after a keyboard or mouse press, since under a press without a pointer the outer dialog's pull-back is
-put off until it is already inert (the "opens the directory browser on its path field" cases in
-`packages/ui/src/dialogs/ProjectDialog.test.tsx`).
+The failures show under different presses, so test all of them: the mount refocus and the replaced content only after a
+press without a pointer (`framesAsTimers()` from `packages/ui/src/components/dialog/dialogTestSupport.ts`, under
+`StrictMode` as well), the DOM `autoFocus` only after a keyboard or mouse press, since under a press without a pointer
+the outer dialog's pull-back is put off until it is already inert (the "opens the directory browser on its path field"
+cases in `packages/ui/src/dialogs/ProjectDialog.test.tsx`).
 
 ## A dialog another dialog opens as it mounts restores focus to the wrong place, so its close handler hands focus on itself
 

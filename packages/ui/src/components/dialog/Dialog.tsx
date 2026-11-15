@@ -1,6 +1,8 @@
 import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 import { takeMenuFocusToRestore } from "../focus/menuFocus";
+import { ringForAutomaticFocus } from "../../input/lastInput";
+import { focusAfterModalCloses } from "../focus/modalFocus";
 import { FadedScroller, useFadeRegion } from "../scroll/scrollFade";
 import { TitledControl } from "../hint/TitledControl";
 import { useT } from "../../i18n/react";
@@ -11,9 +13,9 @@ import { useEscapeWhileTooltipOpen } from "./useEscapeWhileTooltipOpen";
 import { useHeightMotion } from "./useHeightMotion";
 import { useToastClearance } from "./useToastClearance";
 import { useTopLayerAtMount } from "./useTopLayerAtMount";
-import { useFocusLeavingWhenDisabled, useRefocusIfLost } from "./dialogHooks";
+import { useFocusWhenShown, useFocusLeavingWhenDisabled, useRefocusIfLost } from "./dialogHooks";
 import { useFocusLeavingWhenBusy } from "./useFocusLeavingWhenBusy";
-import { Button, Modal, ModalBody, ModalCloseButton, ModalFooter, ModalHeader, ModalHeading, ModalStatusIcon } from "../../primitives";
+import { Button, Modal, ModalBody, ModalCloseButton, ModalFooter, ModalHeader, ModalHeading, ModalStatusIcon, openingFocus } from "../../primitives";
 
 const NOT_TYPED_INTO = new Set(["checkbox", "radio", "button", "submit", "image", "reset", "range", "color", "file"]);
 
@@ -359,8 +361,9 @@ type DialogFrameProps = Parameters<typeof DialogFrame>[0];
  * dialog's form — the danger icon, the failure's title, its explanation and "Error details", and the acknowledgement
  * as the only button, which calls `onClose`. It is an acknowledgement-only failure: there is no Report issue button,
  * and the type of `failure` leaves out an unexpected failure, whose report-a-bug guidance would have nothing to act on
- * here. Its acknowledgement and its close button (×) close it, both through `onClose`; Escape and a press outside do not,
- * as with the error alert dialog. The dialog's own title, body, footer and submit are not shown.
+ * here. Its acknowledgement and its close button (×) close it, both through `onClose`, and hand focus left on `<body>`
+ * to the window's fallback; Escape and a press outside do not, as with the error alert dialog. The dialog's own title,
+ * body, footer and submit are not shown.
  */
 export function Dialog({ failure, ...props }: DialogFrameProps & {
   failure?: AcknowledgementView;
@@ -368,7 +371,38 @@ export function Dialog({ failure, ...props }: DialogFrameProps & {
   const t = useT();
   // What describes a failure that holds a block of its own apart (`attached`): its explanation, not the block.
   const descriptionId = useId();
+  // The failure form puts focus where it starts each time a failure is shown: as it opens failed, as it turns failed
+  // while open, and as it moves on to another queued subject (`resetKey`) that has failed too. A question the user did
+  // not ask for (`focusesItselfOnOpen`) keeps that rule and starts on the dialog itself, not on OK, so an Enter typed
+  // elsewhere does nothing; one that held focus on itself already passes it through `relayRef` so the failure is read.
+  // Any other starts on OK, whatever the press that opened it.
+  const acknowledgeRef = useRef<HTMLButtonElement>(null);
+  const relayRef = useRef<HTMLSpanElement>(null);
+  const focusesItself = failure !== undefined && props.focusesItselfOnOpen === true;
+  // OK taking focus as the dialog opens already failed is its opening focus; a failure that turns up in a dialog
+  // already open moves focus the user did not move, so its ring follows the last input.
+  const openingFailed = useRef(failure !== undefined);
+  const failureStart = () => {
+    const opening = openingFailed.current;
+    openingFailed.current = false;
+    if (focusesItself) return dialogAround(acknowledgeRef);
+    if (!opening && acknowledgeRef.current) ringForAutomaticFocus();
+    return acknowledgeRef.current;
+  };
+  useFocusWhenShown(
+    failureStart,
+    failure !== undefined,
+    `${props.resetKey ?? ""}\n${failure?.message ?? ""}`,
+    relayRef,
+  );
   if (!failure) return <DialogFrame {...(props as DialogFrameProps)} />;
+  // A failure that ends a dialog's purpose is usually its subject gone, often taking the control that opened the dialog
+  // with it, so react-aria's restore can find nothing and leave focus on `<body>`; the window's fallback then takes it.
+  // It acts only on focus left on `<body>`.
+  const acknowledge = () => {
+    props.onClose();
+    focusAfterModalCloses();
+  };
   return (
     <DialogFrame
       failing
@@ -378,13 +412,17 @@ export function Dialog({ failure, ...props }: DialogFrameProps & {
       topLayerAtMount={props.topLayerAtMount}
       resetKey={failure.message}
       keyboardDismissHeld
-      onClose={props.onClose}
+      focusesItselfOnOpen={focusesItself}
+      onClose={acknowledge}
       headerLeading={<ModalStatusIcon status="danger" />}
       title={alertTitle(t, failure)}
-      footer={<Button autoFocus variant="danger" onPress={props.onClose}>{t("error.acknowledge")}</Button>}
+      footer={<Button ref={acknowledgeRef} {...openingFocus(!focusesItself)} variant="danger" onPress={acknowledge}>{t("error.acknowledge")}</Button>}
       describedBy={failure.attached ? descriptionId : undefined}
     >
       <ErrorAlertBody alert={failure} descriptionId={failure.attached ? descriptionId : undefined} />
+      {/* Out of the flow and hidden from assistive technology: focus only passes through it
+          (see `useFocusWhenShown`). */}
+      <span ref={relayRef} tabIndex={-1} aria-hidden="true" className="absolute" />
     </DialogFrame>
   );
 }

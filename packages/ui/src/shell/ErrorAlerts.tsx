@@ -6,8 +6,9 @@ import { useT } from "../i18n/react";
 import { openSettingsFromAnywhere } from "../settings/settingsLauncher";
 import { DaemonProvider, type Daemon } from "../store";
 import { useIssueReport } from "../components/alerts/useIssueReport";
-import { dialogAround } from "../components/dialog/dialogElement";
 import { Dialog } from "../components/dialog/Dialog";
+import { dialogAround } from "../components/dialog/dialogElement";
+import { useFocusWhenShown } from "../components/dialog/dialogHooks";
 import { openSessionModelFromAnywhere } from "../dialogs/sessionModelLauncher";
 import { ErrorAlertBody, alertTitle } from "../components/dialog/ErrorAlertBody";
 import { Button, ModalStatusIcon } from "../primitives";
@@ -56,23 +57,11 @@ function ErrorAlertHost(): React.ReactElement | null {
   const issue = useIssueReport(error?.classification.kind === "unexpected" ? alertFailures(error, "report") : undefined);
   // What describes an alert that holds a block of its own apart (`attached`): its explanation, not the block.
   const descriptionId = useId();
-  // Focus the alert in the render after the one that mounted it, before the task that raised it ends, and nowhere
-  // else: its `Dialog` never puts focus on it by itself, not even when the alert it replaces leaves focus on `<body>`
-  // (until then it holds focus on an empty element inside the alert; see `focusesItselfOnOpen`).
-  // react-aria turns a new modal's focus containment on from a layout effect at mount, which forces a render; the state
-  // set here from a layout effect of the same commit is set after it and lands in that render or a later one, and a
-  // layout effect of that render runs after the containment's own, which sit below it. Focus must land after that:
-  // a dialog under the alert that has no focused element of its own yet (one opened by a press without a pointer,
-  // whose own opening focus react-aria's `focusSafely` defers to the next frame or past the open transition) treats
-  // focus on the not-yet-containing alert as escaping its containment and queues `focusSafely` on the alert's first
-  // control, where Enter would then press it (for Manage accounts, opening Settings). It must also land before the
-  // next frame, because that dialog's deferred opening focus fires then unless focus has moved: once it lands on the
-  // dialog, the alert is outside the containment it joins and focus is taken back from it.
-  const [mountedId, setMountedId] = useState<number>();
-  useLayoutEffect(() => { setMountedId(error?.id); }, [error?.id]);
-  useLayoutEffect(() => {
-    if (mountedId !== undefined) dialogAround(inside)?.focus();
-  }, [mountedId]);
+  // Focus the alert itself each time one is shown, and nowhere else: its `Dialog` never puts focus on it by itself, not
+  // even when the alert it replaces leaves focus on `<body>` (until then it holds focus on an empty element inside the
+  // alert; see `focusesItselfOnOpen`). Landing on its first control instead, its close button, Enter would acknowledge
+  // it unread.
+  useFocusWhenShown(() => dialogAround(inside), error !== undefined, error?.id);
   if (!error) return null;
   const unexpected = error.classification.kind === "unexpected";
   // A button for the remedy when it is the one remedy of every failure the alert is about.

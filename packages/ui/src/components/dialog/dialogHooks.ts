@@ -121,3 +121,46 @@ export function useSubmitValidation(): {
     },
   };
 }
+
+/**
+ * Puts focus on `target` (the dialog itself, for a dialog that starts there: a question the user did not ask for, an
+ * error alert; else the control it opens on) each time the dialog is shown: at mount, and whenever `key` (the subject
+ * it shows) changes while `enabled`.
+ *
+ * It lands from a layout effect of the render after the one that mounted the dialog or changed its subject, so focus
+ * has moved before the new subject is painted and before a repeated Enter can land on a button. react-aria turns a new
+ * modal's focus containment on from a layout effect at mount, which forces a render; the state set here from a layout
+ * effect of the same commit lands in that render or a later one, whose layout effects run after the containment's own.
+ * Focus must land after that: a dialog underneath that holds no focused element of its own yet (one opened by a press
+ * without a pointer, whose opening focus react-aria defers a frame) treats focus that lands before that as escaping its
+ * containment and moves it to this dialog's first control. It must also land before the next frame, when that dialog's
+ * deferred opening focus fires unless focus has moved. An `autoFocus` would not do: after a press without a pointer
+ * react-aria defers it past running transitions and drops it once focus has moved, as the dialog's own refocus moves
+ * it.
+ *
+ * When `target` already holds focus, as a dialog that starts on itself does when its subject changes in place, nothing
+ * would tell a screen reader the subject changed; with `relay`, an element inside the dialog hidden from assistive
+ * technology, focus passes through it and back, so `target` takes focus anew and is read again.
+ *
+ * `target` is called once per showing, right before the move, so it may also prepare the move (the ring of a move the
+ * user did not make).
+ */
+export function useFocusWhenShown(
+  target: () => HTMLElement | null | undefined,
+  enabled: boolean,
+  key: unknown,
+  relay?: React.RefObject<HTMLElement | null>,
+): void {
+  // A new object each time, so the subject counts as shown anew even when `key` is undefined.
+  const [shown, setShown] = useState<object>();
+  useLayoutEffect(() => {
+    if (enabled) setShown({});
+  }, [enabled, key]);
+  useLayoutEffect(() => {
+    if (!shown) return;
+    const element = target();
+    if (!element) return;
+    if (element === document.activeElement) relay?.current?.focus({ preventScroll: true });
+    element.focus();
+  }, [shown]);
+}

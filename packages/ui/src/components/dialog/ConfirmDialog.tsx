@@ -5,7 +5,7 @@ import type { AcknowledgementView } from "../alerts/errorAlerts";
 import { Message, useCurrentLanguage, useT } from "../../i18n/react";
 import type { ErrorRecovery } from "../../errors/errorRecovery";
 import { Dialog } from "./Dialog";
-import { useDialogAction, useFocusLeavingWhenDisabled } from "./dialogHooks";
+import { useDialogAction, useFocusWhenShown, useFocusLeavingWhenDisabled } from "./dialogHooks";
 import { dialogAround } from "./dialogElement";
 import { useTrimmedField } from "../form/useTrimmedField";
 import { Button, Input, Label, ModalStatusIcon, TextField } from "../../primitives";
@@ -101,22 +101,10 @@ export function ConfirmDialog({
   const word = typeToConfirm?.toLocaleUpperCase(language);
   const confirmed = !confirmDisabled && (word === undefined || typed.toLocaleUpperCase(language) === word);
 
-  // An unprompted question puts focus on itself at mount and for each new subject, from a layout effect, so focus has
-  // moved before the new subject is painted and before a repeated Enter can land on Confirm. It is the layout effect of
-  // the render after the one that mounted it or changed its subject, as `focusesItselfOnOpen` on its `Dialog` sets out:
-  // react-aria turns the modal's focus containment on from a layout effect at mount, which forces a render. A dialog
-  // underneath that holds no focused element of its own yet (one opened by a press without a pointer, whose opening
-  // focus react-aria defers a frame) treats focus that lands before that as escaping its containment and moves it to the
-  // question's first control, its Close button, where Enter would refuse the request or dismiss the prompt.
+  // An unprompted question puts focus on itself at mount and for each new subject, so an Enter typed elsewhere, or
+  // repeated from the press that answered the previous question, cannot land on Confirm.
   const confirmRef = useRef<HTMLButtonElement>(null);
-  // A new object each time, so the subject counts as shown anew even when `resetKey` is undefined.
-  const [shownSubject, setShownSubject] = useState<object>();
-  useLayoutEffect(() => {
-    if (unprompted) setShownSubject({});
-  }, [resetKey]);
-  useLayoutEffect(() => {
-    if (shownSubject) dialogAround(confirmRef)?.focus();
-  }, [shownSubject]);
+  useFocusWhenShown(() => dialogAround(confirmRef), unprompted === true, resetKey);
 
   // Confirm held while the dialog is open (a refusal that arrives under it) hands its focus to Cancel,
   // or to the dialog when there is none.

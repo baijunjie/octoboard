@@ -1,22 +1,22 @@
 // @vitest-environment jsdom
-import { act, useState } from "react";
+import { act, StrictMode, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { expect, it, onTestFinished, vi } from "vitest";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
 
-import { fakeTimers } from "../../test/clock";
-import { errorAlerts } from "../alerts/errorAlerts";
+import { fakeTimers, runOutTimers } from "../../test/clock";
+import { errorAlerts, type AcknowledgementView } from "../alerts/errorAlerts";
 import { currentLanguage, setLanguage } from "../../i18n/language";
 import { DaemonProvider } from "../../store";
 import { testDaemon } from "../../test/testDaemon";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { Dialog } from "./Dialog";
-import { framesAsTimers, settleFrames, trackMountRefocus, withModality } from "./dialogTestSupport";
+import { failureOf, framesAsTimers, openable, settleFrames, trackMountRefocus, withModality } from "./dialogTestSupport";
 import { Checkbox } from "../../primitives";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /** Renders a confirmation and takes it down when the test finishes. */
-function mount(props: { errorTitle?: string; onConfirm?: () => Promise<void>; destructive?: boolean; typeToConfirm?: string; hideCancel?: boolean; confirmDisabled?: boolean; subject?: React.ReactNode; message?: string }): void {
+function mount(props: { errorTitle?: string; onConfirm?: () => Promise<void>; destructive?: boolean; typeToConfirm?: string; hideCancel?: boolean; confirmDisabled?: boolean; subject?: React.ReactNode; message?: string; unprompted?: boolean; failure?: AcknowledgementView; onCancel?: () => void }): void {
   // A previous test's script click leaves virtual modality, which defers react-aria's opening focus to a frame.
   withModality("pointer");
   fakeTimers();
@@ -30,7 +30,7 @@ function mount(props: { errorTitle?: string; onConfirm?: () => Promise<void>; de
     root.render(
       <DaemonProvider value={testDaemon()}>
         <ConfirmDialog title="Archive" message="Archive it?" confirmLabel="Archive" errorTitle="Could not archive" onConfirm={async () => {}} {...props}
-          onCancel={() => {}} />
+          onCancel={props.onCancel ?? (() => {})} />
       </DaemonProvider>,
     );
   });
@@ -47,6 +47,105 @@ it.each([
 ])("starts focus in the right place for %s", (_name, props, focused) => {
   mount(props);
   expect(document.activeElement?.matches(focused)).toBe(true);
+});
+
+// An unprompted question (a session request whose target was archived) keeps its start on the dialog in its failure
+// form, so an Enter typed elsewhere does not acknowledge it; an ordinary confirmation's failure form starts on OK.
+it.each([
+  [true, "[role=alertdialog]", 0],
+  [false, "button", 1],
+])("with unprompted %s, its failure form starts on %s and an immediate Enter closes it %s times", (unprompted, focused, closes) => {
+  const onCancel = vi.fn();
+  mount({ unprompted, failure: failureOf("Gone."), onCancel });
+  runOutTimers();
+  const active = document.activeElement!;
+  expect(active.matches(focused)).toBe(true);
+  if (!unprompted) expect(active.textContent).toBe("OK");
+  act(() => {
+    active.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    active.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", bubbles: true, cancelable: true }));
+  });
+  expect(onCancel).toHaveBeenCalledTimes(closes);
+});
+
+/** An unprompted question that opens already failed, over a dialog that a press without a pointer opened, with focus
+ * left on the control that opened it. `raise` shows the question, and `open`, with `deferred`, the dialog under it, for
+ * a test to call both in one update, the way a question pushed in the task of the press does. Each frame comes as a 0
+ * ms timer, so it runs ahead of any timer set after it was asked for, as a browser may render one before the next timer
+ * task. `strict` mounts it all in `StrictMode`, as the app and the gallery are. */
+function mountFailedQuestionOverVirtuallyOpenedDialog(strict: boolean, deferred = false): { raise: () => void; open: () => void } {
+  framesAsTimers();
+  const opener = document.body.appendChild(document.createElement("button"));
+  onTestFinished(() => { opener.remove(); });
+  opener.focus();
+  const { element, open } = openable(<Dialog title="Edit project" onClose={() => {}} submitLabel="Save" onSubmit={() => {}}><input aria-label="Name" /></Dialog>, deferred);
+  let raise = (): void => {};
+  function Host() {
+    // The question comes up a commit after what raised it, as the window's questions and alerts do, so that it is not
+    // mounted in the commit of the dialog under it, whose own modal then would hide it.
+    const [asked, setAsked] = useState(false);
+    const [raised, setRaised] = useState(false);
+    raise = () => setAsked(true);
+    useEffect(() => { if (asked) setRaised(true); }, [asked]);
+    return (
+      <DaemonProvider value={testDaemon()}>
+        {element}
+        {raised && <ConfirmDialog unprompted failure={failureOf("Gone.")} title="Start" message="Start it?" confirmLabel="Start" errorTitle="Could not start" onConfirm={async () => {}} onCancel={() => {}} />}
+      </DaemonProvider>
+    );
+  }
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  act(() => root.render(strict ? <StrictMode><Host /></StrictMode> : <Host />));
+  return { raise: () => raise(), open };
+}
+
+const failedQuestionHoldsFocus = () => {
+  const question = document.querySelector<HTMLElement>('[role="alertdialog"]')!;
+  expect(question.textContent).toContain("Gone.");
+  expect(question.closest('[aria-hidden="true"], [inert]')).toBeNull();
+  expect(document.activeElement).toBe(question);
+};
+
+// Focusing the failure form as it mounts, before react-aria turns its containment on, makes the dialog underneath,
+// which holds no focus of its own yet, move focus to the form's first control, its OK button, where Enter would
+// acknowledge it.
+describe.each([{ strict: false }, { strict: true }])("an unprompted question that opened already failed over a dialog opened without a pointer (StrictMode: $strict)", ({ strict }) => {
+  it("ends on itself, not on OK", async () => {
+    const { raise } = mountFailedQuestionOverVirtuallyOpenedDialog(strict);
+    act(() => raise());
+    await settleFrames();
+    failedQuestionHoldsFocus();
+  });
+
+  it("ends on itself when raised in the same task as the press that opens the dialog", async () => {
+    const { raise, open } = mountFailedQuestionOverVirtuallyOpenedDialog(strict, true);
+    act(() => {
+      open();
+      raise();
+    });
+    await settleFrames();
+    failedQuestionHoldsFocus();
+  });
+
+  // react-aria's dialog takes focus off itself half a second after it opens, when focus was not inside it as it
+  // mounted, and puts it back once no transition is running on the page. A transition that never reports its end leaves
+  // focus on the page body until it ends.
+  it("keeps focus on itself while a transition underneath never ends", async () => {
+    const { raise } = mountFailedQuestionOverVirtuallyOpenedDialog(strict);
+    const name = document.querySelector('input[aria-label="Name"]')!;
+    name.dispatchEvent(Object.assign(new Event("transitionrun", { bubbles: true }), { propertyName: "translate" }));
+    act(() => raise());
+    const pastMountRefocus = trackMountRefocus();
+    await settleFrames();
+    await pastMountRefocus();
+    await settleFrames();
+    failedQuestionHoldsFocus();
+  });
 });
 
 it("shows the localized confirmation example and keeps the literal and editable value LTR", () => {

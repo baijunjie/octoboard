@@ -2,16 +2,17 @@
 import { act, StrictMode, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { setInteractionModality } from "react-aria";
-import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
+import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
+import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { DaemonProvider } from "../../store";
 import { testDaemon } from "../../test/testDaemon";
 import { errorAlerts, type AcknowledgementView } from "../alerts/errorAlerts";
-import { ActionableError } from "../../errors/actionableError";
 import { CodedError } from "../../errors/codedError";
+import { MODAL_CLOSE_SETTLE_MS, setFocusAfterModalLoss } from "../focus/modalFocus";
 import { Dialog } from "./Dialog";
 import { useDialogAction } from "./dialogHooks";
-import { framesAsTimers, settleFrames } from "./dialogTestSupport";
+import { failureOf, framesAsTimers, settleFrames, trackMountRefocus, withModality } from "./dialogTestSupport";
 import { fakeTimers, runOutTimers } from "../../test/clock";
 import { TextInput } from "../form/TextInput";
 import { TitledControl } from "../hint/TitledControl";
@@ -820,14 +821,7 @@ it("turns into a failure modal in place: danger icon, title, explanation, detail
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   const onClose = vi.fn();
-  const failure: AcknowledgementView = {
-    ...errorAlerts.view({
-      message: "Gone.",
-      error: new ActionableError("Gone.", "none"),
-      details: <code>raw detail</code>,
-    }),
-    classification: { kind: "actionable", recovery: "none" },
-  };
+  const failure = failureOf("Gone.", <code>raw detail</code>);
   const render = (withFailure: boolean) => act(() => {
     root.render(
       <DaemonProvider value={testDaemon()}>
@@ -870,6 +864,262 @@ it("turns into a failure modal in place: danger icon, title, explanation, detail
     act(() => root.unmount());
     container.remove();
   }
+});
+
+/** Renders a dialog with a field that may turn into its failure form, on a fake clock started before mounting.
+ * `show` renders it again with the given failure (or none); the dialog is unmounted when the test finishes. */
+function mountFailable(options: { focusesItselfOnOpen: boolean; failure?: AcknowledgementView; onClose?: () => void }) {
+  fakeTimers();
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  const show = (failure?: AcknowledgementView, resetKey?: string) => act(() => {
+    root.render(
+      <DaemonProvider value={testDaemon()}>
+        <Dialog title="Rename" onClose={options.onClose ?? (() => {})} submitLabel="Save" onSubmit={() => {}} focusesItselfOnOpen={options.focusesItselfOnOpen} failure={failure} resetKey={resetKey}>
+          <input aria-label="Name" />
+        </Dialog>
+      </DaemonProvider>,
+    );
+  });
+  show(options.failure);
+  return { show };
+}
+
+const alertDialog = () => document.querySelector<HTMLElement>("[role=alertdialog]")!;
+const closeButton = () => alertDialog().querySelector<HTMLButtonElement>('button[aria-label="Close"]')!;
+const okButton = () => [...alertDialog().querySelectorAll("button")].find((button) => button.textContent === "OK")!;
+/** An Enter typed on whatever holds focus, as a key press and release. */
+const typeEnter = () => act(() => {
+  const target = document.activeElement ?? document.body;
+  target.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+  target.dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", bubbles: true, cancelable: true }));
+});
+
+// A question the user did not ask for starts on the dialog itself, so an Enter typed elsewhere does nothing; that holds
+// for its failure form too, while any other dialog's failure form opens on OK.
+it.each([
+  [true, "starts on the dialog itself and ignores an Enter typed right away"],
+  [false, "starts on OK, which an Enter acknowledges"],
+])("with focusesItselfOnOpen %s, a dialog that opens already failed %s", (focusesItselfOnOpen) => {
+  const onClose = vi.fn();
+  mountFailable({ focusesItselfOnOpen, failure: failureOf("Gone."), onClose });
+  runOutTimers();
+  // The close button comes before OK, so the dialog itself is not simply the first control of an unprompted form.
+  expect(closeButton()).not.toBeNull();
+  expect(document.activeElement).toBe(focusesItselfOnOpen ? alertDialog() : okButton());
+  typeEnter();
+  expect(onClose).toHaveBeenCalledTimes(focusesItselfOnOpen ? 0 : 1);
+});
+
+it("moves focus from a field to the dialog itself, not OK, when an unprompted dialog turns into its failure form", () => {
+  const onClose = vi.fn();
+  const { show } = mountFailable({ focusesItselfOnOpen: true, onClose });
+  runOutTimers();
+  act(() => document.querySelector<HTMLElement>('input[aria-label="Name"]')!.focus());
+  show(failureOf("Gone."));
+  runOutTimers();
+  expect(document.activeElement).toBe(alertDialog());
+  typeEnter();
+  expect(onClose).not.toHaveBeenCalled();
+});
+
+it("puts focus on OK when an ordinary dialog turns into its failure form", () => {
+  const { show } = mountFailable({ focusesItselfOnOpen: false });
+  runOutTimers();
+  act(() => document.querySelector<HTMLElement>('input[aria-label="Name"]')!.focus());
+  show(failureOf("Gone."));
+  runOutTimers();
+  expect(document.activeElement).toBe(okButton());
+});
+
+it("returns focus to the dialog itself when an unprompted failure form changes to another failure", () => {
+  const onClose = vi.fn();
+  const { show } = mountFailable({ focusesItselfOnOpen: true, failure: failureOf("Gone."), onClose });
+  runOutTimers();
+  act(() => okButton().focus());
+  show(failureOf("Gone for another reason."));
+  runOutTimers();
+  expect(alertDialog().textContent).toContain("Gone for another reason.");
+  expect(document.activeElement).toBe(alertDialog());
+  typeEnter();
+  expect(onClose).not.toHaveBeenCalled();
+});
+
+// A queued question that has failed too, shown once the previous one is gone, is a new subject: it starts on the dialog
+// again even when its failure reads the same, so the Enter that acknowledged the previous one cannot repeat onto OK.
+it("returns focus to the dialog itself when an unprompted failure form moves on to another subject with the same failure", () => {
+  const onClose = vi.fn();
+  const { show } = mountFailable({ focusesItselfOnOpen: true, onClose });
+  show(failureOf("Gone."), "first");
+  runOutTimers();
+  act(() => okButton().focus());
+  show(failureOf("Gone."), "second");
+  runOutTimers();
+  expect(document.activeElement).toBe(alertDialog());
+  typeEnter();
+  expect(onClose).not.toHaveBeenCalled();
+});
+
+// An unprompted failure form that appears while focus is already on the dialog (it turned failed in place, or moved on
+// to another queued subject) passes focus through a hidden element inside the dialog and back, so the dialog is focused
+// anew and a screen reader reads it again; nothing else would tell it the subject changed.
+it.each([
+  ["turns failed in place", (show: (failure?: AcknowledgementView, resetKey?: string) => void) => show(failureOf("Gone."), "one"), undefined],
+  ["moves on to another queued subject", (show: (failure?: AcknowledgementView, resetKey?: string) => void) => show(failureOf("Gone."), "two"), failureOf("Gone.")],
+])("focuses the dialog anew, without Enter acting, when an unprompted dialog already focused %s", (_case, change, before) => {
+  const onClose = vi.fn();
+  const { show } = mountFailable({ focusesItselfOnOpen: true, onClose });
+  if (before) show(before, "one");
+  runOutTimers();
+  act(() => document.querySelector<HTMLElement>("[role=dialog], [role=alertdialog]")!.focus());
+  const dialog = document.querySelector<HTMLElement>("[role=dialog], [role=alertdialog]")!;
+  expect(document.activeElement).toBe(dialog);
+  let focused = 0;
+  const count = (event: FocusEvent) => { if (event.target === dialog) focused += 1; };
+  dialog.addEventListener("focusin", count);
+  onTestFinished(() => dialog.removeEventListener("focusin", count));
+  change(show);
+  runOutTimers();
+  expect(document.querySelector("[role=alertdialog]")).toBe(dialog);
+  expect(focused).toBe(1);
+  expect(document.activeElement).toBe(dialog);
+  typeEnter();
+  expect(onClose).not.toHaveBeenCalled();
+});
+
+// OK taking focus in a dialog that a failure turned up in, or that moved on to another failed subject, is a move the
+// user did not make, so its ring follows the last input: after a key it shows, after a mouse press it does not. As the
+// dialog opens already failed it is the opening focus, whose ring follows react-aria's modality, not the last input.
+// The modality is put back to `pointer` after the input, as a screen reader's virtual press leaves it, so only the ring
+// rule could set it, and it is read as focus arrives, before anything else of react-aria's resets it.
+it.each([
+  ["turns failed while open", "key", true],
+  ["turns failed while open", "mouse", false],
+  ["moves on to another failed subject", "key", true],
+  ["opens already failed", "key", false],
+] as const)("when it %s after a %s, OK has focus and its ring is %s", (scenario, input, ringed) => {
+  withModality(input === "key" ? "keyboard" : "pointer");
+  act(() => setInteractionModality("pointer"));
+  let modalityAtFocus: ReturnType<typeof getInteractionModality>;
+  const record = (event: FocusEvent) => {
+    if ((event.target as HTMLElement).textContent === "OK") modalityAtFocus = getInteractionModality();
+  };
+  window.addEventListener("focusin", record, true);
+  onTestFinished(() => window.removeEventListener("focusin", record, true));
+  const { show } = mountFailable({ focusesItselfOnOpen: false, failure: scenario === "opens already failed" ? failureOf("Gone.") : undefined });
+  if (scenario === "moves on to another failed subject") {
+    show(failureOf("Gone."), "first");
+    runOutTimers();
+    act(() => (document.activeElement as HTMLElement).blur());
+  }
+  runOutTimers();
+  act(() => setInteractionModality("pointer"));
+  if (scenario === "turns failed while open") show(failureOf("Gone."));
+  if (scenario === "moves on to another failed subject") show(failureOf("Gone."), "second");
+  runOutTimers();
+  const ok = okButton();
+  expect(document.activeElement).toBe(ok);
+  expect(modalityAtFocus!).toBe(ringed ? "keyboard" : "pointer");
+  expect(ok.hasAttribute("data-focus-visible")).toBe(ringed);
+});
+
+// react-aria puts off a button's `autoFocus` after a press without a pointer, and the frame's own refocus then moves
+// focus to the dialog, so a failure form that relied on it ended on the dialog. It focuses OK itself, from a layout
+// effect.
+describe.each([{ strict: false }, { strict: true }])("an ordinary dialog opened without a pointer (StrictMode: $strict)", ({ strict }) => {
+  it.each([
+    ["turns failed while open", false],
+    ["opens already failed", true],
+  ])("puts focus on OK when it %s", async (_case, failedAtOpen) => {
+    framesAsTimers();
+    const opener = document.body.appendChild(document.createElement("button"));
+    onTestFinished(() => { opener.remove(); });
+    opener.focus();
+    const container = document.body.appendChild(document.createElement("div"));
+    const root = createRoot(container);
+    onTestFinished(() => {
+      act(() => root.unmount());
+      container.remove();
+    });
+    const show = (failure?: AcknowledgementView) => act(() => {
+      const tree = (
+        <DaemonProvider value={testDaemon()}>
+          <Dialog title="Rename" onClose={() => {}} submitLabel="Save" onSubmit={() => {}} failure={failure}>
+            <input aria-label="Name" />
+          </Dialog>
+        </DaemonProvider>
+      );
+      root.render(strict ? <StrictMode>{tree}</StrictMode> : tree);
+    });
+    show(failedAtOpen ? failureOf("Gone.") : undefined);
+    const pastMountRefocus = trackMountRefocus();
+    await settleFrames();
+    if (!failedAtOpen) {
+      // Focus on a field that the failure form takes away falls to `<body>`, where the frame's refocus acts.
+      act(() => document.querySelector<HTMLElement>('input[aria-label="Name"]')!.focus());
+      show(failureOf("Gone."));
+    }
+    await settleFrames();
+    // Past react-aria's half-second refocus of a dialog that mounted with focus outside it.
+    await pastMountRefocus();
+    await settleFrames();
+    const ok = [...document.querySelectorAll<HTMLButtonElement>("[role=alertdialog] button")].find((button) => button.textContent === "OK")!;
+    expect(ok.closest('[aria-hidden="true"], [inert]')).toBeNull();
+    expect(document.activeElement).toBe(ok);
+  });
+});
+
+// A failure that ends the dialog's purpose often takes the control that opened the dialog with it, so react-aria's
+// restore finds nothing and leaves focus on `<body>`; acknowledging the failure form hands that on to the window.
+/** Mounts a failed dialog that goes away when acknowledged, over a control that may hold focus after it, and
+ * registers `fallback` as the window's fallback for focus left on `<body>`. */
+function acknowledgeFailure(fallback: () => void, onClose: () => void, by: "OK" | "Close" = "OK") {
+  onTestFinished(setFocusAfterModalLoss(fallback));
+  function Host() {
+    const [open, setOpen] = useState(true);
+    return (
+      <>
+        <button type="button">Elsewhere</button>
+        {open && <Dialog title="Rename" onClose={() => { onClose(); setOpen(false); }} focusesItselfOnOpen submitLabel="Save" onSubmit={() => {}} failure={failureOf("Gone.")}><span>body</span></Dialog>}
+      </>
+    );
+  }
+  fakeTimers();
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  act(() => root.render(<DaemonProvider value={testDaemon()}><Host /></DaemonProvider>));
+  runOutTimers();
+  act(() => (by === "OK" ? okButton() : closeButton()).click());
+}
+
+it.each(["OK", "Close"] as const)("hands focus to the window's fallback after acknowledging the failure form with %s when focus is left on the page body", (by) => {
+  const fallback = vi.fn();
+  const onClose = vi.fn();
+  acknowledgeFailure(fallback, onClose, by);
+  expect(onClose).toHaveBeenCalledOnce();
+  expect(document.querySelector("[role=alertdialog]")).toBeNull();
+  (document.activeElement as HTMLElement | null)?.blur();
+  expect(fallback).not.toHaveBeenCalled();
+  act(() => void vi.advanceTimersByTime(MODAL_CLOSE_SETTLE_MS));
+  expect(fallback).toHaveBeenCalledOnce();
+});
+
+it("leaves focus where it landed after acknowledging the failure form, handing nothing to the fallback", () => {
+  const fallback = vi.fn();
+  acknowledgeFailure(fallback, () => {});
+  const elsewhere = [...document.querySelectorAll("button")].find((button) => button.textContent === "Elsewhere")!;
+  act(() => elsewhere.focus());
+  act(() => void vi.advanceTimersByTime(MODAL_CLOSE_SETTLE_MS));
+  expect(document.activeElement).toBe(elsewhere);
+  expect(fallback).not.toHaveBeenCalled();
 });
 
 it("sets the foreground colour on the body of every frame, so prose does not inherit HeroUI's muted grey", () => {

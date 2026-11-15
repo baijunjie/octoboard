@@ -51,7 +51,8 @@ A confirmation opens with keyboard focus on its confirm button, so Enter confirm
   `docs/product/session-requests.md`) — opens with focus on the dialog itself as well, and focus is put back on the
   dialog each time it moves on to the next waiting question, so an Enter held past one answer does not answer the next;
   not while a dialog opened after it covers it (see "Where a question the user did not ask for stands among other
-  dialogs" below).
+  dialogs" below). Its failure modal starts on the dialog too (see "The failure modal" in
+  `docs/product/error-alerts.md`).
 
 ## Where a question the user did not ask for stands among other dialogs
 

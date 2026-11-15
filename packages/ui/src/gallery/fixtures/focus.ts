@@ -716,7 +716,7 @@ export const focusScenarios: Scenario[] = [
     title: "New session from console focus, the console session archived meanwhile",
     state: { ...state, sessions: new Map([...state.sessions!].map(([id, session]) => [id, id === hub1.id ? { ...session, title: "Release coordinator مرحبا 東京 UnbrokenOwnerNameForProductionCompatibilityReview", terminal_title: "Review release readiness مرحبا 東京" } : session])) },
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
-    description: "The fixed console session was archived from another window while New session was open. The dialog itself turns into a failure modal: a danger icon in the header, the title Cannot open a session, a sentence naming the unavailable owner, and OK as its only footer button, with a close button in the header that does what OK does (Escape and a click outside do nothing). Dismissing it returns focus to the available sidebar controls.",
+    description: "The fixed console session was archived from another window while New session was open. The dialog itself turns into a failure modal: a danger icon in the header, the title Cannot open a session, a sentence naming the unavailable owner, and OK as its only footer button, which takes focus, with a close button in the header that does what OK does (Escape and a click outside do nothing). The focus view and its New session went with the archived session, so OK hands focus to the sidebar's first control, New console session, rather than leaving it on the page.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.focus.newSession")),
       (ui) => ui.press(third.name),

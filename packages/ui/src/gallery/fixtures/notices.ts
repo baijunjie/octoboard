@@ -426,7 +426,7 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "exceptional",
     title: "Request to switch a session that was archived",
-    description: "The session to switch was archived while the request waited. The dialog itself turns into a failure modal: a danger icon in the header, the title Cannot switch the account, a sentence saying an archived session cannot be switched, and OK as its only footer button, which refuses the request; the close button in the header does the same, and Escape and a click outside do nothing.",
+    description: "The session to switch was archived while the request waited. The dialog itself turns into a failure modal: a danger icon in the header, the title Cannot switch the account, a sentence saying an archived session cannot be switched, and OK as its only footer button, which refuses the request; the close button in the header does the same, and Escape and a click outside do nothing. Like any question the user did not ask for, it opens with focus on the dialog itself, not on OK or the close button.",
     state: moveState(switchRequestTo("a-personal"), { target: archivedOwnedSession }),
   },
   {

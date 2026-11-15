@@ -4,7 +4,9 @@ import { setInteractionModality } from "react-aria";
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { act, createElement, useState } from "react";
 import { onTestFinished, vi } from "vitest";
+import { ActionableError } from "../../errors/actionableError";
 import { FAKE_FRAME_MS, flushPromises, framesFaked } from "../../test/clock";
+import { errorAlerts, type AcknowledgementView } from "../alerts/errorAlerts";
 
 /** Sends the input behind react-aria's `keyboard` or `pointer` modality (a hardware key, a mouse press) and sets the
  * modality, so a focus move nobody asked for, which follows the last input (`ringForAutomaticFocus`), does not depend
@@ -135,4 +137,13 @@ export function framesHeld(): void {
   vi.stubGlobal("requestAnimationFrame", () => 0);
   vi.stubGlobal("cancelAnimationFrame", () => {});
   onTestFinished(() => { vi.unstubAllGlobals(); });
+}
+
+/** A failure that ends a dialog's purpose (`Dialog`'s `failure`), worded by `message`, with `details` behind its
+ * "Error details" where given. */
+export function failureOf(message: string, details?: React.ReactNode): AcknowledgementView {
+  return {
+    ...errorAlerts.view({ message, error: new ActionableError(message, "none"), details }),
+    classification: { kind: "actionable", recovery: "none" },
+  };
 }
