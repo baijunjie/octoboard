@@ -98,9 +98,9 @@ Settings opens from:
 - the **Manage accounts** button in the rail's account quota panel, which closes the panel and opens it on the Agent
   accounts section (see `docs/product/account-quota-panel.md`);
 - the **Add agent** button of the "No agent added" states — the terminal's empty panel (see "A console with nothing
-  in it" in `docs/product/session-terminal.md`) and the rail's account quota panel, which it closes first — which
-  opens it on the Agent accounts section with the Add agent dialog in front (see "Adding an agent" in
-  `docs/product/agent-accounts.md`);
+  in it" in `docs/product/session-terminal-with-no-session-selected.md`) and the rail's account quota panel, which it
+  closes first — which opens it on the Agent accounts section with the Add agent dialog in front (see "Adding an agent"
+  in `docs/product/agent-accounts.md`);
 - an error alert's **Add agent** or **Manage accounts** button, which acknowledges the alert and opens it the same
   way, above whatever dialog is open (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`).
 

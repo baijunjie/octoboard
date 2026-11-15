@@ -143,8 +143,9 @@ told of their display or focus; the next daemon takes the clients' size when the
 daemon parts from the holders, the answers to the queries in the output it read before the handover, its own and those
 it left to the clients, still go into the program. Typing into a terminal once it is handed over is dropped: every
 client is sent the error `daemon_shutting_down`, with no request id and no params, once for each terminal connection the
-typing came over, in place of `terminal_input_lost` (see "Reconnecting" in `docs/product/session-terminal.md`), and the
-window shows it as an error alert. A paste the handover cut part-way is lost typing, reported as `terminal_input_lost`.
+typing came over, in place of `terminal_input_lost` (see "Reconnecting" in
+`docs/product/session-terminal-reconnecting-and-loading.md`), and the window shows it as an error alert. A paste the
+handover cut part-way is lost typing, reported as `terminal_input_lost`.
 
 The daemon removes `octoboardd.port`, `daemon.owner` and `daemon.key` as it exits, as on any stop.
 

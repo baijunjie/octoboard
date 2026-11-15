@@ -2,11 +2,11 @@
 
 What the terminal's area shows for an archived session: a read-only **Session history** of what was said in it, read
 from the agent's own conversation record, so the user can recall what the session was about. It stands in for the
-terminal; the way back to the session's terminal is reopening it. The terminal itself, and the floating bar that
-offers Reopen, are in "Interrupted and archived sessions" in `docs/product/session-terminal.md`; reopening is
-in "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`. Sessions read the same
-record, of any session, with `read_session_history` (see "Reading a session's history" in
-`docs/product/what-every-session-reads.md`).
+terminal; the way back to the session's terminal is reopening it. The terminal itself is in "An archived session", and
+the floating bar that offers Reopen in "Resuming on selection, and the card", both in
+`docs/product/session-terminal-interrupted-and-archived-sessions.md`; reopening is in "Archiving, interruption and
+resuming" in `docs/product/archiving-and-resuming-sessions.md`. Sessions read the same record, of any session, with
+`read_session_history` (see "Reading a session's history" in `docs/product/what-every-session-reads.md`).
 
 ## When the history is shown
 
@@ -16,8 +16,9 @@ record, of any session, with `read_session_history` (see "Reading a session's hi
 - **The terminal underneath is out of reach**: nothing typed or pasted goes anywhere, there is no editing menu, and
   typing does not reopen the session. Its saved terminal screen is not shown.
 - **While a reopen is under way** the loading state covers the history (see "Loading" in
-  `docs/product/session-terminal.md`), and the history cannot be reached. A reopen that succeeds shows the session's
-  live terminal; one that is refused leaves the session archived, with its history shown again.
+  `docs/product/session-terminal-reconnecting-and-loading.md`), and the history cannot be reached. A reopen that
+  succeeds shows the session's live terminal; one that is refused leaves the session archived, with its history shown
+  again.
 - **The history is read afresh each time it is shown**, from the agent's record as it is then; nothing is kept between
   showings, and nothing is written to the agent's record.
 
@@ -154,5 +155,5 @@ a key, and not after a pointer press. Where nothing there can take focus, such a
 account (see `docs/product/switching-session-accounts.md`), focus goes to the top bar's first enabled control, its focus
 ring showing only when the last input was a key. Selecting no session from the history, or the selected session's record
 going away by itself, hands focus on as the session going away from a live terminal does (see "With no session selected"
-in `docs/product/session-terminal.md`). While the archive view is open, the history cannot hold focus at all (see "The
-archive view" in `docs/product/archive-view.md`).
+in `docs/product/session-terminal-with-no-session-selected.md`). While the archive view is open, the history cannot hold
+focus at all (see "The archive view" in `docs/product/archive-view.md`).

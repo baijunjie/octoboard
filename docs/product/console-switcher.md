@@ -65,8 +65,8 @@ switches the whole window to that console, not only the sidebar:
   interrupted session is shown without being resumed, and an archived one is shown still archived, not reopened (see
   "Selecting a session" in `docs/product/sidebar.md` for what selecting does instead). With no session remembered for
   the console, or with the remembered one no longer existing, nothing is selected, and the terminal's area shows its
-  empty state for that console (see "With no session selected" in `docs/product/session-terminal.md`); a console just
-  created always shows that.
+  empty state for that console (see "With no session selected" in
+  `docs/product/session-terminal-with-no-session-selected.md`); a console just created always shows that.
 - **The right pane goes to that session's own owner** — a console session with its report panel, a project session's
   project with its Files panel — and with nothing selected there is no right pane (see "What the right pane shows" in
   `docs/product/window-layout.md`).

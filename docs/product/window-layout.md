@@ -96,10 +96,10 @@ in the layout takes the soft one.** The panel cards — the floating sidebar (se
 in `docs/product/pane-docking.md` and "When the sidebar cannot dock" in `docs/product/sidebar-drawer.md`), and the
 right pane's cards, docked and floating alike (see "The panel cards" in `docs/product/right-pane-panels.md`) — have
 the hairline edge and a light card shadow, short and faint. Whatever else floats over the content, such as the
-notice floating over the terminal (see "Interrupted and archived sessions" in `docs/product/session-terminal.md`),
-casts a large elevation shadow. A card lying in the layout, such as a focus mode's session card (see "What both
-views show" in `docs/product/focus-mode.md`), has no outline and is set apart by the same soft shadow as the content
-panel's edges.
+notice floating over the terminal (see "Resuming on selection, and the card" in
+`docs/product/session-terminal-interrupted-and-archived-sessions.md`), casts a large elevation shadow. A card lying in
+the layout, such as a focus mode's session card (see "What both views show" in `docs/product/focus-mode.md`), has no
+outline and is set apart by the same soft shadow as the content panel's edges.
 
 **The sidebar and the right pane share one horizontal inset**, docked or floating alike: a
 header, a bar, a section heading, a notice or a row's content starts **16 px** from the pane's edge, and a row's hover
@@ -232,22 +232,21 @@ It runs, left to right:
   session title* for a console session, which belongs to no project — followed by the session's status icon. The
   session title follows "Displayed names" in `docs/product/session-titles.md`. Nothing in the bar reports the
   session's terminal connection; the terminal itself does (see "Reconnecting" in
-  `docs/product/session-terminal.md`). While the sidebar is docked and shown, the breadcrumb starts where the
-  terminal's area does, over the sidebar's inner edge, and follows that edge while the sidebar is resized and while
-  the docked column eases open or closed (see "Hiding the sidebar" in `docs/product/pane-docking.md`). The start of
-  the bar never becomes narrower than the buttons there — in the macOS application, that includes the clear space
-  kept for the window buttons. Once the column no longer reaches past that start, the breadcrumb stays beside the
+  `docs/product/session-terminal-reconnecting-and-loading.md`). While the sidebar is docked and shown, the breadcrumb
+  starts where the terminal's area does, over the sidebar's inner edge, and follows that edge while the sidebar is
+  resized and while the docked column eases open or closed (see "Hiding the sidebar" in `docs/product/pane-docking.md`).
+  The start of the bar never becomes narrower than the buttons there — in the macOS application, that includes the clear
+  space kept for the window buttons. Once the column no longer reaches past that start, the breadcrumb stays beside the
   sidebar toggle, which is also where it sits while the sidebar is hidden. While the sidebar floats it starts right
-  after the sidebar toggle as well. Its end mirrors this: while the right pane is docked, the breadcrumb's space
-  ends where the right pane does, rather than running on over it, and follows the pane's edge while it is resized.
-  The end of the bar never becomes narrower than the toggles there, so once the pane no longer reaches past them,
-  and while the right pane is not docked — not shown, or a floating group or a mobile panel — the breadcrumb's space
-  runs on to the toggles, or to the bar's end where there are none. A trail too long for its space fades out at its
-  right edge, as in "Names too long for their space" in `docs/product/labels-and-tooltips.md`, and the status icon
-  always stays visible. With no session selected there is no breadcrumb. While the archive view is open (see "The
-  archive view" in `docs/product/archive-view.md`) the breadcrumb shows where that is instead, with no status icon:
-  *console › project › Archived sessions*, *console › console session › Archived bound sessions*, or *console ›
-  Archived console sessions*.
+  after the sidebar toggle as well. Its end mirrors this: while the right pane is docked, the breadcrumb's space ends
+  where the right pane does, rather than running on over it, and follows the pane's edge while it is resized. The end of
+  the bar never becomes narrower than the toggles there, so once the pane no longer reaches past them, and while the
+  right pane is not docked — not shown, or a floating group or a mobile panel — the breadcrumb's space runs on to the
+  toggles, or to the bar's end where there are none. A trail too long for its space fades out at its right edge, as in
+  "Names too long for their space" in `docs/product/labels-and-tooltips.md`, and the status icon always stays visible.
+  With no session selected there is no breadcrumb. While the archive view is open (see "The archive view" in
+  `docs/product/archive-view.md`) the breadcrumb shows where that is instead, with no status icon: *console › project ›
+  Archived sessions*, *console › console session › Archived bound sessions*, or *console › Archived console sessions*.
 - At the **end of the bar**, the **panel toggles**: one per kind of panel the right pane's owner has, there only while
   the right pane has an owner (see "What the right pane shows" below), each showing or hiding its panel and so the right
   pane (see "The panel toggles in the top bar" in `docs/product/right-pane-panels.md`). The end is the reading
@@ -406,9 +405,9 @@ switcher" in `docs/product/console-switcher.md`). The project pane's file and ch
 "A row's actions" in `docs/product/project-pane.md`). A report page's fields are input fields and text areas like any
 other.
 
-**The terminal has its own editing menu** in both the desktop app and a browser (see "Copy, paste and selection" in
-`docs/product/session-terminal.md`), and so do the file viewer's code regions and rendered Markdown documents (see
-"Selecting and copying" in `docs/product/file-viewer.md`).
+**The terminal has its own editing menu** in both the desktop app and a browser (see "The editing menu" in
+`docs/product/terminal-copy-paste-and-selection.md`), and so do the file viewer's code regions and rendered Markdown
+documents (see "Selecting and copying" in `docs/product/file-viewer.md`).
 
 **In a browser** the browser's own menu stays everywhere except over the rows, headers and avatars that open an action
 menu, over the terminal, and over the file viewer's text, apart from a link or an image inside a rendered document.

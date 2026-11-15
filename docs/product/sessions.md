@@ -123,5 +123,5 @@ names" in `docs/product/session-titles.md`).
 
 The selected session's terminal — what its area shows with no session selected, typing into it, its output and
 scrollback, reconnecting and loading, an interrupted session's saved preview, links in its output, and what it offers
-while a console has nothing in it — is described in `docs/product/session-terminal.md`; what an archived session shows
-in its place, in `docs/product/session-history.md`.
+while a console has nothing in it — is described in `docs/product/session-terminal.md` and the docs it points to;
+what an archived session shows in its place, in `docs/product/session-history.md`.

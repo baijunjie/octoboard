@@ -107,8 +107,8 @@ While a session is shown as switching:
   The terminal offers no Resume. When the session stops being shown as switching, the cover gives way to whatever the
   terminal would show otherwise, and keyboard focus that was in the terminal when the cover came goes back to it,
   unless it has been put somewhere else meanwhile. While its process cannot be reached, the cover of "While the
-  session's process cannot be reached" in `docs/product/session-terminal.md` takes this cover's place, and this one
-  comes back once the process is reached again with the switch still under way;
+  session's process cannot be reached" in `docs/product/session-terminal-reconnecting-and-loading.md` takes this cover's
+  place, and this one comes back once the process is reached again with the switch still under way;
 - selecting it does not resume it, though it reads *interrupted* while its process is down;
 - archiving it asks for confirmation first;
 - its row's menu disables the other accounts of **Switch account**, **Hand off** and **Unbind** (see "Session rows" in

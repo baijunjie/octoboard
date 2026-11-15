@@ -5,8 +5,8 @@ saves it as a file on the machine the daemon runs on and pastes that file's abso
 system terminal pastes the path of an image file dragged onto it. Claude Code, Codex and Grok Build each take a pasted
 path of an image file as an attached image (`[Image #1]` in their input). Because the agent reads the file, not the
 clipboard, this works for every agent, also when the daemon runs on another machine than the window, and in a browser
-as well as in the desktop app. Pasting text, and the editing menu itself, are described in "Copy, paste and selection"
-in `docs/product/session-terminal.md`.
+as well as in the desktop app. Pasting text, and the editing menu itself, are described in
+`docs/product/terminal-copy-paste-and-selection.md`.
 
 ## Which pastes paste an image
 

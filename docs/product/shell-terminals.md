@@ -16,8 +16,9 @@ panel" in `docs/product/terminal-panel.md`). A terminal otherwise lives on after
 window is closed while the daemon keeps running, and across a lost and restored connection. A client that connects is
 given every shell terminal the daemon holds, running or exited, oldest first,
 and attaching to a running one starts from a first paint of its screen and scrollback before live output follows, the
-same way a session's terminal is attached to (see "Output, scrollback and size" in `docs/product/session-terminal.md`);
-attaching to an exited one is in "When the shell exits on its own" below.
+same way a session's terminal is attached to (see "Attaching and scrollback" in
+`docs/product/terminal-output-scrollback-and-size.md`); attaching to an exited one is in "When the shell exits on its
+own" below.
 
 Shell terminals are live state: they are held in memory, and only the name the user gave one is saved, until the
 terminal is closed or its project removed. A shell terminal's shell runs in a process holder, not in the daemon (see
@@ -110,10 +111,10 @@ reads as busy, as on every host: what cannot be ruled out is asked about.
 A shell that exits by itself (`exit`, a crash) does not take its terminal with it: the terminal stays, marked exited
 and not busy, with its final screen, until it is closed. Attaching to an exited terminal shows a paint of that final
 screen and then ends the attachment; it takes no input. The paint is drawn from the daemon's parsed copy of the
-terminal as a running terminal's first paint is (see "Output, scrollback and size" in
-`docs/product/session-terminal.md`), with the scrollback the client asks for and its wrapped lines joined, so they
-reflow to the client's width. A client attached at the moment the shell exits is let go once the output still waiting
-for it has reached it.
+terminal as a running terminal's first paint is (see "Attaching and scrollback" in
+`docs/product/terminal-output-scrollback-and-size.md`), with the scrollback the client asks for and its wrapped lines
+joined, so they reflow to the client's width. A client attached at the moment the shell exits is let go once the output
+still waiting for it has reached it.
 
 ## Closing a shell terminal
 

@@ -9,14 +9,14 @@ Octoboard decides both from which client was most recently active, not from whic
 does not attach the terminal plays no part in either.
 
 Each client is sent the output at its own pace: one that falls behind holds up neither the program nor the other
-clients (see "Output, scrollback and size" in `docs/product/session-terminal.md`).
+clients (see "Sending output to clients" in `docs/product/terminal-output-scrollback-and-size.md`).
 
 ## The most recently active client
 
 - **A client becomes the most recently active one when it attaches the terminal, and whenever it is used**: input is
   sent from it, or the person turns to its terminal. Input is typing, a paste, a mouse button press. Attaching covers
-  selecting a session, reconnecting and reloading the window, as in "Output, scrollback and size" in
-  `docs/product/session-terminal.md`.
+  selecting a session, reconnecting and reloading the window, as in "Attaching and scrollback" in
+  `docs/product/terminal-output-scrollback-and-size.md`.
 - **The person turns to a client's terminal**, in the desktop app and in a browser, when:
   - the terminal is attached at the user's request (selecting its session, choosing Reconnect) while the user is in its
     window, that is, the window is visible and has focus;
@@ -26,7 +26,7 @@ clients (see "Output, scrollback and size" in `docs/product/session-terminal.md`
     below);
   - the terminal attaches again by itself once its process can be reached again, when keyboard focus was on the cover
     shown meanwhile as that happened, wherever focus then goes (see "While the session's process cannot be reached" in
-    `docs/product/session-terminal.md`).
+    `docs/product/session-terminal-reconnecting-and-loading.md`).
 
   This makes the client the most recently active one with nothing typed. A reconnect made in the background (after a
   dropped connection) and a size change in a window the user is not in do not count as turning to the terminal, and
@@ -48,8 +48,8 @@ clients (see "Output, scrollback and size" in `docs/product/session-terminal.md`
 ## The terminal's size
 
 - **The terminal has the size asked for by the most recently active client that has asked for one.** Each client asks
-  for the size its terminal area fits, on attaching and whenever that area changes (see "Output, scrollback and size"
-  in `docs/product/session-terminal.md`).
+  for the size its terminal area fits, on attaching and whenever that area changes (see "The character grid and its
+  size" in `docs/product/terminal-output-scrollback-and-size.md`).
 - **Octoboard keeps the latest size each attached client asked for.** A size asked for by a client that is not the
   most recently active one waits; it is applied when that client becomes the most recently active one, by being used,
   without the client asking again. A size change made in the window the user is in turns the person to that terminal

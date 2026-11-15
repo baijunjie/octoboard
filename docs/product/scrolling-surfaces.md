@@ -99,8 +99,8 @@ Once it holds more than it can show, each of these fades at its edge:
 
 Three kinds of scrolling show no fade:
 
-- **What scrolls as a document of its own**: the terminal's scrollback (see "Output, scrollback and size" in
-  `docs/product/session-terminal.md`).
+- **What scrolls as a document of its own**: the terminal's scrollback (see "Attaching and scrollback" in
+  `docs/product/terminal-output-scrollback-and-size.md`).
 - **Settings' accounts table**, which scrolls sideways in a narrow window with its actions column pinned at its end
   edge, where a fade would dim that column (see "The accounts table" in `docs/product/agent-accounts.md`).
 - **A menu's or a selector's own list of choices** — an action menu, the account and option selects — which scrolls

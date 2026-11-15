@@ -86,8 +86,8 @@ Every other query reaches every attached client, and each client's terminal answ
 - **Attaching does not answer old queries**: a client attaching (selecting a session, reconnecting, reopening the
   Terminal panel) starts from a first paint of the screen, which asks nothing, and answers only the queries in the
   output that follows it. Such a query asked while no client was attached gets no answer. Likewise, a client that fell
-  so far behind that it was sent a fresh paint in place of the output it missed (see "Output, scrollback and size" in
-  `docs/product/session-terminal.md`) answers none of the queries in that output.
+  so far behind that it was sent a fresh paint in place of the output it missed (see "Sending output to clients" in
+  `docs/product/terminal-output-scrollback-and-size.md`) answers none of the queries in that output.
 - **A client's answer can arrive after Octoboard's answer to a later query**: when a program asks one of these and
   then one Octoboard answers, it reads Octoboard's answer first.
 - **A client showing a read-only screen answers nothing**: an interrupted session's saved preview, a session frozen for

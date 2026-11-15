@@ -13,9 +13,9 @@ opens, is described under "Web addresses" and "File paths" below; the rest holds
 - **A link opens with a primary-button click**, without requiring a modifier key.
 - **Selecting text does not open a link**: a click that leaves a terminal selection, including dragging within a link,
   opens nothing. Other mouse buttons and a Mac's Control-click do not open a link. Right-click and a Mac's Control-click
-  open the editing menu described in "Copy, paste and selection" in `docs/product/session-terminal.md`; on a file path
-  link it offers **Open in file manager** (see "File paths" below), and it has nothing of its own for a web address.
-  Opening a link does not resume an interrupted session or reopen an archived one.
+  open the editing menu described in "The editing menu" in `docs/product/terminal-copy-paste-and-selection.md`; on a
+  file path link it offers **Open in file manager** (see "File paths" below), and it has nothing of its own for a web
+  address. Opening a link does not resume an interrupted session or reopen an archived one.
 - **A scrollbar a full-screen program draws down the terminal's last column is no part of a row's text** — as Grok
   Build draws one when the conversation overflows its view, its thumb a `█`, its track blank cells. A block element
   (U+2580–U+259F, such as `█`, `▐`, `▕`, `▓` or `░`) alone in the terminal's last column, with a blank cell right

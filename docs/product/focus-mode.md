@@ -274,8 +274,9 @@ included; a browser keeps the keys for its own tabs.
 - Where it works, the keys never reach the terminal, so the agent never receives them. It does nothing while a dialog or
   a menu is open, and is left alone during an input-method composition. A key held down moves one chip only.
 - It enters the next console session's focus mode and selects it, like pressing its chip, except that **it does not
-  resume an interrupted console session**: it only shows it, with its "Not running" card (see "Interrupted and archived
-  sessions" in `docs/product/session-terminal.md`), so stepping through the chips never starts a process.
+  resume an interrupted console session**: it only shows it, with its "Not running" card (see "Resuming on selection,
+  and the card" in `docs/product/session-terminal-interrupted-and-archived-sessions.md`), so stepping through the chips
+  never starts a process.
 - Wherever keyboard focus was, it goes to the terminal of the console session moved to, an interrupted one's included.
 
 ## Leaving focus mode, and what is remembered

@@ -139,7 +139,7 @@ alone in a column take its full height; a pair divides its column using its heig
 switch two panels between side by side and stacked without restarting their content or discarding their weights.
 
 In docked mode, opening the first panel shows the pane at once and takes its width from the terminal, which is
-resized (see "Output, scrollback and size" in `docs/product/session-terminal.md`).
+resized (see "The character grid and its size" in `docs/product/terminal-output-scrollback-and-size.md`).
 
 ## The panel toggles in the top bar
 
@@ -435,6 +435,7 @@ between regions with F6" in `docs/product/moving-focus-between-regions.md`). Car
 panel floating alone at 768 px and below are stops; a hidden group is skipped.
 
 **Closing a panel that holds keyboard focus hands focus to the terminal** — or, where the terminal cannot take it,
-where it goes instead (see "With no session selected" in `docs/product/session-terminal.md`). So does the right pane
-going while its width handle holds focus, a project session's Report panel going with its last page while it holds
-focus, and a panel toggle going from the top bar while it holds focus (see "A project session's Report panel" above).
+where it goes instead (see "With no session selected" in `docs/product/session-terminal-with-no-session-selected.md`).
+So does the right pane going while its width handle holds focus, a project session's Report panel going with its last
+page while it holds focus, and a panel toggle going from the top bar while it holds focus (see "A project session's
+Report panel" above).

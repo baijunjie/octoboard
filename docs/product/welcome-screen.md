@@ -44,7 +44,7 @@ reachable. On narrow windows, the action row and tool row contents wrap rather t
   no panel to float in.
 - **No terminal.** None of the terminal's empty states appears here: the panel asking for a session to be selected, or
   the panel offering **Add project**, **New session** or **New console session** for the current scope (see "With no
-  session selected" and "A console with nothing in it" in `docs/product/session-terminal.md`).
+  session selected" and "A console with nothing in it" in `docs/product/session-terminal-with-no-session-selected.md`).
 - **No toggle in the top bar**: there is no sidebar for the sidebar toggle to control, and the panel toggles, at the
   bar's end, are there only while the right pane has an owner (see "The sidebar toggle and the panel toggles" in
   `docs/product/window-layout.md`). The top bar keeps **Back** and **Forward**, and **both are disabled**: every place
@@ -78,8 +78,8 @@ still hidden.
 - Wherever the window would hand keyboard focus to the terminal — the connection banner's Retry going away, a toast
   being dealt with — it hands focus to the New console button instead, and leaves focus on nothing when it is already on
   nothing. This is the rule the terminal itself follows with no session selected and nothing to offer in its place,
-  which hands focus to the top bar (see "With no session selected" in `docs/product/session-terminal.md`); here the top
-  bar has no enabled control to take it.
+  which hands focus to the top bar (see "With no session selected" in
+  `docs/product/session-terminal-with-no-session-selected.md`); here the top bar has no enabled control to take it.
 - **When the first console is created** from the welcome screen's New console, focus moves to the first control in the
   top bar a keyboard can reach. The handoff is New console's alone: consoles arriving through Import configuration
   appear while its dialog is still open on the import's result, and get no such handoff.

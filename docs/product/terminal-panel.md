@@ -155,8 +155,8 @@ fzf) get it there too: from inside a shell terminal it does not send a floating 
 then sent away with its Close panel button or by moving the pointer away. In the agent terminal in the centre,
 `Escape` behaves as described in "A hidden pane floats in on hover" in `docs/product/pane-docking.md`.
 
-- **Copy, paste and select all**: the same editing menu as a session's terminal, opened the same ways (see "Copy, paste
-  and selection" in `docs/product/session-terminal.md`), except that it pastes no image (see "Which pastes paste an
+- **Copy, paste and select all**: the same editing menu as a session's terminal, opened the same ways (see
+  `docs/product/terminal-copy-paste-and-selection.md`), except that it pastes no image (see "Which pastes paste an
   image" in `docs/product/pasting-images.md`). Paste is unavailable while the terminal is not connected, a
   terminal whose shell has exited or whose shell's process cannot be reached included. Selecting under mouse reporting,
   and text a program copies with OSC 52, follow the same section; a program in a tab not shown can copy too, and each
@@ -171,10 +171,10 @@ then sent away with its Close panel button or by moving the pointer away. In the
   goes to the agent terminal.
 - **Size**: whatever changes the panel's size resizes the shell's terminal, and the shell is told the new size the way
   an agent is, including holding its grid size during a resize-handle drag and fitting a changed area when the drag
-  ends (see "Output, scrollback and size" in `docs/product/session-terminal.md`). Output continues during the drag.
-  A terminal whose tab has not been shown yet tells the shell no size until it is first shown. While the panel is
-  maximized and the docked sidebar's column eases open or closed, the shown terminal keeps its size, whatever else
-  changes it meanwhile, and is fitted once, when the column comes to rest, as the agent terminal is.
+  ends (see "The character grid and its size" in `docs/product/terminal-output-scrollback-and-size.md`). Output
+  continues during the drag. A terminal whose tab has not been shown yet tells the shell no size until it is first
+  shown. While the panel is maximized and the docked sidebar's column eases open or closed, the shown terminal keeps its
+  size, whatever else changes it meanwhile, and is fitted once, when the column comes to rest, as the agent terminal is.
 - **Drawing**: a shell terminal is drawn without GPU acceleration, so however many tabs are open none of them takes a
   graphics context from the agent terminal. Its colours, and the minimum contrast its text is held to, follow the
   window's appearance as the agent terminal's do (see "What follows the choice" in `docs/product/appearance.md`).
@@ -191,15 +191,16 @@ part of what is said; it is reached as any other control. The tab stays until it
 ## Reconnecting
 
 A running shell's terminal whose connection drops reconnects by itself, as a session's terminal does (see "Reconnecting"
-in `docs/product/session-terminal.md`): with a backoff, up to five times, under a cover with a spinner saying it is
-reconnecting; then a cover saying it is disconnected, with a **Reconnect** button offered only while the connection to
-the daemon is open. Pressing Reconnect starts the attempts over and puts keyboard focus in the terminal; a tap on it
-leaves focus where the button's going away puts it after a tap (below). A terminal whose attempts are spent is tried
-again by Reconnect, or by itself when the application re-reads the daemon's whole state on a new connection to the
-daemon. Each tab reconnects on its own, shown or hidden; only the shown tab's state is told to assistive technology, as
-it begins, and, for a tab already reconnecting or disconnected, about 1.5 seconds after the tab is shown. A reconnect in
-the background never moves keyboard focus. Typing a dropped connection had not yet written into the shell is reported as
-for a session's terminal, naming the shell terminal (see "Reconnecting" in `docs/product/session-terminal.md`).
+in `docs/product/session-terminal-reconnecting-and-loading.md`): with a backoff, up to five times, under a cover with a
+spinner saying it is reconnecting; then a cover saying it is disconnected, with a **Reconnect** button offered only
+while the connection to the daemon is open. Pressing Reconnect starts the attempts over and puts keyboard focus in the
+terminal; a tap on it leaves focus where the button's going away puts it after a tap (below). A terminal whose attempts
+are spent is tried again by Reconnect, or by itself when the application re-reads the daemon's whole state on a new
+connection to the daemon. Each tab reconnects on its own, shown or hidden; only the shown tab's state is told to
+assistive technology, as it begins, and, for a tab already reconnecting or disconnected, about 1.5 seconds after the tab
+is shown. A reconnect in the background never moves keyboard focus. Typing a dropped connection had not yet written into
+the shell is reported as for a session's terminal, naming the shell terminal (see "Reconnecting" in
+`docs/product/session-terminal-reconnecting-and-loading.md`).
 
 Keyboard focus and Reconnect:
 
@@ -216,14 +217,14 @@ Keyboard focus and Reconnect:
 A running shell terminal whose process Octoboard cannot reach for now — its record carries `holder_link: "pending"`, as
 "A holder that cannot be connected to" in `docs/product/process-holders.md` describes — keeps the state *running*, and
 its tab stays as it was. Its terminal follows the same rules as a session's terminal in that case (see "While the
-session's process cannot be reached" in `docs/product/session-terminal.md`): a cover at once, over its last screen, with
-a spinner, a heading saying it is reconnecting to the terminal and a line saying that the shell's process is still
-running, that input is unavailable until the connection returns and that reconnection is automatic; no button; nothing
-sent to the shell and nothing kept to be sent later; no automatic reconnect attempt made or counted; and, once the
-process can be reached, one attach by itself with the five attempts fresh, even where they had been spent. Each tab goes
-by its own terminal's record. A shell that exits meanwhile shows its exited notice instead (see "When the shell exits"
-above); a tab first shown while its shell's process could not be reached is then attached once, for the shell's last
-screen.
+session's process cannot be reached" in `docs/product/session-terminal-reconnecting-and-loading.md`): a cover at once,
+over its last screen, with a spinner, a heading saying it is reconnecting to the terminal and a line saying that the
+shell's process is still running, that input is unavailable until the connection returns and that reconnection is
+automatic; no button; nothing sent to the shell and nothing kept to be sent later; no automatic reconnect attempt made
+or counted; and, once the process can be reached, one attach by itself with the five attempts fresh, even where they had
+been spent. Each tab goes by its own terminal's record. A shell that exits meanwhile shows its exited notice instead
+(see "When the shell exits" above); a tab first shown while its shell's process could not be reached is then attached
+once, for the shell's last screen.
 
 Keyboard focus follows the session terminal's rules too: the cover is a region named by the terminal's name, as its tab
 is, and described by its heading and line; focus in the shell terminal, or on a Reconnect that goes away, moves to the
@@ -232,10 +233,10 @@ terminal or, when the last interaction was a tap, to the panel's first control t
 bar's, with no focus ring; and a recovery in the background never moves focus. Assistive technology is told the cover's
 heading and line once, only for the shown tab: as the cover comes while the tab is shown, or, for a tab already covered
 when it is shown, after the attended wait the session terminal uses for a session shown already covered (see "While the
-session's process cannot be reached" in `docs/product/session-terminal.md`), dropped unsaid if the tab is hidden,
-another tab is shown or the process can be reached again first; and not when keyboard focus is on the cover at the
-moment it would be said. A tab hidden throughout is never told. A recovered-display announcement for the shown tab
-waits until the cover is gone.
+session's process cannot be reached" in `docs/product/session-terminal-reconnecting-and-loading.md`), dropped unsaid if
+the tab is hidden, another tab is shown or the process can be reached again first; and not when keyboard focus is on the
+cover at the moment it would be said. A tab hidden throughout is never told. A recovered-display announcement for the
+shown tab waits until the cover is gone.
 
 A shell terminal of a holder that a daemon start finds unreachable is not listed, and has no tab, until its process
 can be reached (see "A holder that cannot be connected to" in `docs/product/process-holders.md`).

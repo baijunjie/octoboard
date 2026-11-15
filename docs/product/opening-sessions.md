@@ -117,9 +117,9 @@ localized default explicitly when no custom name was entered.
 **Every new session is listed at once as *starting*,** before its agent has been launched, and the launch goes on behind
 it (see "The launch environment" in `docs/product/launching-agents.md`). The dialog does not wait for the launch: it
 closes as soon as the session is recorded, and the session's terminal says it is starting until the agent is up (see
-"Loading" in `docs/product/session-terminal.md`). A refusal that can be known before anything is recorded — an unknown
-owner, an unavailable agent or one that is not added, a used-up account, a model the agent does not offer, the refusals
-about a conversation to resume (see "Opening a new session on a found conversation" in
+"Loading" in `docs/product/session-terminal-reconnecting-and-loading.md`). A refusal that can be known before anything
+is recorded — an unknown owner, an unavailable agent or one that is not added, a used-up account, a model the agent does
+not offer, the refusals about a conversation to resume (see "Opening a new session on a found conversation" in
 `docs/product/resuming-a-conversation-by-its-session-id.md`) — is still shown while the dialog is open, in an error
 alert over it, and the dialog stays open. A session an agent opens with `open_session`, and the session an approved
 request for one starts (see "On approval" in `docs/product/session-requests.md`), are listed as *starting* the same way,
@@ -169,8 +169,8 @@ says why:
 
 - when some supported agent is installed, or not yet determined unavailable, but none of those is added, the terminal's
   empty panel, where it would otherwise offer a new session, says that no agent is added and offers **Add agent** (see
-  "A console with nothing in it" in `docs/product/session-terminal.md`); the console sessions section and a project's
-  empty row, with room for less, say only that no agent is added, beside a bot icon;
+  "A console with nothing in it" in `docs/product/session-terminal-with-no-session-selected.md`); the console sessions
+  section and a project's empty row, with room for less, say only that no agent is added, beside a bot icon;
 - when every agent has been determined unavailable, the terminal's empty panel, where it would otherwise offer a new
   session, says that no agent was found and how to make one available; the console sessions section and a project's
   empty row say only that no agent was found on the user's `PATH`, beside a crossed-out bot icon (see "The console

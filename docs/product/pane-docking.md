@@ -56,8 +56,8 @@ either.
 
 Anything that changes the terminal's size — resizing the window, resizing a pane, hiding or showing the sidebar, the
 right pane coming or going as its first panel opens or its last closes or with its owner — resizes the agent's
-terminal (see "Output, scrollback and size" in `docs/product/session-terminal.md`). A panel floating over the
-terminal, alone or as a whole floating group, coming or going does not.
+terminal (see "The character grid and its size" in `docs/product/terminal-output-scrollback-and-size.md`). A panel
+floating over the terminal, alone or as a whole floating group, coming or going does not.
 
 ### Resizing the sidebar and the right pane
 
@@ -139,8 +139,8 @@ As the sidebar's column closes, the width it gives up goes to the terminal. When
 held below the width the user chose, it can grow into that room as the room appears. Showing the sidebar limits the
 right pane again as soon as the sidebar is shown, when the window cannot afford both panes their chosen widths, and
 the opening column takes its own width from the terminal as it eases open. The terminal is not refitted while the
-column moves: it keeps its size through the ease and is fitted once the column comes to rest (see "Output, scrollback
-and size" in `docs/product/session-terminal.md`).
+column moves: it keeps its size through the ease and is fitted once the column comes to rest (see "The character grid
+and its size" in `docs/product/terminal-output-scrollback-and-size.md`).
 
 ### A hidden pane floats in on hover
 

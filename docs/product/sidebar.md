@@ -93,16 +93,17 @@ is disabled, since no session can be opened from the window (see "When no agent 
 carries the bot icon and says that no agent is added; otherwise it carries a crossed-out bot icon and says that no agent
 was found on the user's `PATH`. It says that much and no more, and offers nothing to press: the terminal's empty panel,
 where it would otherwise offer a new session, says the rest, with **Add agent** when an agent waits to be added (see "A
-console with nothing in it" in `docs/product/session-terminal.md`); the welcome screen's supported-tool list and hint
-are described in "What the welcome screen shows" in `docs/product/welcome-screen.md`. The row shows whatever the section
-lists — a console session left interrupted from before an agent went off the `PATH` still has its row — and it takes the
-place of the "no console session" row.
+console with nothing in it" in `docs/product/session-terminal-with-no-session-selected.md`); the welcome screen's
+supported-tool list and hint are described in "What the welcome screen shows" in `docs/product/welcome-screen.md`. The
+row shows whatever the section lists — a console session left interrupted from before an agent went off the `PATH` still
+has its row — and it takes the place of the "no console session" row.
 
 Below it, a **Projects** heading and the console's projects (see "Order of projects and sessions" in
 `docs/product/order-of-projects-and-sessions.md`). With no project, an empty row saying the console has none yet takes
 their place; the whole row is a button opening the new-project dialog, as the console's **Add project** does (see "The
 console header" above and "Empty rows" below). The terminal's area chooses its own next action from the console's
-console sessions and projects (see "A console with nothing in it" in `docs/product/session-terminal.md`).
+console sessions and projects (see "A console with nothing in it" in
+`docs/product/session-terminal-with-no-session-selected.md`).
 
 The Projects heading appends the number of projects listed in parentheses, including inactive and collapsed projects.
 The count follows the current project filter and shows zero when the console has no projects or none match.
@@ -204,7 +205,7 @@ filter (see "Filtering the project list" above), and those explaining why no age
 section or a project's empty session list (see "When no agent can open a session" in `docs/product/opening-sessions.md`).
 Focus mode's empty lists use the same compact rows (see "What both views show" in `docs/product/focus-mode.md`). The
 terminal's empty state is a full panel carrying the next action for the current scope (see "A console with nothing in
-it" in `docs/product/session-terminal.md`).
+it" in `docs/product/session-terminal-with-no-session-selected.md`).
 
 ## Rows, names and keyboard focus
 
@@ -248,16 +249,16 @@ session (`Ctrl+Tab` or `Ctrl+Shift+Tab` by default) in a console session's focus
 console session (see "The switch strip" in `docs/product/focus-mode.md`). Selecting an archived one does not reopen it:
 it is shown still archived, with its history in place of its terminal (see `docs/product/session-history.md`), and
 pressing Reopen reopens it (see "Archiving, interruption and resuming" in
-`docs/product/archiving-and-resuming-sessions.md` and "Interrupted and archived sessions" in
-`docs/product/session-terminal.md`). Selecting a session also gives the window's right pane to its own owner: a console
-session's report panel, a project session's project's Files panel (see "What the right pane shows" in
-`docs/product/window-layout.md`). Whatever it is selected from — a sidebar row, a project or console "View archive"
-submenu, focus mode and its switch strip, the archive view, the rail's waiting count, or the menu bar icon's menu (see
-"Choosing a session" in `docs/product/menu-bar-icon.md`) — **the sidebar follows it**: it switches to the session's
-console, showing the session selected rather than the one remembered for that console (see "What switching console
-shows" in `docs/product/console-switcher.md`), and leaves focus mode when the session does not belong to what focus mode
-is on (see "Leaving focus mode, and what is remembered" in `docs/product/focus-mode.md`). Back and Forward return to
-earlier selections without resuming anything (see `docs/product/navigation-history.md`).
+`docs/product/archiving-and-resuming-sessions.md` and "Resuming on selection, and the card" in
+`docs/product/session-terminal-interrupted-and-archived-sessions.md`). Selecting a session also gives the window's right
+pane to its own owner: a console session's report panel, a project session's project's Files panel (see "What the right
+pane shows" in `docs/product/window-layout.md`). Whatever it is selected from — a sidebar row, a project or console
+"View archive" submenu, focus mode and its switch strip, the archive view, the rail's waiting count, or the menu bar
+icon's menu (see "Choosing a session" in `docs/product/menu-bar-icon.md`) — **the sidebar follows it**: it switches to
+the session's console, showing the session selected rather than the one remembered for that console (see "What switching
+console shows" in `docs/product/console-switcher.md`), and leaves focus mode when the session does not belong to what
+focus mode is on (see "Leaving focus mode, and what is remembered" in `docs/product/focus-mode.md`). Back and Forward
+return to earlier selections without resuming anything (see `docs/product/navigation-history.md`).
 
 A session is selected automatically only when this application is the one that opened it through the session dialog,
 for either a console or a project session, and that closes the archive view if it is
@@ -267,8 +268,9 @@ daemon opened, is listed unselected and is put on screen by the user selecting i
 When the selected session stops existing — deleted from the archive, by this client or another, for instance — nothing
 is selected in its place, and the terminal's area shows its empty state: the panel asking for a session to be selected,
 or the next creation action for the current scope (see "With no session selected" in
-`docs/product/session-terminal.md`). The one exception is the session going with the last console: there is then no
-terminal at all, and the content panel shows the welcome screen (see `docs/product/welcome-screen.md`).
+`docs/product/session-terminal-with-no-session-selected.md`). The one exception is the session going with the last
+console: there is then no terminal at all, and the content panel shows the welcome screen (see
+`docs/product/welcome-screen.md`).
 
 ## How the sidebar's view changes
 

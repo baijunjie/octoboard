@@ -209,8 +209,21 @@ Where to start, by question:
 
 ### Terminals, files and the project pane
 
-- [The session terminal](product/session-terminal.md) — the terminal showing the selected session: typing, copying,
-  scrollback, reconnecting and states.
+- [The session terminal](product/session-terminal.md) — the terminal showing the selected session: typing, the mouse
+  and the macOS editing keys, typing waiting while the session's messages are held, and links; points to the docs
+  below.
+- [The session terminal with no session selected](product/session-terminal-with-no-session-selected.md) — what the
+  terminal's area shows with no session selected, where focus goes, and the creation action in an empty console.
+- [Copy, paste and selection in the session terminal](product/terminal-copy-paste-and-selection.md) — the terminal's
+  editing menu (Copy, Paste, Select all, Open in file manager), selecting with the mouse under mouse reporting, and
+  text a program copies with OSC 52.
+- [Terminal output, scrollback and size](product/terminal-output-scrollback-and-size.md) — attaching from a first
+  paint, the scrollback, a client that falls behind the output, gutters and resizing, and colours.
+- [Reconnecting and loading in the session terminal](product/session-terminal-reconnecting-and-loading.md) — automatic
+  reconnecting and the disconnected panel, lost input, the cover while the session's process cannot be reached, and
+  the loading state.
+- [The terminal of interrupted and archived sessions](product/session-terminal-interrupted-and-archived-sessions.md) —
+  resuming on selection, the Resume or Reopen card, an archived session's history, and the saved terminal preview.
 - [Pasting an image into a session's terminal](product/pasting-images.md) — which pastes paste a clipboard image, the
   saved file's path that is pasted, where the file is kept and how a failure shows.
 - [Links in terminal output](product/terminal-links.md) — how web addresses and file paths in terminals become links.

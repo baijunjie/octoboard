@@ -96,10 +96,10 @@ project, its console session or its console no longer exists. Closing it hands t
 on nothing, to the terminal once the view has closed, or where the terminal cannot take it, to what takes it in the
 terminal's place: an archived session's history (see "Keyboard focus" in `docs/product/session-history.md`), or, with no
 session selected, the creation action the empty panel offers, else the top bar's first enabled control (see "With no
-session selected" in `docs/product/session-terminal.md`). After a close the user made — every way above but the last —
-the focus ring follows the input that closed it: it shows after a key, and not after a pointer press. After the view
-closed by itself, the ring shows only when the last input was a key (see "The focus ring after a focus move the window
-makes on its own" in `docs/product/moving-focus-between-regions.md`).
+session selected" in `docs/product/session-terminal-with-no-session-selected.md`). After a close the user made — every
+way above but the last — the focus ring follows the input that closed it: it shows after a key, and not after a pointer
+press. After the view closed by itself, the ring shows only when the last input was a key (see "The focus ring after a
+focus move the window makes on its own" in `docs/product/moving-focus-between-regions.md`).
 
 The view slides up from below on opening and slides down on closing, each over 240 ms. Closing takes effect at
 once: selection and navigation do not wait for the animation, and the departing view no longer accepts input or

@@ -60,8 +60,9 @@ the **100** most recent places; older ones are dropped.
 - When a move leaves keyboard focus on nothing, or on a control the move has just disabled, such as Back or Forward,
   focus goes to the terminal, or to the archive view when the place moved to has it open, after a tap too (see "The
   archive view" in `docs/product/archive-view.md`). Where the terminal takes none — no session selected and no creation
-  action in its place (see "With no session selected" in `docs/product/session-terminal.md`), or after a tap (see "Focus
-  after a tap" in `docs/product/moving-focus-between-regions.md`) — it goes to the top bar's first enabled control.
+  action in its place (see "With no session selected" in `docs/product/session-terminal-with-no-session-selected.md`),
+  or after a tap (see "Focus after a tap" in `docs/product/moving-focus-between-regions.md`) — it goes to the top bar's
+  first enabled control.
 
 ## Keyboard shortcuts
 

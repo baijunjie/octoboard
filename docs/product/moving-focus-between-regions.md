@@ -41,15 +41,15 @@ the project pane" in `docs/product/project-pane.md`), the terminal and the archi
 them (see "Maximizing a panel" in `docs/product/right-pane-panels.md`) or a panel floats over them at 768 px and below
 (see "At 768 px and below: one panel floats over the terminal" in `docs/product/right-pane-panels.md`), and the terminal
 when no session is selected — unless its area is then offering a creation action, which makes it a stop (see "A console
-with nothing in it" in `docs/product/session-terminal.md`) — or while the archive view covers it. With no console the
-sidebar, the archive view, the terminal and the right pane are all skipped together, none of them being on screen, and
-the welcome screen is the only stop between the rail and the update notice or the connection banner; with a console the
-welcome screen is the one skipped. The sidebar counts as shown when it is docked and visible in the row, or its
-automatic floating overlay is revealed. A hover preview of a hidden sidebar that could dock remains excluded. A docked
-sidebar column that is still easing closed already counts as hidden, and one that is still easing open already counts as
-shown (see "The sidebar toggle and the panel toggles" in `docs/product/window-layout.md`). A right pane panel counts as
-shown while it is open, docked in the pane's column or maximized, in a revealed floating group, or floating alone at 768
-px and below.
+with nothing in it" in `docs/product/session-terminal-with-no-session-selected.md`) — or while the archive view covers
+it. With no console the sidebar, the archive view, the terminal and the right pane are all skipped together, none of
+them being on screen, and the welcome screen is the only stop between the rail and the update notice or the connection
+banner; with a console the welcome screen is the one skipped. The sidebar counts as shown when it is docked and visible
+in the row, or its automatic floating overlay is revealed. A hover preview of a hidden sidebar that could dock remains
+excluded. A docked sidebar column that is still easing closed already counts as hidden, and one that is still easing
+open already counts as shown (see "The sidebar toggle and the panel toggles" in `docs/product/window-layout.md`). A
+right pane panel counts as shown while it is open, docked in the pane's column or maximized, in a revealed floating
+group, or floating alone at 768 px and below.
 
 Where focus lands in each region:
 
@@ -60,7 +60,7 @@ Where focus lands in each region:
 | Welcome screen | its New console button |
 | Sidebar | the selected session's row, or the sidebar's first control when that row is not on screen |
 | Archive view | its first control |
-| Terminal | the terminal, so typing reaches the agent; instead its cover while the session's process cannot be reached (see "While the session's process cannot be reached" in `docs/product/session-terminal.md`), or the button its area offers in the terminal's place while there is one — its cover's Reconnect, or its empty state's Add project, New session or New console session (see "Reconnecting" and "A console with nothing in it" in `docs/product/session-terminal.md`); for an archived session, its history in the terminal's place (see "Keyboard focus" in `docs/product/session-history.md`) |
+| Terminal | the terminal, so typing reaches the agent; instead its cover while the session's process cannot be reached (see "While the session's process cannot be reached" in `docs/product/session-terminal-reconnecting-and-loading.md`), or the button its area offers in the terminal's place while there is one — its cover's Reconnect, or its empty state's Add project, New session or New console session (see "Reconnecting" in `docs/product/session-terminal-reconnecting-and-loading.md` and "A console with nothing in it" in `docs/product/session-terminal-with-no-session-selected.md`); for an archived session, its history in the terminal's place (see "Keyboard focus" in `docs/product/session-history.md`) |
 | Report panel | the pager's first enabled button in its header, else Maximize panel or Restore panel size while docked, else Close panel; Tab goes through the remaining header controls to the report page |
 | Files panel | its header's selected tab, Files or Changes, preserving the current mode; the arrow keys move between Files and Changes, and Tab goes through the tab's controls (the filter toggle, in Files Collapse all folders while it is enabled, and in Changes Group by folder), then Refresh, the panel's own buttons (see "A panel's header" in `docs/product/right-pane-panels.md`) and the content below; Try again while the panel failed to load (see "Loading the project pane" in `docs/product/project-pane.md`) |
 | Processes panel | Try again while the first reading of its list failed (see "Loading, refreshing and failures" in `docs/product/processes-panel.md`); otherwise, in a project's panel, its session filter while the field is shown, or its header's filter toggle while the field is hidden; in a console session's, the first tree's Stop, else its Close panel |
@@ -73,8 +73,8 @@ Pressing Retry from the keyboard works as with the mouse. If Retry holds focus w
 begins or the banner disappears — focus returns to an open modal dialog: to the control it left while that control is
 still available in the dialog, otherwise to the dialog itself. With no modal dialog open, focus goes to the terminal —
 or, where the terminal cannot take it, where it goes instead (see "With no session selected" in
-`docs/product/session-terminal.md` and "Keyboard focus" in `docs/product/welcome-screen.md`). Pressing Retry with the
-mouse leaves keyboard focus where it was.
+`docs/product/session-terminal-with-no-session-selected.md` and "Keyboard focus" in `docs/product/welcome-screen.md`).
+Pressing Retry with the mouse leaves keyboard focus where it was.
 
 The control focus lands on shows its focus ring, even when the last input before `F6` was the mouse.
 

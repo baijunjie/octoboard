@@ -140,8 +140,9 @@ told apart.
     shows each such session as *Reconnecting* (see "Which status a session shows" in
     `docs/product/session-statuses.md`) and covers the terminal of each such session and shell terminal, which sends
     nothing and keeps nothing typed meanwhile to send later, then attaches again by itself once the holder is
-    connected to (see "While the session's process cannot be reached" in `docs/product/session-terminal.md` and
-    "While the shell's process cannot be reached" in `docs/product/terminal-panel.md`);
+    connected to (see "While the session's process cannot be reached" in
+    `docs/product/session-terminal-reconnecting-and-loading.md` and "While the shell's process cannot be reached" in
+    `docs/product/terminal-panel.md`);
   - each of its sessions **stays claimed**, with the status it was stored with: it is not interrupted, a resume or a
     launch of it is refused, and the processes its agent started are not stopped as a previous run's leftovers;
   - new terminals go to a new holder, and the old one takes no more once it is connected to again.
@@ -186,9 +187,9 @@ program drew before those last bytes is missing.
   before then, the flag clears, the view is hidden (a shell terminal's tab no longer shown) or another session or
   terminal is shown. One that comes, or is still waiting, while the view is covered because its process cannot be
   reached waits until that cover is gone (see "While the session's process cannot be reached" in
-  `docs/product/session-terminal.md`). A mark already there when the view is opened or shown is not announced on its
-  own. It says only how faithful the screen is, apart from whether the process can be reached: a terminal can carry
-  both the mark and the *Reconnecting* presentation at once, each in its own place.
+  `docs/product/session-terminal-reconnecting-and-loading.md`). A mark already there when the view is opened or shown is
+  not announced on its own. It says only how faithful the screen is, apart from whether the process can be reached: a
+  terminal can carry both the mark and the *Reconnecting* presentation at once, each in its own place.
 - The program is made to **redraw**: its terminal is resized one row smaller and back (one row larger and back at a
   single row), so a full-screen program paints its whole screen again over the rebuilt one. No client asked for those
   resizes: they count as no client's activity and leave the size the clients decide as it was (see
@@ -211,7 +212,7 @@ screen, then takes in only what was written since, as output it reads live:
 - **The normal screen behind an alternate one is saved too**: under a full-screen program started from a shell's prompt,
   the shell's screen and scrollback come back with it, in the daemon's screen of the terminal and in the first paint of
   every terminal that attaches, so they are shown exactly as they were once the program leaves its alternate screen (see
-  "Output, scrollback and size" in `docs/product/session-terminal.md`).
+  "Attaching and scrollback" in `docs/product/terminal-output-scrollback-and-size.md`).
 - **A saved screen is marked inexact when it cannot reproduce the terminal's state**: an alternate screen (a full-screen
   program's) over a normal screen with anything drawn on it or kept in its scrollback, when the terminal's width changed
   while the alternate screen was shown and the program has not entered it again since (the hidden normal screen was
@@ -232,8 +233,8 @@ screen, then takes in only what was written since, as output it reads live:
   reach the program as typed input. A holder of a later build that answers kinds of query this daemon does not know has
   none of the queries since the handover answered. An answer to a query from before the handover may reach the program
   after the holder's answer to a later one.
-- The restored screen leaves out what a client's first paint leaves out (see "Output, scrollback and size" in
-  `docs/product/session-terminal.md`).
+- The restored screen leaves out what a client's first paint leaves out (see "Attaching and scrollback" in
+  `docs/product/terminal-output-scrollback-and-size.md`).
 
 **A screen that cannot be verified as exact is rebuilt instead**, marked inexact and redrawn, as for any terminal taken
 over (see "The screen of a terminal taken over" above). A saved screen is used only when the terminal's holder reports
@@ -251,15 +252,16 @@ a later planned stop carrying them over.
 **A saved screen whose holder is gone becomes the session's preview.** Where a planned stop saved a session's screen
 and its holder then ended — with the system shutting down, say — the next start, finding the holder gone, or finding
 that a holder it could not connect to at the start is gone, keeps that screen as the session's saved terminal preview,
-and the session is interrupted with it, as an ordinary stop would have frozen it (see "Interrupted and archived
-sessions" in `docs/product/session-terminal.md`). The preview is restored from the saved screen as an adoption restores
-it; where it is of a size no screen can have, it is drawn at 24 rows by 80 columns. A holder the daemon ends itself
-(see "A holder that cannot be connected to" and "After a quit of the application" above) hands back the output
-it kept: where that output holds the whole of what was written since the handover the screen was saved at, the preview
-is the saved screen with that output on it; where it holds other output, the preview is rebuilt from that output, as
-for a terminal taken over; where it holds none, the preview is the saved screen alone. Nothing in it is answered. A session
-already interrupted or archived keeps the preview it had, and a shell terminal has none. A preview that cannot be
-written is not tried again: the session is interrupted without a new one, as after a failed write at an ordinary stop.
+and the session is interrupted with it, as an ordinary stop would have frozen it (see "The saved terminal preview" in
+`docs/product/session-terminal-interrupted-and-archived-sessions.md`). The preview is restored from the saved screen as
+an adoption restores it; where it is of a size no screen can have, it is drawn at 24 rows by 80 columns. A holder the
+daemon ends itself (see "A holder that cannot be connected to" and "After a quit of the application" above) hands back
+the output it kept: where that output holds the whole of what was written since the handover the screen was saved at,
+the preview is the saved screen with that output on it; where it holds other output, the preview is rebuilt from that
+output, as for a terminal taken over; where it holds none, the preview is the saved screen alone. Nothing in it is
+answered. A session already interrupted or archived keeps the preview it had, and a shell terminal has none. A preview
+that cannot be written is not tried again: the session is interrupted without a new one, as after a failed write at an
+ordinary stop.
 
 ## Losing and regaining the connection to a holder
 

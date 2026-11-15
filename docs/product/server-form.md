@@ -107,8 +107,8 @@ the page had shown stays. Reloading the page meets the same refusal; the way bac
 other outcome — the key accepted, no answer, a daemon of an earlier build that has no such check — leaves the page
 losing its connection as any other does: the connection banner and its Retry (see "Losing the daemon connection" in
 `docs/product/application-lifecycle.md`), and its open terminals reconnecting (see "Reconnecting" in
-`docs/product/session-terminal.md`). A page opened at the daemon's address with no key in it shows the same screen at
-once, saying instead that this address does not open the daemon because it carries no key.
+`docs/product/session-terminal-reconnecting-and-loading.md`). A page opened at the daemon's address with no key in it
+shows the same screen at once, saying instead that this address does not open the daemon because it carries no key.
 
 ## The browser socket
 

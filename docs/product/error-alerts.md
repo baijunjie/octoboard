@@ -139,9 +139,9 @@ on its search field; form dialogs and confirmations are in "Where keyboard focus
 keyboard focus starts in a confirmation" in `docs/product/dialogs.md`.
 Otherwise it goes to the selected session's terminal. With no session selected, or no console at all, neither the
 terminal's empty panel nor the welcome screen takes it, as neither takes focus while it is on nothing (see "With no
-session selected" in `docs/product/session-terminal.md` and "Keyboard focus" in `docs/product/welcome-screen.md`):
-it goes to the sidebar instead, else, when the sidebar is not shown or has no control to take it, to the rail. Each
-region lands focus where `F6` would (see "Moving focus between regions with F6" in
+session selected" in `docs/product/session-terminal-with-no-session-selected.md` and "Keyboard focus" in
+`docs/product/welcome-screen.md`): it goes to the sidebar instead, else, when the sidebar is not shown or has no control
+to take it, to the rail. Each region lands focus where `F6` would (see "Moving focus between regions with F6" in
 `docs/product/moving-focus-between-regions.md`).
 
 The error alert announces the failure it shows; nothing else announces that failure again.
