@@ -87,7 +87,7 @@ function Breadcrumb({ session, focusTerminal }: { session: Session; focusTermina
             from={`[data-status-mark-id="${RECOVERED_DISPLAY_MARK_ID}"]`}
             ring={false}
             to={() => {
-              // Focus on the mark alone goes to the terminal at once.
+              // Focus on the mark alone, or fallen to the page from its closed popover, goes to the terminal at once.
               if (!document.activeElement?.closest(STATUS_MARK_POPOVER)) {
                 ringForAutomaticFocus();
                 focusTerminal();

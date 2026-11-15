@@ -841,6 +841,12 @@ it the destination would hold focus with no ring. A mark whose focus goes to the
 Report panels' marks) and the handoffs of panes and panels taken away keep `HandoffOnUnmount`, with the ring following
 the last input: no dialog's restore follows them.
 
+Focus that fell to `<body>` from inside a source still counts as the source's when the source goes. A popover that is
+part of a mark gives focus back to the mark only a frame after its content unmounts, so a mark removed in that gap
+(its popover's Try again answered at once) would otherwise leave focus on `<body>`. `HandoffOnUnmount`, and through
+it `useHandoffAfterRemoval`, hands such focus on as long as nothing else took focus and no press landed outside the
+source since it fell.
+
 The Settings search re-matches its rows whenever what it matches changes without the user touching the query (the
 language changed, a setting changed from another window, a read of the system answered or failed), so a row can go away
 under focus, even a control whose own change made it go. Such a re-match never moves the panel: the section on screen

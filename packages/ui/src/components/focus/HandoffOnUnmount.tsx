@@ -30,6 +30,13 @@ import { focusFellToPage } from "./regionFocus";
  * before this cleanup runs. Keep the element in a variable while mounted instead (a ref callback
  * that stores only non-null values).
  *
+ * Focus that fell to the page from inside `from` still counts as there when this unmounts: a react-aria popover whose
+ * content matches `from` gives focus back to its trigger only a frame after the content unmounts, so a source removed
+ * in that gap would otherwise leave focus on `<body>`. It counts until focus lands on another element or a press lands
+ * outside `from` (a press on the page's background drops focus to `<body>` without a `focusin`), and only on an
+ * unmount: a change of the selector hands on only focus still inside. A `from` function returning null at unmount
+ * declines the handoff either way.
+ *
  * Under StrictMode the effect is torn down and set up again right after mount, which runs the
  * handoff once; that does nothing only because focus cannot already be inside `from` at that
  * moment, so do not place this where it could be. */
@@ -38,11 +45,32 @@ export function HandoffOnUnmount({ from, to, ring = true }: { from: string | (()
   const source = useLatest(from);
   const ringOn = useLatest(ring);
   const selector = typeof from === "string" ? from : undefined;
-  useLayoutEffect(
-    () => () => {
+  // Declared before the handoff's effect, so its cleanup runs first on an unmount and not at all on a selector change.
+  const unmounting = useRef(false);
+  // Cleared on setup: StrictMode's trial unmount in development runs the cleanup once, then sets the effect up again.
+  useLayoutEffect(() => {
+    unmounting.current = false;
+    return () => { unmounting.current = true; };
+  }, []);
+  useLayoutEffect(() => {
+    const inside = (element: Element | null) => {
+      const scope = source.current;
+      return Boolean(typeof scope === "string" ? element?.closest(scope) : element && scope()?.contains(element));
+    };
+    // Read as focus or a press arrives, while the element is still in the document: once removed, it is no longer
+    // inside.
+    let lastInside = inside(document.activeElement);
+    // A press aimed at the document itself has no element inside the source.
+    const note = (event: Event) => { lastInside = event.target instanceof Element && inside(event.target); };
+    document.addEventListener("focusin", note, true);
+    document.addEventListener("pointerdown", note, true);
+    return () => {
+      document.removeEventListener("focusin", note, true);
+      document.removeEventListener("pointerdown", note, true);
       const active = document.activeElement;
       const scope = source.current;
-      if (!(typeof scope === "string" ? active?.closest(scope) : scope()?.contains(active))) return;
+      const fellFromInside = unmounting.current && lastInside && focusFellToPage() && (typeof scope === "string" || scope() !== null);
+      if (!inside(active) && !fellFromInside) return;
       if (ringOn.current) ringForAutomaticFocus();
       latest.current();
       // A `focusin` alone, not a blur and a refocus: a field that closes on blur would take that `focusout` as
@@ -52,16 +80,16 @@ export function HandoffOnUnmount({ from, to, ring = true }: { from: string | (()
       queueMicrotask(() => {
         if (document.activeElement === moved) moved.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
       });
-    },
-    [selector],
-  );
+    };
+  }, [selector]);
   return null;
 }
 
 /** Moves focus on to `target`, a move the user did not ask for, if it is in the document and enabled and focus is not
  * held elsewhere, letting the ring follow the last input just before (`ringForAutomaticFocus`), so a target that turns
  * out not to be there leaves the modality alone. Focus is held elsewhere unless it has fallen to `<body>` (or nowhere);
- * with `duringRemoval`, from a `HandoffOnUnmount`'s `to`, it is still on the source, which that already checked. */
+ * with `duringRemoval`, from a `HandoffOnUnmount`'s `to`, it is still on the source, or fell to the page from it, which
+ * that already checked. */
 export function focusHandoffTarget(target: HTMLElement | null | undefined, { duringRemoval = false } = {}): void {
   if (!target?.isConnected || target.matches(":disabled") || (!duringRemoval && !focusFellToPage())) return;
   ringForAutomaticFocus();

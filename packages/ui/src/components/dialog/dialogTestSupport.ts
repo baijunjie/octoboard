@@ -36,6 +36,11 @@ const MOUNT_REFOCUS_MS = 500;
 /** Rounds `settleFrames` runs by default. */
 const SETTLE_ROUNDS = 10;
 
+/** How far a fake clock moves a 0 ms timer set while its timers run: fake-timers schedules it 1 ms on (`duringTick`,
+ * Vitest 5's bundled `@sinonjs/fake-timers`), so a frame asked for from inside another frame, under `framesAsTimers`,
+ * is due a millisecond later. Recheck it on an upgrade. */
+const IN_TICK_ZERO_DELAY_MS = 1;
+
 /**
  * Call right after a dialog mounts. Returns what a test awaits before a step whose focus it asserts,
  * so that the step cannot straddle `useDialog`'s mount timer.
@@ -94,14 +99,15 @@ export function framesAsTimers(modality: "virtual" | "pointer" | "keyboard" = "v
 /**
  * Settles a bounded chain of animation frames, committing React work between rounds. With `framesAsTimers`, each
  * round runs zero-delay work; with Vitest's fake frames it advances one frame, including timers due before it.
- * A fake clock that leaves frames real also requires `framesAsTimers`; zero-delay advances drive its timer stubs.
+ * A fake clock that leaves frames real also requires `framesAsTimers`; each round then advances the clock by the 1 ms
+ * a frame asked for inside another frame is put off (`IN_TICK_ZERO_DELAY_MS`), so such a chain settles too.
  * On the real clock this requires `framesAsTimers`: zero-delay turns cannot reliably reach jsdom's native frames.
  * The default rounds outlast the opening focus, containment and deferred refocus chains in a dialog; callers can
  * request more rounds for a longer chain. Timers waiting beyond these rounds are left pending.
  */
 export async function settleFrames(rounds = SETTLE_ROUNDS): Promise<void> {
   for (let round = 0; round < rounds; round += 1) {
-    if (vi.isFakeTimers()) act(() => void vi.advanceTimersByTime(framesFaked() ? FAKE_FRAME_MS : 0));
+    if (vi.isFakeTimers()) act(() => void vi.advanceTimersByTime(framesFaked() ? FAKE_FRAME_MS : IN_TICK_ZERO_DELAY_MS));
     await flushPromises();
   }
 }

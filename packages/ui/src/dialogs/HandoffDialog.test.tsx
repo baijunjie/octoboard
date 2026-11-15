@@ -16,7 +16,8 @@ import { availabilityOf } from "../fixtures/fixtureProviders";
 import { testDaemon } from "../test/testDaemon";
 import { TEST_PROVIDERS } from "../test/testProviders";
 import { HandoffDialog } from "./HandoffDialog";
-import { fakeTimers, flushPromises } from "../test/clock";
+import { fakeTimers, fakeTimersKeepingFrames, flushPromises } from "../test/clock";
+import { framesAsTimers, settleFrames } from "../components/dialog/dialogTestSupport";
 
 vi.mock("../preferences/theme", () => ({ useOctoboardTheme: () => ({ resolved: "dark" }) }));
 
@@ -176,20 +177,31 @@ it("offers Download Git before Try again in the mark's popover when no Git is fo
 });
 
 it("keeps focus inside the dialog when a retry of the check succeeds and takes the mark away", async () => {
+  // Frames as timers, so the popover's opening focus, a frame after it opens, has run before Try again is pressed:
+  // the popover then closes with focus in it, focus falls to the page, and the mark goes before the frame that would
+  // give focus back to it. The clock is faked too, so the 500 ms refocus of each dialog's `useDialog` never fires
+  // mid-test.
+  framesAsTimers();
+  fakeTimersKeepingFrames();
   mount(sessionOf("s-1", parentConsole.id, project.id, "Fix search", "idle"), [], "failTwice");
   await settle();
   const dialog = document.body.querySelector('[role="dialog"]')!;
+  const popover = () => document.body.querySelector('[data-status-mark-popover] [role="dialog"]');
   act(() => mark()!.focus());
   press(mark()!);
+  await settleFrames();
+  expect(popover()?.contains(document.activeElement)).toBe(true);
   await act(async () => popoverRetry()!.click());
-  await settle();
-  // The retry failed again: the mark stays.
+  await settleFrames();
+  // The retry failed again: the mark stays, and takes back the focus its popover held.
   expect(mark()).not.toBeNull();
-  act(() => mark()!.focus());
+  expect(document.activeElement).toBe(mark());
   press(mark()!);
+  await settleFrames();
+  expect(popover()?.contains(document.activeElement)).toBe(true);
   await act(async () => popoverRetry()!.click());
-  await settle();
-  // The retry succeeded: the mark, which held focus, is gone, and focus did not fall to the page.
+  await settleFrames();
+  // The retry succeeded: the mark, whose popover held focus, is gone, and focus did not fall to the page.
   expect(mark()).toBeNull();
   expect(document.activeElement).toBe(dialog);
 });

@@ -204,7 +204,7 @@ Applies to the `packages/ui` component tests (`vitest` under jsdom) that render 
   exports built with `lazy` give one file two separate first tests, and a test that renders one surface and then the
   other settles twice.
 
-## A dialog test waits out the dialog's own mount refocus before any step whose focus it asserts
+## A dialog test settles the dialog's opening focus and waits out its mount refocus before any step whose focus it asserts
 
 Applies to `packages/ui` component tests (`vitest` under jsdom) that mount a modal — every HeroUI `Modal` and
 `AlertDialog`, so `Dialog` and `ConfirmDialog` too, is react-aria's `Dialog` and so runs `useDialog`. Half a second
@@ -224,6 +224,13 @@ in a test on a fake clock, where it would never resolve.
 - `fakeTimers()` fakes animation frames too, as sinon's 16 ms frames (`FAKE_FRAME_MS`), so a frame never runs ahead
   of a 0 ms timer and a `requestAnimationFrame` stub installed earlier is replaced. A test on `framesAsTimers()` that
   also fakes the clock does so with `fakeTimersKeepingFrames()` (`packages/ui/src/test/clock.ts`).
+- Under virtual modality (a press react-aria reads as virtual, a `click()` among them), a dialog or popover opened by
+  the press takes its opening focus a frame later, so a step taken right after the open — pressing a control inside
+  it, closing it — runs with focus still on the trigger when the test runs fast and inside the overlay under load, and
+  the two take different paths (focus given back to the trigger, or falling to `<body>` as the content unmounts). Such
+  a test fixes the order: `framesAsTimers()`, with `fakeTimersKeepingFrames()` so the refocus above cannot fire
+  mid-test, `await settleFrames()` after the open, and an assertion that focus is inside the overlay before the step,
+  as the retry-takes-the-mark-away case in `packages/ui/src/dialogs/HandoffDialog.test.tsx` does.
 
 ## Inject the load proof's delay as a busy wait, never as a timer
 
