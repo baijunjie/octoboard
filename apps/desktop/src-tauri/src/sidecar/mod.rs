@@ -144,7 +144,7 @@ fn record_no_daemon(app: &AppHandle, gone: DaemonStatus) {
 /// detail once it has loaded (`daemon_exit_detail`).
 pub fn give_up_on_daemon(app: &AppHandle, detail: String) {
     record_no_daemon(app, DaemonStatus::GaveUp(detail.clone()));
-    let _ = app.emit("daemon-exited", detail);
+    let _ = app.emit_to(crate::MAIN_WINDOW_LABEL, "daemon-exited", detail);
 }
 
 /// How the daemon ended, when the shell has given up on it: what the page that loads in the window

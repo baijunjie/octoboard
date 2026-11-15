@@ -10,9 +10,10 @@ mod blocking_pass;
 mod branch_cleanup;
 mod branch_origin;
 mod browse;
-mod browser_socket;
+mod browser;
 mod cli;
 mod config_document;
+mod connection_details;
 mod coordinator;
 mod cross_project_guard;
 mod env_shell;
@@ -285,8 +286,8 @@ async fn run_daemon(
     // which a stale socket file's removal needs. A daemon that cannot bind it, or cannot hold the
     // owner key the socket is for, serves no browser and runs on for everything else.
     let browser_listener =
-        if parent_pid.is_none() && !server::ui::EMBEDDED.is_empty() && browser_socket::AVAILABLE {
-            match browser_socket::bind(&paths::data_dir()) {
+        if parent_pid.is_none() && !server::ui::EMBEDDED.is_empty() && browser::socket::AVAILABLE {
+            match browser::socket::bind(&paths::data_dir()) {
                 Ok(listener) => Some(listener),
                 Err(err) => {
                     tracing::warn!(
@@ -312,6 +313,12 @@ async fn run_daemon(
         state.set_follows_application();
         // Before anything the application could write is lost to nobody reading it.
         state::application_note::spawn_reader(state.clone());
+        // Remote access, where the user allowed it: the owner socket opened and the owner key held
+        // before the owner record, which says whether the daemon takes the key, is written; served
+        // with the other clients below.
+        state
+            .remote_access
+            .begin(&state, paths::data_dir(), !server::ui::EMBEDDED.is_empty());
     }
     // Resolved once: the refusal of a planned restart and the choice of its successor read the
     // same answer.
@@ -460,6 +467,7 @@ async fn run_daemon(
             owner
                 .with_service_manager(state.service_managed())
                 .with_owner_key(state.owner_key.is_held())
+                .with_browser_port(state.remote_access.recorded_port(&state))
                 .with_unit(unit)
                 .with_predecessor(predecessor)
         });
@@ -471,6 +479,8 @@ async fn run_daemon(
             if let Err(err) = owner.record() {
                 tracing::warn!(%err, "writing the owner record failed");
             }
+            // Written again as remote access is turned on and off.
+            state.remote_access.keep_record(owner.clone());
         }
         None => tracing::warn!("reading this process's start time failed; no owner record"),
     }
@@ -519,11 +529,16 @@ async fn run_daemon(
 
     let browser = browser_listener.map(|listener| {
         tracing::info!(
-            path = %browser_socket::path_in(&paths::data_dir()).display(),
+            path = %browser::socket::path_in(&paths::data_dir()).display(),
             "serving the browser on its socket"
         );
-        browser_socket::serve(listener, server::browser_router(state.clone()))
+        browser::serve_on(listener, server::browser_router(state.clone()))
     });
+    if state.remote_access.offered() {
+        state
+            .remote_access
+            .serve_clients(server::browser_router(state.clone()));
+    }
     let serve = axum::serve(listener, server::router(state.clone()));
     // The listener goes with `serve` once this ends, and the browser socket's with `browser`
     // below: the daemon accepts no more connections, and the browser socket is free for a
@@ -552,6 +567,8 @@ async fn run_daemon(
         }
     };
     drop(browser);
+    // The owner record as remote access last wrote it, which is the one to remove.
+    let owner = state.remote_access.close().or(owner);
     // Held on only for a successor this daemon starts itself: anything else lets the port go now,
     // so a client is refused at once rather than left waiting in the backlog for nobody.
     let mut kept_listener = kept_listener.filter(|_| {

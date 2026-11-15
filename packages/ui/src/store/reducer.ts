@@ -204,6 +204,7 @@ export function reducer(state: State, action: Action): State {
             keepAwakeHeld: event.keep_awake_held,
             daemonUpdate: sameValue(state.daemonUpdate, event.daemon_update) ? state.daemonUpdate : event.daemon_update,
             daemonUpdateStale: false,
+            remoteAccess: sameValue(state.remoteAccess, event.remote_access) ? state.remoteAccess : event.remote_access,
             shellTerminals: keepSame(state.shellTerminals, event.shell_terminals, (t) => t.id),
           };
         case "trusted_directories_updated":
@@ -420,6 +421,8 @@ export function reducer(state: State, action: Action): State {
           return state.keepAwakeHeld === event.keep_awake_held ? state : { ...state, keepAwakeHeld: event.keep_awake_held };
         case "daemon_update_status_updated":
           return sameValue(state.daemonUpdate, event.status) && !state.daemonUpdateStale ? state : { ...state, daemonUpdate: event.status, daemonUpdateStale: false };
+        case "remote_access_updated":
+          return sameValue(state.remoteAccess, event.remote_access) ? state : { ...state, remoteAccess: event.remote_access };
         case "agent_availability_updated":
           return { ...state, agentAvailability: new Map(event.agent_availability.map((a) => [a.agent, a])) };
         case "agent_cli_status_updated": {

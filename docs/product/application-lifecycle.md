@@ -9,8 +9,11 @@ turned on keeping it running in the background, a setting that is off to begin w
 Linux server without a display, reached by its owner from a browser on another machine over SSH — changes is said where
 it applies, and in `docs/product/server-form.md`.
 
-Who can reach the daemon, in either form, is in `docs/product/who-can-reach-the-daemon.md`, and the files Octoboard
-writes for itself are in `docs/product/files-octoboard-owns.md`. What the desktop application runs on and how it is
+The desktop application can also show the daemons of other machines, each in a remote window of its own beside the
+local daemon's main window (see `docs/product/remote-daemons.md`); this document is about the application, its main
+window and its own daemon, and says where remote windows change anything. Who can reach the daemon, in either form, is
+in `docs/product/who-can-reach-the-daemon.md`, and the files Octoboard writes for itself are in
+`docs/product/files-octoboard-owns.md`. What the desktop application runs on and how it is
 installed is in `docs/product/installing-the-desktop-app.md`.
 
 ## Starting up
@@ -108,6 +111,11 @@ by then closed into the background stays closed. That fallback is not armed at a
 login**, and such a launch starts hidden, as if its window had been closed into the background, while keeping Octoboard
 running in the background is on (see "A launch at login" in `docs/product/launch-at-login.md`).
 
+**Remote windows open at the last quit come back.** As the application starts, it connects again, asking nothing, to
+the remote daemons whose windows were open when it last quit, and may hold the main window hidden for up to 15 seconds
+meanwhile where it was hidden at that quit (see "Bringing remote windows back at launch" in
+`docs/product/remote-daemons.md`). A launch at login that keeps the application in the background brings none back.
+
 **Closing the window during a launch follows the user's choice.** The application reads whether to keep running in the
 background from its own settings file as it starts, before the window's UI has loaded (see "Where the choice is
 stored" under "Closing the window" below), so a close in the first moments of a launch closes the window into the
@@ -172,11 +180,13 @@ the screen for a daemon of another version (see "The window chrome and the conte
 `docs/product/window-layout.md`), even when the window was already in use on an earlier connection: nothing the window
 had shown stays. No connection banner shows and there is no Retry, since another attempt would meet the same daemon.
 The way out is the screen's: in the desktop application, quitting and opening Octoboard again, which brings up the
-daemon bundled with it; in a browser, reloading the page. A browser page waiting for its daemon to come back from a
+daemon bundled with it; in a browser, reloading the page. A remote daemon of another version never gets this far in
+the desktop application: it is refused before its window loads (see "A version mismatch" in
+`docs/product/remote-daemons.md`). A browser page waiting for its daemon to come back from a
 restart into an update it asked for reloads itself instead of showing the screen (see "Restarting into the update" in
 `docs/product/server-form-updates.md`).
 
-A quit while that screen is shown — its own **Quit Octoboard**, or any of the shell's quit gestures (see "Quitting"
+A quit while that screen is shown — its own **Quit**, or any of the shell's quit gestures (see "Quitting"
 below) — quits at once, asking nothing about running sessions or terminals: that daemon is not talked to.
 
 ## Closing the window
@@ -189,6 +199,18 @@ application, which has no application menu, are the close button of the system's
 the same thing, deliberately, and what they do is the user's choice: the **Keep running in the background when the
 window is closed** switch in Settings' General section, which is **off to begin with** (see "Keep running in the
 background" in `docs/product/general-settings.md`).
+
+**With remote windows open** (see `docs/product/remote-daemons.md`), that choice applies only when the window closed is
+the last one on screen:
+
+- **Closing the main window while another window is on screen only hides it**, whatever the switch says: the local
+  daemon and its sessions run on, and the main window comes back as below.
+- **Closing a remote window closes it for good**, which disconnects it and ends nothing on its daemon. With another
+  window on screen, nothing else happens.
+- **Closing the last window on screen**, main or remote, follows the switch as below: with it off the application quits,
+  and with it on it goes into the background, the main window staying hidden.
+
+The rest of this section reads "the window" as the last window on screen.
 
 **With the switch off, closing the window quits.** It is an ordinary quit gesture, taking exactly the path `Cmd+Q` takes
 (see "Quitting" below): with a session starting, working, waiting for the user, dormant or working in background, or a
@@ -226,15 +248,18 @@ import asked to apply that section sets it on the application that runs the impo
 browser, which has no such choice, neither writes nor applies it (see "The settings a client holds" in
 `docs/product/settings-in-a-configuration.md`).
 
-**Bringing a window closed into the background back.** Any of these brings the window back where it was, at the size
-and position it had:
+**Bringing a window closed into the background back.** Any of these brings a window back where it was, at the size
+and position it had — the window the user focused last, else the main window, unless what brings it back names one:
 
-- the menu bar icon's menu, while the icon is shown: its entry for opening the board or one of its sessions (see
-  "Clicking the icon" and "The icon's menu" in `docs/product/menu-bar-icon.md`);
+- the menu bar icon's menu, while the icon is shown: a tab's entry for opening the board or one of its sessions, which
+  bring back that daemon's window (see "Clicking the icon" and "The icon's menu" in `docs/product/menu-bar-icon.md`);
+- the Remote menu's and the Dock menu's items, and on Windows the jump list's (see "Where remote daemons are reached
+  from" in `docs/product/remote-daemons.md`);
 - opening Octoboard again while it runs — on macOS from the Finder, Spotlight or `open`; on Windows any launch of it,
   such as from the Start menu, which starts no second Octoboard but brings the running one's window forward (once its
   window exists: during the first moments of a launch there is none yet to bring);
-- anything else that activates Octoboard, such as clicking one of its notifications;
+- anything else that activates Octoboard, such as clicking one of its notifications, which brings back the window that
+  raised it;
 - a quit that has to ask for confirmation (see "Quitting" below);
 - the daemon exiting and not being started again: the window comes back showing the notice that it exited (see
   "Starting up" above). A daemon that exits while the window is shown only shows the notice, and does not take the
@@ -247,8 +272,15 @@ again.
 
 Every way of quitting the application behaves the same: `Cmd+Q`, the application menu's Quit, the menu bar icon's quit
 entry (see "Quitting completely" in `docs/product/menu-bar-icon.md`), the Dock icon's own Quit and, while keeping
-Octoboard running in the background is off, closing the window: the close button, `Cmd+W` and the Window menu's Close
-Window item (see "Closing the window" above). The Windows application has no application menu and no `Cmd+Q`: it is
+Octoboard running in the background is off, closing the last window on screen: the close button, `Cmd+W` and the Window
+menu's Close Window item (see "Closing the window" above).
+
+**A quit is the main window's and the local daemon's.** Whichever window it is made from, a remote window included, the
+confirmation below asks only about the local daemon's sessions and shell terminals, in the main window, which is
+brought back to ask it. Quitting stops only the local daemon: every remote window is disconnected, asking nothing about
+its daemon, whose sessions run on (see "Disconnecting and closing" in `docs/product/remote-daemons.md`). Which remote
+windows were open is remembered for the next launch; a remote window whose close is the quit counts as open, and stays
+on screen while the quit is being confirmed, and where it is cancelled. The Windows application has no application menu and no `Cmd+Q`: it is
 quit through the notification-area icon's quit entry, or by closing the window while keeping it running in the
 background is off. The difference is the escape hatch in "Quitting when the window has stopped responding" below, which
 the close gestures have no part in. The system logging out, restarting or shutting down is not one of these quits and
@@ -269,8 +301,8 @@ another version (see "A daemon of another version" above).
   busy shell terminals holding the quit, the message says some terminals are still running something and quitting ends
   what they run; with sessions and busy shell terminals both, it says both are still running, that quitting interrupts
   the sessions, each resumable next time, and ends what the terminals run.
-- Asking brings Octoboard to the front first, restoring its window if it was minimized and bringing it back if it was
-  closed into the background, so a quit from outside the window — the Dock icon's own Quit while another application
+- Asking brings Octoboard to the front first, restoring the main window if it was minimized and bringing it back if it
+  was closed into the background or hidden, so a quit from outside the window — the Dock icon's own Quit while another application
   covers it, or the menu bar icon's Quit while the window is closed — does not leave the question unseen.
 - Once confirmed, every session process is ended and every one of those sessions is left **interrupted**, never
   archived. Clicking one next time resumes it (see "Archiving, interruption and resuming" in
@@ -418,6 +450,8 @@ is interrupted, no preview is frozen, and nothing a session started is stopped.
   keeps its one Dock icon, the one kept in the Dock. Only when that wait cannot be set up is the new version launched
   while the old process is still ending, as a separate instance: it then shows a Dock icon of its own for as long as it
   runs, and the icon kept in the Dock stays inactive meanwhile.
+- **Remote windows** are disconnected as at a quit, nothing being asked of their daemons, and the new launch brings them
+  back (see "Bringing remote windows back at launch" in `docs/product/remote-daemons.md`).
 - **The new version's daemon takes everything over.** On macOS the update has already replaced the application, and
   the new application's daemon adopts the holders, those of the previous build included, within its compatible range.
   On Windows the update's installer runs only after the planned stop, while the holders run on from their copy of the

@@ -30,6 +30,7 @@ export function TextInput({
   dir,
   isDisabled,
   characterLimit,
+  type,
 }: {
   label: string;
   /** A visible label that shows less than the field's name ("Directory" for "Directory for Notes"): the
@@ -50,6 +51,8 @@ export function TextInput({
   dir?: "ltr";
   isDisabled?: boolean;
   characterLimit?: number;
+  /** `password` for a secret: its characters are hidden and the browser is told not to remember it. */
+  type?: "password";
 }): React.ReactElement {
   const field = useTrimmedField(value, onChange);
   const invalid = errorMessage !== undefined && errorMessage !== null && errorMessage !== false && errorMessage !== "";
@@ -59,7 +62,7 @@ export function TextInput({
   const input = endAdornment !== undefined ? (
     <Input data-1p-ignore variant="secondary" fullWidth dir={dir} placeholder={placeholder} end={endAdornment} className={trailing ? "min-w-0 flex-1" : undefined} />
   ) : (
-    <Input data-1p-ignore dir={dir} placeholder={placeholder} className={trailing ? "min-w-0 flex-1" : undefined} />
+    <Input data-1p-ignore dir={dir} placeholder={placeholder} autoComplete={type === "password" ? "off" : undefined} className={trailing ? "min-w-0 flex-1" : undefined} />
   );
   return (
     <TextField
@@ -70,6 +73,7 @@ export function TextInput({
       autoFocus={autoFocus}
       disabled={isDisabled}
       invalid={invalid}
+      type={type}
     >
       {/* The visible text is hidden from the name and the plain label stands in for it, so the name
           is exactly `label` and not the two put together (react-aria names the input by the label

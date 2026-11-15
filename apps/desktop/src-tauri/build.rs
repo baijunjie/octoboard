@@ -71,6 +71,25 @@ fn main() {
     );
 
     println!("cargo:rustc-env=OCTOBOARD_APP_NAME={name}");
+    // The protocol generation the bundled UI speaks, which a remote daemon's must match before its
+    // window opens (`src/remote/`): the UI's generated bindings state it, the daemon's own
+    // `GENERATION` being checked against them by the daemon's tests.
+    let bindings = "../../../packages/ui/src/protocol.generated.ts";
+    println!("cargo:rerun-if-changed={bindings}");
+    let generation = fs::read_to_string(bindings)
+        .unwrap_or_else(|e| panic!("read {bindings}: {e}"))
+        .lines()
+        .find_map(|line| {
+            line.trim()
+                .strip_prefix("export const PROTOCOL_GENERATION = ")?
+                .strip_suffix(';')?
+                .parse::<u32>()
+                .ok()
+        })
+        .unwrap_or_else(|| {
+            panic!("{bindings} states no `export const PROTOCOL_GENERATION = <n>;`")
+        });
+    println!("cargo:rustc-env=OCTOBOARD_PROTOCOL_GENERATION={generation}");
     // Where the update manifests are published (`src/updater/`).
     println!("cargo:rustc-env=OCTOBOARD_REPOSITORY_URL={repository_url}");
     // The generated resources are macOS bundle resources (`tauri.macos.conf.json`); Cargo-only checks

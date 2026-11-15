@@ -205,9 +205,8 @@ pub(super) const GET_SETTINGS: ToolDef = ToolDef {
                   awake), `keep_awake_when` (`always`, or `working` for while any session \
                   works), `daemon_update_check` (whether a daemon that updates itself checks \
                   for a newer release on its own), `daemon_update_channel` (`stable` or \
-                  `beta`, the release line it follows), `auto_select_account`, `interface_language` (the language every window of the \
-                  user shows and the one you are told to reply in, a tag; `null` until a window \
-                  reported one), \
+                  `beta`, the release line it follows), `auto_select_account`, `agent_language` (the language you are told to talk to \
+                  the user in, a tag; `null` until a window reported one), \
                   `default_clone_dir`, the `git_workflow` settings, \
                   `provider_settings` (the settings the user made for each agent's \
                   provider that you may read, by agent and then setting id, with the value \
@@ -286,13 +285,13 @@ pub(super) const UPDATE_SETTINGS: ToolDef = ToolDef {
                                     change withdraws what the old channel offered, and \
                                     checks at once while automatic checks are on.",
                 },
-                "interface_language": {
+                "agent_language": {
                     "type": "string",
-                    "description": "The language the user's interface is shown in, as a tag the \
-                                    interface is offered in (such as `en`, `ja` or \
-                                    `zh-Hans`). Sessions are told to talk to the user in \
-                                    it, and a change switches every window of the user \
-                                    to it.",
+                    "description": "The language sessions are told to talk to the user in, as \
+                                    a tag the interface is offered in (such as `en`, `ja` \
+                                    or `zh-Hans`). It reaches sessions launched \
+                                    afterwards, and leaves the language of the user's \
+                                    windows as it is.",
                 },
                 "default_clone_dir": {
                     "type": "string",

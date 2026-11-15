@@ -94,7 +94,7 @@ function AccountRow({
       {row.choice === "directory" && (
         <DirectoryChoiceField
           label={t("configuration.import.accounts.directory.label", { account: isolate(account.name) })}
-          placeholder={configDir === undefined ? "" : t("configuration.import.accounts.directory.placeholder", { example: `${configDir}-work` })}
+          placeholder={configDir === undefined ? "" : t("common.example", { example: `${configDir}-work` })}
           requiredMessage={t("configuration.import.accounts.directory.required")}
           value={row.directory}
           onChange={(directory) => onChange({ ...row, directory })}

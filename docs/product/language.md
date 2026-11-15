@@ -14,20 +14,29 @@ onto the list" below).
 list, and what any message missing from a language's translation is shown in. The fallback is a choice of its own; it
 is not taken from the list's order.
 
-## Choosing the language
+## Two languages
 
-The language is chosen in the Language row of Settings' General section (see "Language" in
-`docs/product/general-settings.md`). The options are the 17 languages in list order; there is no option that follows the system. Each language is named in that
-language itself (日本語, Deutsch, العربية and so on), so a user can find theirs whatever the UI currently shows. The
-choice is one for every window and is also the language sessions are told to talk to the user in: it is the language
-the daemon holds (see "The language the daemon holds" below). A pick takes effect at once in the window it is made in,
-then in every other open window.
+Octoboard has two language settings, each one of the offered languages:
 
-**Before a language is known, it is picked from the system.** When a client has no language cached (see "Where the
-choice is stored" below), the UI maps the system's preferred languages onto the list (see below) and renders in the
-result until it has connected; it then takes the language the daemon holds, when the daemon holds one this build
-offers. A later change of the system's languages changes nothing once a client has a language cached, in the macOS
-application and in a browser alike: the language changes only when the language the daemon holds does.
+- **The interface language**, the language the UI renders in — "the current language" below. It is the client's own:
+  every window of the desktop application shows the same one, whichever daemon it shows, and a browser keeps its own. It
+  is never sent to a daemon, so two clients of one daemon may show different languages (see "Choosing the interface
+  language" and "Where the interface language is stored" below).
+- **The agent language**, the language sessions are told to talk to the user in. It is a daemon's setting, one for every
+  client of that daemon (see "The agent language" below).
+
+## Choosing the interface language
+
+The interface language is chosen in the Interface language row of Settings' General section (see "Language" in
+`docs/product/general-settings.md`). The options are the 17 languages in list order; there is no option that follows
+the system. Each language is named in that language itself (日本語, Deutsch, العربية and so on), so a user can find
+theirs whatever the UI currently shows. A pick takes effect at once in the window it is made in and, in the desktop
+application, in every other open window of it, a remote window included; it changes nothing on any daemon.
+
+**Until a language is picked, it is picked from the system.** When a client has none stored (see "Where the interface
+language is stored" below), the UI maps the system's preferred languages onto the list (see below) and renders in the
+result. A later change of the system's languages changes nothing once a client has a language stored, in the desktop
+application and in a browser alike: the language changes only when the user picks another.
 
 The pick from the system in the macOS application uses the system's full list of preferred languages. The window's
 web view on its own would only know the first preference, which would put a user whose first language is not offered
@@ -71,7 +80,7 @@ Some consequences:
 
 ## What follows the language
 
-**"The current language" is always the language the UI actually renders, never the system's own locale.** When the
+**"The current language" is always the interface language the UI actually renders, never the system's own locale.** When the
 system's language is not offered, the UI is English while the system stays as it is, and everything localized follows
 the UI rather than the system.
 
@@ -91,14 +100,16 @@ What follows the current language:
   as written (see "Language and direction in a page" in `docs/product/report-page-components.md`);
 - the UI components' own built-in text and formatting;
 - in the macOS application, the application menu: every item Octoboard defines in it — the Octoboard menu's About,
-  Settings…, Services, Hide, Hide Others, Show All and Quit, and the Edit, View and Window menus with their items.
-  A change of language relabels the menu at once, on every screen the window shows. The product name in the labels
+  Settings…, Services, Hide, Hide Others, Show All and Quit, and the Edit, View, Remote and Window menus with their
+  items — and the Remote items of the Dock icon's menu; in the Windows application, the Remote items of every window's
+  system menu and of the taskbar's jump list (see "Where remote daemons are reached from" in
+  `docs/product/remote-daemons.md`). A change of language relabels them at once, on every screen the window shows. The product name in the labels
   is never translated. At launch the menu is English until the window's UI has loaded. The items macOS adds to
   these menus by itself — AutoFill, Start Dictation…, Emoji & Symbols, Close All — are not Octoboard's and do not
   follow the language; they are currently shown in English;
 - in the desktop application, the menu bar icon's menu (the notification-area icon's on Windows): its group headings,
-  its session lines' wording, its quota submenus' titles and lines, the update entry, Open and Quit (see "The icon's
-  menu" in `docs/product/menu-bar-icon.md`). Like the application menu, it is relabelled at once on a change of
+  its session lines' wording, its quota submenus' titles and lines, the local daemon's tab, the update entry, Open,
+  Disconnect and Quit (see "The icon's menu" in `docs/product/menu-bar-icon.md`). Like the application menu, it is relabelled at once on a change of
   language and is English until the window's UI has loaded. The icon's accessible name — on Windows its tooltip — follows the language too (see "The icon's look" and
   "The notification-area icon on Windows" in `docs/product/menu-bar-icon.md`); without a quota it is the product name
   alone. The product name and the
@@ -117,7 +128,7 @@ What does not follow it:
 - **The terminal.** What the agent draws is laid out left to right whatever the language, and is never mirrored.
 - **Text aimed at the agents** — the console session's instructions, the tool descriptions and the tools' replies, the
   prompts injected into a launch — stays English whatever the language. Only what the user reads in Octoboard's own UI
-  is localized. What a session is told of the user's language names it, in English, without translating anything else
+  is localized. What a session is told of the agent language names it, in English, without translating anything else
   (see "The guidance on the user's language" in `docs/product/launching-agents.md`).
 - **The prefilled Issue report.** The title and body **Report issue** fills in are English whatever the language,
   being written for the maintainers (see `docs/product/issue-reports.md`); the guidance around it in the alert follows
@@ -141,51 +152,44 @@ may be on another machine; until a daemon has announced them, and for a daemon t
 own are used. What concerns the window's own machine — its notifications, its permissions, its menu bar icon — is
 worded in the window's own terms.
 
-## Where the choice is stored
+## Where the interface language is stored
 
-The choice is held **by the daemon**, as the language the daemon holds (see below): one value for every client, a
-desktop window and a browser tab, or two machines reaching the same daemon, alike. Each client also keeps a copy in its
-own browser storage, refreshed whenever the window takes the daemon's language or the user picks one, and used only to
-render in before the client has connected, such as while it starts or after it has lost its connection. Once
-connected, the daemon's language wins: a copy that differs from it is replaced by it, when it is one this build
-offers, and never replaces it.
+The interface language is kept **by the client**, in its own browser storage, and never by a daemon. In the desktop
+application that storage is the application's, shared by every window, so all of them show one language, whichever
+daemon each shows, and a pick in one reaches the others at once. A browser keeps its own, so a browser tab on a daemon
+and the desktop application's window on the same daemon each show their own. Without that storage nothing is kept:
+every load renders in the language picked from the system. Clearing it makes the next load pick from the system again.
 
-A client with no copy — on its first launch, or once its storage has been cleared — renders in the language picked
-from the system until it has connected, then switches to the language the daemon holds; the switch may be briefly
-visible. Without that storage nothing is kept: every load renders in the language picked from the system until it has
-connected.
+A configuration export made by a client carries the interface language it shows, as the settings a client holds are
+carried, and an import that applies the General section sets it on the client that runs the import (see "The settings a
+client holds" in `docs/product/settings-in-a-configuration.md`).
 
-## The language the daemon holds
+## The agent language
 
-The daemon holds one language, stored as `interface_language`, a tag from the 17 offered (see "The offered languages"
-above); the daemon refuses any other tag. It is **the language every window shows**, and also **the user's language**:
-the language sessions are told to talk to the user in (see "The guidance on the user's language" in
-`docs/product/launching-agents.md`), so a window's language is always the one agents are told. There is one value for
-every client, and none until a client reports one.
+A daemon holds one agent language, stored as `agent_language`, a tag from the 17 offered (see "The offered languages"
+above); the daemon refuses any other tag. It is the language sessions are told to talk to the user in (see "The
+guidance on the user's language" in `docs/product/launching-agents.md`). It is one value for every client of that daemon,
+and none until one is set. Every window of a daemon shows the one that daemon holds in its Agent language row, so a
+remote window shows and changes the remote daemon's (see `docs/product/remote-daemons.md`); while the daemon holds none,
+or one this build does not offer, the row shows the interface language.
 
-**Every window follows it.** Once a client has connected and received the daemon's state for that connection, the
-window shows the language the daemon holds, and switches whenever the daemon announces a new one, whoever changed it.
-Until then — on a reconnect too — the window keeps the language it has. A language this build does not offer leaves the
-window in the language it has, and the client leaves the daemon's value as it is. A window that is not connected when
-the language changes takes the new one when it reconnects.
+The agent language changes:
 
-The language changes:
-
-- **when the user picks one in Settings**, in any window. The window switches at once and sends the pick to the daemon,
-  and every other open window follows. When the daemon does not receive the pick or refuses it, an error is shown and
-  the window goes back to the language the daemon holds, as the window last knew it, or to the language it showed
-  before the pick when the daemon holds none this build offers; the pick is not sent again later;
+- **when the user picks one in Settings**, in any window of that daemon, which saves as the daemon's other settings do
+  (see "How switches save" in `docs/product/settings.md`); every other open window of that daemon shows the new one;
 - **when a console session changes it** through the settings tools, under the same rule about offered tags (see
-  "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`); every open
-  window follows;
-- **when an import applies the General section** of a configuration document that carries a language this build
+  "Application settings: `get_settings` and `update_settings`" in `docs/product/agent-settings-tools.md`);
+- **when an import applies the General section** of a configuration document that carries an agent language this build
   offers; one it does not offer is skipped (see "Application settings are left alone unless they are asked for" in
-  `docs/product/settings-in-a-configuration.md`). Every open window follows. A configuration export that includes the
-  General section carries the language the daemon holds, when it holds one;
-- **on connecting, only while the daemon holds none yet**: the client reports the language it shows — its cached copy,
-  or its pick from the system — so the daemon starts from it. This is the only time a client reports a language
-  without the user picking one. A report that fails is not shown as an error, and is tried again later, at the latest
-  when the client next connects.
+  `docs/product/settings-in-a-configuration.md`). A configuration export that includes the General section carries the
+  agent language the daemon holds, when it holds one;
+- **on connecting, only while the daemon holds none yet**: the client gives it the interface language it shows, once it
+  has received the daemon's state for that connection. This is the only time a client sets it without the user picking
+  one, and the remote window of the desktop application does it for a remote daemon too. A report that fails is not
+  shown as an error, and is tried again later, at the latest when the client next connects.
+
+The interface language never follows the agent language, nor the agent language the interface language once the daemon
+holds one.
 
 ## What is translated so far
 

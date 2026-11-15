@@ -205,6 +205,7 @@ mod tests {
             host: crate::platform::HostFacts::current().into(),
             keep_awake_held: false,
             shell_terminals: vec![],
+            remote_access: None,
         })
         .unwrap();
         assert_eq!(snapshot["account_quotas"][0]["plan"], "max");

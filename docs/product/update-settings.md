@@ -3,13 +3,21 @@
 Settings' **Updates** section, directly above About, holds everything about updating Octoboard, in three rows:
 **Version**, **Check for updates automatically** and **Update channel**. It is there wherever something updates itself:
 
-- in the **desktop application**, on macOS and on Windows, where it updates the application (see
+- in the **desktop application's main window**, on macOS and on Windows, where it updates the application (see
   `docs/product/in-app-updates.md`);
 - in a **browser open on a daemon that updates itself** — the server form's official release build (see "Which daemons
   update themselves" in `docs/product/server-form-updates.md`) — where it updates the daemon.
 
 Anywhere else, a browser on any other daemon included, the section is absent. The rows are the same in both; where they
 differ, it is said below.
+
+**In a remote window of the desktop application** (see `docs/product/remote-daemons.md`), nothing is updated: the
+section is there only where the remote daemon updates itself, and then holds that daemon's **Check for updates
+automatically** and **Update channel** alone, with no Version row and nothing that checks, downloads or restarts. They
+are the daemon's settings `daemon_update_check` and `daemon_update_channel`, as in a browser below; the switch's line
+says, while on, that the daemon checks for updates in the background, and while off, that turning it on lets it, and
+either way that the daemon is updated on the computer it runs on (see "No updates in a remote window" in
+`docs/product/remote-daemons.md`).
 
 ## The Version row
 

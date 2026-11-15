@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::menu::APP_NAME;
 
@@ -25,6 +25,13 @@ pub struct TrayMenu {
     #[serde(default = "default_updates_label")]
     pub(super) updates: String,
     pub(super) quit: String,
+    /// The label of Disconnect, which a remote daemon's tab (a submenu on Windows) has.
+    #[serde(default = "default_disconnect_label")]
+    pub(super) disconnect: String,
+    /// The labels of the application's own lines and of the tabs, which the menu takes from the
+    /// local daemon's window.
+    #[serde(default)]
+    pub(super) app: AppLabels,
     /// Whether the icon shows the attention dot, which asks for the user's attention.
     #[serde(default)]
     pub(super) attention: bool,
@@ -45,9 +52,30 @@ pub struct TrayMenu {
     pub(super) keep_awake_label: String,
 }
 
+/// The labels of what the menu shows for the application rather than for one daemon: the local
+/// daemon's tab ("This Mac", "This PC"), and the line that opens a daemon held for the browser
+/// there.
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct AppLabels {
+    pub(super) this_computer: String,
+    pub(super) open_in_browser: String,
+}
+
+impl Default for AppLabels {
+    /// English, until the UI sends its own.
+    fn default() -> Self {
+        let mac = cfg!(target_os = "macos");
+        Self {
+            this_computer: if mac { "This Mac" } else { "This PC" }.to_string(),
+            open_in_browser: "Open in browser".to_string(),
+        }
+    }
+}
+
 /// A picture: a base64 PNG, and whether it is a template image, drawn in black for its alpha alone
 /// so macOS tints it to suit the menu.
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub(super) struct LineIcon {
     pub(super) png: String,
     pub(super) template: bool,
@@ -61,20 +89,24 @@ pub(super) struct TraySection {
 }
 
 /// A submenu, opened from a line of the menu that shows its title.
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct TraySubmenu {
     pub(super) title: String,
     /// The picture beside the title, such as the agent's mark: a key of `icons`.
     #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(super) icon: Option<String>,
     pub items: Vec<SubmenuItem>,
     /// The current console's account quota for this agent, selected by the UI.
     #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub quota_remaining: Option<u8>,
     /// Weekly remainder beneath the 5-hour bar, absent for single-window accounts.
     #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub quota_weekly_remaining: Option<u8>,
     #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub quota_label: Option<String>,
 }
 
@@ -87,19 +119,21 @@ pub(super) struct TrayItem {
 }
 
 /// One window of a two-layer meter: its name and detail, and how much of its bar is filled (0 to 1).
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct MeterLayer {
     pub name: String,
     pub detail: String,
     pub fraction: f64,
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct HeaderStatus {
     pub label: String,
     #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub foreground_colour: Option<[u8; 3]>,
     #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub background_colour: Option<[u8; 4]>,
 }
 
@@ -109,19 +143,23 @@ pub struct HeaderStatus {
 /// windows as one two-layer meter, a note, and the rules between accounts. `label` is a line's whole
 /// phrase (for a header, when it says more than `title`): its menu item's title, which is what
 /// assistive technology reads.
-#[derive(Clone, Deserialize)]
+#[derive(Clone, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum SubmenuItem {
     Header {
         title: String,
         #[serde(default)]
+        #[serde(skip_serializing_if = "Option::is_none")]
         status: Option<HeaderStatus>,
         #[serde(default)]
+        #[serde(skip_serializing_if = "Option::is_none")]
         suffix: Option<String>,
         /// When the account's reading was taken, drawn right-aligned on its line.
         #[serde(default)]
+        #[serde(skip_serializing_if = "Option::is_none")]
         detail: Option<String>,
         #[serde(default)]
+        #[serde(skip_serializing_if = "Option::is_none")]
         label: Option<String>,
     },
     Window {
@@ -131,11 +169,13 @@ pub enum SubmenuItem {
         fraction: f64,
         /// The bar's colour, as sRGB bytes from the UI stylesheet.
         #[serde(default)]
+        #[serde(skip_serializing_if = "Option::is_none")]
         fill_colour: Option<[u8; 3]>,
         #[serde(default)]
         used_up: bool,
         /// The bar's colour when `used_up`, as sRGB bytes from the UI stylesheet.
         #[serde(default)]
+        #[serde(skip_serializing_if = "Option::is_none")]
         used_up_colour: Option<[u8; 3]>,
     },
     Meter {
@@ -144,11 +184,13 @@ pub enum SubmenuItem {
         label: String,
         /// The bar's colour, as sRGB bytes from the UI stylesheet.
         #[serde(default)]
+        #[serde(skip_serializing_if = "Option::is_none")]
         fill_colour: Option<[u8; 3]>,
         #[serde(default)]
         used_up: bool,
         /// The bars' colour when `used_up`, as sRGB bytes from the UI stylesheet.
         #[serde(default)]
+        #[serde(skip_serializing_if = "Option::is_none")]
         used_up_colour: Option<[u8; 3]>,
     },
     Note {
@@ -174,6 +216,10 @@ fn default_updates_label() -> String {
     "Check for updates".to_string()
 }
 
+fn default_disconnect_label() -> String {
+    "Disconnect".to_string()
+}
+
 /// The English name the icon has while the computer is kept awake, until the UI sends its own.
 pub(super) fn default_keep_awake_label() -> String {
     format!("{APP_NAME} is keeping the computer awake")
@@ -189,6 +235,8 @@ impl Default for TrayMenu {
             open: "Open board".to_string(),
             updates: default_updates_label(),
             quit: "Quit completely".to_string(),
+            disconnect: default_disconnect_label(),
+            app: AppLabels::default(),
             attention: false,
             quota_remaining: None,
             quota_weekly_remaining: None,
@@ -369,5 +417,23 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn the_application_s_labels_are_optional_and_read_whole() {
+        let bare = parsed(r#"{"sections": [], "open": "Open", "quit": "Quit"}"#);
+        assert_eq!(bare.app, AppLabels::default());
+        let sent = parsed(
+            r#"{"sections": [], "open": "Open", "quit": "Quit", "app": {
+                "this_computer": "Diese Mac", "open_in_browser": "Browser"}}"#,
+        );
+        assert_eq!(sent.app.this_computer, "Diese Mac");
+        assert_eq!(sent.app.open_in_browser, "Browser");
+        // A label the UI left out keeps its English default.
+        let partial = parsed(
+            r#"{"sections": [], "open": "Open", "quit": "Quit", "app": {"this_computer": "Hier"}}"#,
+        );
+        assert_eq!(partial.app.this_computer, "Hier");
+        assert_eq!(partial.app.open_in_browser, "Open in browser");
     }
 }

@@ -1,0 +1,9 @@
+# A custom permission for the app's own command that shows a system notification marked with the
+# window that raised it; see `exit-lifecycle.toml` for why an app-defined command needs a file like
+# this.
+"$schema" = "./schemas/schema.json"
+
+[[permission]]
+identifier = "allow-show-notification"
+description = "Allows the frontend to show a system notification, a click on which brings forward the window that raised it."
+commands.allow = ["show_notification"]

@@ -261,9 +261,10 @@ runtime and panics on a multi-thread one.
   wait is CPU work or `spawn_blocking`. With real I/O in between they return before the code got there, and an
   absence asserted after them passes whatever the code does: wait for an event instead.
 
-## A test that needs a port nothing listens on takes `test_support::ClosedPort`
+## A test takes a free port from `test_support::ClosedPort`, and never expects a port it closed to be free at once
 
-Applies to daemon tests that connect to a loopback port expecting the connection to be refused. Never bind port 0 and
+Applies to daemon tests that connect to a loopback port expecting the connection to be refused, or that need a port
+number to bind. Never bind port 0 and
 drop the listener to get one: the system hands that port to the next test in parallel that binds port 0, and the
 connection reaches that test's server instead of being refused. Holding the port in a bound socket that never listens
 does not work either: on macOS the connection times out rather than being refused. `ClosedPort::new()` picks a port
@@ -271,3 +272,15 @@ below the ephemeral range, which no other test is given for as long as the `Clos
 long as the test relies on the port, and name the port through `closed.port()`: every finder in a binary starts at the
 same place, so a `ClosedPort` dropped at once (`ClosedPort::new().port()` stored for later) has its port bound by the
 next finder, and the connection reaches that test's listener instead of being refused.
+
+On Linux and macOS, a port whose listener the test or the code under test has just closed is neither bindable nor
+refusing at once: while another test in the binary spawns a child process, the child holds a copy of every descriptor
+until its `exec` closes them, so the listening socket lives on for a moment, a bind on the port fails with
+`EADDRINUSE` and a connection is accepted. This shows only under the full suite's load, and never on Windows, whose
+sockets are not inherited. So, after a listener closes:
+
+- to prove the code under test let the port go, assert that
+  `crate::platform::proc_table::listening_ports(&[std::process::id() as i32])` no longer lists it (the child's copy
+  belongs to another process), not that the port binds or refuses;
+- before binding the port again or expecting a refusal on it, wait with `test_support::closed_port::let_go(port)`,
+  which blocks (from async code, through `spawn_blocking`).

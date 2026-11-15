@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager, RunEvent, WebviewWindow, Window};
 
 use crate::apple_event::{current_enum_code, Slot};
-use crate::background::{hidden_by_close, hide, show_main_window, BackgroundState};
+use crate::background::{hidden_by_close, hide, show_last_focused_window, BackgroundState};
 use crate::diagnostics::diagnostic;
 use crate::exit::{end_session, quit_let_through, should_let_quit_through, way_out_under_way};
 
@@ -134,7 +134,7 @@ pub fn on_run_event(app: &AppHandle, event: &RunEvent) {
     // Dock, brings the window back. Answered with a window still on screen too: one closed in
     // fullscreen stays visible while it leaves fullscreen, and this cancels its pending hide.
     if let RunEvent::Reopen { .. } = event {
-        show_main_window(app);
+        show_last_focused_window(app);
     }
 }
 
@@ -187,7 +187,7 @@ fn deactivate(app: &AppHandle) {
 
 /// Brings the window back when the app is activated while the close button has it hidden: by a
 /// click on one of its notifications, which no other event reports. Every path through
-/// `show_main_window` (the tray menu's Open and session lines, a reopen, `bring_to_front`) clears
+/// `show_window` (the tray menu's Open and session lines, a reopen, `bring_to_front`) clears
 /// `hidden_by_close` before it activates the app, so none is answered twice, and Cmd+H never sets
 /// it, so unhiding the app that way is left to AppKit. Called on the main thread.
 fn show_on_activation(app: &AppHandle) {
@@ -197,7 +197,7 @@ fn show_on_activation(app: &AppHandle) {
     let app = app.clone();
     let block = block2::RcBlock::new(move |_: std::ptr::NonNull<NSNotification>| {
         if hidden_by_close(&app) {
-            show_main_window(&app);
+            show_last_focused_window(&app);
         }
     });
     // SAFETY: the block is `'static` and sendable, and no queue is given, so it runs on the thread

@@ -13,18 +13,24 @@ account details dialog, and on the sharing row of an account's settings dialog (
 `docs/product/per-agent-settings.md`, "The accounts table", "The account details dialog" and "Sharing the default
 configuration" in `docs/product/agent-accounts.md`, and "Explanations in help tips" in
 `docs/product/labels-and-tooltips.md`). The sections, in order, are **General**, **Appearance**, **Agent
-behavior**, **Agent accounts**, **Git**, **Trusted folders**, **Permissions**, **Notifications**, **Keyboard shortcuts**,
-**Cleanup**, **Configuration**, **Updates** and **About**; the dialog opens on General unless it was asked to open on
-another section. **Permissions** is there in the macOS application and in a browser running on a Mac, an iPhone or an
-iPad — judged from the platform the browser reports, not from the system the daemon runs on; the desktop application
-on any other system and a browser on any other system leave it out. **Updates** is there only where something updates
-itself: the desktop application, and a browser open on a daemon that updates itself (see `docs/product/update-settings.md`). The search field narrows the sections and their rows to
+behavior**, **Agent accounts**, **Git**, **Trusted folders**, **Permissions**, **Remote access**, **Notifications**,
+**Keyboard shortcuts**, **Cleanup**, **Configuration**, **Updates** and **About**; the dialog opens on General unless it
+was asked to open on another section. **Permissions** is there in the macOS application's main window and in a browser
+running on a Mac, an iPhone or an iPad — judged from the platform the browser reports, not from the system the daemon
+runs on; the desktop application on any other system, its remote windows and a browser on any other system leave it
+out. **Remote access** is there only in the main window of the macOS and Windows applications (see
+`docs/product/remote-access-settings.md`). **Updates** is there only where something updates itself: the desktop
+application's main window, a browser open on a daemon that updates itself, and a remote window whose daemon updates
+itself, there with that daemon's two settings alone (see `docs/product/update-settings.md`).
+
+In a remote window of the desktop application, every setting a daemon keeps is the remote daemon's, and what is the
+application's own is left out (see "The remote window" in `docs/product/remote-daemons.md`). The search field narrows the sections and their rows to
 the settings that match what is typed (see `docs/product/searching-settings.md`).
 
 A console session can read and change the default clone directory, the automatic pulling of repositories, the
 automatic deletion of archived sessions whose conversation is gone, resuming sessions on start, Prevent sleep and when
-it holds, closing idle shell terminals with their panel, the application-wide git workflow settings, the language the
-daemon holds for the user (see "The language the daemon holds" in `docs/product/language.md`) and the daemon's own
+it holds, closing idle shell terminals with their panel, the application-wide git workflow settings, the agent language
+(see "The agent language" in `docs/product/language.md`) and the daemon's own
 automatic update check and update channel. It can read, but not change, automatic account
 selection, Claude compatibility, Codex compatibility, the agent tags, the agent accounts (without their directories) and the trusted
 folders. The switches of Agent behavior, the approval modes, and the switches that switch accounts at the usage limit
@@ -83,7 +89,8 @@ Settings opens from:
 
 - the **Settings** button at the bottom of the rail (see "The rail" in `docs/product/window-layout.md`);
 - in the macOS application, the application menu's **Settings…** item, whose shortcut is Open settings' — `Cmd+,`
-  unless the user has changed it (see `docs/product/keyboard-shortcuts.md`). The menu item does nothing
+  unless the user has changed it (see `docs/product/keyboard-shortcuts.md`) — in the window the user focused last, a
+  remote window included (see `docs/product/remote-daemons.md`), else the main window. The menu item does nothing
   while the window has nothing to show yet (before the daemon's state has first arrived), while Settings is already
   open, and while another dialog or an action menu — a row's or a header's, its submenus included — is open;
 - where there is no native menu — the Windows application and a browser — the Open settings shortcut itself (`Ctrl+,`
@@ -192,8 +199,8 @@ client in the same way (see "Check for updates automatically" in `docs/product/u
 
 ## General
 
-App-wide settings: the **Language** row, then the groups **Startup**, **Window**, **Power**, **Terminals** and
-**Sorting**, each under a heading (see "Group headings" above), some of them only in the desktop application. Which rows
+App-wide settings: the **Interface language** and **Agent language** rows, then the groups **Startup**, **Window**,
+**Power**, **Terminals** and **Sorting**, each under a heading (see "Group headings" above), some of them only in the desktop application. Which rows
 each group holds, where each is shown and what each does are in `docs/product/general-settings.md`.
 
 ## Appearance
@@ -273,6 +280,13 @@ Recording and Accessibility, to grant it ahead of time. In a browser that has th
 the list of sections above), it only says that permissions can be managed only in the macOS application. What the
 section shows and what each row offers are in `docs/product/macos-privacy-permissions.md`.
 
+## Remote access
+
+In the main window of the macOS and Windows applications: whether the application's own daemon may be reached from the
+owner's other devices over SSH, and, while it is, the browser address, the SSH forward, the connection details with
+their QR code and the key rotation, with whether the computer's SSH server is on, and on Windows the browser port. What
+the section shows, and what each row does, are in `docs/product/remote-access-settings.md`.
+
 ## Notifications
 
 Whether Octoboard may show a system notification when a session starts waiting for the user. What the section shows
@@ -311,7 +325,8 @@ cannot the section holds a line saying that exporting and importing configuratio
 
 Where Octoboard's updates stand, with the button that moves the update on, whether Octoboard checks for updates by
 itself, and the release channel it follows: three rows, **Version**, **Check for updates automatically** and **Update
-channel**, in the desktop application for the application and in a browser for a daemon that updates itself. The rows,
+channel**, in the desktop application's main window for the application and in a browser for a daemon that updates
+itself; in a remote window whose daemon updates itself, only the last two, for that daemon. The rows,
 and where each choice is kept, are in `docs/product/update-settings.md`.
 
 ## About

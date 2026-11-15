@@ -4,7 +4,7 @@ import { expect, it } from "vitest";
 import type { Imported } from "../../configuration/ImportResult";
 import { CLEANUP_SWITCHES, GENERAL_SWITCHES, GIT_SWITCHES, AGENT_BEHAVIOR_SWITCHES } from "../../configuration/booleanSettings";
 import { documentClientSettings } from "../../configuration/clientSettings";
-import { documentLanguage } from "../../configuration/languageSettingValues";
+import { documentAgentLanguage } from "../../configuration/agentLanguageSettingValues";
 import { isLanguage } from "../../i18n/languages";
 import { documentShortcuts, type Inspection } from "../../configuration/importPlan";
 import { SETTINGS_SECTIONS } from "../../configuration/settingsSections";
@@ -297,9 +297,10 @@ it("reports settings only for a document that carries them, and only ones it car
       expect(result.settings_applied ?? null, id).toBeNull();
       expect(result.settings_error ?? null, id).toBeNull();
     } else if (result.settings_applied) {
-      // The language is the daemon's own to apply; the other client-held values are passed through. A result of some of
-      // the sections carries only the keys of those, so each key it holds is one the document carries, with its value.
-      const { keyboard_shortcuts: _shortcuts, interface_language: _language, ...applied } = result.settings_applied;
+      // The agent language is the daemon's own to apply, from either language key; the other client-held values are
+      // passed through. A result of some of the sections carries only the keys of those, so each key it holds is one
+      // the document carries, with its value.
+      const { keyboard_shortcuts: _shortcuts, interface_language: _language, agent_language: _agentLanguage, ...applied } = result.settings_applied;
       const carried = carriedSettings(inspection.settings);
       for (const [key, value] of Object.entries(applied)) expect(value, `${id}: ${key}`).toEqual(carried[key as keyof typeof carried]);
     }
@@ -322,7 +323,7 @@ function sectionsWithLines(inspection: Omit<Inspection, "type">, text: string): 
   const client = documentClientSettings(document, { backgroundRun: true, menuBarIcon: true });
   const switches = (list: readonly { field: keyof typeof settings }[]) => list.some(({ field }) => settings[field] != null);
   const lines: Record<SettingsSection, boolean> = {
-    general: isLanguage(documentLanguage(document)) || client.session_order !== undefined || client.run_in_background !== undefined || client.show_menu_bar_icon !== undefined || switches(GENERAL_SWITCHES),
+    general: isLanguage(documentAgentLanguage(document)) || client.interface_language !== undefined || client.session_order !== undefined || client.run_in_background !== undefined || client.show_menu_bar_icon !== undefined || switches(GENERAL_SWITCHES),
     appearance: client.appearance !== undefined || client.markdown_style !== undefined || client.terminal_font_size !== undefined,
     git: settings.default_clone_dir !== null || settings.foreign_default_clone_dir || settings.git_workflow != null || switches(GIT_SWITCHES),
     agent_behavior: switches(AGENT_BEHAVIOR_SWITCHES),

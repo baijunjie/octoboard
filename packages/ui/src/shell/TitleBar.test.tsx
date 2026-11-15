@@ -8,9 +8,11 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { sessionOf } from "../fixtures/builders";
 import { currentLanguage, setLanguage } from "../i18n/language";
+import type { PlatformAdapter } from "../platform";
 import { PlatformProvider } from "../platform/react";
-import { TitleBar } from "./TitleBar";
-import { BROWSER_HOST } from "../test/hosts";
+import { BareTitleBar, TitleBar } from "./TitleBar";
+import { withoutIsolates } from "../test/dom";
+import { BROWSER_HOST, MAC_HOST, WINDOWS_HOST } from "../test/hosts";
 import { TestHost } from "../test/TestHost";
 import { testDaemon } from "../test/testDaemon";
 import { tap, press as pressMark } from "../components/hint/tooltipTestSupport";
@@ -28,12 +30,12 @@ const toggle = (open: boolean, onPress: () => void) => ({
   onHoverChange: () => {},
 });
 
-function mount(props: Partial<React.ComponentProps<typeof TitleBar>>) {
+function mount(props: Partial<React.ComponentProps<typeof TitleBar>>, platform: PlatformAdapter = { kind: "browser", host: BROWSER_HOST }) {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   const render = (next: Partial<React.ComponentProps<typeof TitleBar>>) => act(() =>
     root.render(
-      <PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}>
+      <PlatformProvider value={platform}>
         <TitleBar
           sidebarShown
           hasSidebar
@@ -255,4 +257,68 @@ it("leaves focus alone when the note goes while focus is elsewhere", () => {
   expect(container.contains(outside)).toBe(false);
   render({ ...session, screen_inexact: false });
   expect(focusTerminal).not.toHaveBeenCalled();
+});
+
+/** The window of a daemon elsewhere, as the desktop shell opens it. */
+function inRemoteWindow(name = "Build box") {
+  vi.stubGlobal("__TAURI_INTERNALS__", {});
+  window.history.replaceState({}, "", `/?daemon=me%40host&remote=${encodeURIComponent(name)}`);
+  onTestFinished(() => {
+    window.history.replaceState({}, "", "/");
+    vi.unstubAllGlobals();
+  });
+}
+
+const remoteDaemons: NonNullable<PlatformAdapter["remoteDaemons"]> = {
+  list: async () => [],
+  status: async () => [],
+  onChanged: () => () => {},
+  save: async (entry) => ({ ...entry, id: entry.id ?? "new" }),
+  remove: async () => {},
+  connect: async () => ({ outcome: "opened" }),
+  disconnect: async () => {},
+  newWindow: async () => {},
+  openWindow: async () => {},
+  showMainWindow: async () => {},
+  showUpdates: async () => {},
+};
+
+it("names the daemon in a window opened on a daemon elsewhere, for the eye and for a screen reader, in the bar with a session and in the bare one", () => {
+  inRemoteWindow();
+  const { container } = mount({});
+  expect(container.textContent).toContain("Build box");
+  expect(withoutIsolates(container.querySelector(".sr-only")!.textContent)).toBe("Daemon on Build box");
+  expect(container.querySelector("[aria-hidden=true] [dir=auto]")!.textContent).toBe("Build box");
+
+  const bare = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(bare);
+  act(() => root.render(<PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}><BareTitleBar /></PlatformProvider>));
+  onTestFinished(() => {
+    act(() => root.unmount());
+    bare.remove();
+  });
+  expect(bare.textContent).toContain("Build box");
+  expect(withoutIsolates(bare.querySelector(".sr-only")!.textContent)).toBe("Daemon on Build box");
+});
+
+it("names no daemon in the local daemon's window", () => {
+  const { container } = mount({});
+  expect(container.querySelector(".sr-only")).toBeNull();
+  expect(container.textContent).not.toContain("Daemon on");
+});
+
+it("has no Remote menu button on any platform: the Windows bar's Remote items live in the window's system menu", () => {
+  const windows = mount({}, { kind: "tauri", host: WINDOWS_HOST, remoteDaemons });
+  expect(windows.container.querySelector("button[aria-label=Remote]")).toBeNull();
+  expect(Array.from(windows.container.querySelectorAll("button")).map((button) => button.getAttribute("aria-label"))).not.toContain("Remote");
+  // The first button of the bar is the navigation's, not a menu.
+  expect(windows.container.querySelector("button")!.getAttribute("aria-label")).toBe("Back");
+  expect(windows.container.querySelector("button[aria-haspopup]")).toBeNull();
+
+  const mac = mount({}, { kind: "tauri", host: MAC_HOST, remoteDaemons });
+  expect(mac.container.querySelector("button[aria-label=Remote]")).toBeNull();
+  const browser = mount({});
+  expect(browser.container.querySelector("button[aria-label=Remote]")).toBeNull();
+  const noShell = mount({}, { kind: "tauri", host: WINDOWS_HOST });
+  expect(noShell.container.querySelector("button[aria-label=Remote]")).toBeNull();
 });

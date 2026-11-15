@@ -16,7 +16,8 @@ in the environment wins.
   `bundle.macOS.infoPlist` in `tauri.macos.conf.json`; the ignored `src-tauri/generated-localizations/` holds the `.lproj/InfoPlist.strings` files
   mapped into bundle resources by `src-tauri/tauri.macos.conf.json`. Its exported `generateNativeLocalizations` is tested by
   `native-localizations.test.mjs`.
-- `build-daemon.mjs` (`pnpm build:daemon`) — builds `apps/daemon/` in release mode and copies it into
+- `build-daemon.mjs` (`pnpm build:daemon`) — builds `apps/daemon/` in release mode with the UI build embedded
+  (building `packages/ui` first when `packages/ui/dist` is missing) and copies it into
   `src-tauri/binaries/` as `octoboardd-<target triple>` (with `.exe` for a Windows target, which Tauri's
   `beforeBuildCommand` announces through `TAURI_ENV_TARGET_TRIPLE`), the name Tauri's `externalBin` needs. Tauri runs it as
   `beforeBuildCommand` (through `pnpm build:tauri`); `tauri dev` does not, so it must be run by hand after a daemon

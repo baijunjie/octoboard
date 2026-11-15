@@ -48,41 +48,41 @@ fn update_settings_applies_all_or_nothing_and_a_blank_clone_dir_clears_it() {
     .unwrap();
     assert_eq!(state.store.default_clone_dir().unwrap(), built_in);
 
-    // The interface language is one of the tags the interface offers; any other is refused
+    // The agent language is one of the tags the interface offers; any other is refused
     // before anything of the same request is written.
     assert!(update_settings(
         &state,
         SettingsChanges {
             auto_pull_repositories: Some(true),
-            interface_language: Some("klingon".to_string()),
+            agent_language: Some("klingon".to_string()),
             ..SettingsChanges::default()
         },
     )
     .is_err());
     assert!(!state.store.get_settings().unwrap().auto_pull_repositories);
-    assert_eq!(state.store.interface_language().unwrap(), None);
+    assert_eq!(state.store.agent_language().unwrap(), None);
     let mut events = state.subscribe();
     update_settings(
         &state,
         SettingsChanges {
-            interface_language: Some("zh-Hans".to_string()),
+            agent_language: Some("zh-Hans".to_string()),
             ..SettingsChanges::default()
         },
     )
     .unwrap();
     assert_eq!(
-        state.store.interface_language().unwrap().as_deref(),
+        state.store.agent_language().unwrap().as_deref(),
         Some("zh-Hans")
     );
     assert!(matches!(
         events.try_recv(),
         Ok(Event::SettingsUpdated { settings })
-            if settings.interface_language.as_deref() == Some("zh-Hans")
+            if settings.agent_language.as_deref() == Some("zh-Hans")
     ));
     update_settings(
         &state,
         SettingsChanges {
-            interface_language: Some("zh-Hans".to_string()),
+            agent_language: Some("zh-Hans".to_string()),
             ..SettingsChanges::default()
         },
     )
@@ -729,9 +729,9 @@ fn each_settings_change_names_the_path_it_writes() {
             },
         ),
         (
-            "interface_language",
+            "agent_language",
             SettingsChanges {
-                interface_language: Some(String::new()),
+                agent_language: Some(String::new()),
                 ..SettingsChanges::default()
             },
         ),

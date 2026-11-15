@@ -221,12 +221,49 @@ pub fn current_json() -> String {
     serde_json::to_string(&current()).expect("host facts serialise")
 }
 
+/// The facts as the window of a daemon on another machine is given them: the application's own
+/// features stay with the local daemon's window, so this one is offered none of running in the
+/// background, launch at login, the privacy grants or the updater. Its daemon has a tab of the menu
+/// bar icon's menu, which the icon's keep-awake eyes follow while it is the window focused last,
+/// and its share of the Dock badge, as the local one does.
+pub fn for_remote_window(facts: HostFacts) -> HostFacts {
+    HostFacts {
+        run_in_background: false,
+        launch_at_login: false,
+        permissions_pane: false,
+        updater: Updater::None,
+        ..facts
+    }
+}
+
+/// `for_remote_window(current())` as the JSON the window's query carries.
+pub fn remote_window_json() -> String {
+    serde_json::to_string(&for_remote_window(current())).expect("host facts serialise")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn json(facts: &HostFacts) -> serde_json::Value {
         serde_json::to_value(facts).unwrap()
+    }
+
+    #[test]
+    fn a_remote_window_is_offered_none_of_the_applications_own_features_but_its_icon_and_badge() {
+        for facts in [macos(), windows(), linux()] {
+            let mut expected = json(&facts);
+            let remote = json(&for_remote_window(facts));
+            for (key, value) in [
+                ("runInBackground", serde_json::json!(false)),
+                ("launchAtLogin", serde_json::json!(false)),
+                ("permissionsPane", serde_json::json!(false)),
+                ("updater", serde_json::json!("none")),
+            ] {
+                expected[key] = value;
+            }
+            assert_eq!(remote, expected);
+        }
     }
 
     #[test]
@@ -304,5 +341,53 @@ mod tests {
         };
         assert_eq!(os, expected);
         assert!(current_json().starts_with('{'));
+    }
+
+    #[test]
+    fn the_remote_window_s_json_is_the_current_facts_without_the_applications_own_features() {
+        let remote: serde_json::Value = serde_json::from_str(&remote_window_json()).unwrap();
+        let current: serde_json::Value = serde_json::from_str(&current_json()).unwrap();
+        assert_eq!(remote["runInBackground"], false);
+        assert_eq!(remote["launchAtLogin"], false);
+        assert_eq!(remote["permissionsPane"], false);
+        assert_eq!(remote["updater"], "none");
+        for kept in [
+            "os",
+            "modifier",
+            "chrome",
+            "terms",
+            "appMenu",
+            "translucent",
+        ] {
+            assert_eq!(remote[kept], current[kept], "{kept}");
+        }
+    }
+
+    #[test]
+    fn a_remote_window_keeps_the_menu_bar_icon_the_badge_and_the_keep_awake_eyes_of_its_system() {
+        // Its daemon has a tab of the menu bar icon, a share of the Dock badge, and the icon's
+        // keep-awake eyes follow it while it is the window focused last.
+        for facts in [macos(), windows(), linux()] {
+            let (badge, keep_awake) = (facts.badge, facts.keep_awake);
+            let status_item = json(&facts)["statusItem"].clone();
+            let remote = for_remote_window(facts);
+            assert_eq!(remote.badge, badge);
+            assert_eq!(remote.keep_awake, keep_awake);
+            assert_eq!(json(&remote)["statusItem"], status_item);
+        }
+    }
+
+    #[test]
+    fn what_a_remote_window_is_offered_is_never_more_than_the_local_window() {
+        for facts in [macos(), windows(), linux()] {
+            let local = json(&facts);
+            let remote = json(&for_remote_window(facts));
+            for feature in ["runInBackground", "launchAtLogin", "permissionsPane"] {
+                assert!(
+                    remote[feature].as_bool() <= local[feature].as_bool(),
+                    "{feature}"
+                );
+            }
+        }
     }
 }

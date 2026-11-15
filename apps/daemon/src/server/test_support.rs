@@ -15,7 +15,7 @@ pub(super) async fn serve(name: &str) -> u16 {
 
 /// `serve`, also handing back the directory the daemon keeps saved session output in.
 pub(super) async fn serve_with_output_dir(name: &str) -> (u16, std::path::PathBuf) {
-    serve_files(name, port_files(), false).await
+    serve_files(name, port_files(false), false).await
 }
 
 /// Serves the real router over `state` on an ephemeral loopback port and returns the port.

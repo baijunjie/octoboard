@@ -50,7 +50,7 @@ impl Store {
             auto_approve_handoffs: read_setting(&conn, "auto_approve_handoffs")?,
             ask_questions_as_choices: read_setting(&conn, "ask_questions_as_choices")?,
             keep_sessions_in_own_project: read_setting(&conn, "keep_sessions_in_own_project")?,
-            interface_language: read_setting(&conn, "interface_language")?,
+            agent_language: read_setting(&conn, "agent_language")?,
             keep_awake: read_setting(&conn, "keep_awake")?,
             keep_awake_when: read_keep_awake_when(&conn)?,
             auto_select_account: read_setting(&conn, "auto_select_account")?,
@@ -224,17 +224,18 @@ impl Store {
         Ok(())
     }
 
-    /// The tag of the language the user last picked for the interface, as a client reported it;
-    /// `None` until one has.
-    pub fn interface_language(&self) -> Result<Option<String>> {
-        read_setting(&self.lock(), "interface_language")
+    /// The tag of the agent language, the language sessions are told to talk to the user in: the
+    /// one the user last picked, or the interface language the first client to connect reported;
+    /// `None` until either.
+    pub fn agent_language(&self) -> Result<Option<String>> {
+        read_setting(&self.lock(), "agent_language")
     }
 
     /// Stores an already-validated tag. Whether the setting actually changed.
-    pub fn set_interface_language(&self, tag: &str) -> Result<bool> {
+    pub fn set_agent_language(&self, tag: &str) -> Result<bool> {
         let changed = self.lock().execute(
-            "UPDATE settings SET interface_language = ?2 \
-             WHERE id = ?1 AND interface_language IS NOT ?2",
+            "UPDATE settings SET agent_language = ?2 \
+             WHERE id = ?1 AND agent_language IS NOT ?2",
             params![SETTINGS_ID, tag],
         )?;
         Ok(changed > 0)
@@ -353,9 +354,30 @@ bool_settings! {
     resume_sessions_on_start, set_resume_sessions_on_start;
     keep_awake, set_keep_awake;
     daemon_update_check, set_daemon_update_check;
+    allow_remote_access, set_allow_remote_access;
 }
 
 impl Store {
+    /// The port the desktop application's daemon serves a browser at on Windows while remote
+    /// access is on, as the user set it; `None` until they do, which is the built-in default. Like
+    /// Allow remote access, it is the user's alone: no settings tool or configuration document
+    /// carries it. A stored value that is no port reads as `None`.
+    pub fn remote_access_port(&self) -> Result<Option<u16>> {
+        let port: Option<i64> = read_setting(&self.lock(), "remote_access_port")?;
+        Ok(port
+            .and_then(|port| u16::try_from(port).ok())
+            .filter(|port| *port != 0))
+    }
+
+    /// Stores the port, or `None` to go back to the built-in default.
+    pub fn set_remote_access_port(&self, port: Option<u16>) -> Result<()> {
+        self.lock().execute(
+            "UPDATE settings SET remote_access_port = ?2 WHERE id = ?1",
+            params![SETTINGS_ID, port],
+        )?;
+        Ok(())
+    }
+
     /// Runs `sql`, the statement `bool_settings!` builds to write a column only when it differs
     /// from `value`. Whether it did.
     fn write_bool_setting(&self, sql: &'static str, value: bool) -> Result<bool> {
@@ -952,22 +974,22 @@ mod tests {
         assert_eq!(store.default_clone_dir().unwrap(), built_in);
     }
 
-    /// The interface language is unset until a client reports one, a repeat of the same tag
-    /// changes nothing, and a later one replaces it.
+    /// The agent language is unset until a client reports one, a repeat of the same tag changes
+    /// nothing, and a later one replaces it.
     #[test]
-    fn the_interface_language_is_unset_until_reported() {
-        let path = temp_db("interface-language");
+    fn the_agent_language_is_unset_until_reported() {
+        let path = temp_db("agent-language");
         let store = Store::open(&path).expect("store");
-        assert_eq!(store.interface_language().unwrap(), None);
+        assert_eq!(store.agent_language().unwrap(), None);
 
-        assert!(store.set_interface_language("ja").unwrap());
-        assert!(!store.set_interface_language("ja").unwrap());
+        assert!(store.set_agent_language("ja").unwrap());
+        assert!(!store.set_agent_language("ja").unwrap());
         assert_eq!(
-            store.get_settings().unwrap().interface_language.as_deref(),
+            store.get_settings().unwrap().agent_language.as_deref(),
             Some("ja")
         );
-        assert!(store.set_interface_language("de").unwrap());
-        assert_eq!(store.interface_language().unwrap().as_deref(), Some("de"));
+        assert!(store.set_agent_language("de").unwrap());
+        assert_eq!(store.agent_language().unwrap().as_deref(), Some("de"));
     }
 
     /// The JSON settings that name providers load only the registered ones, and a write keeps the
@@ -1031,5 +1053,71 @@ mod tests {
                 .collect::<Vec<_>>(),
             ["codex"]
         );
+    }
+
+    /// Allow remote access is off in a new store, a repeat of the value changes nothing, and the
+    /// value survives reopening the store.
+    #[test]
+    fn allow_remote_access_is_off_until_turned_on_and_is_kept() {
+        let path = temp_db("allow-remote-access");
+        let store = Store::open(&path).expect("store");
+        assert!(!store.allow_remote_access().unwrap());
+        assert!(!store.set_allow_remote_access(false).unwrap());
+        assert!(store.set_allow_remote_access(true).unwrap());
+        assert!(!store.set_allow_remote_access(true).unwrap());
+        assert!(store.allow_remote_access().unwrap());
+        drop(store);
+        let reopened = Store::open(&path).expect("reopened");
+        assert!(reopened.allow_remote_access().unwrap());
+        assert!(reopened.set_allow_remote_access(false).unwrap());
+        assert!(!reopened.allow_remote_access().unwrap());
+    }
+
+    /// The browser port is unset until the user sets one, which is kept; `None` goes back to the
+    /// built-in default; and a stored value that is no port reads as unset.
+    #[test]
+    fn the_remote_access_port_is_unset_until_set_and_a_value_that_is_no_port_reads_as_unset() {
+        let path = temp_db("remote-access-port");
+        let store = Store::open(&path).expect("store");
+        assert_eq!(store.remote_access_port().unwrap(), None);
+        store.set_remote_access_port(Some(4321)).unwrap();
+        assert_eq!(store.remote_access_port().unwrap(), Some(4321));
+        store.set_remote_access_port(Some(u16::MAX)).unwrap();
+        assert_eq!(store.remote_access_port().unwrap(), Some(u16::MAX));
+        drop(store);
+        let store = Store::open(&path).expect("reopened");
+        assert_eq!(store.remote_access_port().unwrap(), Some(u16::MAX));
+        store.set_remote_access_port(None).unwrap();
+        assert_eq!(store.remote_access_port().unwrap(), None);
+        for stored in [0_i64, -1, 65_536, 1_000_000] {
+            store
+                .lock()
+                .execute(
+                    "UPDATE settings SET remote_access_port = ?2 WHERE id = ?1",
+                    params![SETTINGS_ID, stored],
+                )
+                .unwrap();
+            assert_eq!(store.remote_access_port().unwrap(), None, "{stored}");
+        }
+    }
+
+    /// Neither remote access setting is part of the settings record every client and every
+    /// settings tool reads: they are the user's alone.
+    #[test]
+    fn the_settings_record_holds_no_remote_access_setting() {
+        let path = temp_db("settings-no-remote-access");
+        let store = Store::open(&path).expect("store");
+        store.set_allow_remote_access(true).unwrap();
+        store.set_remote_access_port(Some(4000)).unwrap();
+        let settings = serde_json::to_value(store.get_settings().unwrap()).unwrap();
+        let keys: Vec<&String> = settings
+            .as_object()
+            .unwrap()
+            .keys()
+            .filter(|key| key.contains("remote_access"))
+            .collect();
+        assert!(keys.is_empty(), "{keys:?}");
+        assert!(settings.get("interface_language").is_none());
+        assert!(settings.get("agent_language").is_some());
     }
 }

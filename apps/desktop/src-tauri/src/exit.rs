@@ -518,7 +518,7 @@ fn decide(app: &AppHandle, debounce: bool) -> bool {
     }
 
     if !debounce {
-        let _ = app.emit("exit-requested", ());
+        let _ = app.emit_to(crate::MAIN_WINDOW_LABEL, "exit-requested", ());
         return false;
     }
 
@@ -534,7 +534,7 @@ fn decide(app: &AppHandle, debounce: bool) -> bool {
         return true;
     }
     *last_prevented_at = Some(now);
-    let _ = app.emit("exit-requested", ());
+    let _ = app.emit_to(crate::MAIN_WINDOW_LABEL, "exit-requested", ());
     false
 }
 

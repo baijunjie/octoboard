@@ -9,16 +9,17 @@
 //! itself by its having recorded the very launch key of the daemon it took over from, and the
 //! launch key goes into what the daemon's helpers read, which a key kept for good must not.
 //!
-//! Only a daemon that serves the browser on its owner-only socket holds one ([`OwnerKey::start`],
-//! [`crate::browser_socket`]): the desktop application hands its daemon's launch key to its own
-//! window and has no address to keep, and a build that embeds no UI has no page to open. The owner
-//! key is the browser's alone, and accepted only on that socket. It is never written to
-//! `daemon.key`, a helper's key file or a holder's record, and never handed to anything the daemon
-//! starts, so what holds the launch key gains no more by it.
+//! Only a daemon that serves the browser's way in holds one ([`crate::browser`]): the server
+//! form's from its start ([`OwnerKey::start`]), the desktop application's while Allow remote access
+//! is on ([`OwnerKey::enable`], [`OwnerKey::disable`]), whose own window has the launch key; a
+//! build that embeds no UI has no page to open. The owner key is the browser's alone, and accepted
+//! only on the way in: the owner socket, or on Windows the browser port and the owner pipe. It is
+//! never written to `daemon.key`, a helper's key file or a holder's record, and never handed to
+//! anything the daemon starts, so what holds the launch key gains no more by it.
 //!
 //! Each rotation moves a generation on, which every connection admitted by the owner key watches
-//! ([`OwnerKey::admit`]): a rotation alone closes them, so a page holding the old key is cut off
-//! at once rather than at its next connection.
+//! ([`OwnerKey::admit`]): a rotation, or remote access turned off, closes them, so a page holding
+//! the old key is cut off at once rather than at its next connection.
 
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, RwLock};
@@ -29,8 +30,8 @@ use crate::hostfs::replace::{replace_beside, Permissions};
 use crate::request_guard::{generate_key, is_key, key_matches};
 
 /// What the daemon holds of its owner key: the key and the file it is kept in, or nothing, as a
-/// daemon that follows the desktop application, or could not read or write the file, does. Shared
-/// by the guard, which accepts it, and the route that rotates it.
+/// daemon that follows the desktop application with remote access off, or one that could not read
+/// or write the file, does. Shared by the guard, which accepts it, and the route that rotates it.
 pub struct OwnerKey {
     held: RwLock<Option<Held>>,
     /// Serializes rotations, so the file is written outside `held` and a request's read of the
@@ -57,8 +58,9 @@ impl Default for OwnerKey {
 pub struct Revocation(watch::Receiver<u64>);
 
 impl Revocation {
-    /// Resolves when the owner key has been rotated since this connection was admitted, and never
-    /// otherwise: the key's holder outlives every connection, so its end is no rotation.
+    /// Resolves when the owner key has been rotated since this connection was admitted, or let go
+    /// ([`OwnerKey::disable`], remote access turned off), and never otherwise: the key's holder
+    /// outlives every connection, so its end is neither.
     pub async fn revoked(&mut self) {
         if self.0.changed().await.is_err() {
             std::future::pending::<()>().await;
@@ -130,6 +132,30 @@ impl OwnerKey {
                 false
             }
         }
+    }
+
+    /// Stops holding the owner key, as a daemon that follows the desktop application does when
+    /// remote access is turned off: the key is refused from then on, and every connection it
+    /// admitted is told to close, as at a rotation. The file is left as it is, so the address
+    /// works again once remote access is turned back on. Whether a key was held.
+    pub fn disable(&self) -> bool {
+        let _rotation = self.rotating.lock().unwrap();
+        let mut held = self.held.write().unwrap();
+        let was_held = held.take().is_some();
+        if was_held {
+            self.generation.send_modify(|generation| *generation += 1);
+        }
+        was_held
+    }
+
+    /// The owner key held, for the address the desktop application's Settings show; `None` while
+    /// none is.
+    pub fn current(&self) -> Option<String> {
+        self.held
+            .read()
+            .unwrap()
+            .as_ref()
+            .map(|held| held.key.clone())
     }
 
     /// Whether the daemon holds an owner key, which is what its owner record says.
@@ -558,5 +584,31 @@ mod tests {
         let held = OwnerKey::default();
         assert!(!held.start(true, &dir.join("missing")));
         assert!(!held.is_held());
+    }
+
+    /// Turning remote access off stops holding the key: it is refused, every connection it
+    /// admitted is told to close, and rotating is refused as for a daemon that never held one. The
+    /// file keeps the key, which is held again, unchanged, once the key is enabled again.
+    #[tokio::test]
+    async fn disabling_refuses_the_key_and_revokes_what_it_admitted() {
+        let dir = ScratchDir::new("owner-key-disable");
+        let held = OwnerKey::default();
+        held.enable(&path_in(&dir)).unwrap();
+        let key = read_in(&dir).unwrap();
+        assert_eq!(held.current().as_deref(), Some(key.as_str()));
+        let mut admitted = held.admit(query(&key).as_deref()).expect("admitted");
+
+        assert!(held.disable());
+        assert!(!held.is_held());
+        assert_eq!(held.current(), None);
+        assert!(!held.accepts(query(&key).as_deref()));
+        tokio::time::timeout(crate::test_support::PATIENCE, admitted.revoked())
+            .await
+            .expect("disabling revokes the connection");
+        assert!(matches!(held.rotate(), Err(RotateError::NotHeld)));
+        assert!(!held.disable(), "nothing was held the second time");
+
+        held.enable(&path_in(&dir)).unwrap();
+        assert!(held.accepts(query(&key).as_deref()), "the same key again");
     }
 }

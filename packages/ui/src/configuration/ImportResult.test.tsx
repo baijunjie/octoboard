@@ -270,10 +270,11 @@ it("tells of the default clone directory only where it was applied, and of the c
     container.render(<ImportResult result={{ type: "configuration_imported", id: null, consoles: [], settings_applied: documentSettings(carried), settings_error: null, accounts: null }} clientSettings={clientSettings} />);
   render({});
   expect(Object.keys(settingLines(container))).not.toContain("Default clone directory");
-  render({ default_clone_dir: "/Users/dev/Code" }, [{ field: "appearance", label: "settings.theme.label", value: "Dark" }, { field: "interface_language", label: "settings.language.label", value: "日本語", lang: "ja" }]);
+  render({ default_clone_dir: "/Users/dev/Code" }, [{ field: "appearance", label: "settings.theme.label", value: "Dark" }, { field: "interface_language", label: "settings.language.label", value: "日本語", lang: "ja" }, { field: "agent_language", label: "settings.agentLanguage.label", value: "Deutsch", lang: "de" }]);
   expect(settingLines(container)["Default clone directory"]).toEqual({ badge: "Matches the file", note: "/Users/dev/Code" });
   expect(settingLines(container)["Theme"]).toEqual({ badge: "Dark" });
-  expect(settingLines(container)["Language"]).toEqual({ badge: "日本語" });
+  expect(settingLines(container)["Interface language"]).toEqual({ badge: "日本語" });
+  expect(settingLines(container)["Agent language"]).toEqual({ badge: "Deutsch" });
   // The language's name is marked as that language, and the directory stands as plain monospace text, not a chip.
   expect(container.querySelector("[lang=ja]")?.textContent).toBe("日本語");
   const directory = Array.from(container.querySelectorAll("div.font-mono")).find((node) => node.textContent === "/Users/dev/Code");

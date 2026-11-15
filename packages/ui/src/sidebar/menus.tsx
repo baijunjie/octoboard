@@ -106,6 +106,26 @@ export type MenuPlacement = "list" | "focused" | "nested";
  * Push is disabled, with no reason, while a push of the project is in flight (`pushing`, from its git
  * status): the daemon refuses a second one, and the git badge, drawn beside the project's name in
  * every placement, already shows why. */
+/** Open in: the file manager and the system terminal where the daemon shares this machine, and the repository's web
+ * page; nothing at all when none of them is offered. */
+function openInItems(
+  t: Translate,
+  project: Project,
+  handlers: SidebarHandlers,
+  repository: ReturnType<typeof repositoryLink>,
+): ActionMenuSubmenu[] {
+  const { onOpenProjectDirectory, onOpenSystemTerminal, onOpenRepository } = handlers;
+  const items: ActionMenuItem[] = [
+    ...(onOpenProjectDirectory ? [{ label: t("common.fileManager"), icon: Folder, onClick: () => onOpenProjectDirectory(project) }] : []),
+    ...(onOpenSystemTerminal ? [{ label: t("sidebar.project.systemTerminal"), icon: Terminal, onClick: () => onOpenSystemTerminal(project) }] : []),
+    ...(repository && onOpenRepository ? [{
+      label: repository.host, icon: <RepositoryIcon brand={repository.brand} />, end: <ExternalLinkIcon />,
+      onClick: () => onOpenRepository(repository.url),
+    }] : []),
+  ];
+  return items.length > 0 ? [{ label: t("common.openIn"), icon: SquareArrowOutUpRight, items }] : [];
+}
+
 export function projectMenu(
   t: Translate,
   handlers: SidebarHandlers,
@@ -134,17 +154,7 @@ export function projectMenu(
       load: { key: JSON.stringify([project.id, t("common.copyAbsolutePath")]), run: () => handlers.onLoadProjectCopyPathItem(project) },
     },
     "separator",
-    {
-      label: t("common.openIn"), icon: SquareArrowOutUpRight,
-      items: [
-        { label: t("common.fileManager"), icon: Folder, onClick: () => handlers.onOpenProjectDirectory(project) },
-        { label: t("sidebar.project.systemTerminal"), icon: Terminal, onClick: () => handlers.onOpenSystemTerminal(project) },
-        ...(repository && handlers.onOpenRepository ? [{
-          label: repository.host, icon: <RepositoryIcon brand={repository.brand} />, end: <ExternalLinkIcon />,
-          onClick: () => handlers.onOpenRepository!(repository.url),
-        }] : []),
-      ],
-    },
+    ...openInItems(t, project, handlers, repository),
     ...(panels.length > 0 ? [{
       label: t("sidebar.project.openPanel"), icon: PanelRight, iconClassName: "rtl:-scale-x-100",
       items: panels.map((kind) => ({ label: t(PANEL_META[kind].name), icon: PANEL_META[kind].icon, onClick: () => handlers.onOpenProjectPanel(project, kind) })),

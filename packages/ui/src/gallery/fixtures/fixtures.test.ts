@@ -225,12 +225,15 @@ describe("gallery scenarios", () => {
     }
   });
 
-  it("say the same of the daemon's machine as of the host a scenario gives, so paths are spelt as that machine writes them", () => {
+  it("say the same of the daemon's machine as of the host a scenario gives, unless it is a remote daemon's window, so paths are spelt as that machine writes them", () => {
     const hosted = SCENARIOS.filter((scenario) => scenario.host);
     expect(hosted.map(({ id }) => id)).toContain("settings-notifications-windows");
-    for (const { id, host, state } of hosted) {
-      expect(state?.host?.os ?? host!.os, id).toBe(host!.os);
-      expect(state?.host?.path_style ?? "unix", id).toBe(host!.os === "windows" ? "windows" : "unix");
+    for (const { id, host, state, remoteWindow } of hosted) {
+      // A remote daemon's window is on one computer and its daemon on another: the daemon's machine is its own, and its
+      // paths follow that.
+      const daemonOs = state?.host?.os ?? host!.os;
+      if (!remoteWindow) expect(daemonOs, id).toBe(host!.os);
+      expect(state?.host?.path_style ?? "unix", id).toBe(daemonOs === "windows" ? "windows" : "unix");
     }
   });
 

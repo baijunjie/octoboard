@@ -103,7 +103,7 @@ export function ResumeConversationFields({
           label={t("dialog.session.resumeId")}
           value={resumeId}
           onChange={onResumeIdChange}
-          placeholder={t("dialog.session.resumeExample", { example: EXAMPLE_CONVERSATION_ID })}
+          placeholder={t("common.example", { example: EXAMPLE_CONVERSATION_ID })}
           // The ID's text is wrong once a submit has tried it; no conversation having the ID is found out on its own.
           errorMessage={shownProblem ? idProblems[shownProblem] : notFound ? t("dialog.session.resumeNotFound") : undefined}
           describedBy={!shownProblem && problem ? lookupAlertId : undefined}

@@ -44,13 +44,13 @@ pub fn refresh_console_session_instructions(store: &Store, console_id: &str) -> 
 }
 
 /// Writes the console's instruction file with the guidance the stored settings call for: asking as
-/// choices, and replying in the interface's language. No lock: see
+/// choices, and replying in the agent language. No lock: see
 /// [`write_console_session_instructions`].
 pub fn write_console_session_instructions_from_settings(
     store: &Store,
     console: &Console,
 ) -> Result<()> {
-    let user_language = store.interface_language()?;
+    let user_language = store.agent_language()?;
     write_console_session_instructions(
         console,
         &RoleOptions {

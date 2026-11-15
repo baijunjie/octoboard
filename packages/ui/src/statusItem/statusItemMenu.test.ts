@@ -10,7 +10,7 @@ import { DEFAULT_SESSION_ORDER } from "../sessions/order";
 import { delegatingSessionIds } from "../sessions/sessionStatus";
 import { TEST_PROVIDERS } from "../test/testProviders";
 import { iconKeysOf } from "./statusItemIcons";
-import { buildStatusItemMenu, MAX_PER_SECTION, MAX_SESSION_LABEL_COLUMNS } from "./statusItemMenu";
+import { buildStatusItemMenu, MAX_PER_SECTION, MAX_SESSION_LABEL_COLUMNS, statusItemAppLabels } from "./statusItemMenu";
 import { buildQuotaSubmenus, type StatusItemQuotaSource } from "./statusItemQuota";
 
 const t: Translate = ((key: string, ...args: unknown[]) => format("en", key as never, args[0] as never)) as Translate;
@@ -38,6 +38,18 @@ const menuOf = (sessions: Session[], quota: StatusItemQuotaSource = NO_QUOTA, qu
 
 const inProject = (id: string, status: SessionStatus, title = id, terminal_title?: string) =>
   sessionOf(id, "c", "p", title, status, { terminal_title, has_conversation: false });
+
+describe("statusItemAppLabels", () => {
+  it("names this computer in the words of the system the window runs on", () => {
+    expect(statusItemAppLabels(t, "macos")).toEqual({ this_computer: "This Mac", open_in_browser: "Open in browser" });
+    expect(statusItemAppLabels(t, "windows").this_computer).toBe("This PC");
+    expect(statusItemAppLabels(t).this_computer).toBe("This Mac");
+  });
+
+  it("goes with every menu a window sends, for the shell to take from the local daemon's window", () => {
+    expect(menuOf([]).app).toEqual(statusItemAppLabels(t, "macos"));
+  });
+});
 
 describe("buildStatusItemMenu", () => {
   it("says so when every session is archived, or there are none", () => {

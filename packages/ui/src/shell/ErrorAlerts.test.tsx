@@ -72,7 +72,7 @@ it("stays above an open form until acknowledged and leaves the form available fo
   await settleFrames();
   const alert = document.querySelector<HTMLElement>('[role="alertdialog"]')!;
   expect(alert).not.toBeNull();
-  expect(alert.querySelector('[aria-label="Close"]')).toBeNull();
+  expect(alert.querySelector('[aria-label="Close"]')).not.toBeNull();
   expect(alert.contains(document.activeElement)).toBe(true);
   expect(document.activeElement).toBe(alert);
   act(() => alert.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
@@ -107,6 +107,17 @@ it("gives known disk and lock failures specific remedies without bug-report inst
   act(() => errorAlerts.acknowledge());
   act(() => errorAlerts.report({ message: "Session locked", error: new CodedError("Session locked", "session_locked", { session: "s1" }) }));
   expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("choose Unlock");
+});
+
+it("gives every alert a close button that acknowledges it as OK does, Escape staying off", () => {
+  mount();
+  act(() => errorAlerts.report({ message: "Action failed" }));
+  const alert = document.querySelector('[role="alertdialog"]')!;
+  expect([...alert.querySelectorAll("button")].map((b) => b.getAttribute("aria-label") ?? b.textContent)).toEqual(["Close", "OK"]);
+  act(() => alert.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+  expect(document.querySelector('[role="alertdialog"]')).toBe(alert);
+  act(() => alert.querySelector<HTMLButtonElement>('[aria-label="Close"]')!.click());
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
 });
 
 it("offers Issue guidance for unexpected failures, opening only after a user click", async () => {
@@ -288,7 +299,7 @@ it.each(["modelChange", "changeModelSetting"] as const)("offers a button for %s 
   const open = vi.fn();
   onTestFinished(registerSessionModelLauncher(open));
   act(() => errorAlerts.report({ message: "Action failed", session: "s-1", recovery }));
-  const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button'));
+  const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')).filter((b) => b.textContent);
   expect(buttons.map((b) => b.textContent)).toEqual(["Change model", "OK"]);
   act(() => buttons[0].click());
   expect(open).toHaveBeenCalledExactlyOnceWith("s-1");
@@ -298,7 +309,7 @@ it.each(["modelChange", "changeModelSetting"] as const)("offers a button for %s 
 it("offers no Change model button for an alert that is about no session", () => {
   mount();
   act(() => errorAlerts.report({ message: "Action failed", recovery: "modelChange" }));
-  expect(Array.from(document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')).map((b) => b.textContent)).toEqual(["OK"]);
+  expect(Array.from(document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')).map((b) => b.getAttribute("aria-label") ?? b.textContent)).toEqual(["Close", "OK"]);
 });
 
 describe("the session an alert is about", () => {
@@ -586,7 +597,7 @@ it("shows a failed account-switch batch as prose: the target once, a short reaso
   expect(details.textContent).toContain("No space left on device (os error 28)");
   const visible = (alert.textContent ?? "").replace(details.textContent ?? "", "");
   expect(visible).not.toContain("os error 28");
-  expect([...alert.querySelectorAll("button")].map((button) => button.getAttribute("aria-label") ?? button.textContent)).toEqual(["Copy", "Copy", "OK"]);
+  expect([...alert.querySelectorAll("button")].map((button) => button.getAttribute("aria-label") ?? button.textContent)).toEqual(["Close", "Copy", "Copy", "OK"]);
 });
 
 async function failedBatch(failures: Record<string, Error>, accountName = "Work") {

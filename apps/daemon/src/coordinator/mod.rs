@@ -66,6 +66,7 @@ pub mod pages;
 pub mod planned_stop;
 pub mod processes;
 pub mod projects;
+pub mod remote_access;
 pub mod restart;
 pub mod resume;
 pub mod resume_on_start;
@@ -465,6 +466,25 @@ async fn handle_inner(
                 id: request_id,
                 started_at,
             }))
+        }
+
+        RequestBody::SetRemoteAccess { allowed } => {
+            let state = state.clone();
+            tokio::task::spawn_blocking(move || state.remote_access.set(&state, allowed)).await??;
+            Ok(None)
+        }
+
+        RequestBody::RotateOwnerKey => {
+            let state = state.clone();
+            tokio::task::spawn_blocking(move || state.remote_access.rotate(&state)).await??;
+            Ok(None)
+        }
+
+        RequestBody::SetRemoteAccessPort { port } => {
+            let state = state.clone();
+            tokio::task::spawn_blocking(move || state.remote_access.set_port(&state, port.get()))
+                .await??;
+            Ok(None)
         }
 
         RequestBody::RestartDaemon => {
@@ -988,7 +1008,7 @@ async fn handle_inner(
             auto_approve_handoffs,
             ask_questions_as_choices,
             keep_sessions_in_own_project,
-            interface_language,
+            agent_language,
             keep_awake,
             keep_awake_when,
             auto_select_account,
@@ -1014,7 +1034,7 @@ async fn handle_inner(
                     auto_approve_handoffs,
                     ask_questions_as_choices,
                     keep_sessions_in_own_project,
-                    interface_language,
+                    agent_language,
                     keep_awake,
                     keep_awake_when,
                     auto_select_account,

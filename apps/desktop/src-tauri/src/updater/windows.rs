@@ -31,8 +31,9 @@ pub async fn install(
 /// for the caller to relaunch the current version.
 ///
 /// The process ends inside the installer's launch without a `RunEvent::Exit`, so what that event
-/// saves is saved here first, and the tray icon, which the exit would remove, is removed. The daemon
-/// has been stopped by then (`confirm_quit`).
+/// saves (the windows' frames, and which remote windows are open, for the relaunch to bring back)
+/// is saved here first, and the tray icon, which the exit would remove, is removed. The daemon has
+/// been stopped by then (`confirm_quit`).
 pub fn install_for_restart(app: &AppHandle, held: Option<(Update, Vec<u8>)>) {
     if let Some((update, bytes)) = held {
         start_installer(app, update, bytes);
@@ -54,6 +55,7 @@ pub fn install_on_quit(app: &AppHandle, held: Option<(Update, Vec<u8>)>) {
 /// Runs the installer, which ends the process; returns only when it could not be started.
 fn start_installer(app: &AppHandle, update: Update, bytes: Vec<u8>) {
     window_state::save(app);
+    crate::remote::remember_windows(app);
     tray::remove(app);
     if let Err(err) = update.install(bytes) {
         diagnostic!("cannot start the update installer: {err}");

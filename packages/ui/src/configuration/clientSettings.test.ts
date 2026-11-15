@@ -2,6 +2,7 @@
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { format, type Translate } from "../i18n/catalog";
+import { currentLanguage, setLanguage } from "../i18n/language";
 import { runInBackground } from "../lifecycle/runInBackground";
 import { showMenuBarIcon } from "../lifecycle/showMenuBarIcon";
 import type { SettingsSection } from "../protocol";
@@ -15,7 +16,7 @@ const BROWSER = { backgroundRun: false, menuBarIcon: false };
 const ALL: SettingsSection[] = ["general", "appearance", "agent_behavior", "git", "keyboard_shortcuts", "cleanup"];
 const FILE = { appearance: "dark", markdown_style: "github", terminal_font_size: 18, run_in_background: true, show_menu_bar_icon: false };
 
-it("holds the session order of the General section and, only where its platform has them, the background running and menu bar icon, and the appearance, Markdown style and terminal font size of the Appearance section", () => {
+it("holds the interface language and session order of the General section and, only where its platform has them, the background running and menu bar icon, and the appearance, Markdown style and terminal font size of the Appearance section", () => {
   onTestFinished(() => {
     markdownStyle.set("tailwind");
     terminalFontSize.set(15);
@@ -29,7 +30,7 @@ it("holds the session order of the General section and, only where its platform 
   showMenuBarIcon.set(false);
   sessionOrderPreference.set({ sessions: "started", activeProjects: "used", inactiveProjects: "used" });
   const appearance = { appearance: "light", markdown_style: "latex", terminal_font_size: 20 };
-  const order = { session_order: { sessions: "started", active_projects: "used", inactive_projects: "used" } };
+  const order = { interface_language: currentLanguage(), session_order: { sessions: "started", active_projects: "used", inactive_projects: "used" } };
   const window = { run_in_background: true, show_menu_bar_icon: false };
   expect(heldClientSettings({ appearance: "light" }, DESKTOP, ALL)).toEqual({ ...appearance, ...order, ...window });
   expect(heldClientSettings({ appearance: "light" }, BROWSER, ALL)).toEqual({ ...appearance, ...order });
@@ -114,8 +115,18 @@ it("words each value as its settings page does, with the one this client has whe
   expect(clientSettingValues(t, {})).toEqual([]);
 });
 
-it("leaves the language to the daemon: a document's is no client setting, and nothing here applies one", () => {
-  const settings = { interface_language: "ja" };
-  expect(clientSettingsOf(settings, DESKTOP)).toEqual({});
-  expect(heldClientSettings({ appearance: "light" }, DESKTOP, ALL)).not.toHaveProperty("interface_language");
+it("holds the interface language as a client setting, and leaves the agent language to the daemon", () => {
+  setLanguage("ja");
+  onTestFinished(() => setLanguage("en"));
+  expect(clientSettingsOf({ interface_language: "de", agent_language: "fr" }, DESKTOP)).toEqual({ interface_language: "de" });
+  expect(clientSettingsOf({ interface_language: "tlh" }, DESKTOP)).toEqual({});
+  expect(heldClientSettings({ appearance: "light" }, DESKTOP, ["general"])).toMatchObject({ interface_language: "ja" });
+  const t = ((key: string) => key) as Translate;
+  expect(heldClientSettings({ appearance: "light" }, DESKTOP, ALL)).not.toHaveProperty("agent_language");
+  expect(heldClientSettings({ appearance: "light" }, DESKTOP, ["appearance"])).not.toHaveProperty("interface_language");
+  expect(clientSettingValues(t, { interface_language: "de" }, { interface_language: "ja" })).toEqual([
+    { field: "interface_language", label: "settings.language.label", value: "Deutsch", lang: "de", current: "日本語", currentLang: "ja" },
+  ]);
+  applyClientSettings({ interface_language: "ko" }, () => {});
+  expect(currentLanguage()).toBe("ko");
 });

@@ -1,4 +1,4 @@
-import React, { createContext, useContext } from "react";
+import React, { createContext, useContext, useEffect } from "react";
 
 import { useTheme } from "../primitives";
 
@@ -40,6 +40,9 @@ function narrowResolvedTheme(value: string | undefined): "light" | "dark" {
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
+/** Where HeroUI keeps the theme choice (`useTheme`). */
+const THEME_STORAGE_KEY = "heroui-theme";
+
 /**
  * Applies HeroUI's theme class and `data-theme` attribute to `<html>` for whichever screen is
  * mounted — `StartupScreen` included, since `main.tsx` renders it in place of `App` until a daemon
@@ -53,6 +56,15 @@ function narrowResolvedTheme(value: string | undefined): "light" | "dark" {
  */
 export function ThemeProvider({ children }: { children: React.ReactNode }): React.ReactElement {
   const { theme, resolvedTheme, setTheme } = useTheme();
+  // The appearance is the application's: a choice another window stores is taken up here too. HeroUI's hook reads its
+  // storage once, so the change is handed to it; storing the same value again sends no further event.
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === THEME_STORAGE_KEY && event.newValue !== null) setTheme(event.newValue);
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [setTheme]);
   const value: ThemeContextValue = {
     choice: theme === "light" || theme === "dark" ? theme : "system",
     // `resolvedTheme` is undefined only during SSR, which this client-only app never runs under.

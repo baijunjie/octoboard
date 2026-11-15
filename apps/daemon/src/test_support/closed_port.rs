@@ -14,6 +14,12 @@
 //! the port is only handed out by [`ClosedPort::port`], so a number copied out of a temporary
 //! `ClosedPort` is a port the next finder in the binary probes first, since every finder starts at
 //! the same place.
+//!
+//! On Linux and macOS a child process another test is spawning holds a copy of every descriptor
+//! this process has open until its `exec` closes them, so the probe's socket can outlive its drop
+//! for a moment, still listening: the port would take a connection, and a listener bound on it at
+//! once would find it in use. A port is handed out only once it refuses a connection, when no
+//! such copy is left.
 
 use std::collections::BTreeSet;
 use std::net::TcpListener;
@@ -43,7 +49,10 @@ impl ClosedPort {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         for offset in 0..TRIED {
             let port = FIRST + (start + offset) % TRIED;
-            if !handed_out.contains(&port) && TcpListener::bind(("127.0.0.1", port)).is_ok() {
+            if !handed_out.contains(&port)
+                && TcpListener::bind(("127.0.0.1", port)).is_ok()
+                && let_go(port)
+            {
                 handed_out.insert(port);
                 return Self { port };
             }
@@ -57,6 +66,27 @@ impl ClosedPort {
     pub(crate) fn port(&self) -> u16 {
         self.port
     }
+}
+
+/// Waits until no socket listens on the loopback `port` any more, a copy a child process holds of
+/// one this process has closed included: a connection to the port is refused. False when one still
+/// listens there after [`super::PATIENCE`].
+#[cfg(unix)]
+pub(crate) fn let_go(port: u16) -> bool {
+    let address = std::net::SocketAddr::from((std::net::Ipv4Addr::LOCALHOST, port));
+    // Bounded: a socket bound there that does not listen lets a connection time out on macOS.
+    let refused = || {
+        std::net::TcpStream::connect_timeout(&address, std::time::Duration::from_secs(1))
+            .is_err_and(|err| err.kind() == std::io::ErrorKind::ConnectionRefused)
+    };
+    crate::session::wait::wait_for(super::PATIENCE, refused)
+}
+
+/// True at once: Windows makes sockets that no child process inherits, and answers a connection to
+/// a closed loopback port only after retrying it for seconds.
+#[cfg(windows)]
+pub(crate) fn let_go(_port: u16) -> bool {
+    true
 }
 
 impl Drop for ClosedPort {

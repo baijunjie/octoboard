@@ -1,0 +1,26 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "remote",
+  "description": "for the window of a daemon other than the local one, or of the connect page that opens one: the default permissions, the remote daemons (listing, saving and removing them, connecting, disconnecting, opening a remote window or the local one; no command of it returns a secret), the menu labels, the configuration file dialogs, opening the app's notification settings, its own menu bar icon's menu and whether it shows the computer kept awake, its share of the Dock badge, system notifications marked with the window that raised them, clipboard text, opening a link in the system's browser, native window theming, revealing the window the shell creates hidden, and dragging and zooming it by the UI's own top bar; none of the exit flow (only the local daemon's window quits the application or stops its daemon), the settings the shell keeps, launch at login, the privacy grants, the updater, the system directory picker (the daemon does not share this machine's files)",
+  "windows": [
+    "daemon-*"
+  ],
+  "permissions": [
+    "core:default",
+    "allow-remote-daemons",
+    "allow-notification-settings",
+    "allow-set-menu-labels",
+    "allow-reveal-main-window",
+    "allow-configuration-file",
+    "core:window:allow-set-theme",
+    "core:window:allow-start-dragging",
+    "core:window:allow-internal-toggle-maximize",
+    "allow-tray",
+    "allow-badge",
+    "allow-show-notification",
+    "notification:default",
+    "clipboard-manager:allow-write-text",
+    "clipboard-manager:allow-read-text",
+    "shell:allow-open"
+  ]
+}

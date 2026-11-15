@@ -6,7 +6,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { consoleOf } from "../fixtures/builders";
 import { isolate } from "../i18n/isolate";
-import { setLanguage } from "../i18n/language";
+import { currentLanguage, setLanguage } from "../i18n/language";
 import { runInBackground } from "../lifecycle/runInBackground";
 import { showMenuBarIcon } from "../lifecycle/showMenuBarIcon";
 import type { SavedConfigurationFile } from "../platform";
@@ -232,10 +232,11 @@ it("saves the document as the daemon sent it, under a name for the console, and 
 
 const FOCUS = { code: "KeyK", primary: true, shift: true };
 
-/** Exports a document whose settings are the daemon's own (it holds the language `daemon` reports), from a client with
- * `capabilities` having checked the `sections` (every one by default), and returns the settings that were saved. */
+/** Exports a document whose settings are the daemon's own (it holds the agent language `daemon` reports), from a client
+ * with `capabilities` having checked the `sections` (every one by default), and returns the settings that were saved.
+ */
 async function savedSettings(daemonLanguage: string | undefined, capabilities: Parameters<typeof mountDialog>[4] = {}, sections: string[] = SECTIONS) {
-  const full: ConfigurationDocument = { ...DOCUMENT, settings: documentSettings({ auto_pull_repositories: true, ...(daemonLanguage && { interface_language: daemonLanguage }) }) };
+  const full: ConfigurationDocument = { ...DOCUMENT, settings: documentSettings({ auto_pull_repositories: true, ...(daemonLanguage && { agent_language: daemonLanguage }) }) };
   const save = vi.fn<Save>(async (name) => ({ kind: "saved", name }));
   mountDialog((onClose) => <ExportConfigurationDialog onClose={onClose} />, () => Promise.resolve({ type: "configuration_exported", id: null, document: full }), { save, open: vi.fn() }, {}, capabilities);
   // By position: the labels follow the language the test has set. The first checkbox is the paths option.
@@ -268,10 +269,10 @@ function holdClientSettings() {
   return { backgroundRun: { set: vi.fn(async () => {}) } };
 }
 
-it("adds the client's session order and background run with General only, not its appearance, Markdown style or terminal font size", async () => {
+it("adds the client's interface language, session order and background run with General only, not its appearance, Markdown style or terminal font size", async () => {
   const capabilities = holdClientSettings();
   const general = (await savedSettings("de", capabilities, ["General"])).saved;
-  expect(general).toMatchObject({ interface_language: "de", run_in_background: true, session_order: { sessions: "status", active_projects: "status", inactive_projects: "name" } });
+  expect(general).toMatchObject({ interface_language: currentLanguage(), agent_language: "de", run_in_background: true, session_order: { sessions: "status", active_projects: "status", inactive_projects: "name" } });
   expect(general).not.toHaveProperty("markdown_style");
   expect(general).not.toHaveProperty("terminal_font_size");
   expect(general).not.toHaveProperty("appearance");
@@ -283,6 +284,7 @@ it("adds the client's appearance, Markdown style and terminal font size with App
   const appearance = (await savedSettings("de", capabilities, ["Appearance"])).saved;
   expect(appearance).toMatchObject({ appearance: expect.any(String), markdown_style: "github", terminal_font_size: 18 });
   expect(appearance).not.toHaveProperty("session_order");
+  expect(appearance).not.toHaveProperty("interface_language");
   expect(appearance).not.toHaveProperty("run_in_background");
   expect(appearance).not.toHaveProperty("keyboard_shortcuts");
 });
@@ -307,7 +309,7 @@ it("adds the keyboard shortcuts, an empty set where none is changed, with the Ke
   expect(saved).not.toHaveProperty("appearance");
 });
 
-it("adds the appearance and Markdown style this client has to a full export and leaves the language as the daemon holds it", async () => {
+it("adds the appearance, Markdown style and interface language this client has to a full export and leaves the agent language as the daemon holds it", async () => {
   markdownStyle.set("github");
   setLanguage("ja");
   localStorage.setItem("heroui-theme", "dark");
@@ -317,7 +319,7 @@ it("adds the appearance and Markdown style this client has to a full export and 
     localStorage.removeItem("heroui-theme");
   });
   const { saved } = await savedSettings("de");
-  expect(saved).toMatchObject({ appearance: "dark", markdown_style: "github", interface_language: "de" });
+  expect(saved).toMatchObject({ appearance: "dark", markdown_style: "github", interface_language: "ja", agent_language: "de" });
   // A browser has no background running to report.
   expect(saved).not.toHaveProperty("run_in_background");
 });

@@ -51,6 +51,7 @@ const { FakeController } = vi.hoisted(() => {
       return this.callbacks.pathLinks?.open(target);
     }
     openLink(url: string): Promise<void> | undefined { return this.callbacks.openLink?.(url); }
+    hasPathLinks(): boolean { return this.callbacks.pathLinks !== undefined; }
     mount(): void {}
     inputLabel: string | undefined;
     setInputLabel(label: string): void {
@@ -569,6 +570,24 @@ it("hands a path with a view to the file viewer once it has read it, and opens a
   await act(async () => FakeController.last.openPath({ path: "/tmp/b.png" }));
   expect(onViewFile).toHaveBeenCalledOnce();
   expect(request).toHaveBeenLastCalledWith({ type: "open_path_link", project: "p-1", path: "/tmp/b.png" });
+});
+
+it("leaves paths plain text in the window of a daemon elsewhere, and still opens web links", async () => {
+  daemon = testDaemon({ state: { connectionState: "open" }, request, terminalUrl: () => "", isLocal: false });
+  platform.links = { open: vi.fn().mockResolvedValue(undefined) };
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  roots.push(root);
+  render(root);
+  expect(FakeController.last.hasPathLinks()).toBe(false);
+  await act(async () => FakeController.last.openLink("https://example.com/docs"));
+  expect(platform.links.open).toHaveBeenCalledExactlyOnceWith("https://example.com/docs");
+});
+
+it("makes paths links in the local daemon's window", () => {
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  roots.push(root);
+  render(root);
+  expect(FakeController.last.hasPathLinks()).toBe(true);
 });
 
 const archived = sessionOf("s-old", "c-1", undefined, "Old work", "archived");

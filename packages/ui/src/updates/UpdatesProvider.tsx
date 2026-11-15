@@ -7,6 +7,7 @@ import { alertAppDataFailure, raiseError } from "../components/alerts/raiseError
 import { codeRecord } from "../errors/codes";
 import { daemonMessage, NO_RECORDS } from "../errors/daemonMessage";
 import { currentLanguage, t } from "../i18n/language";
+import { windowKind } from "../platform";
 import { usePlatform } from "../platform/react";
 import { useDaemonStoreOrEmpty, useOptionalDaemon, type Daemon } from "../store";
 import { createDaemonUpdateStore } from "./daemonUpdateStore";
@@ -47,19 +48,23 @@ function createDaemonUpdateStoreFor(daemon: Daemon): UpdateStore {
 
 /**
  * Owns the application's update state for the window and runs the automatic checks, where there is something to update:
- * the desktop application, through its `updater`, or a daemon that updates itself (`snapshot.daemon_update` is not null),
- * through its own status (`createDaemonUpdateStore`); elsewhere it provides nothing, and the update notice and the
- * Settings section are absent. The platform's updater wins where there is one: a window of the desktop application
+ * the desktop application, through its `updater`, or a daemon that updates itself (`snapshot.daemon_update` is not
+ * null), through its own status (`createDaemonUpdateStore`); elsewhere it provides nothing, and the update notice and
+ * the Settings section are absent. The platform's updater wins where there is one: a window of the desktop application
  * updates the application, whichever daemon it is connected to. Mounted once above every screen, the error boundary
- * included, inside the daemon's provider, so the checks run whichever screen is up and a crash that is recovered from does
- * not start the state over while an update is installed. The channel is the one the user chose, else the running build's
- * default (`effectiveUpdateChannel`); choosing another looks again at once, on the new one (the store drops the result of
- * a check that was asking about the old one). `firstCheckDelayMs` moves the first automatic check from its default of
- * `FIRST_CHECK_DELAY_MS`; `null` leaves out the automatic checks altogether, for a surface that must hold a state of its
- * own (the gallery).
+ * included, inside the daemon's provider, so the checks run whichever screen is up and a crash that is recovered from
+ * does not start the state over while an update is installed. The channel is the one the user chose, else the running
+ * build's default (`effectiveUpdateChannel`); choosing another looks again at once, on the new one (the store drops the
+ * result of a check that was asking about the old one). `firstCheckDelayMs` moves the first automatic check from its
+ * default of `FIRST_CHECK_DELAY_MS`; `null` leaves out the automatic checks altogether, for a surface that must hold a
+ * state of its own (the gallery). A window of the desktop application opened on a daemon elsewhere provides nothing
+ * either: updating is done on each machine itself, so that window shows no update and starts none
+ * (`useRemoteUpdatePreferences` keeps the daemon's own two settings of its updates in its Settings).
  */
 export function UpdatesProvider({ children, firstCheckDelayMs }: { children: React.ReactNode; firstCheckDelayMs?: number | null }): React.ReactElement {
-  const { updater } = usePlatform();
+  const { updater: platformUpdater } = usePlatform();
+  const local = windowKind() !== "remote";
+  const updater = local ? platformUpdater : undefined;
   const daemon = useOptionalDaemon();
   const hasDaemonUpdate = useDaemonStoreOrEmpty((state) => !!state.daemonUpdate);
   const [desktopStore] = useState(() =>
@@ -76,7 +81,7 @@ export function UpdatesProvider({ children, firstCheckDelayMs }: { children: Rea
   );
   // The daemon's store lives as long as its connection does and the daemon updates itself: one made for another daemon, or
   // none, is replaced while rendering.
-  const wanted = !updater && hasDaemonUpdate ? daemon : undefined;
+  const wanted = local && !updater && hasDaemonUpdate ? daemon : undefined;
   const [held, setHeld] = useState(() => ({ wanted, store: wanted && createDaemonUpdateStoreFor(wanted) }));
   if (held.wanted !== wanted) setHeld({ wanted, store: wanted && createDaemonUpdateStoreFor(wanted) });
   const store = desktopStore ?? held.store;
@@ -84,6 +89,15 @@ export function UpdatesProvider({ children, firstCheckDelayMs }: { children: Rea
   useEffect(() => store?.start(firstCheckDelayMs), [store, firstCheckDelayMs]);
 
   return <UpdatesContext.Provider value={store}>{children}</UpdatesContext.Provider>;
+}
+
+/** Whether this window's Settings holds the daemon's own settings of its updates (the automatic check and the channel)
+ * with nothing else of updates: in a window of the desktop application opened on a daemon elsewhere that updates
+ * itself, where `UpdatesProvider` provides no store. Those two are settings like any other the daemon has, which the
+ * window keeps reachable; checking, installing and restarting are done on that machine. */
+export function useRemoteUpdatePreferences(): boolean {
+  const hasDaemonUpdate = useDaemonStoreOrEmpty((state) => !!state.daemonUpdate);
+  return windowKind() === "remote" && hasDaemonUpdate;
 }
 
 const NO_UPDATES = () => () => {};

@@ -6,7 +6,11 @@ version takes effect the next time Octoboard starts. Nothing is ever installed, 
 the user asking. Settings' Updates section, where its update is followed and its checks and channel chosen, is in
 `docs/product/update-settings.md`. A browser updates nothing itself: a browser open on a daemon of the server form that
 updates itself shows that daemon's update instead, in the same notice and Settings section (see
-`docs/product/server-form-updates.md`), and one open on any other daemon shows none.
+`docs/product/server-form-updates.md`), and one open on any other daemon shows none. Everything below happens in the
+main window: a remote window of the application shows no update notice, no update strip and no Version row, and makes
+no check, whichever daemon it shows (see "No updates in a remote window" in `docs/product/remote-daemons.md`), and a
+remote daemon of another version is refused before its window loads, pointing to this application's Updates where the
+application is behind (see "A version mismatch" in the same doc).
 
 ## Update channels
 

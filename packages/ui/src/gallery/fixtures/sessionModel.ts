@@ -157,7 +157,7 @@ export const sessionModelScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Change model of a session archived while the dialog is open",
-    description: "Another window archived the session after the dialog opened, so the dialog has turned into a failure modal titled \"Cannot change the model\": it names the session in an inline chip and says it was archived, so its model cannot be changed, and to reopen it to change its model and reasoning effort, with OK as its only button. A session deleted meanwhile turns the dialog into the same modal.",
+    description: "Another window archived the session after the dialog opened, so the dialog has turned into a failure modal titled \"Cannot change the model\": it names the session in an inline chip and says it was archived, so its model cannot be changed, and to reopen it to change its model and reasoning effort, with OK as its only footer button and a close button in the header, which does what OK does. Escape and a click outside do nothing. A session deleted meanwhile turns the dialog into the same modal.",
     state,
     steps: [...openDialog(running.title), (ui) => ui.archiveSession(running.id)],
   },

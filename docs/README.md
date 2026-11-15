@@ -191,7 +191,8 @@ Where to start, by question:
 - [Searching Settings](product/searching-settings.md) — the Settings search field: what a query matches, how sections,
   rows and groups are filtered, the empty state, and Find and Escape on the field.
 - [Appearance](product/appearance.md) — light, dark and follow-the-system, and what follows the choice.
-- [Language](product/language.md) — the offered languages, how the choice is made and stored.
+- [Language](product/language.md) — the offered languages, the interface language each client holds and the agent
+  language each daemon holds, how each is chosen and stored.
 - [Right-to-left layout](product/right-to-left-layout.md) — what is mirrored under a right-to-left language.
 - [Dialogs](product/dialogs.md) — dialog titles, initial focus, what Enter and confirm buttons do, and where an unasked question stands among other dialogs.
 - [Error alerts](product/error-alerts.md) — where a failure, warning or note is shown, by how it arises.
@@ -260,15 +261,17 @@ Where to start, by question:
   releases are published, and installing (WebView2, the agents' CLIs, Developer Mode, SmartScreen on the unsigned
   Windows installer).
 - [Application lifecycle](product/application-lifecycle.md) — the desktop form from startup to quit: starting the
-  daemon and restarting one that dies, losing the daemon connection, a daemon of another version, closing, quitting
-  and restarting, crashes and forced termination.
+  daemon and restarting one that dies, losing the daemon connection, a daemon of another version, one window per
+  daemon and remote windows, closing, quitting and restarting, restoring remote windows, crashes and forced
+  termination.
 - [The server form](product/server-form.md) — the daemon alone on a Linux server, reached from a browser over SSH: how
   it starts and stops, the owner-only browser socket and the SSH forward to it, the UI a server build serves and the
   page whose key is refused, `--port`, and the example systemd user unit.
 - [Running in the background from the command line](product/daemon-command-line.md) — the
-  `octoboardd start/stop/restart/status/address` commands (on Windows too, and against the desktop app's daemon) and
-  `address --rotate`: how they find the daemon, waiting out a planned restart caught half-way, exit statuses, and how a
-  successor is recognised.
+  `octoboardd start/stop/restart/status/address` commands (on Windows too, and against the desktop app's daemon),
+  `address --rotate`, `proxy` and `address --json` for another device reaching the daemon over SSH, and `connection`:
+  how they find the daemon, waiting out a planned restart caught half-way, exit statuses, and how a successor is
+  recognised.
 - [Planned restart and planned stop](product/planned-restart-and-planned-stop.md) — handing sessions and shell
   terminals over to their holders: how one is asked for, who starts the next daemon, `--service-managed`, what a
   planned stop keeps, while the terminals are handed over, and an ordinary stop during a planned stop.
@@ -276,9 +279,16 @@ Where to start, by question:
   release holds for Linux (archives, `.sha256`, `.sig`, the Linux manifests), the install script with `--service`, and
   the ways to upgrade.
 - [Who can reach the daemon](product/who-can-reach-the-daemon.md) — the daemon's access model in both forms: loopback
-  only, the launch key and where helpers keep it, the owner key a browser address carries (on the browser socket alone)
-  and its trade-off, SSH as the only remote path, other users of the machine and port takeover, and the origin and key
+  only, the launch key and where helpers keep it, the owner key a browser address carries (on the browser's way in
+  alone) and its trade-off, SSH as the only remote path, remote access to the desktop app's daemon (the macOS socket,
+  the Windows browser port and owner pipe), other users of the machine and port takeover, and the origin and key
   checks.
+- [Remote daemons](product/remote-daemons.md) — the desktop app reaching daemons on other machines over SSH: the
+  Remote, Dock and Windows system menus and the jump list, the connect page and the saved-daemon form, connection
+  details, every connection outcome, device keys, the remote window, Disconnect and restoring remote windows at launch.
+- [Remote access settings](product/remote-access-settings.md) — Settings' Remote access section: the switch and its
+  confirmation, failures, the Windows browser port, the address and forward, the connection details with QR, Rotate
+  key and the SSH server row.
 - [Files Octoboard owns](product/files-octoboard-owns.md) — every file Octoboard writes under `~/.octoboard` and the
   desktop app's own state files, and the database's schema version check.
 - [Process holders](product/process-holders.md) — the processes that run sessions and shell terminals so they outlive

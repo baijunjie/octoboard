@@ -5,14 +5,14 @@ browser or application on another machine, through SSH (see "Two deployment form
 no Tauri IPC channel and no shared state between them (see "Why the daemon is split out" there), so everything the UI
 can do is in here.
 
-The daemon binds to `127.0.0.1` on the port it is started with (`--port <port>`, 1–65535), else on an ephemeral port
-the operating system assigns, which is what the application uses, and generates a key for this launch (see "Who may
-connect"; a daemon that serves the browser also accepts an owner key that persists, on its browser socket alone). It prints `octoboardd listening on
-127.0.0.1:<port> with key <key>` on stdout as its first line, the key being 64 lower-case hex characters, and writes
-the port alone to `octoboardd.port` in its data directory (`~/.octoboard/octoboardd.port`; a failed write is only
-logged); the key is not in that file. It lives in the daemon's memory, in the owner-only key record
-`~/.octoboard/daemon.key`, and in the files of the sessions the daemon starts (see "Who may connect"). The application
-reads the stdout line.
+The daemon binds to `127.0.0.1` on the port it is started with (`--port <port>`, 1–65535), else on an ephemeral port the
+operating system assigns, which is what the application uses, and generates a key for this launch (see "Who may
+connect"; a daemon that serves the browser also accepts an owner key that persists, on its way in for the browser
+alone). It prints `octoboardd listening on 127.0.0.1:<port> with key <key>` on stdout as its first line, the key being
+64 lower-case hex characters, and writes the port alone to `octoboardd.port` in its data directory
+(`~/.octoboard/octoboardd.port`; a failed write is only logged); the key is not in that file. It lives in the daemon's
+memory, in the owner-only key record `~/.octoboard/daemon.key`, and in the files of the sessions the daemon starts (see
+"Who may connect"). The application reads the stdout line.
 
 ## Who may connect
 
@@ -37,79 +37,95 @@ gets `403`; one that fails the second gets `401` with a short body.
 
   Anything else, including `null` and a malformed value, is refused.
 
-**The key** keeps out what those rules let through: any page served from `localhost` (an untrusted dev server, say)
-and every Tauri application, which all share `tauri://localhost`. Each launch of the daemon makes a new one from the
-operating system's random source (the launch key), and every request, on every route, has to carry it as the `key`
-query parameter (`?key=<key>`, the first `key` parameter counting) with exactly the value the daemon made, or, on the
-browser socket alone, the owner key below; each is compared in constant time, and a missing, wrong or empty one is
-refused. On the TCP port the launch key is the only key: the owner key is refused there as any wrong key, and where
-the daemon serves the browser on its socket the `401` body says so (`REFUSED_AT_PORT` in
-`apps/daemon/src/server/access.rs`: a browser reaches this daemon through its own socket, not this port, and
-`octoboardd address` on the server prints the SSH forward to use); otherwise the body is `missing or wrong key`. The `Host` and `Origin` rules are applied first, so a request that fails them is told `403` whatever it
-carries as a key.
+**The key** keeps out what those rules let through: any page served from `localhost` (an untrusted dev server, say) and
+every Tauri application, which all share `tauri://localhost`. Each launch of the daemon makes a new one from the
+operating system's random source (the launch key), and every request, on every route, has to carry it as the `key` query
+parameter (`?key=<key>`, the first `key` parameter counting) with exactly the value the daemon made, or, on the
+browser's way in alone, the owner key below; each is compared in constant time, and a missing, wrong or empty one is
+refused. On the TCP port the launch key is the only key: the owner key is refused there as any wrong key, and where the
+daemon serves the browser on its socket the `401` body says so (`REFUSED_AT_PORT` in `apps/daemon/src/server/access.rs`:
+a browser reaches this daemon through its own socket, not this port, and `octoboardd address` on the server prints the
+SSH forward to use; for the desktop application's daemon on Windows, its browser port); otherwise the body is
+`missing or wrong key`. The `Host` and `Origin` rules are applied first, so a request that fails them is told `403`
+whatever it carries as a key.
 
-**The owner key** is a second key, accepted in addition to the launch key on the browser socket (see "The browser
-socket" below) and nowhere else, for the owner's browser, so that an address bookmarked in it keeps working across
-launches: a daemon that serves the browser keeps it in the owner-only file `~/.octoboard/owner.key`, one line of 64
-lower-case hex characters, written as `daemon.key` is. The file is trusted only if it is a regular file (not followed
-through a symbolic link) owned by the daemon's user with no permission bit set for group or others; any other file at
-that path is replaced. At start such a daemon reads the file, and makes and writes a new key when it is missing, is not
-trusted or does not hold one; a daemon that cannot read the file (which it then leaves as it is) or cannot write it
-logs a warning, opens no socket and serves no browser, holding no owner key. The key then persists, across launches,
+**The owner key** is a second key, accepted in addition to the launch key on the browser's way in and nowhere else: the
+browser socket (see "The browser socket" below), and, in the desktop application's daemon on Windows, the browser port
+and the owner named pipe (see "Remote access"). It is for the owner's browser, so that an address bookmarked in it keeps
+working across launches. A daemon that serves the browser keeps it in the owner-only file `~/.octoboard/owner.key`, one
+line of 64 lower-case hex characters, written as `daemon.key` is. The file is trusted only if it is a regular file (not
+followed through a symbolic link) owned by the daemon's user with no permission bit set for group or others; any other
+file at that path is replaced. At start such a daemon reads the file, and makes and writes a new key when it is missing,
+is not trusted or does not hold one; a daemon that cannot read the file (which it then leaves as it is) or cannot write
+it logs a warning, opens no way in and serves no browser, holding no owner key. The key then persists, across launches,
 planned restarts and a service manager's restarts, until it is rotated (`POST /owner-key/rotate` below, or
-`octoboardd address --rotate`). A daemon that serves no browser never reads, creates or accepts it: the one the
-desktop application starts (with `--parent-pid`), one whose build carries no UI, one on a host without Unix sockets,
-and one that could not open the socket. It is the browser's key only: it is never written to `daemon.key`, a helper's
+`octoboardd address --rotate`). The daemons that serve the browser are the server form's, always, and the one the
+desktop application starts (with `--parent-pid`) while the Allow remote access setting is on (see "Remote access"):
+turning the setting on makes it read or create the file and hold the key, and turning it off makes it refuse the key and
+close every connection the key opened. A daemon that serves no browser never reads, creates or accepts it: the
+desktop application's while the setting is off, one whose build carries no UI, one on a host with no way in for the
+browser, and one that could not open it. It is the browser's key only: it is never written to `daemon.key`, a helper's
 key file or a holder's record, never put in any argument, environment, log or the startup line, and the launch key
 keeps every other use it has. A daemon that holds it says so in its owner record `daemon.owner` by a token,
 `owner-key`, after the port and the tokens that say whether it follows an application (`application` or `alone`) and
 whether a service manager starts its successor (`service` or `no-service`), and before the tokens naming its systemd
-unit and the daemon it took over from (see `docs/product/files-octoboard-owns.md`), so the token says that the daemon
-serves the browser; it is read wherever it stands after the port, and a record without it is of a daemon that serves
-none. An earlier build reads only the third token of the record and takes a word it does not know there as none, and a
-build that reads the service token anywhere after the port ignores tokens it does not know, so the token changes
-nothing either reads.
+unit and the daemon it took over from (see `docs/product/files-octoboard-owns.md`); on Windows the desktop
+application's daemon adds `browser-port=<port>` beside it, the loopback port its browser way in listens on. Both are
+read wherever they stand after the port, so the token says that the daemon serves the browser, and a record without it
+is of a daemon that serves none; the record is written again as the setting or the port changes. An earlier build reads
+only the third token of the record and takes a word it does not know there as none, and a build that reads the service
+token anywhere after the port ignores tokens it does not know, so the tokens change nothing either reads.
 
 `octoboardd address` prints the browser address, `http://127.0.0.1:<port>/?key=<key>`, with the owner key where the
 daemon's record carries the `owner-key` token and `owner.key` holds a key it trusts, and with the launch key
-otherwise: for a daemon that follows the application or is an earlier build, and for one that serves the browser but
-whose file is missing, untrusted, unreadable or holds no key, where it says on stderr that the address lasts only until
-the daemon restarts and that `--rotate` makes a lasting one. On stderr it also says how the address is opened. For a
-daemon that serves the browser it prints the forward of the socket,
+otherwise: for a daemon that is an earlier build, and for one that serves the browser but whose file is missing,
+untrusted, unreadable or holds no key, where it says on stderr that the address lasts only until the daemon restarts and
+that `--rotate` makes a lasting one. The `<port>` is the daemon's own port for the server form's daemon, and for the
+desktop application's, whose own port the system assigns at each launch, the fixed port a browser's machine forwards to:
+the server form's default port, the same at every launch, or on Windows the browser port the daemon's record names.
+For the desktop application's daemon while remote access is off there is no address: `address` says so on stderr, with
+exit status 1 and nothing on stdout. On stderr it also says how the address is opened. For a daemon that serves the
+browser it prints the forward of the way in: on Linux and macOS
 `ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:<port>:<socket> <user>@<server>`, `<socket>` being the socket's real
-path; before that it asks the daemon on its socket whether it accepts the key in the address, and warns when the
-daemon refuses it or the socket cannot be asked. For a daemon that does not, on a host with Unix sockets, it says
-instead that the daemon serves no browser and that the address is for programs that take its launch key. Neither
-changes the status.
+path; on Windows, where the SSH server cannot forward to a socket, the forward of the browser port,
+`ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:<port>:127.0.0.1:<port> <user>@<server>`. Before that it asks the
+daemon at that way in whether it accepts the key in the address, and warns when the daemon refuses it or nothing
+answers. For a daemon that serves no browser, on a host with Unix sockets, it says instead that the daemon serves no
+browser and that the address is for programs that take its launch key. Neither changes the status.
 `octoboardd address --rotate` replaces the owner key first and prints the address with the new one. For a daemon whose
 record carries the token it asks through `POST /owner-key/rotate` with the launch key from `daemon.key`, and reads the
 new key from `owner.key`; a refusal or failure is said on stderr, with exit 1 and nothing on stdout. For a daemon
 whose record lacks the token it replaces the file directly, for the next daemon that serves the browser, prints the
-address with the launch key and exits 0, with a note on stderr. With no daemon running it replaces the file when the
-data directory exists, creating nothing otherwise, and exits 3 as `address` does; a daemon found running once the file
-is replaced is rotated through as above.
+address with the launch key and exits 0, with a note on stderr; for the desktop application's daemon while remote
+access is off it replaces the file the same way, for when remote access is turned on, and exits 0 with the note and
+nothing on stdout. With no daemon running it replaces the file when the data directory exists, creating nothing
+otherwise, and exits 3 as `address` does; a daemon found running once the file is replaced is rotated through as above.
 
-**The browser socket.** A daemon that serves the browser — started without `--parent-pid`, built with the UI embedded,
-on a host with Unix sockets, and able to open the socket and hold the owner key — listens on a second listener, the
+**The browser socket.** A daemon that serves the browser — the server form's, or the desktop application's while remote
+access is on, built with the UI embedded, on a host with Unix sockets, and able to open the socket and hold the owner
+key — listens on a second listener, the
 Unix socket `~/.octoboard/browser.sock` (mode 0600), beside the TCP port. It serves the same routes under the same
-guard, plus the embedded UI below, and is the only place that accepts the owner key. It is opened only if the data
+guard, plus the embedded UI below, and with the browser port and owner pipe of the desktop application's daemon on
+Windows (see "Remote access") is the only place that accepts the owner key. It is opened only if the data
 directory is owned by the daemon's user with no permission for group or others (`mode & 077 == 0`) and no directory
 above it lets another user rename it; the data directory is created with mode 0700, and an existing one the user owns
 is tightened to 0700 at start. A socket file a daemon that is gone left at the path is replaced under the instance
 lock; the daemon never removes it at exit. Where it cannot be opened the daemon logs why and serves no browser.
 
-**The embedded browser UI.** A server build of the daemon carries the UI's build inside its binary and serves it,
-on its browser socket only, same-origin with the routes of this document; the TCP port serves no UI on a host with Unix
-sockets, and the daemon the desktop application starts carries none and serves none.
-Its files are the published application's and hold nothing secret, and the requests a page makes for its scripts,
-stylesheets and fonts carry no key, so a read of one of them is let through without the key, still subject to the
-`Host` and `Origin` rules (`403`):
+**The embedded browser UI.** A build of the daemon that embeds the UI carries the UI's build inside its binary and
+serves it on the browser's way in, same-origin with the routes of this document: the server form's browser socket, and
+the way in of the desktop application's daemon while remote access is on (see "Remote access"). The TCP port serves no
+UI on a host with Unix sockets, nor in a daemon that follows the desktop application, on any system; a server-form
+daemon on a host without them (Windows) has no browser socket and serves the UI on its TCP port instead. Its files are
+the published application's and hold nothing secret, and the requests a page makes for its scripts, stylesheets and
+fonts carry no key, so a read of one of them is let through without the key, still subject to the `Host` and `Origin`
+rules (`403`):
 
 - `GET /` (or `HEAD /`) gives the page itself, `index.html`; `GET` or `HEAD` of any other path gives the file of the
   build at exactly that path. No other path is answered with the page.
 - Every other request — every route of this document, any path that names no file of the build, any other method on
   a file's path — needs the key: `401` without it, and with it `404` for a path no route or file answers.
-  Where the daemon serves no UI (on the TCP port, or in a build that carries none), `/` is such a path.
+  Where the daemon serves no UI (on a TCP port that serves none, or in a build that carries none), `/` is such a path.
 - A file is answered with its content type and `X-Content-Type-Options: nosniff`. The files under `assets/`, which the
   bundler names after a hash of their contents, are sent as cacheable for a year and immutable; every other file,
   the page included, as `no-cache`, so a browser checks it again on every load. The page, `index.html`, is sent
@@ -127,7 +143,7 @@ starts:
   `http://127.0.0.1:<port>/?key=<key>`, accepting it only when its identity is the running daemon's, so the owner of a
   daemon run in the background, or as a service whose standard output is discarded, gets the key there (where the
   daemon holds an owner key, `address` prints that one instead; see "The owner key" above), with the forward
-  of the socket it is opened through on standard error.
+  of the way in it is opened through on standard error.
 
 - The daemon prints it on its startup line (above). The desktop application reads it there and puts it in the window's
   URL beside the port (`?port=<port>&key=<key>`), from which the UI adds it to the URL of every WebSocket it opens
@@ -235,7 +251,7 @@ file of the embedded browser UI needs none (see "Who may connect").
 
 ### Versions and compatibility
 
-The first frame on every control connection is `hello`, `{"type": "hello", "generation": 4, "daemon_version":
+The first frame on every control connection is `hello`, `{"type": "hello", "generation": 5, "daemon_version":
 "0.1.0"}`: the protocol generation the daemon speaks and its release version. Its shape is frozen across generations, so
 a client of any generation can read it: fields may be added to it, never removed or given another meaning. The
 terminal socket has no hello; the control socket's speaks for the daemon.
@@ -342,11 +358,14 @@ The terminal socket has no heartbeat of its own.
 | `check_daemon_update` | — | Checks the release manifest of the daemon's channel for a newer daemon, in the background; see "Daemon updates" below. Answered with `daemon_update_check` once it is known whether a check started; the result follows as `daemon_update_status_updated`, which also announces that the check started. Nothing is started while a check or the download runs, within 30 seconds of the last one, or once an update is installed, and the reply then says so (`started` false). Refused with `daemon_update_unavailable` where `snapshot.daemon_update` is null |
 | `update_daemon` | — | Downloads the update the last check found, checks it and replaces the daemon's own executable with it, in the background; the daemon keeps running the build it started as until `restart_daemon`. Answered with `daemon_update_started` once it has started; its progress and outcome follow as `daemon_update_status_updated`, whose `install.started_at` is the reply's `started_at`. The daemon never does this on its own. Refused: `daemon_update_unavailable`, `daemon_update_running` (a download of this daemon's, or an `octoboardd update`, runs), `daemon_update_installed` (an update has replaced the executable already and awaits the restart), `daemon_update_nothing_to_install` (the last check found none), `daemon_update_not_writable` (the user the daemon runs as may not replace its executable: nothing is downloaded), `daemon_shutting_down` |
 | `restart_daemon` | — | Restarts the daemon in place, the planned restart `octoboardd restart` makes: every session keeps running, with its screen, under the daemon that starts from the file now at the daemon's launch path, on the same address and key; the connection closes and the client reconnects. Answered with `ack`. A client that restarts to run an update asks `handover_check` first, with the status's `installed.holder_floor` and `installed.version`, to tell the user which sessions the restart interrupts. Refused with `daemon_update_unavailable` where `snapshot.daemon_update` is null, with `daemon_update_running` while this daemon downloads an update (a restart would end the download), with `daemon_shutting_down` while a stop, restart or handover is under way (the stop asked for first stays the one made), with `holders_in_service` where the daemon leaves its next start to a service manager and a process holder it started runs inside its own systemd service (as for `planned_stop`), and with `agent_update_running` while an update of an agent's CLI runs (a restart would cut it off mid-install) |
+| `set_remote_access` | `allowed` | Turns Allow remote access on or off for the desktop application's daemon (see "Remote access" below). Answered with `ack` once it has taken effect, and broadcast as `remote_access_updated`, also when the owner socket could not be opened. Refused with `remote_access_unavailable` where `snapshot.remote_access` is null, and with `remote_access_refused_to_browser` on a connection the owner key opened. Not offered to the agents' settings tools, and carried by no configuration export |
+| `rotate_owner_key` | — | Replaces the owner key, as `octoboardd address --rotate` does: every connection the old key opened is closed. Answered with `ack`, and broadcast as `remote_access_updated` with the new address. Refused with `remote_access_unavailable` where `snapshot.remote_access` is null or not `serving`, and with `remote_access_refused_to_browser` on a connection the owner key opened |
+| `set_remote_access_port` | `port` (1–65535; 0 does not read as a request) | Sets the loopback port the desktop application's daemon serves the browser at on Windows (`remote_access.browser_port`, see "Remote access" below). Takes effect at once: while remote access is on, the old port is let go, every connection the owner key opened is closed and the new port is listened on, a port already in use being said as `failure`. Answered with `ack`, and broadcast as `remote_access_updated`. Refused with `remote_access_unavailable` where `snapshot.remote_access` is null or its `browser_port` is, and with `remote_access_refused_to_browser` on a connection the owner key opened. Not offered to the agents' settings tools, and carried by no configuration export |
 | `update_agent_cli` | `agent` | Updates the agent's installed CLI with the command its install method names, run in the background for at most ten minutes; sessions of the agent that run keep their process, and sessions started afterwards use the new version. Answered with `ack` once the update has started; its progress and outcome follow as `agent_cli_status_updated` (`update`). The daemon never does this on its own. Refused: `agent_not_added`, `provider_unsupported` (`operation` `cli_update`: the agent's provider knows no way to update its CLI), `agent_not_installed`, `shell_environment_timeout`, `agent_cli_update_unsupported` (the install is not recognised, or the tool that updates it, `npm` or `brew`, is not on the shell's `PATH`), `agent_cli_update_running`, `daemon_shutting_down` (the daemon has begun to shut down, or a planned restart has been accepted: no update is started) |
 | `use_reset_credit` | `agent` (the provider the credit is of; one whose `capabilities.reset_credits` is true), `account?` (an account id; absent or null is the agent's default account) | Uses one of the account's rate limit reset credits, for a user who confirmed it; nothing else in the daemon, no MCP tool and no automatic account switch ever does. The credit is the first the held reading lists (`reset_credits`, which expires first), or the one the provider picks when the reading holds no details. The provider's CLI is run as a reading runs it, with a fresh idempotency key (for Codex, `codex app-server` with `account/rateLimitResetCredit/consume`; see "Plan quota" in `docs/agent-cli-reference.md`). Answered with `reset_credit_used` once the provider has answered. The account's quota is read again after every run of the CLI, a failed one included, since a credit may have been used though the answer did not arrive. Refused: `provider_unsupported` (`operation` `reset_credit`: the agent's provider offers no reset credits), `unknown_account` (not an account of the agent), `agent_not_available`, `shell_environment_timeout`, `binary_not_found`, `reset_credit_not_signed_in`, `reset_credit_in_progress` (a use on this account is running), `daemon_shutting_down`, `reset_credit_timed_out`, `reset_credit_failed` |
 | `read_account_mcp_inventory` | `agent`, `account?` (an account id; absent or null is the agent's default account), `refresh?` (default false) | Reads the MCP servers and platform connectors of the account through the agent's own CLI and answers with `account_mcp_inventory_read` once it has answered; it connects to every server, so it can take up to a minute and a quarter (Claude Code checks the sign-in for up to 15 seconds before listing for up to 60; Grok Build lists for up to 15 seconds, then diagnoses for up to 60). `refresh` asks the agent to refetch what it caches (Codex's Apps) instead of reading what it holds; Claude Code and Grok Build have nothing to refetch, so `refresh` changes nothing for them. A request for an account that is already being read joins that reading and gets the same inventory, whatever its `refresh`. Nothing the account holds is written. Refused only with `unknown_account` (not an account of the agent); every other failure is the inventory's `unavailable`. See "Account MCP inventory" below |
 | `refresh_account_quotas` | `agent?`, `account?` | Answered with `ack` at once. Re-reads the plan quota of the accounts it selects whose last attempt is older than the polling interval (five minutes, longer for an account that keeps failing), and also those whose last attempt is over 30 seconds old and which hold no windows because the account is not signed in or has no quota to report (a sign-in done outside Octoboard shows up at once): `agent` limits it to one agent's accounts, `account` (an account id) to that one account, and with neither it covers every account of every available agent, leaving out the accounts turned off (`set_account_disabled`) unless a session is running on one. An `account` that does not exist or belongs to another `agent` is refused with `unknown_account`. Each reading that finishes follows as `account_quotas_updated`; any other account that is not due, or whose reading is already running, is left alone. See "Account quotas" below |
-| `export_configuration` | `console?`, `consoles?` (`one`\|`all`\|`none`), `settings_sections?`, `include_accounts?`, `include_paths?` | Answered with `configuration_exported`: the configuration document (see "Configuration export" below) holding the regions chosen. `consoles` says which consoles and projects: `one` (the console `console` names), `all` or `none`; absent it is `one` when `console` is given and `all` otherwise, and `console` is read for `one` alone. `settings_sections` lists the sections of Settings whose application settings are in it (`general`, `appearance`, `git`, `agent_behavior`, `keyboard_shortcuts`, `cleanup`; the Agent accounts section is `include_accounts`), written under one `settings` region that exists exactly when the list is not empty; absent it is every section when every console is exported and none otherwise, and a section listed twice counts once. The daemon writes the keys it holds of each section (General: `interface_language`, when it holds one, `resume_sessions_on_start`, `keep_awake`, `keep_awake_when` and `auto_close_idle_shell_terminals`; Appearance and Keyboard shortcuts: none, so the region may be empty and the client adds the rest). `include_accounts` says whether the account structure is, never a credential; absent it is false. Each region is independent of the others. A request that would export nothing (`consoles` `none`, no sections, no accounts) is refused with `export_empty`, `consoles` `one` without a `console` with `field_required`, and a `console` that does not exist with `unknown_console` rather than answered with an empty document. `include_paths` is a bool, true when absent; false exports each project's `path` as its last segment alone and drops a `remote_url` that cannot be cloned from (see "Configuration export"); it never touches the accounts, whose directories are always written. A read of what is stored: it runs no `git` and touches no session |
+| `export_configuration` | `console?`, `consoles?` (`one`\|`all`\|`none`), `settings_sections?`, `include_accounts?`, `include_paths?` | Answered with `configuration_exported`: the configuration document (see "Configuration export" below) holding the regions chosen. `consoles` says which consoles and projects: `one` (the console `console` names), `all` or `none`; absent it is `one` when `console` is given and `all` otherwise, and `console` is read for `one` alone. `settings_sections` lists the sections of Settings whose application settings are in it (`general`, `appearance`, `git`, `agent_behavior`, `keyboard_shortcuts`, `cleanup`; the Agent accounts section is `include_accounts`), written under one `settings` region that exists exactly when the list is not empty; absent it is every section when every console is exported and none otherwise, and a section listed twice counts once. The daemon writes the keys it holds of each section (General: `agent_language`, when it holds one, `resume_sessions_on_start`, `keep_awake`, `keep_awake_when` and `auto_close_idle_shell_terminals`; Appearance and Keyboard shortcuts: none, so the region may be empty and the client adds the rest). `include_accounts` says whether the account structure is, never a credential; absent it is false. Each region is independent of the others. A request that would export nothing (`consoles` `none`, no sections, no accounts) is refused with `export_empty`, `consoles` `one` without a `console` with `field_required`, and a `console` that does not exist with `unknown_console` rather than answered with an empty document. `include_paths` is a bool, true when absent; false exports each project's `path` as its last segment alone and drops a `remote_url` that cannot be cloned from (see "Configuration export"); it never touches the accounts, whose directories are always written. A read of what is stored: it runs no `git` and touches no session |
 | `inspect_configuration` | `document` | Answered with `configuration_inspected`: for each project of the configuration document `document` (see "Configuration import" below) the directories it could be placed in on this machine, for each account reference that matches no account here (an account the document's accounts would create is listed too; the client tells them apart from `accounts`), and, when the document carries accounts, what importing each of them would do. Changes nothing and runs no `git`. Its existence checks of paths together have a 15 second deadline; a project whose check did not come back in that time is offered nothing. A document that is not a configuration document, is of a version this daemon does not read, or cannot be read is refused with `configuration_not_recognised`, `configuration_version_unsupported` or `configuration_unreadable` |
 | `import_configuration` | `document`, `resolutions?`, `apply_settings?`, `apply_clone_dir?`, `apply_accounts?`, `apply_agents?`, `account_resolutions?`, `apply_consoles?`, `import_id?`, `settings_versions?` | Answered with `configuration_imported`: creates a new console for each console of `document` and associates each project with the directory its entry in `resolutions` chooses (see "Configuration import" below). A project with no entry is left out. The document is refused as `inspect_configuration` refuses it, and a resolution that names a console or project the document does not have, names one twice, or chooses a `directory` that is neither an absolute path nor starts with `~/`, is refused with `import_resolution_invalid`; all of that before anything is created, as is anything `create_console` would refuse of a console of the document (an avatar that is not an image, say). `apply_settings` (a list of sections as for `export_configuration`; absent or empty applies none, a section listed twice counts once) also applies the document's application settings of those sections only; listing a section the document does not carry (none of its keys present) is refused with `import_settings_missing` (`section` in its params), before anything is created. `apply_clone_dir` (read only when `apply_settings` lists `git`; absent means true) says whether the document's default clone directory is applied with them: false keeps this machine's own, and the reply carries no `clone_dir_applied`. `apply_accounts` (absent means false) also creates the document's accounts, before the consoles, so their references bind to them; asking for them of a document that carries none is refused with `import_accounts_missing`, before anything is created. `apply_agents` (read only with `apply_accounts`; absent means every agent the document carries something for: an agent entry, a place in `added_agents`, or provider settings or tags) limits the accounts' part to those agents (a list is deduplicated): an agent not listed is not appended to the added agents, its default account's name and flag are not applied, none of its accounts is created or reused (a console or project reference to one falls back exactly as one to an account left out does, unless an account of that name exists on this machine already), and its provider settings and tags are not applied; the three Agent accounts switches apply whichever agents are listed. Listing an agent the document carries nothing for is refused with `import_agent_missing` (`agent` in its params), before anything is created, and the reply (`accounts.agents_added`, `accounts.agents`, `accounts.agent_settings_applied`) holds only what was applied. `account_resolutions` (read only with `apply_accounts`) are `{ agent, account, directory? \| leave_out? }` entries, `account` being the index among the document's accounts of that `agent`: it gives the account another `directory` (absolute or starting with `~/`) or leaves it out (`leave_out: true`). One that names an account the document lacks, names one twice, gives both or neither of the two choices, or gives a malformed `directory` is refused with `import_resolution_invalid` (`agent` and `account` in its params), before anything is created. `apply_consoles` (absent means true, so a client that never sends it keeps importing the consoles) says whether the document's consoles and projects are created at all; false creates no console or project, and `resolutions` are not read (one naming a project the document lacks is no refusal), so only the accounts and the settings asked for are applied and `consoles` in the reply is empty. A project or account that cannot be created after that is not an error of the request (see "Configuration import"). `import_id` (a token of the client's own choosing) names the import in the `configuration_import_progress` events broadcast while it runs; absent means none are sent. `settings_versions` (the `settings_versions` of the `configuration_inspected` reply the client previewed with) checks the import's settings writes: see "Checked writes". |
 | `get_project_source` | `project`, `slot?`, `asked_by_person?` | Where the project's files are read from: its resolved directory and, when it is inside a Git repository, the repository, the worktree holding it, its place in that worktree and every worktree of the repository, that one included. Answered with `project_source`. A browse request: see "Browsing a project" below for the rules every browse request shares (`slot`, budgets, its own outbound queue) |
@@ -391,7 +410,7 @@ The terminal socket has no heartbeat of its own.
 | `confirm_trust` | `session`, `remember`, `trust_parent_dir?` | The user's go-ahead to a `trust_prompt`, whichever agent is asking: Octoboard may press that session's own folder-trust confirmation, which it does by typing at the session's terminal after checking that the confirmation is still up — for Claude Code a Down and an Enter, once the cursor is seen to move to "Yes, I trust this folder"; for Codex an Enter, with the cursor seen on "1. Trust and continue" and nothing written into the session since the confirmation was sighted; for Grok Build a `y`, while no hook has run, the process is still there and nothing has been written into the session since the confirmation was sighted. Pressing it is what makes the agent record the trust in its own configuration, so its later launches do not ask; for Grok Build the entry Grok wrote into the session's own copy of its trust store is then carried over, unchanged, into the user's own store, and the press counts only once that is done, or, when no hook comes to carry it (a Grok policy that runs none), once the confirmation is seen to have gone from the screen; a hook that comes later still carries the entry. `remember` also records the project's permission (`Project.trust_consent`) once the confirmation has been pressed, so a later confirmation of any agent in that project is pressed without a prompt, and broadcasts the updated `project_upserted`. `trust_parent_dir` (absent means false) records the project's parent directory as trusted instead, once the confirmation has been pressed, and then `remember` adds nothing. Every project whose directory really lies under that directory (see the `trusted_directories` notes under "Records") is covered by it, for every agent — those already there, those added later by any means, repositories the console session clones or adds into it included — and each agent then applies that project's own configuration once it has recorded its trust. The confirmations already waiting under it are pressed at once. The daemon derives the directory from the session's project (it is the prompt's `trust_dir`); a client never names one. A parent that is the filesystem root, the user's home directory (however it is spelled or linked) or a directory containing it is refused, before anything is pressed, with `error` code `trust_directory_too_broad`; so is a project whose path is not absolute (`trust_path_not_absolute`), so is any case where the home directory cannot be determined to check against (`trust_home_unknown`), and so is a project whose parent cannot be checked within a few seconds, as on a mount that does not answer (`trust_directory_unreachable`); a client keeps its dialog open for each of these four. Refused, with nothing recorded and nothing sent, unless `session` is a running project session that is still waiting at its own agent's confirmation and has not been answered (one that is no longer waiting is answered with `error` code `trust_not_waiting`, which a client shows nothing for); a failure to press once it was accepted (the confirmation is not as expected, or something else typed into the session meanwhile) is an `error` with code `trust_answer_failed`, and a Grok Build press whose entry could not be carried over is one with code `trust_not_carried_over`; either records no permission and is also broadcast as a `session_notice` so that it is seen even if the requesting dialog has closed. Octoboard never writes a trust decision into an agent's configuration itself; the one file it writes is the user's Grok Build trust store, with the entry Grok wrote |
 | `remove_trusted_directory` | `path` | Stops trusting a directory (compared after lexical normalisation, so a trailing slash does not matter) and broadcasts `trusted_directories_updated`. Projects' own permissions, sessions already running and the trust each agent has already recorded are untouched. Removing one that is not trusted does nothing. Directories are added only by `confirm_trust` |
 | `answer_session_request` | `request_id`, `approve`, `agent?`, `account?`, `model?`, `effort?`, `compatibility?` | The user's answer to a `session_request`. `approve` true does what the request's `action` says. For `start` it starts the session the request describes — a project session in its project, or a console session in its console — as `open_session` would, with no `bound_to`: it has no parent and reports to the user, and the requesting session carries on unchanged, neither bound to it nor owning it. For `reopen` and `resume` it brings back the session `target` as `resume_session` does, without an instruction, and its parent and everything bound to it stay as they are; archived parents are reopened first, topmost down, and a name the request carried for an archived session is then given as `rename_session` does (a name that cannot be given is told to the requester and does not undo the reopen). A target that is already running or starting when the answer arrives is left alone and counts as done, as does one that `resume_session` refuses with `session_already_running`, or with `session_already_starting` for the target's own launch or after which the target is no longer without a process; a `session_already_starting` that is a claim for an account switch, a handoff, a transfer of branches or a binding change on the target, or for an archived parent, while the target is still without a process, is not done: the answer fails with that refusal's own error and the requester is told the approval could not be carried out. A name the request carried that was not given because the target was not archived by then is told as `renamed: false` in the result. For `resume_record` it opens a session as `open_session` does on the record the request names, with no `bound_to`, so that it reports to the user. For `switch` it runs the parent's `switch_session_account` on the session `target` and for `handoff` its `handoff_session`, each with the values the user ended the dialog on: `agent` (a handoff's receiving agent) and `account` (a switch's target account, a handoff's receiving account; an explicit `null` is the agent's default account), and `model` and `effort`, each absent where the request's own value stands, an explicit `null` for the agent's own default and a string to pin it. The other values of `agent`, `account`, `model` and `effort` are ignored for the other actions. A switch records a model or effort that is given as the session's own override, checked as `open_session` checks them against the account the session is switched to, before the relaunch that reads it; the previous overrides are put back when the switch fails. A handoff's account left out stands as the request showed it, for the agent the request named; for another agent it is settled as a `handoff_session` call naming that agent with no `account` would settle it. The call's `model` and `effort` stand for the agent it named only. The result of either tool names what was done: a handoff's carries `account`, `account_name` and, where set, `model` and `effort`, a switch's carries `account`, `account_name` and `model` and `effort` where the session has an override, and the `note` says when the user chose differently from what was asked. Everything the operations refuse is refused at that moment as for the tool without a dialog, and the call returns the tool's result. False refuses it and changes nothing (a client sends false when the dialog is dismissed). Approval is answered with `session_opened` carrying the new session, or for `reopen`, `resume` and `switch` the target as it then stands, and for `handoff` the receiving session; refusal with `ack`. The first answer wins. An answer for a request that has already been answered, or that the daemon does not know, gets `session_request_answered`. An approval for one that was withdrawn or timed out, or whose session's process ended before it could be carried out, gets `session_request_not_waiting`; a refusal for one gets the same code. An approval that fails while launching returns that launch's own error. `compatibility` edits apply only to `switch` and `handoff`: each boolean holds a session value, `null` returns to following, and omitted entries keep the requested values (the target's held values for a switch). For a handoff to another agent, the original request's switches are dropped, like its model and effort, before the user's edits are applied. Other actions ignore these edits. |
-| `update_settings` | `auto_close_idle_shell_terminals?`, `auto_pull_repositories?`, `auto_delete_unresumable_archives?`, `resume_sessions_on_start?`, `auto_approve_session_requests?`, `auto_approve_resume_requests?`, `auto_approve_account_switches?`, `auto_approve_handoffs?`, `ask_questions_as_choices?`, `keep_sessions_in_own_project?`, `interface_language?`, `keep_awake?`, `keep_awake_when?`, `auto_select_account?`, `auto_switch_on_usage_limit?`, `auto_start_quota_windows?`, `daemon_update_check?`, `daemon_update_channel?`, `default_clone_dir?`, `git_workflow?`, `agent_tags?`, `base_versions?` | Each settable field absent means "leave it alone". Turning `resume_sessions_on_start` on or off resumes nothing now: it is read once when the daemon starts (see the description of the setting below). Turning `auto_delete_unresumable_archives` on starts no scan; the next scheduled one (at most a day away) deletes again. Turning `auto_approve_session_requests`, `auto_approve_resume_requests`, `auto_approve_account_switches` or `auto_approve_handoffs` on or off changes no request already waiting: the first is read when a `request_session` call is made, the second when a `request_resume_session` call is made, the third when a `switch_session_account` call is made, the fourth when a `handoff_session` call is made. `keep_awake_when` is `always` or `working`; any other value is refused when the request is parsed. Turning `keep_awake` on or off or changing `keep_awake_when` takes effect at once: the daemon takes or releases its hold on the host's sleep, and `keep_awake_held_updated` follows when what it holds changed (see the description of the setting below). `daemon_update_channel` is `stable` or `beta`; any other value is refused when the request is parsed. Turning `daemon_update_check` on, or changing `daemon_update_channel`, has a daemon that updates itself check for an update at once (see "Daemon updates" below); turning the check off stops the automatic checks and leaves the one `check_daemon_update` asks for. Turning `ask_questions_as_choices` on or off changes no session already open: it is read when a session is launched (see the description of the setting below). Turning `keep_sessions_in_own_project` on or off reaches the git of a running session at once and the file-edit tools only of sessions launched afterwards (see the description of the setting below). `interface_language` is a language tag the interface offers (`ar`, `de`, `en`, `es`, `fr`, `hi`, `id`, `it`, `ja`, `ko`, `pt`, `ru`, `th`, `tr`, `vi`, `zh-Hans`, `zh-Hant`); any other tag is refused, leaving the whole request unapplied. Turning `auto_select_account` on or off changes no session already open: it is read when `open_session`, `request_session` or `handoff_session` leaves the account out, and then the session runs on the account of its agent whose weekly quota resets soonest and still has some left, or, when none does, on the account it would have taken while the setting is off. Turning `auto_switch_on_usage_limit` on or off changes no session: it is read at the end of a session's failed turn (see "Switching a session whose turn hit the usage limit" below), and has no bearing on how a new session picks its account or on whether an agent's request for a switch is asked about. `default_clone_dir` follows the path rules of `add_project`'s `path` (absolute or `~/`, stored lexically normalised, a relative one refused), and a blank value goes back to the built-in default; a refused value leaves the whole request unapplied. `git_workflow` is an object of the five git workflow settings (`development`: `in_place`\|`branch`\|`worktree`, `squash_before_delivery`, `rebase_before_delivery`, `delivery`: `ask`\|`merge`\|`pull_request`, `revert_gate`), each optional; `squash_before_delivery`, `rebase_before_delivery` and `delivery` apply only while the effective `development` is not `in_place` (the stored values are kept when it is); `revert_gate` applies whatever `development` is; an item left out is left alone, and an unknown `development` or `delivery` is refused when the request is parsed, as any bad enum value is. Broadcasts `settings_updated` only when something actually changed, as `remove_trusted_directory` does. A change that turns `auto_pull_repositories` on also starts the immediate fast-forward pass described in "Fast-forwarding when the setting is turned on" below, whose statuses follow as `project_git_status` broadcasts; an update that leaves the value as it was starts nothing. Turning it off starts nothing and undoes nothing. Turning `auto_start_quota_windows` on looks over the readings already held at once, as described in "Account quotas" below. `agent_tags` is an object keyed by agent wire name (a provider id, today `claude`, `codex`, `grok`) with a list of strings each, replacing that agent's tags; the tags are normalised as a project's are (each trimmed, the empty ones dropped, a later tag dropped when an earlier one matches it ignoring case, the first spelling kept, the order the user's), an empty list clears the agent's tags, an agent left out is left alone, and an unknown key is refused, leaving the whole request unapplied (see the paragraph on `Settings.agent_tags` below). `base_versions` (an object of path to version, each the version of a field this request changes that the client read) checks the write: see "Checked writes". |
+| `update_settings` | `auto_close_idle_shell_terminals?`, `auto_pull_repositories?`, `auto_delete_unresumable_archives?`, `resume_sessions_on_start?`, `auto_approve_session_requests?`, `auto_approve_resume_requests?`, `auto_approve_account_switches?`, `auto_approve_handoffs?`, `ask_questions_as_choices?`, `keep_sessions_in_own_project?`, `agent_language?`, `keep_awake?`, `keep_awake_when?`, `auto_select_account?`, `auto_switch_on_usage_limit?`, `auto_start_quota_windows?`, `daemon_update_check?`, `daemon_update_channel?`, `default_clone_dir?`, `git_workflow?`, `agent_tags?`, `base_versions?` | Each settable field absent means "leave it alone". Turning `resume_sessions_on_start` on or off resumes nothing now: it is read once when the daemon starts (see the description of the setting below). Turning `auto_delete_unresumable_archives` on starts no scan; the next scheduled one (at most a day away) deletes again. Turning `auto_approve_session_requests`, `auto_approve_resume_requests`, `auto_approve_account_switches` or `auto_approve_handoffs` on or off changes no request already waiting: the first is read when a `request_session` call is made, the second when a `request_resume_session` call is made, the third when a `switch_session_account` call is made, the fourth when a `handoff_session` call is made. `keep_awake_when` is `always` or `working`; any other value is refused when the request is parsed. Turning `keep_awake` on or off or changing `keep_awake_when` takes effect at once: the daemon takes or releases its hold on the host's sleep, and `keep_awake_held_updated` follows when what it holds changed (see the description of the setting below). `daemon_update_channel` is `stable` or `beta`; any other value is refused when the request is parsed. Turning `daemon_update_check` on, or changing `daemon_update_channel`, has a daemon that updates itself check for an update at once (see "Daemon updates" below); turning the check off stops the automatic checks and leaves the one `check_daemon_update` asks for. Turning `ask_questions_as_choices` on or off changes no session already open: it is read when a session is launched (see the description of the setting below). Turning `keep_sessions_in_own_project` on or off reaches the git of a running session at once and the file-edit tools only of sessions launched afterwards (see the description of the setting below). `agent_language` is a language tag the interface offers (`ar`, `de`, `en`, `es`, `fr`, `hi`, `id`, `it`, `ja`, `ko`, `pt`, `ru`, `th`, `tr`, `vi`, `zh-Hans`, `zh-Hant`); any other tag is refused, leaving the whole request unapplied. Turning `auto_select_account` on or off changes no session already open: it is read when `open_session`, `request_session` or `handoff_session` leaves the account out, and then the session runs on the account of its agent whose weekly quota resets soonest and still has some left, or, when none does, on the account it would have taken while the setting is off. Turning `auto_switch_on_usage_limit` on or off changes no session: it is read at the end of a session's failed turn (see "Switching a session whose turn hit the usage limit" below), and has no bearing on how a new session picks its account or on whether an agent's request for a switch is asked about. `default_clone_dir` follows the path rules of `add_project`'s `path` (absolute or `~/`, stored lexically normalised, a relative one refused), and a blank value goes back to the built-in default; a refused value leaves the whole request unapplied. `git_workflow` is an object of the five git workflow settings (`development`: `in_place`\|`branch`\|`worktree`, `squash_before_delivery`, `rebase_before_delivery`, `delivery`: `ask`\|`merge`\|`pull_request`, `revert_gate`), each optional; `squash_before_delivery`, `rebase_before_delivery` and `delivery` apply only while the effective `development` is not `in_place` (the stored values are kept when it is); `revert_gate` applies whatever `development` is; an item left out is left alone, and an unknown `development` or `delivery` is refused when the request is parsed, as any bad enum value is. Broadcasts `settings_updated` only when something actually changed, as `remove_trusted_directory` does. A change that turns `auto_pull_repositories` on also starts the immediate fast-forward pass described in "Fast-forwarding when the setting is turned on" below, whose statuses follow as `project_git_status` broadcasts; an update that leaves the value as it was starts nothing. Turning it off starts nothing and undoes nothing. Turning `auto_start_quota_windows` on looks over the readings already held at once, as described in "Account quotas" below. `agent_tags` is an object keyed by agent wire name (a provider id, today `claude`, `codex`, `grok`) with a list of strings each, replacing that agent's tags; the tags are normalised as a project's are (each trimmed, the empty ones dropped, a later tag dropped when an earlier one matches it ignoring case, the first spelling kept, the order the user's), an empty list clears the agent's tags, an agent left out is left alone, and an unknown key is refused, leaving the whole request unapplied (see the paragraph on `Settings.agent_tags` below). `base_versions` (an object of path to version, each the version of a field this request changes that the client read) checks the write: see "Checked writes". |
 | `refresh_git_status` | `console` | Checks every project of `console` against its remote, a few at a time; answered with `ack` at once, and the statuses follow as `project_git_status` broadcasts, one per project as its own check finishes. A project whose check is already running — this call raced ahead of an earlier one, or another client is watching the same console — is not started again, and nor is one whose last check completed less than a minute ago: several clients can each be polling this console on their own 5-minute interval and phase, and without this floor their sweeps would interleave into several checks per project every 5 minutes instead of one. Either way nothing is broadcast for the project that was skipped — it keeps whatever status it already had. An unknown console is `unknown_console`. See "Daemon behaviour, per project" below for what one project's check does |
 | `open_project_path` | `project`, `path`, `worktree?` | Opens an existing project-relative wire path with its default application on the daemon's host; a directory opens in the file manager. `worktree` selects the same scoped live root as browsing; absent means the project's own directory. The path and its symlink target must remain inside that scope. Answers `ack` when the host accepts the request (Linux starts `xdg-open` detached, so later launcher failures cannot be observed; Windows asks the shell through `ShellExecuteW` and takes its refusal, such as a file that is not found or a read that is denied, as the launch failure; a call still unanswered after 3 seconds is the shell showing a window of its own and counts as accepted, as does a type with no associated application, for which the shell shows its "Open with" chooser). Invalid, missing and outside-scope paths use the browse errors; launch failures are `path_open_failed` |
 | `reveal_project_path` | `project`, `path`, `worktree?` | Shows an existing path in the file manager on the daemon's host: a file is selected in its containing folder, a directory is opened. Scope and path validation match `open_project_path`; a symlink is always selected by its own name, whatever it points at. macOS uses `open -R` to select and `open -a Finder` to open a directory, except that a directory macOS types as a package (`Foo.app`, `Foo.xcodeproj`, which opening would launch) is selected in its parent, as is one whose type cannot be read; Linux requires `gdbus` and a file manager implementing `org.freedesktop.FileManager1`, calling `ShowItems` to select and `ShowFolders` to open a directory; Windows runs `explorer.exe /select,<path>` to select and `explorer.exe <directory>` to open a directory, started detached, since its exit status says nothing of whether it worked. Answers `ack` after the launcher succeeds (on Windows, once `explorer.exe` has started); launch failures are `directory_unavailable` |
@@ -430,7 +449,7 @@ The terminal socket has no heartbeat of its own.
 | `type` | Fields |
 |---|---|
 | `hello` | `generation`, `daemon_version` — the first frame on every control connection, sent once, unprompted, before the `snapshot`: the protocol generation the daemon speaks and its release version. Its shape is frozen across generations; see "Versions and compatibility" |
-| `snapshot` | `hosts`, `consoles`, `projects`, `sessions`, `trusted_directories`, `settings`, `providers`, `git_statuses`, `agent_availability`, `account_quotas`, `account_logins`, `account_sharing`, `agent_cli_statuses`, `daemon_update`, `home_dir`, `host`, `keep_awake_held`, `shell_terminals` — sent unprompted right after `hello` when a control socket connects, and again to a connection that fell too far behind the broadcasts. `providers` is every registered provider's descriptor data (`ProviderInfo`: `id`, `label`, `short_name`, `install_url`, `default_config_dir` relative to the home directory, the `detection_markers` that point a project's top level at it, the `capabilities` it declares, how its own interface names its quota windows as `quota_windows`, how its model ids are shown as `model_display`, and the `settings` it declares, see "Provider settings" below), in the registry's order, which is the order every per-agent listing keeps; it does not change while the daemon runs. `git_statuses` is every `GitStatus` the daemon currently holds, empty on a fresh start — carried here, like the trusted directories, so a reconnecting client never has to ask for it separately. `agent_availability` is one entry per registered provider, each `not_determined` until the daemon's one-time login-shell snapshot for this run lands — see "Agent availability" below. `account_logins` is the logins that have started and not ended, empty when none runs — see "Account login" below. `account_sharing` is the sharing state of every account in `Settings.accounts`, as `account_sharing` sends it. `agent_cli_statuses` is the `AgentCliStatus` last held for each agent, empty until a check ends — see "Agent CLI versions" below. `daemon_update` is the daemon's own update as it stands (`DaemonUpdateStatus`), or null where this daemon does not update itself — see "Daemon updates" below. `account_quotas` is the plan quota last read for each account of every available agent, empty until the first readings land — see "Account quotas" below. `home_dir` is the daemon host's home directory — not the browser's, the two may be on different machines — so a client can show a path under it as `~/...`; it is `HOME`, or the user's entry in the system user database when `HOME` is unset or relative (on Windows `USERPROFILE`, or the profile directory `GetUserProfileDirectoryW` gives when that is unset or relative), and null when the home settled on that way is the filesystem root. `host` is the daemon host's own facts, `{os, path_style, file_links, trash, settings, keep_awake}`: `os` is `macos`, `linux` or `windows`; `path_style` is `unix` or `windows`, how the host writes an absolute path; `file_links` is whether the host can make the file links configuration sharing needs (see `sharing_unavailable_on_host`); `trash` is `trash` or `recycle_bin`, how the host names the place a move to the Trash puts things; `settings` is `system_settings` or `settings`, what the host's own interface calls the app its system settings are changed in, for wording a setting to change there; `keep_awake` is whether the host can be held awake (Prevent sleep, see `Settings.keep_awake`): always true on macOS and Windows, and on Linux only when logind answered on the system bus when the daemon started, in which case a client offers the setting and otherwise does not. Like `home_dir` they are the daemon's, not the client's: a client words what happens on the daemon's machine (a folder moved to the Trash, a path revealed) with `trash` and `settings`, never with its own platform's words, since the two may be different machines. Every absolute path the daemon sends (`Project.path`, a `cwd`, a `directory`, the `path` of a scope error) is a string in the host's native spelling; a client shows and returns it as given, and uses `path_style` only to split or shorten it for display. `host` was added within generation 2, and `trash` and `settings` later within it: a client that does not know a field ignores it. `keep_awake_held` is whether the daemon is holding its host awake right now (the setting is on, its condition is met and the host granted the hold), false when not or when acquiring it failed; it is runtime state, never stored, and changes are announced by `keep_awake_held_updated`. `shell_terminals` is every `ShellTerminal` the daemon holds, running or exited, oldest first; with the records it is all a client needs to rebuild its terminals, so one that lagged loses nothing by the fresh snapshot it is sent |
+| `snapshot` | `hosts`, `consoles`, `projects`, `sessions`, `trusted_directories`, `settings`, `providers`, `git_statuses`, `agent_availability`, `account_quotas`, `account_logins`, `account_sharing`, `agent_cli_statuses`, `daemon_update`, `home_dir`, `host`, `keep_awake_held`, `shell_terminals`, `remote_access` — sent unprompted right after `hello` when a control socket connects, and again to a connection that fell too far behind the broadcasts. `providers` is every registered provider's descriptor data (`ProviderInfo`: `id`, `label`, `short_name`, `install_url`, `default_config_dir` relative to the home directory, the `detection_markers` that point a project's top level at it, the `capabilities` it declares, how its own interface names its quota windows as `quota_windows`, how its model ids are shown as `model_display`, and the `settings` it declares, see "Provider settings" below), in the registry's order, which is the order every per-agent listing keeps; it does not change while the daemon runs. `git_statuses` is every `GitStatus` the daemon currently holds, empty on a fresh start — carried here, like the trusted directories, so a reconnecting client never has to ask for it separately. `agent_availability` is one entry per registered provider, each `not_determined` until the daemon's one-time login-shell snapshot for this run lands — see "Agent availability" below. `account_logins` is the logins that have started and not ended, empty when none runs — see "Account login" below. `account_sharing` is the sharing state of every account in `Settings.accounts`, as `account_sharing` sends it. `agent_cli_statuses` is the `AgentCliStatus` last held for each agent, empty until a check ends — see "Agent CLI versions" below. `daemon_update` is the daemon's own update as it stands (`DaemonUpdateStatus`), or null where this daemon does not update itself — see "Daemon updates" below. `account_quotas` is the plan quota last read for each account of every available agent, empty until the first readings land — see "Account quotas" below. `home_dir` is the daemon host's home directory — not the browser's, the two may be on different machines — so a client can show a path under it as `~/...`; it is `HOME`, or the user's entry in the system user database when `HOME` is unset or relative (on Windows `USERPROFILE`, or the profile directory `GetUserProfileDirectoryW` gives when that is unset or relative), and null when the home settled on that way is the filesystem root. `host` is the daemon host's own facts, `{os, path_style, file_links, trash, settings, keep_awake}`: `os` is `macos`, `linux` or `windows`; `path_style` is `unix` or `windows`, how the host writes an absolute path; `file_links` is whether the host can make the file links configuration sharing needs (see `sharing_unavailable_on_host`); `trash` is `trash` or `recycle_bin`, how the host names the place a move to the Trash puts things; `settings` is `system_settings` or `settings`, what the host's own interface calls the app its system settings are changed in, for wording a setting to change there; `keep_awake` is whether the host can be held awake (Prevent sleep, see `Settings.keep_awake`): always true on macOS and Windows, and on Linux only when logind answered on the system bus when the daemon started, in which case a client offers the setting and otherwise does not. Like `home_dir` they are the daemon's, not the client's: a client words what happens on the daemon's machine (a folder moved to the Trash, a path revealed) with `trash` and `settings`, never with its own platform's words, since the two may be different machines. Every absolute path the daemon sends (`Project.path`, a `cwd`, a `directory`, the `path` of a scope error) is a string in the host's native spelling; a client shows and returns it as given, and uses `path_style` only to split or shorten it for display. `host` was added within generation 2, and `trash` and `settings` later within it: a client that does not know a field ignores it. `keep_awake_held` is whether the daemon is holding its host awake right now (the setting is on, its condition is met and the host granted the hold), false when not or when acquiring it failed; it is runtime state, never stored, and changes are announced by `keep_awake_held_updated`. `shell_terminals` is every `ShellTerminal` the daemon holds, running or exited, oldest first; with the records it is all a client needs to rebuild its terminals, so one that lagged loses nothing by the fresh snapshot it is sent. `remote_access` is where remote access to a daemon that follows the desktop application stands (`RemoteAccess`), null in any other daemon; see "Remote access" below |
 | `agent_availability_updated` | `agent_availability` — the whole list, one entry per registered provider, sent when the daemon's one-time determination of it lands, and again when an update of an agent's CLI (`update_agent_cli`) has ended and that agent's entry is not what it was; nothing else re-determines it during a run |
 | `reset_credit_used` | `id`, `outcome` — the reply to `use_reset_credit`; `outcome` is `reset` (the credit was used and the windows that could be reset were), `nothing_to_reset` (no window of the account is eligible for a reset now; whether the credit is kept was not measured), `no_credit` (the account has no credit left) or `already_redeemed` (this request's idempotency key had already succeeded) |
 | `account_mcp_inventory_read` | `id`, `inventory` — the reply to `read_account_mcp_inventory`: an `AccountMcpInventory`, see "Account MCP inventory" below |
@@ -441,6 +460,7 @@ The terminal socket has no heartbeat of its own.
 | `account_login_updated` | `login` — an `AccountLogin`, the account's whole login state, sent when it starts, moves on or ends; see "Account login" below |
 | `agent_cli_status_updated` | `status` — an `AgentCliStatus`, the agent's whole status, sent when a check of its CLI ends and when an update of it starts or ends; see "Agent CLI versions" below |
 | `daemon_update_status_updated` | `status` — a `DaemonUpdateStatus`, the daemon's whole update status, sent when a check starts or ends, when the download makes progress (at most every 256 KiB and about four times a second), ends or fails, and when the executable has been replaced; see "Daemon updates" below. Never sent by a daemon that does not update itself |
+| `remote_access_updated` | `remote_access` — a `RemoteAccess`, where remote access stands, sent when the setting is turned on or off, the browser port is changed, the owner key is rotated, or the owner socket (on Windows, the browser port) failed to open; see "Remote access" below. Never sent by a daemon whose snapshot carries no `remote_access` |
 | `account_sharing` | `account`, `in_use?`, `idle_sessions?`, `progress?`, `failure?` — an account's whole sharing state, sent whenever any of it changes; each field is absent when it has nothing to say. `in_use` is `{sessions, signing_in}`: how many of the account's sessions work under its directory — in the middle of a turn, idle with background work running, waiting for the user's answer (a permission prompt, a question, a session request, or a screen of its agent's that only the user can answer, such as Claude Code's "Resume this conversation?", or a view of its Claude Code background agents), holding a message of Octoboard's that is queued, being written, or was left unsent in its input box (`message_not_sent`), or claimed (being started, resumed, switched or handed off, or having their parent changed) — and whether it is being signed in (its login, or a sign-in to or sign-out of one of its MCP servers is running): what `account_in_use` refuses a change for. `idle_sessions` is how many of its sessions are idle — at their prompt waiting for the user's next message, with nothing running in the background — which a change ends and resumes. `progress` is `{share, phase, done, total, item?}` while a change runs: its direction; `phase`, one of `waiting` (another account of the same agent is changing), `stopping` (ending the idle sessions), `changing` (the entries) and `resuming` (resuming those sessions), in that order, `waiting` and `stopping` left out when there is nothing to wait for or stop and `resuming` when nothing was stopped; the entries processed out of `total`, none before `changing` and all of them once `resuming`; and `item`, the entry being processed (an item of the catalog or, turning sharing off, the agent's id of a conversation being taken back), present only while `changing`, from the first entry on, absent while the change waits for short CLI reads. `failure` is `{share, cause, items, detail}`, the last change that failed since the daemon started (`cause` and `items` as in `account_sharing_failed`, `items` as an array), cleared when the next change records its choice (one refused or stopped before that leaves it). An account the client has been told nothing of is free; see "Sharing the default configuration" below |
 | `settings_updated` | `settings` — the whole `Settings` record, sent when `update_settings` actually changes it, and also whenever the account list changes (`create_account`, `update_account`, `delete_account`, `set_account_disabled`, `set_default_account_name`, `reorder_accounts`, or a console dialog's save that repoints or mints one), and whenever `Settings.added_agents` changes (`add_agent`, `remove_agent`, `reorder_agents`, or the one-time fill described with `Settings.added_agents` under "Records"), and when `set_provider_setting` changes a stored choice |
 | `console_upserted` / `project_upserted` / `session_upserted` | `console` / `project` / `session` — the whole record, under that key |
@@ -546,6 +566,8 @@ A client also branches on some codes, instead of only showing them:
 | `code` | `params` | Meaning |
 |---|---|---|
 | `unreadable_request` | `detail` | The frame is not a request the daemon can read |
+| `remote_access_unavailable` | — | `set_remote_access`, `rotate_owner_key` or `set_remote_access_port` was sent to a daemon that offers no remote access (`snapshot.remote_access` is null), a rotation while remote access is not serving, or a port to a daemon that serves the browser at no port of its own |
+| `remote_access_refused_to_browser` | — | `set_remote_access`, `rotate_owner_key` or `set_remote_access_port` came over a connection the owner key opened: only the application's own window changes remote access |
 | `store_write_failed` | `cause`, `detail` | SQLite could not read or write Octoboard's own database (`octoboard.db` in the data folder), for a cause the user can fix; any request that reads or writes a record can be answered with it. `cause`: `access` (the data folder or the file is read-only, or access is denied), `disk_full` (no room to grow the file) or `other` (the file could not be opened, which a disk too full for SQLite's journal also causes; any `SQLITE_IOERR`, the system failing a read, write, sync or lock of the file; or the file moved or deleted while open, `SQLITE_READONLY_DBMOVED`); a client treats a cause it does not know as `other`. `detail` is SQLite's own text, which names no operating-system error. Failures of the agents' own databases are never this code |
 | `internal_error` | `detail` | Any other failure |
 | `unknown_console` / `unknown_project` / `unknown_session` / `unknown_page` / `unknown_shell_terminal` | `console` / `project` / `session` / `page` / `shell_terminal` | The record is not there |
@@ -872,7 +894,7 @@ SessionContext { tokens, window?, used_percent? }
 Page    { id, session_id, content: PageContent, submission: { "<field>": string|number|boolean|string[] }|null, submission_revision, created_at }  // session_id: the session that pushed it, a console session or a project session
 Settings  { auto_close_idle_shell_terminals, auto_pull_repositories, auto_delete_unresumable_archives, resume_sessions_on_start, auto_approve_session_requests, auto_approve_resume_requests,
             auto_approve_account_switches, auto_approve_handoffs, ask_questions_as_choices, keep_sessions_in_own_project,
-            interface_language: string|null, keep_awake, keep_awake_when: "always"|"working", auto_select_account, auto_switch_on_usage_limit, auto_start_quota_windows, daemon_update_check, daemon_update_channel: "stable"|"beta", default_clone_dir, accounts: Account[],
+            agent_language: string|null, keep_awake, keep_awake_when: "always"|"working", auto_select_account, auto_switch_on_usage_limit, auto_start_quota_windows, daemon_update_check, daemon_update_channel: "stable"|"beta", default_clone_dir, accounts: Account[],
             account_order: { "<agent>": (string|null)[] },
             provider_settings: { "<agent>": { "<setting>": boolean|string|null } } /* every provider's every setting: the value in effect (see below) */,
             agent_tags: { "<agent>": string[] } /* an agent without tags has no entry (see below) */,
@@ -1691,24 +1713,25 @@ from, only into a project session launched while the setting is on, so a change 
 afterwards, and a project registered after a session started is not in its list. A console session is not affected. It
 is as out of an agent's reach as the approvals (neither `get_settings` shows it nor `update_settings` changes it), and a
 full configuration export carries it as it does them.
-`interface_language` is the tag of the interface language, which a client reports in `update_settings` when the user
-picks one in Settings, and also on connecting when the daemon holds none yet (never otherwise). There is one value,
-shared by every client: each shows it as soon as it connects and whenever a `settings_updated` brings a new one (keeping
-a copy only to render in before it has connected), so a change from any client, or from a console session, switches
-every window; a tag a client does not offer leaves that client in the language it has. It is `null` until one is
-reported. While a language is held and it is not English (any `en` tag), the instructions every session is launched with
-name it and ask the session to talk to the user in it: replies, questions, reports and pages meant for the user, and the
-titles it gives sessions, unless the user writes in another language or asks for one, or the project's or the user's own
-instructions say which to use; what it writes into a project follows that project's conventions instead. Nothing is
-added otherwise: sessions already follow the language the user writes in. A project session is given the section in its
-role text, a console session in its instruction file after the guidance on asking and before the user's own section;
-both are fixed when the session is launched like the settings above, so a change of the language reaches only sessions
-begun afterwards. Every `title` argument (`open_session`, `handoff_session`, `rename_session`, `request_session` and
-`request_resume_session`) keeps the same static description: the language of a name is the one the section names where
-the session has one, else the one the user writes in. A console session reads and changes it through the MCP settings
-tools (`get_settings`, `update_settings`), held to the same offered tags. A configuration export that includes the
-application settings carries it, and an import that applies them sets it when this build offers the tag. A settings key
-the daemon does not know is ignored on import.
+`agent_language` is the tag of the language sessions are told to talk to the user in, a daemon setting like the rest:
+the user picks it in Settings, and a client reports its own interface language in `update_settings` on connecting when
+the daemon holds none yet (never otherwise). The interface language itself is not a setting of the daemon: each client
+holds its own and the daemon never stores or broadcasts it, so two clients on one daemon may show different languages,
+while the agent language is one value shared by every client, which each shows as soon as it connects and whenever a
+`settings_updated` brings a new one, so a change from any client, or from a console session, reaches all of them. It is
+`null` until one is reported. While an agent language is held and it is not English (any `en` tag), the instructions
+every session is launched with name it and ask the session to talk to the user in it: replies, questions, reports and
+pages meant for the user, and the titles it gives sessions, unless the user writes in another language or asks for one,
+or the project's or the user's own instructions say which to use; what it writes into a project follows that project's
+conventions instead. Nothing is added otherwise: sessions already follow the language the user writes in. A project
+session is given the section in its role text, a console session in its instruction file after the guidance on asking
+and before the user's own section; both are fixed when the session is launched like the settings above, so a change of
+the agent language reaches only sessions begun afterwards. Every `title` argument (`open_session`, `handoff_session`,
+`rename_session`, `request_session` and `request_resume_session`) keeps the same static description: the language of a
+name is the one the section names where the session has one, else the one the user writes in. A console session reads
+and changes it through the MCP settings tools (`get_settings`, `update_settings`, as `agent_language`), held to the same
+offered tags. A configuration export that includes the application settings carries it, and an import that applies them
+sets it when this build offers the tag. A settings key the daemon does not know is ignored on import.
 `auto_start_quota_windows` (default `false`) is whether the daemon starts a
 usage window that has reset but not begun counting; see "Account quotas" below. Agents cannot read or change it, as it
 spends the user's quota. A configuration export that includes the accounts carries it.
@@ -2095,7 +2118,7 @@ dotted, with a fixed vocabulary:
 
 - `Settings`: `auto_close_idle_shell_terminals`, `auto_pull_repositories`, `auto_delete_unresumable_archives`,
   `auto_approve_session_requests`, `auto_approve_resume_requests`, `auto_approve_account_switches`,
-  `auto_approve_handoffs`, `ask_questions_as_choices`, `keep_sessions_in_own_project`, `interface_language`,
+  `auto_approve_handoffs`, `ask_questions_as_choices`, `keep_sessions_in_own_project`, `agent_language`,
   `keep_awake`, `keep_awake_when`, `auto_select_account`, `auto_switch_on_usage_limit`, `auto_start_quota_windows`,
   `default_clone_dir`, `resume_sessions_on_start`, `daemon_update_check`, `daemon_update_channel`, `git_workflow.<item>`, `agent_tags.<agent>` and
   `provider_settings.<agent>.<setting>`, for
@@ -2309,6 +2332,44 @@ https://octoboard.dev/install.sh | sh`.
 `DaemonUpdateStatus`, `snapshot.daemon_update`, `daemon_update_status_updated`, the three requests and the settings were
 added within the current protocol generation: a client that does not know them ignores them.
 
+### Remote access
+
+A daemon that follows the desktop application, on macOS or Windows, offers remote access: `snapshot.remote_access` is a
+`RemoteAccess`, null in every other daemon. Its `allowed` is the Allow remote access setting, off unless the user turned
+it on, which the daemon stores and applies at its start and at once when `set_remote_access` changes it. While it is on,
+the daemon opens its owner socket (`browser.sock` in the data directory, as the server form's), serves the UI there and
+holds and accepts the owner key (see "Who may connect"); `state` is then `serving`, with the browser's `address`
+(`http://127.0.0.1:<port>/?key=<owner key>`, the port being the server form's default port, which stays the same across
+launches) and the `forward_command` that reaches the socket from another machine, its remote host left as `<server>`.
+When the socket could not be opened or the key could not be held, `state` is `failed` and `failure` says why (`reason`:
+`no_ui`, `not_private`, `socket_failed` or `owner_key_failed`; `detail`: the system's words, in English). While it is
+off, `state` is `off`: there is no owner socket and no owner key, and turning it off closes the socket, refuses the
+owner key and closes every connection the key opened, as a rotation does. The owner record says whether the daemon takes
+the owner key, so `octoboardd address` prints the address while remote access is on and says it is off otherwise. The
+TCP port of a daemon that follows the application serves no UI, on any system.
+
+On Windows, whose SSH server cannot forward to a socket, the daemon serves the browser at a loopback port of its own in
+place of the owner socket, and that listener alone takes the owner key; the daemon's own TCP port still never does.
+`browser_port` is that port, set whatever `state` is (null on every other system): the server form's default port until
+`set_remote_access_port` changes it, which takes effect at once. The `address` is at that port, and the
+`forward_command` forwards the same port on both ends (`ssh -N -o ExitOnForwardFailure=yes -L
+127.0.0.1:<port>:127.0.0.1:<port> <user>@<server>`). A port already in use is `failure.reason` `port_in_use`, any other
+failure to listen `port_failed`. The owner record names the port (`browser-port=<port>`) while the key is taken there,
+so `octoboardd address` prints the address and forward for it.
+
+On Windows the owner endpoint another device's application reaches through `octoboardd proxy` is not that port but a
+named pipe, `\\.\pipe\octoboard-owner-<hash of the data directory>`, opened with the browser's port, serving the same
+and closed when remote access is turned off (a change of port leaves it open): the daemon creates it refusing remote
+clients, owned by and open only to the daemon's user (where the name is taken, it joins only a pipe of its own user),
+and `octoboardd proxy` and `address --json` refuse a pipe of that name owned by anyone else. A pipe that could not be
+opened (its name held by another program or user) is `failure.reason` `pipe_failed`, and nothing is served.
+
+While `state` is `serving`, `connection` holds the connection details another device's application sets itself up
+from (`text`, as `octoboardd connection` prints them, with this computer's own name as the host, the default SSH port,
+the SSH server's host key fingerprint where it can be read and the path of the daemon's own executable; `qr`, the QR
+code of `text` as rows of `1` (dark) and `0` (light) modules, without a quiet zone); it is null otherwise. The
+desktop application's daemon runs only while the application does, so another device reaches it only then.
+
 ### Configuration export
 
 `export_configuration` produces the document a user carries to another machine. The reply, `configuration_exported`,
@@ -2316,7 +2377,7 @@ holds it under `document`; a client saves it as a file and does not build or alt
 input of the import as much as a file the user keeps, so its shape is part of this contract.
 
 ```
-Document { format: "octoboard-configuration", version: 3,
+Document { format: "octoboard-configuration", version: 4,
            exported_by,              // the Octoboard version that exported it, or null; informational
            settings?: DocumentSettings,                      // present exactly when at least one settings section was
                                                              // exported, whichever consoles
@@ -2324,7 +2385,8 @@ Document { format: "octoboard-configuration", version: 3,
            consoles: DocumentConsole[] }                     // empty when no console was exported
 DocumentSettings { // every key is optional (absent or null: not carried); a section is carried when any of its keys is
                    // general
-                   interface_language?,                 // the interface language tag the daemon held
+                   interface_language?,                 // the interface language tag, added by a client that holds one
+                   agent_language?,                     // the agent language tag the daemon held
                    resume_sessions_on_start?,           // absent in a document of a build without the setting
                    run_in_background?,                  // bool, added by a client that has the setting
                    show_menu_bar_icon?,                 // bool, added by a client that has the icon
@@ -2407,27 +2469,27 @@ DocumentAccount   { name, directory, disabled: bool }
   (`settings`) and the accounts (`accounts`). `settings` is present exactly when at least one section was exported and
   `accounts` exactly when the accounts were: nothing may be inferred from the presence of one about the others. A
   section is carried by a document when any of its keys is present. The sections and their keys: General
-  (`interface_language`, `resume_sessions_on_start`, `run_in_background`, `show_menu_bar_icon`, `keep_awake`,
-  `keep_awake_when`, `auto_close_idle_shell_terminals`, `session_order`), Appearance (`appearance`, `markdown_style`,
-  `terminal_font_size`), Git (`default_clone_dir`, `auto_pull_repositories`, `git_workflow`), Agent behavior
-  (`auto_approve_session_requests`, `auto_approve_resume_requests`, `auto_approve_account_switches`,
+  (`interface_language`, `agent_language`, `resume_sessions_on_start`, `run_in_background`, `show_menu_bar_icon`,
+  `keep_awake`, `keep_awake_when`, `auto_close_idle_shell_terminals`, `session_order`), Appearance (`appearance`,
+  `markdown_style`, `terminal_font_size`), Git (`default_clone_dir`, `auto_pull_repositories`, `git_workflow`), Agent
+  behavior (`auto_approve_session_requests`, `auto_approve_resume_requests`, `auto_approve_account_switches`,
   `auto_approve_handoffs`, `ask_questions_as_choices`, `keep_sessions_in_own_project`), Keyboard shortcuts
-  (`keyboard_shortcuts`) and Cleanup (`auto_delete_unresumable_archives`); the Agent accounts section is the accounts region. A document names no section,
-  only keys, so a document written by a release that grouped the keys differently (App behavior apart from General, the
-  appearance and Markdown style under General) is read as it is: each of its keys counts toward the section it belongs
-  to now. A key the document does not carry (absent or `null`) is left as this machine has it;
-  `resume_sessions_on_start` is also absent in a document of a build without the setting. The client's own keys are
-  `appearance`, `markdown_style`, `terminal_font_size`, `session_order`, `run_in_background`, `show_menu_bar_icon` and
-  `keyboard_shortcuts`, which the daemon never builds, stores or reads: the client adds them to the document it saves,
-  for the sections chosen only, applies them itself on import, and the daemon passes them through (`settings_applied`
-  carries them back as they came), except `terminal_font_size`, which it normalises: a number that is not negative
-  rounds to the nearest whole pixel, and anything else (a negative number, text) reads as absent, so
-  `settings_applied` carries the rounded size or none. `session_order` is `{ sessions, active_projects,
-  inactive_projects }`, each part optional and passed through unchecked; the client writes all three, and on import
-  applies each part whose value it knows. The settings of the Agent accounts section travel with the accounts, in
-  `accounts.agent_settings`. Consoles are ordered by creation time and a console's `projects` by name, with the stored
-  id breaking a tie, so the order is the same on every export; the id itself is not in the document. `projects` is all
-  of a console's projects, whether or not a project is a git repository.
+  (`keyboard_shortcuts`) and Cleanup (`auto_delete_unresumable_archives`); the Agent accounts section is the accounts
+  region. A document names no section, only keys, so a document written by a release that grouped the keys differently
+  (App behavior apart from General, the appearance and Markdown style under General) is read as it is: each of its keys
+  counts toward the section it belongs to now. A key the document does not carry (absent or `null`) is left as this
+  machine has it; `resume_sessions_on_start` is also absent in a document of a build without the setting. The client's
+  own keys are `appearance`, `markdown_style`, `terminal_font_size`, `session_order`, `run_in_background`,
+  `show_menu_bar_icon` and `keyboard_shortcuts`, which the daemon never builds, stores or reads: the client adds them to
+  the document it saves, for the sections chosen only, applies them itself on import, and the daemon passes them through
+  (`settings_applied` carries them back as they came), except `terminal_font_size`, which it normalises: a number that
+  is not negative rounds to the nearest whole pixel, and anything else (a negative number, text) reads as absent, so
+  `settings_applied` carries the rounded size or none. `session_order` is
+  `{ sessions, active_projects, inactive_projects }`, each part optional and passed through unchecked; the client writes
+  all three, and on import applies each part whose value it knows. The settings of the Agent accounts section travel
+  with the accounts, in `accounts.agent_settings`. Consoles are ordered by creation time and a console's `projects` by
+  name, with the stored id breaking a tie, so the order is the same on every export; the id itself is not in the
+  document. `projects` is all of a console's projects, whether or not a project is a git repository.
 - **Nothing is an id.** No console, project or account carries an `id`. A console's `workdir` is not in the document
   either: the daemon derives it from the console's id when it creates the console, so it would carry that id and the
   daemon's own layout, and an import creates its console, and so its directory, itself. A console's `accounts.<agent>`
@@ -2478,7 +2540,7 @@ DocumentAccount   { name, directory, disabled: bool }
   exporting machine.
 - **Models and efforts** are exported as stored. They are free text read only when a session is launched, so a value
   the importing machine's agent does not offer is not an error here.
-- **Version.** `format` tells a configuration document from any other JSON; `version` is an integer, 3 today. It is
+- **Version.** `format` tells a configuration document from any other JSON; `version` is an integer, 4 today. It is
   raised when a change would make a reader written for a released version misread a document: a field removed, or given
   another meaning. A field added is not such a change, and a reader ignores one it does not know. An import reads the
   current `version` and upgrades every older one from 1 (what the beta releases wrote) on the raw document before
@@ -2486,16 +2548,19 @@ DocumentAccount   { name, directory, disabled: bool }
   not know, or a `version` that is not between 1 and the current one, before creating anything. Version changes and
   upgrade steps are written only between released versions: a change no release has carried is made in place, at the
   current `version`, and raising `version` past a released one adds the step that upgrades a document of that version.
-  Two steps exist. 1 to 2: the five settings of the Agent accounts section (the three switches, `agent_tags` and
+  Three steps exist. 1 to 2: the five settings of the Agent accounts section (the three switches, `agent_tags` and
   `provider_settings`) move from `settings` into `accounts.agent_settings` (a document that has them but no accounts
   region gets one with no agents, so they are kept, and an import applies them with the accounts), an account's
   `share_default_config` is dropped, and what version 1 never carried (`settings.default_clone_dir`, a default account's
   `disabled`, and `accounts.agent_settings` of a document with no `settings`) is written `null`, which leaves this
   machine's value as it is. 2 to 3: `settings.sidebar_order_by_status` is dropped, as a client keeps the sidebar's sort
-  itself. `exported_by` records the Octoboard version that produced the document, for diagnosing one
-  that misbehaves; an import never reads it and it takes no part in `version`. Each agent's settings are nested: a
-  console's `accounts`, `launch` and `project_session_launch` and a project's `accounts` and `launch` are objects keyed
-  by agent, and an agent's entry that is left out is unset.
+  itself. 3 to 4: `settings.agent_language` is the agent's language, a daemon setting, where a version 3 document's
+  `interface_language` was the one language of the windows and the agents alike; the step copies `interface_language`
+  into `agent_language` when the document carries none, and leaves `interface_language` as the client's own.
+  `exported_by` records the Octoboard version that produced the document, for diagnosing one that misbehaves; an import
+  never reads it and it takes no part in `version`. Each agent's settings are nested: a console's `accounts`, `launch`
+  and `project_session_launch` and a project's `accounts` and `launch` are objects keyed by agent, and an agent's entry
+  that is left out is unset.
 
 ### Configuration import
 
@@ -2606,7 +2671,8 @@ configuration_imported { settings_applied?: { auto_close_idle_shell_terminals?, 
                                            auto_approve_handoffs?, ask_questions_as_choices?,
                                            keep_sessions_in_own_project?, git_workflow?,
                                            default_clone_dir?,          // only when it was applied
-                                           interface_language?,         // only when this build offers it
+                                           interface_language?,         // the client's own, echoed as it came
+                                           agent_language?,             // only when this build offers it
                                            appearance?, markdown_style?, terminal_font_size?, session_order?,
                                            run_in_background?, show_menu_bar_icon?, keyboard_shortcuts?,
                                            keep_awake?, keep_awake_when? /* only a name this build knows */ },
@@ -2778,15 +2844,17 @@ Failure           { code, params, message }             // as an `error` reply c
   (`settings_error`). A failure to write it is `settings_error` too and leaves the rest of the settings unapplied. The
   inspection's `in_document_clone_dir` gives each project's offers under the document's directory (the same
   `exported_path`, and the clone-dependent choices worked out there), for the review to show whichever the user picks.
-- **The language and the client's own settings.** `settings.interface_language` is applied through `update_settings`
-  only when this build offers the tag (a tag it does not is skipped, the rest still apply and `settings_applied` carries
-  no `interface_language`). `appearance`, `markdown_style`, `terminal_font_size`, `session_order`, `run_in_background`,
-  `show_menu_bar_icon` and `keyboard_shortcuts` are the one kind of setting the daemon does not apply: the
-  client holds them, `{}` for the shortcuts meaning every shortcut at its default (which is what a client with none
-  changed writes), and the daemon echoes them in `settings_applied` when the settings were applied, as they came
-  (`terminal_font_size` rounded to a whole pixel, or dropped when it is no such number), for the client to apply to
-  itself, ignoring a value it does not know or a setting its platform lacks. The language is no
-  client's own: the daemon applies it, and every window follows it.
+- **The languages and the client's own settings.** The agent language is applied through `update_settings`, from
+  `settings.agent_language` (which the upgrade of a version 3 document fills from its `interface_language` where it
+  carries none), and only when this build offers the tag (a tag it does not is skipped, the rest still apply and
+  `settings_applied` carries no `agent_language`). `interface_language`, `appearance`, `markdown_style`,
+  `terminal_font_size`, `session_order`, `run_in_background`, `show_menu_bar_icon` and `keyboard_shortcuts` are the one
+  kind of setting the daemon does not apply: the client holds them, `{}` for the shortcuts meaning every shortcut at its
+  default (which is what a client with none changed writes), and the daemon echoes them in `settings_applied` when the
+  settings were applied, as they came (`terminal_font_size` rounded to a whole pixel, or dropped when it is no such
+  number), for the client to apply to itself, ignoring a value it does not know or a setting its platform lacks. The
+  agent language is no client's own: the daemon applies it, and every window follows it; the interface language is the
+  client's.
 - **The Agent accounts settings.** `accounts.agent_settings` (`auto_select_account`, `auto_switch_on_usage_limit`,
   `auto_start_quota_windows`, `provider_settings` and `agent_tags`) is applied with the accounts (`apply_accounts`),
   after the accounts, through the same path as `update_settings`, whatever `apply_settings` says;
@@ -4218,8 +4286,71 @@ replace it. A caller reads the new key from `owner.key` (`octoboardd address --r
 |---|---|
 | `204` | The key was replaced; the body is empty |
 | `401` | The request does not carry the launch key (the guard's `401` for a key that is neither) |
-| `409` | The daemon holds no owner key, so serves no browser (it follows the desktop application, its build carries no UI, or it could not open the socket or read or write the file at start); JSON body `{"reason": "no_owner_key", "message": "<English prose>"}`, and nothing changes |
+| `409` | The daemon holds no owner key, so serves no browser (remote access is off in the desktop application's daemon, its build carries no UI, or it could not open the way in or read or write the file); JSON body `{"reason": "no_owner_key", "message": "<English prose>"}`, and nothing changes |
 | `500` | The new key could not be written; the old key stands, in memory and on disk; JSON body `{"reason": "write_failed", "message": "<English prose>"}` |
+
+## `octoboardd proxy`, `address --json` and `connection` — another device reaching the daemon over SSH
+
+The application on another device reaches a daemon through three modes of the `octoboardd` on the daemon's machine, run
+there over SSH as the daemon's user. They are a contract between releases: the device's application and the machine's
+`octoboardd` are installed and updated separately, so what follows only grows, as the protocol does within a generation
+(see "Versions and compatibility").
+
+**`octoboardd address --json`** (it takes no `--rotate`) prints one line on stdout, a JSON object, and nothing else
+there:
+
+```
+{"owner_key": "<64 hex>", "generation": <number>, "daemon_version": "<release version>"}
+```
+
+`owner_key` is the key in `owner.key`, and `generation` and `daemon_version` are the daemon's own, read from the `hello`
+(see "Versions and compatibility") it sends on opening a control connection on its owner endpoint, which is made with
+that key, so the line is printed only once the daemon has accepted the key. A reader ignores a field it does not know.
+The key is never in an argument, and it is on stdout alone.
+
+**`octoboardd proxy`** connects to the daemon's owner endpoint and carries bytes both ways between it and its own
+standard input and output until either side closes. It writes nothing else on stdout, whatever the outcome (its
+messages are on stderr), and it reads no key: the client sends the owner key in its own requests, as a browser does,
+and speaks this document over the connection. On Linux and macOS the endpoint is the browser socket, and when the
+input ends `proxy` shuts the sending half down and carries on until the daemon closes, so the answer to a last request
+is not lost. On Windows the endpoint is the owner named pipe (see "Remote access"), which has no half-close: once the
+input has ended, `proxy` carries what the daemon still sends until it has been silent for two seconds, then ends the
+connection, so a client that is done sends its last request and closes its side, and one that expects an answer to it
+waits no longer than that for it to start.
+
+Both modes find the running daemon as `address` does, waiting through a planned restart, and exit with a status that
+says why they could not reach it, the reason on stderr:
+
+| Status | Meaning |
+|---|---|
+| `0` | `address --json` printed its line; `proxy`'s connection ended, by either side |
+| `1` | Anything else that failed: the key in `owner.key` is missing or unusable, or the daemon refuses it; the daemon's answer could not be read (for `address --json`, nothing is printed on stdout); the daemon is running but its record is not yet readable; `proxy`'s connection failed in the middle |
+| `3` | No daemon runs |
+| `4` | The running daemon has no owner endpoint: it takes no owner key (it is an earlier build, its build carries no UI, or its way in could not be opened), or it is the desktop application's daemon with Allow remote access off |
+| `5` | The daemon has an owner endpoint but it cannot be connected to |
+| `6` | No daemon runs, and this `octoboardd` is the desktop application's own copy, whose daemon runs only while the application does: the application is not running |
+
+A client treats a status it does not know as a failure. `3` and `6` differ only in what can be done about it: a daemon
+of the server form is started on the machine, the application's is started by opening the application there.
+
+**`octoboardd connection`** prints the connection details another device sets itself up from, with no secret, as a QR
+code (unless `--text`, which prints the text alone) followed by one line of text on stdout, a URI that is also what the
+desktop application's daemon gives its Remote access section (see "Remote access"):
+
+```
+octoboard+ssh://<user>@<host>:<port>?fingerprint=<fingerprint>&octoboardd=<path>&name=<name>
+```
+
+`<user>` is the account the command runs as, `<host>` the host other devices reach the machine at (an IPv6 address in
+square brackets) and `<port>` the machine's SSH port (22 by default); `--host` and `--ssh-port` give them, and
+otherwise they are taken from the SSH session running the command, and the host, failing that, from the machine's own
+name.
+The three query fields are each left out when unknown, and in this order: `fingerprint`, the SSH server's host key
+fingerprint as OpenSSH prints it (`SHA256:<base64>`, from the first of the ed25519, ECDSA and RSA host keys that can
+be read); `octoboardd`, the path of this executable; `name`, the name the machine gives itself, unless it is the host.
+Every component is UTF-8 percent-encoded except the characters a URI never reserves (and `:`, `/` and `@` in a query
+value). A reader ignores a query field it does not know. Where the host came from, and any field that could not be
+told, is said on stderr. It exits `0`, or `1` when the user's or the machine's name cannot be read.
 
 ## `POST /restart` — a planned restart
 
@@ -4542,16 +4673,22 @@ directory.
   changed model or effort reaches the calling session on its next launch unless it was opened with its own. A changed
   `project_session_launch` reaches project sessions at their next launch, unless their project or the session sets
   its own.
-- `get_settings` answers `auto_close_idle_shell_terminals`, `auto_pull_repositories`, `auto_delete_unresumable_archives`, `resume_sessions_on_start`, `keep_awake`, `keep_awake_when`, `daemon_update_check`, `daemon_update_channel`, `auto_select_account`,
-  `interface_language`, `default_clone_dir`, `git_workflow` (the five application-wide values),
-  `provider_settings` (`{ "<agent>": { "<setting>": value } }`, the value in effect of each setting the provider declares `shown_to_agents`, read-only; an agent with none has no entry), `agent_tags` (per added agent that has any, every agent while the added list is undecided), `accounts` (`id`, `agent`, `name`, `default`, `disabled`;
-  never a config directory; a default account's `name` is the one the user gave it, else `Default`, and its id stays
-  `default`) and `trusted_directories`. `update_settings` takes `auto_pull_repositories`,
-  `auto_close_idle_shell_terminals`, `auto_delete_unresumable_archives`, `resume_sessions_on_start`, `keep_awake`, `keep_awake_when` (`always` or `working`, any other text refused), `daemon_update_check`, `daemon_update_channel` (`stable` or `beta`, any other text refused), `auto_select_account`, `default_clone_dir` (blank
-  resets it), `agent_tags` (an object of agent to list of strings, replacing that agent's tags, the rest left alone; checked and normalised like the control request) and `git_workflow`
-  (an object of any of the five items, the rest left alone; a bad `development` or `delivery` or an unknown key is
-  refused by the tool) through the function `update_settings` runs, so enabling the automatic pull fast-forwards the
-  projects already behind at once.
+- `get_settings` answers `auto_close_idle_shell_terminals`, `auto_pull_repositories`,
+  `auto_delete_unresumable_archives`, `resume_sessions_on_start`, `keep_awake`, `keep_awake_when`,
+  `daemon_update_check`, `daemon_update_channel`, `auto_select_account`, `agent_language`, `default_clone_dir`,
+  `git_workflow` (the five application-wide values), `provider_settings` (`{ "<agent>": { "<setting>": value } }`, the
+  value in effect of each setting the provider declares `shown_to_agents`, read-only; an agent with none has no entry),
+  `agent_tags` (per added agent that has any, every agent while the added list is undecided), `accounts` (`id`, `agent`,
+  `name`, `default`, `disabled`; never a config directory; a default account's `name` is the one the user gave it, else
+  `Default`, and its id stays `default`) and `trusted_directories`. `update_settings` takes `auto_pull_repositories`,
+  `auto_close_idle_shell_terminals`, `auto_delete_unresumable_archives`, `resume_sessions_on_start`, `keep_awake`,
+  `keep_awake_when` (`always` or `working`, any other text refused), `daemon_update_check`, `daemon_update_channel`
+  (`stable` or `beta`, any other text refused), `auto_select_account`, `agent_language` (a tag the interface offers, any
+  other refused), `default_clone_dir` (blank resets it), `agent_tags` (an object of agent to list of strings, replacing
+  that agent's tags, the rest left alone; checked and normalised like the control request) and `git_workflow` (an object
+  of any of the five items, the rest left alone; a bad `development` or `delivery` or an unknown key is refused by the
+  tool) through the function `update_settings` runs, so enabling the automatic pull fast-forwards the projects already
+  behind at once.
 - `open_session` takes `title`, `agent`, `account` (id or name, `default`), `model` and `effort` besides the brief;
   the account is read among the accounts of the agent the session will be of. A `model` or `effort` left out is the
   project's, else the console's project session value. The result carries `session`, `agent`, `account` (the id, or

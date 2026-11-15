@@ -309,8 +309,8 @@ describe("restarting", () => {
   });
 
   it.each([
-    ["restart", "Could not restart", "Octoboard kept running instead of relaunching. Quit it and open it again."],
-    ["quit", "Could not quit", "Octoboard kept running instead of ending. Try quitting it again."],
+    ["restart", "Could not restart", "The app kept running instead of relaunching. Quit it and open it again."],
+    ["quit", "Could not quit", "The app kept running instead of ending. Try quitting it again."],
   ] as const)("says in its own words that a %s did not happen, with the shell's text behind Details", async (action, title, message) => {
     const { hook, quit } = mount([], { confirmQuit: async () => { throw new Error("ipc: no such window"); } });
     await act(async () => (action === "restart" ? hook().requestRestart(null, null) : quit()));
@@ -352,7 +352,7 @@ describe("the daemon exiting by itself", () => {
     const [alert] = errorAlerts.getSnapshot();
     onTestFinished(() => act(() => errorAlerts.acknowledge()));
     expect(alert.title).toBe("The daemon exited unexpectedly");
-    expect(alert.message).toBe("The daemon runs your sessions and terminals, and Octoboard cannot work without it. Restart Octoboard to continue.");
+    expect(alert.message).toBe("The daemon runs your sessions and terminals, and the app cannot work without it. Restart the app to continue.");
     expect(alert.message).not.toContain("signal");
     expect(alert.details).not.toBeNull();
     expect(alert.classification.kind).toBe("unexpected");

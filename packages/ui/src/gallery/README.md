@@ -51,6 +51,14 @@ which resets the dev app's `octoboard.*` preferences (hence port 5175 for `pnpm 
   scenario none. Which keys are drawn (⌘ and symbols, or Ctrl and text caps) and whether Back and Forward are listed follow
   the scenario's `host`, or the platform the gallery is viewed in where it has none; steps press keys with `ui.chord`, which
   turns a portable binding into that host's.
+- Three scenario fields give the frame what only the desktop shell has. `trayFlyout` renders the Windows notification-area
+  flyout page (`TrayFlyout`) in place of the app, over a model that `trayFlyoutFixture.ts` builds from per-daemon window
+  states with the app's own menu builder (`buildStatusItemMenu`, with its real icons and quota rows) and lays out as the
+  shell's `tabs.rs` / `flyout_model.rs` do, so the quota rows and sessions follow the app and only the lines the shell adds
+  (Check for updates, Open board, Disconnect, Quit completely) are written out there. `remoteWindow` makes the page a remote daemon's window:
+  the shell marks one with `?remote=<name>` and its IPC bridge, which the app reads (`remoteDaemonName`), so the frame puts
+  both on the page after the platform adapter has been chosen (choosing it under the marker would build the shell's own
+  adapter). `remoteLogin` stubs the shell's Remote Login (OpenSSH Server on Windows) answer for the Remote access section.
 - A scenario with `liveChanges` lists them as buttons beside the other controls, offered once its page is ready. Each
   makes what another window or the machine would while the view is on screen (an account added, a terminal closed there,
   an agent found missing), as the daemon's own events through the steps' `daemonEvents`, for the motion and focus of a

@@ -1,3 +1,5 @@
+// First, before any module that creates a preference: see the module.
+import "./preferenceIdentity";
 import React from "react";
 import ReactDOM from "react-dom/client";
 
@@ -6,8 +8,10 @@ import { AppRoot } from "./AppRoot";
 import { suppressNativeContextMenu } from "./input/contextMenuGuard";
 import { isKeylessDaemonPage, resolveDaemonAddress, resolveRecovered, resolveStartupError } from "./daemon";
 import { runtimeError } from "./errors/runtimeError";
+import { ConnectPage } from "./shell/ConnectPage";
+import { TrayFlyout } from "./shell/TrayFlyout";
 import { connectShellSettings } from "./lifecycle/shellSettings";
-import { selectPlatform } from "./platform";
+import { connectPageEntry, selectPlatform, windowKind } from "./platform";
 import { KeyRefusedScreen } from "./shell/KeyRefusedScreen";
 import { DaemonFailedScreen, NoAddressMessage, StartupScreen } from "./StartupScreen";
 import { createDaemon } from "./store";
@@ -28,12 +32,18 @@ const root = ReactDOM.createRoot(rootEl);
 
 const platform = selectPlatform();
 suppressNativeContextMenu(platform);
+// The notification-area flyout has no daemon, and the shell shows and themes its window itself.
+const kind = windowKind();
+const trayFlyout = kind === "flyout";
 // The shell holds the run-in-background and menu bar icon choices and starts from its own file; from here a change of
-// either reaches it, and what the page kept before the file existed is handed over once.
-connectShellSettings({
-  runInBackground: platform.backgroundRun && ((enabled) => platform.backgroundRun!.set(enabled)),
-  showMenuBarIcon: platform.statusItem && ((shown) => platform.statusItem!.setVisible(shown)),
-});
+// either reaches it, and what the page kept before the file existed is handed over once. The flyout leaves that to the
+// windows that show the settings.
+if (!trayFlyout) {
+  connectShellSettings({
+    runInBackground: platform.backgroundRun && ((enabled) => platform.backgroundRun!.set(enabled)),
+    showMenuBarIcon: platform.statusItem?.setVisible && ((shown) => platform.statusItem!.setVisible!(shown)),
+  });
+}
 
 // Where the shell puts a translucent material behind a transparent webview (the macOS application,
 // `decorate` in `apps/desktop/src-tauri/src/chrome/macos.rs`), the page leaves the window chrome's
@@ -57,7 +67,9 @@ if (platform.translucentWindow) document.documentElement.dataset.windowMaterial 
 // raw choice decides which of the two it gets, not the resolved class alone.
 const initialThemeChoice = document.documentElement.dataset.themeChoice;
 const initialResolvedTheme = document.documentElement.dataset.theme;
-const initialNativeThemePush = platform.nativeWindow
+// The flyout's window is themed and shown by the shell (`reveal` would show it at load).
+const shownWindow = trayFlyout ? undefined : platform.nativeWindow;
+const initialNativeThemePush = shownWindow
   ?.setTheme(initialThemeChoice === "system" ? undefined : (initialResolvedTheme as "light" | "dark"))
   .catch(() => {});
 
@@ -65,9 +77,13 @@ const startupError = resolveStartupError(platform);
 const daemonAddress = resolveDaemonAddress(platform);
 // Created here rather than by a component: the connection lives as long as the window, and a
 // component that owned it would drop it, for good, on its first unmount (StrictMode's included).
-const daemon = !startupError && daemonAddress ? createDaemon(daemonAddress) : undefined;
+// The connect page has no daemon behind it at all: it is where one is chosen.
+const connectPage = kind === "connect";
+const daemon = !connectPage && !trayFlyout && !startupError && daemonAddress ? createDaemon(daemonAddress, { remote: kind === "remote" }) : undefined;
 
 function screen(): React.ReactElement {
+  if (trayFlyout) return <TrayFlyout />;
+  if (connectPage) return <ConnectPage entryId={connectPageEntry()} />;
   if (startupError) {
     // The daemon failed to start before the window even opened, and the shell passed the message
     // along via `?error=` instead of `?port=` — there is nothing to connect to, same as the
@@ -92,7 +108,7 @@ function screen(): React.ReactElement {
 
 root.render(
   <React.StrictMode>
-    <AppRoot platform={platform} daemon={daemon} nativeSync>
+    <AppRoot platform={platform} daemon={daemon} nativeSync={!trayFlyout} firstCheckDelayMs={connectPage || trayFlyout ? null : undefined}>
       {screen()}
     </AppRoot>
   </React.StrictMode>,
@@ -120,5 +136,5 @@ root.render(
 // `initialNativeThemePush` is still waited on. Revealing before that IPC round trip settles would
 // only move the flash from "before this page painted" to "before the window's appearance matched it".
 void Promise.resolve(initialNativeThemePush).then(() => {
-  if (!resolveRecovered()) return platform.nativeWindow?.reveal().catch(() => {});
+  if (!resolveRecovered()) return shownWindow?.reveal().catch(() => {});
 });

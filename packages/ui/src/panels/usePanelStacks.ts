@@ -18,6 +18,7 @@ export const stacksPreference = createPersistedPreference<PanelStacks>(
   PREFERENCE_KEYS.panelStacks,
   (raw) => parseStacks(raw, raw === null && legacyHidden()),
   serializeStacks,
+  { scope: "daemon" },
 );
 
 /** How many sessions' closed Report panels are remembered: the most recent ones, so that sessions
@@ -37,6 +38,7 @@ export const closedReportsPreference = createPersistedPreference<readonly string
     }
   },
   (ids) => (ids.length > 0 ? JSON.stringify(ids) : null),
+  { scope: "daemon" },
 );
 
 /**

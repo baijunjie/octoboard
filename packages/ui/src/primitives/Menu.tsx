@@ -1,6 +1,6 @@
 import { Dropdown, Separator } from "@heroui/react";
 import React from "react";
-import { MenuContext, useSlottedContext } from "react-aria-components";
+import { Header, MenuContext, useSlottedContext } from "react-aria-components";
 
 import { useDisabled } from "./busy";
 import { setKeyboardModality } from "./focus";
@@ -87,30 +87,34 @@ const KEEP_DISABLED = { disabledBehavior: "selection" } as object;
  * keys and announced, though it cannot be chosen.
  *
  * react-aria keeps the trigger's choice from its last opening until the next one through the trigger, so a menu opened
- * some other way (a context menu) gives `autoFocus` for each opening. */
-export function MenuList({ onAction, autoFocus, children }: {
+ * some other way (a context menu) gives `autoFocus` for each opening. A menu drawn in the page, outside any popover
+ * (the notification-area flyout), has no trigger to name it, so it is given a `label`. */
+export function MenuList({ label, onAction, autoFocus, children }: {
+  label?: string;
   onAction: (id: string) => void;
   autoFocus?: "first" | "menu";
   children: React.ReactNode;
 }): React.ReactElement {
   return (
-    <Dropdown.Menu onAction={(key) => onAction(String(key))} {...definedProps({ autoFocus: autoFocus && (autoFocus === "menu" ? true : "first") })} {...KEEP_DISABLED}>
+    <Dropdown.Menu onAction={(key) => onAction(String(key))} {...definedProps({ "aria-label": label, autoFocus: autoFocus && (autoFocus === "menu" ? true : "first") })} {...KEEP_DISABLED}>
       {children as React.ReactElement}
     </Dropdown.Menu>
   );
 }
 
-/** HeroUI's dropdown item: `id` is what `onAction` is told, `textValue` what typing to it matches, `label` its accessible
- * name where its content does not give the right one. `ref` is the item's element. `shortcut` is the key that runs the
- * item, announced as its `aria-keyshortcuts` (the caller handles the key, and runs the item with `activateMenuItem`);
- * in a filtered menu no key runs an item, so none is announced.
- * `danger` draws a destructive item; `closeOnSelect={false}` keeps the menu open after it runs. */
-export function MenuItem({ ref, id, textValue, label, shortcut, danger, disabled, closeOnSelect, className, children, ...data }: DataAttributes & {
+/** HeroUI's dropdown item: `id` is what `onAction` is told, `textValue` what typing to it matches, `label` its
+ * accessible name where its content does not give the right one. `ref` is the item's element. `shortcut` is the key
+ * that runs the item, announced as its `aria-keyshortcuts` (the caller handles the key, and runs the item with
+ * `activateMenuItem`); in a filtered menu no key runs an item, so none is announced. `expanded` marks an item that
+ * opens its content in place (`aria-expanded`, which react-aria filters out too), open or closed; left out, the item
+ * says nothing of it. `danger` draws a destructive item; `closeOnSelect={false}` keeps the menu open after it runs. */
+export function MenuItem({ ref, id, textValue, label, shortcut, expanded, danger, disabled, closeOnSelect, className, children, ...data }: DataAttributes & {
   ref?: React.Ref<HTMLDivElement>;
   id: string;
   textValue: string;
   label?: string;
   shortcut?: string;
+  expanded?: boolean;
   danger?: boolean;
   disabled?: boolean;
   closeOnSelect?: boolean;
@@ -119,11 +123,14 @@ export function MenuItem({ ref, id, textValue, label, shortcut, danger, disabled
 }): React.ReactElement {
   const filtered = useMenuFiltered();
   const classes = joinClasses(filtered ? FILTERED_ITEM_CLASS : undefined, className);
-  // react-aria filters `aria-keyshortcuts` out of a menu item's props, so it is set on the element.
+  // react-aria filters `aria-keyshortcuts` and `aria-expanded` out of a menu item's props, so they are set on the
+  // element.
   const announceShortcut = (node: HTMLDivElement | null) => {
     if (!node) return;
     if (shortcut && !filtered) node.setAttribute("aria-keyshortcuts", shortcut);
     else node.removeAttribute("aria-keyshortcuts");
+    if (expanded === undefined) node.removeAttribute("aria-expanded");
+    else node.setAttribute("aria-expanded", String(expanded));
   };
   return (
     <Dropdown.Item
@@ -170,9 +177,24 @@ export function MenuChoices({ selected, children }: { selected: string[]; childr
   );
 }
 
-/** HeroUI's separator between two runs of a menu's items. */
-export function MenuSeparator(): React.ReactElement {
-  return <Separator />;
+/** HeroUI's dropdown section: a run of items under `heading` (what names the group for assistive technology, and is
+ * drawn as given: a label with a picture beside it). The heading is not an item and takes no focus. */
+export function MenuSection({ heading, headingClassName, children }: {
+  heading: React.ReactNode;
+  headingClassName?: string;
+  children: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <Dropdown.Section>
+      <Header {...definedProps({ className: headingClassName })}>{heading}</Header>
+      {children as React.ReactElement}
+    </Dropdown.Section>
+  );
+}
+
+/** HeroUI's separator between two runs of a menu's items; `className` sets it in from the row's edge. */
+export function MenuSeparator({ className }: { className?: string }): React.ReactElement {
+  return <Separator {...definedProps({ className })} />;
 }
 
 /** HeroUI's submenu trigger: `children` are the `MenuItem` that opens it and the `MenuPopover` it opens. */

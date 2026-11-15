@@ -12,9 +12,11 @@ mod app_settings;
 #[cfg(target_os = "macos")]
 mod apple_event;
 mod background;
+mod badge;
 mod chrome;
 mod config_dir;
 mod configuration_file;
+mod daemon_window;
 mod diagnostics;
 mod directory_picker;
 mod exit;
@@ -24,29 +26,35 @@ mod launch_at_login;
 mod lifecycle;
 mod menu;
 mod notification_settings;
+mod notifications;
+mod open_address;
 mod page_isolation;
 mod permissions;
 mod recovery;
+mod remote;
+mod remote_login;
 mod sidecar;
-// The panes it opens are those of the macOS privacy grants, notifications and login items.
+// The addresses of the System Settings panes the shell opens: the privacy grants, notifications and
+// login items.
 #[cfg(target_os = "macos")]
 mod system_settings;
 mod tray;
 mod updater;
+mod window_factory;
 mod window_state;
 
 use std::thread;
-use std::time::Duration;
 
-use tauri::{Emitter, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent};
+use tauri::{Emitter, Manager, RunEvent, WebviewWindowBuilder, WindowEvent};
 
 use background::BackgroundState;
 use diagnostics::diagnostic;
 use exit::{begin_quit, confirm_quit, frontend_exit_heartbeat, request_quit, ExitState};
 use menu::{set_menu_labels, ui_event_for};
-use sidecar::{mark_daemon_stopping, start_daemon, window_params, DaemonState};
+use sidecar::{mark_daemon_stopping, start_daemon, DaemonState};
 
-/// The label of the one window the application opens.
+/// The label of the main window, the local daemon's; the windows of other daemons are
+/// `daemon_window`'s.
 pub(crate) const MAIN_WINDOW_LABEL: &str = "main";
 
 /// The builder the main window is made with, which the platform modules add to.
@@ -77,7 +85,12 @@ pub fn run() {
         .manage(lifecycle::LifecycleState::default())
         .manage(DaemonState::default())
         .manage(tray::TrayState::default())
+        .manage(badge::BadgeState::default())
         .manage(updater::UpdaterState::default())
+        .manage(daemon_window::DaemonWindows::default())
+        .manage(window_state::TrackedWindows::default())
+        .manage(remote::RemoteState::default())
+        .manage(remote::RestoreState::default())
         .invoke_handler(tauri::generate_handler![
             frontend_exit_heartbeat,
             begin_quit,
@@ -86,6 +99,8 @@ pub fn run() {
             set_menu_labels,
             tray::set_tray_menu,
             tray::set_keep_awake_shown,
+            badge::set_badge_count,
+            notifications::show_notification,
             launch_at_login::launch_at_login_status,
             launch_at_login::set_launch_at_login,
             launch_at_login::open_login_items_settings,
@@ -95,33 +110,79 @@ pub fn run() {
             permissions::permissions_status,
             permissions::request_permission,
             permissions::open_privacy_settings,
+            remote_login::remote_login_status,
+            remote_login::open_remote_login_settings,
             notification_settings::open_notification_settings,
             configuration_file::save_configuration_file,
             configuration_file::open_configuration_file,
             directory_picker::pick_directory,
             updater::check_for_update,
-            updater::install_update
+            updater::install_update,
+            remote::remote_daemons_list,
+            remote::remote_daemon_save,
+            remote::remote_daemon_remove,
+            remote::remote_daemon_connect,
+            remote::remote_daemons_status,
+            remote::remote_daemon_disconnect,
+            remote::remote_window_new,
+            remote::remote_window_open,
+            remote::main_window_show,
+            tray::flyout::tray_flyout_model,
+            tray::flyout::tray_flyout_size,
+            tray::flyout::tray_flyout_choose,
+            tray::flyout::tray_flyout_close
         ])
         .on_menu_event(|app, event| {
             let id = event.id().as_ref();
             if let Some(event) = ui_event_for(id) {
                 // Only a signal: the Settings dialog is the UI's to open, and it decides whether
-                // now is a good time.
-                let _ = app.emit(event, ());
+                // now is a good time. To the focused window alone, which is the one whose menu the
+                // user sees.
+                if let Some(window) = daemon_window::menu_target(app) {
+                    let _ = window.emit_to(window.label(), event, ());
+                }
             } else if id == "quit" {
                 request_quit(app);
-            } else {
+            } else if !remote::handle_menu_item(app, id) {
                 tray::handle_menu_event(app, id);
             }
         })
         .on_window_event(|window, event| {
             // Closing the window leaves the app running in the background when the user chose that
             // in Settings, and quits it otherwise (see `handle_close_request`); the other ways to
-            // quit are Cmd+Q, the app menu's or the menu bar icon's Quit. The UI registers no
-            // close listener of its own, so the close reaches this handler rather than being
-            // answered in the webview.
-            if let WindowEvent::CloseRequested { api, .. } = event {
-                background::handle_close_request(window, api);
+            // quit are Cmd+Q, the app menu's or the menu bar icon's Quit. The UI registers no close
+            // listener of its own, so the close reaches this handler rather than being answered in
+            // the webview. The notification-area icon's flyout (Windows) is no daemon's window: it
+            // only hides, and it hides as it loses the focus.
+            if window.label() == tray::flyout::FLYOUT_LABEL {
+                match event {
+                    WindowEvent::CloseRequested { api, .. } => {
+                        api.prevent_close();
+                        tray::flyout::hide(window.app_handle());
+                    }
+                    WindowEvent::Focused(false) => tray::flyout::focus_lost(window.app_handle()),
+                    _ => {}
+                }
+                return;
+            }
+            match event {
+                WindowEvent::CloseRequested { api, .. } => {
+                    background::handle_close_request(window, api);
+                }
+                WindowEvent::Focused(true) => {
+                    daemon_window::note_focused(window.app_handle(), window.label());
+                    // The menu bar icon's quota and eyes follow the window focused last.
+                    tray::focus_changed(window.app_handle());
+                }
+                // Only a remote window is ever destroyed while the application runs on: the main
+                // one is hidden instead. Its connection ends with it.
+                WindowEvent::Destroyed => {
+                    daemon_window::forget(window.app_handle(), window.label());
+                    tray::window_closed(window.app_handle(), window.label());
+                    badge::forget(window.app_handle(), window.label());
+                    remote::window_closed(window.app_handle(), window.label());
+                }
+                _ => {}
             }
         })
         .setup(|app| {
@@ -132,6 +193,10 @@ pub fn run() {
             // Before the icon, which is hidden at once when the user turned it off.
             app_settings::install(app.handle());
             tray::create(app.handle())?;
+            // The notification-area icon's flyout, made hidden now so that a click shows it at
+            // once.
+            tray::flyout::make(app.handle());
+            notifications::install(app.handle());
             lifecycle::install(app.handle());
             // The daemon is started on a thread of its own, with retries that can take most of a
             // minute in all, and the window opens once it has. A daemon that fails to start
@@ -172,6 +237,10 @@ pub fn run() {
             // A recovery still running must not start a daemon the application would leave behind.
             mark_daemon_stopping(app_handle);
             window_state::save(app_handle);
+            // Which remote windows are open, for the next launch to bring back, before they end.
+            remote::remember_windows(app_handle);
+            // A remote window only disconnects: its daemon's sessions run on.
+            remote::end_all(app_handle);
             // Tells the daemon about a quit, or passes the system ending the session on to it (on
             // Windows that reaches this with no `ExitRequested`). A held update is installed here
             // only for a quit let through, and left for the next start otherwise.
@@ -198,18 +267,6 @@ pub(crate) fn percent_encode_query_value(input: &str) -> String {
     out
 }
 
-/// Upper bound on how long the window stays hidden (see `.visible(false)` below) before this
-/// safety net shows it regardless of what the frontend is doing. The UI reveals the window itself
-/// (`background::reveal_main_window`, which keeps it hidden after a launch at login that keeps the
-/// app in the background) well inside this, once it has pushed the native theme
-/// (`packages/ui/src/main.tsx`, measured at 140-220 ms after the window is created); this exists
-/// only for the paths that never reach that point at all — the webview failing to load the bundle
-/// at all, say — where a window left hidden forever is strictly worse than one that briefly shows
-/// through in the OS's own appearance. Four seconds is generous next to that measured reveal
-/// without being so long that a genuinely stuck launch reads as a hung application rather than a
-/// slow one. Not armed after a launch at login.
-const REVEAL_SAFETY_NET: Duration = Duration::from_secs(4);
-
 /// Opens the main window for the daemon as it is when the window is built. On the main thread.
 fn open_window_for(app: &tauri::AppHandle) {
     // The window's webview gets its isolation before the window exists where the platform lets it,
@@ -217,102 +274,38 @@ fn open_window_for(app: &tauri::AppHandle) {
     // on macOS), so the window is opened from its callback.
     let handle = app.clone();
     page_isolation::prepare(move |configuration| {
-        if let Err(err) = open_main_window(&handle, configuration) {
+        // Before the main window exists, which may be held hidden while they come back.
+        remote::begin_restore(&handle, background::starts_in_background_at_login(&handle));
+        if let Err(err) = window_factory::open_main_window(&handle, configuration) {
             diagnostic!("cannot open the main window: {err}");
             handle.exit(1);
+            return;
+        }
+        // A first launch from a taskbar jump list's task asks for a remote window, or the local
+        // one; a later one reaches the running application through the single-instance plugin.
+        if let Some(action) = remote::launch_action(std::env::args()) {
+            remote::run_menu_action(&handle, action);
         }
     });
 }
 
-fn open_main_window(
-    app: &tauri::AppHandle,
-    configuration: page_isolation::Configuration,
-) -> tauri::Result<()> {
-    let daemon_query = window_params(app);
-    let host = percent_encode_query_value(&host_facts::current_json());
-    let settings = percent_encode_query_value(&app_settings::current_json(app));
-    let query = match languages::preferred_languages() {
-        Some(languages) => format!(
-            "{daemon_query}&host={host}&settings={settings}&languages={}",
-            percent_encode_query_value(&languages)
-        ),
-        None => format!("{daemon_query}&host={host}&settings={settings}"),
-    };
-    let url = WebviewUrl::App(format!("index.html?{query}").into());
-    // Decided before the window exists, from the saved frame and the displays connected now, so the
-    // window is placed while it is still hidden and is never seen moving into place.
-    let (displays, main_display) = window_state::displays(app);
-    let initial = window_state::initial_window(
-        window_state::load(app).as_ref(),
-        &displays,
-        main_display,
-        chrome::system_frame(),
-    );
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    let builder = WebviewWindowBuilder::new(app, MAIN_WINDOW_LABEL, url)
-        .title(menu::APP_NAME)
-        .inner_size(initial.size.0, initial.size.1)
-        // 48 (the left rail) + 280 (sidebar) + 520 (the terminal pane's own floor) + 320 (the
-        // report panel's own floor) = 1168: at this minimum, both panes already sit on their
-        // floors with nothing left to give up, so neither can be squeezed past usability by a
-        // narrower window. Height 600 gives the terminal about 30 rows, which is comfortably
-        // usable.
-        .min_inner_size(window_state::MIN_SIZE.0, window_state::MIN_SIZE.1)
-        // Created hidden so AppKit never paints the window in the OS's own appearance before the
-        // webview has painted anything themed — with no window on screen yet, there is nothing
-        // for it to paint prematurely. `packages/ui/src/main.tsx` shows it once that has
-        // happened, through `background::reveal_main_window`; `REVEAL_SAFETY_NET`
-        // below is the backstop for every path that does not reach that call (not armed after a
-        // launch at login).
-        .visible(false);
-    let builder = match initial.position {
-        Some((x, y)) => builder.position(x, y),
-        None => builder,
-    };
-    let builder = page_isolation::apply(builder, configuration);
-    let builder = chrome::decorate(builder);
-
-    let window = builder.build()?;
-    page_isolation::install(&window);
-    chrome::install(&window);
-    // A recovery that finished while the window was being built found no window to point at the
-    // restarted daemon, so the window is pointed at it here instead.
-    if window_params(app) != daemon_query {
-        if let Some(address) = sidecar::current_address(app) {
-            recovery::point_window_at(app, &address);
-        }
+    #[test]
+    fn a_query_value_keeps_its_plain_characters_and_escapes_the_rest_byte_by_byte() {
+        assert_eq!(percent_encode_query_value(""), "");
+        assert_eq!(percent_encode_query_value("aZ09-_.~"), "aZ09-_.~");
+        assert_eq!(
+            percent_encode_query_value("me@host:22 &=?#/%+"),
+            "me%40host%3A22%20%26%3D%3F%23%2F%25%2B"
+        );
+        // A multi-byte character is escaped as its UTF-8 bytes.
+        assert_eq!(percent_encode_query_value("é"), "%C3%A9");
+        assert_eq!(
+            percent_encode_query_value("服务器"),
+            "%E6%9C%8D%E5%8A%A1%E5%99%A8"
+        );
     }
-    // Not the builder's `.maximized`. AppKit first puts a new window's frame on the main display,
-    // and the builder's position is applied afterwards, queued on the main thread; tao queues a
-    // builder-requested zoom while creating the window, ahead of that move, so the zoom would
-    // happen on the main display and record that frame as the one to un-zoom to. Asked for here,
-    // the zoom is queued behind the move and happens on the display the window belongs on.
-    if initial.maximized {
-        if let Err(err) = window.maximize() {
-            diagnostic!("cannot maximize the window: {err}");
-        }
-    }
-    window_state::track(&window, &initial);
-
-    // `WebviewWindow::show` dispatches onto the window's own event loop internally, so calling it
-    // from this background thread rather than the main one is safe, so a plain `thread::sleep`
-    // here needs neither `tauri::async_runtime` nor a direct `tokio` dependency.
-    // Not after a launch at login: the UI's reveal can arrive late there (the system is busy
-    // starting), and the net would show the whole window at a launch that may be meant to stay
-    // hidden. Should the UI never load, the menu bar icon, a reopen of the app or a notification
-    // still bring the window back. Peeked at, not taken: the reveal still needs to find it.
-    if !launch_at_login::login_launch_pending() {
-        let safety_net_window = window.clone();
-        let safety_net_app = app.clone();
-        thread::spawn(move || {
-            thread::sleep(REVEAL_SAFETY_NET);
-            // Not for a window the user has closed since it was revealed: it would come back
-            // without the Dock icon.
-            if !background::hidden_by_close(&safety_net_app) {
-                let _ = safety_net_window.show();
-            }
-        });
-    }
-
-    Ok(())
 }

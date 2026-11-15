@@ -96,7 +96,7 @@ That gate covers the launch only. On a reconnect the store keeps everything the 
 `snapshotEpoch` is already above zero from earlier snapshots. So code that acts on what the daemon holds *now*, above
 all code that writes back to the daemon (seeding a value when it holds none) or overrides the window from it, gates on
 a snapshot of the current connection: remember `snapshotEpoch` when `connectionState` changes and wait for a larger
-one while it is `"open"`, as `packages/ui/src/lifecycle/useInterfaceLanguage.ts` does. `hosts !== undefined`,
+one while it is `"open"`, as `packages/ui/src/lifecycle/useAgentLanguageSeed.ts` does. `hosts !== undefined`,
 `connectionState === "open"` or `snapshotEpoch > 0`, alone or together, still pass on the previous connection's data.
 
 ## A request's reply and the broadcast of its change reach the UI in either order

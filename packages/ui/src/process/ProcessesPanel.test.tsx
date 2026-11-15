@@ -454,7 +454,7 @@ it("raises a stop that left a process running as an error alert, worded by why, 
   await confirmStop();
   expect(errorAlerts.getSnapshot().map((alert) => [alert.title, alert.message, alert.error])).toMatchObject([[
     "Could not stop the process",
-    "Octoboard does not have permission to stop the process or some of its child processes, so they are still running. To stop them, run Octoboard with the same permissions as those processes.",
+    "The app does not have permission to stop the process or some of its child processes, so they are still running. To stop them, run the app with the same permissions as those processes.",
     { code: "process_not_stopped", params: { reason: "access_denied" } },
   ]]);
   expect(daemon.showNotice).not.toHaveBeenCalled();

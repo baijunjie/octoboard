@@ -67,7 +67,8 @@ and with the same effect (see "A row's actions" in `docs/product/project-pane.md
 holding the file and selects it, Default application opens the file with the operating system's default application, both on the
 machine running the daemon. They are offered only on a live file — a file opened from Files or from the terminal, and an
 uncommitted change that is not a deletion, in the worktree it is read from; a committed change and a change that deletes
-the file have neither. Each is an icon button whose tooltip is the short name the row's menu uses while the name
+the file have neither; nor has any file in a remote window of the desktop application (see "The remote window" in
+`docs/product/remote-daemons.md`). Each is an icon button whose tooltip is the short name the row's menu uses while the name
 announced says what pressing does (see "Tooltips on icon-only controls" in `docs/product/labels-and-tooltips.md`).
 Neither says anything when it succeeds; a refusal or a failure raises the same error alert as from a row, with the same
 remedy for a file that is no longer there.

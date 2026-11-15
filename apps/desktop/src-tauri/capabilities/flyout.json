@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "flyout",
+  "description": "for the notification-area icon's flyout on Windows: the default permissions, the flyout's own commands, and native window theming; none of any daemon's or the application's other commands",
+  "windows": ["tray-flyout"],
+  "permissions": ["core:default", "allow-tray-flyout", "core:window:allow-set-theme"]
+}

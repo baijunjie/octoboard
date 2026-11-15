@@ -549,7 +549,7 @@ const closeTrigger = (dialog: Element) => dialog.querySelector<HTMLElement>("[da
 it.each([
   ["modal", {}, 1],
   ["confirmation", { alert: true }, 0],
-  ["acknowledgement", { alert: true, dismissable: false }, 0],
+  ["failure modal", { failing: true }, 0],
   ["modal whose keyboard dismissal is held", { keyboardDismissHeld: true }, 1],
   ["busy modal", { busy: true }, 0],
 ])("handles a backdrop press on a %s", (_name, props, closes) => {
@@ -816,7 +816,7 @@ it.each([
 });
 
 // A failure that ends the dialog's purpose replaces its content in the same modal, in the error alert dialog's form.
-it("turns into a failure modal in place: danger icon, title, explanation, details, the acknowledgement alone", () => {
+it("turns into a failure modal in place: danger icon, title, explanation, details, the acknowledgement alone in its footer, and a close button", () => {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   const onClose = vi.fn();
@@ -853,9 +853,19 @@ it("turns into a failure modal in place: danger icon, title, explanation, detail
     expect(dialog?.querySelector("details summary")?.textContent).toBe("Error details");
     const footer = [...(dialog?.querySelectorAll("button") ?? [])].filter((button) => button.closest("[data-slot$=footer]")).map((button) => button.textContent);
     expect(footer).toEqual(["OK"]);
-    expect(dialog?.querySelector('[aria-label="Close"]')).toBeNull();
-    act(() => [...dialog!.querySelectorAll("button")].find((button) => button.textContent === "OK")!.click());
+    // Escape and a press outside are held; the close button does what OK does.
+    const backdrop = document.querySelector<HTMLElement>("[data-slot$=-backdrop]")!;
+    act(() => {
+      backdrop.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 }));
+      backdrop.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, button: 0 }));
+      backdrop.click();
+      dialog!.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    });
+    expect(onClose).not.toHaveBeenCalled();
+    act(() => closeTrigger(dialog!)!.click());
     expect(onClose).toHaveBeenCalledOnce();
+    act(() => [...dialog!.querySelectorAll("button")].find((button) => button.textContent === "OK")!.click());
+    expect(onClose).toHaveBeenCalledTimes(2);
   } finally {
     act(() => root.unmount());
     container.remove();

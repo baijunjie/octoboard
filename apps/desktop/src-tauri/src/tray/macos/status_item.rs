@@ -1,4 +1,4 @@
-//! The status item's own views: its accessible name and the attention dot and red eyes laid over
+//! The status item's own views: its accessible name, and the attention dot and red eyes laid over
 //! its button.
 
 use super::lines::picture_view;
@@ -64,7 +64,8 @@ impl Layer {
     }
 }
 
-/// The views that draw the layers on the status item's button, once made.
+/// The views that draw the layers on a status item's button, once made.
+#[derive(Default)]
 struct LayerViews {
     dot: Option<objc2::rc::Retained<objc2_app_kit::NSImageView>>,
     eyes: Option<objc2::rc::Retained<objc2_app_kit::NSImageView>>,
@@ -83,9 +84,9 @@ impl LayerViews {
 }
 
 thread_local! {
-    /// AppKit's views live on the main thread, and so does this.
-    static LAYER_VIEWS: std::cell::RefCell<LayerViews> =
-        const { std::cell::RefCell::new(LayerViews { dot: None, eyes: None }) };
+    /// The views over the application's one icon. AppKit's views live on the main thread, and so
+    /// does this.
+    static LAYER_VIEWS: std::cell::RefCell<LayerViews> = std::cell::RefCell::default();
 }
 
 /// Shows or hides the attention dot and the red eyes over the icon, and answers whether every layer

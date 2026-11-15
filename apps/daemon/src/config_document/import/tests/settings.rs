@@ -1043,13 +1043,13 @@ fn a_version_1_document_without_one_of_the_two_regions_is_upgraded_all_the_same(
     assert!(parse(&neither).unwrap().accounts.is_none());
 }
 
-/// The interface language travels: an export holds the one the daemon has, and an import sets it
+/// The agent language travels: an export holds the one the daemon has, and an import sets it
 /// when this build offers the tag, and skips it otherwise. A settings key this build does not
 /// know, such as `reply_in_interface_language`, is ignored rather than refused.
 #[tokio::test]
-async fn the_interface_language_is_carried_and_an_unknown_setting_is_ignored() {
+async fn the_agent_language_is_carried_and_an_unknown_setting_is_ignored() {
     let (source, source_dir) = app_state("import-reply-language-source");
-    source.store.set_interface_language("ja").unwrap();
+    source.store.set_agent_language("ja").unwrap();
     source
         .store
         .insert_console(&crate::test_support::console(&source_dir))
@@ -1059,7 +1059,7 @@ async fn the_interface_language_is_carried_and_an_unknown_setting_is_ignored() {
             .unwrap(),
     )
     .unwrap();
-    assert_eq!(full["settings"]["interface_language"], "ja");
+    assert_eq!(full["settings"]["agent_language"], "ja");
     assert!(full["settings"]
         .get("reply_in_interface_language")
         .is_none());
@@ -1081,7 +1081,7 @@ async fn the_interface_language_is_carried_and_an_unknown_setting_is_ignored() {
     )
     .await
     .unwrap();
-    assert_eq!(target.store.interface_language().unwrap(), None);
+    assert_eq!(target.store.agent_language().unwrap(), None);
     let imported = apply(
         &target,
         &full,
@@ -1097,20 +1097,16 @@ async fn the_interface_language_is_carried_and_an_unknown_setting_is_ignored() {
     .await
     .unwrap();
     assert_eq!(
-        target.store.interface_language().unwrap().as_deref(),
+        target.store.agent_language().unwrap().as_deref(),
         Some("ja")
     );
     assert_eq!(
-        imported
-            .settings_applied
-            .unwrap()
-            .interface_language
-            .as_deref(),
+        imported.settings_applied.unwrap().agent_language.as_deref(),
         Some("ja")
     );
 
     // A tag this build does not offer is skipped and the rest of the settings still apply.
-    full["settings"]["interface_language"] = serde_json::json!("tlh");
+    full["settings"]["agent_language"] = serde_json::json!("tlh");
     full["settings"]["auto_pull_repositories"] = serde_json::json!(true);
     let imported = apply(
         &target,
@@ -1128,12 +1124,125 @@ async fn the_interface_language_is_carried_and_an_unknown_setting_is_ignored() {
     .unwrap();
     assert!(imported.settings_error.is_none());
     // The echo names the language only where it was applied.
-    assert_eq!(imported.settings_applied.unwrap().interface_language, None);
+    assert_eq!(imported.settings_applied.unwrap().agent_language, None);
     assert_eq!(
-        target.store.interface_language().unwrap().as_deref(),
+        target.store.agent_language().unwrap().as_deref(),
         Some("ja")
     );
     assert!(target.store.auto_pull_repositories().unwrap());
+}
+
+/// A version 3 document, of a build that held one language for the windows and the agents, carries
+/// it as `interface_language` alone: its upgrade makes it the agent language too, and the import
+/// echoes it as it came for the client to apply as its interface language. A document that carries
+/// both keys sets the agent language from `agent_language`.
+#[tokio::test]
+async fn an_older_documents_interface_language_is_also_the_agent_language() {
+    let (target, _target_dir) = app_state("import-older-language");
+    let sections = || ApplyOptions {
+        settings: vec![SettingsSection::General],
+        accounts: None,
+        consoles: false,
+        clone_dir: false,
+        agents: None,
+    };
+    let older = serde_json::json!({
+        "format": "octoboard-configuration",
+        "version": 3,
+        "settings": { "interface_language": "ko" },
+        "consoles": [],
+    });
+    let imported = apply(&target, &older, Vec::new(), sections())
+        .await
+        .unwrap();
+    assert_eq!(
+        target.store.agent_language().unwrap().as_deref(),
+        Some("ko")
+    );
+    let echoed = imported.settings_applied.unwrap();
+    assert_eq!(echoed.interface_language.as_deref(), Some("ko"));
+    assert_eq!(echoed.agent_language.as_deref(), Some("ko"));
+
+    let both = serde_json::json!({
+        "format": "octoboard-configuration",
+        "version": 3,
+        "settings": { "interface_language": "fr", "agent_language": "de" },
+        "consoles": [],
+    });
+    let imported = apply(&target, &both, Vec::new(), sections()).await.unwrap();
+    assert_eq!(
+        target.store.agent_language().unwrap().as_deref(),
+        Some("de")
+    );
+    let echoed = imported.settings_applied.unwrap();
+    assert_eq!(echoed.interface_language.as_deref(), Some("fr"));
+    assert_eq!(echoed.agent_language.as_deref(), Some("de"));
+}
+
+/// The upgrade of a version 3 document copies `interface_language` into `agent_language` where it
+/// carries none, keeps it where it does, and leaves a document without either as it was.
+#[test]
+fn a_version_3_document_has_its_interface_language_copied_into_the_agent_language() {
+    let upgraded = |settings: serde_json::Value| {
+        let mut raw = serde_json::json!({
+            "format": "octoboard-configuration",
+            "version": 3,
+            "settings": settings,
+            "consoles": [],
+        })
+        .as_object()
+        .unwrap()
+        .clone();
+        crate::config_document::upgrade::upgrade(&mut raw, 3);
+        assert_eq!(raw["version"], json!(CONFIGURATION_VERSION));
+        raw["settings"].clone()
+    };
+    assert_eq!(
+        upgraded(json!({ "interface_language": "ko" })),
+        json!({ "interface_language": "ko", "agent_language": "ko" })
+    );
+    assert_eq!(
+        upgraded(json!({ "interface_language": "ko", "agent_language": null })),
+        json!({ "interface_language": "ko", "agent_language": "ko" })
+    );
+    assert_eq!(
+        upgraded(json!({ "interface_language": "fr", "agent_language": "de" })),
+        json!({ "interface_language": "fr", "agent_language": "de" })
+    );
+    assert_eq!(
+        upgraded(json!({ "keep_awake": true })),
+        json!({ "keep_awake": true })
+    );
+}
+
+/// In a document of the current version `interface_language` is the client's own alone: an import
+/// echoes it and leaves the agent language as it was.
+#[tokio::test]
+async fn a_current_documents_interface_language_is_not_the_agent_language() {
+    let (target, _target_dir) = app_state("import-current-language");
+    target.store.set_agent_language("ja").unwrap();
+    let document = serde_json::json!({
+        "format": "octoboard-configuration",
+        "version": CONFIGURATION_VERSION,
+        "settings": { "interface_language": "ko" },
+        "consoles": [],
+    });
+    let options = ApplyOptions {
+        settings: vec![SettingsSection::General],
+        accounts: None,
+        consoles: false,
+        clone_dir: false,
+        agents: None,
+    };
+    let imported = apply(&target, &document, Vec::new(), options)
+        .await
+        .unwrap();
+    assert_eq!(
+        target.store.agent_language().unwrap().as_deref(),
+        Some("ja")
+    );
+    let echoed = imported.settings_applied.unwrap();
+    assert_eq!(echoed.interface_language.as_deref(), Some("ko"));
 }
 
 /// The values only a client holds (appearance, Markdown style, running in the background, the menu
@@ -1992,7 +2101,7 @@ fn document_with_flat_general_and_appearance_keys() -> serde_json::Value {
     let mut value = document(Vec::new());
     value["settings"] = json!({
         "appearance": "dark",
-        "interface_language": "de",
+        "agent_language": "de",
         "markdown_style": "github",
         "session_order": { "sessions": "started", "active_projects": "name", "inactive_projects": "used" },
         "resume_sessions_on_start": false,
@@ -2097,7 +2206,7 @@ async fn applying_only_appearance_carries_the_theme_keys_and_leaves_the_daemons_
     assert_eq!(echoed.appearance.as_deref(), Some("dark"));
     assert_eq!(echoed.markdown_style.as_deref(), Some("github"));
     assert_eq!(echoed.session_order, None);
-    assert_eq!(echoed.interface_language, None);
+    assert_eq!(echoed.agent_language, None);
     assert_eq!(echoed.run_in_background, None);
     assert_eq!(echoed.show_menu_bar_icon, None);
     assert_eq!(echoed.keep_awake, None);

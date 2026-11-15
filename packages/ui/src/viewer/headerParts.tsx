@@ -8,6 +8,7 @@ import { ROW_ICON_BUTTON_CLASS } from "../components/controls/RowControls";
 import { TitledControl } from "../components/hint/TitledControl";
 import { PlainMarkedPath } from "../components/text/MarkedPath";
 import { type HostPath, useHostPathActions } from "../components/host/useHostPathActions";
+import { useDaemon } from "../store";
 import { Message, useT } from "../i18n/react";
 import { displayWirePath } from "../format/wirePath";
 import { ChangeStatusBadge } from "./ChangeStatusBadge";
@@ -36,14 +37,17 @@ export function CopyPathButton({ path }: { path: string }): React.ReactElement {
 /** File manager and Default application, the last of the header's controls: the same two actions, with
  * the same icons and names, as the project pane's row menu has, on the subject's live file. Each is
  * an icon button that takes no focus from a press, like the others. */
-export function HostPathButtons({ host }: { host: HostPath }): React.ReactElement {
+export function HostPathButtons({ host }: { host: HostPath }): React.ReactElement | null {
   const t = useT();
   const act = useHostPathActions();
+  // Both are this machine's: not offered for a daemon elsewhere.
+  const { isLocal } = useDaemon();
   // The tooltip is the short label the row menu has; the accessible name says what pressing does.
   const buttons = [
     { type: "reveal_project_path", title: t("common.fileManager"), name: t("viewer.openInFileManager"), Icon: FolderOpen },
     { type: "open_project_path", title: t("common.defaultApplication"), name: t("viewer.openInDefaultApplication"), Icon: SquareArrowOutUpRight },
   ] as const;
+  if (isLocal === false) return null;
   return (
     <>
       {buttons.map(({ type, title, name, Icon }) => (

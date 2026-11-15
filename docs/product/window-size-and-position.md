@@ -6,7 +6,11 @@ is in "The window's minimum size" in `docs/product/window-layout.md`.
 ## The window's size and position across launches
 
 The desktop window reopens with the **size, position and maximized state it had when the application last quit**. A
-browser tab has no window of its own to place, so none of this applies there.
+browser tab has no window of its own to place, so none of this applies there. Each remote daemon's window (see
+`docs/product/remote-daemons.md`) keeps a state of its own, by the same rules, under that daemon's SSH destination: it
+is saved when the window closes as well as at a quit, and a window opened for that daemon later, such as one brought
+back at launch, opens with it. A new remote window opens on the connect page where the last window on the connect page
+was left; once it becomes a daemon's window, the frame it has then is that daemon's from then on.
 
 - **First launch**, or a saved state that cannot be read: the window opens at **1200×760**, placed by the system,
   which centres it. On Windows, where the system does not fit a new window onto its screen, a main display whose

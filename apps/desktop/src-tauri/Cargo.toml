@@ -60,27 +60,37 @@ serde_json = "1"
 # Draws the menu bar icon's canvases and encodes them as PNG (`tray/icon.rs`). Only the PNG codec:
 # the crate's defaults pull a whole codec set (AV1 encoding among it) the icon never uses.
 image = { version = "0.25", default-features = false, features = ["png"] }
+# The SSH client a remote daemon is reached through (`remote/`): one connection authenticates, runs
+# `octoboardd address --json` and carries each proxied connection of the remote window. Its `ring`
+# backend, which the TLS stack already builds, instead of the default `aws-lc-rs`, which needs CMake
+# and NASM on Windows; `rsa` keeps RSA host and user keys usable.
+russh = { version = "0.65", default-features = false, features = ["ring", "rsa"] }
+# The runtime `russh` runs on, the one Tauri's async runtime already is; for the remote window's
+# loopback listener and the bytes it carries (`remote/tunnel.rs`).
+tokio = { version = "1", features = ["net", "io-util", "sync", "time", "rt", "macros"] }
 
 # macOS keeps one instance through LaunchServices and the daemon's instance lock; elsewhere a second
 # launch has to be turned back by the plugin (`lifecycle/windows.rs`), which brings the running window forward.
 [target.'cfg(not(target_os = "macos"))'.dependencies]
 tauri-plugin-single-instance = "2.5"
 
-# For `notification_settings.rs`, which opens the Settings page of notifications with `ShellExecuteW`, for
-# `chrome/windows.rs`, which measures the system frame with `AdjustWindowRectExForDpi`, for `tray/windows.rs`,
-# which follows the tray menu's modal loop through a subclass of tray-icon's window and reads the theme its menu
-# is drawn in (the registry, high contrast and its colours) to colour the menu's single-colour pictures, and for
-# `launch_at_login/windows.rs`, which reads and writes the `Run` key's login entry, and
-# `lifecycle/windows.rs`, which puts the shell before its daemon in the system's shutdown order. The
-# version the lockfile already resolves for other dependencies.
+# For `open_address.rs`, which opens an address with `ShellExecuteW`, `chrome/windows.rs`, which measures
+# the system frame with `AdjustWindowRectExForDpi`, `menu/system_menu.rs`, which adds the remote daemons to
+# the window's system menu (`GetSystemMenu`, `AppendMenuW`) and hears its items through a window subclass,
+# `launch_at_login/windows.rs`, which reads and writes the `Run` key's login entry, `lifecycle/windows.rs`,
+# which puts the shell before its daemon in the system's shutdown order, `remote_login.rs`, which asks the
+# Service Control Manager whether OpenSSH Server runs, and `remote/credentials.rs`, which keeps each remote
+# daemon's device key in the Credential Manager. The version the lockfile already resolves for other
+# dependencies.
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_System_Registry", "Win32_System_Threading", "Win32_UI_Accessibility", "Win32_UI_HiDpi", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Credentials", "Win32_System_Registry", "Win32_System_Services", "Win32_System_Threading", "Win32_UI_HiDpi", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 # For the request filter `page_isolation/windows.rs` puts on the window's WebView2 and the browser accelerator
 # keys `chrome/windows.rs` turns off on it, and `windows` for the string and interface types their calls take.
 # Pinned to the exact versions `tauri` and `wry` already resolve, so promoting them to direct dependencies does
 # not shift anything else this crate depends on.
 webview2-com = "=0.39.1"
-windows = { version = "=0.62.2", default-features = false }
+# The jump list (`menu/jump_list.rs`) uses its shell, COM and property types.
+windows = { version = "=0.62.2", default-features = false, features = ["Win32_Foundation", "Win32_Storage_EnhancedStorage", "Win32_System_Com", "Win32_System_Com_StructuredStorage", "Win32_System_Variant", "Win32_UI_Shell", "Win32_UI_Shell_Common", "Win32_UI_Shell_PropertiesSystem"] }
 
 # The macOS-only bindings; the other platforms build without them.
 [target.'cfg(target_os = "macos")'.dependencies]
@@ -96,7 +106,7 @@ windows = { version = "=0.62.2", default-features = false }
 # versions already resolved transitively through `tauri-runtime-wry`, so promoting them to direct
 # dependencies does not shift anything else this crate depends on.
 objc2 = "=0.6.5"
-objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["NSAccessibilityProtocols", "NSApplication", "NSAttributedString", "NSBezierPath", "NSButton", "NSColor", "NSCell", "NSControl", "NSDockTile", "NSFont", "NSGraphics", "NSImage", "NSImageView", "NSMenu", "NSMenuItem", "NSResponder", "NSStatusBarButton", "NSStatusItem", "NSStringDrawing", "NSTextAttachment", "block2", "NSView", "NSWindow", "NSWorkspace", "objc2-core-foundation"] }
+objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["NSAccessibilityProtocols", "NSApplication", "NSAttributedString", "NSBezierPath", "NSButton", "NSColor", "NSCell", "NSControl", "NSDockTile", "NSFont", "NSGraphics", "NSImage", "NSImageView", "NSMenu", "NSMenuItem", "NSResponder", "NSSegmentedControl", "NSStatusBarButton", "NSStatusItem", "NSStringDrawing", "NSTextAttachment", "block2", "NSView", "NSWindow", "NSWorkspace", "objc2-core-foundation"] }
 # For the system's preferred languages in `languages.rs`, the notification observers in
 # `lifecycle/macos.rs` and `tray/macos/` (and the main queue the latter applies a held menu on, and the
 # bytes of the raised hand's picture), the content rule list in `page_isolation/macos.rs`, in
@@ -114,3 +124,6 @@ block2 = "=0.6.2"
 # For the macOS half of `sidecar::terminate`, which sends the daemon SIGTERM so it stops its sessions' processes
 # before a restart kills it. The release line `octoboardd` and `tauri` already resolve.
 libc = "0.2"
+# For `remote/credentials.rs`, which keeps each remote daemon's device key in the login keychain as a
+# generic password. The release line the TLS stack's platform verifier already resolves.
+security-framework = "3.7"

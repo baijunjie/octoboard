@@ -18,7 +18,7 @@ const console = consoleOf("console", "Main");
 const project = projectOf("project", console.id, "Website");
 
 function mountMenus() {
-  const handlers = { onOpenDialog: vi.fn(), onSetPinned: vi.fn(), onFocus: vi.fn(), onSelectSession: vi.fn(), onOpenArchive: vi.fn() } as unknown as SidebarHandlers;
+  const handlers = { onOpenDialog: vi.fn(), onSetPinned: vi.fn(), onFocus: vi.fn(), onSelectSession: vi.fn(), onOpenArchive: vi.fn(), onOpenProjectDirectory: vi.fn(), onOpenSystemTerminal: vi.fn() } as unknown as SidebarHandlers;
   const host = mountHost(<>
     <ActionMenu label="Project actions" items={() => projectMenu(t, handlers, project, [], { gitRepository: true })} />
     <ActionMenu label="Console actions" items={() => consoleMenu(t, console, handlers, [])} />

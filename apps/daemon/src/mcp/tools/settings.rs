@@ -222,7 +222,7 @@ pub(in crate::mcp) fn get_settings(state: &Arc<AppState>) -> Result<Value> {
         "daemon_update_check": state.store.daemon_update_check()?,
         "daemon_update_channel": state.store.daemon_update_channel()?,
         "auto_select_account": state.store.auto_select_account()?,
-        "interface_language": state.store.interface_language()?,
+        "agent_language": state.store.agent_language()?,
         "default_clone_dir": state.store.default_clone_dir()?,
         "git_workflow": state.store.git_workflow_settings()?,
         "provider_settings": shown_provider_settings(state)?,
@@ -300,7 +300,7 @@ pub(in crate::mcp) fn update_settings(
             daemon_update_channel: daemon_update_channel_argument(arguments)?,
             provider_settings: Default::default(),
             agent_tags: Default::default(),
-            interface_language: raw_text(arguments, "interface_language")?
+            agent_language: raw_text(arguments, "agent_language")?
                 .map(|tag| tag.trim().to_string()),
             default_clone_dir: raw_text(arguments, "default_clone_dir")?,
             git_workflow: git_workflow_argument(arguments)?,

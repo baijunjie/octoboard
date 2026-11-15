@@ -3,7 +3,7 @@
 // The UI imports it only through `protocol.ts`, which re-exports it.
 
 /** The protocol generation this file describes; see `hello`. */
-export const PROTOCOL_GENERATION = 4;
+export const PROTOCOL_GENERATION = 5;
 
 /**
  * A named config directory of one agent, kept once for the whole application and referred to by
@@ -1059,6 +1059,25 @@ export type ConfigurationDocument = {
  */
 export type ConflictKind = "both_modified" | "both_added" | "both_deleted" | "added_by_us" | "added_by_them" | "deleted_by_us" | "deleted_by_them";
 
+/**
+ * The connection details of a daemon: what another device needs to reach it over SSH, with no
+ * secret (see "Printing the connection details" in `docs/product/daemon-command-line.md`).
+ */
+export type ConnectionDetails = {
+  /**
+   * The details as one line of text,
+   * `octoboard+ssh://<user>@<host>:<port>?fingerprint=…&octoboardd=…&name=…`, which the desktop
+   * application reads back when it is pasted into a remote daemon's form. The host is this
+   * computer's own name, which the owner may need to correct on the other device.
+   */
+  text: string,
+  /**
+   * The QR code of `text`, one string per row of modules from the top, each character a module
+   * from the left: `1` dark, `0` light. The quiet zone around it is the client's to draw.
+   */
+  qr: Array<string>,
+};
+
 export type ConnectorState = "connected" | "not_connected" | "unknown";
 
 export type Console = {
@@ -1583,11 +1602,18 @@ export type DocumentSessionOrder = {
  */
 export type DocumentSettings = {
   /**
-   * The interface language tag (see `Settings.interface_language`): the daemon writes the one it
-   * holds. An import applies it only when this build offers it. Absent when the daemon held
-   * none.
+   * The interface language tag, which only the client holds, carried like `run_in_background`:
+   * the client adds the language it shows to a document it saves and applies it from an
+   * import's reply when it offers it. A document of version 3 or older, from a build that held
+   * one language for the windows and the agents alike, carries that language here alone: its
+   * upgrade copies it into `agent_language`.
    */
   interface_language?: string,
+  /**
+   * The agent language tag (see `Settings.agent_language`): the daemon writes the one it holds.
+   * An import applies it only when this build offers it. Absent when the daemon held none.
+   */
+  agent_language?: string,
   /**
    * Whether the daemon resumes the interrupted sessions when it starts (see
    * `Settings.resume_sessions_on_start`). Absent in a document from a build that had no such
@@ -1833,6 +1859,13 @@ export type Event = {
    * not stored.
    */
   shell_terminals: Array<ShellTerminal>,
+  /**
+   * Remote access to this daemon (Allow remote access), where the daemon follows the
+   * desktop application on a host with a way in for the browser (the owner socket on Linux
+   * and macOS, a loopback port of its own on Windows); null elsewhere: a daemon that runs
+   * on its own (the server form) serves its browser as it always does.
+   */
+  remote_access: RemoteAccess | null,
 }
 | {
   "type": "agent_availability_updated",
@@ -1849,6 +1882,10 @@ export type Event = {
 | {
   "type": "agent_cli_status_updated",
   status: AgentCliStatus,
+}
+| {
+  "type": "remote_access_updated",
+  remote_access: RemoteAccess,
 }
 | {
   "type": "daemon_update_status_updated",
@@ -3502,6 +3539,77 @@ export type ReadFrom = {
 };
 
 /**
+ * Where remote access to a daemon that follows the desktop application stands
+ * (`snapshot.remote_access`, `remote_access_updated`).
+ */
+export type RemoteAccess = {
+  /**
+   * The Allow remote access setting, as the user left it. Off unless the user turned it on. It
+   * is the user's alone: no agent's settings tool reads or changes it, and no configuration
+   * export carries it.
+   */
+  allowed: boolean,
+  /**
+   * What the daemon does with it right now.
+   */
+  state: RemoteAccessState,
+  /**
+   * On Windows, whose SSH server cannot forward to a socket, the loopback port the daemon serves
+   * the browser at while remote access is on, in place of the owner socket, as the user set it
+   * (`set_remote_access_port`); set whatever `state` is. Null on every other system, where the
+   * browser goes through the owner socket. Like `allowed`, it is the user's alone.
+   */
+  browser_port: number | null,
+  /**
+   * The address a browser opens, `http://127.0.0.1:<port>/?key=<owner key>`, through the forward
+   * below; set while `state` is `serving`, null otherwise. The port is the one the forward binds
+   * on the browser's machine, which stays the same across launches, so the address can be
+   * bookmarked.
+   */
+  address: string | null,
+  /**
+   * The command the browser's machine forwards the owner socket (on Windows, `browser_port`)
+   * with, as `octoboardd address` prints it, the remote host left as `<server>` for the owner to
+   * fill in; set while `state` is `serving`, null otherwise.
+   */
+  forward_command: string | null,
+  /**
+   * Why the daemon could not serve a browser though the setting is on; set while `state` is
+   * `failed`, null otherwise.
+   */
+  failure: RemoteAccessFailure | null,
+  /**
+   * The connection details another device's application sets itself up from to reach this
+   * daemon over the computer's SSH server, as `octoboardd connection` prints them on a server;
+   * set while `state` is `serving`, null otherwise.
+   */
+  connection: ConnectionDetails | null,
+};
+
+/**
+ * Why the way in (the owner socket, or on Windows the browser port and the owner pipe) is not
+ * served though remote access is on.
+ */
+export type RemoteAccessFailure = {
+  reason: RemoteAccessFailureReason,
+  /**
+   * The system's own words for it, in English, with the path concerned: for the user to act on
+   * or to report, shown beside the client's own sentence for `reason`.
+   */
+  detail: string,
+};
+
+/**
+ * The kind of failure, which a client words.
+ */
+export type RemoteAccessFailureReason = "no_ui" | "not_private" | "socket_failed" | "owner_key_failed" | "port_in_use" | "port_failed" | "pipe_failed";
+
+/**
+ * What a daemon that follows the application does with remote access.
+ */
+export type RemoteAccessState = "off" | "serving" | "failed";
+
+/**
  * One control-socket frame from the client: an optional request id the daemon echoes back, plus
  * the request itself. The id lets the UI pair a reply with the request that caused it; state
  * changes are broadcast to every client instead and carry no id.
@@ -4121,10 +4229,10 @@ export type Request = {
   ask_questions_as_choices?: boolean,
   keep_sessions_in_own_project?: boolean,
   /**
-   * A tag the interface offers (`interface_language::display_name` knows it); any other
-   * is refused.
+   * The agent language: a tag the interface offers (`interface_language::display_name`
+   * knows it); any other is refused.
    */
-  interface_language?: string,
+  agent_language?: string,
   keep_awake?: boolean,
   keep_awake_when?: KeepAwakeWhen,
   auto_select_account?: boolean,
@@ -4289,6 +4397,17 @@ export type Request = {
 }
   | {
   "type": "restart_daemon"
+}
+  | {
+  "type": "set_remote_access",
+  allowed: boolean,
+}
+  | {
+  "type": "rotate_owner_key"
+}
+  | {
+  "type": "set_remote_access_port",
+  port: number,
 }
   | {
   "type": "refresh_git_status",
@@ -4993,10 +5112,10 @@ export type RequestBody = {
   ask_questions_as_choices?: boolean,
   keep_sessions_in_own_project?: boolean,
   /**
-   * A tag the interface offers (`interface_language::display_name` knows it); any other
-   * is refused.
+   * The agent language: a tag the interface offers (`interface_language::display_name`
+   * knows it); any other is refused.
    */
-  interface_language?: string,
+  agent_language?: string,
   keep_awake?: boolean,
   keep_awake_when?: KeepAwakeWhen,
   auto_select_account?: boolean,
@@ -5161,6 +5280,17 @@ export type RequestBody = {
 }
 | {
   "type": "restart_daemon"
+}
+| {
+  "type": "set_remote_access",
+  allowed: boolean,
+}
+| {
+  "type": "rotate_owner_key"
+}
+| {
+  "type": "set_remote_access_port",
+  port: number,
 }
 | {
   "type": "refresh_git_status",
@@ -5713,12 +5843,13 @@ export type Settings = {
    */
   keep_sessions_in_own_project: boolean,
   /**
-   * The tag of the interface language, one of the tags the interface offers; `null` until a
-   * client reports one. It is the one language every client shows (each keeps a copy only to
-   * render in before it has connected) and the one sessions are told to reply in, so a change
-   * reaches every window. Carried by a configuration export in its General section.
+   * The tag of the agent language, one of the tags the interface offers: the language sessions
+   * are told to talk to the user in. `null` until a client reports one; a client reports its own
+   * interface language when it connects to a daemon that holds none, and the user's pick in
+   * Settings otherwise. The interface language itself is the client's alone and never stored
+   * here. Carried by a configuration export in its General section.
    */
-  interface_language: string | null,
+  agent_language: string | null,
   /**
    * Prevent sleep: whether the daemon holds its host awake (see `crate::keep_awake`), when
    * `keep_awake_when` says it should. Off unless the user turned it on. It acts only where the

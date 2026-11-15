@@ -189,7 +189,7 @@ export function ConfirmDialog({
           </Label>
           {/* Capitals by styling rather than by rewriting the value: rewriting a controlled value
               mid-composition breaks an input method's composition. */}
-          <Input dir="ltr" placeholder={t("dialog.typeToConfirm.example", { word })} className="uppercase" autoComplete="off" spellCheck={false} />
+          <Input dir="ltr" placeholder={t("common.example", { example: word })} className="uppercase" autoComplete="off" spellCheck={false} />
         </TextField>
       )}
     </Dialog>

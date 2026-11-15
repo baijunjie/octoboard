@@ -44,10 +44,10 @@ export interface SidebarHandlers {
   /** Opens the project's panel of `kind` in the aside, as its top-bar toggle does; the Terminal
    * panel starts a shell only when the project has none. */
   onOpenProjectPanel: (project: Project, kind: ProjectPanelKind) => void;
-  /** Opens the project directory in the system file manager. */
-  onOpenProjectDirectory: (project: Project) => void;
-  /** Opens the system terminal at the project's directory. */
-  onOpenSystemTerminal: (project: Project) => void;
+  /** Opens the project directory in the system file manager; absent when the daemon does not share this machine. */
+  onOpenProjectDirectory?: (project: Project) => void;
+  /** Opens the system terminal at the project's directory; absent when the daemon does not share this machine. */
+  onOpenSystemTerminal?: (project: Project) => void;
   /** Opens a validated repository web URL; absent without browser-link support. */
   onOpenRepository?: (url: string) => void;
   onLoadProjectCopyPathItem: (project: Project) => Promise<ActionMenuItem>;

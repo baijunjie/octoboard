@@ -229,7 +229,7 @@ export const handoffScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Hand off dialog open as the other agents go missing",
-    description: "Reached only when the agents change under an open dialog (the menu's Hand off is disabled without another agent): Codex and Grok Build stop being installed meanwhile. The dialog itself turns into a failure modal: a danger icon in the header, the title Cannot hand off the session, a sentence saying no other agent can take the session over, and OK as its only button. No second dialog opens over it.",
+    description: "Reached only when the agents change under an open dialog (the menu's Hand off is disabled without another agent): Codex and Grok Build stop being installed meanwhile. The dialog itself turns into a failure modal: a danger icon in the header, the title Cannot hand off the session, a sentence saying no other agent can take the session over, and OK as its only footer button, with a close button in the header that does what OK does (Escape and a click outside do nothing). No second dialog opens over it.",
     state,
     steps: [...openHandoff(bare.title), (ui) => ui.setAgents({ installed: ["claude"] })],
   },

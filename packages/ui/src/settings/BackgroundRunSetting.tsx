@@ -14,7 +14,7 @@ export function BackgroundRunSetting(): React.ReactElement {
   const { statusItem } = usePlatform();
   const iconShown = showMenuBarIcon.useValue();
   // The description names the menu bar icon as the way back to the window only while it is shown.
-  const iconBrings = statusItem !== undefined && iconShown;
+  const iconBrings = statusItem?.setVisible !== undefined && iconShown;
   const description = t(
     enabled
       ? iconBrings ? "settings.background.description.on" : "settings.background.description.onIconHidden"

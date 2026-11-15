@@ -7,7 +7,7 @@ import { DaemonErrorMessage } from "../components/alerts/DaemonErrorMessage";
 import { CodedError } from "../errors/codedError";
 import { NO_RECORDS } from "../errors/daemonMessage";
 import type { ErrorPresentation } from "../errors/errorPresentation";
-import { format, globalParam, translatorFor, type Translate } from "../i18n/catalog";
+import { format, translatorFor, type Translate } from "../i18n/catalog";
 import { setLanguage } from "../i18n/language";
 import type { Language } from "../i18n/languages";
 import { BodiesFailureReason, ViewerErrorMessage } from "./ViewerErrorMessage";
@@ -53,13 +53,13 @@ it("keeps the special explanation for an unmerged file", () => {
   expect(render(error).textContent).toBe(format("en", "viewer.error.unmerged"));
 });
 
-it.each<Language>(["en", "zh-Hans"])("retains permission diagnostics and the product name treatment in %s", (language) => {
+it.each<Language>(["en", "zh-Hans"])("keeps permission diagnostics out of the summary in %s", (language) => {
   setLanguage(language);
   const permission = render(new CodedError("fallback", "permission_denied", { path: "src/gone.ts", detail: "Access denied" }));
   // The system's text is the failure's Details, not part of the summary line.
   expect(permission.textContent).not.toContain("Access denied");
   expect(permission.textContent).not.toContain("src/gone.ts");
-  expect(permission.querySelector("[dir=auto]")?.textContent).toBe(globalParam("appName"));
+  expect(permission.textContent).toBe(format(language, "viewer.error.permissionDenied.summary"));
 });
 
 it("compares the displayed wire path without decoding a displayed name twice", () => {

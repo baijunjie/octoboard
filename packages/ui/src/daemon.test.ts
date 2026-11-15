@@ -170,3 +170,10 @@ it("takes a page given a key or a port by the build's constants as not keyless",
   vi.stubEnv("VITE_DAEMON_PORT", "4242");
   expect(isKeylessDaemonPage(browser)).toBe(false);
 });
+
+it("addresses a window opened on a remote daemon by the loopback port the shell gave it, whatever its page origin", () => {
+  vi.stubGlobal("__TAURI_INTERNALS__", {});
+  onTestFinished(() => void vi.unstubAllGlobals());
+  openAt("?port=4242&key=aa&daemon=me%40host&remote=host");
+  expect(resolveDaemonAddress(platform)).toEqual({ origin: "ws://127.0.0.1:4242", key: "aa" });
+});

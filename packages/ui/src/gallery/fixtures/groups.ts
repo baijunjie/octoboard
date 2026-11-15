@@ -12,6 +12,7 @@ import {
   Funnel,
   type LucideIcon,
   MessageSquareWarning,
+  PanelBottom,
   PanelsTopLeft,
   Plug,
   Presentation,
@@ -48,6 +49,7 @@ export const GROUPS = [
   { title: "Settings", icon: Settings },
   { title: "Updates", icon: Download },
   { title: "Window layout", icon: PanelsTopLeft },
+  { title: "Notification-area flyout", icon: PanelBottom },
   { title: "Component colors", icon: FileText },
 ] as const satisfies readonly { title: string; icon: LucideIcon }[];
 

@@ -387,8 +387,8 @@ it("leaves focus to the dialog when the whole row goes while What is new holds i
 });
 
 it.each([
-  ["installer", WINDOWS_HOST, "Version 0.2.0 is downloaded. It is installed when Octoboard quits or restarts.", "An update is downloaded. It is installed when Octoboard quits or restarts."],
-  ["in-place", MAC_HOST, "Version 0.2.0 is installed. It takes effect after Octoboard restarts.", "An update is installed. It takes effect after Octoboard restarts."],
+  ["installer", WINDOWS_HOST, "Version 0.2.0 is downloaded. It is installed when the app quits or restarts.", "An update is downloaded. It is installed when the app quits or restarts."],
+  ["in-place", MAC_HOST, "Version 0.2.0 is installed. It takes effect after the app restarts.", "An update is installed. It takes effect after the app restarts."],
 ])("words a finished download as the %s updater leaves it, with and without a known version", async (_updater, host, known, unknown) => {
   const found = mount({ kind: "tauri", host, updater: updaterOf(async () => FOUND) });
   await act(async () => {});

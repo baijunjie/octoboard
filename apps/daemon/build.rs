@@ -43,8 +43,10 @@ fn main() {
 }
 
 /// Writes `embedded_ui.rs` into the build's output directory: the table of the UI build's files
-/// (`src/server/ui.rs`), each `include_bytes!`'d, with the `embedded-ui` feature, and an empty one
-/// without. The build is `packages/ui/dist`, which the workspace package builds first
+/// (`src/server/ui.rs`), each gzip-compressed into the output directory and `include_bytes!`'d from
+/// there, with the `embedded-ui` feature, and an empty one without. Compressed, the UI adds about a
+/// quarter of its size to the binary, and is sent as it is stored to every browser, all of which
+/// take gzip. The build is `packages/ui/dist`, which the workspace package builds first
 /// (`pnpm --filter @octoboard/daemon... build`); a build with the feature and no UI build there
 /// fails rather than ship a binary with no UI.
 ///
@@ -76,12 +78,33 @@ fn embed_ui() {
         let mut files = Vec::new();
         collect_files(&dist, &dist, &mut files);
         files.sort();
-        for (name, path) in files {
-            table.push_str(&format!("    ({name:?}, include_bytes!({path:?})),\n"));
+        let compressed = out.with_file_name("embedded_ui");
+        // Files of an earlier build may have been removed from the UI build since.
+        let _ = fs::remove_dir_all(&compressed);
+        for (index, (name, path)) in files.into_iter().enumerate() {
+            let target = compressed.join(format!("{index}.gz"));
+            fs::create_dir_all(&compressed).expect("create the compressed UI directory");
+            gzip(std::path::Path::new(&path), &target);
+            let target = target.to_str().expect("a UTF-8 path").to_string();
+            table.push_str(&format!("    ({name:?}, include_bytes!({target:?})),\n"));
         }
     }
     table.push_str("];\n");
     fs::write(&out, table).expect("write embedded_ui.rs");
+}
+
+/// Writes `source` gzip-compressed, at the best compression, to `target`. Built without a file name
+/// or time in the header, so the same UI build compresses to the same bytes.
+fn gzip(source: &std::path::Path, target: &std::path::Path) {
+    use std::io::Write;
+
+    let contents = fs::read(source).expect("read a UI file");
+    let mut encoder = flate2::GzBuilder::new().mtime(0).write(
+        fs::File::create(target).expect("create a compressed UI file"),
+        flate2::Compression::best(),
+    );
+    encoder.write_all(&contents).expect("compress a UI file");
+    encoder.finish().expect("compress a UI file");
 }
 
 /// Every file below `dir`, as its path relative to `root` with `/` separators and its path,

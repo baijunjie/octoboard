@@ -1,13 +1,14 @@
 //! Following AppKit's notifications that a menu began and ended tracking.
 
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Manager};
 
 use super::finish::finish_opening_menu;
 use crate::tray::menu_tracking::tracking;
-use crate::tray::{apply, MENU_OPENED_EVENT, TRAY_ID};
+use crate::tray::{build, chosen_on_open, menu_opened, TrayState, TRAY_ID};
 
 /// Keeps `MenuTracking` up to date from AppKit's notifications that a menu began and ended
-/// tracking, both posted on the main thread.
+/// tracking, both posted on the main thread. As the icon's menu begins, it is finished and its tab
+/// chosen (`finish_opening_menu`).
 pub(in crate::tray) fn follow_menu_tracking(app: &AppHandle) {
     use objc2_app_kit::{NSMenuDidBeginTrackingNotification, NSMenuDidEndTrackingNotification};
     use objc2_foundation::{NSNotification, NSNotificationCenter, NSOperationQueue};
@@ -19,8 +20,9 @@ pub(in crate::tray) fn follow_menu_tracking(app: &AppHandle) {
             // SAFETY: the notification is alive for the duration of its delivery.
             let notification = unsafe { notification.as_ref() };
             if is_tray_menu(&app, notification) {
-                finish_opening_menu(&app, notification);
-                let _ = app.emit(MENU_OPENED_EVENT, ());
+                let chosen = chosen_on_open(&app);
+                finish_opening_menu(&app.state::<TrayState>(), notification, chosen);
+                menu_opened(&app);
             }
         })
     };
@@ -38,8 +40,8 @@ pub(in crate::tray) fn follow_menu_tracking(app: &AppHandle) {
             let app = app.clone();
             let apply_held = block2::RcBlock::new(move || {
                 let due = tracking(&app).due();
-                if let Some(menu) = due {
-                    let _ = apply(&app, &menu);
+                if due {
+                    build(&app);
                 }
             });
             // SAFETY: the main queue runs the block on the main thread, where the menu is built.
@@ -66,7 +68,7 @@ pub(in crate::tray) fn follow_menu_tracking(app: &AppHandle) {
     }
 }
 
-/// Whether `notification` is about the menu on the tray's status item rather than another menu of
+/// Whether `notification` is about the menu on the icon's status item rather than another menu of
 /// the app.
 fn is_tray_menu(app: &AppHandle, notification: &objc2_foundation::NSNotification) -> bool {
     use objc2::{rc::Retained, MainThreadMarker};

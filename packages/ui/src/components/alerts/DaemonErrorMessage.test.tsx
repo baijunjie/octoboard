@@ -456,7 +456,7 @@ describe("a failure to write the application's own data nested in another failur
     const error = new CodedError("fallback", "launch_failed", { title: "Draft", ...nested });
     const { body, raw } = mountApart(error);
     const text = body.textContent?.replace(/[\u2066-\u2069]/g, "");
-    expect(text).toContain("Could not start Draft: Octoboard could not read or write its own data.");
+    expect(text).toContain("Could not start Draft: The app could not read or write its own data.");
     expect(text).not.toContain("Error code 13");
     expect(raw.querySelector("pre")?.textContent).toBe(detail);
   });
@@ -465,7 +465,7 @@ describe("a failure to write the application's own data nested in another failur
     const error = new CodedError("fallback", "handoff_archive_failed", { receiving_session: "s2", ...nested, cause: "other" });
     const { body, raw } = mountApart(error);
     const text = body.textContent?.replace(/[\u2066-\u2069]/g, "");
-    expect(text).toContain("The work was handed off to s2, but archiving the original session failed: Octoboard could not read or write its own data.");
+    expect(text).toContain("The work was handed off to s2, but archiving the original session failed: The app could not read or write its own data.");
     expect(text).not.toContain("Error code 13");
     expect(raw.querySelector("pre")?.textContent).toBe(detail);
   });
@@ -482,7 +482,7 @@ describe("a failure to write the application's own data nested in another failur
     const error = new CodedError("fallback", "handoff_move_failed", { receiving_session: "s2", ...nested, cause: "other" });
     const { body, raw } = mountApart(error);
     const text = body.textContent?.replace(/[\u2066-\u2069]/g, "");
-    expect(text).toContain("The new session s2 was started, but handing the work off to it did not complete: Octoboard could not read or write its own data.");
+    expect(text).toContain("The new session s2 was started, but handing the work off to it did not complete: The app could not read or write its own data.");
     expect(text).not.toContain("Error code 13");
     expect(raw.querySelector("pre")?.textContent).toBe(detail);
   });
@@ -549,7 +549,7 @@ describe("a failed automatic account switch", () => {
     const detail = "database or disk is full: Error code 13: Insertion failed because database is full";
     const error = new CodedError("fallback", "account_switch_automatically_failed", { ...params, reason_code: "store_write_failed", reason: `Octoboard could not read or write its own data: ${detail}`, cause: "disk_full", detail });
     const { body, raw } = mountApart(error);
-    expect(body.textContent?.replace(/[\u2066-\u2069]/g, "")).toContain("Octoboard could not read or write its own data.");
+    expect(body.textContent?.replace(/[\u2066-\u2069]/g, "")).toContain("The app could not read or write its own data.");
     expect(body.textContent).not.toContain("Error code 13");
     expect(raw.querySelector("pre")?.textContent).toBe(detail);
   });
@@ -682,7 +682,7 @@ it.each(["project", "console"])("preserves the held %s session's task and name a
 });
 
 it.each([
-  ["tool", ["Git", "PATH", "Octoboard"]],
+  ["tool", ["Git", "PATH"]],
   ["projectBranches", ["Terminal", "git worktree list", "git branch", "Git"]],
   ["sessionBranches", ["Terminal", "Git"]],
   ["repository", ["Git", "Git", "Terminal"]],

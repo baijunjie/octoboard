@@ -5,12 +5,13 @@ import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
 import type { Console } from "../protocol";
 import { useDaemonStore } from "./react";
 
-/** The current console, which the sidebar shows. Kept per window profile in `localStorage`, like the panes'
+/** The current console, which the sidebar shows. Kept per daemon in `localStorage` (`PreferenceScope`), like the panes'
  * visibility: a convenience, so a stored id that no longer names a record is simply ignored. */
 export const consolePreference = createPersistedPreference<string | undefined>(
   PREFERENCE_KEYS.sidebarConsole,
   (raw) => raw ?? undefined,
   (value) => value ?? null,
+  { scope: "daemon" },
 );
 
 /** The console shown: the chosen one while it exists, otherwise the first. */

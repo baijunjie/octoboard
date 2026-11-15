@@ -277,7 +277,7 @@ section, and every section's checkbox is checked when the review opens. Only the
 unchecked, a card collapses to its title row, with a **Left out** outcome at its end. Within a card the lines stand in
 the order of that section's rows:
 
-- **General**: Language, then the switch Resume sessions on start, then Keep running in the background and Show menu
+- **General**: Interface language, then Agent language, then the switch Resume sessions on start, then Keep running in the background and Show menu
   bar icon, then the switch Prevent sleep and When to prevent sleep, then the switch Close idle terminals when closing
   the panel, then **Sorting**.
 - **Appearance**: Theme, Markdown style, then Terminal font size.
@@ -286,8 +286,8 @@ the order of that section's rows:
 - **Keyboard shortcuts**: one line, **Changed shortcuts**.
 - **Cleanup**: the switch Automatically delete archived sessions whose conversation is gone.
 
-A setting only a client holds, Language and Sorting have their line only when the file carries a value this client
-can use: a language this build offers; Keep running in the background and Show menu bar icon have none in a browser. A
+A setting only a client holds, Agent language and Sorting have their line only when the file carries a value this
+client can use: a language this build offers; Keep running in the background and Show menu bar icon have none in a browser. A
 switch, When to prevent sleep or the git workflow that the file does not carry within a section it does carry — Resume
 sessions on start, in a file from a build without it — has its line all the same, badged **No change**, since applying
 leaves it as it is; so has When to prevent sleep when the file names a choice this build does not know.
@@ -299,15 +299,17 @@ with what then follows in that setting's own words (see "The application setting
 **When to prevent sleep**, which the daemon holds, is badged **Set to the file's**, with the file's choice and, in
 brackets, the one set now, each by its name as Settings words it; or **No change** when they are the same.
 
-A **setting only a client holds** — Theme, Markdown style, Terminal font size, Keep running in the background, Show
-menu bar icon — is badged **Set to the file's**, with the file's value and, in brackets, the value this client has now,
-worded as Settings words them (a Markdown style by its name, a switch as **On** or **Off**, a font size in pixels, as
+A **setting only a client holds** — Interface language, Theme, Markdown style, Terminal font size, Keep running in the
+background, Show menu bar icon — is badged **Set to the file's**, with the file's value and, in brackets, the value this client has now,
+worded as Settings words them (a language by its name in its own language, a Markdown style by its name, a switch as
+**On** or **Off**, a font size in pixels, as
 "18 px (now 15 px)"); or **No change** when they are the same. The file's terminal font size is given as this client
 would apply it: rounded, and held to the range of 10 to 24 pixels (see "The application settings an export carries"
 in `docs/product/settings-in-a-configuration.md`).
-**Language**, which the daemon holds rather than the client, reads the same way, comparing the file's language with
-the language the daemon holds now — or with the language this window shows, when the daemon holds none or one this
-build does not offer — each by its name in its own language (see "The language the daemon holds" in `docs/product/language.md`).
+**Agent language**, which the daemon holds rather than the client, reads the same way, comparing the file's agent
+language with the one the daemon holds now — or with the interface language this window shows, when the daemon holds
+none or one this build does not offer — each by its name in its own language (see "The agent language" in
+`docs/product/language.md`).
 
 The **default clone directory** has its line when the file carries one that can be used here, or one written on another
 operating system. A directory written on another operating system (see "The default clone directory on import" in

@@ -1,13 +1,14 @@
 //! The rich menu bar icon of macOS: the attention dot, the red eyes and the accessible name on the
-//! status item,
-//! the menu tracking that holds back a menu sent while one is open, and the finishing pass that
-//! gives the menu its template pictures and its custom rows (`lines.rs`, `openers.rs`).
+//! status item, the menu tracking that holds back a rebuild while a menu is open, and the finishing
+//! pass that gives the menu its row of tabs (`tabs.rs`), its template pictures and its custom rows
+//! (`lines.rs`, `openers.rs`).
 
 mod finish;
 mod lines;
 mod menu_tracking;
 mod openers;
 mod status_item;
+mod tabs;
 
 use std::borrow::Cow;
 
@@ -21,6 +22,12 @@ pub(super) use finish::{finish_when_opened, Unfinished};
 pub(super) use menu_tracking::follow_menu_tracking;
 pub(super) use status_item::{set_icon_label, set_visible, show_layers};
 
+/// The tabs are a row at the top of the menu, every tab's lines below it.
+pub(super) const LAYOUT: super::tabs::Layout = super::tabs::Layout::Tabs;
+
+/// The icon opens its native menu, not a flyout.
+pub(super) const FLYOUT: bool = false;
+
 /// The octopus is a template image, which macOS tints for a light or dark menu bar itself.
 pub(super) const TEMPLATE: bool = true;
 
@@ -28,12 +35,6 @@ pub(super) const TEMPLATE: bool = true;
 /// apply.
 pub(super) fn picture(attention: bool, awake: bool, quota: Option<icon::Quota>) -> Image<'static> {
     icon::octopus(attention, awake, quota)
-}
-
-/// A line's picture as the UI drew it: AppKit tints a template one for the menu once the menu is
-/// finished (`finish.rs`).
-pub(super) fn menu_picture(picture: Image<'static>, _template: bool) -> Image<'static> {
-    picture
 }
 
 /// AppKit lays out the bidi isolates the UI wraps names and values in and draws nothing for them,

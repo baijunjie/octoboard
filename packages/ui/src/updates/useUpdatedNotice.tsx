@@ -7,6 +7,7 @@ import { t } from "../i18n/language";
 import { Message } from "../i18n/react";
 import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
 import { useDaemon, useDaemonStore } from "../store";
+import { windowKind } from "../platform";
 import { isReloading } from "../platform/reloadPage";
 
 /** The version this browser was last told of, read from storage at the moment of asking and not once at load: another tab
@@ -33,7 +34,8 @@ function remember(version: string): void {
  * an older version of itself (`updated_from`, which it holds for as long as it runs), with a link to what is new. A
  * toast, since it is no more than news; it comes as soon as the daemon that greeted has sent its own status, in whichever
  * tab of the browser is first to see it, unless that page is reloading. What is held from a daemon that went before
- * (`daemonUpdateStale`) says nothing of this one. */
+ * (`daemonUpdateStale`) says nothing of this one. Never in a window of the desktop application opened on a daemon
+ * elsewhere, which shows nothing of updates (`UpdatesProvider`). */
 export function useUpdatedNotice(): void {
   const { showNotice } = useDaemon();
   const updatedFrom = useDaemonStore((state) => (state.daemonUpdateStale ? undefined : state.daemonUpdate?.updated_from));
@@ -43,7 +45,7 @@ export function useUpdatedNotice(): void {
   useEffect(() => {
     // A page already reloading (the one that asked for the restart, whose reload this same status set off) leaves it to
     // the page that replaces it, as one told of it here would never be seen.
-    if (!updatedFrom || !version || said.current === version || toldVersion() === version || isReloading()) return;
+    if (windowKind() === "remote" || !updatedFrom || !version || said.current === version || toldVersion() === version || isReloading()) return;
     said.current = version;
     remember(version);
     showNotice(

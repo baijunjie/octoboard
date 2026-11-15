@@ -331,7 +331,9 @@ desktop app).
 - The menu starts with **Copy relative path**, then **Copy absolute path**, as top-level actions in a group of their
   own, followed by a separator and the **Open in** submenu, omitting unavailable actions. On a file's row Open in holds
   **File manager**, then **Default application**; on a folder's row — a symbolic link listed as a folder included —
-  **File manager**, then **Terminal**.
+  **File manager**, then **Terminal**. In a remote window of the desktop application, whose daemon is another machine's,
+  File manager and Default application are left out, and so is Open in when nothing is left in it (see "The remote
+  window" in `docs/product/remote-daemons.md`).
 - **File manager** shows the entry in the file manager: a file, or a symbolic link whatever it leads to, is selected in
   its containing folder, and a folder is opened. On macOS a folder that macOS treats as a package, such as an `.app` or
   an `.xcodeproj`, which opening would launch, is selected in its containing folder instead, and so is a folder whose

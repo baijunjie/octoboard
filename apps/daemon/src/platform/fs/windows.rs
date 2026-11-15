@@ -367,6 +367,11 @@ impl Drop for Token {
     }
 }
 
+/// The security identifier of the user this process runs as.
+pub fn process_user_sid() -> io::Result<Vec<u8>> {
+    Token::of_this_process()?.user_sid()
+}
+
 /// The security identifier of the operating system itself (`LocalSystem`).
 fn system_sid() -> io::Result<Vec<u8>> {
     well_known_sid(WinLocalSystemSid)
@@ -945,6 +950,19 @@ pub fn env_home() -> Option<OsString> {
 /// The name of the user the daemon runs as, as Windows sets it in the environment.
 pub fn account_name() -> Option<OsString> {
     std::env::var_os("USERNAME")
+}
+
+/// The name of this computer, as Windows sets it in the environment.
+pub fn host_name() -> Option<OsString> {
+    std::env::var_os("COMPUTERNAME").filter(|name| !name.is_empty())
+}
+
+/// The directory Windows' OpenSSH server keeps its host keys in: `ssh` under `ProgramData`.
+pub fn ssh_host_key_dir() -> PathBuf {
+    std::env::var_os("ProgramData")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(r"C:\ProgramData"))
+        .join("ssh")
 }
 
 /// The profile directory Windows records for the user the daemon runs as.

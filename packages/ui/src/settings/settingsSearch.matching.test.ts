@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+// @vitest-environment jsdom
+import { describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { booleanSetting } from "../configuration/booleanSettings";
 import { DEVELOPMENT_CHOICES } from "../git/gitWorkflow";
@@ -21,7 +22,7 @@ const DESKTOP: PlatformAdapter = {
   appMenu: { onSettingsRequested: () => () => {}, setLabels: async () => {} },
 };
 
-const context = (overrides: Partial<SettingsSearchContext> = {}): SettingsSearchContext => ({ platform: BROWSER, keepAwake: false, settings: DEFAULT_SETTINGS, reads: { launchAtLogin: true, macosPermissions: true, macosPermissionsUnreadable: false }, ...overrides });
+const context = (overrides: Partial<SettingsSearchContext> = {}): SettingsSearchContext => ({ platform: BROWSER, keepAwake: false, settings: DEFAULT_SETTINGS, remoteAccess: null, reads: { launchAtLogin: true, macosPermissions: true, macosPermissionsUnreadable: false }, ...overrides });
 const withSettings = (changes: Partial<Settings>): Settings => ({ ...DEFAULT_SETTINGS, ...changes });
 
 const SECTION_LABELS: Record<SettingsSectionId, Parameters<typeof sectionMatches>[1]> = {
@@ -32,6 +33,7 @@ const SECTION_LABELS: Record<SettingsSectionId, Parameters<typeof sectionMatches
   "agent-permissions": "settings.section.agentPermissions",
   "trusted-folders": "settings.section.trustedFolders",
   permissions: "settings.section.permissions",
+  "remote-access": "settings.section.remoteAccess",
   notifications: "settings.section.notifications",
   shortcuts: "settings.section.shortcuts",
   cleanup: "settings.section.cleanup",
@@ -277,6 +279,31 @@ describe("sectionMatches", () => {
   });
 });
 
+describe("the Updates section in a remote daemon's window", () => {
+  const inRemoteWindow = () => {
+    vi.stubGlobal("__TAURI_INTERNALS__", {});
+    window.history.replaceState({}, "", "/?remote=server");
+    onTestFinished(() => {
+      window.history.replaceState({}, "", "/");
+      vi.unstubAllGlobals();
+    });
+  };
+
+  it("finds no version row, which that window does not draw", () => {
+    expect(find("updates", "updates").ids.has("updates.version")).toBe(true);
+    inRemoteWindow();
+    expect(find("updates", "updates").ids.has("updates.version")).toBe(false);
+  });
+
+  it("finds the automatic check only by the wording the window shows", () => {
+    expect(find("updates", "daemon checks").ids.has("updates.autoCheck")).toBe(false);
+    expect(find("updates", "app checks").ids.has("updates.autoCheck")).toBe(true);
+    inRemoteWindow();
+    expect(find("updates", "daemon checks").ids.has("updates.autoCheck")).toBe(true);
+    expect(find("updates", "app checks").ids.has("updates.autoCheck")).toBe(false);
+  });
+});
+
 describe("which section each row is indexed under", () => {
   const ids = (section: SettingsSectionId) => SETTINGS_SEARCH_INDEX[section].map((entry) => entry.id);
 
@@ -285,9 +312,10 @@ describe("which section each row is indexed under", () => {
     expect(SETTINGS_SEARCH_INDEX.appearance.every((entry) => entry.group === undefined)).toBe(true);
   });
 
-  it("lists the language, the startup, window, power and terminal rows and the sorting rows under General, and not the theme or the Markdown style", () => {
+  it("lists the interface and agent language, the startup, window, power and terminal rows and the sorting rows under General, and not the theme or the Markdown style", () => {
     expect(ids("general")).toEqual([
       "language",
+      "agent-language",
       "launch-at-login",
       "resume_sessions_on_start",
       "run-in-background",

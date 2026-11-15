@@ -69,7 +69,7 @@ export function useTerminalController({
   options?: Omit<TerminalControllerOptions, "host">;
 }): void {
   const t = useT();
-  const { request } = useDaemon();
+  const { request, isLocal } = useDaemon();
   const { links, clipboard, host } = usePlatform();
   const { style: pathStyle } = useHostPaths();
   const { resolved: colorTheme } = useOctoboardTheme();
@@ -93,7 +93,9 @@ export function useTerminalController({
         onLinkHover: (link) => setLinkRef.current?.(link),
         copyToClipboard: programCopyHandler(clipboard, () => latest.current),
         pasteImage: pasteImages ? pasteImageHandlers(() => latest.current, clipboard?.readImage?.bind(clipboard)) : undefined,
-        pathLinks: {
+        // A path is opened or revealed on the daemon's host, which is this machine's only where the daemon shares it:
+        // in the window of a daemon elsewhere the paths stay plain text, and web links still open.
+        pathLinks: isLocal === false ? undefined : {
           pathStyle,
           probe: async (paths) => {
             const reply = await latest.current.request({ type: "probe_path_links", project: latest.current.project, paths });

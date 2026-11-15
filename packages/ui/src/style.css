@@ -255,6 +255,8 @@ html {
 
 @import "./shell/TitleBar.css";
 
+@import "./shell/TrayFlyout.css";
+
 @import "./styles/surfaces.css";
 
 @import "./components/alerts/ErrorAlert.css";

@@ -10,6 +10,7 @@ import type { Console } from "../protocol";
 import { statusLabel } from "../sessions/sessionLabel";
 import { consoleMenu, type ConsoleMenuHandlers } from "../sidebar/menus";
 import type { OpenSettings } from "../settings/settingsLauncher";
+import { RailRemoteDaemons } from "./RailRemoteDaemons";
 import { RailQuotaEntry } from "./RailQuotaEntry";
 import { RailProcessesEntry } from "./RailProcessesEntry";
 import { RailCountBadge } from "./RailCountBadge";
@@ -172,7 +173,8 @@ interface RailProps extends ConsoleMenuHandlers {
 
 /**
  * The left rail, the window chrome's second half beside the top bar: at the top the console
- * switcher (one avatar per console, in their order, then New console), at the bottom, pushed down,
+ * switcher (one avatar per console, in their order, then New console), under it, in the application's own window, the
+ * remote daemons (`RailRemoteDaemons`), at the bottom, pushed down,
  * the waiting count, the notifications bell (browser only, while the permission is undecided), the
  * account quota entry and Settings. It sits at the reading direction's start, like the sidebar, and
  * holds only glyphs and avatars. At the tablet boundary and below an `onDemand` rail leaves the row and
@@ -216,7 +218,10 @@ export function Rail({
       inert={away}
       className={`flex w-(--rail-width) shrink-0 flex-col items-center gap-1 pt-1 pb-2 select-none ${onDemand ? `${ON_DEMAND_FRAME} ${away ? ON_DEMAND_AWAY : ON_DEMAND_OPEN}` : ""}`}
     >
-      <div ref={consolesRef} className="relative flex min-h-0 flex-col items-center gap-1">
+      {/* Gives way after the remote daemons below (`RailRemoteDaemons`), whose shrink factor is a thousand times its own.
+          Its own stays 1, not a fraction: once the remote daemons are at their minimum it is the only item left to
+          shrink, and flexbox takes away only that fraction of the overflow from items whose factors sum below 1. */}
+      <div ref={consolesRef} className="relative flex min-h-0 shrink flex-col items-center gap-1">
         {/* More consoles than fit scroll here, the scrollbar left out: the rail is too narrow for
             one, which leaves the fade as the only thing saying there are more. */}
         <FadedScroller hideScrollBar className="relative flex min-h-0 flex-col items-center overscroll-contain py-0.5">
@@ -238,6 +243,7 @@ export function Rail({
           </ChromeButton>
         </div>
       </div>
+      <RailRemoteDaemons />
       <div className="mt-auto flex shrink-0 flex-col items-center gap-1">
         {waitingCount > 0 && (
           <ChromeButton label={t("rail.waiting", { count: waitingCount })} onPress={onNextWaiting} tooltipPlacement="end"

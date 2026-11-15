@@ -52,10 +52,10 @@ const SECTION_NOTE: Record<SettingsSection, PlainMessageKey> = {
  * name it was saved under, or only that it was downloaded where the platform cannot say more. What is added are the
  * settings this client holds, which the daemon does not know of: a document that includes the Keyboard shortcuts
  * section gets this client's shortcut changes (an empty set when none is changed), and with the section they belong to
- * its session order and, where the platform has it, whether it runs in the background and whether it shows its menu bar
- * icon (General; the language and whether it prevents sleep, and when, are the daemon's own and are in the document as
- * it holds them), and its appearance, Markdown style and terminal font size (Appearance; see `heldClientSettings`).
- * Dismissing the save dialog leaves this one open.
+ * its interface language, its session order and, where the platform has it, whether it runs in the background and
+ * whether it shows its menu bar icon (General; the agent language and whether it prevents sleep, and when, are the
+ * daemon's own and are in the document as it holds them), and its appearance, Markdown style and terminal font size
+ * (Appearance; see `heldClientSettings`). Dismissing the save dialog leaves this one open.
  */
 export function ExportConfigurationDialog({
   console: inHand,
@@ -85,7 +85,7 @@ export function ExportConfigurationDialog({
   const exported = consoles === "one" ? inHand : undefined;
   const sections = SETTINGS_SECTIONS.filter((section) => included[section]);
   // The General note lists the settings this client can hold only where the platform has all of them.
-  const heldHere = backgroundRun !== undefined && statusItem !== undefined;
+  const heldHere = backgroundRun !== undefined && statusItem?.setVisible !== undefined;
   const nothing = consoles === "none" && sections.length === 0 && !includeAccounts;
   // A project's path is the only one the choice is about: with no console exported the option is not shown.
   const pathsApply = consoles !== "none";

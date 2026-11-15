@@ -13,10 +13,11 @@ publish = false
 name = "octoboardd"
 path = "src/main.rs"
 
-# Embeds the UI build (`packages/ui/dist`) in the binary and serves it (`src/server/ui.rs`), the server
-# form's way in for a browser. The desktop form's sidecar is built without it: its window loads the
-# UI the shell bundles. Build it through the workspace package, which builds the UI first:
-# `pnpm --filter @octoboard/daemon... build`.
+# Embeds the UI build (`packages/ui/dist`) in the binary, compressed, and serves it (`src/server/ui.rs`)
+# on the browser socket, a browser's way in. Both forms' releases are built with it: the server form's,
+# and the desktop form's sidecar, which serves a browser while Allow remote access is on (its window
+# still loads the UI the shell bundles). Build it through the workspace package, which builds the UI
+# first: `pnpm --filter @octoboard/daemon... build`.
 [features]
 embedded-ui = []
 # Turns on the server form's self-update (`src/self_update`): a Linux daemon that follows no application
@@ -28,6 +29,9 @@ self-update = []
 
 [build-dependencies]
 serde_json = "1"
+# Compresses the embedded UI's files (`embed_ui` in `build.rs`); the version the lockfile already
+# resolves for the self-update's download.
+flate2 = "1"
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
@@ -90,6 +94,9 @@ minisign-verify = "0.3"
 # with as a JavaScript regular expression, to refuse one that does not compile when the page is
 # pushed (`crate::protocol::page_content`). The `regex` crate's syntax differs from JavaScript's.
 regress = "0.12"
+# Encodes the connection details `octoboardd connection` prints as a QR code, drawn in the terminal
+# with block characters; without default features it pulls in no image library.
+qrcode = { version = "0.14.1", default-features = false }
 
 # The platform layer's Unix modules (`src/platform`), the PTY backend of `platform::term` among
 # them.

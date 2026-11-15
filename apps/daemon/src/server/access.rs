@@ -8,8 +8,8 @@
 //! and is fetched by a page's own asset requests (see [`crate::server::ui`]). It is the launch key,
 //! generated for each daemon launch ([`generate_key`](crate::request_guard::generate_key)), which
 //! the daemon hands only to what it starts or to the application that started it (see
-//! `apps/daemon/PROTOCOL.md`, "Who may connect"), or, on the browser socket alone
-//! ([`crate::browser_socket`]), the owner key ([`crate::owner_key`]) that a daemon serving the
+//! `apps/daemon/PROTOCOL.md`, "Who may connect"), or, on the browser's way in alone
+//! ([`crate::browser`]), the owner key ([`crate::owner_key`]) that a daemon serving the
 //! browser keeps for the owner's browser across launches; a page that merely knows the port cannot
 //! supply either. The TCP port never takes the owner key: another user of the host can bind that
 //! port while the daemon has let it go, and a key the browser sends there would be theirs. The
@@ -35,26 +35,43 @@ use crate::request_guard::{headers_allowed, key_matches};
 use crate::server::ui::{self, Files};
 
 /// What the guard of one listener checks a request against: the daemon's launch key, the owner key
-/// where that listener takes it (the browser socket), and the embedded UI files it serves, which
+/// where that listener takes it (the browser's way in), and the embedded UI files it serves, which
 /// need no key (see [`crate::server::ui`]).
 #[derive(Clone)]
 pub struct Access {
     pub key: Arc<str>,
     pub owner_key: Option<Arc<OwnerKey>>,
     pub ui: Files,
-    /// The body of a `401`: on the TCP port of a daemon that serves the browser on its socket, it
-    /// says where a browser goes instead, since a page opened through a forward to the port is
-    /// refused there.
-    pub refusal: &'static str,
+    /// On the TCP port, the daemon's owner key, which the port never accepts: while it is held,
+    /// the body of a `401` says where a browser goes instead (the way in that takes it), since a
+    /// page opened through a forward to the port is refused there. Read on every refusal, as remote
+    /// access can be turned on and off while the daemon runs.
+    pub owner_key_elsewhere: Option<Arc<OwnerKey>>,
+}
+
+impl Access {
+    /// The body of a `401` on this listener.
+    fn refusal(&self) -> &'static str {
+        match &self.owner_key_elsewhere {
+            Some(owner_key) if owner_key.is_held() => REFUSED_AT_PORT,
+            _ => REFUSED,
+        }
+    }
 }
 
 /// The body of a `401`.
 pub const REFUSED: &str = "missing or wrong key";
 
-/// The body of a `401` on the TCP port of a daemon that serves the browser on its socket instead.
-pub const REFUSED_AT_PORT: &str =
+/// The body of a `401` on the TCP port of a daemon that serves the browser on its socket instead,
+/// or on Windows at a loopback port of its own ([`crate::browser::port`]).
+pub const REFUSED_AT_PORT: &str = if crate::browser::port::USED {
+    "missing or wrong key. A browser reaches this daemon at its own \
+     browser port, not this one: run `octoboardd address` on that computer for the address and the \
+     SSH forward to use."
+} else {
     "missing or wrong key. A browser reaches this daemon through its \
-     own socket, not this port: run `octoboardd address` on the server for the SSH forward to use.";
+     own socket, not this port: run `octoboardd address` on the server for the SSH forward to use."
+};
 
 /// Which key let a request in, for a handler that keeps a connection open: one the owner key
 /// admitted closes once that key is rotated away ([`Admission::revoked`]); the launch key lasts as
@@ -63,6 +80,12 @@ pub const REFUSED_AT_PORT: &str =
 pub struct Admission(Option<Revocation>);
 
 impl Admission {
+    /// Whether the owner key admitted the request, as a browser's are: such a connection may not
+    /// change remote access or rotate the key.
+    pub fn by_owner_key(&self) -> bool {
+        self.0.is_some()
+    }
+
     /// Resolves when the owner key that admitted the request has been rotated since, and never
     /// for a request the launch key admitted.
     pub async fn revoked(&mut self) {
@@ -102,7 +125,7 @@ pub async fn guard(State(access): State<Access>, mut request: Request, next: Nex
             .and_then(|owner| owner.admit(query))
         {
             Some(revocation) => Admission(Some(revocation)),
-            None => return (StatusCode::UNAUTHORIZED, access.refusal).into_response(),
+            None => return (StatusCode::UNAUTHORIZED, access.refusal()).into_response(),
         }
     };
     request.extensions_mut().insert(admission);
@@ -113,6 +136,8 @@ pub async fn guard(State(access): State<Access>, mut request: Request, next: Nex
 mod tests {
     use super::*;
     use crate::test_support::{ScratchDir, PATIENCE};
+
+    const PAGE: Files = Files::plain(&[("index.html", b"<html>")]);
 
     fn held_key(label: &str) -> (OwnerKey, String, ScratchDir) {
         let dir = ScratchDir::new(label);
@@ -153,8 +178,8 @@ mod tests {
         let access = Access {
             key: "key".into(),
             owner_key: None,
-            ui: &[("index.html", b"<html>")],
-            refusal: REFUSED,
+            ui: PAGE,
+            owner_key_elsewhere: None,
         };
         let seen = Arc::new(std::sync::Mutex::new(None));
         let app = {

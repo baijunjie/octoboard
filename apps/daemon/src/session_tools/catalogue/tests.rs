@@ -645,3 +645,26 @@ fn compatibility_schema_names_the_launch_level_it_edits() {
         }
     }
 }
+
+/// The settings tools offer the agent language and nothing about remote access, which is the
+/// user's alone, nor the interface language, which is the client's.
+#[test]
+fn the_settings_tools_offer_the_agent_language_and_no_remote_access() {
+    let tool = |name| tool_by_name(SessionKind::Console, false, name).unwrap();
+    let update = tool("update_settings");
+    let schema = (update.schema)();
+    let properties = schema["properties"].as_object().expect("properties");
+    assert_eq!(properties["agent_language"]["type"], "string");
+    assert!(!properties.contains_key("interface_language"));
+    assert!(properties.keys().all(|key| !key.contains("remote")));
+    assert!(tool("get_settings")
+        .description
+        .contains("`agent_language`"));
+    for name in ["get_settings", "update_settings"] {
+        let text = format!("{} {}", tool(name).description, (tool(name).schema)());
+        let text = text.to_lowercase();
+        assert!(!text.contains("remote_access"), "{name}");
+        assert!(!text.contains("remote access"), "{name}");
+        assert!(!text.contains("interface_language"), "{name}");
+    }
+}

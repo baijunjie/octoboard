@@ -502,11 +502,11 @@ async fn a_console_session_prompt_is_left_set_or_cleared_by_an_update() {
     assert!(!file().contains("Answer in French."));
 
     // The file follows the language the user's interface is set to at the next write.
-    state.store.set_interface_language("ja").unwrap();
+    state.store.set_agent_language("ja").unwrap();
     handle(&state, None, update(Some(Some("Be brief."))))
         .await
         .unwrap();
-    assert!(file().contains("interface to Japanese (ja)."));
+    assert!(file().contains("talk to them in Japanese (ja)."));
 }
 
 /// A name that is blank, and a model or effort the agent does not offer, are refused by the

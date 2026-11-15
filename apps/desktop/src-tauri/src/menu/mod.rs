@@ -1,23 +1,33 @@
-//! The app's native menu bar: built on macOS, and not at all elsewhere, where the host facts
-//! announce none (`appMenu: false`) and Settings, About and Quit are reachable from the rail and
-//! the tray. What differs by platform is in `macos.rs` and `windows.rs`; this module holds the
-//! ids and events the menus' items share with `on_menu_event` in `lib.rs`.
+//! The app's native menu bar and Dock menu: built on macOS, and not at all elsewhere, where the
+//! host facts announce none (`appMenu: false`) and Settings, About and Quit are reachable from the
+//! rail and the tray, and the remote daemons from every window's system menu (`system_menu.rs`) and
+//! the taskbar's jump list (`windows.rs`); the tray lists the connected ones, and offers no way to
+//! connect. What differs by platform is in `macos.rs` and `windows.rs`; this module holds the ids
+//! and events the menus' items share with `on_menu_event` in `lib.rs`.
 
 use std::collections::HashMap;
 
 use tauri::AppHandle;
 
 #[cfg(target_os = "macos")]
+mod dock;
+#[cfg(target_os = "macos")]
 mod macos;
 #[cfg(target_os = "macos")]
 use macos as platform;
 
+// Its lines are built on every platform, for their tests; only Windows sets the list.
+#[cfg_attr(not(windows), allow(dead_code))]
+mod jump_list;
+// Its items are built on every platform, for their tests; only Windows puts them on a window.
+#[cfg_attr(not(windows), allow(dead_code))]
+mod system_menu;
 #[cfg(not(target_os = "macos"))]
 mod windows;
 #[cfg(not(target_os = "macos"))]
 use windows as platform;
 
-pub use platform::install;
+pub use platform::{install, install_window, remote_daemons_changed};
 
 /// The product name, from `config/app.json` (see `build.rs`).
 pub const APP_NAME: &str = env!("OCTOBOARD_APP_NAME");

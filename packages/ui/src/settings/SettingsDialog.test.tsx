@@ -11,7 +11,8 @@ import type { SettingsNavigation } from "./sections";
 import type { HostFacts } from "../platform/host";
 import type { UpdaterCapability } from "../platform";
 import { PlatformProvider } from "../platform/react";
-import type { DaemonUpdateStatus } from "../protocol";
+import { remoteAccessOf } from "../fixtures/builders";
+import type { DaemonUpdateStatus, RemoteAccess } from "../protocol";
 import { DaemonProvider } from "../store";
 import { testDaemon } from "../test/testDaemon";
 import { UpdatesProvider } from "../updates/UpdatesProvider";
@@ -54,23 +55,33 @@ vi.mock("./CleanupSection", () => ({ CleanupSection: () => <p>Cleanup section</p
 vi.mock("./AgentBehaviorSection", () => ({ AgentBehaviorSection: () => <p>Agent behavior</p> }));
 vi.mock("./NotificationsSection", () => ({ NotificationsSection: () => <p>Notifications</p> }));
 vi.mock("./ConfigurationSection", () => ({ ConfigurationSection: () => <p>Configuration</p> }));
+vi.mock("./RemoteAccessSection", () => ({ RemoteAccessSection: () => <p>Remote access section</p> }));
+
+const IDLE_UPDATE: DaemonUpdateStatus = { phase: "idle", available: null, progress: null, installed: null, last_check: null, install: null, manual: null, updated_from: null };
+const UPDATER: UpdaterCapability = { currentVersion: async () => "0.1.0", check: async () => undefined, install: async () => {} };
 
 /** What makes something update: the desktop shell's updater, or a daemon that updates itself (`daemonUpdate`). */
 interface Updating {
   updater?: UpdaterCapability;
   daemonUpdate?: DaemonUpdateStatus;
+  /** What the daemon says of remote access, and whether the shell has Remote Login to report: both are the
+   * application's window's, for a daemon that offers remote access. */
+  remoteAccess?: RemoteAccess;
+  remoteLogin?: boolean;
 }
 
 function mount(first: SettingsNavigation, width = 1440, host: HostFacts = MAC_HOST, updating: Updating = {}) {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
-  const daemon = updating.daemonUpdate && testDaemon({ state: { daemon: { version: __OCTOBOARD_VERSION__, generation: 1 }, daemonUpdate: updating.daemonUpdate } });
+  const daemon = (updating.daemonUpdate || updating.remoteAccess) && testDaemon({
+    state: { ...(updating.daemonUpdate && { daemon: { version: __OCTOBOARD_VERSION__, generation: 1 }, daemonUpdate: updating.daemonUpdate }), ...(updating.remoteAccess && { remoteAccess: updating.remoteAccess }) },
+  });
   const dialog = (navigation: typeof first) => <SettingsDialog navigation={navigation} onClose={() => {}} />;
   const show = (navigation: typeof first) =>
     act(() =>
       root.render(
-        <PlatformProvider value={{ kind: "tauri", host, updater: updating.updater }}>
-          {daemon ? <DaemonProvider value={daemon}><UpdatesProvider firstCheckDelayMs={null}>{dialog(navigation)}</UpdatesProvider></DaemonProvider> : updating.updater ? <UpdatesProvider firstCheckDelayMs={null}>{dialog(navigation)}</UpdatesProvider> : dialog(navigation)}
+        <PlatformProvider value={{ kind: "tauri", host, updater: updating.updater, ...(updating.remoteLogin && { remoteLogin: { status: async () => true, openSystemSettings: async () => {} } }) }}>
+          {daemon && updating.daemonUpdate ? <DaemonProvider value={daemon}><UpdatesProvider firstCheckDelayMs={null}>{dialog(navigation)}</UpdatesProvider></DaemonProvider> : daemon ? <DaemonProvider value={daemon}>{dialog(navigation)}</DaemonProvider> : updating.updater ? <UpdatesProvider firstCheckDelayMs={null}>{dialog(navigation)}</UpdatesProvider> : dialog(navigation)}
         </PlatformProvider>,
       ),
     );
@@ -334,6 +345,34 @@ it.each([
   if (listed) expect(tabs.indexOf("Updates")).toBe(tabs.indexOf("About") - 1);
 });
 
+it.each([
+  ["a daemon that updates itself, with the application's updater", { daemonUpdate: IDLE_UPDATE, updater: UPDATER }, true],
+  ["a daemon that updates itself, without an updater", { daemonUpdate: IDLE_UPDATE }, true],
+  ["a daemon that updates nothing, with the application's updater", { updater: UPDATER }, false],
+  ["nothing that updates", {}, false],
+] as const)("lists the Updates section in the window of a daemon elsewhere only where that daemon updates itself: %s", async (_name, updating, listed) => {
+  inRemoteWindow();
+  mount({ nonce: 1, section: "general", addAgent: false }, 1440, MAC_HOST, updating as Updating);
+  await act(async () => {});
+  const tabs = [...document.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent);
+  expect(tabs.includes("Updates")).toBe(listed);
+  if (listed) expect(tabs.indexOf("Updates")).toBe(tabs.indexOf("About") - 1);
+  onTestFinished(() => void vi.unstubAllGlobals());
+});
+
+it("holds only the two settings of the daemon's updates in the Updates section of the window of a daemon elsewhere", async () => {
+  inRemoteWindow();
+  mount({ nonce: 1, section: "updates", addAgent: false }, 1440, MAC_HOST, { daemonUpdate: IDLE_UPDATE, updater: UPDATER });
+  await act(async () => {});
+  const panel = document.querySelector('[role="tabpanel"]')!;
+  expect(panel.textContent).toContain("Check for updates automatically");
+  expect(panel.textContent).toContain("Update channel");
+  expect(panel.textContent).not.toContain("You are using version");
+  expect(panel.querySelector("button[aria-label='Check for updates']")).toBeNull();
+  expect(panel.querySelectorAll("input[type=checkbox]")).toHaveLength(1);
+  onTestFinished(() => void vi.unstubAllGlobals());
+});
+
 it("asks account forms to close for every later navigation request", async () => {
   const { show } = mount({ nonce: 1, section: "accounts", addAgent: true });
   await act(async () => {});
@@ -367,4 +406,39 @@ it("waits for a modal still in front, such as the Add agent dialog being dismiss
   settings.removeAttribute("aria-hidden");
   act(() => void vi.advanceTimersToNextFrame());
   expect(document.activeElement).toBe(selected());
+});
+
+/** Makes this window the application's window of a daemon elsewhere, as the desktop shell opens it. */
+function inRemoteWindow() {
+  vi.stubGlobal("__TAURI_INTERNALS__", {});
+  window.history.replaceState({}, "", "/?remote=server&daemon=me%40server");
+  onTestFinished(() => window.history.replaceState({}, "", "/"));
+}
+
+it.each([
+  ["the application's window, for a daemon that offers it", { remoteAccess: remoteAccessOf(), remoteLogin: true }, true],
+  ["a browser, whose adapter has none of the shell's capabilities", { remoteAccess: remoteAccessOf() }, false],
+  ["a daemon that offers none", { remoteLogin: true }, false],
+] as const)("lists the Remote access section, between Permissions and Notifications, only where it is the application's own: %s", async (_name, updating, listed) => {
+  mount({ nonce: 1, section: "general", addAgent: false }, 1440, MAC_HOST, updating as Updating);
+  await act(async () => {});
+  const tabs = [...document.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent);
+  expect(tabs.includes("Remote access")).toBe(listed);
+  if (listed) {
+    expect(tabs.indexOf("Remote access")).toBe(tabs.indexOf("Permissions") + 1);
+    expect(tabs.indexOf("Notifications")).toBe(tabs.indexOf("Remote access") + 1);
+  }
+});
+
+it("lists neither Remote access nor Permissions in the window of a daemon elsewhere, whose settings are that daemon's alone", async () => {
+  inRemoteWindow();
+  // As the shell gives it: no Remote Login in a remote daemon's window.
+  mount({ nonce: 1, section: "general", addAgent: false }, 1440, MAC_HOST, { remoteAccess: remoteAccessOf() });
+  await act(async () => {});
+  const tabs = [...document.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent);
+  expect(tabs).not.toContain("Remote access");
+  expect(tabs).not.toContain("Permissions");
+  expect(tabs).toContain("General");
+  expect(tabs).toContain("Notifications");
+  onTestFinished(() => void vi.unstubAllGlobals());
 });

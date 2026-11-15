@@ -33,7 +33,7 @@ import { useRegionCycle } from "./layout/useRegionCycle";
 import { ExitConfirmDialog } from "./lifecycle/ExitConfirmDialog";
 import { useAppExit } from "./lifecycle/useAppExit";
 import { useGitStatusSchedule } from "./lifecycle/useGitStatusSchedule";
-import { useInterfaceLanguage } from "./lifecycle/useInterfaceLanguage";
+import { useAgentLanguageSeed } from "./lifecycle/useAgentLanguageSeed";
 import { useStatusItemMenu } from "./statusItem/useStatusItemMenu";
 import { useWaitingNotifications } from "./lifecycle/useWaitingNotifications";
 import { sessionDisplayTitle } from "./sessions/sessionLabel";
@@ -87,7 +87,7 @@ import { useTerminalFocus } from "./app/useTerminalFocus";
 
 export function App(): React.ReactElement {
   const t = useT();
-  const { request, reconnect, store } = useDaemon();
+  const { request, reconnect, store, isLocal } = useDaemon();
   const connectionState = useDaemonStore((s) => s.connectionState);
   const hosts = useDaemonStore((s) => s.hosts);
   const consoles = useDaemonStore((s) => s.consoles);
@@ -119,7 +119,7 @@ export function App(): React.ReactElement {
   const hasAside = asideOwner !== undefined;
   const sidebarView = useSidebarView(consoleList);
   useGitStatusSchedule();
-  useInterfaceLanguage();
+  useAgentLanguageSeed();
 
   const currentConsole = sidebarView.currentConsole;
   const {
@@ -633,8 +633,8 @@ export function App(): React.ReactElement {
                 onOpenArchive={stableOpenArchive}
                 visibleProjectPanels={visibleProjectPanels}
                 onOpenProjectPanel={stableOpenProjectPanel}
-                onOpenProjectDirectory={stableOpenProjectDirectory}
-                onOpenSystemTerminal={stableOpenSystemTerminal}
+                onOpenProjectDirectory={isLocal === false ? undefined : stableOpenProjectDirectory}
+                onOpenSystemTerminal={isLocal === false ? undefined : stableOpenSystemTerminal}
                 onOpenRepository={stableOpenRepository}
                 onCopyProjectName={stableCopyProjectName}
                 onLoadProjectCopyPathItem={stableLoadProjectCopyPathItem}

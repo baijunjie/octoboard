@@ -81,11 +81,12 @@ pub struct Settings {
     /// launched with, so a change reaches it only in sessions launched afterwards. Only the
     /// user's own client changes it.
     pub keep_sessions_in_own_project: bool,
-    /// The tag of the interface language, one of the tags the interface offers; `null` until a
-    /// client reports one. It is the one language every client shows (each keeps a copy only to
-    /// render in before it has connected) and the one sessions are told to reply in, so a change
-    /// reaches every window. Carried by a configuration export in its General section.
-    pub interface_language: Option<String>,
+    /// The tag of the agent language, one of the tags the interface offers: the language sessions
+    /// are told to talk to the user in. `null` until a client reports one; a client reports its own
+    /// interface language when it connects to a daemon that holds none, and the user's pick in
+    /// Settings otherwise. The interface language itself is the client's alone and never stored
+    /// here. Carried by a configuration export in its General section.
+    pub agent_language: Option<String>,
     /// Prevent sleep: whether the daemon holds its host awake (see `crate::keep_awake`), when
     /// `keep_awake_when` says it should. Off unless the user turned it on. It acts only where the
     /// host can be held (`HostInfo::keep_awake`); elsewhere it is stored and does nothing.
@@ -184,7 +185,7 @@ impl Default for Settings {
             auto_approve_handoffs: false,
             ask_questions_as_choices: true,
             keep_sessions_in_own_project: false,
-            interface_language: None,
+            agent_language: None,
             keep_awake: false,
             keep_awake_when: KeepAwakeWhen::Working,
             auto_select_account: false,
@@ -245,6 +246,7 @@ mod tests {
             host: crate::platform::HostFacts::current().into(),
             keep_awake_held: false,
             shell_terminals: vec![],
+            remote_access: None,
         })
         .unwrap();
         assert_eq!(snapshot["trusted_directories"][0], "/work");

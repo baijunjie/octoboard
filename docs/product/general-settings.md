@@ -1,32 +1,41 @@
 # General settings
 
-Settings' **General** section (see "General" in `docs/product/settings.md`): app-wide settings, the **Language** row
-first, on its own, then five groups, each under a heading (see "Group headings" in `docs/product/settings.md`):
+Settings' **General** section (see "General" in `docs/product/settings.md`): app-wide settings, the **Interface
+language** and **Agent language** rows first, on their own, then five groups, each under a heading (see "Group
+headings" in `docs/product/settings.md`):
 
-- **Startup**: **Launch at login**, in the desktop application where the system offers it (see "Launch at login"
-  below), then **Resume sessions on start**, in every client;
-- **Window**, in the desktop application only: **Keep running in the background**, then **Show menu bar icon**;
+- **Startup**: **Launch at login**, in the desktop application's main window where the system offers it (see "Launch
+  at login" below), then **Resume sessions on start**, in every client;
+- **Window**, in the desktop application's main window only: **Keep running in the background**, then **Show menu bar
+  icon**;
 - **Power**, in every client, where the daemon's host can be held awake: **Prevent sleep**, and under it, while it is
   on, **When to prevent sleep**;
 - **Terminals**: **Close idle terminals when closing the panel**, in every client;
 - **Sorting**: **Sessions**, **Active projects** and **Inactive projects**, in every client.
 
-A group with nothing to show in the client is left out, so a browser shows Language, then Startup with Resume sessions
-on start alone, Power where the daemon's host can be held awake, Terminals and Sorting.
+A group with nothing to show in the client is left out, so a browser, and a remote window of the desktop application
+(see "The remote window" in `docs/product/remote-daemons.md`), show the two language rows, then Startup with Resume
+sessions on start alone, Power where the daemon's host can be held awake, Terminals and Sorting. In a remote window
+every setting of the section that the daemon keeps is the remote daemon's.
 
 How each of these switches saves is in "How switches save" in `docs/product/settings.md`.
 
 ## Language
 
-The language of every window, and the one agents talk to the user in, chosen from a drop-down of the offered
-languages, each named in its own language; the row's description says both. What the options are, how a language is
-picked before one is known, what follows the choice, where it is kept, how every window follows it and how it becomes
-the language sessions are told are in `docs/product/language.md`.
+Two rows, each a drop-down of the offered languages, each named in its own language:
+
+- **Interface language**: the language of the interface on this device, the client's own — in the desktop
+  application every window's, whichever daemon it shows. What the options are, how a language is picked before one is
+  chosen, what follows it and where it is kept are in "Choosing the interface language" and "Where the interface
+  language is stored" in `docs/product/language.md`.
+- **Agent language**: the language agents talk to the user in, which the window's daemon keeps; in a remote window, the
+  remote daemon's. How it is set at first, what changes it and what sessions are told are in "The agent language" in
+  `docs/product/language.md`.
 
 ## Launch at login
 
-A switch: whether the system opens Octoboard when the user logs in. **Only the desktop application has this row**, on
-Windows and on macOS 13 and later; on macOS 11 and 12 and in a browser it is absent. The switch shows the system's own
+A switch: whether the system opens Octoboard when the user logs in. **Only the desktop application's main window has
+this row**, on Windows and on macOS 13 and later; on macOS 11 and 12 and in a browser it is absent. The switch shows the system's own
 state rather than a choice Octoboard keeps — off until the system has an entry for Octoboard — and the row appears once
 that state has been read. While it is off the row's description says that, once it is
 on, Octoboard opens when the user logs in; while it is on, that it does; either way it adds that, while Octoboard keeps
@@ -54,8 +63,9 @@ next starts. Which sessions are resumed, and how, is in "Resuming the interrupte
 A switch, labelled for what turning it on does: keep Octoboard running in the background when the window is closed. It
 is **off to begin with**, so closing the window quits.
 
-**Only the desktop application has this row**, on macOS and on Windows. A browser has no native window to close into
-the background, so the row is absent there.
+**Only the desktop application's main window has this row**, on macOS and on Windows. A browser has no native window to
+close into the background, so the row is absent there, and a remote window leaves it to the main window, the choice
+being the application's.
 
 The row's description says what the choice means and never mentions quitting, which the label already carries: while
 the switch is off it says what turning it on will do, and while it is on it says what is happening now — closing the
@@ -70,7 +80,8 @@ in `docs/product/application-lifecycle.md`.
 ## Show menu bar icon
 
 A switch, **on to begin with**: whether the menu bar icon is shown. On Windows its label names the notification-area
-icon instead. **Only the desktop application has this row.** While the switch is on the row's description says that the
+icon instead. **Only the desktop application's main window has this row**: the icon is the application's (see
+`docs/product/menu-bar-icon.md`). While the switch is on the row's description says that the
 icon's menu lists the sessions waiting for the user, paused, done or awaiting instructions, and opens the window; while
 it is off, that once it is on the icon's menu does so — or, while Octoboard keeps running in the background, that once
 it is on the icon's menu opens the window and that meanwhile opening Octoboard again or clicking one of its

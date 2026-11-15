@@ -8,7 +8,7 @@
 
 use tauri::{AppHandle, RunEvent, WebviewWindow, Window, Wry};
 
-use crate::background::show_main_window;
+use crate::background::show_last_focused_window;
 
 /// Nothing to keep. Not a unit struct, so `run` manages it the same way on every platform.
 #[derive(Default)]
@@ -19,9 +19,12 @@ pub struct LifecycleState {}
 /// window. Without a window yet (the daemon is still starting) there is nothing to show.
 pub fn register_first(builder: tauri::Builder<Wry>) -> tauri::Builder<Wry> {
     builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
-        // A login entry that fires while the app already runs is no one asking for the window.
-        if !crate::launch_at_login::has_login_argument(&args) {
-            show_main_window(app);
+        // A taskbar jump list's task asks for a remote window or the local one; a login entry
+        // that fires while the app already runs is no one asking for the window.
+        if let Some(action) = crate::remote::launch_action(&args) {
+            crate::remote::run_menu_action(app, action);
+        } else if !crate::launch_at_login::has_login_argument(&args) {
+            show_last_focused_window(app);
         }
     }))
 }

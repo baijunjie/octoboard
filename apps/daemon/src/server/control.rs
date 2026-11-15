@@ -180,9 +180,10 @@ async fn handle_control(
                 }
                 let state = state.clone();
                 let outbound = outbound.clone();
+                let by_owner_key = admission.by_owner_key();
                 tokio::spawn(async move {
                     let (reply, followup) = answered(request_id(&text), async move {
-                        handle_request(&state, &text).await
+                        handle_request(&state, &text, by_owner_key).await
                     })
                     .await;
                     let _ = outbound.send(reply).await;
@@ -364,14 +365,23 @@ async fn pending_questions(state: &AppState) -> Vec<Event> {
     questions
 }
 
-/// Parses and runs one request, and returns what goes back on the asking socket, with what the
+/// Parses and runs one request, refusing one that changes remote access over a connection the owner
+/// key opened (`by_owner_key`), and returns what goes back on the asking socket, with what the
 /// request still has to do once that has been sent.
-async fn handle_request(state: &Arc<AppState>, text: &str) -> (Event, Option<Followup>) {
+async fn handle_request(
+    state: &Arc<AppState>,
+    text: &str,
+    by_owner_key: bool,
+) -> (Event, Option<Followup>) {
     let request: Request = match serde_json::from_str(text) {
         Ok(request) => request,
         Err(err) => return (Event::unreadable_request(&err.to_string()), None),
     };
     let id = request.id.clone();
+    if by_owner_key && request.body.changes_remote_access() {
+        let refusal = crate::coordinator::remote_access::refused_to_browser();
+        return (Event::from_error(id, &refusal), None);
+    }
     match crate::coordinator::handle_deferred(state, request.id, request.body).await {
         Ok((Some(event), followup)) => (event, followup),
         Ok((None, followup)) => (Event::Ack { id }, followup),
@@ -443,6 +453,7 @@ fn snapshot(state: &Arc<AppState>) -> anyhow::Result<Event> {
         host: crate::platform::HostFacts::current().into(),
         keep_awake_held: state.keep_awake_held(),
         shell_terminals: state.shell_terminals.list(),
+        remote_access: state.remote_access.info(state),
     })
 }
 
@@ -780,5 +791,43 @@ mod tests {
         // Reading advances nothing: the same snapshot again carries the same versions.
         let (again, _, _) = stamped(&state);
         assert_eq!(again[0].versions, consoles[0].versions);
+    }
+
+    /// The snapshot says where remote access stands only for a daemon that follows the desktop
+    /// application: the field is there as null for any other, and a state, off until the user
+    /// turns it on, for that one.
+    #[test]
+    fn the_snapshot_carries_remote_access_only_where_the_daemon_offers_it() {
+        use crate::coordinator::remote_access::{WayIn, FORWARD_PORT};
+        use crate::protocol::RemoteAccessState;
+
+        let (state, dir) = crate::test_support::app_state("snapshot-remote-access");
+        let remote_access = |state: &Arc<AppState>| match snapshot(state).unwrap() {
+            Event::Snapshot { remote_access, .. } => remote_access,
+            other => panic!("not a snapshot: {other:?}"),
+        };
+        assert_eq!(remote_access(&state), None);
+        let json = serde_json::to_value(snapshot(&state).unwrap()).unwrap();
+        assert!(
+            json.as_object().unwrap().contains_key("remote_access"),
+            "the field is always there"
+        );
+        assert!(json["remote_access"].is_null());
+
+        state.set_follows_application();
+        state
+            .remote_access
+            .begin_with(&state, dir.to_path_buf(), true, WayIn::Port);
+        let offered = remote_access(&state).expect("offered to the application's daemon");
+        assert_eq!(
+            (offered.allowed, offered.state),
+            (false, RemoteAccessState::Off)
+        );
+        let json = serde_json::to_value(snapshot(&state).unwrap()).unwrap();
+        assert_eq!(json["remote_access"]["state"], "off");
+        assert_eq!(json["remote_access"]["allowed"], false);
+        assert_eq!(json["remote_access"]["browser_port"], FORWARD_PORT);
+        assert!(json["remote_access"]["address"].is_null());
+        drop(state.remote_access.close());
     }
 }

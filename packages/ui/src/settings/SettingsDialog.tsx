@@ -1,4 +1,4 @@
-import { Bell, BrushCleaning, CircleArrowUp, FileCog, FolderCheck, GitBranch, Info, Keyboard, KeyRound, Palette, SearchX, Settings2, ShieldCheck, ShieldUser, type LucideIcon } from "lucide-react";
+import { Bell, BrushCleaning, Cable, CircleArrowUp, FileCog, FolderCheck, GitBranch, Info, Keyboard, KeyRound, Palette, SearchX, Settings2, ShieldCheck, ShieldUser, type LucideIcon } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
@@ -17,7 +17,8 @@ import { useEscapeWhileTooltipOpen } from "../components/dialog/useEscapeWhileTo
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useT } from "../i18n/react";
 import { isImeKey } from "../input/imeKey";
-import { useHost } from "../platform/react";
+import { windowKind } from "../platform";
+import { useHost, usePlatform } from "../platform/react";
 import { useIsNarrow } from "../components/hooks/breakpoint";
 import { AboutSection } from "./AboutSection";
 import { AppearanceSection } from "./AppearanceSection";
@@ -30,6 +31,8 @@ import { GeneralSection } from "./GeneralSection";
 import { GitSection } from "./GitSection";
 import { NotificationsSection } from "./NotificationsSection";
 import { PermissionsSection } from "./PermissionsSection";
+import { RemoteAccessSection } from "./RemoteAccessSection";
+import { remoteAccessOffered } from "./remoteAccessOffered";
 import { ShortcutsSection } from "./ShortcutsSection";
 import { matches as keyMatches } from "../shortcuts/binding";
 import { FIND_BINDING } from "../shortcuts/commands";
@@ -41,7 +44,8 @@ import { useFocusRescue } from "./useFocusRescue";
 import { useSettingsQuery } from "./useSettingsQuery";
 import { TrustedFoldersSection } from "./TrustedFoldersSection";
 import { UpdatesSetting } from "./UpdatesSetting";
-import { useUpdateStore } from "../updates/UpdatesProvider";
+import { useDaemonStoreOrEmpty } from "../store";
+import { useRemoteUpdatePreferences, useUpdateStore } from "../updates/UpdatesProvider";
 
 interface Section {
   label: PlainMessageKey;
@@ -60,6 +64,7 @@ const SECTIONS: Record<SettingsSectionId, Section> = {
   "agent-permissions": { label: "settings.section.agentPermissions", Icon: ShieldUser, Content: AgentBehaviorSection },
   "trusted-folders": { label: "settings.section.trustedFolders", Icon: FolderCheck, Content: TrustedFoldersSection },
   permissions: { label: "settings.section.permissions", Icon: ShieldCheck, Content: PermissionsSection },
+  "remote-access": { label: "settings.section.remoteAccess", Icon: Cable, Content: RemoteAccessSection },
   notifications: { label: "settings.section.notifications", Icon: Bell, Content: NotificationsSection },
   shortcuts: { label: "settings.section.shortcuts", Icon: Keyboard, Content: ShortcutsSection, stickyHeadingHeight: STICKY_HEADING_HEIGHT.group },
   cleanup: { label: "settings.section.cleanup", Icon: BrushCleaning, Content: CleanupSection },
@@ -174,11 +179,18 @@ interface SettingsDialogProps {
 function SettingsDialogContent({ initialSection = SETTINGS_SECTION_IDS[0], navigation, onClose }: SettingsDialogProps): React.ReactElement {
   const t = useT();
   const host = useHost();
+  const platform = usePlatform();
   // The privacy grants are the system's own on macOS alone: managed in the app there (`permissionsPane`), and in a
-  // browser on a Mac the section says they are managed in the app.
-  // The Updates section is there where something updates: the desktop application, or a daemon that updates itself.
-  const updates = useUpdateStore() !== undefined;
-  const sectionIds = SETTINGS_SECTION_IDS.filter((id) => (id !== "permissions" || host.permissionsPane || host.os === "macos") && (id !== "updates" || updates));
+  // browser on a Mac the section says they are managed in the app. Not in the window of a daemon elsewhere: the grants
+  // are this machine's.
+  // The Updates section is there where something updates: the desktop application, or a daemon that updates itself; in
+  // the window of a daemon elsewhere that updates itself, with that daemon's two settings of its updates alone.
+  const remoteUpdatePreferences = useRemoteUpdatePreferences();
+  const updates = useUpdateStore() !== undefined || remoteUpdatePreferences;
+  const permissions = (host.permissionsPane || host.os === "macos") && windowKind() !== "remote";
+  // Remote access is the application's own: in the local daemon's window, for a daemon that offers it.
+  const remoteAccess = remoteAccessOffered(platform, useDaemonStoreOrEmpty((s) => s.remoteAccess));
+  const sectionIds = SETTINGS_SECTION_IDS.filter((id) => (id !== "permissions" || permissions) && (id !== "remote-access" || remoteAccess) && (id !== "updates" || updates));
   const isNarrow = useIsNarrow();
   const fullScreen = isNarrow;
   const search = useSettingsQuery({ sectionIds, sectionLabel: (id) => SECTIONS[id].label, initialId: navigation?.section ?? initialSection });

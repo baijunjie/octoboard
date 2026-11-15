@@ -1,30 +1,30 @@
-//! Holding back a menu the UI sends while a menu is open. What tells it a menu began and ended
-//! tracking is native (`macos/menu_tracking.rs`).
+//! Holding back a rebuild of the menu while a menu is open. What tells it a menu began and ended
+//! tracking is native (`macos/menu_tracking.rs`), or the flyout's own (`flyout.rs`).
 
 use tauri::{AppHandle, Manager};
 
-use super::{model::TrayMenu, TrayState};
+use super::TrayState;
 
-/// Whether a menu is open, and the latest menu the UI sent while one was. Any menu of the app counts
-/// as open, not only this one: telling them apart would take the tray's own `NSMenu` out of the
-/// notifications, and holding the tray's menu back while the app menu is open costs nothing anyone
-/// can see.
+/// Whether a menu is open, and whether the menu is to be built again once it closes. Any menu of
+/// the app counts as open, not only the icon's: holding the icon's menu back while another menu is
+/// open costs nothing anyone can see. What the menu is built from is kept up to date meanwhile, so
+/// the rebuild takes the latest of everything.
 #[derive(Default)]
 pub(super) struct MenuTracking {
     open: bool,
-    held: Option<TrayMenu>,
+    due: bool,
 }
 
 impl MenuTracking {
-    /// The menu to apply now, or `None` when it is held until the open menu closes. Only the
-    /// latest is worth showing, so a menu replaces one already held, and one applied now drops it.
-    pub(super) fn offer(&mut self, menu: TrayMenu) -> Option<TrayMenu> {
+    /// Whether the menu may be built again now; otherwise the rebuild waits for the open menu to
+    /// close. Replacing the menu closes it if it is open.
+    pub(super) fn rebuild_now(&mut self) -> bool {
         if self.open {
-            self.held = Some(menu);
-            None
+            self.due = true;
+            false
         } else {
-            self.held = None;
-            Some(menu)
+            self.due = false;
+            true
         }
     }
 
@@ -32,36 +32,19 @@ impl MenuTracking {
         self.open = true;
     }
 
-    /// Whether a menu was held back while the menu was open, and is now waiting for `due`.
+    /// Whether a rebuild was held back while the menu was open, and is now waiting for `due`.
     pub(super) fn closed(&mut self) -> bool {
         self.open = false;
-        self.held.is_some()
+        self.due
     }
 
-    /// The menu last set, `menu`, to build again now in a theme the system changed to, or `None`
-    /// while a menu is open: a menu held then is newer and is built when the menu closes, and
-    /// otherwise `menu` waits there in its place.
-    #[cfg_attr(
-        target_os = "macos",
-        allow(dead_code, reason = "only Windows builds the menu again for a theme")
-    )]
-    pub(super) fn rebuild(&mut self, menu: TrayMenu) -> Option<TrayMenu> {
+    /// Whether the held rebuild is to happen now: not when a menu has opened again since, which it
+    /// then waits for to close.
+    pub(super) fn due(&mut self) -> bool {
         if self.open {
-            self.held.get_or_insert(menu);
-            None
-        } else {
-            Some(menu)
+            return false;
         }
-    }
-
-    /// The held menu, unless a menu has opened again since, in which case it waits for that one
-    /// to close.
-    pub(super) fn due(&mut self) -> Option<TrayMenu> {
-        if self.open {
-            None
-        } else {
-            self.held.take()
-        }
+        std::mem::take(&mut self.due)
     }
 }
 
@@ -77,65 +60,41 @@ pub(super) fn tracking(app: &AppHandle) -> std::sync::MutexGuard<'_, MenuTrackin
 mod tests {
     use super::*;
 
-    fn menu(open: &str) -> TrayMenu {
-        TrayMenu {
-            open: open.to_string(),
-            ..TrayMenu::default()
-        }
-    }
-
     #[test]
-    fn a_menu_sent_while_none_is_open_applies_at_once() {
+    fn a_rebuild_asked_for_while_no_menu_is_open_happens_at_once() {
         let mut tracking = MenuTracking::default();
-        assert_eq!(tracking.offer(menu("a")).map(|m| m.open), Some("a".into()));
+        assert!(tracking.rebuild_now());
         assert!(!tracking.closed());
-        assert!(tracking.due().is_none());
+        assert!(!tracking.due());
     }
 
     #[test]
-    fn a_menu_built_again_while_one_is_open_never_replaces_a_newer_one() {
+    fn rebuilds_asked_for_while_a_menu_is_open_happen_once_when_it_closes() {
         let mut tracking = MenuTracking::default();
-        assert_eq!(
-            tracking.rebuild(menu("a")).map(|m| m.open),
-            Some("a".into())
-        );
         tracking.opened();
-        assert!(tracking.offer(menu("newer")).is_none());
-        assert!(tracking.rebuild(menu("a")).is_none());
+        assert!(!tracking.rebuild_now());
+        assert!(!tracking.rebuild_now());
         assert!(tracking.closed());
-        assert_eq!(tracking.due().map(|m| m.open), Some("newer".into()));
-        tracking.opened();
-        assert!(tracking.rebuild(menu("a")).is_none());
-        assert!(tracking.closed());
-        assert_eq!(tracking.due().map(|m| m.open), Some("a".into()));
+        assert!(tracking.due());
+        assert!(!tracking.due());
     }
 
     #[test]
-    fn menus_sent_while_one_is_open_wait_and_only_the_latest_applies() {
+    fn a_held_rebuild_yields_to_one_made_meanwhile_and_to_a_menu_opened_again() {
         let mut tracking = MenuTracking::default();
         tracking.opened();
-        assert!(tracking.offer(menu("a")).is_none());
-        assert!(tracking.offer(menu("b")).is_none());
+        tracking.rebuild_now();
         assert!(tracking.closed());
-        assert_eq!(tracking.due().map(|m| m.open), Some("b".into()));
-        assert!(tracking.due().is_none());
-    }
-
-    #[test]
-    fn a_held_menu_yields_to_a_newer_one_and_to_a_menu_opened_again() {
-        let mut tracking = MenuTracking::default();
-        tracking.opened();
-        tracking.offer(menu("a"));
-        assert!(tracking.closed());
-        assert!(tracking.offer(menu("b")).is_some());
-        assert!(tracking.due().is_none());
+        // A rebuild made before the held one ran takes its place.
+        assert!(tracking.rebuild_now());
+        assert!(!tracking.due());
 
         tracking.opened();
-        tracking.offer(menu("c"));
+        tracking.rebuild_now();
         tracking.closed();
         tracking.opened();
-        assert!(tracking.due().is_none());
-        tracking.closed();
-        assert_eq!(tracking.due().map(|m| m.open), Some("c".into()));
+        assert!(!tracking.due());
+        assert!(tracking.closed());
+        assert!(tracking.due());
     }
 }

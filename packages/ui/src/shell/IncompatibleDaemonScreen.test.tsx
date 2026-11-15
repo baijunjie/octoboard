@@ -2,7 +2,6 @@
 import { act } from "react";
 import { beforeEach, expect, it, vi } from "vitest";
 
-import { appConfig } from "../appConfig";
 import { setLanguage } from "../i18n/language";
 import type { PlatformAdapter } from "../platform";
 import { reloadPage } from "../platform/reloadPage";
@@ -28,10 +27,10 @@ it("names both versions and quits on the desktop", async () => {
   const daemon = testDaemon({ state: { connectionState: "incompatible", daemon: { version: "1.4.0", generation: 2 } } });
   const container = mountHost(<IncompatibleDaemonScreen onQuit={onQuit} />, { daemon, platform: desktop });
   await act(async () => {});
-  expect(container.querySelector("h1")?.textContent).toBe(`${appConfig.name} and its daemon are different versions`);
+  expect(container.querySelector("h1")?.textContent).toBe("The app and its daemon are different versions");
   expect(container.textContent?.replace(/[\u2068\u2069]/g, "")).toContain("Window version: 1.3.0. Daemon version: 1.4.0.");
   expect(button(container, "Reload")).toBeUndefined();
-  act(() => button(container, `Quit ${appConfig.name}`)!.click());
+  act(() => button(container, "Quit")!.click());
   expect(onQuit).toHaveBeenCalledTimes(1);
 });
 
@@ -40,7 +39,7 @@ it("offers Reload in a browser, and says a version it does not know is unknown",
   const container = mountHost(<IncompatibleDaemonScreen onQuit={vi.fn()} />, { daemon });
   await act(async () => {});
   expect(container.textContent).toContain("Window version: unknown. Daemon version: unknown.");
-  expect(button(container, `Quit ${appConfig.name}`)).toBeUndefined();
+  expect(button(container, "Quit")).toBeUndefined();
   expect(button(container, "Reload")).toBeDefined();
 });
 

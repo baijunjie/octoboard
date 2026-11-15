@@ -28,9 +28,6 @@ sessions building and testing in their own worktrees, often short of memory, whi
 
 - Do not run the heavy steps of one verification side by side: under that load it gains almost nothing and adds memory
   pressure.
-- Run tests and Rust checks through the package scripts that queue for the heavy-step slot (`pnpm test:rust`, the UI's
-  `pnpm test` / `test:related`), never `cargo test` or `vitest` directly: on 2026-11-15 four sessions each compiling the
-  daemon's test binary with a direct `cargo test` ran the 16 GiB machine out of memory while the slot sat unused.
 - Do not move tests to CI: tests stay local by the user's decision. Merges are local fast-forwards with no PR flow, so
   CI test runs would need branch pushes and macOS runner minutes.
 - Do not point worktrees at one shared `CARGO_TARGET_DIR`: cargo locks its build directory for a whole build, so

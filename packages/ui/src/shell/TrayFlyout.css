@@ -1,0 +1,54 @@
+/* The notification-area flyout (`TrayFlyout`): what its pictures and bars need beyond the components they are made of.
+   The quota bars take their colours from the model the shell hands over (`--tray-flyout-fill`, the agent's bar colour as
+   the macOS menu draws it), the track being the application's own. Under Windows high contrast a drawn colour is forced
+   to the page's, so the bars, pictures and chips take system colours instead and every track gets an outline. */
+.tray-flyout-picture {
+  display: block;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  background-color: currentColor;
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+}
+
+.tray-flyout-bar {
+  --meter-fill: var(--tray-flyout-fill, currentColor);
+}
+
+.tray-flyout-mini-fill {
+  background-color: var(--tray-flyout-fill, currentColor);
+}
+
+@media (forced-colors: active) {
+  .tray-flyout-picture {
+    forced-color-adjust: none;
+    background-color: currentColor;
+  }
+
+  .tray-flyout-bar {
+    forced-color-adjust: none;
+    --meter-fill: Highlight;
+  }
+
+  .tray-flyout-mini-fill {
+    forced-color-adjust: none;
+    background-color: Highlight;
+  }
+
+  .tray-flyout-track {
+    forced-color-adjust: none;
+    background-color: Canvas;
+    outline: 1px solid CanvasText;
+  }
+
+  /* A soft badge is told from its row by its fill alone, which high contrast takes away. */
+  .tray-flyout-status {
+    outline: 1px solid CanvasText;
+    outline-offset: -1px;
+  }
+}

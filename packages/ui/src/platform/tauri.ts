@@ -1,6 +1,7 @@
 import { ConfigurationFileError } from "./configurationFileError";
 import type {
   AppMenuCapability,
+  JumpListCapability,
   BackgroundRunCapability,
   BadgeCapability,
   ClipboardCapability,
@@ -17,35 +18,54 @@ import type {
   NotificationCapability,
   OpenedConfigurationFile,
   PlatformAdapter,
+  RemoteDaemonEntry,
+  RemoteDaemonsCapability,
+  RemoteDaemonStatus,
+  RemoteLoginCapability,
   StatusItemCapability,
+  TrayFlyoutCapability,
+  TrayFlyoutModel,
   UpdaterCapability,
   UpdateProgress,
   WindowChromeCapability,
 } from "./index";
 import { tauriHost, type HostFacts } from "./host";
 import { UpdaterError } from "./updaterError";
+import { windowKind } from "./windowKind";
 
 // Every Tauri module is loaded with a dynamic `import()` and only from here, so a plain browser
 // never fetches them.
 
 export function tauriPlatform(): PlatformAdapter {
   const host = tauriHost();
+  // The window of a daemon elsewhere neither quits the application nor stops its daemon, and offers nothing of this
+  // machine's own to act on the daemon's files or grants; the shell gives it none of the commands (its host facts drop
+  // the application's own features already).
+  const kind = windowKind();
+  const local = kind === "local";
   return {
     kind: "tauri",
     host,
-    exit: tauriExit(),
+    exit: local ? tauriExit() : undefined,
     notifications: tauriNotifications(host),
     badge: host.badge ? tauriBadge() : undefined,
     nativeWindow: tauriNativeWindow(),
     windowChrome: host.chrome === "overlay-left" ? tauriWindowChrome(host.trafficLightInset ?? 0) : undefined,
     translucentWindow: host.translucent,
     appMenu: host.appMenu ? tauriAppMenu() : undefined,
-    statusItem: host.statusItem === "none" ? undefined : tauriStatusItem(),
+    jumpList: host.os === "windows" ? tauriJumpList() : undefined,
+    statusItem: host.statusItem === "none" ? undefined : tauriStatusItem(local),
+    trayFlyout: kind === "flyout" ? tauriTrayFlyout() : undefined,
     clipboard: tauriClipboard(),
     configurationFile: tauriConfigurationFile(),
-    directoryPicker: tauriDirectoryPicker(),
+    directoryPicker: local ? tauriDirectoryPicker() : undefined,
     links: tauriLinks(),
-    macosPermissions: tauriMacosPermissions(),
+    macosPermissions: local ? tauriMacosPermissions() : undefined,
+    // This computer's own SSH server, which only the local daemon's window is about.
+    remoteLogin: local ? tauriRemoteLogin() : undefined,
+    // Every window of the application reaches daemons elsewhere: the connect page is where one is chosen, and a remote
+    // daemon's window lists and opens its siblings from its menu.
+    remoteDaemons: tauriRemoteDaemons(),
     backgroundRun: host.runInBackground ? tauriBackgroundRun() : undefined,
     keepAwake: host.keepAwake ? tauriKeepAwake() : undefined,
     launchAtLogin: host.launchAtLogin ? tauriLaunchAtLogin() : undefined,
@@ -77,10 +97,15 @@ function unlistenTracker(): { track: (unlisten: () => void) => void; undo: () =>
  * listener exists (see `unlistenTracker`). `handler` gets the event's payload. */
 function listenTo<T = undefined>(event: string, handler: (payload: T) => void): () => void {
   const { track, undo } = unlistenTracker();
-  void import("@tauri-apps/api/event").then(async ({ listen }) => {
-    track(await listen<T>(event, (e) => handler(e.payload)));
-  });
+  void listenHere<T>(event, (payload) => handler(payload)).then(track);
   return undo;
+}
+
+/** Listens to the shell's `event` as sent to this window, or to every window. The shell sends what is one window's to
+ * that window alone (`emit_to`), and a listener that names no window would hear what is sent to any other too. */
+async function listenHere<T>(event: string, handler: (payload: T) => void): Promise<() => void> {
+  const { getCurrentWebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+  return getCurrentWebviewWindow().listen<T>(event, (e) => handler(e.payload));
 }
 
 /** The `{ kind, detail? }` a shell command rejects with, when it did. */
@@ -134,12 +159,27 @@ function tauriAppMenu(): AppMenuCapability {
   };
 }
 
-function tauriStatusItem(): StatusItemCapability {
+function tauriJumpList(): JumpListCapability {
   return {
-    async setVisible(visible) {
+    async setLabels(labels) {
       const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("set_app_settings", { settings: { show_menu_bar_icon: visible } });
+      // The menu's command: the Windows shell has no menu bar and keeps them for the jump list.
+      await invoke("set_menu_labels", { labels, settingsAccelerator: null });
     },
+  };
+}
+
+/** The menu bar icon of this window's daemon: the shell gives each daemon's window an icon of its own, whose menu this
+ * window fills and whose choices reach this window alone. Whether the icons show is the application's setting, which
+ * only the local daemon's window (`local`) offers. */
+function tauriStatusItem(local: boolean): StatusItemCapability {
+  return {
+    ...(local && {
+      async setVisible(visible: boolean) {
+        const { invoke } = await import("@tauri-apps/api/core");
+        await invoke("set_app_settings", { settings: { show_menu_bar_icon: visible } });
+      },
+    }),
     async setMenu(menu) {
       const { invoke } = await import("@tauri-apps/api/core");
       await invoke("set_tray_menu", { menu });
@@ -152,6 +192,35 @@ function tauriStatusItem(): StatusItemCapability {
     },
     onOpened(handler) {
       return listenTo("tray-menu-opened", () => handler());
+    },
+  };
+}
+
+/** The notification-area flyout's page: the shell holds its model and acts on what is chosen, and sizes the window to
+ * what the page reports. */
+function tauriTrayFlyout(): TrayFlyoutCapability {
+  return {
+    async model() {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke<TrayFlyoutModel | null>("tray_flyout_model");
+    },
+    onModel(handler) {
+      return listenTo<TrayFlyoutModel>("tray-flyout-model", handler);
+    },
+    onOpened(handler) {
+      return listenTo<{ chosen: number }>("tray-flyout-opened", handler);
+    },
+    async setSize(size) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("tray_flyout_size", size);
+    },
+    async choose(id) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("tray_flyout_choose", { id });
+    },
+    async close() {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("tray_flyout_close");
     },
   };
 }
@@ -173,8 +242,7 @@ function tauriExit(): ExitCapability {
         // No close listener: the shell answers the window's close button itself, by hiding the
         // window or taking it as a quit gesture (see `backgroundRun`), which a listener here would
         // stop it from doing.
-        const { listen } = await import("@tauri-apps/api/event");
-        track(await listen("exit-requested", () => onQuitRequested()));
+        track(await listenHere("exit-requested", () => onQuitRequested()));
         // The shell gives up on the daemon once, for good, so this page reports that once: from the
         // event, or from asking the shell below. The event reaches only a page already listening,
         // and a page that loads while the daemon dies again — the window pointed at a restarted
@@ -189,7 +257,7 @@ function tauriExit(): ExitCapability {
         track(() => {
           reported = true;
         });
-        track(await listen<string>("daemon-exited", (event) => daemonExited(event.payload)));
+        track(await listenHere<string>("daemon-exited", daemonExited));
         const missed = await invoke<string | null>("daemon_exit_detail").catch(() => null);
         if (missed !== null) daemonExited(missed);
       })();
@@ -232,9 +300,10 @@ function tauriNotifications(host: HostFacts): NotificationCapability {
       }
       return permissionRequest;
     },
-    async notify(notification) {
-      const { sendNotification } = await import("@tauri-apps/plugin-notification");
-      sendNotification(notification);
+    async notify({ title, body }) {
+      // Through the shell, which marks the notification with this window, so a click on it brings this window forward.
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("show_notification", { title, body });
     },
     ...(host.notificationSettings === "system-pane" && {
       async openSystemSettings() {
@@ -370,6 +439,69 @@ function tauriMacosPermissions(): MacosPermissionsCapability {
   };
 }
 
+/** Present whatever the OS: the shell reads Remote Login on macOS and the OpenSSH Server service on Windows, and its
+ * `status` answers `undefined` where it cannot tell. */
+function tauriRemoteLogin(): RemoteLoginCapability {
+  return {
+    async status() {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return (await invoke<boolean | null>("remote_login_status")) ?? undefined;
+    },
+    async openSystemSettings() {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("open_remote_login_settings");
+    },
+  };
+}
+
+function tauriRemoteDaemons(): RemoteDaemonsCapability {
+  return {
+    async list() {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke<RemoteDaemonEntry[]>("remote_daemons_list");
+    },
+    async status() {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke<RemoteDaemonStatus[]>("remote_daemons_status");
+    },
+    onChanged: (listener) => listenTo("remote-daemons-changed", listener),
+    async save(entry) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke<RemoteDaemonEntry>("remote_daemon_save", { entry });
+    },
+    async remove(id) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("remote_daemon_remove", { id });
+    },
+    async connect(request) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke("remote_daemon_connect", { request });
+    },
+    async disconnect(id) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("remote_daemon_disconnect", { id });
+    },
+    async newWindow() {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("remote_window_new");
+    },
+    async openWindow(id) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("remote_window_open", { id });
+    },
+    async showMainWindow() {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("main_window_show");
+    },
+    // The main window answers the event the menu bar icon's Check for updates sends it (`onUpdatesRequested`).
+    async showUpdates() {
+      const [{ invoke }, { emitTo }] = await Promise.all([import("@tauri-apps/api/core"), import("@tauri-apps/api/event")]);
+      await invoke("main_window_show");
+      await emitTo("main", "tray-updates-requested");
+    },
+  };
+}
+
 function tauriBackgroundRun(): BackgroundRunCapability {
   return {
     async set(enabled) {
@@ -444,11 +576,12 @@ function tauriUpdater(): UpdaterCapability {
   };
 }
 
+/** Through the shell, which shows the sum of every daemon window's count on the Dock tile. */
 function tauriBadge(): BadgeCapability {
   return {
     async set(count) {
-      const { getCurrentWindow } = await import("@tauri-apps/api/window");
-      await getCurrentWindow().setBadgeCount(count > 0 ? count : undefined);
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("set_badge_count", { count: Math.max(0, Math.round(count)) });
     },
   };
 }

@@ -5,3 +5,12 @@
   min-width: 10px;
   min-height: 10px;
 }
+
+/* Under Windows high contrast the dot's fill would be forced to the page colour and vanish: it keeps a system colour. */
+@media (forced-colors: active) {
+  .app-badge--xs {
+    forced-color-adjust: none;
+    background-color: Highlight;
+    border: 1px solid CanvasText;
+  }
+}

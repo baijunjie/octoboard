@@ -301,6 +301,9 @@ const CORE_CODES = {
   quota_timed_out: { origin: "daemon" },
   quota_unreadable_reply: { origin: "daemon" },
   relocation_failed: { origin: "daemon", unexpected: "classified by its `cause`; one the window has no remedy for is unexpected", detailBlock: true, codeParams: ["path"], variants: { thread_record: { codeParams: ["path"] }, kept_staging: { codeParams: ["path", "kept_in"] } }, variantOf: (params) => params.stage === "thread_record" || params.stage === "kept_staging" ? params.stage : undefined },
+  remote_access_refused_to_browser: { origin: "daemon", unexpected: "the Remote access section is offered only in the application's own window, never in a browser" },
+  // A rotation racing remote access being turned off in another window, or a daemon that stopped offering it.
+  remote_access_unavailable: { origin: "daemon", recovery: "none" },
   repository_name_missing: { origin: "daemon", recovery: "path", codeParams: ["url"] },
   request_superseded: { origin: "daemon", unexpected: "a browse request given up for a newer one, which the window shows nothing for" },
   request_timed_out: { origin: "client", recovery: "connection" },

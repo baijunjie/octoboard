@@ -42,6 +42,7 @@ export const activePreference = createPersistedPreference<Record<string, string>
   PREFERENCE_KEYS.activeShellTerminals,
   parseActive,
   (value) => JSON.stringify(value),
+  { scope: "daemon" },
 );
 
 /** Makes `terminal` the tab `project`'s Terminal panel shows. */

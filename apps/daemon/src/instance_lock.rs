@@ -39,7 +39,7 @@ pub fn acquire() -> Result<InstanceLock> {
         .with_context(|| format!("creating {}", dir.display()))?;
     // The files written below hold keys and session data, and the browser's socket is only as
     // private as this directory; where it cannot be made private the daemon runs on, and serves
-    // no browser (see `crate::browser_socket`).
+    // no browser (see `crate::browser::socket`).
     if let Err(err) = crate::platform::fs::keep_private_below(&dir) {
         tracing::warn!(path = %dir.display(), %err, "making the data directory private failed");
     }

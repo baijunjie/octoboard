@@ -223,7 +223,7 @@ export const quotaGatingScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "New session, every agent's accounts are turned off",
-    description: "Every added agent has all its accounts turned off. Opening a new session shows a failure modal saying no agent is available to open a session, with OK as its only button, instead of offering a disabled account.",
+    description: "Every added agent has all its accounts turned off. Opening a new session shows a failure modal saying no agent is available to open a session, with OK as its only footer button and a close button in the header that does what OK does (Escape and a click outside do nothing), instead of offering a disabled account.",
     state: {
       ...launchState([website], []),
       settings: { ...settings, disabled_default_accounts: [...FIXTURE_AGENTS], accounts: accounts.map((account) => ({ ...account, disabled: true })) },

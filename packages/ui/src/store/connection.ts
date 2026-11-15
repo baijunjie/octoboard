@@ -18,7 +18,8 @@ import { broadcastNotification, type NotifiedBroadcast, type WindowNotification,
  * `main.tsx`) and alive until the window closes. The store is a vanilla one, so code outside React
  * can read and subscribe to it; components use `useDaemonStore`. */
 export interface Daemon {
-  /** True only when the connection establishes that the daemon runs on this machine. Unknown counts as remote. */
+  /** True only when the connection establishes that the daemon runs on this machine. Unknown counts as remote, and so
+   * does a window the desktop shell opened on a daemon elsewhere, which reaches it at a loopback address too. */
   readonly isLocal?: boolean;
   store: StoreApi<State>;
   /** Sends a request and resolves with its correlated reply, of the type the request is answered with (`ReplyOf`), or
@@ -51,7 +52,8 @@ export interface Daemon {
   terminalReconnectDelay?: (attempt: number) => number;
 }
 
-export function createDaemon(address: DaemonAddress): Daemon {
+/** `remote`: the window is one the desktop shell opened on a daemon elsewhere (the platform layer's `windowKind`). */
+export function createDaemon(address: DaemonAddress, { remote = false }: { remote?: boolean } = {}): Daemon {
   const store = createStateStore();
   const dispatch = (action: Action) => store.setState((state) => reducer(state, action));
   // The events that arrived together are one update: a burst renders once, not once per event.
@@ -113,7 +115,7 @@ export function createDaemon(address: DaemonAddress): Daemon {
   };
 
   return {
-    isLocal: isLocalDaemon(address),
+    isLocal: !remote && isLocalDaemon(address),
     store,
     request,
     showNotice: (message, content) => notify({ kind: "notice", message, content }),

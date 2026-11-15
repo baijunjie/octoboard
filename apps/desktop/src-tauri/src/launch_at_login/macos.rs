@@ -15,7 +15,7 @@ use objc2_foundation::NSError;
 
 use super::Status;
 use crate::apple_event::{current_enum_code, Slot};
-use crate::system_settings::{open_system_settings, LOGIN_ITEMS_PANE_URL};
+use crate::system_settings::LOGIN_ITEMS_PANE_URL;
 
 #[link(name = "ServiceManagement", kind = "framework")]
 extern "C" {}
@@ -87,7 +87,7 @@ pub fn set(enabled: bool) -> Result<Status, String> {
 
 /// Opens System Settings at its list of login items.
 pub fn open_settings() -> Result<(), String> {
-    open_system_settings(LOGIN_ITEMS_PANE_URL)
+    crate::open_address::open(LOGIN_ITEMS_PANE_URL)
 }
 
 /// Whether the Apple event being handled now is the launch the login item made. Meaningful only

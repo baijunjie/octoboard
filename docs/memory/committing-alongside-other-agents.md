@@ -14,3 +14,8 @@ moment.
 - `git add` only your own paths, then run `git diff --cached --name-only` immediately before `git commit`. If it lists
   a path that is not yours, do not commit it into yours: wait for that agent's commit to land and check again, or
   report it to whoever dispatched you.
+- Never rewrite a commit there (`git commit --amend`, `reset`, `rebase`): by the time you run it, `HEAD` may be another
+  agent's commit, and an amend has landed on one that way. Make a new commit instead.
+
+A dispatcher running several agents that commit at once gives each its own branch and worktree, and merges them one
+by one; sharing a worktree is for an agent and its dispatcher, or agents that commit one after another.

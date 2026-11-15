@@ -607,7 +607,7 @@ mod tests {
             ..ask
         };
         let text = console_session_instructions(Some("Be brief."), &options);
-        assert!(text.contains("interface to Portuguese (pt)."));
+        assert!(text.contains("talk to them in Portuguese (pt)."));
         let language = text.find("## The user's language").expect("a section");
         assert!(text.find("## Asking the user").unwrap() < language);
         assert!(language < text.find("## The user's instructions").unwrap());

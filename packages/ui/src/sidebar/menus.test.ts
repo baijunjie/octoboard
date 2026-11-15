@@ -454,9 +454,14 @@ describe("the Archive and Delete entries", () => {
   });
 });
 
+/** The handlers of the local daemon's window, which opens a project in this machine's file manager and terminal. */
+function local(more: Partial<SidebarHandlers> = {}): SidebarHandlers {
+  return { onOpenProjectDirectory: vi.fn(), onOpenSystemTerminal: vi.fn(), ...more } as unknown as SidebarHandlers;
+}
+
 describe("a project's menu", () => {
   const labels = (placement: MenuPlacement, gitRepository = false) =>
-    projectMenu(t, {} as SidebarHandlers, { id: "p" } as Project, [], { placement, gitRepository }).flatMap((entry) =>
+    projectMenu(t, local(), { id: "p" } as Project, [], { placement, gitRepository }).flatMap((entry) =>
       typeof entry === "object" ? [entry.label] : [],
     );
 
@@ -467,7 +472,7 @@ describe("a project's menu", () => {
   });
 
   it("puts Pin first, then groups viewing, copying and opening, managing the project, and removing it", () => {
-    const handlers = {} as unknown as SidebarHandlers;
+    const handlers = local();
     const menu = projectMenu(t, handlers, { id: "p", pinned: false } as Project, [], { gitRepository: true });
     expect(menu.map((entry) => (entry === "separator" ? entry : entry.label))).toEqual([
       "Pin", "Focus mode", "View archive", "separator",
@@ -479,25 +484,33 @@ describe("a project's menu", () => {
   });
 
   it("groups outside tools for every project", () => {
-    const menu = projectMenu(t, {} as SidebarHandlers, { id: "p" } as Project, []);
+    const menu = projectMenu(t, local(), { id: "p" } as Project, []);
     expect(openIn(menu).items.map((entry) => typeof entry === "object" ? entry.label : entry)).toEqual(["File manager", "System terminal"]);
     expect(labels("list")).not.toContain("Terminal");
   });
 
+  it("offers neither the file manager nor the system terminal for a daemon elsewhere, and no Open in with nothing in it", () => {
+    const project = { id: "p", remote_url: "git@github.com:acme/app.git" } as Project;
+    const remote = { onOpenRepository: vi.fn() } as unknown as SidebarHandlers;
+    expect(openIn(projectMenu(t, remote, project, [])).items.map((entry) => typeof entry === "object" ? entry.label : entry)).toEqual(["GitHub"]);
+    const labels = projectMenu(t, {} as SidebarHandlers, { id: "p" } as Project, []).flatMap((entry) => typeof entry === "object" ? [entry.label] : []);
+    expect(labels).not.toContain("Open in");
+  });
+
   it("opens the branded repository through the Open in submenu", () => {
-    const handlers = { onOpenRepository: vi.fn() } as unknown as SidebarHandlers;
+    const handlers = local({ onOpenRepository: vi.fn() });
     const project = { id: "p", remote_url: "git@github.com:acme/app.git" } as Project;
     const entry = openIn(projectMenu(t, handlers, project, [])).items[2];
     expect(entry).toMatchObject({ label: "GitHub", icon: { props: { brand: "github" } } });
     (entry as { onClick: () => void }).onClick();
     expect(handlers.onOpenRepository).toHaveBeenCalledExactlyOnceWith("https://github.com/acme/app");
-    expect(openIn(projectMenu(t, {} as SidebarHandlers, project, [])).items).toHaveLength(2);
+    expect(openIn(projectMenu(t, local(), project, [])).items).toHaveLength(2);
     expect(openIn(projectMenu(t, handlers, { ...project, remote_url: "/tmp/repo" }, [])).items).toHaveLength(2);
   });
 
   it("offers each panel in Open panel, below Open in, except those on screen for this project", () => {
     const panelItems = (visibleProjectPanels: SidebarHandlers["visibleProjectPanels"]) => {
-      const menu = projectMenu(t, { visibleProjectPanels } as SidebarHandlers, { id: "p" } as Project, []);
+      const menu = projectMenu(t, local({ visibleProjectPanels }), { id: "p" } as Project, []);
       const labels = menu.flatMap((entry) => typeof entry === "object" ? [entry.label] : []);
       const panel = menu.find((entry) => typeof entry === "object" && entry.label === "Open panel") as ActionMenuSubmenu | undefined;
       return { labels, items: panel?.items.flatMap((item) => typeof item === "object" ? [item.label] : []) };
@@ -537,7 +550,7 @@ describe("a project's menu", () => {
 
   it("puts pull and push under Git only for a git repository", () => {
     const git = (repository: boolean) => {
-      const entry = projectMenu(t, {} as SidebarHandlers, { id: "p" } as Project, [], { gitRepository: repository }).find(
+      const entry = projectMenu(t, local(), { id: "p" } as Project, [], { gitRepository: repository }).find(
         (candidate) => typeof candidate === "object" && candidate.label === "Git",
       );
       return entry && typeof entry === "object" && "items" in entry ? entry.items.flatMap((item) => (typeof item === "object" ? [item.label] : [])) : undefined;
@@ -618,7 +631,7 @@ describe("archive previews in menus", () => {
   });
 
   it("leaves View archive out of a project's own focus mode, which lists its archive below", () => {
-    const menu = projectMenu(t, {} as SidebarHandlers, { id: "p" } as Project, roots, { placement: "focused" });
+    const menu = projectMenu(t, local(), { id: "p" } as Project, roots, { placement: "focused" });
     expect(menu.some((entry) => typeof entry === "object" && entry.label === "View archive")).toBe(false);
   });
 
@@ -735,7 +748,7 @@ describe("menu-only letters on direct actions", () => {
   it.each(["list", "focused", "nested"] as const)("keeps project letters unique in the %s menu, pinned or not", (placement) => {
     for (const pinned of [false, true]) {
       const project = { id: "p", pinned } as Project;
-      const menu = projectMenu(t, {} as SidebarHandlers, project, [], { placement, gitRepository: true });
+      const menu = projectMenu(t, local(), project, [], { placement, gitRepository: true });
       expect(letters(menu)).toEqual([
         ...(placement !== "focused" ? [[pinned ? "Unpin" : "Pin", "P"]] : []),
         ...(placement === "list" ? [["Focus mode", "F"]] : []),

@@ -3,12 +3,14 @@ import { KEEP_AWAKE_WHEN, KEEP_AWAKE_WHEN_DESCRIPTION } from "../configuration/k
 import { appConfig } from "../appConfig";
 import { DEVELOPMENT_CHOICES, GIT_WORKFLOW_ITEMS } from "../git/gitWorkflow";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
+import { daemonOs } from "../i18n/platformTerms";
 import type { Language } from "../i18n/languages";
-import type { PlatformAdapter } from "../platform";
-import type { Settings } from "../protocol";
+import { windowKind, type PlatformAdapter } from "../platform";
+import type { RemoteAccess, Settings } from "../protocol";
 import { SESSION_ORDER_WORDS } from "../sessions/orderWording";
 import { ALL_COMMANDS, clientCapabilities, isAvailable, SHORTCUT_GROUPS } from "../shortcuts/commands";
 import type { SettingsSectionId } from "./sections";
+import { sshServerWords } from "./sshServerWords";
 
 /** What decides which settings a section shows: the platform's capabilities, whether the daemon's host can be held
  * awake, the daemon's settings, and what the reads of the system that some of them wait on have answered. */
@@ -16,6 +18,9 @@ export interface SettingsSearchContext {
   platform: PlatformAdapter;
   keepAwake: boolean;
   settings: Settings;
+  /** Where remote access stands, which decides what the Remote access section shows beyond its switch (null where the
+   * daemon offers none, when the section is not listed at all). */
+  remoteAccess: RemoteAccess | null;
   /** What each read says of the settings that wait on it, as the section decides it (see `searchReads`): a row with
    * no capability to read from is never counted, and one with it is counted from the answer on. */
   reads: {
@@ -80,7 +85,8 @@ const ownBranch = ({ settings }: SettingsSearchContext) => settings.git_workflow
  */
 const INDEX = {
   general: [
-    { id: "language", label: "settings.language.label", description: ["settings.language.sharedDescription"] },
+    { id: "language", label: "settings.language.label", description: ["settings.language.description"] },
+    { id: "agent-language", label: "settings.agentLanguage.label", description: ["settings.agentLanguage.description"] },
     {
       id: "launch-at-login",
       label: "settings.launchAtLogin.label",
@@ -101,7 +107,7 @@ const INDEX = {
       label: "settings.menuBarIcon.label",
       description: ["settings.menuBarIcon.description.on", "settings.menuBarIcon.description.off", "settings.menuBarIcon.description.offInBackground"],
       group: WINDOW,
-      shown: ({ platform }) => platform.statusItem !== undefined,
+      shown: ({ platform }) => platform.statusItem?.setVisible !== undefined,
     },
     daemonSwitch("keep_awake", POWER, ({ keepAwake }) => keepAwake),
     {
@@ -182,6 +188,63 @@ const INDEX = {
       shown: ({ platform, reads }) => platform.macosPermissions !== undefined && reads.macosPermissionsUnreadable,
     },
   ],
+  // Listed only in the application's window for a daemon that offers it (`remoteAccessOffered`), so the section's own
+  // entries need no `shown` for that; what the daemon is doing decides the rest.
+  "remote-access": [
+    { id: "remote-access.allow", label: "settings.remoteAccess.allow.label", description: ["settings.remoteAccess.allow.description.on", "settings.remoteAccess.allow.description.off"] },
+    // What the section says in place of the address when the daemon could not serve, found by its reasons.
+    {
+      id: "remote-access.failed",
+      label: "settings.remoteAccess.failed.title",
+      description: [
+        "settings.remoteAccess.failed.noUi",
+        "settings.remoteAccess.failed.notPrivate",
+        "settings.remoteAccess.failed.socketFailed",
+        "settings.remoteAccess.failed.ownerKeyFailed",
+        "settings.remoteAccess.failed.portInUse",
+        "settings.remoteAccess.failed.portFailed",
+        "settings.remoteAccess.failed.pipeFailed",
+      ],
+      shown: ({ remoteAccess }) => remoteAccess?.failure != null,
+    },
+    // The browser port, on Windows alone; the current port is the row's value, not searched.
+    {
+      id: "remote-access.port",
+      label: "settings.remoteAccess.port.label",
+      description: ["settings.remoteAccess.port.description"],
+      shown: ({ remoteAccess }) => remoteAccess?.browser_port != null,
+    },
+    {
+      id: "remote-access.address",
+      label: "settings.remoteAccess.address.label",
+      description: ["settings.remoteAccess.address.description"],
+      shown: ({ remoteAccess }) => remoteAccess?.state === "serving" && remoteAccess.address !== null,
+    },
+    {
+      id: "remote-access.forward",
+      label: "settings.remoteAccess.forward.label",
+      description: [(t) => t("settings.remoteAccess.forward.description", { server: "<server>" })],
+      shown: ({ remoteAccess }) => remoteAccess?.state === "serving" && remoteAccess.forward_command !== null,
+    },
+    {
+      id: "remote-access.connection",
+      label: "settings.remoteAccess.connection.label",
+      description: [(t) => t("settings.remoteAccess.connection.description", { addRemoteDaemon: t("remoteDaemons.add"), connectionDetails: t("remoteDaemons.form.details") })],
+      shown: ({ remoteAccess }) => remoteAccess?.state === "serving" && remoteAccess.connection !== null,
+    },
+    {
+      id: "remote-access.rotate",
+      label: "settings.remoteAccess.rotate.label",
+      description: ["settings.remoteAccess.rotate.description"],
+      shown: ({ remoteAccess }) => remoteAccess?.state === "serving",
+    },
+    // Worded by the system's name for its SSH server; the daemon whose section it is runs on this computer.
+    {
+      id: "remote-access.remote-login",
+      label: (t) => t(sshServerWords(daemonOs()).label),
+      description: [(t) => t(sshServerWords(daemonOs()).description)],
+    },
+  ],
   // Its description is where notifications stand, not what the setting does, so it is not searched.
   notifications: [{ id: "notifications", label: "settings.notifications.label" }],
   // One entry per command the client has, in the list's order by group, found by its name and its group's.
@@ -206,11 +269,19 @@ const INDEX = {
       shown: ({ platform }) => platform.configurationFile !== undefined,
     },
   ],
-  // Listed only where something updates (`SettingsDialog`), so its entries need no `shown`.
+  // Listed only where something updates (`SettingsDialog`). A remote window's section has only the daemon's own two
+  // settings of its updates, the automatic check worded for the daemon.
   updates: [
     // Its description is where updates stand, not what the row does, so it is not searched.
-    { id: "updates.version", label: "settings.updates.status.label" },
-    { id: "updates.autoCheck", label: "settings.updates.autoCheck.label", description: ["settings.updates.autoCheck.description.on", "settings.updates.autoCheck.description.off"] },
+    { id: "updates.version", label: "settings.updates.status.label", shown: () => windowKind() !== "remote" },
+    {
+      id: "updates.autoCheck",
+      label: "settings.updates.autoCheck.label",
+      description: [
+        (t) => t(windowKind() === "remote" ? "settings.updates.autoCheck.description.remote.on" : "settings.updates.autoCheck.description.on"),
+        (t) => t(windowKind() === "remote" ? "settings.updates.autoCheck.description.remote.off" : "settings.updates.autoCheck.description.off"),
+      ],
+    },
     { id: "updates.channel", label: "settings.updates.channel.label", description: ["settings.updates.channel.description"] },
   ],
   about: [

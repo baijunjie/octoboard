@@ -5,13 +5,14 @@ import { expect, it, vi } from "vitest";
 import { consoleOf, sessionOf } from "../fixtures/builders";
 import { joinPhrases } from "../i18n/joinPhrases";
 import { isolate } from "../i18n/isolate";
+import type { PlatformAdapter, RemoteDaemonStatus } from "../platform";
 import { PlatformProvider } from "../platform/react";
 import type { Session, SessionStatus } from "../protocol";
 import { DaemonProvider } from "../store";
 import { testDaemon } from "../test/testDaemon";
 import { Rail } from "./Rail";
 import { enter, leave, mountForTooltip, openTooltip } from "../components/hint/tooltipTestSupport";
-import { BROWSER_HOST } from "../test/hosts";
+import { BROWSER_HOST, MAC_HOST } from "../test/hosts";
 import { fakeTimers, runOutTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -182,4 +183,88 @@ it("opens on keyboard focus, and not on hover while the hidden sidebar floats in
   act(() => avatar.blur());
   runOutTimers();
   expect(vi.getTimerCount()).toBe(0);
+});
+
+/** The rail in the application's own window, with the remote daemons the shell reports connected. */
+async function railWithRemoteDaemons(connected: RemoteDaemonStatus[]): Promise<HTMLElement> {
+  const entry = (id: string, name: string) => ({ id, name, host: `${id}.example.com`, port: 22, user: "u", auth: "device" as const, keyPath: null, fingerprint: null, octoboarddPath: null });
+  const platform: PlatformAdapter = {
+    kind: "tauri",
+    host: MAC_HOST,
+    remoteDaemons: {
+      list: async () => [entry("staging", "Staging"), entry("lab", "Home lab")],
+      status: async () => connected,
+      onChanged: () => () => {},
+      save: async (saved) => ({ ...saved, id: saved.id ?? "new" }),
+      remove: async () => {},
+      connect: async () => ({ outcome: "opened" }),
+      disconnect: async () => {},
+      newWindow: async () => {},
+      openWindow: async () => {},
+      showMainWindow: async () => {},
+      showUpdates: async () => {},
+    },
+  };
+  let container!: HTMLElement;
+  await act(async () => {
+    container = mountForTooltip(
+      <PlatformProvider value={platform}>
+        <DaemonProvider value={testDaemon()}>
+          <Rail
+            consoles={[main]}
+            currentConsoleId={main.id}
+            onSelectConsole={() => {}}
+            onConsoleEnter={() => {}}
+            onConsoleLeave={() => {}}
+            hoverOpensSidebar={false}
+            onOpenDialog={() => {}}
+            onSelectSession={() => {}}
+            onOpenArchive={() => {}}
+            waitingCount={0}
+            onNextWaiting={() => {}}
+            onOpenProcesses={() => true}
+            onOpenSettings={() => {}}
+            onOpenSettingsAt={() => {}}
+            focusTerminal={() => {}}
+            onDemand={false}
+            away={false}
+          />
+        </DaemonProvider>
+      </PlatformProvider>,
+    );
+  });
+  return container;
+}
+
+const FOLLOWING = Node.DOCUMENT_POSITION_FOLLOWING;
+
+it("puts the connected remote daemons below the consoles and above the settings, behind a groove", async () => {
+  fakeTimers();
+  const container = await railWithRemoteDaemons([{ id: "staging", state: "connected", via: "window" }]);
+  const group = container.querySelector<HTMLElement>("[role=group][aria-label='Remote daemons']")!;
+  expect(group).not.toBeNull();
+  const consoleAvatar = container.querySelector("[data-sidebar-peek-keep]")!;
+  const newConsole = container.querySelector("button[aria-label='New console']")!;
+  const settings = container.querySelector("button[aria-label='Settings']")!;
+  expect(consoleAvatar.compareDocumentPosition(group) & FOLLOWING).toBeTruthy();
+  expect(newConsole.compareDocumentPosition(group) & FOLLOWING).toBeTruthy();
+  expect(group.compareDocumentPosition(settings) & FOLLOWING).toBeTruthy();
+  expect(group.querySelector(".groove-t")).not.toBeNull();
+  // The tile, and no Add or edit button: each tile's menu opens from a right-click, its trigger not drawn.
+  const shown = [...group.querySelectorAll("button")].filter((button) => !button.closest(".hidden"));
+  expect(shown.map((button) => button.getAttribute("aria-label")?.replace(/[\u2068\u2069]/g, "").split(",")[0])).toEqual(["Staging"]);
+});
+
+it("has neither the group nor its groove while no remote daemon is connected, though some are saved", async () => {
+  fakeTimers();
+  const container = await railWithRemoteDaemons([]);
+  expect(container.querySelector("[role=group][aria-label='Remote daemons']")).toBeNull();
+  expect(container.querySelector(".groove-t")).toBeNull();
+  expect(container.querySelector("button[aria-label='Settings']")).not.toBeNull();
+});
+
+it("has no remote daemons in a browser", async () => {
+  fakeTimers();
+  const rail = avatarOf(["idle"]).closest("nav")!;
+  expect(rail.querySelector("[role=group][aria-label='Remote daemons']")).toBeNull();
 });

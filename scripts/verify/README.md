@@ -131,6 +131,9 @@ retention and timing measurements are documented in the [Rust cache module](../.
   or `[[example]]`, a `tests/`, `src/bin`, `examples` or `benches` directory, a second daemon binary, a daemon library,
   or a doctest in the desktop crate. A doctest cannot be selected next to `--lib` and `--bin`, so it needs a change to
   how that crate is narrowed.
+- A desktop test that reads a capability, a permission file or `lib.rs` needs no entry: a change to such a file runs
+  the desktop crate in full. One that derives `TS` or reads other modules' sources would be skipped by the module
+  filters and goes in `CRATE_WIDE_TESTS.native`; the meta test in `quick.test.mjs` fails when one is not named.
 - A new `include_str!` of Markdown is named in `DAEMON_READS_MARKDOWN` (or a rule of its own) and in
   `RUST_MARKDOWN_READERS`; the tests fail with the file to name. A file outside the UI package that a UI test reads runs
   the full UI suite in a quick run until `UI_READERS` names its readers; the tests fail when an entry leaves a reader

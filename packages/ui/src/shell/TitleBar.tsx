@@ -1,12 +1,15 @@
-import { ArrowLeft, ArrowRight, ChevronRight, PanelLeft, PanelLeftDashed, PanelRight, PanelRightDashed } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronRight, PanelLeft, PanelLeftDashed, PanelRight, PanelRightDashed, Server } from "lucide-react";
 import React, { useSyncExternalStore } from "react";
 
 import { PANE_ID } from "../layout/paneOverlay";
 import { useT } from "../i18n/react";
+import { isolate } from "../i18n/isolate";
+import { remoteDaemonName } from "../platform";
 import { usePlatform } from "../platform/react";
 import type { Session } from "../protocol";
 import { sessionDisplayTitle } from "../sessions/sessionLabel";
 import { useDaemonStore, useSessionShownStatus } from "../store";
+import { Chip } from "../primitives";
 import { ChromeButton } from "./ChromeButton";
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import { HandoffOnUnmount } from "../components/focus/HandoffOnUnmount";
@@ -58,12 +61,37 @@ function LeftInset(): React.ReactElement | null {
   return windowChrome ? <div className="w-(--window-controls-inset) shrink-0 rtl:hidden" /> : null;
 }
 
-/** The bar with nothing in it, for the screens that have no session UI yet (starting up, failed to
- * start): it still keeps the window's controls clear and makes the window draggable. */
+/** The name of the daemon the window shows, in a window opened on a daemon elsewhere (`remoteDaemonName`), so that
+ * windows of several daemons are told apart; nothing in the local daemon's window. A small chip, filled as a control
+ * is so that it stands off the title bar, apart from the breadcrumb, as it marks the machine and is no level of the
+ * path; it keeps its width while the breadcrumb beside it fades first, and a name too long for its fixed width fades,
+ * runs as a marquee on hover and shows in full in a tooltip. */
+function RemoteDaemonName(): React.ReactElement | null {
+  const t = useT();
+  const name = remoteDaemonName();
+  if (name === undefined) return null;
+  return (
+    <Chip size="sm" color="default" className="me-3 min-w-0 shrink-0 gap-1.5 bg-default px-2 text-default-foreground">
+      <Server aria-hidden="true" className="size-3 shrink-0" />
+      <span className="sr-only">{t("titleBar.remoteDaemon", { name: isolate(name) })}</span>
+      <span aria-hidden="true" className="flex max-w-40 min-w-0">
+        <FadeOverflow as="span" dir="auto" className="min-w-0" titleWhenClipped={name}>
+          {name}
+        </FadeOverflow>
+      </span>
+    </Chip>
+  );
+}
+
+/** The bar with nothing in it but the daemon's name in a remote window, for the screens that have no session UI yet
+ * (starting up, failed to start): it still keeps the window's controls clear and makes the window draggable. */
 export function BareTitleBar(): React.ReactElement {
   return (
     <BarFrame>
       <LeftInset />
+      <div className="flex min-w-0 items-center px-3">
+        <RemoteDaemonName />
+      </div>
     </BarFrame>
   );
 }
@@ -259,6 +287,7 @@ export function TitleBar({
         </div>
       </div>
       <div className="flex min-w-0 flex-1 items-center px-3">
+        <RemoteDaemonName />
         {viewTrail ? <Trail names={viewTrail} /> : selectedSession && <Breadcrumb session={selectedSession} focusTerminal={focusTerminal} />}
       </div>
       {/* While the aside is docked, as wide as it and never narrower than its toggles, so the

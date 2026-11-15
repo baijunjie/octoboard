@@ -2,7 +2,7 @@ import { createStore, type StoreApi } from "zustand";
 
 import type { ConnectionState } from "../daemon-client";
 import { DEFAULT_SETTINGS } from "./defaultSettings";
-import { type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type AgentAvailability, type AgentCliStatus, type Console, type DaemonUpdateStatus, type GitStatus, type Host, type HostInfo, type Page, type Project, type ProviderInfo, type Session, type Settings, type ShellTerminal } from "../protocol";
+import { type AccountLogin, type AccountQuota, type AccountSharing, type Agent, type AgentAvailability, type AgentCliStatus, type Console, type DaemonUpdateStatus, type GitStatus, type Host, type HostInfo, type Page, type Project, type ProviderInfo, type RemoteAccess, type Session, type Settings, type ShellTerminal } from "../protocol";
 import type { SessionRequest } from "./sessionRequests";
 
 /** A page's submission at one of its revisions, as `Page` and `page_submission` carry it. */
@@ -127,6 +127,10 @@ export interface State {
    * connection's, which may be another daemon's, and nothing may be read from it as the daemon's own. A `snapshot` or a
    * status event ends it. */
   daemonUpdateStale: boolean;
+  /** Where remote access to the daemon stands as the last `snapshot` or `remote_access_updated` said; null where the
+   * daemon offers none (anything but the desktop application's own daemon on a host with owner sockets, and before
+   * the first snapshot), so there is nothing to show. Runtime state of the daemon, never stored here. */
+  remoteAccess: RemoteAccess | null;
   /** Every shell terminal the daemon holds, running or exited, keyed by id, in the order the
    * daemon lists them (oldest first) and then as created. Live state of the daemon: a `snapshot`
    * names them all again, and one goes only on `shell_terminal_deleted` or with its project. */
@@ -170,6 +174,7 @@ const initialState: State = {
   keepAwakeHeld: false,
   daemonUpdate: null,
   daemonUpdateStale: false,
+  remoteAccess: null,
   shellTerminals: new Map(),
   queuedAccountSwitches: new Set(),
   restartAwaited: false,

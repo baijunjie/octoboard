@@ -16,6 +16,7 @@ pub(crate) mod listener_handover;
 pub(crate) mod local_socket;
 pub(crate) mod names;
 pub(crate) mod open;
+pub(crate) mod owner_pipe;
 pub(crate) mod policy;
 pub(crate) mod proc;
 pub(crate) mod proc_table;
@@ -115,6 +116,27 @@ impl HostFacts {
     }
 }
 
+/// Whether the executable at `exe` is the copy of the daemon the desktop application named
+/// `app_name` carries, whose daemon runs only while the application does: one inside a macOS
+/// application bundle (`<app>.app/Contents/MacOS/`), or one beside the application's executable
+/// (`<app_name>.exe`) on Windows. Elsewhere, and for any other copy, false.
+pub fn is_application_copy(exe: &std::path::Path, app_name: &str) -> bool {
+    let Some(dir) = exe.parent() else {
+        return false;
+    };
+    if cfg!(target_os = "macos") {
+        let bundle = dir
+            .parent()
+            .zip(dir.parent().and_then(std::path::Path::parent));
+        return dir.file_name() == Some(std::ffi::OsStr::new("MacOS"))
+            && bundle.is_some_and(|(contents, app)| {
+                contents.file_name() == Some(std::ffi::OsStr::new("Contents"))
+                    && app.extension() == Some(std::ffi::OsStr::new("app"))
+            });
+    }
+    cfg!(windows) && dir.join(format!("{app_name}.exe")).is_file()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -129,6 +151,30 @@ mod tests {
         assert_eq!(
             facts.settings == SettingsName::SystemSettings,
             cfg!(target_os = "macos")
+        );
+    }
+
+    #[test]
+    fn only_a_copy_in_an_application_bundle_or_beside_the_application_is_the_applications() {
+        let in_bundle =
+            std::path::Path::new("/Applications/Octoboard.app/Contents/MacOS/octoboardd");
+        assert_eq!(
+            is_application_copy(in_bundle, "Octoboard"),
+            cfg!(target_os = "macos")
+        );
+        assert!(!is_application_copy(
+            std::path::Path::new("/home/me/.local/bin/octoboardd"),
+            "Octoboard"
+        ));
+        assert!(!is_application_copy(
+            std::path::Path::new("/opt/Contents/MacOS/octoboardd"),
+            "Octoboard"
+        ));
+        let dir = crate::test_support::ScratchDir::new("application-copy");
+        std::fs::write(dir.join("Octoboard.exe"), b"").unwrap();
+        assert_eq!(
+            is_application_copy(&dir.join("octoboardd.exe"), "Octoboard"),
+            cfg!(windows)
         );
     }
 }

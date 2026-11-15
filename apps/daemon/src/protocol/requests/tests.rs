@@ -1163,3 +1163,96 @@ fn compatibility_control_session_requests_parse_switches_and_reject_other_value_
         }
     }
 }
+
+/// Exactly the three requests that change remote access say so; a connection the owner key opened
+/// is refused them and nothing else.
+#[test]
+fn only_the_remote_access_requests_change_remote_access() {
+    let changes = |json: &str| {
+        serde_json::from_str::<Request>(json)
+            .unwrap()
+            .body
+            .changes_remote_access()
+    };
+    assert!(changes(r#"{"type":"set_remote_access","allowed":true}"#));
+    assert!(changes(r#"{"type":"rotate_owner_key"}"#));
+    assert!(changes(r#"{"type":"set_remote_access_port","port":3369}"#));
+    assert!(!changes(r#"{"type":"ping"}"#));
+    assert!(!changes(r#"{"type":"shutdown"}"#));
+}
+
+/// The three requests that change remote access read the fields the protocol document names.
+#[test]
+fn the_remote_access_requests_read_their_fields() {
+    let read = |json: &str| serde_json::from_str::<Request>(json);
+    for allowed in [true, false] {
+        let request = read(&format!(
+            r#"{{"type":"set_remote_access","id":"r","allowed":{allowed}}}"#
+        ))
+        .unwrap();
+        assert_eq!(request.id.as_deref(), Some("r"));
+        assert!(matches!(
+            request.body,
+            RequestBody::SetRemoteAccess { allowed: read } if read == allowed
+        ));
+    }
+    assert!(matches!(
+        read(r#"{"type":"rotate_owner_key","id":"r"}"#)
+            .unwrap()
+            .body,
+        RequestBody::RotateOwnerKey
+    ));
+    assert!(matches!(
+        read(r#"{"type":"set_remote_access_port","port":3369}"#)
+            .unwrap()
+            .body,
+        RequestBody::SetRemoteAccessPort { port } if port.get() == 3369
+    ));
+    assert!(matches!(
+        read(r#"{"type":"set_remote_access_port","port":65535}"#)
+            .unwrap()
+            .body,
+        RequestBody::SetRemoteAccessPort { port } if port.get() == 65535
+    ));
+}
+
+/// What is not a switch position or a port is no request: the switch needs its value, and the
+/// port 0, a number beyond 65535, a negative one, a string and none at all do not read.
+#[test]
+fn a_remote_access_request_without_a_usable_value_is_no_request() {
+    let read = |json: &str| serde_json::from_str::<Request>(json);
+    assert!(read(r#"{"type":"set_remote_access"}"#).is_err());
+    assert!(read(r#"{"type":"set_remote_access","allowed":"yes"}"#).is_err());
+    assert!(read(r#"{"type":"set_remote_access","allowed":null}"#).is_err());
+    for port in ["0", "65536", "-1", r#""3369""#, "null", "33.5"] {
+        assert!(
+            read(&format!(
+                r#"{{"type":"set_remote_access_port","port":{port}}}"#
+            ))
+            .is_err(),
+            "{port}"
+        );
+    }
+    assert!(read(r#"{"type":"set_remote_access_port"}"#).is_err());
+}
+
+/// The settings change names the agent language; the key an earlier build used for the one language
+/// of the windows and the agents is no longer a setting of the request.
+#[test]
+fn the_settings_request_carries_the_agent_language() {
+    let request =
+        serde_json::from_str::<Request>(r#"{"type":"update_settings","agent_language":"ja"}"#)
+            .unwrap();
+    assert!(matches!(
+        request.body,
+        RequestBody::UpdateSettings { agent_language: Some(ref tag), .. } if tag == "ja"
+    ));
+    let absent = serde_json::from_str::<Request>(r#"{"type":"update_settings"}"#).unwrap();
+    assert!(matches!(
+        absent.body,
+        RequestBody::UpdateSettings {
+            agent_language: None,
+            ..
+        }
+    ));
+}

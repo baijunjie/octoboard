@@ -72,6 +72,6 @@ it("names the menu bar icon as the way back only while it is shown", async () =>
     showMenuBarIcon.set(false);
   });
   expect(container.textContent).not.toContain("brings the window back");
-  expect(container.textContent).toContain("Open Octoboard again or click one of its notifications");
+  expect(container.textContent).toContain("Open the app again or click one of its notifications");
   showMenuBarIcon.set(true);
 });

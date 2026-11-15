@@ -42,6 +42,12 @@ const RECORD_AFTER_DAEMON: &str = "OCTOBOARD_TEST_STAND_IN_AFTER";
 /// The variable that has [`stand_in_child`] record the port it holds instead of [`PORT`].
 const RECORD_PORT: &str = "OCTOBOARD_TEST_STAND_IN_PORT";
 
+/// The variable that, set, has [`stand_in_child`] record that it accepts the owner key.
+const RECORD_OWNER_KEY: &str = "OCTOBOARD_TEST_STAND_IN_OWNER_KEY";
+
+/// The variable that, set, has [`stand_in_child`] record that it follows the desktop application.
+const RECORD_APPLICATION: &str = "OCTOBOARD_TEST_STAND_IN_APPLICATION";
+
 /// The port the stand-in records unless [`RECORD_PORT`] gives another; nothing listens there, and
 /// the commands that use it do not connect.
 const PORT: u16 = 47_999;
@@ -85,10 +91,11 @@ fn stand_in_child() {
         Err(_) => Predecessor::Unsaid,
     };
     let port = std::env::var(RECORD_PORT).map_or(PORT, |port| port.parse().unwrap());
-    let owner = Owner::current(port, false, true)
+    let owner = Owner::current(port, std::env::var_os(RECORD_APPLICATION).is_some(), true)
         .unwrap()
         .with_service_manager(false)
-        .with_predecessor(predecessor);
+        .with_predecessor(predecessor)
+        .with_owner_key(std::env::var_os(RECORD_OWNER_KEY).is_some());
     owner.record_key(TEST_KEY).unwrap();
     owner.record().unwrap();
     crate::owner_record::settle_handover();
@@ -177,6 +184,32 @@ impl StandIn {
                 .env(RECORD_AFTER, "0")
                 .env(RECORD_PORT, port.to_string());
         })
+    }
+
+    /// [`StandIn::start`] for one that records itself at once, as accepting the owner key when
+    /// `owner_key`, and returns once it has.
+    fn start_now(home: &Path, owner_key: bool) -> Self {
+        let mut stand_in = Self::spawn(home, |command| {
+            command.env(RECORD_AFTER, "0");
+            if owner_key {
+                command.env(RECORD_OWNER_KEY, "1");
+            }
+        });
+        stand_in.await_line("recorded");
+        stand_in
+    }
+
+    /// [`StandIn::start_now`] for the desktop application's daemon, which takes the owner key only
+    /// while remote access is on.
+    fn start_application_now(home: &Path, remote_access: bool) -> Self {
+        let mut stand_in = Self::spawn(home, |command| {
+            command.env(RECORD_AFTER, "0").env(RECORD_APPLICATION, "1");
+            if remote_access {
+                command.env(RECORD_OWNER_KEY, "1");
+            }
+        });
+        stand_in.await_line("recorded");
+        stand_in
     }
 
     /// [`StandIn::start`] for one that records the daemon `after` as its predecessor.
@@ -610,4 +643,543 @@ fn restart_reports_a_refusal_from_a_daemon_that_records_its_key_and_leaves_it_ru
         format!("POST /restart?key={TEST_KEY} HTTP/1.1\r\n")
     );
     assert!(stand_in.running(), "the refused daemon was ended");
+}
+
+/// `proxy` and `address --json` exit 3 with no daemon running, 4 with a daemon that has no owner
+/// endpoint and 5 with one whose endpoint cannot be reached, each with the reason on stderr and
+/// nothing of their own on stdout.
+#[test]
+fn the_owner_endpoint_modes_tell_apart_why_there_is_no_endpoint() {
+    let assert_status = |home: &Path, expected: i32, reason: &str| {
+        for arguments in ["proxy", "address --json"] {
+            let (code, stdout, stderr) = finished(command(home, arguments));
+            assert_eq!(code, expected, "{arguments}: {stdout}{stderr}");
+            assert!(stderr.contains(reason), "{arguments}: {stderr}");
+            assert!(
+                !stdout.lines().any(|line| line.starts_with('{')),
+                "{arguments}: {stdout}"
+            );
+        }
+    };
+
+    let home = ScratchDir::new("endpoint-none");
+    assert_status(&home, 3, "is not running");
+
+    let home = ScratchDir::new("endpoint-without");
+    let _stand_in = StandIn::start_now(&home, false);
+    assert_status(&home, 4, "has no owner endpoint");
+
+    let home = ScratchDir::new("endpoint-unreachable");
+    let _stand_in = StandIn::start_now(&home, true);
+    assert_status(&home, 5, "cannot be reached");
+}
+
+/// Serves `router` on the browser socket of `home`'s data directory until dropped.
+fn serve_endpoint(home: &Path, router: axum::Router) -> crate::browser::ServeTask {
+    let data = home.join(".octoboard");
+    std::fs::create_dir_all(&data).unwrap();
+    let listener = crate::platform::local_socket::Listener::bind_replacing_stale(
+        &crate::browser::socket::path_in(&data),
+    )
+    .unwrap();
+    crate::browser::serve_on(listener, router)
+}
+
+/// An HTTP request written to `proxy`'s standard input is answered on its standard output as the
+/// daemon's owner endpoint answers it, and the command exits 0 once the daemon closes.
+#[tokio::test(flavor = "multi_thread")]
+async fn proxy_carries_a_request_and_its_answer_through_its_standard_input_and_output() {
+    let home = ScratchDir::new("proxy-process");
+    let _served = serve_endpoint(&home, crate::browser::key_check_router());
+    let home_path = home.to_path_buf();
+    let (code, stdout, stderr) = tokio::task::spawn_blocking(move || {
+        let _stand_in = StandIn::start_now(&home_path, true);
+        let mut child = in_home(&home_path, "cli::background_tests::command_child")
+            .env(ARGUMENTS, "proxy")
+            .stdin(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut stdin = child.stdin.take().unwrap();
+        stdin
+            .write_all(
+                b"GET /key-check?key=good HTTP/1.1\r\nHost: 127.0.0.1:3369\r\nConnection: close\r\n\r\n",
+            )
+            .unwrap();
+        drop(stdin);
+        finished(CommandChild(Some(child)))
+    })
+    .await
+    .unwrap();
+    assert_eq!(code, 0, "{stdout}{stderr}");
+    assert!(
+        stdout.contains("HTTP/1.1 204 No Content\r\n"),
+        "{stdout}{stderr}"
+    );
+}
+
+/// `address --json` prints the owner key in `owner.key`, with the generation and version the daemon
+/// states in the hello it opens a control connection with on its owner endpoint; a key the
+/// endpoint refuses is status 1 with nothing printed.
+#[tokio::test(flavor = "multi_thread")]
+async fn address_json_prints_the_owner_key_and_the_hello_of_the_endpoint() {
+    use axum::extract::ws::{Message, WebSocketUpgrade};
+    use axum::extract::RawQuery;
+    use axum::http::StatusCode;
+    use axum::response::IntoResponse;
+
+    const OWNER_KEY: &str = "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210";
+    let home = ScratchDir::new("address-json");
+    let router = axum::Router::new().route(
+        "/ws/control",
+        axum::routing::get(
+            |RawQuery(query): RawQuery, ws: WebSocketUpgrade| async move {
+                if query.as_deref() != Some(&format!("key={OWNER_KEY}")) {
+                    return StatusCode::UNAUTHORIZED.into_response();
+                }
+                ws.on_upgrade(|mut socket| async move {
+                    let hello = r#"{"type":"hello","generation":7,"daemon_version":"9.8.7"}"#;
+                    let _ = socket.send(Message::Text(hello.into())).await;
+                    while let Some(Ok(_)) = socket.recv().await {}
+                })
+                .into_response()
+            },
+        ),
+    );
+    let _served = serve_endpoint(&home, router);
+    let home_path = home.to_path_buf();
+    let (accepted, refused) = tokio::task::spawn_blocking(move || {
+        let _stand_in = StandIn::start_now(&home_path, true);
+        let data = home_path.join(".octoboard");
+        crate::owner_key::write_in(&data, OWNER_KEY);
+        let accepted = finished(command(&home_path, "address --json"));
+        crate::owner_key::write_in(&data, &"0".repeat(64));
+        let refused = finished(command(&home_path, "address --json"));
+        (accepted, refused)
+    })
+    .await
+    .unwrap();
+    let (code, stdout, stderr) = accepted;
+    assert_eq!(code, 0, "{stdout}{stderr}");
+    let line = stdout
+        .lines()
+        .find(|line| line.starts_with('{'))
+        .expect("a JSON line");
+    assert_eq!(
+        line,
+        format!(r#"{{"owner_key":"{OWNER_KEY}","generation":7,"daemon_version":"9.8.7"}}"#)
+    );
+    let (code, stdout, stderr) = refused;
+    assert_eq!(code, 1, "{stdout}{stderr}");
+    assert!(stderr.contains("refuses the owner key"), "{stderr}");
+    assert!(
+        !stdout.lines().any(|line| line.starts_with('{')),
+        "{stdout}"
+    );
+}
+
+/// A daemon that holds the lock without having recorded where it listens (it is starting or
+/// stopping) has no known endpoint: `proxy` and `address --json` exit 1, saying so, and write
+/// nothing of their own on standard output.
+#[test]
+fn the_owner_endpoint_modes_say_a_daemon_not_yet_recorded_is_status_1() {
+    let home = ScratchDir::new("endpoint-unrecorded");
+    let _stand_in = StandIn::start_held(&home);
+    for arguments in ["proxy", "address --json"] {
+        let (code, stdout, stderr) = finished(command(&home, arguments));
+        assert_eq!(code, 1, "{arguments}: {stdout}{stderr}");
+        assert!(stderr.contains("not known"), "{arguments}: {stderr}");
+        assert_eq!(said(&stdout), "", "{arguments}");
+        assert!(
+            !stdout.lines().any(|line| line.starts_with('{')),
+            "{arguments}: {stdout}"
+        );
+    }
+}
+
+/// The desktop application's daemon has an owner endpoint only while remote access is on: with it
+/// off, `proxy` and `address --json` exit 4 and say which setting turns it on; with it on and the
+/// endpoint not answering, 5.
+#[test]
+fn the_application_daemon_has_an_owner_endpoint_only_while_remote_access_is_on() {
+    let home = ScratchDir::new("endpoint-application-off");
+    let _stand_in = StandIn::start_application_now(&home, false);
+    for arguments in ["proxy", "address --json"] {
+        let (code, stdout, stderr) = finished(command(&home, arguments));
+        assert_eq!(code, 4, "{arguments}: {stdout}{stderr}");
+        assert!(
+            stderr.contains("Allow remote access"),
+            "{arguments}: {stderr}"
+        );
+        assert_eq!(said(&stdout), "", "{arguments}");
+    }
+
+    let home = ScratchDir::new("endpoint-application-on");
+    let _stand_in = StandIn::start_application_now(&home, true);
+    for arguments in ["proxy", "address --json"] {
+        let (code, stdout, stderr) = finished(command(&home, arguments));
+        assert_eq!(code, 5, "{arguments}: {stdout}{stderr}");
+        assert!(
+            stderr.contains("cannot be reached"),
+            "{arguments}: {stderr}"
+        );
+        assert_eq!(said(&stdout), "", "{arguments}");
+    }
+}
+
+/// `octoboardd` run as the copy inside the desktop application's bundle, with no daemon running,
+/// says that the application is not running and exits 6, apart from the 3 any other copy exits
+/// with: the application's daemon runs only while the application does.
+#[cfg(target_os = "macos")]
+#[test]
+fn the_applications_own_copy_with_no_daemon_running_is_status_6() {
+    let home = ScratchDir::new("endpoint-application-copy");
+    let macos = home.join("Octoboard.app/Contents/MacOS");
+    std::fs::create_dir_all(&macos).unwrap();
+    let copy = macos.join("octoboardd");
+    let exe = std::env::current_exe().unwrap();
+    // A link rather than a copy of the whole test binary; where the scratch directory is on
+    // another volume, a copy.
+    if std::fs::hard_link(&exe, &copy).is_err() {
+        std::fs::copy(&exe, &copy).unwrap();
+    }
+    for arguments in ["proxy", "address --json"] {
+        let child = Command::new(&copy)
+            .args(["--exact", "cli::background_tests::command_child"])
+            .args(["--ignored", "--nocapture"])
+            .env("HOME", &*home)
+            .env(ARGUMENTS, arguments)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let (code, stdout, stderr) = finished(CommandChild(Some(child)));
+        assert_eq!(code, 6, "{arguments}: {stdout}{stderr}");
+        assert!(
+            stderr.contains("application is not running"),
+            "{arguments}: {stderr}"
+        );
+        assert_eq!(said(&stdout), "", "{arguments}");
+    }
+    // Any other copy exits 3.
+    let (code, stdout, stderr) = finished(command(&home, "proxy"));
+    assert_eq!(code, 3, "{stdout}{stderr}");
+}
+
+/// `address --json` with no usable owner key in `owner.key` exits 1 with nothing printed, though
+/// the endpoint answers: it has no key to ask the daemon with.
+#[tokio::test(flavor = "multi_thread")]
+async fn address_json_without_a_usable_owner_key_is_status_1() {
+    let home = ScratchDir::new("address-json-no-key");
+    let _served = serve_endpoint(&home, crate::browser::key_check_router());
+    let home_path = home.to_path_buf();
+    let results = tokio::task::spawn_blocking(move || {
+        let _stand_in = StandIn::start_now(&home_path, true);
+        let missing = finished(command(&home_path, "address --json"));
+        crate::owner_key::write_in(&home_path.join(".octoboard"), "not a key");
+        let malformed = finished(command(&home_path, "address --json"));
+        (missing, malformed)
+    })
+    .await
+    .unwrap();
+    for (code, stdout, stderr) in [results.0, results.1] {
+        assert_eq!(code, 1, "{stdout}{stderr}");
+        assert!(stderr.contains("owner.key"), "{stderr}");
+        assert!(
+            !stdout.lines().any(|line| line.starts_with('{')),
+            "{stdout}"
+        );
+    }
+}
+
+/// An owner endpoint that serves `first_frame` to a control connection opened with `OWNER_KEY`.
+fn control_router_opening_with(first_frame: &'static str) -> axum::Router {
+    use axum::extract::ws::{Message, WebSocketUpgrade};
+    use axum::extract::RawQuery;
+    use axum::http::StatusCode;
+    use axum::response::IntoResponse;
+
+    axum::Router::new().route(
+        "/ws/control",
+        axum::routing::get(
+            move |RawQuery(query): RawQuery, ws: WebSocketUpgrade| async move {
+                if query.as_deref() != Some(&format!("key={OWNER_KEY}")) {
+                    return StatusCode::UNAUTHORIZED.into_response();
+                }
+                ws.on_upgrade(move |mut socket| async move {
+                    let _ = socket.send(Message::Text(first_frame.into())).await;
+                    while let Some(Ok(_)) = socket.recv().await {}
+                })
+                .into_response()
+            },
+        ),
+    )
+}
+
+/// The owner key the endpoints of the tests below accept.
+const OWNER_KEY: &str = "fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210";
+
+/// What `address --json` finds of the daemon's first frame: a hello of an earlier generation, of
+/// which fields may have been added, is read as the hello it is, since its shape is frozen across
+/// generations; a first frame that is no hello is status 1 with nothing printed.
+#[tokio::test(flavor = "multi_thread")]
+async fn address_json_reads_the_hello_of_any_generation_and_nothing_else() {
+    let home = ScratchDir::new("address-json-frames");
+    let older = r#"{"type":"hello","generation":4,"daemon_version":"0.0.9","added_later":[1]}"#;
+    let (code, stdout, stderr) = address_json_against(&home, older).await;
+    assert_eq!(code, 0, "{stdout}{stderr}");
+    let line = stdout
+        .lines()
+        .find(|line| line.starts_with('{'))
+        .expect("a JSON line");
+    assert_eq!(
+        line,
+        format!(r#"{{"owner_key":"{OWNER_KEY}","generation":4,"daemon_version":"0.0.9"}}"#)
+    );
+    assert_eq!(
+        stdout.lines().filter(|line| line.starts_with('{')).count(),
+        1
+    );
+
+    let home = ScratchDir::new("address-json-no-hello");
+    let (code, stdout, stderr) =
+        address_json_against(&home, r#"{"type":"snapshot","hosts":[]}"#).await;
+    assert_eq!(code, 1, "{stdout}{stderr}");
+    assert!(stderr.contains("could not be asked"), "{stderr}");
+    assert!(
+        !stdout.lines().any(|line| line.starts_with('{')),
+        "{stdout}"
+    );
+}
+
+/// Runs `address --json` against a stand-in daemon whose owner endpoint opens a control connection
+/// with `first_frame`, `owner.key` holding [`OWNER_KEY`].
+async fn address_json_against(
+    home: &ScratchDir,
+    first_frame: &'static str,
+) -> (i32, String, String) {
+    let _served = serve_endpoint(home, control_router_opening_with(first_frame));
+    let home_path = home.to_path_buf();
+    tokio::task::spawn_blocking(move || {
+        let _stand_in = StandIn::start_now(&home_path, true);
+        crate::owner_key::write_in(&home_path.join(".octoboard"), OWNER_KEY);
+        finished(command(&home_path, "address --json"))
+    })
+    .await
+    .unwrap()
+}
+
+/// `proxy` ends with status 0 once the daemon closes the connection while its own input is still
+/// open, and carries what the daemon said before closing.
+#[tokio::test(flavor = "multi_thread")]
+async fn proxy_ends_with_status_0_when_the_daemon_closes_first() {
+    let home = ScratchDir::new("proxy-daemon-closes");
+    let _served = serve_endpoint(&home, crate::browser::key_check_router());
+    let home_path = home.to_path_buf();
+    let (code, stdout, stderr) = tokio::task::spawn_blocking(move || {
+        let _stand_in = StandIn::start_now(&home_path, true);
+        let mut child = in_home(&home_path, "cli::background_tests::command_child")
+            .env(ARGUMENTS, "proxy")
+            .stdin(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut stdin = child.stdin.take().unwrap();
+        // `Connection: close` has the daemon close after answering; the input stays open.
+        stdin
+            .write_all(
+                b"GET /key-check?key=bad HTTP/1.1\r\nHost: 127.0.0.1:3369\r\nConnection: close\r\n\r\n",
+            )
+            .unwrap();
+        stdin.flush().unwrap();
+        let held_open = stdin;
+        let finished = finished(CommandChild(Some(child)));
+        drop(held_open);
+        finished
+    })
+    .await
+    .unwrap();
+    assert_eq!(code, 0, "{stdout}{stderr}");
+    assert!(
+        stdout.contains("HTTP/1.1 401 Unauthorized\r\n"),
+        "{stdout}{stderr}"
+    );
+}
+
+/// What `octoboardd connection <arguments>` prints, run as a process of its own in `home` with
+/// the SSH session `ssh_connection` (none when `None`): its status, standard output and standard
+/// error.
+fn connection_with(
+    home: &Path,
+    arguments: &str,
+    ssh_connection: Option<&str>,
+) -> (i32, String, String) {
+    let mut command = in_home(home, "cli::background_tests::command_child");
+    command.env(ARGUMENTS, format!("connection {arguments}"));
+    match ssh_connection {
+        Some(session) => command.env("SSH_CONNECTION", session),
+        None => command.env_remove("SSH_CONNECTION"),
+    };
+    finished(CommandChild(Some(command.spawn().unwrap())))
+}
+
+/// The line of `stdout` that is the connection details, which there is exactly one of.
+fn details_line(stdout: &str) -> &str {
+    let lines: Vec<&str> = stdout
+        .lines()
+        .filter(|line| line.starts_with("octoboard+ssh://"))
+        .collect();
+    assert_eq!(lines.len(), 1, "{stdout}");
+    lines[0]
+}
+
+/// `connection --text` prints the one line of text alone, `connection` the QR code, an empty line
+/// and then that line; the host and port are the ones given, else the SSH session's, `--host`
+/// alone keeping the session's port; and it touches nothing, so it runs with no daemon and creates
+/// no data directory.
+#[test]
+fn connection_prints_the_details_as_text_after_the_qr_code_and_touches_nothing() {
+    let home = ScratchDir::new("connection-process");
+    let session = Some("192.0.2.9 51000 198.51.100.7 2200");
+
+    let (code, stdout, stderr) =
+        connection_with(&home, "--host box.example --ssh-port 2222 --text", session);
+    assert_eq!(code, 0, "{stdout}{stderr}");
+    let text = details_line(&stdout).to_owned();
+    assert!(text.contains("@box.example:2222"), "{text}");
+    assert!(!text.contains(char::is_whitespace), "{text}");
+    assert!(
+        stderr
+            .lines()
+            .last()
+            .is_some_and(|note| note.contains("Connection details")),
+        "the note on pasting is last: {stderr}"
+    );
+    assert!(
+        !stderr.contains("the address this SSH session reached"),
+        "a host given is not explained: {stderr}"
+    );
+
+    let (code, stdout, stderr) = connection_with(&home, "--host box.example --ssh-port 2222", None);
+    assert_eq!(code, 0, "{stdout}{stderr}");
+    let lines: Vec<&str> = stdout.lines().collect();
+    let at = lines
+        .iter()
+        .position(|line| *line == text)
+        .expect("the same text");
+    assert_eq!(lines[at - 1], "", "an empty line before the text");
+    let code_lines: Vec<&&str> = lines[..at - 1]
+        .iter()
+        .filter(|line| line.contains(['▀', '▄', '█']))
+        .collect();
+    assert!(code_lines.len() > 8, "the QR code: {stdout}");
+    assert!(
+        code_lines.iter().all(|line| !line.contains('\x1b')),
+        "no color where standard output is no terminal"
+    );
+    assert_eq!(at, lines.len() - 1, "nothing after the text");
+
+    let (code, stdout, stderr) = connection_with(&home, "--text", session);
+    assert_eq!(code, 0, "{stdout}{stderr}");
+    assert!(details_line(&stdout).contains("@198.51.100.7:2200"));
+    assert!(
+        stderr.contains("this SSH session") && stderr.contains("--host"),
+        "{stderr}"
+    );
+
+    let (code, stdout, stderr) = connection_with(&home, "--host box.example --text", session);
+    assert_eq!(code, 0, "{stdout}{stderr}");
+    assert!(
+        details_line(&stdout).contains("@box.example:2200"),
+        "the session's port stays: {stdout}"
+    );
+
+    assert!(
+        !home.join(".octoboard").exists(),
+        "creates no data directory"
+    );
+}
+
+/// The entry's name in the details is the name the machine gives itself, left out where that is
+/// the host.
+#[test]
+fn connection_names_the_entry_after_the_machine_unless_that_is_the_host() {
+    let Some(machine) =
+        crate::platform::fs::host_name().and_then(crate::connection_details::text_of)
+    else {
+        return;
+    };
+    if machine.contains(char::is_whitespace) {
+        // The arguments of the child are split at spaces.
+        return;
+    }
+    let home = ScratchDir::new("connection-name");
+    let (code, stdout, stderr) = connection_with(&home, &format!("--host {machine} --text"), None);
+    assert_eq!(code, 0, "{stdout}{stderr}");
+    assert!(
+        !details_line(&stdout).contains("name="),
+        "the host is the name: {stdout}"
+    );
+    let (code, stdout, stderr) = connection_with(&home, "--host other.example --text", None);
+    assert_eq!(code, 0, "{stdout}{stderr}");
+    assert!(details_line(&stdout).contains("name="), "{stdout}");
+}
+
+/// `address` for the desktop application's daemon prints the browser address at the fixed forward
+/// port, not at the port the system assigned the daemon, while remote access is on; with it off it
+/// prints none, says which setting turns it on and exits 1, and `--rotate` replaces the key for
+/// later and exits 0.
+#[tokio::test(flavor = "multi_thread")]
+async fn address_for_the_application_daemon_follows_remote_access() {
+    let home = ScratchDir::new("address-application-on");
+    let _served = serve_endpoint(&home, crate::browser::key_check_router());
+    let home_path = home.to_path_buf();
+    let (on, off, rotated, after) = tokio::task::spawn_blocking(move || {
+        let data = home_path.join(".octoboard");
+        crate::owner_key::write_in(&data, OWNER_KEY);
+        let on = {
+            let _stand_in = StandIn::start_application_now(&home_path, true);
+            finished(command(&home_path, "address"))
+        };
+        let (off, rotated, after) = {
+            let _stand_in = StandIn::start_application_now(&home_path, false);
+            let off = finished(command(&home_path, "address"));
+            let kept = crate::owner_key::read_in(&data);
+            let rotated = finished(command(&home_path, "address --rotate"));
+            (off, (kept, rotated), crate::owner_key::read_in(&data))
+        };
+        (on, off, rotated, after)
+    })
+    .await
+    .unwrap();
+
+    let (code, stdout, stderr) = on;
+    assert_eq!(code, 0, "{stdout}{stderr}");
+    let line = stdout
+        .lines()
+        .find(|line| line.starts_with("http://"))
+        .expect("an address");
+    let fixed = crate::coordinator::remote_access::FORWARD_PORT;
+    assert_eq!(line, format!("http://127.0.0.1:{fixed}/?key={OWNER_KEY}"));
+
+    let (code, stdout, stderr) = off;
+    assert_eq!(code, 1, "{stdout}{stderr}");
+    assert!(
+        !stdout.lines().any(|line| line.starts_with("http://")),
+        "{stdout}"
+    );
+    assert!(stderr.contains("Allow remote access"), "{stderr}");
+
+    let (kept, (code, stdout, stderr)) = rotated;
+    assert_eq!(
+        kept.as_deref(),
+        Some(OWNER_KEY),
+        "`address` replaced nothing"
+    );
+    assert_eq!(code, 0, "{stdout}{stderr}");
+    assert!(
+        !stdout.lines().any(|line| line.starts_with("http://")),
+        "{stdout}"
+    );
+    let after = after.expect("a key");
+    assert_ne!(after, OWNER_KEY);
 }

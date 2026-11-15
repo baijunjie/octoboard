@@ -6,9 +6,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use super::{PermissionKind, PermissionsStatus};
-use crate::system_settings::{
-    open_system_settings, ACCESSIBILITY_PANE_URL, SCREEN_RECORDING_PANE_URL,
-};
+use crate::system_settings::{ACCESSIBILITY_PANE_URL, SCREEN_RECORDING_PANE_URL};
 
 /// The four system functions, declared by hand rather than taken from a crate: the rest of this
 /// shell reaches macOS through the `objc2` family, but these are plain C entry points in two
@@ -140,7 +138,7 @@ pub fn request_permission(kind: PermissionKind) -> bool {
 }
 
 pub fn open_privacy_settings(kind: PermissionKind) -> Result<(), String> {
-    open_system_settings(match kind {
+    crate::open_address::open(match kind {
         PermissionKind::ScreenRecording => SCREEN_RECORDING_PANE_URL,
         PermissionKind::Accessibility => ACCESSIBILITY_PANE_URL,
     })

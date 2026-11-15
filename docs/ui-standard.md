@@ -374,6 +374,16 @@ accurate without that assumption. Keep all translations aligned with the same sc
 Keyboard-shortcut scope descriptions use the shared `useShortcutScopeDescription` hook: desktop app versus browser
 comes from the platform adapter's `kind`, independently of where sessions run.
 
+## Naming the application in copy
+
+UI copy does not name the application where a generic reference says the same thing (by the user's decision): "the
+app", "this app", or a reference that leaves the subject implicit ("Restart to finish updating"), in every catalog
+alike. The name stays only where a generic reference would mislead or be ambiguous: where the application is set
+beside other software (an agent, a browser, the system's own settings, another computer's copy of it), where the user
+must recognise the name elsewhere (a system settings list, a notification's sender, a command such as `octoboardd`),
+and in the product's own titles (the About dialog, the window title). The daemon is "the daemon", and a command names
+its executable.
+
 ## Keyboard
 
 A chart in a report page is the one place the mouse has an interaction the keyboard does not: the tooltip on hover, the
@@ -519,6 +529,11 @@ leading edge only where the group is wider than the row, so it overflows at its 
 that a field (a select, a text field, a path picker) fills the row's width with the buttons beside it. Whatever the
 alignment, a group has at most one primary button, and a centred row holds at most two buttons: a third way out becomes
 a mark or goes.
+
+**A dialog's footer holds at most two buttons** (by the user's decision). Where a dialog offers two actions besides
+dismissing it, the dialog's own close button (the × at its top trailing corner) is the way to dismiss it and the footer
+leaves out Cancel; the footer is then the secondary action and the primary one. A dialog with one action keeps Cancel
+beside it.
 
 Every button is the wrapper layer's `Button` (HeroUI's, through `primitives`). A custom-drawn button, such as a whole
 band or row that is itself the control, uses the layer's `BareButton`, which marks the states React Aria's buttons
@@ -1565,8 +1580,10 @@ refusal through `StatusAnnouncer` instead, again on a repeated refusal in the sa
 #### The error alert dialog
 
 Every asynchronous refusal or failure reported in reply to an operation the user started opens the dedicated error alert
-dialog and remains there until the user presses its acknowledgement button. Errors never use toasts, timeouts, an
-outside press, Escape or a close button for dismissal. Use HeroUI's `AlertDialog` (the wrapper layer's `Modal` with
+dialog and remains there until the user dismisses it on purpose: with its acknowledgement button, or with its close
+button (×), which every error alert dialog has, since pressing it is as deliberate as pressing a button (by the user's
+decision). Errors never use toasts, timeouts, an outside press or Escape for dismissal: those are too easily set off by
+accident. Use HeroUI's `AlertDialog` (the wrapper layer's `Modal` with
 `alert`) with its icon (`ModalStatusIcon`) set to `status="danger"` and a danger acknowledgement button, retaining the
 library's default visual treatment. The alert takes focus and announces its title and body through `role="alertdialog"`,
 without a second live announcement inside it; the body's opening sentence is optional, never restating the title, so an
@@ -1601,7 +1618,11 @@ which can capture what the user would not share.
 Do not ask the user to fix a likely application defect or present a known environmental problem as a bug.
 An error alert dialog's recovery action is a secondary button in its footer beside the acknowledgement button, never a
 button inside its body. The footer is trailing-aligned, so Report issue and the recovery action come first and the
-acknowledgement button, the dialog's primary, stands at the trailing edge. Its body is the dialog's own prose in the
+acknowledgement button, the dialog's primary, stands at the trailing edge. Where Report issue and a recovery action
+are both offered, the footer's two-button limit applies (see "Buttons"): the acknowledgement button goes, the close
+button doing exactly what it did, and the footer holds Report issue and the recovery action, which stays a secondary
+button. A dialog that must be acknowledged in the same way, such as the ended login dialog, follows the same rules: a
+close button, no Escape and no outside press. Its body is the dialog's own prose in the
 application's own words: the explanation, the remedy and any further explanation follow one another without an Alert
 inside the dialog. What is not written for the reader — a message passed through from the system, Git, the daemon or an
 agent, a stack, a diagnostic block — is never part of that prose, not even as a reference chip: it sits behind an
@@ -1629,8 +1650,9 @@ itself into a failure modal in the error alert dialog's form, never an ordinary 
 the danger icon in its header, a title naming the failure, the explanation as sentences in its body, the raw text
 behind **Error details**, and its footer trailing-aligned like the error alert dialog's, secondary buttons first and
 the primary at the trailing edge. It replaces the dialog's content in the same modal; no second dialog opens over a
-dialog that has nothing left to offer. A login that failed or timed out is one: it has no close button and no Escape,
-and its footer is Close then Log in again, which takes focus. The alert dialog's mounting and the focus move announce a
+dialog that has nothing left to offer. It takes the error alert dialog's dismissal too: a close button (×), and no
+Escape or outside press. A login that failed or timed out is one: its footer is Close then Log in again, which takes
+focus, or Report issue then Log in again for an unexpected failure, the × standing for Close. The alert dialog's mounting and the focus move announce a
 failure modal, with no further live announcement.
 
 The error alert dialog owns the announcement of the failures it shows; nothing else announces them again. A failure
@@ -2182,6 +2204,10 @@ keys (Copy, Paste, Select all) opens from right-click and the Menu key or Shift+
 since the editing keys themselves already do what those items do. It may also hold an item about what lies under the
 pointer, which only a right-click there can offer and a key-opened menu leaves out (the terminal's Open in file manager
 on a path link). The terminal's editing menu and the file viewer's text menu are the instances.
+
+The rail's tiles are the other exception (by the user's decision): a console's avatar and a connected remote daemon's
+tile open their menu from right-click and the Menu key or Shift+F10 alone, with no visible trigger beside a tile that
+has no room for one; every item in a remote daemon's tile menu is also offered elsewhere (the menu bar icon's tab).
 
 ### Copy actions in menus
 

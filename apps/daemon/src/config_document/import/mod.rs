@@ -135,7 +135,7 @@ fn parse(value: &serde_json::Value) -> Result<ConfigurationDocument> {
         return Err(CodedError::raised(
             error_code::CONFIGURATION_VERSION_UNSUPPORTED,
             format!(
-                "the configuration is of version {version}; this Octoboard reads versions {} to {}",
+                "the configuration is of version {version}; this version of the app reads versions {} to {}",
                 upgrade::OLDEST_VERSION,
                 CONFIGURATION_VERSION
             ),
@@ -295,8 +295,8 @@ fn clone_dir_changes(dir: &str) -> SettingsChanges {
 }
 
 /// The write of the document's application settings, once everything else is done: the keys it
-/// carries, the language only where this build offers it and the choice of when to hold only where
-/// this build knows it.
+/// carries, the agent language only where this build offers it and the choice of when to hold only
+/// where this build knows it.
 fn application_settings_changes(settings: &DocumentSettings) -> SettingsChanges {
     SettingsChanges {
         auto_close_idle_shell_terminals: settings.auto_close_idle_shell_terminals,
@@ -308,7 +308,7 @@ fn application_settings_changes(settings: &DocumentSettings) -> SettingsChanges 
         auto_approve_handoffs: settings.auto_approve_handoffs,
         ask_questions_as_choices: settings.ask_questions_as_choices,
         keep_sessions_in_own_project: settings.keep_sessions_in_own_project,
-        interface_language: offered_language(settings.interface_language.as_deref()),
+        agent_language: offered_language(settings.agent_language.as_deref()),
         resume_sessions_on_start: settings.resume_sessions_on_start,
         keep_awake: settings.keep_awake,
         keep_awake_when: known_keep_awake_when(settings.keep_awake_when.as_deref()),
@@ -912,18 +912,19 @@ pub async fn apply_reporting(
     }
     if let Some(settings) = document.settings.filter(|_| settings_error.is_none()) {
         progress.report(ImportItem::Settings, ImportItemState::Creating);
-        let interface_language = offered_language(settings.interface_language.as_deref());
+        let agent_language = offered_language(settings.agent_language.as_deref());
         let changes = application_settings_changes(&settings);
         let keep_awake_when = changes.keep_awake_when;
         let base = based_on(&changes, settings_versions.as_ref());
         match coordinator::settings::update_settings_checked(state, changes, &base).await {
             // The echo says what was applied, so the directory only where it was written above, the
-            // language only where this build offers it and the choice of when to hold only where
-            // this build knows it.
+            // agent language only where this build offers it (whichever key it came under), the
+            // interface language as it came, for the client to apply, and the choice of when to
+            // hold only where this build knows it.
             Ok(()) => {
                 settings_applied = Some(DocumentSettings {
                     default_clone_dir: clone_dir_applied.clone(),
-                    interface_language,
+                    agent_language,
                     keep_awake_when: keep_awake_when.map(|when| when.wire_name().to_string()),
                     ..settings
                 });

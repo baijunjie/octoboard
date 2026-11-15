@@ -137,7 +137,7 @@ glyph is drawn in the danger colour.
   daemon that could not start, then a line giving the window's version and the daemon's, each said to be unknown where
   it is not known: the window's version is the application's as the desktop shell reports it, so a browser shows it
   unknown, and the daemon's is the release version its greeting gave, unknown for a daemon that sent none (see "A
-  daemon of another version" in `docs/product/application-lifecycle.md`). Its row holds **Quit Octoboard** in the desktop application, or
+  daemon of another version" in `docs/product/application-lifecycle.md`). Its row holds **Quit** in the desktop application, or
   **Reload** in a browser, as the primary button, then **Report issue**.
 - **An address that does not open the daemon**, shown only by a page the server form's daemon served: headed that this
   address no longer opens the daemon, with the line saying its key has changed, when the daemon refused the page's key
@@ -220,7 +220,7 @@ F6" in `docs/product/moving-focus-between-regions.md`.
 ## The top bar
 
 The top bar is on every screen, the same height everywhere. On the screens shown before there is anything to
-show it is there but empty.
+show it is there but empty, but for the remote daemon's name in a remote window (below).
 
 It runs, left to right:
 
@@ -228,6 +228,11 @@ It runs, left to right:
   `docs/product/navigation-history.md`); each is disabled while there is nowhere to go in its direction.
 - The sidebar toggle ("Show sessions" / "Hide sessions"), there only while there is a sidebar — so not while the
   window shows the welcome screen (see `docs/product/welcome-screen.md`).
+- **In a remote window** (see `docs/product/remote-daemons.md`), the **remote daemon's name**, in a chip with a server
+  glyph, filled as the bar's controls are, and set apart from the breadcrumb, since it names the machine rather than a
+  level of the path. Assistive technology reads it as the daemon on that name. It keeps its width while the breadcrumb
+  beside it fades first; a name too long for the chip's own width fades too, runs as a marquee while the pointer rests
+  on it, and shows whole in a tooltip. The main window has no chip.
 - The selected session's **breadcrumb** — *console › project › session title* for a project session, *console ›
   session title* for a console session, which belongs to no project — followed by the session's status icon. The
   session title follows "Displayed names" in `docs/product/session-titles.md`. Nothing in the bar reports the
@@ -268,7 +273,9 @@ not move anything.
 **In the Windows application the window has the system's own title bar and frame**, with the system's minimise,
 maximise and close buttons, above the top bar; snapping, maximising and moving the window are the system's, by that
 title bar. The top bar is then like a browser's: it starts at the window's left edge, keeps no space for window
-buttons, and dragging it moves nothing. There is no menu bar and no application menu: Settings, its About section
+buttons, and dragging it moves nothing. The system menu of the title bar's icon holds the Remote items after the
+system's own (see "Where remote daemons are reached from" in `docs/product/remote-daemons.md`). There is no menu bar and
+no application menu: Settings, its About section
 included, opens from the rail's Settings button and from its shortcut (see "Opening and closing Settings" in
 `docs/product/settings.md`), and Octoboard is quit from the notification-area icon's menu (see
 `docs/product/menu-bar-icon.md`).
@@ -307,6 +314,17 @@ The rail runs from under the top bar to the window's bottom (or the connection b
   in `docs/product/pane-docking.md`). When there are more consoles than fit, the avatars scroll, with no scrollbar
   drawn — so the fade at the column's edge is the only sign there are more (see "The edge that hides content fades"
   in `docs/product/scrolling-surfaces.md`); New console stays below them.
+- **Under the consoles, in the main window of the desktop application, the connected remote daemons**, set off by a
+  groove: one tile for each remote daemon whose connection is held, in a remote window or for the browser (see
+  `docs/product/remote-daemons.md`), in the order they were saved. A tile is a round avatar with a server glyph, on a
+  fill picked from the daemon's name, with a badge at its corner: a check while connected, a turning arrow while
+  reconnecting. Its tooltip gives the name, `user@host:port` and the state. Pressing it brings the daemon's window
+  forward, or opens the browser at it again. A right-click, or the Menu key or `Shift+F10` on it, opens a menu with
+  **Open**, the same, and **Disconnect** (see "Disconnecting and closing" in `docs/product/remote-daemons.md`); the
+  menu has no visible trigger beside the tile. Remote daemons that are not connected have no tile, and with none
+  connected the group and its groove are absent. Nothing here adds, edits or removes one: that is the connect page's.
+  A remote window, and a browser, have no such group. In a window too short for the whole rail this group gives way
+  first, down to one tile, scrolling on its own without a scrollbar, before the consoles lose any height.
 - **At the bottom**, top to bottom: - the **waiting count**, a raised hand with the number of sessions waiting for
   the user in a badge at the button's top right, its top left under a right-to-left language (see
   `docs/product/right-to-left-layout.md`), shown only while at least one is (99+ beyond 99); pressing it goes to the

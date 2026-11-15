@@ -66,7 +66,7 @@ it("pushes the choice to the shell when the switch is toggled", async () => {
 
 it("says how the window comes back only while the icon is hidden and the app keeps running in the background", async () => {
   const container = mount({ kind: "tauri", host: BROWSER_HOST, statusItem: statusItem(async () => {}) });
-  const hint = "open Octoboard again or click one of its notifications";
+  const hint = "open the app again or click one of its notifications";
   await act(async () => {
     showMenuBarIcon.set(false);
   });

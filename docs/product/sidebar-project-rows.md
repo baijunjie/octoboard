@@ -69,6 +69,8 @@ without moving the others.
   below). System terminal opens the operating system's terminal application at that directory (see "Opening a project
   terminal" in `docs/product/project-terminal.md`). Both are offered for every project, including one that is not a
   git repository and one whose git status has not arrived. Neither raises a success notice; a failure is an error alert.
+  In a remote window of the desktop application both are left out, the daemon being another machine's (see "The remote
+  window" in `docs/product/remote-daemons.md`), and Open in is left out too when no repository entry remains.
   The repository entry opens the recorded remote's web address in the client's browser and carries a trailing external-link icon.
   Public GitHub, GitLab and Bitbucket hosts carry their brand names and icons; other hosts carry their hostname and a
   globe icon, including self-hosted installations. A missing, invalid, local or unsupported remote, or a client unable

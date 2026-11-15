@@ -64,8 +64,9 @@ on Windows by the `--launched-at-login` argument. Only the first time a launch's
   the background: the window is never shown, and on macOS Octoboard is not in the Dock, though its Dock icon may appear
   for a moment while it starts. The daemon and the sessions run as with the window shown, and the window comes back by
   any of the ways in "Closing the window" in `docs/product/application-lifecycle.md`: the menu bar icon's menu while
-  the icon is shown, opening Octoboard again, or one of its notifications.
-- **While it is off**, a launch at login opens the window as any launch does.
+  the icon is shown, opening Octoboard again, or one of its notifications. It brings back none of the remote windows
+  open at the last quit (see "Bringing remote windows back at launch" in `docs/product/remote-daemons.md`).
+- **While it is off**, a launch at login opens the window as any launch does, and brings those remote windows back.
 - The four-second fallback that shows a window the UI has not revealed (see "Starting up" in
   `docs/product/application-lifecycle.md`) is not armed at a launch at login, whichever way the switch is set: should
   the UI never load, the window stays hidden until one of the ways above brings it back.

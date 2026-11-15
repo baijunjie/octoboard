@@ -14,11 +14,12 @@ function systemLanguages(): readonly string[] {
 }
 
 /**
- * The UI's language. Once connected it is the one the daemon holds, which every client shares
- * (`useInterfaceLanguage`); what is kept here is only a cache of it, so that the start renders in
- * that language before it has connected. With no cache (the first launch, or cleared storage) it is
- * picked from the system's preferred languages. Without storage nothing is kept, so it is picked
- * from the system again on every load.
+ * The UI's language, the interface language: the client's own, never sent to a daemon, and kept in
+ * this client's storage as an application preference, which every window of the desktop application
+ * shares (a pick in one window reaches the others), whichever daemon each shows. With nothing kept
+ * (the first launch, or cleared storage) it is picked from the system's preferred languages. Without
+ * storage nothing is kept, so it is picked from the system again on every load. A daemon that holds
+ * no agent language is given this one as its first (`useAgentLanguageSeed`).
  */
 const language = createPersistedPreference<Language>(
   PREFERENCE_KEYS.language,

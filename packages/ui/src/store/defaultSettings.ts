@@ -12,7 +12,7 @@ export const DEFAULT_SETTINGS: Settings = {
   auto_approve_handoffs: false,
   ask_questions_as_choices: true,
   keep_sessions_in_own_project: false,
-  interface_language: null,
+  agent_language: null,
   keep_awake: false,
   keep_awake_when: "working",
   auto_select_account: false,

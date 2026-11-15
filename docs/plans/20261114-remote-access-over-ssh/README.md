@@ -37,7 +37,8 @@ daemon, so that login is the credential: a device is let in by its SSH key and r
 - **A browser reaches a daemon through the owner's own SSH forward.** On Linux and macOS that is a forward of the
   socket, as in the server form. Windows' SSH server cannot forward to a socket or a named pipe (Win32-OpenSSH 9.5
   and 9.8 both fail, and its fix has no date), so on Windows alone the daemon accepts the owner key at a fixed
-  loopback TCP port, on a listener of its own, while remote access is on, as VS Code's remote server does on a
+  loopback TCP port, on a listener of its own, while remote access is on (the server form's default port
+  unless the owner changes it, settled by the user), as VS Code's remote server does on a
   Windows host (settled by the user). The confirmation says what that costs: on a computer other people also log in
   to, one of them can take that port whenever the daemon is not holding it — while the application is not running,
   or while its daemon is restarted — and be sent the key by a browser that reconnects.
@@ -95,31 +96,23 @@ daemon, so that login is the credential: a device is let in by its SSH key and r
 
 ## Milestones
 
-- [01 Remote access switch and browser access on macOS](01-remote-access-switch-and-browser-access-on-macos.md) —
-  needs the owner key and the browser socket, which exist
-- [02 Browser access on Windows](02-browser-access-on-windows.md) — needs 01
-- [03 The owner endpoint command](03-owner-endpoint-command.md) — needs the browser socket of the server form,
-  which exists
-- [04 One window per daemon](04-one-window-per-daemon.md) — needs nothing of the others
-- [05 Connecting to a remote daemon over SSH](05-remote-daemon-over-ssh.md) — needs 03 and 04
-- [06 Menu bar icon, Dock badge and notifications per daemon](06-menu-bar-icon-dock-badge-and-notifications.md) —
-  needs 05
-- [07 Device keys](07-device-keys.md) — needs 05
-- [08 Connection details and setup guide](08-connection-details-and-setup-guide.md) — needs 05
-- [09 The desktop form as a host](09-desktop-form-as-host.md) — needs 01, 02, 03 and 08
+- 01 Remote access switch and browser access on macOS (closed)
+- 02 Browser access on Windows (closed)
+- 03 The owner endpoint command (closed)
+- 04 One window per daemon (closed)
+- 05 Connecting to a remote daemon over SSH (closed)
+- 06 Menu bar icon, Dock badge and notifications per daemon (closed)
+- 07 Device keys (closed)
+- 08 Connection details and setup guide (closed)
+- 09 The desktop form as a host (closed)
+- 10 The notification-area flyout on Windows (closed)
+- [11 Final confirmation](11-final-confirmation.md) — needs 01 to 10
 
 ## Open
 
 - Which mobile client a phone uses; no mobile client exists yet.
-- Where in the window remote daemons are listed, added and connected from.
 - Whether the first version honours the owner's SSH agent and `~/.ssh/config` (host aliases, identity files), and
   jump hosts.
-- Whether remote windows come back at launch, at a launch at login and after a restart into an update.
-- Whether a remote window offers the remote daemon's own update, as a browser on a server form's daemon does.
-- Which window Settings and About open in when no window has the focus.
-- The default port of browser access on Windows.
 - Whether Windows offers the application's way in (the named pipe) without also opening the browser's port.
 - How the page for a refused key words its way back (today: run `octoboardd address` on the server) when the daemon
   is the desktop application's.
-- How a desktop host whose application is not running is told from a server whose daemon is stopped, for which the
-  application offers to start it.

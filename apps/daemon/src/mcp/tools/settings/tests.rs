@@ -571,29 +571,56 @@ async fn the_users_own_switches_are_out_of_the_agents_reach() {
     }
 }
 
-/// The language the daemon holds for the user is read and changed through the settings tools,
-/// and a tag the interface does not offer is refused without changing it.
+/// Remote access (Allow remote access, and the browser port of Windows) is the user's alone: an
+/// agent can neither read nor change it through the settings tools, whatever it passes.
 #[tokio::test]
-async fn the_interface_language_is_read_and_changed_through_the_tools() {
-    let (state, _dir) = settings_state("app-settings-interface-language");
-    let read = call(&state, "a", "get_settings", &Map::new())
+async fn remote_access_is_out_of_the_agents_reach() {
+    let (state, _dir) = settings_state("app-settings-remote-access");
+    state.store.set_remote_access_port(Some(4000)).unwrap();
+    let listed = call(&state, "a", "get_settings", &arguments(json!({})))
         .await
         .unwrap();
-    assert!(read["interface_language"].is_null());
+    let text = listed.to_string();
+    assert!(!text.contains("remote_access"), "{text}");
+    assert!(!text.contains("4000"), "{text}");
 
     let updated = call(
         &state,
         "a",
         "update_settings",
-        &arguments(json!({ "interface_language": " ja " })),
+        &arguments(json!({
+            "allow_remote_access": true,
+            "remote_access_port": 5000,
+            "default_clone_dir": crate::test_support::host_path("/tmp/clones"),
+        })),
     )
     .await
     .unwrap();
-    assert_eq!(updated["interface_language"], "ja");
-    assert_eq!(
-        state.store.interface_language().unwrap().as_deref(),
-        Some("ja")
-    );
+    assert!(!updated.to_string().contains("remote_access"), "{updated}");
+    assert!(!state.store.allow_remote_access().unwrap());
+    assert_eq!(state.store.remote_access_port().unwrap(), Some(4000));
+}
+
+/// The agent language is read and changed through the settings tools,
+/// and a tag the interface does not offer is refused without changing it.
+#[tokio::test]
+async fn the_agent_language_is_read_and_changed_through_the_tools() {
+    let (state, _dir) = settings_state("app-settings-interface-language");
+    let read = call(&state, "a", "get_settings", &Map::new())
+        .await
+        .unwrap();
+    assert!(read["agent_language"].is_null());
+
+    let updated = call(
+        &state,
+        "a",
+        "update_settings",
+        &arguments(json!({ "agent_language": " ja " })),
+    )
+    .await
+    .unwrap();
+    assert_eq!(updated["agent_language"], "ja");
+    assert_eq!(state.store.agent_language().unwrap().as_deref(), Some("ja"));
 
     for (bad, expected) in [
         (json!("klingon"), "not a language"),
@@ -603,15 +630,12 @@ async fn the_interface_language_is_read_and_changed_through_the_tools() {
             &state,
             "a",
             "update_settings",
-            json!({ "interface_language": bad }),
+            json!({ "agent_language": bad }),
         )
         .await;
         assert!(message.contains(expected), "{message}");
     }
-    assert_eq!(
-        state.store.interface_language().unwrap().as_deref(),
-        Some("ja")
-    );
+    assert_eq!(state.store.agent_language().unwrap().as_deref(), Some("ja"));
 }
 
 /// The settings of the Agent accounts section, automatic account selection, the providers'
@@ -1412,4 +1436,24 @@ async fn compatibility_agent_settings_remain_read_only_and_separate_from_launche
         state.store.provider_settings().unwrap()["codex"]["claude_compatibility"],
         Some(crate::providers::SettingValue::Switch(false))
     );
+}
+
+/// The key the one language of the windows and the agents was set by before is no setting of the
+/// tools: passed, it changes no language, whether the call ignores it or refuses it.
+#[tokio::test]
+async fn the_old_interface_language_key_changes_no_language_through_the_tools() {
+    let (state, _dir) = settings_state("app-settings-old-language-key");
+    let _ = call(
+        &state,
+        "a",
+        "update_settings",
+        &arguments(json!({ "interface_language": "ja" })),
+    )
+    .await;
+    assert_eq!(state.store.agent_language().unwrap(), None);
+    let read = call(&state, "a", "get_settings", &Map::new())
+        .await
+        .unwrap();
+    assert!(read.get("interface_language").is_none(), "{read}");
+    assert!(read["agent_language"].is_null());
 }

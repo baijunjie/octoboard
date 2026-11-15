@@ -6,6 +6,7 @@ import type { Agent } from "../protocol";
 export { ConfigurationFileError } from "./configurationFileError";
 export { UpdaterError } from "./updaterError";
 export type { HostFacts } from "./host";
+export { connectPageEntry, daemonIdentity, remoteDaemonName, windowKind, type WindowKind } from "./windowKind";
 
 /**
  * The only route from the UI to anything native. Every capability is optional: a member that is
@@ -42,9 +43,16 @@ export interface PlatformAdapter {
   /** The shell's native menu bar: the items that ask the UI to do something, and the labels the
    * UI gives every item. */
   readonly appMenu?: AppMenuCapability;
+  /** The taskbar's jump list on Windows, whose lines read the labels the UI hands it: New Remote Window, the local
+   * window and, under the Remote menu's name, the saved remote daemons. The shell gives every window's system menu the
+   * same items from the same labels, with a line saying there is no saved daemon. Absent where there is none. */
+  readonly jumpList?: JumpListCapability;
   /** The shell's menu bar icon, which keeps the app reachable while its window is closed: its menu
    * lists the sessions the UI hands it, and choosing one comes back here. */
   readonly statusItem?: StatusItemCapability;
+  /** The notification-area flyout's own page (`?flyout=1`, see `windowKind`): the model it draws and the answers it
+   * gives the shell. Present only there, in the one window that has no daemon and is not a window of any. */
+  readonly trayFlyout?: TrayFlyoutCapability;
   /** The system clipboard, for text the UI puts there on the user's say-so. */
   readonly clipboard?: ClipboardCapability;
   /** Saving the configuration document as a file the user names and opening one the user picks,
@@ -60,6 +68,16 @@ export interface PlatformAdapter {
    * grant on purpose; present only under a desktop shell, which answers `undefined` from `status`
    * when it is not running on macOS. */
   readonly macosPermissions?: MacosPermissionsCapability;
+  /** Whether this computer's SSH server (the service another computer reaches this one through: Remote Login on macOS,
+   * OpenSSH Server on Windows) is on, and the way to the system settings that turn it on; present only in the local
+   * daemon's window of the desktop shell, which answers `undefined` from `status` where it cannot tell. Also what tells
+   * that window from a browser, whose adapter has none of the shell's capabilities. */
+  readonly remoteLogin?: RemoteLoginCapability;
+  /** The list of Octoboard daemons on other computers that the shell reaches over SSH, and connecting to one, which
+   * opens a window of its own on it: present in every window of the desktop application (the local daemon's, a connect
+   * window's and a remote daemon's), and in no browser. The rail lists the connected ones in the local daemon's window
+   * only (`remoteDaemonsOffered`). No command of it hands a secret to the page. */
+  readonly remoteDaemons?: RemoteDaemonsCapability;
   /** Whether closing the window keeps the app running in the background: present only where a
    * shell answers the window's close button and can do either, so the Settings switch for it
    * exists only there. */
@@ -127,7 +145,8 @@ export interface NotificationCapability {
 }
 
 export interface BadgeCapability {
-  /** Shows `count` on the application's icon; 0 clears it. */
+  /** Reports `count` as this window's share of the badge on the application's icon, which shows the sum of every
+   * window's share; 0 gives up the share. */
   set(count: number): Promise<void>;
 }
 
@@ -159,6 +178,11 @@ export interface WindowChromeCapability {
   subscribe(callback: () => void): () => void;
 }
 
+export interface JumpListCapability {
+  /** Hands the shell the jump list's labels, keyed as the menu's (`menu.*`) and already in the UI's language. */
+  setLabels(labels: Record<string, string>): Promise<void>;
+}
+
 export interface AppMenuCapability {
   /** Subscribes to the menu's Settings item (Cmd+, unless rebound), returning the function that undoes it. */
   onSettingsRequested(handler: () => void): () => void;
@@ -173,8 +197,9 @@ export interface AppMenuCapability {
   setLabels(labels: Record<string, string>, settingsAccelerator?: string): Promise<void>;
 }
 
-/** The menu bar icon's menu, already in the UI's language; it also decides the icon's picture,
- * through `attention` and the selected session’s quota. */
+/** What this window's daemon shows in the menu bar icon's menu, its tab (a submenu on Windows), already in the UI's
+ * language; it also decides the icon's picture, through `attention` (the dot is up while any daemon raises a hand) and
+ * the selected session’s quota (shown while this is the window focused last). */
 export interface StatusItemMenu {
   sections: StatusItemSection[];
   /** Submenus after the sessions and before Open, such as an agent's quota; none until the UI has
@@ -185,7 +210,15 @@ export interface StatusItemMenu {
   open: string;
   /** Opens the update controls in Settings; names a known update even when its notice is hidden. */
   updates?: string;
+  /** Quits the application, below every tab. */
   quit: string;
+  /** Ends the connection to a remote daemon (closing its window), in its tab; the application and the local daemon's
+   * window run on. */
+  disconnect: string;
+  /** The labels of what the shell's one menu bar icon shows for the application rather than for this window's daemon:
+   * the local daemon's tab and the line that opens a daemon held for the browser. The shell takes them from the local
+   * daemon's window. */
+  app: StatusItemAppLabels;
   /** Whether the icon shows its attention dot: a live session is waiting for the user. */
   attention: boolean;
   /** Remaining quota of the selected session's account, 0–100: its 5-hour window's when it has a weekly
@@ -200,6 +233,15 @@ export interface StatusItemMenu {
    * and that the app is keeping the computer awake. The shell, which knows when it holds, uses it in place of the
    * name. */
   keep_awake_label: string;
+}
+
+/** The labels the menu bar icon's menu takes from the application rather than from one daemon. Connecting to a remote
+ * daemon is not offered there: that is the Remote menu's, the Dock menu's and the jump list's. */
+export interface StatusItemAppLabels {
+  /** The local daemon's tab: "This Mac", "This PC". */
+  this_computer: string;
+  /** Opens a remote daemon held for the browser there, in its tab. */
+  open_in_browser: string;
 }
 
 export interface StatusItemIcon {
@@ -277,10 +319,13 @@ export type StatusItemSubmenuDraftItem =
 export type StatusItemSubmenuDraft = Omit<StatusItemSubmenu, "items"> & { items: StatusItemSubmenuDraftItem[] };
 
 export interface StatusItemCapability {
-  /** Shows or hides the icon itself, which is the user's Settings switch. The shell shows it from launch, so the UI
-   * sends its choice at startup; hiding keeps the menu, which is there again when the icon is shown. */
-  setVisible(visible: boolean): Promise<void>;
-  /** Replaces the menu bar icon's menu, and with it whether the icon shows its attention dot. */
+  /** Shows or hides every icon, which is the user's Settings switch. The shell shows them from launch, so the UI
+   * sends its choice at startup; hiding keeps the menus, which are there again when the icons are shown. The switch is
+   * the application's, so only the local daemon's window has it; another daemon's window has an icon of its own but
+   * not this. */
+  setVisible?(visible: boolean): Promise<void>;
+  /** Replaces the menu of this window's own menu bar icon (each daemon's window has one), and with it whether the icon
+   * shows its attention dot. */
   setMenu(menu: StatusItemMenu): Promise<void>;
   /** Subscribes to a session being chosen in that menu, returning the function that undoes it. The
    * shell has already brought the window to the front. */
@@ -290,6 +335,69 @@ export interface StatusItemCapability {
   /** Subscribes to the menu beginning to open, returning the function that undoes it. A menu sent
    * while it is open is held until it closes, so what the handler asks for lands on the next one. */
   onOpened(handler: () => void): () => void;
+}
+
+/** What the Windows notification-area flyout shows, built by the shell from the menu bar icon's model, already in the
+ * UI's language. */
+export interface TrayFlyoutModel {
+  /** At least one; the first is the local daemon's. */
+  tabs: TrayFlyoutTab[];
+  /** The tab chosen when the model was built. */
+  chosen: number;
+  /** What each tab lists (its sessions and quota rows), one list per tab in the tabs' order. */
+  panels: TrayFlyoutLine[][];
+  /** The lines every tab shows below its panel: Check for updates. */
+  shared: TrayFlyoutLine[];
+  /** What can be done with each tab's daemon (Open board, Disconnect), one list per tab in the tabs' order, below
+   * the shared lines. */
+  actions: TrayFlyoutLine[][];
+  /** The lines every tab shows last: Quit completely. */
+  footer: TrayFlyoutLine[];
+}
+
+export interface TrayFlyoutTab {
+  key: string;
+  label: string;
+  /** A remote daemon's tab. */
+  remote: boolean;
+  /** The daemon has a session waiting for the user. */
+  raised: boolean;
+}
+
+export type TrayFlyoutLine =
+  /** A section heading, which cannot be chosen. */
+  | { kind: "heading"; label: string; icon?: StatusItemIcon }
+  /** A line that is chosen: its `id` is what the shell is told. */
+  | { kind: "item"; id: string; label: string; icon?: StatusItemIcon }
+  /** A line that cannot be chosen. */
+  | { kind: "note"; label: string; icon?: StatusItemIcon }
+  /** An agent's quota, opened in place to its rows. */
+  | { kind: "quota"; submenu: TrayFlyoutQuota }
+  | { kind: "separator" };
+
+/** A quota submenu as the macOS menu is given it, with its picture inline. */
+export interface TrayFlyoutQuota {
+  title: string;
+  icon?: StatusItemIcon;
+  items: StatusItemSubmenuItem[];
+  quota_remaining?: number;
+  quota_weekly_remaining?: number;
+  quota_label?: string;
+}
+
+export interface TrayFlyoutCapability {
+  /** The model as it is now, or `null` while the shell has none. */
+  model(): Promise<TrayFlyoutModel | null>;
+  /** Subscribes to a newer model, which the shell sends only while the flyout is hidden. */
+  onModel(handler: (model: TrayFlyoutModel) => void): () => void;
+  /** Subscribes to the flyout being shown, with the tab to start on. */
+  onOpened(handler: (opened: { chosen: number }) => void): () => void;
+  /** Tells the shell the content's size in CSS pixels, to size and place the window. */
+  setSize(size: { width: number; height: number }): Promise<void>;
+  /** The line with `id` was chosen; the shell hides the flyout and acts. */
+  choose(id: string): Promise<void>;
+  /** The user dismissed the flyout from the keyboard; the shell hides it. */
+  close(): Promise<void>;
 }
 
 export interface ClipboardCapability {
@@ -424,6 +532,124 @@ export interface MacosPermissionsCapability {
   request(kind: MacosPermissionKind): Promise<boolean>;
   /** Opens the System Settings pane for `kind`. Rejects when the system did not open it. */
   openSystemSettings(kind: MacosPermissionKind): Promise<void>;
+}
+
+/** This computer's SSH server: Remote Login on macOS, OpenSSH Server on Windows. */
+export interface RemoteLoginCapability {
+  /** Whether the SSH server is on (Remote Login on, or the OpenSSH Server service running), or `undefined` where the
+   * shell cannot tell. Only reads. */
+  status(): Promise<boolean | undefined>;
+  /** Opens the system settings that turn it on: macOS System Settings at General, Sharing; Windows Settings at System,
+   * Optional features. Rejects when the system did not open them. */
+  openSystemSettings(): Promise<void>;
+}
+
+/** How the shell signs in to the server: the user's password, a key file on this computer, or this device's own key,
+ * which the shell installs on the server after the first sign-in with one of the others and keeps in the system's
+ * credential store. An entry is switched to "device" by the shell alone. */
+export type RemoteDaemonAuth = "password" | "key" | "device";
+
+/** One remote daemon the shell can connect to, as the shell keeps it. The password or passphrase is never part of it.
+ */
+export interface RemoteDaemonEntry {
+  /** Assigned by the shell. */
+  id: string;
+  /** What the window of the connection is called. */
+  name: string;
+  host: string;
+  /** The SSH port. */
+  port: number;
+  user: string;
+  auth: RemoteDaemonAuth;
+  /** The private key file on this computer, for `auth` "key". */
+  keyPath: string | null;
+  /** The pinned host key fingerprint (`SHA256:…`, as OpenSSH writes it); null until a first connection confirms one. */
+  fingerprint: string | null;
+  /** Where `octoboardd` is on the remote computer, when it is not found by itself. */
+  octoboarddPath: string | null;
+}
+
+/** An entry to save: `id` is null for a new one. */
+export type RemoteDaemonEntryInput = Omit<RemoteDaemonEntry, "id"> & { id: string | null };
+
+export interface RemoteDaemonConnectRequest {
+  id: string;
+  /** The password (`auth` "password", or "device" to sign in again and reinstall the device key) or the key's
+   * passphrase (`auth` "key"); the shell never stores it. */
+  secret: string | null;
+  /** The fingerprint the owner has just confirmed for a host with none pinned. */
+  confirmFingerprint: string | null;
+  /** What to do on the server before connecting: start its daemon. Nothing here updates it, which is done on the
+   * server. */
+  action: "start" | null;
+  /** Hold the connection without opening a window, and have the shell open the daemon's own web interface in the system
+   * browser (`opened_in_browser`), which skips the check that its version matches this application's. */
+  browser: boolean;
+}
+
+/** How a connection attempt ended. */
+export type RemoteDaemonConnectOutcome =
+  /** The window is open, or the one already open for the entry was focused. */
+  | { outcome: "opened" }
+  /** The connection is held for the daemon's own web interface, which the shell has opened in the system browser (the
+   * address carries the owner's key, so it never reaches the page); a shell that cannot open it answers `failed`.
+   * Pressing the entry again opens it again. */
+  | { outcome: "opened_in_browser" }
+  | { outcome: "secret_needed"; kind: "password" | "passphrase" }
+  | { outcome: "host_key_unknown"; fingerprint: string }
+  | { outcome: "host_key_mismatch"; expected: string; actual: string }
+  | { outcome: "unreachable"; detail: string }
+  | { outcome: "auth_failed"; detail: string }
+  /** The server no longer accepts this device's key; signing in with the password installs it again. */
+  | { outcome: "device_key_refused" }
+  | { outcome: "key_unreadable"; detail: string }
+  | { outcome: "octoboardd_not_found"; tried: string[] }
+  | { outcome: "no_daemon" }
+  /** The host's `octoboardd` is the desktop application's, whose daemon runs only while the application does, and the
+   * application is not running there. `detail` may be empty. */
+  | { outcome: "application_not_running"; detail: string }
+  | { outcome: "no_owner_endpoint"; detail: string }
+  | { outcome: "endpoint_unreachable"; detail: string }
+  | { outcome: "generation_mismatch"; remoteGeneration: number; localGeneration: number; remoteVersion: string; localVersion: string }
+  | { outcome: "action_failed"; action: "start"; detail: string }
+  | { outcome: "failed"; detail: string };
+
+/** Whether an entry's window is open and its connection up, or being brought back after it dropped. An entry that
+ * has no window is not connected, and is not reported. */
+export type RemoteDaemonConnectionState = "connected" | "reconnecting";
+
+export interface RemoteDaemonStatus {
+  id: string;
+  state: RemoteDaemonConnectionState;
+  /** What holds the connection: the entry's window, or the system browser (`opened_in_browser`). */
+  via: "window" | "browser";
+}
+
+export interface RemoteDaemonsCapability {
+  list(): Promise<RemoteDaemonEntry[]>;
+  /** The entries whose window is open; any other entry is not connected. */
+  status(): Promise<RemoteDaemonStatus[]>;
+  /** Calls `listener` when the list or a connection changed (an entry saved or removed, a remote window opened or
+   * closed, a connection dropped or back), for the caller to read both again. Returns the unsubscribe. */
+  onChanged(listener: () => void): () => void;
+  /** Saves a new entry or changes one; rejects with the shell's reason when the entry is not valid. */
+  save(entry: RemoteDaemonEntryInput): Promise<RemoteDaemonEntry>;
+  remove(id: string): Promise<void>;
+  /** Connects and opens the window; resolves with how it ended, and may take seconds. Rejects only for a failure of the
+   * command itself. The shell saves the pinned fingerprint itself once a confirmed first connection has authenticated.
+   */
+  connect(request: RemoteDaemonConnectRequest): Promise<RemoteDaemonConnectOutcome>;
+  /** Ends a connection held for the browser, releasing its port and SSH connection, or closes the daemon's window,
+   * which ends its connection. */
+  disconnect(id: string): Promise<void>;
+  /** Opens a new window showing the connect page, where a remote daemon is chosen and connected. */
+  newWindow(): Promise<void>;
+  /** Opens or focuses the daemon's window, going through a connect window only where the connection needs input. */
+  openWindow(id: string): Promise<void>;
+  /** Shows and focuses this computer's own window. */
+  showMainWindow(): Promise<void>;
+  /** Shows this computer's own window with Settings open on Updates, as the menu bar icon's Check for updates does. */
+  showUpdates(): Promise<void>;
 }
 
 /** Picks the implementation once, at startup, from the environment the page is running in. */

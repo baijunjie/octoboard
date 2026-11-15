@@ -1,0 +1,8 @@
+# A custom permission for the app's own Dock badge command; see `exit-lifecycle.toml` for why an
+# app-defined command needs a file like this.
+"$schema" = "./schemas/schema.json"
+
+[[permission]]
+identifier = "allow-badge"
+description = "Allows the frontend to report its window's share of the Dock badge, which shows the sum of every window's share."
+commands.allow = ["set_badge_count"]

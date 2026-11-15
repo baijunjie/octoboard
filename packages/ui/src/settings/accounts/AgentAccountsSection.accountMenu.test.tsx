@@ -195,8 +195,8 @@ describe("an account's actions menu", () => {
     expect(buttonNamed(dialog, "Cancel login")).toBeUndefined();
     const names = [...dialog.querySelectorAll("button")].map((button) => button.textContent).filter((text) => text === "Close" || text === "Log in again");
     expect(names).toEqual(["Close", "Log in again"]);
-    // A failure form like the error alert dialog: no close button of its own and no Escape.
-    expect(dialog.querySelector('[aria-label="Close"]')).toBeNull();
+    // A failure form like the error alert dialog: its close button does what Close does, and there is no Escape.
+    expect(dialog.querySelector('[aria-label="Close"]')).not.toBeNull();
     act(() => void dialog.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
     expect(document.querySelector('[role="alertdialog"]')).toBe(dialog);
     expect(store.getState().accountLogins).toHaveLength(1);
@@ -209,6 +209,18 @@ describe("an account's actions menu", () => {
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Logging in to Claude Code account claude-work…");
     expect(buttonNamed(document.querySelector('[role="dialog"]')!, "Cancel login")).toBeDefined();
     await act(async () => buttonNamed(document.querySelector('[role="dialog"]')!, "Cancel login")?.click());
+  });
+
+  it("closes the failed login's dialog from its close button, which dismisses the failure as Close does", async () => {
+    accountLogins.push({ agent: "claude", account: "claude-work", status: "waiting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null });
+    const { set, store } = mount();
+    set({ accountLogins: [{ agent: "claude", account: "claude-work", status: "failed", authorization_url: null, device_code: null, opened_by_agent: false,
+      failure: { code: "login_failed", params: { agent: "Claude Code", detail: "Login failed: 400" }, message: "x" } }] });
+    await act(async () => {});
+    const dialog = document.querySelector('[role="alertdialog"]')!;
+    await act(async () => dialog.querySelector<HTMLButtonElement>('[aria-label="Close"]')!.click());
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(store.getState().accountLogins).toEqual([]);
   });
 
   it("keeps focus on Log in again when a login opened from the account's menu fails, the menu's focus not coming back over it", async () => {

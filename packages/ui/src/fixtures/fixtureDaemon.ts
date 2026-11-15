@@ -90,7 +90,7 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
 
   const gitReply = createGitReplies(git, fail);
   const importProgress = createImportProgressListeners();
-  const configurationReply = createConfigurationReplies(scenario.configuration, store.getState, fail, () => providerSettingChoices.current, importProgress.deliver, (tag) => store.setState((current) => ({ settings: { ...current.settings, interface_language: tag } })));
+  const configurationReply = createConfigurationReplies(scenario.configuration, store.getState, fail, () => providerSettingChoices.current, importProgress.deliver, (tag) => store.setState((current) => ({ settings: { ...current.settings, agent_language: tag } })));
   const guards = createAccountGuards(context);
   const ledger = createProcessLedger(context);
   const replies = mergeHandlers(

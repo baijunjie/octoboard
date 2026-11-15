@@ -105,19 +105,7 @@ pub(super) fn app_icon(attention: bool, awake: bool) -> Image<'static> {
     let mut canvas = pixels(&original);
     let scale = f64::from(canvas.width()) / f64::from(SIDE);
     if attention {
-        let (centre_x, centre_y) = (DOT_X * scale, DOT_Y * scale);
-        let (radius, clearance) = (DOT_RADIUS * scale, DOT_CLEARANCE * scale);
-        for y in 0..canvas.height() {
-            for x in 0..canvas.width() {
-                let distance = (f64::from(x) + 0.5 - centre_x).hypot(f64::from(y) + 0.5 - centre_y);
-                if distance > radius + clearance + 0.5 {
-                    continue;
-                }
-                let alpha = ((radius + 0.5 - distance).clamp(0.0, 1.0) * 255.0) as u8;
-                let [red, green, blue] = DOT_COLOUR;
-                canvas.put_pixel(x, y, Rgba([red, green, blue, alpha]));
-            }
-        }
+        draw_corner_disc(&mut canvas, scale);
     }
     if awake {
         let scale = f64::from(canvas.width()) / 32.0;
@@ -126,6 +114,25 @@ pub(super) fn app_icon(attention: bool, awake: bool) -> Image<'static> {
         }
     }
     Image::new_owned(canvas.into_raw(), original.width(), original.height())
+}
+
+/// Draws the attention dot, a `DOT_COLOUR` disc at (`DOT_X`, `DOT_Y`) on the 36 pixel canvas
+/// (scaled by `scale`), a ring of the picture cleared around it.
+#[cfg_attr(target_os = "macos", allow(dead_code))]
+fn draw_corner_disc(canvas: &mut RgbaImage, scale: f64) {
+    let (centre_x, centre_y) = (DOT_X * scale, DOT_Y * scale);
+    let (radius, clearance) = (DOT_RADIUS * scale, DOT_CLEARANCE * scale);
+    for y in 0..canvas.height() {
+        for x in 0..canvas.width() {
+            let distance = (f64::from(x) + 0.5 - centre_x).hypot(f64::from(y) + 0.5 - centre_y);
+            if distance > radius + clearance + 0.5 {
+                continue;
+            }
+            let alpha = ((radius + 0.5 - distance).clamp(0.0, 1.0) * 255.0) as u8;
+            let [red, green, blue] = DOT_COLOUR;
+            canvas.put_pixel(x, y, Rgba([red, green, blue, alpha]));
+        }
+    }
 }
 
 /// Lays an `EYE_COLOUR` disc over what is there, its edge one pixel of blend.
@@ -150,6 +157,26 @@ fn draw_disc(canvas: &mut RgbaImage, centre_x: f64, centre_y: f64, radius: f64) 
             );
         }
     }
+}
+
+/// The dot beside the name of a tab whose daemon has a session waiting for the user (macOS): the
+/// attention dot's disc in its orange, on a canvas of its own, 16 pixels square.
+pub(super) fn raised_hand_png() -> Option<Vec<u8>> {
+    const HAND_SIDE: u32 = 16;
+    let centre = f64::from(HAND_SIDE) / 2.0;
+    let radius = centre - 1.0;
+    let mut canvas = RgbaImage::new(HAND_SIDE, HAND_SIDE);
+    let [red, green, blue] = DOT_COLOUR;
+    for y in 0..HAND_SIDE {
+        for x in 0..HAND_SIDE {
+            let distance = (f64::from(x) + 0.5 - centre).hypot(f64::from(y) + 0.5 - centre);
+            let alpha = ((radius + 0.5 - distance).clamp(0.0, 1.0) * 255.0) as u8;
+            canvas.put_pixel(x, y, Rgba([red, green, blue, alpha]));
+        }
+    }
+    let mut bytes = std::io::Cursor::new(Vec::new());
+    canvas.write_to(&mut bytes, ImageFormat::Png).ok()?;
+    Some(bytes.into_inner())
 }
 
 /// AppKit tints this independent template layer orange, including without a readable quota.
@@ -528,5 +555,17 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn a_tab_s_raised_hand_is_an_orange_disc() {
+        let image = Image::from_bytes(&raised_hand_png().expect("PNG")).expect("decodes");
+        assert_eq!((image.width(), image.height()), (16, 16));
+        let at = |x: u32, y: u32| {
+            let i = ((y * 16 + x) * 4) as usize;
+            image.rgba()[i..i + 4].to_vec()
+        };
+        assert_eq!(at(8, 8), [255, 149, 0, 255]);
+        assert_eq!(at(0, 0)[3], 0);
     }
 }

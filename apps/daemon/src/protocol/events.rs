@@ -37,6 +37,7 @@ use super::records::{
     AgentAvailability, Console, DirEntry, GitStatus, Host, Page, Project, Session, SessionKind,
     SessionStatus, ShellTerminal,
 };
+use super::remote_access::RemoteAccess;
 use super::session_branches::SessionBranchItem;
 use super::settings::Settings;
 
@@ -174,6 +175,11 @@ pub enum Event {
         /// Every shell terminal the daemon holds, running or exited, oldest first. Runtime state,
         /// not stored.
         shell_terminals: Vec<ShellTerminal>,
+        /// Remote access to this daemon (Allow remote access), where the daemon follows the
+        /// desktop application on a host with a way in for the browser (the owner socket on Linux
+        /// and macOS, a loopback port of its own on Windows); null elsewhere: a daemon that runs
+        /// on its own (the server form) serves its browser as it always does.
+        remote_access: Option<RemoteAccess>,
     },
     /// Availability or a default account's resolved directory changed for one or more agents —
     /// the whole three-entry list, like every other upsert. Broadcast when the daemon's one-time
@@ -198,6 +204,13 @@ pub enum Event {
     /// `snapshot`.
     AgentCliStatusUpdated {
         status: AgentCliStatus,
+    },
+    /// Remote access changed: the setting was turned on or off, the browser port was changed, the
+    /// owner key was rotated, or the way in failed to open. The whole state, like every other
+    /// upsert; it is also in a `snapshot`. Never sent by a daemon whose snapshot carries no
+    /// `remote_access`.
+    RemoteAccessUpdated {
+        remote_access: RemoteAccess,
     },
     /// The daemon's own update moved on: a check started or ended, a download made progress,
     /// ended or failed, or the executable was replaced. The whole status, like every other upsert;

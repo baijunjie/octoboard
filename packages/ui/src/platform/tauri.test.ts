@@ -16,10 +16,17 @@ class FakeChannel<T> {
 vi.mock("@tauri-apps/api/core", () => ({ invoke: (...args: unknown[]) => invoke(...args), Channel: FakeChannel }));
 /** The shell's events by name, as the adapter listens to them: the test emits one by calling its handler. */
 const listeners = new Map<string, (event: { payload: unknown }) => void>();
-vi.mock("@tauri-apps/api/event", () => ({
-  listen: async (name: string, handler: (event: { payload: unknown }) => void) => {
-    listeners.set(name, handler);
-    return () => listeners.delete(name);
+/** The window the adapter listens on: only its own events, never another window's. */
+const listenedOn = vi.fn();
+vi.mock("@tauri-apps/api/webviewWindow", () => ({
+  getCurrentWebviewWindow: () => {
+    listenedOn();
+    return {
+      listen: async (name: string, handler: (event: { payload: unknown }) => void) => {
+        listeners.set(name, handler);
+        return () => listeners.delete(name);
+      },
+    };
   },
 }));
 
@@ -40,6 +47,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   invoke.mockReset();
   listeners.clear();
+  vi.unstubAllGlobals();
   window.history.replaceState(null, "", "/");
 });
 
@@ -112,7 +120,7 @@ it("changes the settings the shell keeps one at a time, and reveals the window w
   const platform = tauriPlatform();
   await platform.backgroundRun!.set(true);
   expect(invoke).toHaveBeenLastCalledWith("set_app_settings", { settings: { run_in_background: true } });
-  await platform.statusItem!.setVisible(false);
+  await platform.statusItem!.setVisible!(false);
   expect(invoke).toHaveBeenLastCalledWith("set_app_settings", { settings: { show_menu_bar_icon: false } });
   await platform.nativeWindow!.reveal();
   expect(invoke).toHaveBeenLastCalledWith("reveal_main_window");
@@ -320,5 +328,277 @@ describe("reading an image from the clipboard", () => {
     await expect(tauriPlatform().clipboard!.readImage!()).rejects.toBeInstanceOf(Error);
     // Closed whether or not the pixels could be encoded, so the shell's copy of them does not leak.
     expect(close).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("the window of a daemon elsewhere", () => {
+  function openRemote(): void {
+    vi.stubGlobal("__TAURI_INTERNALS__", {});
+    window.history.replaceState(null, "", `/?host=${encodeURIComponent(JSON.stringify(MAC_HOST))}&daemon=me%40host&remote=host`);
+  }
+
+  it("has no exit flow, directory picker or privacy grants, all of which are this machine's", () => {
+    openRemote();
+    const platform = tauriPlatform();
+    expect(platform.exit).toBeUndefined();
+    expect(platform.directoryPicker).toBeUndefined();
+    expect(platform.macosPermissions).toBeUndefined();
+    expect(platform.appMenu).toBeDefined();
+  });
+
+  it("keeps them in the local daemon's window", () => {
+    vi.stubGlobal("__TAURI_INTERNALS__", {});
+    const platform = tauriPlatform();
+    expect(platform.exit).toBeDefined();
+    expect(platform.directoryPicker).toBeDefined();
+    expect(platform.macosPermissions).toBeDefined();
+    expect(platform.statusItem?.setVisible).toBeDefined();
+  });
+
+  it("has a menu bar icon and a share of the badge of its own, but not the switch that shows the icons", () => {
+    openRemote();
+    const platform = tauriPlatform();
+    expect(platform.statusItem).toBeDefined();
+    expect(platform.statusItem!.setVisible).toBeUndefined();
+    expect(platform.badge).toBeDefined();
+  });
+});
+
+it("reports the window's share of the badge and raises a notification through the shell, which knows the window", async () => {
+  invoke.mockResolvedValue(undefined);
+  const platform = tauriPlatform();
+  await platform.badge!.set(3);
+  expect(invoke).toHaveBeenLastCalledWith("set_badge_count", { count: 3 });
+  await platform.badge!.set(0);
+  expect(invoke).toHaveBeenLastCalledWith("set_badge_count", { count: 0 });
+  await platform.notifications!.notify({ title: "Waiting", body: "Fix the build" });
+  expect(invoke).toHaveBeenLastCalledWith("show_notification", { title: "Waiting", body: "Fix the build" });
+});
+
+it("listens to the shell's events on its own window, so what is sent to another window does not reach it", async () => {
+  const handler = vi.fn();
+  const undo = tauriPlatform().appMenu!.onSettingsRequested(handler);
+  await afterQueuedWork();
+  expect(listenedOn).toHaveBeenCalled();
+  listeners.get("settings-requested")!({ payload: undefined });
+  expect(handler).toHaveBeenCalledOnce();
+  undo();
+});
+
+describe("what each kind of window of the application has", () => {
+  function openAs(query: string): void {
+    vi.stubGlobal("__TAURI_INTERNALS__", {});
+    window.history.replaceState(null, "", `/?host=${encodeURIComponent(JSON.stringify(MAC_HOST))}${query}`);
+  }
+
+  it("gives every window the remote daemons, and only the local daemon's the computer's own Remote Login", () => {
+    openAs("");
+    expect(tauriPlatform().remoteDaemons).toBeDefined();
+    expect(tauriPlatform().remoteLogin).toBeDefined();
+    openAs("&daemon=me%40host&remote=host");
+    expect(tauriPlatform().remoteDaemons).toBeDefined();
+    expect(tauriPlatform().remoteLogin).toBeUndefined();
+    openAs("&connect=1");
+    expect(tauriPlatform().remoteDaemons).toBeDefined();
+    expect(tauriPlatform().remoteLogin).toBeUndefined();
+  });
+
+  it("gives the connect page none of what acts on a daemon of this computer", () => {
+    openAs("&connect=1");
+    const platform = tauriPlatform();
+    expect(platform.exit).toBeUndefined();
+    expect(platform.directoryPicker).toBeUndefined();
+    expect(platform.macosPermissions).toBeUndefined();
+    expect(platform.statusItem?.setVisible).toBeUndefined();
+  });
+
+  it("gives the notification-area flyout's page its own capability, and no other window has it", () => {
+    openAs("&flyout=1");
+    const flyout = tauriPlatform();
+    expect(flyout.trayFlyout).toBeDefined();
+    expect(flyout.exit).toBeUndefined();
+    expect(flyout.directoryPicker).toBeUndefined();
+    expect(flyout.macosPermissions).toBeUndefined();
+    expect(flyout.remoteLogin).toBeUndefined();
+    openAs("");
+    expect(tauriPlatform().trayFlyout).toBeUndefined();
+    openAs("&daemon=me%40host&remote=host");
+    expect(tauriPlatform().trayFlyout).toBeUndefined();
+  });
+
+  it("reads none of it outside the shell, where the query is anyone's", () => {
+    window.history.replaceState(null, "", `/?host=${encodeURIComponent(JSON.stringify(MAC_HOST))}&flyout=1&connect=1`);
+    const platform = tauriPlatform();
+    expect(platform.trayFlyout).toBeUndefined();
+    expect(platform.exit).toBeDefined();
+  });
+});
+
+describe("the jump list", () => {
+  it("is on Windows alone, and takes its labels through the menu's own command", async () => {
+    reportHost(MAC_HOST);
+    expect(tauriPlatform().jumpList).toBeUndefined();
+    reportHost(WINDOWS_HOST);
+    const platform = tauriPlatform();
+    invoke.mockResolvedValue(undefined);
+    await platform.jumpList!.setLabels({ "menu.remote": "Remote" });
+    expect(invoke).toHaveBeenCalledExactlyOnceWith("set_menu_labels", { labels: { "menu.remote": "Remote" }, settingsAccelerator: null });
+  });
+});
+
+describe("the badge", () => {
+  it("is reported as a whole, non-negative count, which the shell adds to the other windows'", async () => {
+    invoke.mockResolvedValue(undefined);
+    const { badge } = tauriPlatform();
+    await badge!.set(2.6);
+    expect(invoke).toHaveBeenLastCalledWith("set_badge_count", { count: 3 });
+    await badge!.set(-4);
+    expect(invoke).toHaveBeenLastCalledWith("set_badge_count", { count: 0 });
+  });
+
+  it("is absent where the platform shows no badge", () => {
+    reportHost(WINDOWS_HOST);
+    expect(tauriPlatform().badge).toBeUndefined();
+  });
+});
+
+it("raises each notification through the shell, whatever platform the window is on", async () => {
+  invoke.mockResolvedValue(undefined);
+  reportHost(WINDOWS_HOST);
+  await tauriPlatform().notifications!.notify({ title: "Waiting", body: "Fix the build" });
+  expect(invoke).toHaveBeenLastCalledWith("show_notification", { title: "Waiting", body: "Fix the build" });
+});
+
+it("lets a failed notification reach the caller", async () => {
+  invoke.mockRejectedValue(new Error("no permission"));
+  await expect(tauriPlatform().notifications!.notify({ title: "t", body: "b" })).rejects.toThrow("no permission");
+});
+
+describe("Remote Login", () => {
+  it("reads whether it is on, and answers nothing where the shell cannot tell", async () => {
+    const { remoteLogin } = tauriPlatform();
+    invoke.mockResolvedValueOnce(true);
+    expect(await remoteLogin!.status()).toBe(true);
+    expect(invoke).toHaveBeenLastCalledWith("remote_login_status");
+    invoke.mockResolvedValueOnce(false);
+    expect(await remoteLogin!.status()).toBe(false);
+    invoke.mockResolvedValueOnce(null);
+    expect(await remoteLogin!.status()).toBeUndefined();
+  });
+
+  it("opens the page of the system's settings that turns it on", async () => {
+    invoke.mockResolvedValue(undefined);
+    await tauriPlatform().remoteLogin!.openSystemSettings();
+    expect(invoke).toHaveBeenLastCalledWith("open_remote_login_settings");
+  });
+});
+
+describe("the remote daemons", () => {
+  const ENTRY = { id: "a", name: "Staging", host: "h", port: 22, user: "u", auth: "password", keyPath: null, fingerprint: null, octoboarddPath: null } as const;
+
+  it("lists the entries and the connections through the shell and returns what it answers", async () => {
+    const { remoteDaemons } = tauriPlatform();
+    invoke.mockResolvedValueOnce([ENTRY]);
+    expect(await remoteDaemons!.list()).toEqual([ENTRY]);
+    expect(invoke).toHaveBeenLastCalledWith("remote_daemons_list");
+    invoke.mockResolvedValueOnce([{ id: "a", state: "connected", via: "window" }]);
+    expect(await remoteDaemons!.status()).toEqual([{ id: "a", state: "connected", via: "window" }]);
+    expect(invoke).toHaveBeenLastCalledWith("remote_daemons_status");
+  });
+
+  it("saves and removes an entry by the shell's commands, and gives back what the shell saved", async () => {
+    const { remoteDaemons } = tauriPlatform();
+    const input = { ...ENTRY, id: null };
+    invoke.mockResolvedValueOnce(ENTRY);
+    expect(await remoteDaemons!.save(input)).toEqual(ENTRY);
+    expect(invoke).toHaveBeenLastCalledWith("remote_daemon_save", { entry: input });
+    invoke.mockResolvedValueOnce(undefined);
+    await remoteDaemons!.remove("a");
+    expect(invoke).toHaveBeenLastCalledWith("remote_daemon_remove", { id: "a" });
+  });
+
+  it("sends a connection's request whole, the password with it, and resolves with how it ended", async () => {
+    const request = { id: "a", secret: "hunter2", confirmFingerprint: "SHA256:abc", action: "start", browser: false } as const;
+    invoke.mockResolvedValueOnce({ outcome: "no_daemon" });
+    expect(await tauriPlatform().remoteDaemons!.connect(request)).toEqual({ outcome: "no_daemon" });
+    expect(invoke).toHaveBeenLastCalledWith("remote_daemon_connect", { request });
+  });
+
+  it("lets a failure of the connect command itself reach the caller", async () => {
+    invoke.mockRejectedValueOnce(new Error("no such command"));
+    await expect(tauriPlatform().remoteDaemons!.connect({ id: "a", secret: null, confirmFingerprint: null, action: null, browser: false })).rejects.toThrow("no such command");
+  });
+
+  it("disconnects, opens windows and shows this computer's by the shell's commands", async () => {
+    const { remoteDaemons } = tauriPlatform();
+    invoke.mockResolvedValue(undefined);
+    await remoteDaemons!.disconnect("a");
+    expect(invoke).toHaveBeenLastCalledWith("remote_daemon_disconnect", { id: "a" });
+    await remoteDaemons!.newWindow();
+    expect(invoke).toHaveBeenLastCalledWith("remote_window_new");
+    await remoteDaemons!.openWindow("a");
+    expect(invoke).toHaveBeenLastCalledWith("remote_window_open", { id: "a" });
+    await remoteDaemons!.showMainWindow();
+    expect(invoke).toHaveBeenLastCalledWith("main_window_show");
+  });
+
+  it("hears of a change on its own window, and stops hearing once undone", async () => {
+    const listener = vi.fn();
+    const undo = tauriPlatform().remoteDaemons!.onChanged(listener);
+    await afterQueuedWork();
+    expect(listenedOn).toHaveBeenCalled();
+    listeners.get("remote-daemons-changed")!({ payload: undefined });
+    expect(listener).toHaveBeenCalledOnce();
+    undo();
+    expect(listeners.has("remote-daemons-changed")).toBe(false);
+  });
+});
+
+describe("the notification-area flyout's page", () => {
+  const MODEL = { tabs: [{ key: "local", label: "This PC", remote: false, raised: false }], chosen: 0, panels: [[]], shared: [] };
+
+  function openFlyout() {
+    vi.stubGlobal("__TAURI_INTERNALS__", {});
+    window.history.replaceState(null, "", `/?host=${encodeURIComponent(JSON.stringify(WINDOWS_HOST))}&flyout=1`);
+    return tauriPlatform().trayFlyout!;
+  }
+
+  it("asks the shell for the model, and answers none where it has none", async () => {
+    const flyout = openFlyout();
+    invoke.mockResolvedValueOnce(MODEL);
+    expect(await flyout.model()).toEqual(MODEL);
+    expect(invoke).toHaveBeenLastCalledWith("tray_flyout_model");
+    invoke.mockResolvedValueOnce(null);
+    expect(await flyout.model()).toBeNull();
+  });
+
+  it("tells the shell its size, what was chosen and that it was dismissed, by the shell's commands", async () => {
+    const flyout = openFlyout();
+    invoke.mockResolvedValue(undefined);
+    await flyout.setSize({ width: 320, height: 400 });
+    expect(invoke).toHaveBeenLastCalledWith("tray_flyout_size", { width: 320, height: 400 });
+    await flyout.choose("session:a");
+    expect(invoke).toHaveBeenLastCalledWith("tray_flyout_choose", { id: "session:a" });
+    await flyout.close();
+    expect(invoke).toHaveBeenLastCalledWith("tray_flyout_close");
+  });
+
+  it("hears a newer model and the flyout being shown, with the tab to start on, on its own window", async () => {
+    const flyout = openFlyout();
+    const onModel = vi.fn();
+    const onOpened = vi.fn();
+    // One at a time: the mocked module of the window is resolved by the first import, which a second one racing it
+    // would not see.
+    const undoModel = flyout.onModel(onModel);
+    await vi.waitFor(() => expect(listeners.size).toBe(1));
+    const undoOpened = flyout.onOpened(onOpened);
+    await vi.waitFor(() => expect(listeners.size).toBe(2));
+    listeners.get("tray-flyout-model")!({ payload: MODEL });
+    listeners.get("tray-flyout-opened")!({ payload: { chosen: 1 } });
+    expect(onModel).toHaveBeenCalledExactlyOnceWith(MODEL);
+    expect(onOpened).toHaveBeenCalledExactlyOnceWith({ chosen: 1 });
+    undoModel();
+    undoOpened();
+    expect(listeners.size).toBe(0);
   });
 });

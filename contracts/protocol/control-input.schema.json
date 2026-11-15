@@ -4,7 +4,7 @@
   "title": "Octoboard control socket: client to daemon",
   "description": "One text frame a client sends on `/ws/control`: a request, or a browse request, told apart by `type`. See `apps/daemon/PROTOCOL.md`.",
   "x-octoboard-protocol": {
-    "generation": 4,
+    "generation": 5,
     "channel": "control",
     "direction": "input"
   },
@@ -1617,7 +1617,7 @@
           "required": [
             "type"
           ],
-          "description": "The configuration document, answered with `configuration_exported`: the regions picked by\n`consoles` (`one`, the console `console`; `all`; or `none`), `settings_sections` (the\napplication settings of those sections of Settings, written in one `settings` region) and\n`include_accounts` (the account structure, never a credential). Absent fields keep their\nolder meaning: `consoles` is `one` when `console` is given and `all` otherwise,\n`settings_sections` is every section exactly when every console is exported (none\notherwise; an empty list writes no `settings` region), and `include_accounts` is false.\nA section is written with the keys the daemon holds, so General carries only\n`interface_language`, and only when the daemon holds one. A request that would export\nnothing is refused with `export_empty`, `consoles: \"one\"` without a `console` with\n`field_required`, and a console that does not exist with `unknown_console`. `console` is\nread only for `one`. Reads what is stored; touches no session, runs no `git`.\n`include_paths` says whether each project's absolute directory path is written; absent is\ntrue. False writes only the directory's name, and a remote that cannot be cloned from (a\nlocal path) is left out, so the file reveals no project path of this machine. An account\ndirectory is always written, whatever it says."
+          "description": "The configuration document, answered with `configuration_exported`: the regions picked by\n`consoles` (`one`, the console `console`; `all`; or `none`), `settings_sections` (the\napplication settings of those sections of Settings, written in one `settings` region) and\n`include_accounts` (the account structure, never a credential). Absent fields keep their\nolder meaning: `consoles` is `one` when `console` is given and `all` otherwise,\n`settings_sections` is every section exactly when every console is exported (none\notherwise; an empty list writes no `settings` region), and `include_accounts` is false.\nA section is written with the keys the daemon holds, so General carries only\n`agent_language`, and only when the daemon holds one. A request that would export\nnothing is refused with `export_empty`, `consoles: \"one\"` without a `console` with\n`field_required`, and a console that does not exist with `unknown_console`. `console` is\nread only for `one`. Reads what is stored; touches no session, runs no `git`.\n`include_paths` says whether each project's absolute directory path is written; absent is\ntrue. False writes only the directory's name, and a remote that cannot be cloned from (a\nlocal path) is left out, so the file reveals no project path of this machine. An account\ndirectory is always written, whatever it says."
         },
         {
           "type": "object",
@@ -2502,9 +2502,9 @@
             "keep_sessions_in_own_project": {
               "type": "boolean"
             },
-            "interface_language": {
+            "agent_language": {
               "type": "string",
-              "description": "A tag the interface offers (`interface_language::display_name` knows it); any other\nis refused."
+              "description": "The agent language: a tag the interface offers (`interface_language::display_name`\nknows it); any other is refused."
             },
             "keep_awake": {
               "type": "boolean"
@@ -3121,6 +3121,56 @@
             "type"
           ],
           "description": "Restarts the daemon in place, the planned restart `octoboardd restart` makes: every session\nkeeps running under the daemon that takes over, on the same address. Answered with `ack`;\nthe connection then closes and comes back to the new daemon. Refused with\n`daemon_update_unavailable` where this daemon does not update itself,\n`daemon_update_running` while it downloads an update, `daemon_shutting_down` while a stop,\nrestart or handover is under way, `holders_in_service` where a service manager runs the\ndaemon and a holder running programs is inside the daemon's own systemd service, and\n`agent_update_running` while an update of an agent's CLI runs. A client that restarts after\nan update asks `handover_check` first, to tell the user which sessions the restart\ninterrupts."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "allowed": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "set_remote_access"
+            }
+          },
+          "required": [
+            "type",
+            "allowed"
+          ],
+          "description": "Turns Allow remote access on or off for the desktop application's daemon. Answered with\n`ack` once it has taken effect, and broadcast as `remote_access_updated` (also when the\nowner socket could not be opened, which `failure` says). Refused with\n`remote_access_unavailable` where the snapshot carries no `remote_access`, and with\n`remote_access_refused_to_browser` on a connection the owner key opened, which a browser\nholds. Turning it off closes the owner socket, refuses the owner key and closes every\nconnection it opened. Not offered to agents' settings tools."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "rotate_owner_key"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "description": "Replaces the owner key with a new one, as `octoboardd address --rotate` does: every page\nopened with the old one is cut off. Answered with `ack`, and broadcast as\n`remote_access_updated` with the new address. Refused with `remote_access_unavailable` where\nthe snapshot carries no `remote_access` or it is not `serving`, and with\n`remote_access_refused_to_browser` on a connection the owner key opened."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "port": {
+              "type": "integer",
+              "format": "uint16",
+              "minimum": 1,
+              "maximum": 65535
+            },
+            "type": {
+              "type": "string",
+              "const": "set_remote_access_port"
+            }
+          },
+          "required": [
+            "type",
+            "port"
+          ],
+          "description": "Sets the loopback port the desktop application's daemon serves the browser at on Windows\nwhile remote access is on (`remote_access.browser_port`). Takes effect at once: while remote\naccess is on, the old port is let go, every connection the owner key opened is closed, and\nthe new port is listened on (a port already in use is said as `failure`). Answered with\n`ack`, and broadcast as `remote_access_updated`. Refused with `remote_access_unavailable`\nwhere the snapshot's `remote_access` carries no `browser_port`, and with\n`remote_access_refused_to_browser` on a connection the owner key opened; port 0 does not\nread as a request. Not offered to agents' settings tools."
         },
         {
           "type": "object",

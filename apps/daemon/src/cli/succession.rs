@@ -295,6 +295,7 @@ mod tests {
             follows_application: Some(false),
             service_managed: Some(false),
             takes_owner_key: false,
+            browser_port: None,
             unit: None,
             predecessor,
         }

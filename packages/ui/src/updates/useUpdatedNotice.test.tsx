@@ -139,3 +139,18 @@ it("tells another tab of the browser, which asked for no restart, and remembers 
   expect(showNotice).toHaveBeenCalledOnce();
   expect(localStorage.getItem(PREFERENCE_KEYS.daemonUpdatedNoticeVersion)).toBe("0.2.0");
 });
+
+it("says nothing in the window of a daemon elsewhere, whatever the daemon says, and remembers nothing", () => {
+  vi.stubGlobal("__TAURI_INTERNALS__", {});
+  window.history.replaceState({}, "", "/?remote=server&daemon=me%40server");
+  onTestFinished(() => {
+    window.history.replaceState({}, "", "/");
+    vi.unstubAllGlobals();
+  });
+  const { daemon, showNotice } = mount({ ...IDLE, updated_from: "0.1.0" }, "0.2.0");
+  expect(showNotice).not.toHaveBeenCalled();
+  act(() => applyDaemonEvent(daemon.store, hello("0.3.0")));
+  act(() => applyDaemonEvent(daemon.store, { type: "daemon_update_status_updated", status: { ...IDLE, updated_from: "0.2.0" } }));
+  expect(showNotice).not.toHaveBeenCalled();
+  expect(localStorage.getItem(PREFERENCE_KEYS.daemonUpdatedNoticeVersion)).toBeNull();
+});

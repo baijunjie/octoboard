@@ -48,8 +48,11 @@ export function parseStored(raw: string | null): Record<string, StoredBrowser> {
   }
 }
 
-const stored = createPersistedPreference<Record<string, StoredBrowser>>(PREFERENCE_KEYS.projectBrowsers, parseStored, (value) =>
-  Object.keys(value).length === 0 ? null : JSON.stringify(value),
+const stored = createPersistedPreference<Record<string, StoredBrowser>>(
+  PREFERENCE_KEYS.projectBrowsers,
+  parseStored,
+  (value) => (Object.keys(value).length === 0 ? null : JSON.stringify(value)),
+  { scope: "daemon" },
 );
 
 function update(project: string, change: (entry: StoredBrowser) => StoredBrowser): void {

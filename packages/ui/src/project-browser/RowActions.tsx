@@ -7,6 +7,7 @@ import { RowControls } from "../components/controls/RowControls";
 import { useResolveAbsolutePath } from "../components/host/useResolveAbsolutePath";
 import { useCopyPath } from "../components/host/useCopyPath";
 import { type HostPath, useHostPathActions } from "../components/host/useHostPathActions";
+import { useDaemon } from "../store";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import { itemKeyOf, itemKeySelector } from "../primitives";
@@ -34,6 +35,7 @@ export function RowActions({ path, name, directory = false, reserve = false, con
   const resolveAbsolutePath = useResolveAbsolutePath();
   const scope = useContext(RowPathScope);
   const hostAction = useHostPathActions();
+  const { isLocal } = useDaemon();
   const openTerminal = useContext(OpenShellTerminal);
   const items: ActionMenuEntry[] = [
     { label: t("common.copyRelativePath"), icon: Copy, onClick: () => copyPath(path) },
@@ -53,10 +55,12 @@ export function RowActions({ path, name, directory = false, reserve = false, con
     const fileManager = { label: t("common.fileManager"), icon: FolderOpen, onClick: () => run("reveal_project_path") };
     // A folder's default application would be the file manager again, so a folder offers Terminal in its place.
     const terminal = openTerminal && { label: t("common.terminal"), icon: SquareTerminal, onClick: () => openTerminal({ ...scope, path }) };
+    // The file manager and the default application are this machine's: not offered for a daemon elsewhere.
+    const onHost = isLocal !== false;
     const openIn: ActionMenuEntry[] = directory
-      ? [fileManager, ...(terminal ? [terminal] : [])]
-      : [fileManager, { label: t("common.defaultApplication"), icon: SquareArrowOutUpRight, onClick: () => run("open_project_path") }];
-    items.push("separator", { label: t("common.openIn"), icon: SquareArrowOutUpRight, items: openIn });
+      ? [...(onHost ? [fileManager] : []), ...(terminal ? [terminal] : [])]
+      : onHost ? [fileManager, { label: t("common.defaultApplication"), icon: SquareArrowOutUpRight, onClick: () => run("open_project_path") }] : [];
+    if (openIn.length > 0) items.push("separator", { label: t("common.openIn"), icon: SquareArrowOutUpRight, items: openIn });
   }
   // The tree takes focus to the row as a menu closes, while a menu opened from the keyboard is to
   // give it back to its Actions button.

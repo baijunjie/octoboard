@@ -7,11 +7,12 @@ import { errorAlerts } from "../components/alerts/errorAlerts";
 import { agentCliStatusesOf, agentCliStatusOf, agentCliUpdateOf } from "../fixtures/builders";
 import { FIRST_WRITE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { LanguageProvider } from "../i18n/react";
+import type { UpdaterCapability } from "../platform";
 import { PlatformProvider } from "../platform/react";
 import type { DaemonUpdateStatus } from "../protocol";
 import { DaemonProvider, type State } from "../store";
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
-import { BROWSER_HOST } from "../test/hosts";
+import { BROWSER_HOST, MAC_HOST } from "../test/hosts";
 import { acknowledgeAllAlerts } from "../test/alertQueue";
 import { fakeTimers } from "../test/clock";
 import { testDaemon } from "../test/testDaemon";
@@ -224,4 +225,102 @@ it.each([
   expect(spoken()).toBe("");
   act(() => daemon.store.setState({ agentCliStatuses: agentCliStatusesOf([agentCliStatusOf("claude", { update: agentCliUpdateOf({ state: "succeeded", finished_at: 2 }) })]) }));
   expect(spoken()).toBe("");
+});
+
+/** Makes this window the application's window of a daemon elsewhere, as the desktop shell opens it. */
+function inRemoteWindow() {
+  vi.stubGlobal("__TAURI_INTERNALS__", {});
+  window.history.replaceState({}, "", "/?remote=server&daemon=me%40server");
+  onTestFinished(() => window.history.replaceState({}, "", "/"));
+}
+
+/** The section in the application's window, with an updater of its own (which a remote window must not use), over a
+ * daemon that updates itself or not. */
+function mountDesktop(status: DaemonUpdateStatus | null, settings: Partial<State["settings"]> = {}) {
+  const request = vi.fn(answerDaemonUpdateRequest);
+  const check = vi.fn(async () => undefined);
+  const updater: UpdaterCapability = { currentVersion: async () => "7.7.7", check, install: async () => {} };
+  const daemon = testDaemon({
+    state: { daemon: { version: __OCTOBOARD_VERSION__, generation: 1 }, daemonUpdate: status, settings: { ...DEFAULT_SETTINGS, versions: { daemon_update_check: 1, daemon_update_channel: 2 }, ...settings } },
+    request,
+  });
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  act(() =>
+    root.render(
+      <PlatformProvider value={{ kind: "tauri", host: MAC_HOST, updater }}>
+        <LanguageProvider>
+          <DaemonProvider value={daemon}>
+            <UpdatesProvider firstCheckDelayMs={null}>
+              <UpdatesSetting />
+            </UpdatesProvider>
+          </DaemonProvider>
+        </LanguageProvider>
+      </PlatformProvider>,
+    ),
+  );
+  return { container, request, check };
+}
+
+const rowLabels = (container: HTMLElement) => ["Version", "Check for updates automatically", "Update channel"].filter((label) => textOf(container).includes(label));
+const channelButton = (container: HTMLElement) => container.querySelector<HTMLElement>("button[aria-label='Update channel'], [aria-label='Update channel'] button")!;
+
+it("holds only the automatic check and the update channel in the window of a daemon elsewhere that updates itself, with no version, check, download or restart", () => {
+  inRemoteWindow();
+  const { container } = mountDesktop(IDLE);
+  expect(rowLabels(container)).toEqual(["Check for updates automatically", "Update channel"]);
+  expect(container.querySelectorAll("input[type=checkbox]")).toHaveLength(1);
+  expect(textOf(container)).not.toContain("version");
+  for (const name of ["Check for updates", "Download and install", "Restart now", "Reload", "What is new"]) expect(button(container, name)).toBeUndefined();
+  expect(container.querySelector("[role=status]")).toBeNull();
+});
+
+it("shows the daemon's own values in the window of a daemon elsewhere", () => {
+  inRemoteWindow();
+  const { container } = mountDesktop(IDLE, { daemon_update_check: false, daemon_update_channel: "beta" });
+  expect(container.querySelector<HTMLInputElement>("input[type=checkbox]")!.checked).toBe(false);
+  expect(channelButton(container).textContent).toContain("Beta");
+});
+
+it("words the automatic check as the daemon's own in the window of a daemon elsewhere, and as the application's in the local window", async () => {
+  inRemoteWindow();
+  const remote = mountDesktop(IDLE);
+  expect(textOf(remote.container)).toContain("The daemon checks for updates in the background.");
+  expect(textOf(remote.container)).not.toContain("The app checks");
+  window.history.replaceState({}, "", "/");
+  vi.unstubAllGlobals();
+  const local = mountDesktop(IDLE);
+  await act(async () => {});
+  expect(textOf(local.container)).toContain("The app checks for updates in the background.");
+  expect(textOf(local.container)).not.toContain("The daemon checks");
+});
+
+it("writes the automatic check through the normal settings write, based on the version held, and never asks the daemon or the application to check", async () => {
+  inRemoteWindow();
+  const { container, request, check } = mountDesktop(IDLE);
+  await act(async () => void container.querySelector<HTMLInputElement>("input[type=checkbox]")!.click());
+  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "update_settings", daemon_update_check: false, base_versions: { daemon_update_check: 1 } });
+  expect(check).not.toHaveBeenCalled();
+});
+
+it("writes the update channel through the normal settings write, based on the version held, and does not look again", async () => {
+  inRemoteWindow();
+  const { container, request, check } = mountDesktop(IDLE);
+  await act(async () => channelButton(container).click());
+  await act(async () => Array.from(document.body.querySelectorAll<HTMLElement>("[role=option]")).find((option) => option.textContent?.includes("Beta"))!.click());
+  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "update_settings", daemon_update_channel: "beta", base_versions: { daemon_update_channel: 2 } });
+  expect(check).not.toHaveBeenCalled();
+});
+
+it("keeps the full section, with its version and buttons, in the application's local window", async () => {
+  const { container } = mountDesktop(IDLE);
+  // The application's own version is asked of the shell.
+  await act(async () => {});
+  expect(textOf(container)).toContain("You are using version 7.7.7.");
+  expect(button(container, "Check for updates")).toBeDefined();
+  expect(rowLabels(container)).toEqual(expect.arrayContaining(["Check for updates automatically", "Update channel"]));
 });

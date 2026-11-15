@@ -26,17 +26,18 @@ import { useAccountLoginActions } from "./AccountLogin";
 import { raiseError } from "../../components/alerts/raiseError";
 import { Button, ModalStatusIcon, Spinner } from "../../primitives";
 
-/** The login of one account (`null` for an agent's default account), in a modal of its own. With `start` it asks
- * the daemon to start the login on opening; without, it takes up one that is already running (after a reload, or
- * started by another window). Its title is the plain "Log in"; the body opens with the sentence naming the agent
- * and the account, then shows where the login is, with the device code and the link to open the authorization page
- * again where there is one, and Cancel login. Closing it by any means ends a login that is
- * still running. A login that succeeded closes it: the account's badge and the row's hidden status region say so.
- * One that failed or timed out, and a refusal to start one, replace it with a failure alert dialog of its own, in
- * the form of the error alert dialog (no close button, no Escape): the title says what failed in plain words, the
- * body opens with the sentence naming the agent and the account, which goes on with the cause where the agent named
- * one, then the main remedy, the further explanation, and the raw text behind an "Error details" disclosure;
- * Close, then Log in again, which takes focus. Its mounting is what a screen reader announces. */
+/** The login of one account (`null` for an agent's default account), in a modal of its own. With `start` it asks the
+ * daemon to start the login on opening; without, it takes up one that is already running (after a reload, or started by
+ * another window). Its title is the plain "Log in"; the body opens with the sentence naming the agent and the account,
+ * then shows where the login is, with the device code and the link to open the authorization page again where there is
+ * one, and Cancel login. Closing it by any means ends a login that is still running. A login that succeeded closes it:
+ * the account's badge and the row's hidden status region say so. One that failed or timed out, and a refusal to start
+ * one, replace it with a failure alert dialog of its own, in the form of the error alert dialog (a close button that
+ * does what Close does, but no Escape): the title says what failed in plain words, the body opens with the sentence
+ * naming the agent and the account, which goes on with the cause where the agent named one, then the main remedy, the
+ * further explanation, and the raw text behind an "Error details" disclosure; Close then Log in again, which takes
+ * focus; where it is unexpected, Report issue takes Close's place in the footer (a footer holds at most two buttons)
+ * and the close button stands for Close. Its mounting is what a screen reader announces. */
 export function AccountLoginDialog({ agent, account, start, onClose }: {
   agent: Agent;
   account: string | null;
@@ -167,14 +168,13 @@ export function AccountLoginDialog({ agent, account, start, onClose }: {
       <Dialog
         key="ended"
         alert
-        dismissable={false}
+        keyboardDismissHeld
         headerLeading={<ModalStatusIcon status="danger" />}
         title={t(timedOut ? "settings.accounts.login.timedOutTitle" : "settings.accounts.login.failedTitle")}
         onClose={close}
         footer={(
           <>
-            {unexpected && issue.link}
-            <Button type="button" variant="secondary" onPress={close}>{t("common.close")}</Button>
+            {unexpected ? issue.link : <Button type="button" variant="secondary" onPress={close}>{t("common.close")}</Button>}
             <Button ref={primaryRef} autoFocus type="button" variant="primary" onPress={begin}>{t("settings.accounts.login.again")}</Button>
           </>
         )}

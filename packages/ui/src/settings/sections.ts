@@ -7,6 +7,7 @@ export const SETTINGS_SECTION_IDS = [
   "git",
   "trusted-folders",
   "permissions",
+  "remote-access",
   "notifications",
   "shortcuts",
   "cleanup",

@@ -4,7 +4,7 @@
   "title": "Octoboard control socket: daemon to client",
   "description": "One text frame the daemon sends on `/ws/control`. See `apps/daemon/PROTOCOL.md`.",
   "x-octoboard-protocol": {
-    "generation": 4,
+    "generation": 5,
     "channel": "control",
     "direction": "output"
   },
@@ -2081,6 +2081,27 @@
       ],
       "description": "How a path is in conflict, as `git status` tells the stages apart."
     },
+    "ConnectionDetails": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "The details as one line of text,\n`octoboard+ssh://<user>@<host>:<port>?fingerprint=…&octoboardd=…&name=…`, which the desktop\napplication reads back when it is pasted into a remote daemon's form. The host is this\ncomputer's own name, which the owner may need to correct on the other device."
+        },
+        "qr": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The QR code of `text`, one string per row of modules from the top, each character a module\nfrom the left: `1` dark, `0` light. The quiet zone around it is the client's to draw."
+        }
+      },
+      "required": [
+        "text",
+        "qr"
+      ],
+      "description": "The connection details of a daemon: what another device needs to reach it over SSH, with no\nsecret (see \"Printing the connection details\" in `docs/product/daemon-command-line.md`)."
+    },
     "ConnectorState": {
       "type": "string",
       "enum": [
@@ -3188,7 +3209,11 @@
       "properties": {
         "interface_language": {
           "type": "string",
-          "description": "The interface language tag (see `Settings.interface_language`): the daemon writes the one it\nholds. An import applies it only when this build offers it. Absent when the daemon held\nnone."
+          "description": "The interface language tag, which only the client holds, carried like `run_in_background`:\nthe client adds the language it shows to a document it saves and applies it from an\nimport's reply when it offers it. A document of version 3 or older, from a build that held\none language for the windows and the agents alike, carries that language here alone: its\nupgrade copies it into `agent_language`."
+        },
+        "agent_language": {
+          "type": "string",
+          "description": "The agent language tag (see `Settings.agent_language`): the daemon writes the one it holds.\nAn import applies it only when this build offers it. Absent when the daemon held none."
         },
         "resume_sessions_on_start": {
           "type": "boolean",
@@ -3757,6 +3782,17 @@
               },
               "description": "Every shell terminal the daemon holds, running or exited, oldest first. Runtime state,\nnot stored."
             },
+            "remote_access": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RemoteAccess"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Remote access to this daemon (Allow remote access), where the daemon follows the\ndesktop application on a host with a way in for the browser (the owner socket on Linux\nand macOS, a loopback port of its own on Windows); null elsewhere: a daemon that runs\non its own (the server form) serves its browser as it always does."
+            },
             "type": {
               "type": "string",
               "const": "snapshot"
@@ -3781,7 +3817,8 @@
             "home_dir",
             "host",
             "keep_awake_held",
-            "shell_terminals"
+            "shell_terminals",
+            "remote_access"
           ]
         },
         {
@@ -3857,6 +3894,23 @@
             "status"
           ],
           "description": "A check of an agent's installed CLI ended, or an update of it started, moved on or ended:\nthe agent's whole status, like every other upsert. Every agent's last one is also in a\n`snapshot`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "remote_access": {
+              "$ref": "#/$defs/RemoteAccess"
+            },
+            "type": {
+              "type": "string",
+              "const": "remote_access_updated"
+            }
+          },
+          "required": [
+            "type",
+            "remote_access"
+          ],
+          "description": "Remote access changed: the setting was turned on or off, the browser port was changed, the\nowner key was rotated, or the way in failed to open. The whole state, like every other\nupsert; it is also in a `snapshot`. Never sent by a daemon whose snapshot carries no\n`remote_access`."
         },
         {
           "type": "object",
@@ -8250,6 +8304,152 @@
       ],
       "description": "How the provider's own interface names its quota windows, which Octoboard's wording follows."
     },
+    "RemoteAccess": {
+      "type": "object",
+      "properties": {
+        "allowed": {
+          "type": "boolean",
+          "description": "The Allow remote access setting, as the user left it. Off unless the user turned it on. It\nis the user's alone: no agent's settings tool reads or changes it, and no configuration\nexport carries it."
+        },
+        "state": {
+          "$ref": "#/$defs/RemoteAccessState",
+          "description": "What the daemon does with it right now."
+        },
+        "browser_port": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535,
+          "description": "On Windows, whose SSH server cannot forward to a socket, the loopback port the daemon serves\nthe browser at while remote access is on, in place of the owner socket, as the user set it\n(`set_remote_access_port`); set whatever `state` is. Null on every other system, where the\nbrowser goes through the owner socket. Like `allowed`, it is the user's alone."
+        },
+        "address": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The address a browser opens, `http://127.0.0.1:<port>/?key=<owner key>`, through the forward\nbelow; set while `state` is `serving`, null otherwise. The port is the one the forward binds\non the browser's machine, which stays the same across launches, so the address can be\nbookmarked."
+        },
+        "forward_command": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The command the browser's machine forwards the owner socket (on Windows, `browser_port`)\nwith, as `octoboardd address` prints it, the remote host left as `<server>` for the owner to\nfill in; set while `state` is `serving`, null otherwise."
+        },
+        "failure": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RemoteAccessFailure"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Why the daemon could not serve a browser though the setting is on; set while `state` is\n`failed`, null otherwise."
+        },
+        "connection": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ConnectionDetails"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The connection details another device's application sets itself up from to reach this\ndaemon over the computer's SSH server, as `octoboardd connection` prints them on a server;\nset while `state` is `serving`, null otherwise."
+        }
+      },
+      "required": [
+        "allowed",
+        "state",
+        "browser_port",
+        "address",
+        "forward_command",
+        "failure",
+        "connection"
+      ],
+      "description": "Where remote access to a daemon that follows the desktop application stands\n(`snapshot.remote_access`, `remote_access_updated`)."
+    },
+    "RemoteAccessFailure": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "$ref": "#/$defs/RemoteAccessFailureReason"
+        },
+        "detail": {
+          "type": "string",
+          "description": "The system's own words for it, in English, with the path concerned: for the user to act on\nor to report, shown beside the client's own sentence for `reason`."
+        }
+      },
+      "required": [
+        "reason",
+        "detail"
+      ],
+      "description": "Why the way in (the owner socket, or on Windows the browser port and the owner pipe) is not\nserved though remote access is on."
+    },
+    "RemoteAccessFailureReason": {
+      "oneOf": [
+        {
+          "type": "string",
+          "const": "no_ui",
+          "description": "The daemon's build embeds no UI to serve (a development build)."
+        },
+        {
+          "type": "string",
+          "const": "not_private",
+          "description": "The data directory, or a directory above it, lets another user in, so a socket there would\nnot be the daemon's alone."
+        },
+        {
+          "type": "string",
+          "const": "socket_failed",
+          "description": "The socket could not be opened (a path too long for a socket, say)."
+        },
+        {
+          "type": "string",
+          "const": "owner_key_failed",
+          "description": "The owner key could not be read or written."
+        },
+        {
+          "type": "string",
+          "const": "port_in_use",
+          "description": "On Windows, `browser_port` is already in use, by another program or another user of the\ncomputer: nothing is served until the port is changed or freed."
+        },
+        {
+          "type": "string",
+          "const": "port_failed",
+          "description": "On Windows, `browser_port` could not be listened on for another reason."
+        },
+        {
+          "type": "string",
+          "const": "pipe_failed",
+          "description": "On Windows, the named pipe that is the application's way in (the owner endpoint another\ndevice's application reaches through `octoboardd proxy`) could not be opened: another\nprogram or another user of the computer holds its name, say."
+        }
+      ],
+      "description": "The kind of failure, which a client words."
+    },
+    "RemoteAccessState": {
+      "oneOf": [
+        {
+          "type": "string",
+          "const": "off",
+          "description": "The setting is off: no way in for the browser (owner socket, or on Windows browser port and\nowner pipe), no owner key."
+        },
+        {
+          "type": "string",
+          "const": "serving",
+          "description": "The way in is open (the owner socket, or on Windows the browser port and the owner pipe),\nserves the UI, and accepts the owner key."
+        },
+        {
+          "type": "string",
+          "const": "failed",
+          "description": "The setting is on, but the way in could not be opened or the owner key could not be held\n(`failure` says which): nothing is served, and turning the setting off and on again tries\nagain, as does setting the browser port again on Windows, the same port included."
+        }
+      ],
+      "description": "What a daemon that follows the application does with remote access."
+    },
     "ResetCredit": {
       "type": "object",
       "properties": {
@@ -8977,12 +9177,12 @@
           "type": "boolean",
           "description": "Whether a project session is kept to its own project: its git is refused a ref update in\nthe repository of another registered project, and its file-edit tools are refused a path\nin one. Off unless the user turned it on. The git check reads it at every ref update, so a\nchange reaches running sessions at once; the edit check keeps the value a session was\nlaunched with, so a change reaches it only in sessions launched afterwards. Only the\nuser's own client changes it."
         },
-        "interface_language": {
+        "agent_language": {
           "type": [
             "string",
             "null"
           ],
-          "description": "The tag of the interface language, one of the tags the interface offers; `null` until a\nclient reports one. It is the one language every client shows (each keeps a copy only to\nrender in before it has connected) and the one sessions are told to reply in, so a change\nreaches every window. Carried by a configuration export in its General section."
+          "description": "The tag of the agent language, one of the tags the interface offers: the language sessions\nare told to talk to the user in. `null` until a client reports one; a client reports its own\ninterface language when it connects to a daemon that holds none, and the user's pick in\nSettings otherwise. The interface language itself is the client's alone and never stored\nhere. Carried by a configuration export in its General section."
         },
         "keep_awake": {
           "type": "boolean",
@@ -9116,7 +9316,7 @@
         "auto_approve_handoffs",
         "ask_questions_as_choices",
         "keep_sessions_in_own_project",
-        "interface_language",
+        "agent_language",
         "keep_awake",
         "keep_awake_when",
         "auto_select_account",

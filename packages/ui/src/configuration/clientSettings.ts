@@ -1,4 +1,6 @@
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
+import { currentLanguage, setLanguage } from "../i18n/language";
+import { isLanguage, LANGUAGE_NAMES, type Language } from "../i18n/languages";
 import type { ThemeChoice } from "../preferences/theme";
 import { runInBackground } from "../lifecycle/runInBackground";
 import { showMenuBarIcon } from "../lifecycle/showMenuBarIcon";
@@ -13,6 +15,8 @@ import { MARKDOWN_STYLE_NAMES, MARKDOWN_STYLES, markdownStyle, type MarkdownStyl
  * none, or one this client cannot stand behind (a value it does not know, or a setting its platform does not have),
  * which leaves this client's own as it is. */
 export interface ClientSettings {
+  /** The interface language, which is the client's own (see `i18n/language.ts`). */
+  interface_language?: Language;
   appearance?: ThemeChoice;
   markdown_style?: MarkdownStyle;
   terminal_font_size?: number;
@@ -26,9 +30,9 @@ export interface ClientSettings {
  * items, worded by `sessionOrderValues`. */
 type ScalarClientField = Exclude<keyof ClientSettings, "session_order">;
 
-/** The language, which the daemon holds and an import applies through it, is worded beside the client settings (see
- * `languageSettingValues`). */
-type LanguageField = "interface_language";
+/** The agent language, which the daemon holds and an import applies through it, is worded beside the client settings
+ * (see `agentLanguageSettingValues`). */
+type AgentLanguageField = "agent_language";
 
 /** What this client's platform has to offer the settings above. */
 export interface ClientSettingsPlatform {
@@ -39,8 +43,8 @@ export interface ClientSettingsPlatform {
 }
 
 /** What `platform`'s capabilities (each present only where the platform has it) say this client's platform offers. */
-export function clientSettingsPlatform(platform: { backgroundRun?: unknown; statusItem?: unknown }): ClientSettingsPlatform {
-  return { backgroundRun: platform.backgroundRun !== undefined, menuBarIcon: platform.statusItem !== undefined };
+export function clientSettingsPlatform(platform: { backgroundRun?: unknown; statusItem?: { setVisible?: unknown } }): ClientSettingsPlatform {
+  return { backgroundRun: platform.backgroundRun !== undefined, menuBarIcon: platform.statusItem?.setVisible !== undefined };
 }
 
 const APPEARANCES: readonly ThemeChoice[] = ["light", "dark", "system"];
@@ -52,8 +56,9 @@ const THEME_LABEL: Record<ThemeChoice, PlainMessageKey> = {
 };
 
 /** The values this client adds to a document it saves, for the Settings `sections` the document carries: for General
- * the session order (all three parts), whether it runs in the background and whether it shows its menu bar icon (each of
- * the last two only where the platform has that); for Appearance the theme, the Markdown style and the terminal font size. */
+ * the interface language, the session order (all three parts), whether it runs in the background and whether it shows
+ * its menu bar icon (each of the last two only where the platform has that); for Appearance the theme, the Markdown
+ * style and the terminal font size. */
 export function heldClientSettings(
   current: { appearance: ThemeChoice },
   platform: ClientSettingsPlatform,
@@ -62,6 +67,7 @@ export function heldClientSettings(
   const order = sessionOrderPreference.get();
   return {
     ...(sections.includes("general") && {
+      interface_language: currentLanguage(),
       session_order: { sessions: order.sessions, active_projects: order.activeProjects, inactive_projects: order.inactiveProjects },
       ...(platform.backgroundRun && { run_in_background: runInBackground.get() }),
       ...(platform.menuBarIcon && { show_menu_bar_icon: showMenuBarIcon.get() }),
@@ -82,10 +88,11 @@ export function documentClientSettings(document: unknown, platform: ClientSettin
 /** The client settings `settings` (a document's, or an import's reply) carries that this client can stand behind. */
 export function clientSettingsOf(settings: unknown, platform: ClientSettingsPlatform): ClientSettings {
   if (typeof settings !== "object" || settings === null) return {};
-  const { appearance, markdown_style, terminal_font_size, run_in_background, show_menu_bar_icon, session_order } = settings as Record<string, unknown>;
+  const { interface_language, appearance, markdown_style, terminal_font_size, run_in_background, show_menu_bar_icon, session_order } = settings as Record<string, unknown>;
   const order = sessionOrderOf(session_order);
   const pixelSize = pixelSizeOf(terminal_font_size);
   return {
+    ...(isLanguage(interface_language) && { interface_language }),
     ...(APPEARANCES.includes(appearance as ThemeChoice) && { appearance: appearance as ThemeChoice }),
     ...(MARKDOWN_STYLES.includes(markdown_style as MarkdownStyle) && { markdown_style: markdown_style as MarkdownStyle }),
     ...(pixelSize !== undefined && { terminal_font_size: clampTerminalFontSize(pixelSize) }),
@@ -122,6 +129,7 @@ function sessionOrderOf(value: unknown): Partial<SessionOrder> {
 /** Applies `values` to this client; a value the document did not carry is left as it is, and so is a part of the session
  * order it did not carry. */
 export function applyClientSettings(values: ClientSettings, setAppearance: (choice: ThemeChoice) => void): void {
+  if (values.interface_language !== undefined) setLanguage(values.interface_language);
   if (values.appearance !== undefined) setAppearance(values.appearance);
   if (values.markdown_style !== undefined) markdownStyle.set(values.markdown_style);
   if (values.terminal_font_size !== undefined) terminalFontSize.set(values.terminal_font_size);
@@ -131,11 +139,11 @@ export function applyClientSettings(values: ClientSettings, setAppearance: (choi
 }
 
 /** One client setting for the import cards: its settings-page name, and its value worded for it. `current`, the value
- * this client has now worded the same way (the language the daemon holds now, for the language), is present while
- * reviewing. `lang` and `currentLang` are the language of a value that is a name in a language of its own (a
- * language's name, a Markdown style's). */
+ * this client has now worded the same way (the agent language the daemon holds now, for the agent language), is
+ * present while reviewing. `lang` and `currentLang` are the language of a value that is a name in a language of its own
+ * (a language's name, a Markdown style's). */
 export interface ClientSettingValue {
-  field: ScalarClientField | LanguageField;
+  field: ScalarClientField | AgentLanguageField;
   label: PlainMessageKey;
   value: string;
   lang?: string;
@@ -150,10 +158,11 @@ export function clientSettingValues(
   wanted: ClientSettings,
   current?: ClientSettings,
 ): ClientSettingValue[] {
-  // The language a value is named in, where it is one of its own: the Markdown style names are in English, as the
-  // settings pages mark them.
+  // The language a value is named in, where it is one of its own: a language's name is in that language, and the
+  // Markdown style names are in English, as the settings pages mark them.
   const onOff = (value: boolean) => t(value ? "configuration.import.value.on" : "configuration.import.value.off");
   const words: { [F in ScalarClientField]-?: [PlainMessageKey, (value: NonNullable<ClientSettings[F]>) => string, ((value: NonNullable<ClientSettings[F]>) => string)?] } = {
+    interface_language: ["settings.language.label", (value) => LANGUAGE_NAMES[value], (value) => value],
     appearance: ["settings.theme.label", (value) => t(THEME_LABEL[value])],
     markdown_style: ["settings.markdownStyle.label", (value) => MARKDOWN_STYLE_NAMES[value], () => "en"],
     terminal_font_size: ["settings.terminalFontSize.label", (value) => t("configuration.import.value.pixels", { size: value })],

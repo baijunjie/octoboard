@@ -19,7 +19,7 @@ const MENU_LABEL_KEYS = Object.keys(en).filter((key) => key.startsWith("menu."))
  * surfacing to the user.
  */
 export function useNativeMenuLabels(): void {
-  const { appMenu, host } = usePlatform();
+  const { appMenu, jumpList, host } = usePlatform();
   const language = useCurrentLanguage();
   const accelerator = toAccelerator(useBinding("openSettings"), host);
   // Serial, so two in-flight pushes cannot settle out of order and leave the menu in the earlier language.
@@ -30,4 +30,17 @@ export function useNativeMenuLabels(): void {
     const labels = Object.fromEntries(MENU_LABEL_KEYS.map((key) => [key, format(language, key)]));
     push(() => appMenu.setLabels(labels, accelerator));
   }, [appMenu, language, accelerator, push]);
+
+  // The jump list's and the windows' system menus' lines, sent under the app menu's keys. Windows writes its menus in
+  // sentence case, where the macOS app menu takes Title Case, and the words for the local window are the PC's.
+  useEffect(() => {
+    if (!jumpList) return;
+    const labels = {
+      "menu.remote": format(language, "menu.remote"),
+      "menu.newRemoteWindow": format(language, "jumpList.newRemoteWindow"),
+      "menu.noRemoteDaemons": format(language, "jumpList.noRemoteDaemons"),
+      "menu.openMainWindow": format(language, "jumpList.openMainWindow"),
+    };
+    push(() => jumpList.setLabels(labels));
+  }, [jumpList, language, push]);
 }

@@ -194,12 +194,11 @@ it("words a worktree kept as the home folder, a disk's root or a folder of the a
     { kind: "worktree", name: "/home/dev", branch: "a", state: "failed", uncommitted: false, detail: "it is the home folder", cause: "protected_folder" },
   ]);
   const shown = { ...records, homeDir: "/home/dev" };
-  const app = appConfig.name;
   expect(daemonMessage("en", "session_branches_not_removed", { count: "1", items }, "fallback", shown)).toBe(
-    `This worktree is your home folder, the root of a disk, or holds ${app}’s own data, so it was kept: ${isolate("~")} (${isolate("a")}).`,
+    `This worktree is your home folder, the root of a disk, or holds the app’s own data, so it was kept: ${isolate("~")} (${isolate("a")}).`,
   );
   expect(daemonMessage("zh-Hans", "session_branches_not_removed", { count: "1", items }, "fallback", shown)).toBe(
-    `以下工作树是你的主文件夹、磁盘的根目录，或存放着 ${app} 自身的数据，因此已保留：${isolate("~")}（${isolate("a")}）。`,
+    `以下工作树是你的主文件夹、磁盘的根目录，或存放着本应用自身的数据，因此已保留：${isolate("~")}（${isolate("a")}）。`,
   );
 });
 

@@ -51,9 +51,9 @@ function submitsFromChoice(e: React.KeyboardEvent<HTMLFormElement>): boolean {
 let openDialogs = 0;
 
 /**
- * The frame every dialog shares. Unless `dismissable` is false, Escape calls `onClose`, which
- * `keyboardDismissHeld` withholds from Escape alone and `busy` from Escape and a click outside. A
- * click outside also closes a non-alert dialog; confirmations require an explicit response. The
+ * The frame every dialog shares. Escape calls `onClose`, which `keyboardDismissHeld` withholds from
+ * Escape alone and `busy` from Escape and a click outside. A click outside also closes a dialog
+ * that is neither an alert nor a failure modal; confirmations require an explicit response. The
  * dialog is mounted only while it is open, so `isOpen` is constant. With `onSubmit` the header, body
  * and footer sit in a `<form>`, so Enter in a text field submits it — the dialog decides what
  * "submit" means. Passing or dropping `onSubmit` while the dialog is open swaps that `<form>` and
@@ -97,7 +97,6 @@ function DialogFrame({
   failing,
   resetKey,
   returnFocusRef,
-  dismissable = true,
   keyboardDismissHeld = false,
   focusesItselfOnOpen,
   topLayerAtMount,
@@ -132,10 +131,8 @@ function DialogFrame({
    * own, labelled and reachable apart, which the description would otherwise read out whole (an error alert's
    * `attached`). */
   describedBy?: string;
-  /** An error requires its acknowledgement button, with no implicit dismissal. */
-  dismissable?: boolean;
   /** While set, Escape does not close the dialog, whether it reaches react-aria's modal or arrives while a tooltip is
-   * open; the Close button and a click outside still do. For a dialog whose content takes Escape for something of its
+   * open; the Close button still does, and so does a click outside unless the dialog is an alert or a failure modal. For a dialog whose content takes Escape for something of its
    * own, closing it from a listener on the dialog element: the dialog must not also close from the same press. */
   keyboardDismissHeld?: boolean;
   /** Where focus goes back to when the busy period ends, in place of the control it was moved from (see
@@ -209,7 +206,7 @@ function DialogFrame({
   }, []);
   useToastClearance(markerRef, footer !== null);
   useHeightMotion(markerRef);
-  useEscapeWhileTooltipOpen(dialog, dismissable && !keyboardDismissHeld && !busy ? onClose : () => {});
+  useEscapeWhileTooltipOpen(dialog, !keyboardDismissHeld && !busy ? onClose : () => {});
   const topLayer = useTopLayerAtMount(topLayerAtMount === true, markerRef);
 
   const alerting = alert || failing;
@@ -301,9 +298,9 @@ function DialogFrame({
       alert={alert}
       busy={busy}
       size={containerSize}
-      outsideDismissable={dismissable && !alert}
-      keyboardDismissDisabled={!dismissable || keyboardDismissHeld || busy}
-      onClose={() => dismissable && !busy && onClose()}
+      outsideDismissable={!alert && !failing}
+      keyboardDismissDisabled={keyboardDismissHeld || busy}
+      onClose={() => !busy && onClose()}
       topLayer={topLayer}
       containerClassName={!fullScreen && size === "viewer" ? "max-desktop:p-4" : undefined}
       role={failing ? "alertdialog" : undefined}
@@ -319,10 +316,10 @@ function DialogFrame({
       }
     >
       <span ref={markerRef} hidden />
-      {dismissable && <TitledControl title={t("common.close")}>
+      <TitledControl title={t("common.close")}>
         {/* Named explicitly so it always matches the tooltip. */}
         <ModalCloseButton label={t("common.close")} className={fullScreen ? "top-2 end-3" : undefined} />
-      </TitledControl>}
+      </TitledControl>
       {onSubmit ? (
       // A key held down repeats: the press that opened the dialog (a menu item takes Enter and
       // Space on keydown) would otherwise go on to submit it before the user has read it, Enter
@@ -362,7 +359,8 @@ type DialogFrameProps = Parameters<typeof DialogFrame>[0];
  * dialog's form — the danger icon, the failure's title, its explanation and "Error details", and the acknowledgement
  * as the only button, which calls `onClose`. It is an acknowledgement-only failure: there is no Report issue button,
  * and the type of `failure` leaves out an unexpected failure, whose report-a-bug guidance would have nothing to act on
- * here. Only that acknowledgement closes it. The dialog's own title, body, footer and submit are not shown.
+ * here. Its acknowledgement and its close button (×) close it, both through `onClose`; Escape and a press outside do not,
+ * as with the error alert dialog. The dialog's own title, body, footer and submit are not shown.
  */
 export function Dialog({ failure, ...props }: DialogFrameProps & {
   failure?: AcknowledgementView;
@@ -379,7 +377,7 @@ export function Dialog({ failure, ...props }: DialogFrameProps & {
       alert={props.alert}
       topLayerAtMount={props.topLayerAtMount}
       resetKey={failure.message}
-      dismissable={false}
+      keyboardDismissHeld
       onClose={props.onClose}
       headerLeading={<ModalStatusIcon status="danger" />}
       title={alertTitle(t, failure)}

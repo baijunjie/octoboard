@@ -1,5 +1,6 @@
-//! Remembers the main window's size, position and maximized state across launches, in
-//! `window-state.json` under the application's config directory.
+//! Remembers each window's size, position and maximized state across launches, under the
+//! application's config directory: the main window's (the local daemon's) in `window-state.json`,
+//! and the window of each other daemon under that daemon's identity in `daemon-window-state.json`.
 //!
 //! Every geometry value here is in logical points, in the desktop's one global coordinate space
 //! (origin at the main display's top-left, y growing downwards): the space AppKit places windows
@@ -11,6 +12,7 @@
 //! created with it while still hidden. The normal frame is then followed from the window's own
 //! move and resize events (`Tracker`) and written out on exit (`save`).
 
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::io::ErrorKind;
 use std::path::Path;
@@ -31,6 +33,9 @@ pub const DEFAULT_SIZE: (f64, f64) = (1200.0, 760.0);
 pub const MIN_SIZE: (f64, f64) = (1168.0, 600.0);
 
 const FILE_NAME: &str = "window-state.json";
+
+/// The file holding the windows of the other daemons, one saved state per daemon identity.
+const DAEMON_FILE_NAME: &str = "daemon-window-state.json";
 
 /// The band along the window's top edge that has to be on a display for a saved frame to be
 /// restored: the UI's top bar, which is what the user grabs to move the window, is this tall.
@@ -297,21 +302,35 @@ impl Tracker {
     }
 }
 
-/// The managed state holding the main window's `Tracker`.
-struct TrackedWindow(Mutex<Tracker>);
+/// Each followed window's `Tracker`, by window label, with the daemon identity its state is saved
+/// under (`None` for the main window). Registered once in `run`: Tauri's managed state is
+/// application-wide, so it cannot hold one value per window.
+#[derive(Default)]
+pub struct TrackedWindows(Mutex<HashMap<String, (Option<String>, Tracker)>>);
 
-/// The saved state, or `None` when there is none or it cannot be read.
-pub fn load(app: &AppHandle) -> Option<SavedState> {
-    match config_dir::config_path(app, FILE_NAME) {
-        Ok(path) => read_state(&path),
+/// The saved state of the window of the daemon `identity` names (`None` for the main window), or
+/// `None` when there is none or it cannot be read.
+pub fn load(app: &AppHandle, identity: Option<&str>) -> Option<SavedState> {
+    let name = if identity.is_some() {
+        DAEMON_FILE_NAME
+    } else {
+        FILE_NAME
+    };
+    let path = match config_dir::config_path(app, name) {
+        Ok(path) => path,
         Err(err) => {
             diagnostic!("cannot locate the saved window state: {err}");
-            None
+            return None;
         }
+    };
+    match identity {
+        None => read_state(&path),
+        Some(identity) => read_state::<BTreeMap<String, SavedState>>(&path)
+            .and_then(|states| states.get(identity).copied()),
     }
 }
 
-fn read_state(path: &Path) -> Option<SavedState> {
+fn read_state<T: serde::de::DeserializeOwned>(path: &Path) -> Option<T> {
     let bytes = match fs::read(path) {
         Ok(bytes) => bytes,
         Err(err) if err.kind() == ErrorKind::NotFound => return None,
@@ -362,9 +381,10 @@ fn in_points(area: &PhysicalRect<i32, u32>, scale: f64) -> Rect {
     }
 }
 
-/// Starts following `window`, just created with `initial`. Best effort: a window whose frame cannot
-/// be read is not followed, and its state is then not saved.
-pub fn track(window: &WebviewWindow, initial: &InitialWindow) {
+/// Starts following `window`, just created with `initial`, whose state is saved under `identity`
+/// (see `load`). Best effort: a window whose frame cannot be read is not followed, and its state is
+/// then not saved.
+pub fn track(window: &WebviewWindow, initial: &InitialWindow, identity: Option<String>) {
     // A position from the builder, and a requested maximize, are applied only after the window is
     // created, so its frame now may still be a provisional one on the main display: the decided
     // frame is the one to start from. When the OS placed the window, it did so while creating it,
@@ -379,10 +399,15 @@ pub fn track(window: &WebviewWindow, initial: &InitialWindow) {
             }
         },
     };
-    window.manage(TrackedWindow(Mutex::new(Tracker::new(
-        frame,
-        initial.maximized,
-    ))));
+    window
+        .state::<TrackedWindows>()
+        .0
+        .lock()
+        .unwrap_or_else(|err| err.into_inner())
+        .insert(
+            window.label().to_owned(),
+            (identity, Tracker::new(frame, initial.maximized)),
+        );
 
     let observed = window.clone();
     window.on_window_event(move |event| {
@@ -394,24 +419,99 @@ pub fn track(window: &WebviewWindow, initial: &InitialWindow) {
     });
 }
 
-/// Writes the main window's state out; meant for the moment the application exits.
+/// Writes every followed window's state out; meant for the moment the application exits.
 pub fn save(app: &AppHandle) {
-    let Some(tracked) = app.try_state::<TrackedWindow>() else {
-        return;
-    };
-    // One last look, in case the final move or resize produced no event of its own; if the window
+    let labels: Vec<String> = tracked_labels(app);
+    // One last look, in case the final move or resize produced no event of its own; if a window
     // cannot be read any more, what the events recorded stands.
-    if let Some(window) = app.get_webview_window(crate::MAIN_WINDOW_LABEL) {
-        let _ = observe(&window);
+    for label in &labels {
+        if let Some(window) = app.get_webview_window(label) {
+            let _ = observe(&window);
+        }
     }
-    let state = tracked
+    let states: Vec<_> = {
+        let tracked = app.state::<TrackedWindows>();
+        let tracked = tracked.0.lock().unwrap_or_else(|err| err.into_inner());
+        tracked
+            .values()
+            .map(|(identity, tracker)| (identity.clone(), tracker.state()))
+            .collect()
+    };
+    write_states(app, states);
+}
+
+/// Saves the state of `window` under `identity` from now on: a window on the connect page that
+/// now shows a daemon keeps its frame, and remembers it as that daemon's.
+pub fn retrack(window: &WebviewWindow, identity: String) {
+    if let Some((saved_under, _)) = window
+        .state::<TrackedWindows>()
         .0
         .lock()
         .unwrap_or_else(|err| err.into_inner())
-        .state();
-    let written = config_dir::config_path(app, FILE_NAME)
+        .get_mut(window.label())
+    {
+        *saved_under = Some(identity);
+    }
+}
+
+/// Writes the state of the window `window` out and stops following it; for a window that closes
+/// for good while the application runs on.
+pub fn forget(window: &WebviewWindow) {
+    let _ = observe(window);
+    let removed = window
+        .state::<TrackedWindows>()
+        .0
+        .lock()
+        .unwrap_or_else(|err| err.into_inner())
+        .remove(window.label());
+    if let Some((identity, tracker)) = removed {
+        write_states(window.app_handle(), vec![(identity, tracker.state())]);
+    }
+}
+
+fn tracked_labels(app: &AppHandle) -> Vec<String> {
+    app.state::<TrackedWindows>()
+        .0
+        .lock()
+        .unwrap_or_else(|err| err.into_inner())
+        .keys()
+        .cloned()
+        .collect()
+}
+
+/// Writes the main window's state to its file and merges the other daemons' into theirs, keeping
+/// the saved states of daemons whose windows are not open.
+fn write_states(app: &AppHandle, states: Vec<(Option<String>, SavedState)>) {
+    let mut daemons = Vec::new();
+    for (identity, state) in states {
+        match identity {
+            None => write_file(app, FILE_NAME, &state),
+            Some(identity) => daemons.push((identity, state)),
+        }
+    }
+    if daemons.is_empty() {
+        return;
+    }
+    let written = config_dir::config_path(app, DAEMON_FILE_NAME)
         .map_err(anyhow::Error::from)
-        .and_then(|path| config_dir::write_json(&path, &state));
+        .and_then(|path| merge_daemon_states(&path, daemons));
+    if let Err(err) = written {
+        diagnostic!("cannot save the window's state: {err}");
+    }
+}
+
+/// Puts `states` into the daemons' file at `path`, each under its daemon's identity, leaving the
+/// other daemons' as they were.
+fn merge_daemon_states(path: &Path, states: Vec<(String, SavedState)>) -> anyhow::Result<()> {
+    let mut saved: BTreeMap<String, SavedState> = read_state(path).unwrap_or_default();
+    saved.extend(states);
+    config_dir::write_json(path, &saved)
+}
+
+fn write_file<T: Serialize>(app: &AppHandle, name: &str, value: &T) {
+    let written = config_dir::config_path(app, name)
+        .map_err(anyhow::Error::from)
+        .and_then(|path| config_dir::write_json(&path, value));
     if let Err(err) = written {
         diagnostic!("cannot save the window's state: {err}");
     }
@@ -426,21 +526,19 @@ fn observe(window: &WebviewWindow) -> tauri::Result<()> {
     if !window.is_visible()? || window.is_minimized()? || window.is_fullscreen()? {
         return Ok(());
     }
-    let tracked = window.state::<TrackedWindow>();
     let now = Instant::now();
-    if window.is_maximized()? {
-        tracked
-            .0
-            .lock()
-            .unwrap_or_else(|err| err.into_inner())
-            .record_maximized(now);
+    let frame = if window.is_maximized()? {
+        None
     } else {
-        let frame = frame_of(window)?;
-        tracked
-            .0
-            .lock()
-            .unwrap_or_else(|err| err.into_inner())
-            .record_normal(frame, now);
+        Some(frame_of(window)?)
+    };
+    let tracked = window.state::<TrackedWindows>();
+    let mut tracked = tracked.0.lock().unwrap_or_else(|err| err.into_inner());
+    if let Some((_, tracker)) = tracked.get_mut(window.label()) {
+        match frame {
+            None => tracker.record_maximized(now),
+            Some(frame) => tracker.record_normal(frame, now),
+        }
     }
     Ok(())
 }
@@ -892,9 +990,29 @@ mod tests {
     }
 
     #[test]
+    fn each_daemon_s_window_state_is_kept_under_its_identity() {
+        let scratch = Scratch::new("window-state", "daemons");
+        let path = scratch.0.join(DAEMON_FILE_NAME);
+        let first = saved(10.0, 20.0, 1200.0, 760.0, false);
+        let second = saved(30.0, 40.0, 1300.0, 800.0, true);
+        merge_daemon_states(&path, vec![("a".into(), first)]).unwrap();
+        merge_daemon_states(&path, vec![("b".into(), second)]).unwrap();
+        let states: BTreeMap<String, SavedState> = read_state(&path).unwrap();
+        assert_eq!(states.get("a"), Some(&first));
+        assert_eq!(states.get("b"), Some(&second));
+
+        // A later save of one daemon's window leaves the other's as it was.
+        let moved = saved(50.0, 60.0, 1200.0, 760.0, false);
+        merge_daemon_states(&path, vec![("a".into(), moved)]).unwrap();
+        let states: BTreeMap<String, SavedState> = read_state(&path).unwrap();
+        assert_eq!(states.get("a"), Some(&moved));
+        assert_eq!(states.get("b"), Some(&second));
+    }
+
+    #[test]
     fn missing_state_file_reads_as_none() {
         let scratch = Scratch::new("window-state", "missing");
-        assert_eq!(read_state(&scratch.0.join(FILE_NAME)), None);
+        assert_eq!(read_state::<SavedState>(&scratch.0.join(FILE_NAME)), None);
     }
 
     #[test]
@@ -903,9 +1021,9 @@ mod tests {
         fs::create_dir_all(&scratch.0).unwrap();
         let path = scratch.0.join(FILE_NAME);
         fs::write(&path, b"{\"frame\": {\"x\": 1").unwrap();
-        assert_eq!(read_state(&path), None);
+        assert_eq!(read_state::<SavedState>(&path), None);
         fs::write(&path, b"{\"x\": 1, \"y\": 2}").unwrap();
-        assert_eq!(read_state(&path), None);
+        assert_eq!(read_state::<SavedState>(&path), None);
     }
 
     #[test]
@@ -914,16 +1032,56 @@ mod tests {
         let path = scratch.0.join("nested").join(FILE_NAME);
         let first = saved(1700.0, 100.0, 1200.0, 760.0, true);
         config_dir::write_json(&path, &first).unwrap();
-        assert_eq!(read_state(&path), Some(first));
+        assert_eq!(read_state::<SavedState>(&path), Some(first));
 
         // Overwriting goes through the same rename, and leaves nothing else behind.
         let second = saved(-700.0, -1000.0, 1300.0, 800.0, false);
         config_dir::write_json(&path, &second).unwrap();
-        assert_eq!(read_state(&path), Some(second));
+        assert_eq!(read_state::<SavedState>(&path), Some(second));
         let names: Vec<_> = fs::read_dir(path.parent().unwrap())
             .unwrap()
             .map(|entry| entry.unwrap().file_name())
             .collect();
         assert_eq!(names, [FILE_NAME]);
+    }
+
+    #[test]
+    fn a_daemons_file_that_cannot_be_read_is_started_afresh_by_the_next_save() {
+        let scratch = Scratch::new("window-state", "daemons-corrupt");
+        fs::create_dir_all(&scratch.0).unwrap();
+        let path = scratch.0.join(DAEMON_FILE_NAME);
+        fs::write(&path, b"{\"a\": ").unwrap();
+        let state = saved(10.0, 20.0, 1200.0, 760.0, false);
+        merge_daemon_states(&path, vec![("a".into(), state)]).unwrap();
+        let states: BTreeMap<String, SavedState> = read_state(&path).unwrap();
+        assert_eq!(states.get("a"), Some(&state));
+    }
+
+    #[test]
+    fn the_main_window_and_the_other_daemons_are_kept_in_files_of_their_own() {
+        assert_ne!(FILE_NAME, DAEMON_FILE_NAME);
+        // One save of a remote window writes none of the main window's file.
+        let scratch = Scratch::new("window-state", "separate-files");
+        let main_path = scratch.0.join(FILE_NAME);
+        let main = saved(1.0, 2.0, 1200.0, 700.0, true);
+        config_dir::write_json(&main_path, &main).unwrap();
+        merge_daemon_states(
+            &scratch.0.join(DAEMON_FILE_NAME),
+            vec![("ssh:me@h:22".into(), saved(5.0, 6.0, 1300.0, 800.0, false))],
+        )
+        .unwrap();
+        assert_eq!(read_state::<SavedState>(&main_path), Some(main));
+    }
+
+    #[test]
+    fn a_saved_frame_of_one_daemon_is_not_found_under_another_s_identity() {
+        let scratch = Scratch::new("window-state", "identity-lookup");
+        let path = scratch.0.join(DAEMON_FILE_NAME);
+        let state = saved(5.0, 6.0, 1300.0, 800.0, false);
+        merge_daemon_states(&path, vec![("ssh:me@h:22".into(), state)]).unwrap();
+        let states: BTreeMap<String, SavedState> = read_state(&path).unwrap();
+        assert_eq!(states.get("ssh:me@h:22"), Some(&state));
+        assert_eq!(states.get("ssh:me@h:2222"), None);
+        assert_eq!(states.get("ssh:other@h:22"), None);
     }
 }

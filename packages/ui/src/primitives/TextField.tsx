@@ -44,7 +44,7 @@ export function TextField({ value, onChange, onBlur, label, describedBy, disable
   locked?: boolean;
   /** What the input takes, where it is not plain text: a date, a time or a local date and time pick by the system's own
    * control. */
-  type?: "text" | "date" | "time" | "datetime-local";
+  type?: "text" | "password" | "date" | "time" | "datetime-local";
   /** The keyboard a touch device offers: `decimal` for a number typed as text. */
   inputMode?: "decimal";
 }): React.ReactElement {

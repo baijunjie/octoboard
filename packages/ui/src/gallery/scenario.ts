@@ -1,6 +1,6 @@
 import type { ThirdPartyLicenses } from "../about/thirdPartyLicenses";
 import type { Language } from "../i18n/languages";
-import type { AvailableUpdate, HostFacts, LaunchAtLoginStatus, MacosPermissionsStatus, UpdateProgress } from "../platform";
+import type { AvailableUpdate, HostFacts, LaunchAtLoginStatus, MacosPermissionsStatus, RemoteDaemonConnectOutcome, RemoteDaemonEntry, RemoteDaemonStatus, UpdateProgress } from "../platform";
 import type { Fixture } from "../fixtures/fixture";
 import type { Step } from "../fixtures/interact";
 import type { Preferences } from "../fixtures/preferences";
@@ -42,6 +42,47 @@ export const MIN_HEIGHT = 400;
 /** What a check answers: a newer version, `"upToDate"`, `"pending"` for a check that is never answered, or the
  * updater's own failure text. */
 export type UpdaterCheck = AvailableUpdate | "upToDate" | "pending" | { error: string };
+
+/** The remote daemons the desktop shell keeps, for a window that offers them: the rail's group of them exists only with
+ * this. A connection never ends unless `outcomes` says how, so pressing a tile that has no password to ask for leaves
+ * it connecting. */
+export interface RemoteDaemonsFixture {
+  /** The saved entries, in the order the rail lists them. */
+  entries: RemoteDaemonEntry[];
+  /** The entries whose window is open; any other entry is not connected. */
+  status?: RemoteDaemonStatus[];
+  /** What a press on an entry ends in, by its id; an entry without one never finishes connecting. A press that asks to
+   * hold the connection for the browser (`browser`) is answered with its address, and the entry then counts as held. */
+  outcomes?: Record<string, RemoteDaemonConnectOutcome>;
+}
+
+/** One daemon's tab of the notification-area flyout. */
+export interface TrayFlyoutTabFixture {
+  /** The remote daemon's name, as its tab is labelled; none for this computer's tab, which comes first. */
+  remote?: string;
+  /** A remote daemon whose connection is held for the browser: no window sends its menu, so its tab offers only Open in
+   * browser and Disconnect. */
+  held?: true;
+  /** The window state the daemon's menu is built from (its sessions, consoles, accounts and quota readings), by the
+   * app's own menu builder: the sessions waiting for the user raise the hand on the tab. Left out for a held daemon. */
+  state?: Scenario["state"];
+  /** The session whose quota gives the icon its capsule, and the console whose account the quota rows' openers show. */
+  selectedSessionId?: string;
+  currentConsoleId?: string;
+}
+
+/** The page of the Windows notification-area flyout (`TrayFlyout`), which has no daemon behind it: the model the shell
+ * would hand it, laid out as the shell lays out the macOS menu's lines (a tab per daemon, the chosen tab's lines, then
+ * the lines every tab shares), in the window's language. */
+export interface TrayFlyoutFixture {
+  /** The daemons' tabs in connection order; the first is this computer's. With one tab there is no strip of tabs. */
+  tabs: TrayFlyoutTabFixture[];
+  /** The tab the flyout opens on; the first by default. */
+  chosen?: number;
+  /** The version a known newer release has, which the Check for updates line then names; without it the line only
+   * offers the check. */
+  updateVersion?: string;
+}
 
 /** What the desktop shell's updater answers, for a window that can update itself: the Settings rows and the
  * update notice exist only with one. */
@@ -153,6 +194,25 @@ export interface Scenario extends Fixture {
   /** With `launchAtLogin`, the reason the system gives for not opening its list of login items, which the Open System
    * Settings button of a login entry that `requiresApproval` goes to; without it the list opens (nothing is shown). */
   launchAtLoginOpenError?: string;
+  /** The platform offers the desktop shell's remote daemons, listing these, so the rail has its group of them under the
+   * consoles (alone, and in a `desktopApp`, which is the window that has it). Saving and removing change the list. */
+  remoteDaemons?: RemoteDaemonsFixture;
+  /** The window is the connect page a new remote window opens on (`ConnectPage`), which has no daemon behind it: the
+   * saved remote daemons of `remoteDaemons`, with their connect flow. */
+  connectPage?: boolean;
+  /** The window is a remote daemon's, as the shell opens one (`?remote=<name>`): the title bar names the daemon, and
+   * what is the application's own rather than a daemon's is absent (the rail's remote daemons, the Remote access,
+   * Permissions and Updates sections), as in the shell's window of that kind. Give the `host` the shell gives such a
+   * window (`REMOTE_WINDOW_HOST` of `fixtures/remoteWindow.ts`) and leave out the capabilities a remote window is not
+   * given (`backgroundRun`, `menuBarIcon`, `launchAtLogin`, `updater`). The daemon's host is its own, as `state.host`
+   * says. */
+  remoteWindow?: { name: string };
+  /** Whether macOS Remote Login (Windows: OpenSSH Server) is on, as the shell reports it for the Remote access section:
+   * `"unknown"` is a shell that cannot tell. Opening the system's settings succeeds and shows nothing. Only a window
+   * that has it offers the section (with `state.remoteAccess` set). */
+  remoteLogin?: "on" | "off" | "unknown";
+  /** The window is the notification-area flyout's page in place of the app, over the model of this. */
+  trayFlyout?: TrayFlyoutFixture;
   /** The platform has the desktop shell's notifications, which it grants without a prompt, so the app keeps no switch of
    * its own. Whether the Settings row also links to the system's notification pane follows `host`
    * (`notificationSettings: "system-pane"`, as the real shell does). Nothing is shown or opened. */

@@ -91,7 +91,8 @@ shown as a failure; the dialog takes up that login instead.
 
 After a failure, a timeout or a refusal, the running dialog gives way to a failure alert of its own, in the form of an
 error alert (see "The error alert" in `docs/product/error-alerts.md`), though it is not queued with them: the danger
-icon, the title "Could not log in" or, for a timeout, "Login timed out", no close button, and Escape does not close it.
+icon, the title "Could not log in" or, for a timeout, "Login timed out", a close button (×) that does what **Close**
+does, and neither Escape nor a click outside closes it.
 Its appearing, with keyboard focus moving into it, is what assistive technology hears of the failure.
 
 - Its body opens with one sentence naming the agent and the account: that logging in to the account failed, or that
@@ -104,8 +105,9 @@ Its appearing, with keyboard focus moving into it, is what assistive technology 
 - Then any further explanation in Octoboard's words.
 - What the agent's CLI or the system said is only under a collapsed **Error details** disclosure at the end.
 
-Its buttons are **Report issue** where it applies, **Close**, and **Log in again**, which has keyboard focus. Log in
-again brings the running dialog back on a new login; Close closes it, as above.
+Its footer holds two buttons: **Close** and **Log in again**, which has keyboard focus; for an unexpected failure,
+**Report issue** takes Close's place, and the close button stands for Close. Log in again brings the running dialog
+back on a new login; Close, and the close button, close it, as above.
 
 Whatever the outcome, the account's quota is read again within about 15 seconds (see "When quotas are read" in
 `docs/product/account-quota-readings.md`).

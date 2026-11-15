@@ -6,9 +6,10 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { accountOf, consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import type { AccountQuota, Event, ClientRequestBody } from "../protocol";
 import type { PlatformAdapter, StatusItemCapability } from "../platform";
+import type { HostFacts } from "../platform/host";
 import { DEFAULT_SESSION_ORDER } from "../sessions/order";
 import { sessionOrderPreference, type State } from "../store";
-import { BROWSER_HOST } from "../test/hosts";
+import { BROWSER_HOST, MAC_HOST, WINDOWS_HOST } from "../test/hosts";
 import { TestHost } from "../test/TestHost";
 import { testDaemon } from "../test/testDaemon";
 import type { StatusItemMenuDraft } from "./statusItemMenu";
@@ -30,7 +31,7 @@ function Host({ selectedSessionId, currentConsoleId, updatesLabel }: { selectedS
   return null;
 }
 
-function mount(statusItem: StatusItemCapability, request: (body: ClientRequestBody) => Promise<Event>, initial: Partial<State> = {}) {
+function mount(statusItem: StatusItemCapability, request: (body: ClientRequestBody) => Promise<Event>, initial: Partial<State> = {}, host: HostFacts = MAC_HOST) {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   onTestFinished(() => {
@@ -40,7 +41,7 @@ function mount(statusItem: StatusItemCapability, request: (body: ClientRequestBo
   const daemon = testDaemon({ state: initial, request });
   const select = (selectedSessionId?: string, currentConsoleId?: string) => act(() =>
     root.render(
-      <TestHost daemon={daemon} platform={{ statusItem } as PlatformAdapter}>
+      <TestHost daemon={daemon} platform={{ statusItem, host } as PlatformAdapter}>
         <Host selectedSessionId={selectedSessionId} currentConsoleId={currentConsoleId} />
       </TestHost>,
     ),
@@ -317,4 +318,23 @@ it("pushes the menu again when the session order changes, listing the projects' 
   await act(async () => sessionOrderPreference.set({ ...DEFAULT_SESSION_ORDER, activeProjects: "used" }));
   expect(setMenu).toHaveBeenCalledTimes(2);
   expect(listed()).toEqual(["second", "first"]);
+});
+
+it("names this computer in the words of the system the window runs on", async () => {
+  const pushed = async (host: HostFacts) => {
+    const setMenu = vi.fn<StatusItemCapability["setMenu"]>(() => Promise.resolve());
+    mount({ setMenu, setVisible: async () => {}, onSessionChosen: () => () => {}, onOpened: () => () => {} }, vi.fn(), {}, host);
+    await act(async () => {});
+    return setMenu.mock.lastCall![0].app;
+  };
+  expect(await pushed(MAC_HOST)).toEqual({ this_computer: "This Mac", open_in_browser: "Open in browser" });
+  expect(await pushed(WINDOWS_HOST)).toMatchObject({ this_computer: "This PC" });
+});
+
+it("pushes its daemon's menu from the window of another daemon too, whose icon has no switch of its own", async () => {
+  const setMenu = vi.fn<StatusItemCapability["setMenu"]>(() => Promise.resolve());
+  mount({ setMenu, onSessionChosen: () => () => {}, onOpened: () => () => {} }, vi.fn());
+  await act(async () => {});
+  expect(setMenu).toHaveBeenCalled();
+  expect(setMenu.mock.lastCall![0]).toMatchObject({ disconnect: "Disconnect", quit: "Quit completely" });
 });

@@ -32,15 +32,14 @@ pub(super) async fn rotate_owner_key(
     if !key_matches(query.as_deref(), &state.key) {
         return StatusCode::UNAUTHORIZED.into_response();
     }
-    let owner_key = state.owner_key.clone();
-    let rotated = tokio::task::spawn_blocking(move || owner_key.rotate())
-        .await
-        .map_err(|err| tracing::error!(%err, "the owner key rotation did not finish"));
+    let rotated = tokio::task::spawn_blocking({
+        let state = state.clone();
+        move || state.remote_access.rotate_key(&state)
+    })
+    .await
+    .map_err(|err| tracing::error!(%err, "the owner key rotation did not finish"));
     match rotated {
-        Ok(Ok(())) => {
-            tracing::info!("the owner key was rotated");
-            StatusCode::NO_CONTENT.into_response()
-        }
+        Ok(Ok(())) => StatusCode::NO_CONTENT.into_response(),
         Ok(Err(error)) => {
             let status = match &error {
                 RotateError::NotHeld => StatusCode::CONFLICT,
@@ -213,6 +212,55 @@ mod tests {
         .expect("the checks ran");
     }
 
+    /// A rotation on a desktop daemon serving remote access broadcasts the new address, so its
+    /// Settings do not keep showing the old one.
+    #[tokio::test]
+    async fn a_rotation_on_the_desktop_daemon_broadcasts_the_new_address() {
+        use crate::coordinator::remote_access::WayIn;
+        use crate::protocol::Event;
+
+        let (state, dir) = app_state("server-rotate-broadcast");
+        state.set_follows_application();
+        state
+            .remote_access
+            .begin_with(&state, dir.to_path_buf(), true, WayIn::Port);
+        state
+            .remote_access
+            .serve_clients(crate::server::browser_router(state.clone()));
+        let free = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0))
+            .unwrap()
+            .local_addr()
+            .unwrap()
+            .port();
+        state.remote_access.set_port(&state, free).unwrap();
+        state.remote_access.set(&state, true).unwrap();
+        let old = state.owner_key.current().expect("serving");
+        let port = serve_state(state.clone()).await;
+        let mut events = state.subscribe();
+
+        tokio::task::spawn_blocking(move || {
+            let host = format!("Host: 127.0.0.1:{port}");
+            assert_eq!(
+                status_of(port, &keyed("POST /owner-key/rotate"), &[&host]),
+                204
+            );
+        })
+        .await
+        .expect("the rotation ran");
+        let new = state.owner_key.current().expect("still serving");
+        assert_ne!(new, old);
+        let event = tokio::time::timeout(PATIENCE, events.recv())
+            .await
+            .expect("the rotation was broadcast")
+            .unwrap();
+        let Event::RemoteAccessUpdated { remote_access } = event else {
+            panic!("not the remote access: {event:?}");
+        };
+        let address = remote_access.address.expect("the address");
+        assert!(address.ends_with(&new), "{address}");
+        drop(state.remote_access.close());
+    }
+
     /// A daemon started again over the same data directory has a new launch key and accepts the
     /// same owner key: the address a browser bookmarked still opens it, and the old launch key
     /// does not.
@@ -337,5 +385,140 @@ mod tests {
                 _ => {}
             }
         }
+    }
+
+    /// Over a connection the owner key opened, a browser's, remote access cannot be changed nor
+    /// the key rotated: both requests are refused before they are handled. The same requests over
+    /// the launch key reach their handler, which here refuses them as a daemon on its own does.
+    #[tokio::test]
+    async fn a_connection_the_owner_key_opened_cannot_change_remote_access() {
+        use futures_util::{SinkExt, StreamExt};
+        use tokio_tungstenite::tungstenite::Message as Frame;
+
+        let (port, _state, dir) = serve_with_owner_key("server-owner-key-remote-access").await;
+        let owner = crate::owner_key::read_in(&dir).expect("the owner key");
+        for (key, expected) in [
+            (owner.as_str(), "remote_access_refused_to_browser"),
+            (TEST_KEY, "remote_access_unavailable"),
+        ] {
+            let (mut socket, _) = tokio_tungstenite::connect_async(format!(
+                "ws://127.0.0.1:{port}/ws/control?key={key}"
+            ))
+            .await
+            .expect("connected");
+            for request in [
+                r#"{"type":"set_remote_access","id":"r","allowed":false}"#,
+                r#"{"type":"rotate_owner_key","id":"r"}"#,
+            ] {
+                socket.send(Frame::Text(request.into())).await.unwrap();
+                let reply = loop {
+                    let frame = tokio::time::timeout(PATIENCE, socket.next())
+                        .await
+                        .expect("a reply in time")
+                        .unwrap()
+                        .unwrap();
+                    let Frame::Text(text) = frame else { continue };
+                    let event: serde_json::Value = serde_json::from_str(&text).unwrap();
+                    if event["id"] == "r" {
+                        break event;
+                    }
+                };
+                assert_eq!(reply["type"], "error", "{request}: {reply}");
+                assert_eq!(reply["code"], expected, "{request}: {reply}");
+            }
+        }
+    }
+
+    /// The reply to `request` sent over a control connection opened with `key` on `port`: the
+    /// first error frame, or frame carrying the request's id `r`, whichever comes first; the whole
+    /// wait is bounded, since frames that are no reply (the snapshot, heartbeats) keep arriving.
+    async fn control_reply(port: u16, key: &str, request: &str) -> serde_json::Value {
+        use futures_util::{SinkExt, StreamExt};
+        use tokio_tungstenite::tungstenite::Message as Frame;
+
+        let (mut socket, _) =
+            tokio_tungstenite::connect_async(format!("ws://127.0.0.1:{port}/ws/control?key={key}"))
+                .await
+                .expect("connected");
+        socket.send(Frame::Text(request.into())).await.unwrap();
+        tokio::time::timeout(PATIENCE, async {
+            loop {
+                let Frame::Text(text) = socket.next().await.unwrap().unwrap() else {
+                    continue;
+                };
+                let event: serde_json::Value = serde_json::from_str(&text).unwrap();
+                if event["id"] == "r" || event["type"] == "error" {
+                    return event;
+                }
+            }
+        })
+        .await
+        .expect("a reply in time")
+    }
+
+    /// The port of the browser at Windows is changed by the application's own window alone too:
+    /// over the owner key the request is refused as the other two are, and over the launch key it
+    /// reaches its handler, which refuses it as a daemon with no browser port of its own does.
+    #[tokio::test]
+    async fn a_connection_the_owner_key_opened_cannot_set_the_browser_port() {
+        let (port, _state, dir) = serve_with_owner_key("server-owner-key-browser-port").await;
+        let owner = crate::owner_key::read_in(&dir).expect("the owner key");
+        let request = r#"{"type":"set_remote_access_port","id":"r","port":4000}"#;
+        let refused = control_reply(port, &owner, request).await;
+        assert_eq!(refused["type"], "error", "{refused}");
+        assert_eq!(refused["code"], "remote_access_refused_to_browser");
+        let handled = control_reply(port, TEST_KEY, request).await;
+        assert_eq!(handled["type"], "error", "{handled}");
+        assert_eq!(handled["code"], "remote_access_unavailable");
+    }
+
+    /// A request of another kind is not caught by the refusal: over the owner key a browser still
+    /// uses the daemon, and a frame that is no request at all gets the ordinary error.
+    #[tokio::test]
+    async fn the_refusal_of_remote_access_changes_leaves_a_browsers_other_requests_alone() {
+        let (port, _state, dir) = serve_with_owner_key("server-owner-key-other-requests").await;
+        let owner = crate::owner_key::read_in(&dir).expect("the owner key");
+        let other = control_reply(port, &owner, r#"{"type":"ping","id":"r"}"#).await;
+        assert_eq!(other["type"], "ack", "{other}");
+        let garbled = control_reply(port, &owner, r#"{"id":"r","kind":"set_remote_access"}"#).await;
+        assert_eq!(garbled["type"], "error", "{garbled}");
+        assert_ne!(
+            garbled["code"], "remote_access_refused_to_browser",
+            "{garbled}"
+        );
+    }
+
+    /// What a `401` at the TCP port says: that a browser reaches the daemon at another endpoint
+    /// only while the daemon holds an owner key, as it does while remote access is on, and the
+    /// plain refusal otherwise; remote access turned on and off while the daemon runs changes it.
+    #[tokio::test]
+    async fn the_refusal_at_the_port_points_to_the_owner_endpoint_only_while_the_key_is_held() {
+        let (state, dir) = app_state("server-refusal-body");
+        let port = serve_state(state.clone()).await;
+        let refusal = move || {
+            tokio::task::spawn_blocking(move || {
+                let host = format!("Host: 127.0.0.1:{port}");
+                let wrong = "0".repeat(64);
+                response_of(port, &format!("GET /key-check?key={wrong}"), &[&host])
+            })
+        };
+        let (status, body) = refusal().await.unwrap();
+        assert_eq!(
+            (status, body.as_str()),
+            (401, crate::server::access::REFUSED)
+        );
+
+        state
+            .owner_key
+            .enable(&crate::owner_key::path_in(&dir))
+            .expect("the owner key");
+        let (status, body) = refusal().await.unwrap();
+        assert_eq!(status, 401);
+        assert_eq!(body, crate::server::access::REFUSED_AT_PORT);
+        assert!(body.contains("octoboardd address"), "{body}");
+
+        state.owner_key.disable();
+        let (_, body) = refusal().await.unwrap();
+        assert_eq!(body, crate::server::access::REFUSED);
     }
 }

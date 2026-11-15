@@ -1,11 +1,12 @@
 # Running in the background from the command line
 
-Five commands act on the daemon running against the data directory of the user who runs them (`~/.octoboard`), whoever
-started that daemon, the desktop application included. Whether a daemon runs is told by `daemon.lock` alone; which
+Six commands act on the daemon running against the data directory of the user who runs them (`~/.octoboard`), whoever
+started that daemon, the desktop application included: `start`, `stop`, `restart`, `status` and `address` below, and
+`proxy` (see "Another device reaching the daemon over SSH" below). Whether a daemon runs is told by `daemon.lock` alone; which
 process it is and where it listens, by `daemon.owner`, and its key by `daemon.key` (see
 `docs/product/files-octoboard-owns.md`). Checking takes the lock for an instant, as a shared lock, so that commands
 checking at the same moment do not take each other for a daemon, and a daemon starting at that very instant waits up to
-a second for it rather than refusing to start. All five work on Windows too; where Windows differs, the command says so
+a second for it rather than refusing to start. All six work on Windows too; where Windows differs, the command says so
 below.
 
 **A planned restart caught half-way is waited out.** The daemon of a planned restart removes `daemon.owner` before it
@@ -182,28 +183,38 @@ free is gone at once.
   above and reports the next daemon rather than none. A user for whom no daemon has ever run has no data directory, and
   `status` creates none.
 - **`octoboardd address`** prints the address to open the running daemon at in a browser, its key included, as a single
-  line on standard output and nothing else there, `http://127.0.0.1:<port>/?key=<key>`, `<port>` being the daemon's
-  port, and exits with status 0; the output is meant to be read by a program as well, such as one run over SSH. The host
+  line on standard output and nothing else there, `http://127.0.0.1:<port>/?key=<key>`, and exits with status 0.
+  `<port>` is the daemon's own port for a daemon that runs on its own; for the desktop application's daemon, whose own
+  port the system assigns at each launch, it is the port the browser's machine forwards to: the server form's default
+  port, the same at every launch, or on Windows the browser port the daemon serves at (see "Remote access to the desktop
+  application's daemon" in `docs/product/who-can-reach-the-daemon.md`); the output is meant to be read by a program as well, such as one run over SSH. The host
   is `127.0.0.1`, a loopback address, which a browser treats as a secure context and which the SSH forward below binds
   on the owner's own machine. The key is the owner key where the running daemon's `daemon.owner` says it accepts one
   and `owner.key` holds a key it trusts; otherwise it is the daemon's launch key, as for a daemon that serves no browser
   or is of an earlier build (see "The owner key" in `docs/product/who-can-reach-the-daemon.md`). Where the record says
   the daemon accepts an owner key but `owner.key` is missing, cannot be read or holds no key it trusts, it prints the
   launch key's address and adds on its error output that this address lasts only until the daemon restarts, and that
-  `address --rotate` makes a lasting one. Its one option is `--rotate` (below).
+  `address --rotate` makes a lasting one. For the desktop application's daemon while its remote access is off there is
+  no address: it says so on its error output, naming Allow remote access in the application's Settings, and exits with
+  status 1 with nothing on standard output. Its options are `--rotate` (below) and `--json` (see "Another device
+  reaching the daemon over SSH" below).
 
-  On its error output it also says how the address is opened. For a daemon that accepts the owner key, so serves the
-  browser on its socket (see "The browser socket" in `docs/product/server-form.md`), it prints the SSH command that
+  On its error output it also says how the address is opened. For a daemon that accepts the owner key on its socket
+  (see "The browser socket" in `docs/product/server-form.md`), it prints the SSH command that
   forwards the socket to the owner's machine, with the daemon's port, the socket's real path and `<user>@<server>`,
   `<user>` being the login name the system records for the user (just `<server>` where it records none) and `<server>`
   left for the owner to fill in, and says to run it there and open the address there. Before that, it asks the daemon on
   its socket whether it accepts the key in the address, allowing it **5 seconds** to take the connection and as long to
   answer, and adds a warning when the daemon
   refuses it — `owner.key` changed since the daemon started, say, for which `address --rotate` makes an address it
-  accepts — or when the socket cannot be asked, naming the socket and why. For a daemon that does not accept the owner
-  key, on Linux and macOS, it says instead that the daemon serves no browser page — it follows the desktop application,
-  its build carries no UI, or its data directory is not private to its user or its socket could not be opened, as its
-  log says — and that the address is for programs that take its launch key. Neither changes the status.
+  accepts — or when the socket cannot be asked, naming the socket and why. For the desktop application's daemon on
+  Windows, which takes the owner key at its browser port, it prints instead the command that forwards that port,
+  `ssh -N -o ExitOnForwardFailure=yes -L 127.0.0.1:<port>:127.0.0.1:<port> <user>@<server>`, after asking the daemon at
+  that port, as above, whether it accepts the key, and warning when it refuses it (`owner.key` changed, or another
+  program holds the port) or nothing answers there. For a daemon that does not accept the owner key, on Linux and macOS,
+  it says instead that the daemon serves no browser page — it is an earlier build, its build carries no UI, or its data
+  directory is not private to its user or its socket could not be opened, as its log says — and that the address is for
+  programs that take its launch key. Neither changes the status.
 
   With no daemon running it says so on its error output and exits with status **3**, creating no data directory, and
   waits through a planned restart, as `status` does. A running daemon that no usable `daemon.owner` names — it is still
@@ -226,10 +237,13 @@ free is gone at once.
     the new key (the old one then stands, on disk and in the daemon) or no longer accepts the connection makes it say on
     its error output that the owner key was not rotated, and why, and exit with status 1, with nothing on standard
     output.
-  - **A running daemon that does not accept the owner key** — it follows the desktop application, is of an earlier
-    build, serves no browser, or could not read or write `owner.key` as it started — is left as it is: `owner.key` is
-    replaced directly, for the next daemon that serves the browser, and the address printed is the running daemon's
-    launch key's, with a note on the error output saying so; status 0.
+  - **The desktop application's daemon while its remote access is off**: `owner.key` is replaced directly, for when
+    remote access is turned on, and it says so on the error output, with the note that remote access is off, and exits
+    with status 0 with nothing on standard output.
+  - **Any other running daemon that does not accept the owner key** — it is of an earlier build, serves no browser, or
+    could not read or write `owner.key` as it started — is left as it is: `owner.key` is replaced directly, for the next
+    daemon that serves the browser, and the address printed is the running daemon's launch key's, with a note on the
+    error output saying so; status 0.
   - **With no daemon running**, `owner.key` is replaced where the data directory exists, for the next daemon that
     serves the browser, and the error output says so; where there is no data directory, nothing is
     created and it says only that no daemon runs. Either way it exits with status **3**, with nothing on standard
@@ -239,6 +253,83 @@ free is gone at once.
 `octoboardd update` acts on the installed executable rather than on the running daemon: it checks for, downloads and
 puts in place a newer release, or puts the previous one back, and leaves the restart to `octoboardd restart` (see "The
 `octoboardd update` command" in `docs/product/server-form-updates.md`).
+
+## Another device reaching the daemon over SSH
+
+Two modes of `octoboardd` are for a program run on the daemon's machine as the daemon's user — the desktop application
+on another device, running them over SSH (see `docs/product/remote-daemons.md`). They reach the running daemon at its
+owner endpoint: its browser socket on Linux and macOS, and on Windows the owner pipe of the desktop application's daemon
+(see "Remote access to the desktop application's daemon" in `docs/product/who-can-reach-the-daemon.md`). Neither takes
+a key on its command line. They are a contract between releases, since the device's application and the machine's
+`octoboardd` are installed and updated apart: what they print only grows.
+
+- **`octoboardd address --json`** (which takes no `--rotate`) prints one line on standard output, a JSON object, and
+  nothing else there: `{"owner_key": "<64 hex>", "generation": <number>, "daemon_version": "<release version>"}` — the
+  owner key, and the protocol generation and release version the daemon greets a connection with. It is printed only
+  once the daemon, asked on its owner endpoint with that key, has accepted it. A reader ignores a field it does not know.
+- **`octoboardd proxy`** connects to the owner endpoint and carries bytes both ways between it and its own standard
+  input and output until either side closes, writing nothing else on standard output (its messages go to its error
+  output). It reads no key: the program speaks the daemon's protocol over it, sending the owner key in its own requests
+  as a browser does. On Linux and macOS, once its input ends it carries on until the daemon closes, so the answer to a
+  last request is not lost; on Windows, whose pipe cannot be half-closed, it carries what the daemon still sends until
+  the daemon has been silent for **2 seconds**, then ends the connection.
+
+Both find the running daemon as `address` does, waiting through a planned restart, and exit with a status that says
+why they could not reach it, the reason on their error output:
+
+| Status | Meaning |
+|---|---|
+| `0` | `address --json` printed its line; `proxy`'s connection ended, by either side |
+| `1` | Anything else that failed: `owner.key` is missing or unusable, or the daemon refuses its key; the daemon's answer could not be read (`address --json` then prints nothing on standard output); the daemon runs but its record is not yet readable; `proxy`'s connection failed in the middle |
+| `3` | No daemon runs |
+| `4` | The running daemon has no owner endpoint: it takes no owner key (an earlier build, a build without the UI, or a way in that could not be opened), or it is the desktop application's daemon with remote access off |
+| `5` | The daemon has an owner endpoint, but it cannot be connected to |
+| `6` | No daemon runs, and this `octoboardd` is the desktop application's own copy, whose daemon runs only while the application does: the application is not running |
+
+A status a program does not know is a failure. `3` and `6` differ only in what can be done: a server form's daemon is
+started on the machine (`octoboardd start`), the application's by opening the application there.
+
+## Printing the connection details
+
+**`octoboardd connection [--host <host>] [--ssh-port <port>] [--text]`** prints what another device of the owner's sets
+itself up from to reach this machine's daemon over SSH (see "The macOS and Windows applications" in
+`docs/product/who-can-reach-the-daemon.md`), and exits with status 0. It touches nothing: it asks no daemon, takes no
+lock and creates no data directory, so it prints the same whether a daemon runs or not. The details carry no secret:
+
+- **The host and SSH port**: those given with `--host` and `--ssh-port`; else the server address and port of the SSH
+  session the command runs in, read from `SSH_CONNECTION`, which is what that session's client reached the machine at;
+  else the name the machine gives itself, at port 22. `--host` with no `--ssh-port` keeps the session's port where
+  there is one. On its error output it says where the host came from — the SSH session, or the machine's own name,
+  which other devices may not know — and that `--host` and `--ssh-port` correct it; with a host given it says nothing
+  of it. Where neither a host is given, nor a session nor the machine's name can be read, it says to give one with
+  `--host` and exits with status 1.
+- **The user**: the login name the system records for the user it runs as. Where it records none the command says so
+  and exits with status 1.
+- **The host key fingerprint**, `SHA256:<base64>` without padding, as `ssh-keygen -l` prints it, of the first of the SSH
+  server's public host key files that reads, in the order the application's SSH client prefers their algorithms:
+  `ssh_host_ed25519_key.pub`, `ssh_host_ecdsa_key.pub`, `ssh_host_rsa_key.pub`, in `/etc/ssh` (on Windows, `ssh` under
+  `%ProgramData%`). With none readable it is left out, and the error output says that the application shows the host
+  key at the first connection for the owner to confirm.
+- **The path of `octoboardd`**: the path it was invoked by, found through `PATH` for a bare name, its final symlink
+  unresolved (the path `start` launches the daemon from). Where it cannot be told it is left out, and the error output
+  says that the application looks in the places Octoboard installs to.
+- **A name**: the name the machine gives itself, for the entry's name, left out where it is the host.
+
+They are one line of text, a URI, with the fields left out that are missing:
+`octoboard+ssh://<user>@<host>:<port>?fingerprint=<fingerprint>&octoboardd=<path>&name=<name>`. The user, host and values are percent-encoded as UTF-8, except for the
+characters a URI never reserves and, in a value, `:`, `/` and `@` (so a fingerprint's `+` reads `%2B`); a host with a
+`:`, an IPv6 address, is put in brackets with its zone's `%` written `%25`. A client reads fields it does not know as
+none, so a later field does not break an earlier client. On standard output the command prints a QR code of that
+line, with nothing added, then an empty line and the line itself; with `--text`, the line alone. The QR code is drawn
+with block characters, two rows of modules to a character, with a quiet zone of two modules; where standard output is a
+terminal each of its lines is set to black on bright white, so it reads the same on a dark terminal. Its error output
+ends with a note that the line is pasted into the Connection details field when adding a remote daemon in the
+application, and that the QR code holds the same line. No client scans the QR code yet: it is for a mobile client.
+
+The desktop application's daemon gives the same line, and its QR code, to its Remote access section while remote access
+is served (see "While remote access is served" in `docs/product/remote-access-settings.md`). What the application does
+with a line pasted into the form that adds or edits a remote daemon is in "Saved remote daemons" in
+`docs/product/remote-daemons.md`.
 
 ## Printing the version
 

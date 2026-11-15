@@ -1,5 +1,5 @@
 import type { Translate } from "../i18n/catalog";
-import type { StatusItemEntry, StatusItemMenu, StatusItemSection, StatusItemSubmenuDraft } from "../platform";
+import type { HostFacts, StatusItemAppLabels, StatusItemEntry, StatusItemMenu, StatusItemSection, StatusItemSubmenuDraft } from "../platform";
 import type { Console, Project, Session } from "../protocol";
 import { joinPhrases } from "../i18n/joinPhrases";
 import { remainingPercentAt } from "../accounts/quotaFormat";
@@ -39,6 +39,16 @@ export interface StatusItemMenuSource {
   quota: StatusItemQuotaSource;
   selectedSessionId?: string;
   currentConsoleId?: string;
+  /** The operating system the window runs on, whose words name this computer; macOS when not given. */
+  os?: HostFacts["os"];
+}
+
+/** The labels the menu takes from the application, in the words of the system the window runs on. */
+export function statusItemAppLabels(t: Translate, os: StatusItemMenuSource["os"] = "macos"): StatusItemAppLabels {
+  return {
+    this_computer: t(os === "macos" ? "statusItem.thisMac" : "statusItem.thisPc"),
+    open_in_browser: t("remoteDaemons.browser.open"),
+  };
 }
 
 /** The sessions in summary statuses, in the sidebar's order,
@@ -80,6 +90,8 @@ export function buildStatusItemMenu(t: Translate, source: StatusItemMenuSource):
     submenus: buildQuotaSubmenus(t, quota, consoleMap.get(source.currentConsoleId ?? ""), accountInUse(selected)),
     open: t("statusItem.open"),
     quit: t("statusItem.quit"),
+    disconnect: t("statusItem.disconnect"),
+    app: statusItemAppLabels(t, source.os),
     attention: inOrder((status) => status === "waiting_user" || status === "dormant").length > 0,
   };
 }

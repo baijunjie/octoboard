@@ -21,6 +21,10 @@ import { projectGitScenarios } from "./projectGit";
 import { noticeScenarios } from "./notices";
 import { quotaGatingScenarios } from "./quotaGating";
 import { railQuotaScenarios } from "./railQuota";
+import { remoteAccessScenarios } from "./remoteAccess";
+import { remoteDaemonsScenarios } from "./remoteDaemons";
+import { remoteWindowScenarios } from "./remoteWindow";
+import { trayFlyoutScenarios } from "./trayFlyout";
 import { reportScenarios, reportVisualScenarios } from "./report";
 import { reportChartScenarios } from "./reportCharts";
 import { sessionHistoryScenarios } from "./sessionHistory";
@@ -66,6 +70,7 @@ export const SCENARIOS: Scenario[] = [
   ...projectFilesScenarios,
   ...projectGitScenarios,
   ...settingsScenarios,
+  ...remoteAccessScenarios,
   ...aboutScenarios,
   ...shortcutsScenarios,
   ...dialogScenarios,
@@ -76,6 +81,9 @@ export const SCENARIOS: Scenario[] = [
   ...viewerScenarios,
   ...layoutScenarios,
   ...railQuotaScenarios,
+  ...remoteDaemonsScenarios,
+  ...remoteWindowScenarios,
+  ...trayFlyoutScenarios,
   {
     id: "code-colors",
     group: "Component colors",

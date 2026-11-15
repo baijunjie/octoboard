@@ -1,0 +1,8 @@
+# A custom permission for the commands of the notification-area icon's flyout on Windows; see
+# `exit-lifecycle.toml` for why an app-defined command needs a file like this.
+"$schema" = "./schemas/schema.json"
+
+[[permission]]
+identifier = "allow-tray-flyout"
+description = "Allows the flyout's page to read the menu it draws, report its size, and answer a choice or Esc."
+commands.allow = ["tray_flyout_model", "tray_flyout_size", "tray_flyout_choose", "tray_flyout_close"]

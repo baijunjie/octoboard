@@ -12,8 +12,8 @@ import { openSessionModelFromAnywhere } from "../dialogs/sessionModelLauncher";
 import { ErrorAlertBody, alertTitle } from "../components/dialog/ErrorAlertBody";
 import { Button, ModalStatusIcon } from "../primitives";
 
-/** The alert's control for its remedy (see `recoveryAction`): a link out, or a button that acknowledges the alert and
- * opens what the remedy is done in. */
+/** The alert's control for its remedy (see `recoveryAction`), a link out, or a button that
+ * acknowledges the alert and opens what the remedy is done in. */
 function RecoveryControl({ action, session }: { action: RecoveryAction; session: string | undefined }): React.ReactElement {
   switch (action.kind) {
     case "link": return <RecoveryLink action={action} />;
@@ -51,7 +51,8 @@ function ErrorAlertHost(): React.ReactElement | null {
   // leave it out.
   const [error, setError] = useState<typeof raised>();
   useLayoutEffect(() => { setError(raised); }, [raised]);
-  const acknowledge = useRef<HTMLButtonElement>(null);
+  // A marker inside the alert, to find its element from: the footer may have no acknowledgement button to ask.
+  const inside = useRef<HTMLSpanElement>(null);
   const issue = useIssueReport(error?.classification.kind === "unexpected" ? alertFailures(error, "report") : undefined);
   // What describes an alert that holds a block of its own apart (`attached`): its explanation, not the block.
   const descriptionId = useId();
@@ -70,7 +71,7 @@ function ErrorAlertHost(): React.ReactElement | null {
   const [mountedId, setMountedId] = useState<number>();
   useLayoutEffect(() => { setMountedId(error?.id); }, [error?.id]);
   useLayoutEffect(() => {
-    if (mountedId !== undefined) dialogAround(acknowledge)?.focus();
+    if (mountedId !== undefined) dialogAround(inside)?.focus();
   }, [mountedId]);
   if (!error) return null;
   const unexpected = error.classification.kind === "unexpected";
@@ -79,23 +80,27 @@ function ErrorAlertHost(): React.ReactElement | null {
   const found = error.sharedRecovery ? recoveryAction(t, error.sharedRecovery) : undefined;
   const session = error.session;
   const action = found?.kind === "sessionModel" && !session ? undefined : found;
+  // The close button acknowledges as OK does, on every alert. OK is left out only where the footer would hold three
+  // buttons (Report issue, the remedy and OK): the close button then stands for it.
+  const acknowledgement = !(action && unexpected && issue.link);
   return (
     <Dialog
       key={error.id}
       alert
-      dismissable={false}
+      keyboardDismissHeld
       headerLeading={<ModalStatusIcon status="danger" />}
       title={alertTitle(t, error)}
-      onClose={() => {}}
+      onClose={() => errorAlerts.acknowledge()}
       focusesItselfOnOpen
       topLayerAtMount
       describedBy={error.attached ? descriptionId : undefined}
       footer={<>
         {unexpected && issue.link}
         {action && <RecoveryControl action={action} session={session} />}
-        <Button ref={acknowledge} variant="danger" onPress={() => errorAlerts.acknowledge()}>{t("error.acknowledge")}</Button>
+        {acknowledgement && <Button variant="danger" onPress={() => errorAlerts.acknowledge()}>{t("error.acknowledge")}</Button>}
       </>}
     >
+      <span ref={inside} hidden />
       <ErrorAlertBody alert={error} issueGuidance={issue.guidance} descriptionId={error.attached ? descriptionId : undefined} />
     </Dialog>
   );

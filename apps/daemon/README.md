@@ -28,10 +28,10 @@ pnpm --filter @octoboard/daemon... build   # Build the UI, then the release daem
 ```
 
 The `...` builds the UI package first; the binary is `target/release/octoboardd`. A plain `cargo build -p octoboardd`
-embeds nothing and serves no UI, as the desktop application's sidecar does: `pnpm --filter @octoboard/desktop
-build:daemon` writes the same `target/release/octoboardd` without it, so copy a server build away before building the
-application. `cargo build -p octoboardd --features embedded-ui` embeds whatever `packages/ui/dist` holds and fails when
-it holds no build. A build embedding the UI refuses while `VITE_DAEMON_KEY` or `VITE_DAEMON_PORT` is set in its
+embeds nothing and serves no UI. The desktop application's sidecar embeds it too, for remote access:
+`pnpm --filter @octoboard/desktop build:daemon` writes the same `target/release/octoboardd` with the UI embedded,
+building the UI first when `packages/ui/dist` holds no build. `cargo build -p octoboardd --features embedded-ui` embeds
+whatever `packages/ui/dist` holds and fails when it holds no build. A build embedding the UI refuses while `VITE_DAEMON_KEY` or `VITE_DAEMON_PORT` is set in its
 environment, since the UI build would bake it into the page the daemon serves; it cannot tell whether a `packages/ui/dist`
 built earlier holds one.
 

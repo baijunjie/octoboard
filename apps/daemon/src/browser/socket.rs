@@ -1,0 +1,275 @@
+//! The browser's way in on Linux and macOS, in the server form and in the desktop application's
+//! daemon while remote access is on: a socket in the data directory, `browser.sock`, that only the
+//! daemon's user can reach. The owner key is accepted there, and the embedded UI is served there;
+//! the owner forwards it from their own machine with
+//! `ssh -L 127.0.0.1:<port>:<socket path> <server>`, so the browser still opens
+//! `http://127.0.0.1:<port>`.
+//!
+//! A loopback TCP port cannot do this job: every user of the host can bind one, and a port the
+//! daemon gives up for a moment (a planned restart, a service manager's restart) can be taken by
+//! another user, whom the browser's reconnect, through the owner's own forward, would then hand
+//! the owner key. A socket's path is a file: nobody but its user can create, replace or connect to
+//! one in a directory only that user can enter, so the socket is the daemon's for as long as the
+//! data directory is private. [`bind`] checks that it is, and that no directory above it lets
+//! anyone else rename it away, before it listens; where either fails, or the host has no such
+//! sockets, the daemon serves no browser.
+//!
+//! A stale socket file left by a daemon that died is replaced only under the instance lock, which
+//! the caller holds, so it is never a live daemon's socket. The file is never removed at exit: the
+//! next daemon may already be listening on it by the time this one is done.
+
+use std::path::{Path, PathBuf};
+use std::time::Duration;
+
+use anyhow::{Context, Result};
+
+use crate::platform::local_socket::{self, Listener};
+
+/// The socket's file name in the data directory.
+const FILE_NAME: &str = "browser.sock";
+
+/// Whether this host can serve the browser on a socket of this kind.
+pub const AVAILABLE: bool = local_socket::AVAILABLE;
+
+/// The socket the daemon whose data directory is `data` serves the browser on.
+pub fn path_in(data: &Path) -> PathBuf {
+    data.join(FILE_NAME)
+}
+
+/// Listens on the browser socket of the data directory `data`, once the directory and every one
+/// above it are found private enough that nobody else can reach or replace it. A stale socket file
+/// there is replaced; the caller must hold the instance lock.
+pub fn bind(data: &Path) -> Result<Listener> {
+    local_socket::check_private_tree(data).with_context(|| {
+        format!(
+            "{} is not private to this user; `chmod 700` it, and keep the directories above it \
+             writable by nobody else",
+            data.display()
+        )
+    })?;
+    let path = path_in(data);
+    Listener::bind_replacing_stale(&path).map_err(|err| {
+        // The system refuses a socket path longer than its address holds as an invalid argument.
+        let hint = if err.kind() == std::io::ErrorKind::InvalidInput {
+            " (a socket's path has to be shorter than about 100 bytes)"
+        } else {
+            ""
+        };
+        anyhow::Error::new(err).context(format!("listening on {}{hint}", path.display()))
+    })
+}
+
+/// Whether the daemon whose data directory is `data` accepts `key` on its browser socket, asked as
+/// a browser would ask (`GET /key-check`), naming `port` as the address's port. An error when the
+/// socket cannot be reached or answers anything else.
+pub fn key_accepted(data: &Path, port: u16, key: &str, timeout: Duration) -> std::io::Result<bool> {
+    let stream = local_socket::connect(&path_in(data), timeout)?;
+    super::key_check_over(stream, port, key)
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use crate::browser::{key_check_router, serve_on};
+    use crate::test_support::{ScratchDir, PATIENCE};
+
+    /// A data directory others can enter gets no socket, and nothing is created in it.
+    #[test]
+    fn a_data_directory_others_can_enter_gets_no_socket() {
+        use crate::platform::local_socket::test_api::set_mode;
+
+        let dir = ScratchDir::new("bsock-open");
+        let data = dir.join("data");
+        std::fs::create_dir(&data).unwrap();
+        set_mode(&data, 0o750);
+        let Err(refused) = bind(&data) else {
+            panic!("a directory others can enter is refused");
+        };
+        assert!(format!("{refused:#}").contains("chmod 700"), "{refused:#}");
+        assert!(!path_in(&data).exists());
+    }
+
+    /// A private data directory gets a socket only its user may use. The temporary directory's
+    /// own ancestors may let others in (a shared volume), which no test can change: there the
+    /// refusal is checked instead.
+    #[tokio::test]
+    async fn a_private_data_directory_gets_an_owner_only_socket() {
+        use crate::platform::local_socket::test_api::{mode_of, set_mode};
+
+        let dir = ScratchDir::new("bsock-private");
+        let data = dir.join("data");
+        std::fs::create_dir(&data).unwrap();
+        set_mode(&data, 0o700);
+        match local_socket::check_private_tree(&data) {
+            Ok(()) => {
+                let _listener = bind(&data).expect("a private directory is served");
+                assert_eq!(mode_of(&path_in(&data)) & 0o777, 0o600);
+            }
+            Err(_) => {
+                assert!(bind(&data).is_err());
+                assert!(!path_in(&data).exists());
+            }
+        }
+    }
+
+    /// The key check over the socket tells an accepted key from a refused one, as the router
+    /// answers them, through the same accept loop the daemon serves the browser with.
+    #[tokio::test]
+    async fn the_key_check_goes_over_the_socket() {
+        let dir = ScratchDir::new("bsock-check");
+        let listener = Listener::bind_replacing_stale(&path_in(&dir)).unwrap();
+        let _served = serve_on(listener, key_check_router());
+        let data = dir.to_path_buf();
+        let answers = tokio::task::spawn_blocking(move || {
+            (
+                key_accepted(&data, 3369, "good", PATIENCE).unwrap(),
+                key_accepted(&data, 3369, "bad", PATIENCE).unwrap(),
+            )
+        })
+        .await
+        .unwrap();
+        assert_eq!(answers, (true, false));
+    }
+
+    /// A socket that answers a key check with anything but 204 or 401 cannot say whether the key is
+    /// accepted: that is an error, not a refusal, and neither is a socket nobody listens on.
+    #[tokio::test]
+    async fn a_socket_that_answers_otherwise_or_not_at_all_cannot_be_asked() {
+        use axum::http::StatusCode;
+        use axum::routing::get;
+
+        let dir = ScratchDir::new("bsock-odd");
+        let data = dir.to_path_buf();
+        let missing = tokio::task::spawn_blocking({
+            let data = data.clone();
+            move || key_accepted(&data, 3369, "good", PATIENCE)
+        })
+        .await
+        .unwrap();
+        assert!(missing.is_err(), "no socket there");
+
+        let listener = Listener::bind_replacing_stale(&path_in(&dir)).unwrap();
+        let _served = serve_on(
+            listener,
+            axum::Router::new().route(
+                "/key-check",
+                get(|| async { StatusCode::INTERNAL_SERVER_ERROR }),
+            ),
+        );
+        let odd = tokio::task::spawn_blocking(move || key_accepted(&data, 3369, "good", PATIENCE))
+            .await
+            .unwrap();
+        assert!(odd.is_err(), "a 500 is no answer to the question");
+    }
+
+    /// The daemon's own router, served on a real socket: the owner key, the launch key and no key
+    /// are told apart; a WebSocket upgrade goes through; and a rotation ends the connection the
+    /// owner key opened, while the one the launch key opened stays.
+    #[tokio::test]
+    async fn the_browser_router_serves_the_owner_key_over_the_socket() {
+        use futures_util::{SinkExt, StreamExt};
+        use tokio_tungstenite::tungstenite::Message as Frame;
+
+        let (state, dir) = crate::test_support::app_state("bsock-router");
+        assert!(state.owner_key.start(true, &dir));
+        let owner = crate::owner_key::read_in(&dir).expect("the owner key");
+        let path = path_in(&dir);
+        let listener = Listener::bind_replacing_stale(&path).unwrap();
+        let _served = serve_on(listener, crate::server::browser_router(state.clone()));
+
+        let checked = {
+            let (data, owner) = (dir.to_path_buf(), owner.clone());
+            tokio::task::spawn_blocking(move || {
+                let ask = |key: &str| key_accepted(&data, 3369, key, PATIENCE).unwrap();
+                (
+                    ask(&owner),
+                    ask(crate::test_support::TEST_KEY),
+                    ask(&"0".repeat(64)),
+                )
+            })
+            .await
+            .unwrap()
+        };
+        assert_eq!(checked, (true, true, false));
+
+        async fn upgraded(
+            path: &Path,
+            key: &str,
+        ) -> tokio_tungstenite::WebSocketStream<tokio::net::UnixStream> {
+            let stream = tokio::net::UnixStream::connect(path).await.unwrap();
+            let url = format!("ws://localhost:3369/ws/control?key={key}");
+            tokio_tungstenite::client_async(url, stream)
+                .await
+                .expect("a WebSocket upgrade over the socket")
+                .0
+        }
+        let mut owners = upgraded(&path, &owner).await;
+        let mut launch = upgraded(&path, crate::test_support::TEST_KEY).await;
+        for socket in [&mut owners, &mut launch] {
+            let hello = tokio::time::timeout(PATIENCE, socket.next())
+                .await
+                .expect("the daemon's hello in time")
+                .unwrap()
+                .unwrap();
+            assert!(
+                matches!(&hello, Frame::Text(text) if text.contains("hello")),
+                "{hello:?}"
+            );
+        }
+
+        let rotating = state.clone();
+        tokio::task::spawn_blocking(move || rotating.owner_key.rotate().unwrap())
+            .await
+            .unwrap();
+        tokio::time::timeout(PATIENCE, async {
+            loop {
+                match owners.next().await {
+                    None | Some(Err(_)) | Some(Ok(Frame::Close(_))) => break,
+                    Some(Ok(_)) => {}
+                }
+            }
+        })
+        .await
+        .expect("the owner key's connection was closed by the rotation");
+
+        launch.send(Frame::Ping(vec![1])).await.unwrap();
+        loop {
+            let frame = tokio::time::timeout(PATIENCE, launch.next())
+                .await
+                .expect("an answer in time")
+                .expect("the launch key's connection is still open")
+                .unwrap();
+            match frame {
+                Frame::Pong(_) => break,
+                Frame::Close(_) => panic!("the launch key's connection was closed"),
+                _ => {}
+            }
+        }
+        let data = dir.to_path_buf();
+        let old_refused = tokio::task::spawn_blocking(move || {
+            key_accepted(&data, 3369, &owner, PATIENCE).unwrap()
+        })
+        .await
+        .unwrap();
+        assert!(!old_refused, "the rotated key is refused over the socket");
+    }
+
+    /// Dropping the task ends the accepting: nothing connects to the socket afterwards.
+    #[tokio::test]
+    async fn dropping_the_serve_task_stops_the_accepting() {
+        let dir = ScratchDir::new("bsock-drop");
+        let path = path_in(&dir);
+        let listener = Listener::bind_replacing_stale(&path).unwrap();
+        let served = serve_on(listener, axum::Router::new());
+        assert!(local_socket::connect(&path, PATIENCE).is_ok());
+        drop(served);
+        let refused = crate::test_support::within(PATIENCE, move || {
+            local_socket::connect(&path, PATIENCE).is_err()
+        })
+        .await;
+        assert!(
+            refused,
+            "the socket still accepted after the task was dropped"
+        );
+    }
+}

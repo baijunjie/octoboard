@@ -478,13 +478,18 @@ switch-strip chips.
   runs in — or the console whose console session it is. A session that is answered and later waits again notifies again.
   The macOS application asks for no notification permission, and macOS showed no prompt for one. The banner has been
   seen while Octoboard was not the frontmost application, and not while it was. A notification that cannot be shown is
-  not reported as having failed — the sidebar's own marker carries the same signal.
-- In the macOS application the Dock badge carries how many sessions are waiting, counted across every console, and
-  clears when none is; the Windows application puts no count on its icon. While the window is closed into the
+  not reported as having failed — the sidebar's own marker carries the same signal. In the desktop application each
+  window notifies for its own daemon's sessions, a remote window's included (see `docs/product/remote-daemons.md`), and
+  a click on the notification brings forward the window that raised it, or the main window when that one has closed
+  since; on Windows the click is seen only while the notification is on screen, not once it is in the notification
+  centre.
+- In the macOS application the Dock badge carries how many sessions are waiting, counted across every console of every
+  daemon the application shows — the sum of every window's count, a closed remote window's going with it — and clears
+  when none is; the Windows application puts no count on its icon. While the window is closed into the
   background Octoboard has no Dock icon; the count is still kept and shows once it returns to
   the Dock (see "Closing the window" in `docs/product/application-lifecycle.md`). The menu bar icon's menu lists the
-  waiting sessions too (see "The icon's menu" in `docs/product/menu-bar-icon.md`), and the icon itself carries an orange
-  dot while any is waiting or dormant (see "The icon's look" in `docs/product/menu-bar-icon.md`).
+  waiting sessions too, each daemon's on its own tab (see "The icon's menu" in `docs/product/menu-bar-icon.md`), and the
+  icon itself carries an orange dot while any is waiting or dormant (see "The icon's look" in `docs/product/menu-bar-icon.md`).
 - The rail carries the same count, as a raised hand and the number, shown only while at least one session is waiting.
   Pressing it selects the next waiting session after the selected one — console by console in the order the consoles
   were created, its console sessions before its projects' sessions, and both in the sidebar's order, as the sort chosen

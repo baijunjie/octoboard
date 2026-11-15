@@ -126,8 +126,11 @@ While the user is working on the machine, send the GUI steps to the instance und
 events to its process (`CGEventPostToPid`), placed from that instance's own window frame, and bring its window forward
 through accessibility (`AXRaise`, `AXMain`) rather than by activating the application. That leaves the real cursor,
 the frontmost application and the user's typing where they were. Do not use global input for it — System Events
-keystrokes, `cliclick`, moving the real pointer — and send a system-wide shortcut (Command-F5 for VoiceOver, for one)
-only once the user has explicitly authorised it.
+keystrokes, `cliclick`, `CGEventPost` to a system tap, moving the real pointer, a computer-use tool's clicks and keys —
+and send a system-wide shortcut (Command-F5 for VoiceOver, for one) only once the user has explicitly authorised it.
+Address the instance by its PID throughout, never by name: an AppleScript `tell process "Octoboard"` or
+`tell application "Octoboard"` can pick the user's own running Octoboard, and scripted input aimed that way has landed
+in it and in the user's frontmost application.
 
 Global input, where it is used at all, follows the frontmost application instead. Keystrokes go to whichever application
 is frontmost, and a click at screen coordinates to whichever window is on top at that point, not to Octoboard. Activate

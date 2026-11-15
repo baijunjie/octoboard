@@ -602,9 +602,9 @@ it("keeps each setting an update leaves as it was, so what reads only that setti
   const settings = { ...DEFAULT_SETTINGS, accounts: [accountOf("a1", "claude", "Work", "/home/u/.claude-work")], default_account_names: { claude: "Mine" } };
   client.onEvents!([{ type: "settings_updated", settings }]);
   const before = daemon.store.getState();
-  client.onEvents!([{ type: "settings_updated", settings: structuredClone({ ...settings, interface_language: "zh-Hans" }) }]);
+  client.onEvents!([{ type: "settings_updated", settings: structuredClone({ ...settings, agent_language: "zh-Hans" }) }]);
   const after = daemon.store.getState().settings;
-  expect(after.interface_language).toBe("zh-Hans");
+  expect(after.agent_language).toBe("zh-Hans");
   expect(after.accounts).toBe(before.settings.accounts);
   expect(after.default_account_names).toBe(before.settings.default_account_names);
   // An update that changes nothing leaves the state as it was.
@@ -639,4 +639,34 @@ it("holds whether the daemon keeps the computer awake from the snapshot and foll
   expect(daemon.store.getState().keepAwakeHeld).toBe(false);
   client.onEvents!([{ type: "keep_awake_held_updated", keep_awake_held: true }]);
   expect(daemon.store.getState().keepAwakeHeld).toBe(true);
+});
+
+it("holds where remote access stands from the snapshot and follows remote_access_updated", () => {
+  const daemon = createDaemon({ origin: "http://localhost:1234", key: "k" });
+  expect(daemon.store.getState().remoteAccess).toBeNull();
+  const off = { allowed: false, state: "off", address: null, forward_command: null, connection: null, failure: null } as const;
+  const snapshot = {
+    type: "snapshot", hosts: [], consoles: [], projects: [], sessions: [], trusted_directories: [], settings: {}, git_statuses: [],
+    agent_availability: [], account_quotas: [], account_logins: [], account_sharing: [], agent_cli_statuses: [], home_dir: null, host: { os: "macos", path_style: "unix", file_links: true, trash: "trash", settings: "system_settings", keep_awake: false }, keep_awake_held: false, shell_terminals: [], remote_access: off,
+  } as unknown as Event;
+  client.onEvents!([snapshot]);
+  expect(daemon.store.getState().remoteAccess).toEqual(off);
+  const serving = { allowed: true, state: "serving", browser_port: null, address: "http://127.0.0.1:3369/?key=k", forward_command: "ssh", connection: null, failure: null } as const;
+  client.onEvents!([{ type: "remote_access_updated", remote_access: serving }]);
+  expect(daemon.store.getState().remoteAccess).toEqual(serving);
+  const held = daemon.store.getState().remoteAccess;
+  client.onEvents!([{ type: "remote_access_updated", remote_access: { ...serving } }]);
+  expect(daemon.store.getState().remoteAccess).toBe(held);
+});
+
+describe("whether the daemon shares this machine", () => {
+  it("is so only when the daemon is reached at a loopback address", () => {
+    expect(createDaemon({ origin: "ws://127.0.0.1:4242", key: "k" }).isLocal).toBe(true);
+    expect(createDaemon({ origin: "ws://localhost:4242", key: "k" }).isLocal).toBe(true);
+    expect(createDaemon({ origin: "wss://server.example", key: "k" }).isLocal).toBe(false);
+  });
+
+  it("is not in the window the shell opened on a daemon elsewhere, though it is reached at a loopback address through the connection the application holds", () => {
+    expect(createDaemon({ origin: "ws://127.0.0.1:4242", key: "k" }, { remote: true }).isLocal).toBe(false);
+  });
 });

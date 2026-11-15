@@ -581,7 +581,7 @@ it("says changes cut short and an unreadable folder in one mark on the worktree'
   expect(marks[0].getAttribute("aria-label")).toBe("Not every uncommitted change is listed, and the project's folder is unavailable in this worktree");
   press(marks[0]);
   expect(document.querySelectorAll('[role="dialog"] p')).toHaveLength(4);
-  expect(document.querySelector('[role="dialog"]')!.textContent).toContain("Octoboard is not allowed to read the project's folder in this worktree.");
+  expect(document.querySelector('[role="dialog"]')!.textContent).toContain("The app is not allowed to read the project's folder in this worktree.");
 });
 
 it.each(["together", "loading", "failed"] as const)("keeps the commit grouping control with no change rows while %s", (state) => {

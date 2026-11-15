@@ -23,7 +23,10 @@ carries" below). The one setting of those sections left out is an account's shar
 "What is not configuration and never travels" in `docs/product/configuration-export-and-import.md`). Nothing of the
 Trusted folders, Permissions, Notifications and Updates sections travels — neither form's update channel or automatic
 update check (see `docs/product/update-settings.md`) — nor does a choice a client keeps elsewhere, such as a project's
-focus mode (see `docs/product/focus-mode.md`).
+focus mode (see `docs/product/focus-mode.md`). Nor does anything of the Remote access section, Allow remote access and
+the browser port included, so that no import can open a machine to remote use (see
+`docs/product/remote-access-settings.md`), nor the saved remote daemons of the desktop application (see "Saved remote
+daemons" in `docs/product/remote-daemons.md`).
 
 ## The application settings an export carries
 
@@ -32,12 +35,17 @@ line for turning one on says what then follows, in that setting's own words, as 
 importing Octoboard does not know, such as `reply_in_interface_language` or `sidebar_order_by_status`, is ignored. Every
 key is optional: one a document does not carry, absent or `null`, is left as the importing machine has it. The settings
 only a client holds are in a document only when a client saved it (see "The settings a client holds" below), and the
-language only when the daemon holds one; every other one is in every document whose export chose its section.
+agent language only when the daemon holds one; every other one is in every document whose export chose its section.
 
 **General**
 
-- **Language**, under `interface_language`: the tag of the language the exporting daemon holds, which every window
-  shows (see "The language the daemon holds" in `docs/product/language.md`).
+- **Interface language**, under `interface_language`: the tag of the interface language the exporting client shows,
+  carried only by a client (see "Where the interface language is stored" in `docs/product/language.md`).
+- **Agent language**, under `agent_language`: the tag of the agent language the exporting daemon holds (see "The agent
+  language" in `docs/product/language.md`). A document of version 3 or older, written when one language was both the
+  windows' and the agents', carries that language under `interface_language` alone; reading it copies it into
+  `agent_language` where the document carries none, so it is both (see "Versions" in
+  `docs/product/configuration-export-and-import.md`).
 - **Resume sessions on start** (see that section in `docs/product/general-settings.md`), under `resume_sessions_on_start`. The
   review's line for turning it on says that Octoboard will then resume every interrupted session each time it starts,
   including ones interrupted before it last stopped. A document from a build without the setting has no such key, and
@@ -162,14 +170,17 @@ holds:
 
 ## The settings a client holds
 
-The theme, the Markdown style, the terminal font size, the sorting, keeping running in the background, showing the
-menu bar icon and the keyboard shortcuts are each client's own, kept in that client rather than by the daemon. So the
-client adds them to the document it saves, for the sections chosen alone — for General the sorting and, where it has
-those settings, keeping running in the background and showing the menu bar icon; for Appearance the theme, the Markdown
+The interface language, the theme, the Markdown style, the terminal font size, the sorting, keeping running in the
+background, showing the menu bar icon and the keyboard shortcuts are each client's own, kept in that client rather than
+by the daemon. So the client adds them to the document it saves, for the sections chosen alone — for General the
+interface language, the sorting and, where it has those settings, keeping running in the background and showing the
+menu bar icon; for Appearance the theme, the Markdown
 style and the terminal font size; for Keyboard shortcuts its changed shortcuts — and the daemon builds none of them and
 applies none of them. A document with
-application settings asked of the daemon by any other program therefore has none of them. The language and Prevent
-sleep with When to prevent sleep are not among them: they are the daemon's, which builds them into the document and
+application settings asked of the daemon by any other program therefore has none of them. A remote window of the
+desktop application has neither keeping running in the background nor showing the menu bar icon, which are the main
+window's (see "The remote window" in `docs/product/remote-daemons.md`). The agent language and Prevent sleep with When
+to prevent sleep are not among them: they are the daemon's, which builds them into the document and
 applies them on import.
 
 On import they are applied by the client that runs the import, to itself alone, and only once the daemon reports the
@@ -205,9 +216,10 @@ made in Settings, and the result of the import reports what was applied. So:
 - one that changes closing idle terminals with the panel closes nothing at once and applies to later panel closes;
 - one that turns an automatic approval on or off changes no request already waiting;
 - one that turns asking questions as choices on or off changes no session already running;
-- one that changes the language sets the language the daemon holds, when this build offers the document's language,
-  and every open window switches to it (see "The language the daemon holds" in `docs/product/language.md`); a language
-  it does not offer is skipped, and the rest of the settings still apply.
+- one that changes the agent language sets it on the daemon, when this build offers the document's language, and every
+  open window of that daemon shows it (see "The agent language" in `docs/product/language.md`); a language it does not
+  offer is skipped, and the rest of the settings still apply. The interface language is applied by the importing
+  client to itself, as the other settings a client holds are.
 
 ### The default clone directory on import
 

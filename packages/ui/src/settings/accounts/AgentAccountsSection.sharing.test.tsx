@@ -56,7 +56,7 @@ it("locks the sharing switch where the daemon's host cannot make file links, say
   const dialog = await openSettingsOf(section, "codex-work");
   const [sharing] = sharingSwitches(dialog);
   expect(sharing!.getAttribute("aria-disabled")).toBe("true");
-  expect(captionOf(dialog, sharing!)).toContain("Turn on Developer Mode in Settings on that computer, then quit Octoboard and open it again, or restart the daemon.");
+  expect(captionOf(dialog, sharing!)).toContain("Turn on Developer Mode in Settings on that computer, then quit the app and open it again, or restart the daemon.");
   const chips = [...dialog.querySelectorAll("[data-inline-reference]")].map((chip) => chip.textContent);
   expect(chips).toEqual(expect.arrayContaining(["Developer Mode", "Settings"]));
   request.mockClear();

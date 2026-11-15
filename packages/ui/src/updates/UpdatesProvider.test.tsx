@@ -13,7 +13,7 @@ import { fakeTimers } from "../test/clock";
 import { testDaemon } from "../test/testDaemon";
 import { CHECK_INTERVAL_MS, FIRST_CHECK_DELAY_MS, type UpdateStore } from "./updateStore";
 import { answerDaemonUpdateRequest } from "./daemonUpdateTestSupport";
-import { UpdatesProvider, useUpdateStore } from "./UpdatesProvider";
+import { UpdatesProvider, useRemoteUpdatePreferences, useUpdateStore } from "./UpdatesProvider";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -103,4 +103,68 @@ it("makes no automatic request of its own for the daemon's update: the daemon lo
   const { request } = mount({ daemonUpdate: IDLE });
   await act(async () => vi.advanceTimersByTimeAsync(FIRST_CHECK_DELAY_MS + 2 * CHECK_INTERVAL_MS));
   expect(request).not.toHaveBeenCalled();
+});
+
+/** Makes this window the application's window of a daemon elsewhere, as the desktop shell opens it. */
+function inRemoteWindow() {
+  vi.stubGlobal("__TAURI_INTERNALS__", {});
+  window.history.replaceState({}, "", "/?remote=server&daemon=me%40server");
+  onTestFinished(() => {
+    window.history.replaceState({}, "", "/");
+    vi.unstubAllGlobals();
+  });
+}
+
+it.each([
+  ["the platform has an updater and the daemon updates itself", { updater: updaterOf(), daemonUpdate: IDLE }],
+  ["the platform has an updater and the daemon updates nothing", { updater: updaterOf(), daemonUpdate: null }],
+  ["the platform has an updater and there is no daemon", { updater: updaterOf() }],
+  ["the daemon updates itself and the platform has no updater", { daemonUpdate: IDLE }],
+] as const)("provides no store in the window of a daemon elsewhere, and makes no check or request: %s", async (_name, setup) => {
+  inRemoteWindow();
+  fakeTimers();
+  const check = vi.fn(async () => undefined);
+  const updater = "updater" in setup ? updaterOf(check) : undefined;
+  const { store, request } = mount({ ...setup, updater, firstCheckDelayMs: 0 });
+  expect(store()).toBeUndefined();
+  await act(async () => vi.advanceTimersByTimeAsync(FIRST_CHECK_DELAY_MS + 2 * CHECK_INTERVAL_MS));
+  expect(check).not.toHaveBeenCalled();
+  expect(request).not.toHaveBeenCalled();
+  expect(store()).toBeUndefined();
+});
+
+it("keeps providing no store in the window of a daemon elsewhere when the daemon's status of an update arrives later", () => {
+  inRemoteWindow();
+  const { store, daemon } = mount({ daemonUpdate: null });
+  act(() => daemon!.store.setState({ daemonUpdate: IDLE }));
+  expect(store()).toBeUndefined();
+});
+
+it("provides the stores as before in a browser tab whose address happens to carry ?remote=, since only the application's window can be a remote window", () => {
+  window.history.replaceState({}, "", "/?remote=server");
+  onTestFinished(() => window.history.replaceState({}, "", "/"));
+  expect(mount({ daemonUpdate: IDLE, firstCheckDelayMs: null }).store()).toBeDefined();
+});
+
+it("keeps the daemon's own settings of its updates in a remote window only where that daemon updates itself", () => {
+  let remote: boolean | undefined;
+  const Probe = () => {
+    remote = useRemoteUpdatePreferences();
+    return null;
+  };
+  const probe = (daemonUpdate: DaemonUpdateStatus | null) => {
+    const daemon = testDaemon({ state: { daemon: { version: DAEMON_VERSION, generation: 1 }, daemonUpdate } });
+    const container = document.body.appendChild(document.createElement("div"));
+    const root = createRoot(container);
+    onTestFinished(() => {
+      act(() => root.unmount());
+      container.remove();
+    });
+    act(() => root.render(<DaemonProvider value={daemon}><Probe /></DaemonProvider>));
+    return remote;
+  };
+  expect(probe(IDLE)).toBe(false);
+  inRemoteWindow();
+  expect(probe(IDLE)).toBe(true);
+  expect(probe(null)).toBe(false);
 });

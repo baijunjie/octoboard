@@ -1,5 +1,5 @@
-//! Opening panes of System Settings: the address tables of the panes the shell links to, and the
-//! one way they are opened. macOS only.
+//! The addresses of the System Settings panes the shell links to, which `open_address` opens. macOS
+//! only.
 
 /// The pane of System Settings (macOS 13 and later) every app's notification settings live in.
 const SETTINGS_PANE_URL: &str =
@@ -34,25 +34,6 @@ pub const LOGIN_ITEMS_PANE_URL: &str =
 /// The pane holding the Accessibility grant.
 pub const ACCESSIBILITY_PANE_URL: &str =
     "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility";
-
-/// Opens `url` in System Settings.
-///
-/// Goes through `NSWorkspace`, not `tauri-plugin-shell`: the plugin's `open` only accepts `http:`,
-/// `https:`, `mailto:` and `tel:` addresses and would reject this scheme. Fails with a message when
-/// the address cannot be built or the system declines to open it.
-pub fn open_system_settings(url: &str) -> Result<(), String> {
-    use objc2_app_kit::NSWorkspace;
-    use objc2_foundation::{NSString, NSURL};
-
-    let Some(parsed) = NSURL::URLWithString(&NSString::from_str(url)) else {
-        return Err(format!("not a valid address: {url}"));
-    };
-    if NSWorkspace::sharedWorkspace().openURL(&parsed) {
-        Ok(())
-    } else {
-        Err(format!("the system did not open {url}"))
-    }
-}
 
 #[cfg(test)]
 mod tests {

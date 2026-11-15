@@ -139,14 +139,20 @@ verified only on such a build, after confirming it starts without the grant unde
 app's identity, so the installed app, or any build sharing its identifier, usually holds it already at launch: its
 first read says granted, and the path that notices a grant arriving is never exercised, however the check is driven.
 
+The isolation stops at the system's credential store, which no `HOME` or identifier separates. A check that logs in
+to a remote daemon (a password or key-file login makes and keeps a device key; a later login reads it) uses the real
+user's login keychain (the Credential Manager on Windows), and macOS raises its keychain prompt on the user's screen,
+in the middle of whatever they are doing. Ask the user before running such a check, and in cleanup delete the items
+kept under the verification identifier's service (`<identifier>.remote-daemon-key`). Tests never need it: they take
+the in-memory store in `apps/desktop/src-tauri/src/remote/credentials.rs`.
+
 To test other system languages, pass them for that launch only:
 `open <scratch-app> --args -AppleLanguages '(zh-Hans-CN, en)'`. This steers only a profile with no
-`octoboard.language` key, and even then only until the window has connected: from then on the window shows the
-language the daemon holds (`interface_language` in its settings), and the system pick reaches the daemon only when it
-holds none, after which every later launch follows that value. So testing the initial pick needs both a fresh unique
-profile and a fresh daemon data directory; with only a fresh profile the window renders the pick and then switches
-away once connected. To inspect a profile value, open the sqlite file normally rather than with
-`immutable=1`: the app's last write may still be in the WAL, which `immutable=1` skips.
+`octoboard.language` key: the first load keeps its pick there, and every later launch of that profile shows the kept
+language whatever the system prefers. So each test of the initial pick needs a fresh unique profile; the daemon plays
+no part in the interface language, and a fresh daemon data directory matters only for the agent language, which a
+daemon holding none takes from the first connecting window. To inspect a profile value, open the sqlite file normally
+rather than with `immutable=1`: the app's last write may still be in the WAL, which `immutable=1` skips.
 
 Keep the `.app` and throwaway directories on the internal disk when the checkout is on a removable volume. An ad-hoc
 build has a fresh code identity each time, so macOS's consent prompt for access to that volume can recur on every run.

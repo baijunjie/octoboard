@@ -60,7 +60,8 @@ const LAYERS: &[(&str, &[&str])] = &[
     (
         "host",
         &[
-            "browser_socket",
+            "browser",
+            "connection_details",
             "env_shell",
             "git",
             "holder",

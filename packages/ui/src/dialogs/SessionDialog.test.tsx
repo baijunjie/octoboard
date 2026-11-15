@@ -102,7 +102,7 @@ it.each(["archived", "removed"])("turns a fixed-owner form into a failure modal 
   const dialog = document.body.querySelector('[role="alertdialog"]');
   expect(dialog?.textContent).toContain("Hub is no longer available, so a session cannot be opened for it.");
   expect(dialog?.querySelector("form")).toBeNull();
-  expect(Array.from(dialog?.querySelectorAll("button") ?? []).map((button) => button.textContent)).toEqual(["OK"]);
+  expect(Array.from(dialog?.querySelectorAll("button") ?? []).filter((button) => !button.matches("[data-slot$=close-trigger]")).map((button) => button.textContent)).toEqual(["OK"]);
   await act(async () => buttons().find((b) => b.textContent === "OK")?.click());
   expect(onClose).toHaveBeenCalledTimes(1);
   expect(daemon.request).not.toHaveBeenCalled();

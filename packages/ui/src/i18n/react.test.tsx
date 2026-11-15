@@ -24,7 +24,7 @@ it.each(["en", "zh-Hans", "ar"] as const)("keeps fixed product references rich a
     ["provider.grok.dirHint", ["Grok"]],
     ["provider.codex.login_busy.summary", ["Codex"]],
     ["provider.claude.setting.approval_mode.choice.auto.summary", ["Claude"]],
-    ["settings.permissions.lead", ["Octoboard", "Octoboard", "macOS"]],
+    ["settings.permissions.lead", ["Octoboard", "macOS"]],
     ["settings.cloneDir.description.gitUrl", ["Git"]],
     ["git.unavailable", ["Git"]],
     ["git.notARepository", ["Git"]],
@@ -56,7 +56,7 @@ it.each(["en", "zh-Hans", "ar"] as const)("keeps fixed product references rich a
   expect(container.querySelector("[data-inline-reference]")?.textContent).toBe(name);
   expect(container.textContent).toBe(bare(format(language, "dialog.session.ownerFixed", { name })));
   // A caller can supply its own product-name presentation instead of a referenced product chip.
-  act(() => root.render(<Message id="app.quit.title" params={{ appName: globalParam("appName") } as never} />));
+  act(() => root.render(<Message id="menu.quit" params={{ appName: globalParam("appName") } as never} />));
   expect(container.querySelector("[data-inline-reference]")).toBeNull();
 });
 

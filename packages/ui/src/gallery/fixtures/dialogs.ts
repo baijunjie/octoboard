@@ -1153,7 +1153,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "exceptional",
     title: "New session dialog open as the last agent is removed",
-    description: "Reached only when the agents change under an open dialog (the buttons that open it are disabled without an added agent): every agent is removed meanwhile. The dialog itself turns into a failure modal: a danger icon in the header, the plain title \"Cannot open a session\", a sentence saying no agent is available to open a session, and OK as its only button. No second dialog opens over it.",
+    description: "Reached only when the agents change under an open dialog (the buttons that open it are disabled without an added agent): every agent is removed meanwhile. The dialog itself turns into a failure modal: a danger icon in the header, the plain title \"Cannot open a session\", a sentence saying no agent is available to open a session, and OK as its only footer button, with a close button in the header that does what OK does (Escape and a click outside do nothing). No second dialog opens over it.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.openSession")),
       (ui) => ui.setAgents({ added: [] }),

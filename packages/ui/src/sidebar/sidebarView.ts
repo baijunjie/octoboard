@@ -15,6 +15,7 @@ const focusPreference = createPersistedPreference<string | undefined>(
   PREFERENCE_KEYS.sidebarFocus,
   (raw) => raw ?? undefined,
   (value) => value ?? null,
+  { scope: "daemon" },
 );
 
 export interface SidebarView {

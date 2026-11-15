@@ -27,8 +27,9 @@
 //! which a project session is given only while the application setting `ask_questions_as_choices`
 //! is on at that launch.
 //!
-//! And for the section naming the language the user set the interface to, which a project session
-//! is given only when a language is stored and it is not English (see [`user_language_guidance`]).
+//! And for the section naming the agent language, the language the user is talked to in, which a
+//! project session is given only when a language is stored and it is not English (see
+//! [`user_language_guidance`]).
 
 use crate::messaging::{sharing, texts};
 use crate::protocol::{AgentId, GitDelivery, GitDevelopment, GitWorkflowSettings, SessionKind};
@@ -290,7 +291,7 @@ pub(super) fn asking_guidance(agent: Option<AgentId>) -> String {
     )
 }
 
-/// Which language the session talks to the user in: the one they set Octoboard's interface to,
+/// Which language the session talks to the user in: the agent language the user has set,
 /// named in English with its tag. Nothing for English, which sessions already match to what the
 /// user writes in and which must not be forced on someone who writes in another, nor for a tag the
 /// interface does not offer. It yields to what the user writes in and asks for, and to the
@@ -303,7 +304,7 @@ pub(super) fn user_language_guidance(tag: &str) -> Option<String> {
     let language = crate::interface_language::display_name(tag)?;
     Some(format!(
         "## The user's language\n\n\
-         The user has set Octoboard's interface to {language}. Talk to the user in it — your \
+         The user wants agents to talk to them in {language}. Talk to the user in it — your \
          replies, your questions, reports and pages meant for the user, and the titles you give \
          sessions — unless the user writes to you in another language or asks for one, or the \
          project's or the user's own instructions say which language to use with them. Everything \
@@ -1678,7 +1679,7 @@ mod tests {
                     .expect("the section goes in just before the closing sentence");
                 assert!(section.starts_with("## The user's language\n\n"));
                 assert!(section.contains(
-                    "The user has set Octoboard's interface to Simplified Chinese (zh-Hans)."
+                    "The user wants agents to talk to them in Simplified Chinese (zh-Hans)."
                 ));
                 assert!(
                     text.find("## Asking the user").unwrap()

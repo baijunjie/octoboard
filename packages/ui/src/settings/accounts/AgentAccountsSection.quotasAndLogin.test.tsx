@@ -331,6 +331,7 @@ it("words a login failure the system's text names as its cause, with that cause'
   expect(dialog.textContent).toContain("failed. The disk is full.");
   expect(dialog.textContent).toContain("then retry the operation.");
   expect(dialog.textContent).not.toContain("Report issue");
+  expect([...dialog.querySelectorAll("button")].map((button) => button.textContent)).toContain("Close");
 });
 
 it("asks for a login failure nothing can be said of to be reported", async () => {
@@ -338,6 +339,9 @@ it("asks for a login failure nothing can be said of to be reported", async () =>
   expect(dialog.textContent).toContain("failed. Something unexpected went wrong.");
   expect(dialog.textContent).toContain("file an Issue with the steps that led to it.");
   expect(dialog.textContent).toContain("Report issue");
+  // Three buttons would not fit the footer: the close button stands for Close.
+  expect([...dialog.querySelectorAll("button")].map((button) => button.textContent)).not.toContain("Close");
+  expect(dialog.querySelector('[aria-label="Close"]')).not.toBeNull();
 });
 
 it("reports a login failure by its code, parameter names and the daemon's own text, never the values or the wording shown", async () => {

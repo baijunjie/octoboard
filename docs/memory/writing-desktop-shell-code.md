@@ -1,12 +1,16 @@
 # Writing desktop shell code
 
-## To run something after the current AppKit callback returns, queue it on the main `NSOperationQueue`
+## To run something after the current native callback returns, do not rely on `run_on_main_thread` to queue it
 
 In the desktop shell (`apps/desktop/src-tauri/`), `AppHandle::run_on_main_thread` only queues the closure when it is
 called from another thread. Called on the main thread — from a notification observer, a menu event, an
-`NSApplication` delegate method or anything else AppKit calls into — it runs the closure at once, before the call
-returns (`send_user_message` in `tauri-runtime-wry`, as of 2.12.2). So it cannot put work after the callback in
-progress, whatever the name suggests.
+`NSApplication` delegate method or anything else AppKit calls into, or on Windows from a window procedure — it runs
+the closure at once, before the call returns (`send_user_message` in `tauri-runtime-wry`, as of 2.12.2). So it cannot
+put work after the callback in progress, whatever the name suggests.
+
+On Windows, an action taken from a window procedure (a `WM_SYSCOMMAND` from the system menu, say) that opens or shows a
+window re-enters that procedure when run in place. Leave it first: `tauri::async_runtime::spawn` a task that calls
+`run_on_main_thread`, as the subclass procedure in `apps/desktop/src-tauri/src/menu/system_menu.rs` does.
 
 When work on the main thread has to wait until the current callback has returned (for example until a menu has
 finished delivering the chosen item's action), queue it with `NSOperationQueue::mainQueue().addOperationWithBlock`

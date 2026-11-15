@@ -158,7 +158,7 @@ it("downloads only when the user presses Download and install, with progress, an
   expect(container.querySelector(".progress-bar__output")!.textContent).toBe("50%");
   expect(button(container, "Download and install")).toBeUndefined();
   await act(async () => fake.finish());
-  expect(textOf(container)).toContain("Version 0.2.0 is installed. It takes effect after Octoboard restarts.");
+  expect(textOf(container)).toContain("Version 0.2.0 is installed. It takes effect after the app restarts.");
   expect(button(container, "Restart now")).toBeDefined();
   expect(button(container, "Later")).toBeDefined();
 });
@@ -173,8 +173,8 @@ async function installed(focusTerminal?: () => void) {
 }
 
 it.each([
-  ["installer", WINDOWS_HOST, "Version 0.2.0 is downloaded. It is installed when Octoboard quits or restarts.", "An update is downloaded. It is installed when Octoboard quits or restarts."],
-  ["in-place", MAC_HOST, "Version 0.2.0 is installed. It takes effect after Octoboard restarts.", "An update is installed. It takes effect after Octoboard restarts."],
+  ["installer", WINDOWS_HOST, "Version 0.2.0 is downloaded. It is installed when the app quits or restarts.", "An update is downloaded. It is installed when the app quits or restarts."],
+  ["in-place", MAC_HOST, "Version 0.2.0 is installed. It takes effect after the app restarts.", "An update is installed. It takes effect after the app restarts."],
 ])("words a finished download as the %s updater leaves it, with and without a known version", async (_updater, host, known, unknown) => {
   const fake = fakeUpdater();
   const withVersion = mount({ kind: "tauri", host, updater: fake.updater });

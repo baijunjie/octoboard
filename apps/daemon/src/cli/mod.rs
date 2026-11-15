@@ -9,11 +9,13 @@ mod address;
 mod background;
 #[cfg(all(test, unix))]
 mod background_tests;
+mod connection;
 mod holder;
 pub(crate) mod hook;
 mod installation;
 #[cfg(test)]
 mod key_source_tests;
+mod owner_endpoint;
 mod succession;
 pub(crate) mod update;
 mod verify_archive;
@@ -130,14 +132,46 @@ pub(crate) enum Command {
     /// Print the address to open the running daemon at in a browser, its key included:
     /// `http://127.0.0.1:<port>/?key=<key>`, and on stderr the SSH forward that reaches it. Exits
     /// 3 when none runs. The key is the owner key, which stays the same across launches, when the
-    /// daemon accepts one (a daemon that serves the browser on its socket), else the launch key.
+    /// daemon accepts one (a daemon that serves the browser on its way in), else the launch key.
     Address {
         /// Replace the owner key first, so the address printed is the new one's and an earlier
         /// address stops working. Where no daemon runs, or the running one takes no owner key,
         /// the file alone is replaced, for the next daemon that serves the browser.
         #[arg(long)]
         rotate: bool,
+        /// Print instead, for a program to read, one line of JSON with the owner key
+        /// (`owner_key`), the protocol generation (`generation`) and the release version
+        /// (`daemon_version`) the running daemon states on its owner endpoint, once it has accepted
+        /// the key there. Exits 3 when no daemon runs, 4 when it has no owner endpoint, 5 when the
+        /// endpoint cannot be reached and 6 when this is the desktop application's own copy and the
+        /// application is not running.
+        #[arg(long, conflicts_with = "rotate")]
+        json: bool,
     },
+    /// Print the connection details another device sets itself up from: the SSH host, port and
+    /// user, the SSH server's host key fingerprint and this octoboardd's path, with no secret, as
+    /// a QR code and as one line of text the application takes pasted. The host is the address
+    /// this SSH session reached the machine at, else the machine's own name; on stderr, where it
+    /// came from and how to correct it.
+    Connection {
+        /// The host other devices reach this machine at, instead of the one chosen.
+        #[arg(long)]
+        host: Option<String>,
+        /// The port this machine's SSH server is reached at, instead of the SSH session's or 22.
+        #[arg(long, value_parser = clap::value_parser!(u16).range(1..))]
+        ssh_port: Option<u16>,
+        /// Print the text alone, with no QR code.
+        #[arg(long)]
+        text: bool,
+    },
+    /// Connect to the running daemon's owner endpoint and carry bytes both ways between it and
+    /// this command's standard input and output until either side closes: what a program on
+    /// another machine runs over SSH to reach the daemon, sending the owner key in its own
+    /// requests. Exits 3 when no daemon runs, 4 when it has no owner endpoint (it serves no
+    /// browser, or remote access is off), 5 when the endpoint cannot be reached and 6 when this is
+    /// the desktop application's own copy and the application is not running, with the reason on
+    /// stderr.
+    Proxy,
     /// Forward one agent hook payload to the daemon. This is what the per-session hook script
     /// execs; it is not meant to be run by hand.
     Hook {
@@ -291,7 +325,18 @@ pub(crate) fn run(command: Command) -> Result<()> {
         Command::VerifyArchive { archive, signature } => {
             std::process::exit(verify_archive::run(&archive, &signature))
         }
-        Command::Address { rotate } => std::process::exit(address::print_address(rotate)?),
+        Command::Address { rotate, json } => std::process::exit(if json {
+            owner_endpoint::print_answer()?
+        } else {
+            address::print_address(rotate)?
+        }),
+        Command::Connection {
+            host,
+            ssh_port,
+            text,
+        } => std::process::exit(connection::print_details(host, ssh_port, text)?),
+        // Its stdout carries the connection's bytes and nothing else.
+        Command::Proxy => std::process::exit(owner_endpoint::proxy()?),
         // The hook path must stay silent and must not pay for a runtime: it is on the agent's
         // turn critical path, several times per turn.
         Command::Hook {
@@ -502,19 +547,66 @@ mod tests {
     }
 
     #[test]
-    fn address_takes_only_the_rotate_option_and_no_daemon_option() {
+    fn connection_takes_a_host_an_ssh_port_and_the_text_option() {
+        assert!(matches!(
+            parse(&["connection"]).unwrap().command,
+            Some(Command::Connection {
+                host: None,
+                ssh_port: None,
+                text: false
+            })
+        ));
+        assert!(matches!(
+            parse(&["connection", "--host", "box.example", "--ssh-port", "2222", "--text"])
+                .unwrap()
+                .command,
+            Some(Command::Connection {
+                host: Some(ref host),
+                ssh_port: Some(2222),
+                text: true
+            }) if host == "box.example"
+        ));
+        assert!(parse(&["connection", "--ssh-port", "0"]).is_err());
+    }
+
+    #[test]
+    fn address_takes_the_rotate_or_the_json_option_and_no_daemon_option() {
         assert!(matches!(
             parse(&["address"]).unwrap().command,
-            Some(Command::Address { rotate: false })
+            Some(Command::Address {
+                rotate: false,
+                json: false
+            })
         ));
         assert!(matches!(
             parse(&["address", "--rotate"]).unwrap().command,
-            Some(Command::Address { rotate: true })
+            Some(Command::Address {
+                rotate: true,
+                json: false
+            })
         ));
+        assert!(matches!(
+            parse(&["address", "--json"]).unwrap().command,
+            Some(Command::Address {
+                rotate: false,
+                json: true
+            })
+        ));
+        assert!(parse(&["address", "--json", "--rotate"]).is_err());
         assert!(parse(&["status", "--rotate"]).is_err());
         assert!(parse(&["--rotate"]).is_err());
         assert!(parse(&["address", "--port", "7531"]).is_err());
         assert!(parse(&["--port", "7531", "address"]).is_err());
+    }
+
+    #[test]
+    fn proxy_takes_no_option() {
+        assert!(matches!(
+            parse(&["proxy"]).unwrap().command,
+            Some(Command::Proxy)
+        ));
+        assert!(parse(&["proxy", "--port", "7531"]).is_err());
+        assert!(parse(&["--port", "7531", "proxy"]).is_err());
     }
 
     #[test]

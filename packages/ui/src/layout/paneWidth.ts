@@ -3,6 +3,7 @@ import { useState, useSyncExternalStore } from "react";
 import { MIN_PANEL_COLUMN_WIDTH, MIN_SINGLE_COLUMN_ASIDE_WIDTH } from "./panelColumnWidth";
 import { createPersistedPreference } from "../preferences/persistedPreference";
 import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
+import { LAYOUT_SCOPE } from "./panelVisibility";
 import { useIsNarrow } from "../components/hooks/breakpoint";
 
 /** The two panes whose docked width the user can change. */
@@ -49,6 +50,7 @@ function createChosenWidth(side: PaneSide) {
       return Number.isFinite(width) && width > 0 ? Math.max(min, side === "aside" ? width : Math.min(width, max)) : undefined;
     },
     (width) => (width === undefined ? null : String(width)),
+    LAYOUT_SCOPE,
   );
 }
 

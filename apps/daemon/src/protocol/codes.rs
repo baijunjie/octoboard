@@ -121,6 +121,14 @@ pub mod error_code {
 
     /// A request that is not valid JSON of a known shape.
     pub const UNREADABLE_REQUEST: Code = Code("unreadable_request");
+    /// `set_remote_access`, `rotate_owner_key` or `set_remote_access_port` was sent to a daemon
+    /// that offers no remote access (it runs on its own, or its host has no way in for the
+    /// browser), a rotation while remote access is not serving, or a port to a daemon that serves
+    /// the browser at no port of its own (not on Windows).
+    pub const REMOTE_ACCESS_UNAVAILABLE: Code = Code("remote_access_unavailable");
+    /// `set_remote_access`, `rotate_owner_key` or `set_remote_access_port` came over a connection
+    /// the owner key opened: only the application's own window changes remote access.
+    pub const REMOTE_ACCESS_REFUSED_TO_BROWSER: Code = Code("remote_access_refused_to_browser");
     /// Anything that is not meant for the user to read in detail: an unexpected failure with no
     /// meaning of its own. The text is carried as the `detail` param.
     pub const INTERNAL_ERROR: Code = Code("internal_error");

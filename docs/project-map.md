@@ -28,7 +28,7 @@ The repository root is two workspace roots at once:
   (`apps/desktop/src-tauri/`), built into one `target/` directory.
 
 The daemon's pnpm package (`@octoboard/daemon`) exists so that `pnpm --filter @octoboard/daemon... build` builds the UI
-first and then the daemon with that UI embedded, the server form of the binary; the desktop sidecar embeds none.
+first and then the daemon with that UI embedded, which serves it to a browser on its owner endpoint: always in the server form, and in the desktop sidecar while Allow remote access is on.
 
 `apps/` holds the deliverables, one directory per thing that ships; `packages/` holds code shared between them.
 `contracts/protocol/` holds the protocol's JSON Schema, which a daemon test renders from the wire types and native

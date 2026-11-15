@@ -42,6 +42,10 @@ use crate::platform::proc_table;
 /// a command following a daemon through a planned restart compares identities. A record without
 /// `after=`, as a build before it writes or a daemon that cannot tell writes, does not say
 /// ([`Predecessor::Unsaid`]).
+///
+/// The desktop application's daemon on Windows, which serves the browser at a loopback port of its
+/// own while remote access is on ([`crate::browser::port`]), adds `browser-port=<port>` beside
+/// `owner-key` for the same reason, read wherever it stands after the port.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Owner {
     pub identity: ProcessIdentity,
@@ -56,6 +60,10 @@ pub struct Owner {
     /// Whether the daemon accepts the owner key, which `address` then prints in place of the
     /// launch key.
     pub takes_owner_key: bool,
+    /// The loopback port the daemon takes the owner key at, where it serves the browser at a port
+    /// of its own (the desktop application's daemon on Windows) rather than on its socket; `None`
+    /// otherwise.
+    pub browser_port: Option<u16>,
     /// The systemd unit the daemon runs as, where a service manager restarts it and it could name
     /// the unit (a systemd user service, systemd 248 or later); `None` otherwise.
     pub unit: Option<String>,
@@ -104,6 +112,9 @@ const NO_SERVICE: &str = "no-service";
 /// The token of a record of a daemon that accepts the owner key.
 const OWNER_KEY: &str = "owner-key";
 
+/// What leads the token naming the port the daemon takes the owner key at.
+const BROWSER_PORT: &str = "browser-port=";
+
 /// What leads the token naming the daemon's systemd unit.
 const UNIT: &str = "unit=";
 
@@ -144,6 +155,7 @@ impl Owner {
             follows_application: takes_restart.then_some(follows_application),
             service_managed: None,
             takes_owner_key: false,
+            browser_port: None,
             unit: None,
             predecessor: Predecessor::Unsaid,
         })
@@ -169,6 +181,15 @@ impl Owner {
     pub fn with_owner_key(self, takes: bool) -> Self {
         Self {
             takes_owner_key: takes,
+            ..self
+        }
+    }
+
+    /// This owner, naming the loopback port it takes the owner key at, where it serves the browser
+    /// at a port of its own.
+    pub fn with_browser_port(self, browser_port: Option<u16>) -> Self {
+        Self {
+            browser_port,
             ..self
         }
     }
@@ -353,6 +374,9 @@ impl Owner {
         if self.takes_owner_key {
             content.push_str(&format!(" {OWNER_KEY}"));
         }
+        if let Some(port) = self.browser_port {
+            content.push_str(&format!(" {BROWSER_PORT}{port}"));
+        }
         if let Some(unit) = &self.unit {
             content.push_str(&format!(" {UNIT}{unit}"));
         }
@@ -382,6 +406,11 @@ impl Owner {
             _ => None,
         });
         let takes_owner_key = rest.contains(&OWNER_KEY);
+        let browser_port = rest
+            .iter()
+            .find_map(|token| token.strip_prefix(BROWSER_PORT))
+            .and_then(|port| port.parse::<u16>().ok())
+            .filter(|port| *port != 0);
         let unit = rest
             .iter()
             .find_map(|token| token.strip_prefix(UNIT))
@@ -402,6 +431,7 @@ impl Owner {
             follows_application,
             service_managed,
             takes_owner_key,
+            browser_port,
             unit,
             predecessor,
         })
@@ -483,6 +513,7 @@ mod tests {
             follows_application: Some(false),
             service_managed: None,
             takes_owner_key: false,
+            browser_port: None,
             unit: None,
             predecessor: Predecessor::Unsaid,
         }
@@ -643,6 +674,63 @@ mod tests {
         }
         assert!(!owner(10, 7531).takes_owner_key);
         assert!(owner(10, 7531).with_owner_key(true).takes_owner_key);
+    }
+
+    /// The browser port is a token of its own, written after the owner-key token for the desktop
+    /// application's daemon on Windows, and read back wherever it stands; a value that is no port
+    /// reads as none while the rest of the record stands.
+    #[test]
+    fn the_browser_port_reads_back_and_a_value_that_is_no_port_reads_as_none() {
+        let dir = ScratchDir::new("owner-record-browser-port");
+        let path = dir.join("daemon.owner");
+        let ours = Owner {
+            follows_application: Some(true),
+            ..owner(10, 54321)
+        }
+        .with_owner_key(true)
+        .with_browser_port(Some(3369));
+        ours.write_to(&path).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "10:123456 54321 application owner-key browser-port=3369\n"
+        );
+        assert_eq!(Owner::read_from(&path), Some(ours.clone()));
+        std::fs::write(
+            &path,
+            "10:123456 54321 application browser-port=3369 owner-key\n",
+        )
+        .unwrap();
+        assert_eq!(Owner::read_from(&path), Some(ours));
+        for token in [
+            "browser-port=0",
+            "browser-port=70000",
+            "browser-port=x",
+            "browser-port=",
+            "browser-port=-1",
+        ] {
+            std::fs::write(
+                &path,
+                format!("10:123456 54321 application owner-key {token}\n"),
+            )
+            .unwrap();
+            let read = Owner::read_from(&path).expect("the record stands");
+            assert_eq!(read.browser_port, None, "{token}");
+            assert!(read.takes_owner_key, "{token}");
+            assert_eq!(read.port, 54321, "{token}");
+        }
+        std::fs::write(&path, "10:123456 54321 application owner-key\n").unwrap();
+        assert_eq!(Owner::read_from(&path).unwrap().browser_port, None);
+        // An earlier build reads the identity, the port and the third token alone.
+        std::fs::write(
+            &path,
+            "10:123456 54321 application owner-key browser-port=3369\n",
+        )
+        .unwrap();
+        let earlier = read_as_an_earlier_build(&std::fs::read_to_string(&path).unwrap());
+        assert_eq!(
+            earlier.map(|(_, port, follows)| (port, follows)),
+            Some((54321, Some(true)))
+        );
     }
 
     /// An earlier build reads the identity, the port and the third token alone, so the token
@@ -977,13 +1065,16 @@ mod tests {
         ];
         for follows_application in [Some(true), Some(false), None] {
             for managed in [None, Some(true), Some(false)] {
-                for takes_owner_key in [false, true] {
+                for (takes_owner_key, browser_port) in
+                    [(false, None), (true, None), (true, Some(4000))]
+                {
                     for unit in [None, Some("octoboard.service".to_owned())] {
                         for predecessor in predecessors {
                             let ours = Owner {
                                 follows_application,
                                 service_managed: managed,
                                 takes_owner_key,
+                                browser_port,
                                 unit: unit.clone(),
                                 predecessor,
                                 ..owner(10, 7531)

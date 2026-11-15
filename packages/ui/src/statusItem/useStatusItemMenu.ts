@@ -57,7 +57,7 @@ interface UseStatusItemMenuOptions {
  * menu follows), so the menu is pushed again when the appearance changes.
  */
 export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, updatesLabel, onSessionChosen }: UseStatusItemMenuOptions): void {
-  const { statusItem } = usePlatform();
+  const { statusItem, host } = usePlatform();
   const { store, request } = useDaemon();
   const t = useT();
   const language = useCurrentLanguage();
@@ -73,6 +73,7 @@ export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, 
       const { consoles, projects, sessions, settings, agentAvailability, accountQuotas, providers, queuedAccountSwitches } = store.getState();
       const now = Date.now();
       const draft = buildStatusItemMenu(t, {
+        os: host.os,
         selectedSessionId,
         currentConsoleId,
         consoles: Array.from(consoles.values()),
@@ -123,7 +124,7 @@ export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, 
       unsubscribe();
       unsubscribeOrder();
     };
-  }, [statusItem, ready, selectedSessionId, currentConsoleId, t, language, appearance, store, pushSerially, updatesLabel]);
+  }, [statusItem, ready, selectedSessionId, currentConsoleId, t, language, appearance, store, pushSerially, updatesLabel, host.os]);
 
   // Read at call time: the subscription is made once.
   const chooseRef = useLatest(onSessionChosen);

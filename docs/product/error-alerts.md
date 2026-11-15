@@ -115,9 +115,12 @@ details" below). The one exception is text the user wrote that a failure hands b
 `draft_discarded` notice carries: it is shown in a block of its own after the explanation and the next step, and before
 the disclosure (see "Names and diagnostic details" below). The body's opening sentence (after any session and location lines) is optional: it is there only for
 what the title leaves unexplained, such as a cause or what the failure left as it was, and never says the title again in
-other words; when the title says it all, the body starts with the next step. It has one acknowledgement button. Escape,
-a click outside and a close button cannot dismiss it, and it never dismisses itself. Acknowledgement does not retry the
-failed operation. The originating dialog remains available for correcting inputs or retrying unless that operation's own
+other words; when the title says it all, the body starts with the next step. It has one acknowledgement button, and a
+close button (×) at its top trailing corner, which acknowledges it exactly as that button does: pressing either is a
+deliberate dismissal. Escape and a click outside never dismiss it, being too easily set off by accident, and it never
+dismisses itself. Its footer holds at most two buttons: where both **Report issue** and a recovery action are offered
+(see "Recovery and unexpected errors" below), the acknowledgement button is left out and the close button stands for
+it. Acknowledgement does not retry the failed operation. The originating dialog remains available for correcting inputs or retrying unless that operation's own
 contract closes it, or a recovery action navigates Settings and closes its account or agent forms (see "Opening and
 closing Settings" in `docs/product/settings.md`).
 
@@ -164,9 +167,9 @@ open, so that it can no longer do what it was opened for, the dialog does not cl
 over it: **the dialog turns into a failure modal** in place, in the error alert's form. Its content is replaced by the
 standard danger icon in its header, a title naming the failure, the explanation as sentences in its body (with names
 as chips, as in "Names and diagnostic details" below) and any raw text behind **Error details**, and a single
-acknowledgement button: nothing to submit or retry, no remedy button and no request to report an issue. Escape, a
-press outside and a close button do not dismiss it; acknowledging it closes the dialog, and what the dialog would
-have done is not done. It is announced as an alert dialog, with its explanation. It stays as it was when it appeared
+acknowledgement button: nothing to submit or retry, no remedy button and no request to report an issue. As in the
+error alert, a close button (×) at its top trailing corner acknowledges it exactly as that button does; Escape and a
+press outside do not dismiss it. Acknowledging it closes the dialog, and what the dialog would have done is not done. It is announced as an alert dialog, with its explanation. It stays as it was when it appeared
 until it is acknowledged, even if the state that caused it passes.
 
 | Dialog | Title | Why |
@@ -703,7 +706,8 @@ context, even when they have no stack trace. It asks the user to use **Report is
 that led to the failure.
 
 **Report issue** is a secondary action in the footer, before the acknowledgement button, with a trailing
-external-link icon. The guidance names it with a non-interactive inline reference; only the footer action is a link. It
+external-link icon; beside a recovery action, the two fill the footer and the close button acknowledges (see "The error
+alert" above). The guidance names it with a non-interactive inline reference; only the footer action is a link. It
 opens the explicit `issueUrl` configured in `config/app.json` when the user activates it, as a new Issue prefilled
 with a title and a body that describe the failure, its personal information removed (see `docs/product/issue-reports.md`).
 Repeated activation is blocked while opening is pending. It does not create the Issue itself, and attaches no

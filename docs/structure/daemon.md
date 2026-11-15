@@ -16,63 +16,85 @@ serde. The crate is a member of the root Cargo workspace beside the desktop shel
 ## Entry points
 
 `src/main.rs` hands a named CLI mode to `cli::run`; otherwise it takes the instance lock, binds `127.0.0.1` (on the
-top-level `--port` when given, else on an OS-assigned port, which is what the desktop shell starts; or serves the listener a predecessor handed over, named by the hidden `--listen-fd`, which `main()` takes over through `platform::listener_handover::adopt` before anything else opens a descriptor and `adopt_or_bind` falls back from to binding the port), binds the browser socket
-`browser.sock` in the data directory (`browser_socket::bind`) when there is no `--parent-pid`, the build embeds the UI and the
-host has such sockets (`browser_socket::AVAILABLE`), opens the store,
-generates the per-launch key (or reads the one its predecessor hands it on stdin, `--key-stdin`, with the predecessor's identity on the line after it), reads or makes, when it
-serves the browser, the owner key that outlives the launch (`owner_key::OwnerKey::start`, the owner-only `owner.key` in the
-data directory, accepted besides the launch key on the browser socket alone), loads the screens
-a planned stop saved (`state::restart_screens`, kept until each is consumed), the messages it left queued
-(`messaging::restart_outbox`, deleted as read) and the background work each session's agent had left running
-(`state::background_store`, loaded before the adoption and pruned after it to the sessions adopted or claimed), adopts what the holders kept running (`coordinator::adopt`),
-keeps claimed what a holder it cannot link to yet runs (`coordinator::unlinked`), marks the other sessions interrupted,
-clears the run directory but for the adopted and claimed sessions' scratch directories, writes the owner-only key record
-(`daemon.key`) and then the owner record beside the lock (`owner_record::Owner`, the pid identity, the port, whether it
-follows an application, whether a service manager starts its successor, the systemd unit it then runs as, which daemon it took over from
-(`Owner::predecessor`) and, as the `owner-key` token, whether it holds an owner key; no key is in it), prints the
-handshake line (port and key) and runs the server, beside the browser socket's when it has one, until a stop is asked for
-(`state::StopKind`). An ordinary stop ends
-every session: the `shutdown` control request, `POST /shutdown` (`src/server/callbacks.rs`), a termination signal or
-the application's pid going away after the application wrote a `quit` line to the daemon's stdin
-(`state::application_note`); the pid going away with no such line is a planned stop. An ordinary stop asked for
-while a planned stop runs escalates it: the handover stops where it stands and everything is ended, the holders already
-handed over or parted from included, and a planned stop asked for after the application's quit line is ordinary. Every start,
-with or without `--parent-pid`, reconciles the application's quit record (`holder::quit_targets`, the
-`application-quit` file, `paths::application_quit_record`, written by every quit that may have left holders) under the
-instance lock before it adopts anything, and follows an ordinary stop for the holders it names: it ends what they run
-instead of adopting it (`Holders::end_quit_targets`), the endings running off the start and awaited for up to
-`ENDINGS_WAIT`, 4 s, so that the startup line the application waits for still comes in time (`wait_for_quit_endings`
-in `main.rs`, `Holders::wait_endings`); the record's lifecycle is in [`src/holder/`](../../apps/daemon/src/holder/README.md). A planned
-stop hands every terminal over to its holder with its screen saved and ends nothing
-(`coordinator::planned_stop`, behind the barrier of `state::handover_barrier`): the `planned_stop` control request and `POST /planned-stop`; a planned
-restart, `POST /restart` or the host's restart request (`SIGUSR1`, which `restart` sends to a daemon whose key is not recorded), also brings the successor up
-on the same port: started by `main` (`self_update::start_successor`, which is handed `cli::start_successor` as its start, so that `self_update` names nothing of the entry layer, and, for a server-form daemon whose update does not start, goes back to the build that ran, and where the first start fails and nothing is put back starts the same file once more with no listener handed over; from the installation entry point `cli::launch_path` in
-`src/cli/installation.rs`, its final symlink left unresolved), with the same key, which is kept only in that case, or,
-under a systemd service (the environment shows the daemon to be the unit's main process, or `--service-managed` says
-so), by the unit on the daemon's exit status 75, when the successor makes a new key. A daemon that follows no application keeps a duplicate of its listener for the run (`platform::listener_handover::Kept::of`); at a planned restart with a successor it starts itself, `run_daemon` keeps the port bound, has `turn_away` accept and reset every new connection until right before the successor is started, then passes the kept listener down the chain above, to be handed to the successor as descriptor 3 with `--listen-fd 3`; every other stop lets the port go as soon as it stops serving. A user runs the modes `start` (on the port of `--port`, else `defaultServerPort` of `config/app.json`, which `build.rs` passes in as `OCTOBOARD_DEFAULT_SERVER_PORT`), `stop`, `restart`, `status` and `address` to keep a daemon in
-the background and to find it (`src/cli/background.rs` for the first four, `src/cli/address.rs` for `address`; `start` runs the daemon as a background process of its own, `stop`, `restart`,
-`status` and `address` find it through `instance_lock::is_running` and the owner record, `owner_record::Owner`, waiting
-through a planned restart caught half-way with the handover note the restarting daemon leaves (`Owner::note_handover`)
-and, for a service-managed daemon that has ended, by asking systemd about the unit its record names
-(`platform::proc::unit_state`, which `src/cli/succession.rs` and `src/cli/background.rs` ask) rather than waiting a fixed time;
-`stop` and `restart` tell the daemon that takes over by the predecessor it records, which is the identity of the daemon it took over from
-(handed to it on stdin by a daemon that starts its successor itself, copied from the note or the record left by the daemon before it in a service), falling back to comparing the keys
-where it does not say; `address` prints the browser address with the owner key when the record
-says the daemon holds one and `owner.key` has it, which outlives the daemon, else with the launch key, which it reads from the key record only the
-daemon's own user can open, and notes on stderr what a browser needs (`address_notes` in `src/cli/address.rs`: whether the daemon
-accepts the key, the SSH forward command; `no_browser_note` where none is served); `address --rotate` replaces the owner key first, through the running daemon (`POST /owner-key/rotate`) or, with none
-running, in `owner.key` (`owner_key::replace_in`), and prints the new address; where the host has no signal to stop a daemon by (Windows), `stop` asks it over loopback instead, and `restart` asks over loopback on every host wherever the key is recorded, so that a refusal comes back with its reason, with the key the key record (`daemon.key`) holds; the loopback request is `request_over_loopback` in `src/cli/background.rs`, which `address --rotate` uses too). The CLI modes other processes start are `hook`, `git-ref`,
-`gate-hook`, `guard-hook`, `status-line`, `mcp` and `holder`: their dispatch, with the user's modes, is `src/cli/mod.rs`, and their
-code is `src/cli/hook.rs` (`hook`), a provider's `StatusLine`
-(`status-line`; `src/cli/mod.rs` only finds the provider's and hands over, Claude Code's is
-`src/adapter/claude/status_line.rs`), `src/session_git_hooks/` (`git-ref`, `gate-hook`), `src/cross_project_guard/hook.rs` (`guard-hook`) and `src/mcp/stdio.rs` (`mcp`); `holder` is `src/cli/holder.rs`, which runs `holder::server::run`. The routes are in `src/server/`. Each mode takes the running
-daemon's port (`--port`) and the launch key, which is in no process's arguments, since every user of the machine can list
-those: `hook`, `status-line` and `mcp` are given the owner-only file that holds it (`--key-file`, written by
-`src/key_file.rs` into the session's scratch directory), and `git-ref` and `gate-hook` read it from the
-file that the `OCTOBOARD_DAEMON_CREDENTIAL_PATH` variable of the project session's agent environment names. Those two
-alone take `--port` as optional and, where the launch's route is gone (no port, no usable key file, a refused key,
-nothing listening), call the daemon its owner record names with its recorded key (`src/session_git_hooks/route.rs`,
-over `owner_record::Owner::recorded_in`, with the data directory passed in from `src/cli/mod.rs`). `guard-hook` is the one
+top-level `--port` when given, else on an OS-assigned port, which is what the desktop shell starts; or serves the
+listener a predecessor handed over, named by the hidden `--listen-fd`, which `main()` takes over through
+`platform::listener_handover::adopt` before anything else opens a descriptor and `adopt_or_bind` falls back from to
+binding the port), binds the browser socket `browser.sock` in the data directory (`browser::socket::bind`) when there is
+no `--parent-pid`, the build embeds the UI and the host has such sockets (`browser::socket::AVAILABLE`), opens the
+store, generates the per-launch key (or reads the one its predecessor hands it on stdin, `--key-stdin`, with the
+predecessor's identity on the line after it), reads or makes, when it serves the browser, the owner key that outlives
+the launch (`owner_key::OwnerKey::start`, the owner-only `owner.key` in the data directory, accepted besides the launch
+key on the browser's way in alone), loads the screens a planned stop saved (`state::restart_screens`, kept until each is
+consumed), the messages it left queued (`messaging::restart_outbox`, deleted as read) and the background work each
+session's agent had left running (`state::background_store`, loaded before the adoption and pruned after it to the
+sessions adopted or claimed), adopts what the holders kept running (`coordinator::adopt`), keeps claimed what a holder
+it cannot link to yet runs (`coordinator::unlinked`), marks the other sessions interrupted, clears the run directory but
+for the adopted and claimed sessions' scratch directories, writes the owner-only key record (`daemon.key`) and then the
+owner record beside the lock (`owner_record::Owner`, the pid identity, the port, whether it follows an application,
+whether a service manager starts its successor, the systemd unit it then runs as, which daemon it took over from
+(`Owner::predecessor`) and, as the `owner-key` token, whether it holds an owner key, with, as `browser-port=<port>`, the
+loopback port the desktop application's daemon on Windows takes it at; no key is in it), prints the handshake line (port
+and key) and runs the server, beside the browser socket's when it has one, and, in a daemon that follows the
+application, the way in remote access opened (`RemoteAccess::begin` applies the stored setting before the owner record
+is written, `RemoteAccess::serve_clients` serves what it opened once the daemon serves its other clients), until a stop
+is asked for (`state::StopKind`). An ordinary stop ends every session: the `shutdown` control request, `POST /shutdown`
+(`src/server/callbacks.rs`), a termination signal or the application's pid going away after the application wrote a
+`quit` line to the daemon's stdin (`state::application_note`); the pid going away with no such line is a planned stop.
+An ordinary stop asked for while a planned stop runs escalates it: the handover stops where it stands and everything is
+ended, the holders already handed over or parted from included, and a planned stop asked for after the application's
+quit line is ordinary. Every start, with or without `--parent-pid`, reconciles the application's quit record
+(`holder::quit_targets`, the `application-quit` file, `paths::application_quit_record`, written by every quit that may
+have left holders) under the instance lock before it adopts anything, and follows an ordinary stop for the holders it
+names: it ends what they run instead of adopting it (`Holders::end_quit_targets`), the endings running off the start and
+awaited for up to `ENDINGS_WAIT`, 4 s, so that the startup line the application waits for still comes in time
+(`wait_for_quit_endings` in `main.rs`, `Holders::wait_endings`); the record's lifecycle is in
+[`src/holder/`](../../apps/daemon/src/holder/README.md). A planned stop hands every terminal over to its holder with its
+screen saved and ends nothing (`coordinator::planned_stop`, behind the barrier of `state::handover_barrier`): the
+`planned_stop` control request and `POST /planned-stop`; a planned restart, `POST /restart` or the host's restart
+request (`SIGUSR1`, which `restart` sends to a daemon whose key is not recorded), also brings the successor up on the
+same port: started by `main` (`self_update::start_successor`, which is handed `cli::start_successor` as its start, so
+that `self_update` names nothing of the entry layer, and, for a server-form daemon whose update does not start, goes
+back to the build that ran, and where the first start fails and nothing is put back starts the same file once more with
+no listener handed over; from the installation entry point `cli::launch_path` in `src/cli/installation.rs`, its final
+symlink left unresolved), with the same key, which is kept only in that case, or, under a systemd service (the
+environment shows the daemon to be the unit's main process, or `--service-managed` says so), by the unit on the daemon's
+exit status 75, when the successor makes a new key. A daemon that follows no application keeps a duplicate of its
+listener for the run (`platform::listener_handover::Kept::of`); at a planned restart with a successor it starts itself,
+`run_daemon` keeps the port bound, has `turn_away` accept and reset every new connection until right before the
+successor is started, then passes the kept listener down the chain above, to be handed to the successor as descriptor 3
+with `--listen-fd 3`; every other stop lets the port go as soon as it stops serving. A user runs the modes `start` (on
+the port of `--port`, else `defaultServerPort` of `config/app.json`, which `build.rs` passes in as
+`OCTOBOARD_DEFAULT_SERVER_PORT`), `stop`, `restart`, `status` and `address` to keep a daemon in the background and to
+find it (`src/cli/background.rs` for the first four, `src/cli/address.rs` for `address`; `start` runs the daemon as a
+background process of its own, `stop`, `restart`, `status` and `address` find it through `instance_lock::is_running` and
+the owner record, `owner_record::Owner`, waiting through a planned restart caught half-way with the handover note the
+restarting daemon leaves (`Owner::note_handover`) and, for a service-managed daemon that has ended, by asking systemd
+about the unit its record names (`platform::proc::unit_state`, which `src/cli/succession.rs` and `src/cli/background.rs`
+ask) rather than waiting a fixed time; `stop` and `restart` tell the daemon that takes over by the predecessor it
+records, which is the identity of the daemon it took over from (handed to it on stdin by a daemon that starts its
+successor itself, copied from the note or the record left by the daemon before it in a service), falling back to
+comparing the keys where it does not say; `address` prints the browser address with the owner key when the record says
+the daemon holds one and `owner.key` has it, which outlives the daemon, else with the launch key, which it reads from
+the key record only the daemon's own user can open, and notes on stderr what a browser needs (`address_notes` in
+`src/cli/address.rs`: whether the daemon accepts the key, the SSH forward command; `no_browser_note` where none is
+served); `address --rotate` replaces the owner key first, through the running daemon (`POST /owner-key/rotate`) or, with
+none running, in `owner.key` (`owner_key::replace_in`), and prints the new address; where the host has no signal to stop
+a daemon by (Windows), `stop` asks it over loopback instead, and `restart` asks over loopback on every host wherever the
+key is recorded, so that a refusal comes back with its reason, with the key the key record (`daemon.key`) holds; the
+loopback request is `request_over_loopback` in `src/cli/background.rs`, which `address --rotate` uses too). The CLI
+modes other processes start are `hook`, `git-ref`, `gate-hook`, `guard-hook`, `status-line`, `mcp` and `holder`: their
+dispatch, with the user's modes, is `src/cli/mod.rs`, and their code is `src/cli/hook.rs` (`hook`), a provider's
+`StatusLine` (`status-line`; `src/cli/mod.rs` only finds the provider's and hands over, Claude Code's is
+`src/adapter/claude/status_line.rs`), `src/session_git_hooks/` (`git-ref`, `gate-hook`),
+`src/cross_project_guard/hook.rs` (`guard-hook`) and `src/mcp/stdio.rs` (`mcp`); `holder` is `src/cli/holder.rs`, which
+runs `holder::server::run`. The routes are in `src/server/`. Each mode takes the running daemon's port (`--port`) and
+the launch key, which is in no process's arguments, since every user of the machine can list those: `hook`,
+`status-line` and `mcp` are given the owner-only file that holds it (`--key-file`, written by `src/key_file.rs` into the
+session's scratch directory), and `git-ref` and `gate-hook` read it from the file that the
+`OCTOBOARD_DAEMON_CREDENTIAL_PATH` variable of the project session's agent environment names. Those two alone take
+`--port` as optional and, where the launch's route is gone (no port, no usable key file, a refused key, nothing
+listening), call the daemon its owner record names with its recorded key (`src/session_git_hooks/route.rs`, over
+`owner_record::Owner::recorded_in`, with the data directory passed in from `src/cli/mod.rs`). `guard-hook` is the one
 mode that calls no daemon: it takes neither of them, only the list file that the launch wrote (`--list`):
 
 - `hook` — posts an agent's hook payload from stdin to `POST /hook/:session`.
@@ -97,67 +119,80 @@ mode that calls no daemon: it takes neither of them, only the list file that the
 `src/` has one directory per domain, plus a few helpers at its root: `blocking_pass/` (the width of a pass of blocking
 per-entity work, `each_blocking` for an async caller, `blocking_pass/within.rs`'s `within_deadline` for a caller with no
 runtime, and, in `blocking_pass/stalled.rs`, `StalledPasses`, the blocking work that outran its deadline and whose
-thread is still running), `browser_socket.rs` (the browser's way in, in the server form: `bind` listens on the owner-only Unix
-socket `browser.sock` in the data directory once the directory and its ancestors are found private, `serve` and `ServeTask`
-run the browser router on it, and `key_accepted` asks it the key check as a browser would; `AVAILABLE` says whether the host has such sockets),
-`git_workflow.rs` (the one place the application-wide git workflow values and a project's
-overrides are combined: `effective`; the settings types are in `protocol/`), `host_tools.rs` (`HostTools`, the seam
-tests substitute stand-ins behind, `git` among them: the one place a project's git gets the user's `git`, handed out by
-pace with `Tools::git_for`, which `isolated_git` and `isolated_git_per_request` give browse reads), `instance_lock.rs`
-(one daemon per data directory, which it creates private, and whether one runs), `interface_language.rs` (the languages the interface is offered
-in, mirroring the UI's `i18n/languages.ts`), `key_file.rs` (a session's owner-only key file in its scratch directory:
-its path, `write` and `read`), `log_file.rs` (the rotated `daemon.log`, and a holder's own `holder-<id>.log`),
-`loopback.rs` (the std-only HTTP client to a loopback address, the daemon's or a holder's, that the CLI modes, the git
-hook modes and the MCP stdio bridge call with; it names the statuses a holder answers a waiting helper with when it has
-no daemon or lost it), `owner_key.rs` (`OwnerKey`, the owner key of a daemon that serves the browser: `owner.key`
-in the data directory, a second key accepted besides the launch key on the browser socket only, kept across launches until
-rotated, and never written to `daemon.key`, a helper's key file or a holder's record or handed to anything the daemon
-starts; `admit` gives a connection the key admitted a `Revocation` that resolves when a rotation moves the key on; `read_in` and
-`replace_in` are what the `address` mode uses), `owner_record.rs` (the owner record beside the lock, which finds the running daemon and says
-whether it follows an application, whether a service manager starts its successor, which systemd unit it runs as, which daemon it took over from (`Predecessor`) and whether it holds an owner key, and the owner-only key record,
-`daemon.key`, which four things read: `address`; `stop` and `restart` on every host, to recognise a successor by its key
-where its record does not name its predecessor; `stop` on Windows and `restart` on every host, which ask over loopback; and the git hook modes'
-fallback; the `_in` reads take the data directory from their caller), `request_body.rs` (the layers
-that read a request's body before anything answers, the daemon's listener and the holders' alike: a refused request's
-is read and thrown away, only an admitted one's is held, up to a limit of 2 MiB), `request_guard.rs` (the
-Origin/Host rules, the key compare and the key generator that the daemon's guard and the holders' helper routes and
-secret share), `paths.rs` (where Octoboard keeps its files under the data directory), `text.rs` (`trimmed_or_none`, free
-text as stored, and `without_paste_wrapper`, a prompt with the wrapper an agent puts around a paste taken off),
-`time.rs` (the clock, `now_millis`, `now_micros` and `now_secs`, and the RFC 3339, compact and readable timestamps) and
-`wire_path.rs` (`RelPath`, the canonical wire form of a path or branch name, made and validated through
-`platform::names`, with no OS token of its own; whether this host can name it is asked only where it meets the disk, by
-`RelPath::host_path`, which gives `None` for a path it cannot). `build.rs` passes `repositoryUrl` and `websiteUrl` of `config/app.json` in as `OCTOBOARD_REPOSITORY_URL` (where the releases and their manifests are) and `OCTOBOARD_WEBSITE_URL` (which serves `install.sh`), and links `octoboardd.exe.manifest` (the
-long-path-aware and `asInvoker` declaration, the binary's whole manifest) into the Windows MSVC binary as its manifest
-resource: it writes the file into a compiled resource file (`$OUT_DIR/octoboardd-manifest.res`) and passes that to the
-linker as an input with `/MANIFEST:NO`, which `link.exe` and `lld-link` both take without `mt.exe`, libxml2 or a
-resource compiler, so `cargo xwin` can cross-link the exe. With the cargo feature `embedded-ui`, `build.rs` also writes
-the file table of the UI build in `packages/ui/dist` (`$OUT_DIR/embedded_ui.rs`, `include_bytes!` of every file) that
-`src/server/ui.rs` serves; without the feature the table is empty, as in the desktop sidecar, and it refuses to build
-with the feature when there is no UI build or when `VITE_DAEMON_KEY` or `VITE_DAEMON_PORT` is set.
-`apps/daemon/package.json` makes the daemon the pnpm package `@octoboard/daemon`, only to run that cargo build after the
-UI's (`build` script, a dependency on `@octoboard/ui`); it has no test script. Test-only files (`tests.rs`,
-`*_tests.rs`, `test_support/` and `store/test_support.rs`, and the `layering_tests/` directory) sit beside the code they
-test, and `apps/daemon/testdata/` holds the captured agent screens and records tests replay, and `testdata/self_update/`, a signed test archive and its test key for the self-update's tests. `apps/daemon/dist/` holds
-hand-written distribution files, not build output (`dist/systemd/octoboardd.service`, an example systemd user unit for
-running the daemon in the background on Linux, which the Linux release archive ships and the website's `install.sh`
-installs with `--service`).
+thread is still running), `browser/` (the browser's way in, served by the server form and by the desktop application's
+daemon while remote access is on: `mod.rs` has the one accept loop for every such listener, `serve_on` with its `Accept`
+listeners and `ServeTask`, and `serve_on_port`, whose listener is closed as its task is dropped so the port is free
+again at once, the key check a browser asks, `key_check_over`, and `browser_address`; `socket.rs` the owner-only Unix
+socket `browser.sock` in the data directory, which `bind` listens on once the directory and its ancestors are found
+private, `key_accepted` asks and `AVAILABLE` says whether the host has; `port.rs` the loopback port Windows serves the
+browser at instead, `USED`, `bind`, `in_use` and `key_accepted`; `forward.rs` the `ssh -L` command a browser's machine
+forwards either with, the login being the daemon's account, and `shell_quoted`), `connection_details.rs` (the connection
+details another device reaches the daemon with over SSH: the SSH host, port and user, the host key's fingerprint and the
+path of `octoboardd`, as an `octoboard+ssh://` line and a QR code of it, which `octoboardd connection` prints and the
+desktop application's daemon gives its Remote access section while serving), `git_workflow.rs` (the one place the
+application-wide git workflow values and a project's overrides are combined: `effective`; the settings types are in
+`protocol/`), `host_tools.rs` (`HostTools`, the seam tests substitute stand-ins behind, `git` among them: the one place
+a project's git gets the user's `git`, handed out by pace with `Tools::git_for`, which `isolated_git` and
+`isolated_git_per_request` give browse reads), `instance_lock.rs` (one daemon per data directory, which it creates
+private, and whether one runs), `interface_language.rs` (the languages the interface is offered in, mirroring the UI's
+`i18n/languages.ts`), `key_file.rs` (a session's owner-only key file in its scratch directory: its path, `write` and
+`read`), `log_file.rs` (the rotated `daemon.log`, and a holder's own `holder-<id>.log`), `loopback.rs` (the std-only
+HTTP client to a loopback address, the daemon's or a holder's, that the CLI modes, the git hook modes and the MCP stdio
+bridge call with; it names the statuses a holder answers a waiting helper with when it has no daemon or lost it),
+`owner_key.rs` (`OwnerKey`, the owner key of a daemon that serves the browser: `owner.key` in the data directory, a
+second key accepted besides the launch key on the browser's way in only (the owner socket, or on Windows the browser
+port and the owner pipe), kept across launches until rotated, and never written to `daemon.key`, a helper's key file or
+a holder's record or handed to anything the daemon starts; `admit` gives a connection the key admitted a `Revocation`
+that resolves when a rotation moves the key on; `read_in` and `replace_in` are what the `address` mode uses),
+`owner_record.rs` (the owner record beside the lock, which finds the running daemon and says whether it follows an
+application, whether a service manager starts its successor, which systemd unit it runs as, which daemon it took over
+from (`Predecessor`), whether it holds an owner key and, on Windows, at which browser port (`browser-port=`), and the
+owner-only key record, `daemon.key`, which four things read: `address`; `stop` and `restart` on every host, to recognise
+a successor by its key where its record does not name its predecessor; `stop` on Windows and `restart` on every host,
+which ask over loopback; and the git hook modes' fallback; the `_in` reads take the data directory from their caller),
+`request_body.rs` (the layers that read a request's body before anything answers, the daemon's listener and the holders' alike: a refused request's is read and thrown away, only an admitted one's is held, up to a limit of 2 MiB), `request_guard.rs` (the Origin/Host rules, the key compare and the key generator that the daemon's guard and the
+holders' helper routes and secret share), `paths.rs` (where Octoboard keeps its files under the data directory),
+`text.rs` (`trimmed_or_none`, free text as stored, and `without_paste_wrapper`, a prompt with the wrapper an agent puts
+around a paste taken off), `time.rs` (the clock, `now_millis`, `now_micros` and `now_secs`, and the RFC 3339, compact
+and readable timestamps) and `wire_path.rs` (`RelPath`, the canonical wire form of a path or branch name, made and
+validated through `platform::names`, with no OS token of its own; whether this host can name it is asked only where it
+meets the disk, by `RelPath::host_path`, which gives `None` for a path it cannot). `build.rs` passes `repositoryUrl` and
+`websiteUrl` of `config/app.json` in as `OCTOBOARD_REPOSITORY_URL` (where the releases and their manifests are) and
+`OCTOBOARD_WEBSITE_URL` (which serves `install.sh`), and links `octoboardd.exe.manifest` (the long-path-aware and
+`asInvoker` declaration, the binary's whole manifest) into the Windows MSVC binary as its manifest resource: it writes
+the file into a compiled resource file (`$OUT_DIR/octoboardd-manifest.res`) and passes that to the linker as an input
+with `/MANIFEST:NO`, which `link.exe` and `lld-link` both take without `mt.exe`, libxml2 or a resource compiler, so
+`cargo xwin` can cross-link the exe. With the cargo feature `embedded-ui`, `build.rs` also writes the file table of the
+UI build in `packages/ui/dist` (`$OUT_DIR/embedded_ui.rs`, `include_bytes!` of every file, gzip-compressed there) that
+`src/server/ui.rs` serves; the desktop sidecar's release is built with the feature too, and without it the table is empty; it refuses to build with the feature when
+there is no UI build or when `VITE_DAEMON_KEY` or `VITE_DAEMON_PORT` is set. `apps/daemon/package.json` makes the daemon
+the pnpm package `@octoboard/daemon`, only to run that cargo build after the UI's (`build` script, a dependency on
+`@octoboard/ui`); it has no test script. Test-only files (`tests.rs`, `*_tests.rs`, `test_support/` and
+`store/test_support.rs`, and the `layering_tests/` directory) sit beside the code they test, and `apps/daemon/testdata/`
+holds the captured agent screens and records tests replay, and `testdata/self_update/`, a signed test archive and its
+test key for the self-update's tests. `apps/daemon/dist/` holds hand-written distribution files, not build output
+(`dist/systemd/octoboardd.service`, an example systemd user unit for running the daemon in the background on Linux,
+which the Linux release archive ships and the website's `install.sh` installs with `--service`).
 
 ### Wire and server
 
-- `src/server/` — the router of `PROTOCOL.md`, built twice by `mod.rs`: `router` for the loopback TCP port (the launch key
-  alone, and no UI on a host with browser sockets) and `browser_router` for the browser socket (the launch key or the owner
-  key, and the embedded UI); `control.rs` the control socket, `terminal.rs` the terminal socket (a
-  per-connection `Registration` settles the attach's precedence at its deadline in a task of its own and lets the client
-  go however the connection ends; for a held terminal, a call that may resize it runs on a blocking thread),
-  `callbacks.rs` the hook, git-ref, revert-gate, context-window and MCP routes, `access.rs` the Host/Origin/key guard, one `Access` per listener
-  (the rules are `request_guard.rs`'s; the key is the daemon's launch key, and on the browser socket also its owner key,
-  `AppState::owner_key`; it lets a GET or HEAD that names an embedded UI file its listener serves through without the key, and
-  marks every admitted request with an `Admission` that `control.rs` and `terminal.rs` watch to close a connection the owner
-  key admitted once that key is rotated), `keys.rs` the routes about the keys: `GET /key-check`, which a page
-  uses to tell a key the daemon refuses from a daemon it cannot reach, and `POST /owner-key/rotate`, which the launch key alone may call), `ui.rs` the embedded browser UI, served as the browser router's fallback on the same origin as the
-  protocol routes (empty, so serving nothing, without the `embedded-ui` feature), `relay.rs` the handler of the helper requests a holder
-  relays (it runs the same `callbacks::handle` the HTTP routes run, once `AppState::end_adoption` says the adopted
-  sessions exist: reports that arrive before are held in order, questions wait up to 20 s).
+- `src/server/` — the router of `PROTOCOL.md`, built twice by `mod.rs`: `router` for the loopback TCP port (the launch
+  key alone, and no UI on a host with browser sockets) and `browser_router` for the browser's way in (the browser
+  socket, and on Windows the browser port and the owner pipe: the launch key or the owner key, and the embedded UI);
+  `control.rs` the control socket, `terminal.rs` the terminal socket (a per-connection `Registration` settles the
+  attach's precedence at its deadline in a task of its own and lets the client go however the connection ends; for a
+  held terminal, a call that may resize it runs on a blocking thread), `callbacks.rs` the hook, git-ref, revert-gate,
+  context-window and MCP routes, `access.rs` the Host/Origin/key guard, one `Access` per listener (the rules are
+  `request_guard.rs`'s; the key is the daemon's launch key, and on the browser's way in also its owner key,
+  `AppState::owner_key`; it lets a GET or HEAD that names an embedded UI file its listener serves through without the
+  key, and marks every admitted request with an `Admission` that `control.rs` and `terminal.rs` watch to close a
+  connection the owner key admitted once that key is rotated), `keys.rs` the routes about the keys: `GET /key-check`,
+  which a page uses to tell a key the daemon refuses from a daemon it cannot reach, and `POST /owner-key/rotate`, which
+  the launch key alone may call), `ui.rs` the embedded browser UI, served as the browser router's fallback on the same
+  origin as the protocol routes (empty, so serving nothing, without the `embedded-ui` feature), `relay.rs` the handler
+  of the helper requests a holder relays (it runs the same `callbacks::handle` the HTTP routes run, once
+  `AppState::end_adoption` says the adopted sessions exist: reports that arrive before are held in order, questions wait
+  up to 20 s).
 - `src/protocol/` — Rust types of the wire protocol, one file per concern, re-exported as `crate::protocol`; `codes.rs`
   is the `Code` registry (a core code can be made only there; a provider's code only through `Code::of_provider` from
   its declaration), `errors.rs` the one mapping from a failure to an `error` reply (with `CodedError::require_offered`,
@@ -178,7 +213,23 @@ installs with `--service`).
   the `pattern` of a text field compiled with `regress`), `chart.rs` the chart kind's allow-listed ECharts subset, and
   `submission.rs` what a submission may carry; `PageContent::parse` and `PageContent::check_submission` in `mod.rs` are
   the entry points.
-- `src/cli/` — the command line and the modes above; `hook.rs` is the `hook` mode, `background.rs` the user's `start`, `stop`, `restart` and `status`, the start of a planned restart's successor and the loopback request the commands send (`request_over_loopback`), `address.rs` the user's `address` and `address --rotate` and the notes `address` says on stderr (`address_notes`, `no_browser_note`, `forward_command`), `update.rs` the user's `update [--check] [--rollback] [--channel]` (the server form's update from the command line, over `self_update/`, refused for a daemon that follows the application), `succession.rs` how those commands find the daemon through a planned restart caught half-way (`find_daemon`, `next_may_come`), tell the daemon that took over from it (`succession`, by the predecessor it records) and pass a successor its predecessor on stdin (`handover_input`, `handed_over_from`), the process holding the instance lock, which `background.rs` names where the host says (`platform::fs::lock_holder`), and `installation.rs` the path the daemon launches a successor, or `start` its daemon, from. `octoboardd --version` (clap's, no mode) answers `octoboardd <version>` and touches nothing: it is how an update runs a build to see that it starts.
+- `src/cli/` — the command line and the modes above; `hook.rs` is the `hook` mode, `background.rs` the user's `start`,
+  `stop`, `restart` and `status`, the start of a planned restart's successor and the loopback request the commands send
+  (`request_over_loopback`), `address.rs` the user's `address` and `address --rotate` and the notes `address` says on
+  stderr (`address_notes`, `no_browser_note`; the forward command they give is `browser::forward`'s),
+  `owner_endpoint.rs` the `proxy` mode and `address --json`, for a program on the daemon's machine running as its user,
+  such as the one another device's application runs over SSH (the owner endpoint is the browser socket on Linux and
+  macOS and the owner pipe on Windows; `proxy` carries bytes between its standard input and output and the endpoint, and
+  `address --json` prints the owner key, the protocol generation and the release version of the daemon there),
+  `connection.rs` the `connection` mode, which prints the connection details (`connection_details`) as a line and a QR
+  code, `update.rs` the user's `update [--check] [--rollback] [--channel]` (the server form's update from the command
+  line, over `self_update/`, refused for a daemon that follows the application), `succession.rs` how those commands find
+  the daemon through a planned restart caught half-way (`find_daemon`, `next_may_come`), tell the daemon that took over
+  from it (`succession`, by the predecessor it records) and pass a successor its predecessor on stdin (`handover_input`,
+  `handed_over_from`), the process holding the instance lock, which `background.rs` names where the host says
+  (`platform::fs::lock_holder`), and `installation.rs` the path the daemon launches a successor, or `start` its daemon,
+  from. `octoboardd --version` (clap's, no mode) answers `octoboardd <version>` and touches nothing: it is how an update
+  runs a build to see that it starts.
 
 ### Coordinator role
 
@@ -187,30 +238,34 @@ installs with `--service`).
   `restart` (what the restarts of a session's process share: `run` drives the stop and relaunch of an account switch and
   a model change, the other helpers also serve a sharing change), `bindings`, `lifecycle` (archiving, deleting, and a
   session's own archive when its work is finished: `lifecycle/finished.rs`), `handoff`, `account_switch`,
-  `model_change`, `account_sharing`, `accounts`, `settings`, `pages` (a session's page list and a form's submission), `processes` (listing, stopping and keeping the
-  process trees a client sees), `messages`, `auto_switch` (moving a session off an account whose usage limit stopped a
-  turn; lower layers reach it through `AppState`'s hooks), `validate` for the checks of request text fields; the
-  requests that edit settings, a console, a project or an account carry `base_versions` and run through
-  `settings::update_settings_checked`, `consoles::update_console_checked`, `projects::update_project_checked` and
-  `accounts::update_account_requested`, which check under `AppState::checked_write`), plus
-  `console_workdir.rs` (a console's working directory: its instruction file written into it, and its removal),
-  `exit_watch.rs` (the exit watcher every launch starts, and `unregister_live`), `adopt.rs` (at start,
-  matches the terminals the holders kept running with the store: a session's is adopted into a
-  rebuilt `LiveSession` and watched like a launch of the daemon's own, with its messages going through the private server its holder kept running as the terminal's companion, where the provider's `rebuild_launch` links to it again; a shell terminal's is put back,
-  any other is ended; its module doc has the rules), `unlinked.rs` (what a holder that cannot be linked to runs:
-  claimed at start from the store's record of where each launch runs, taken over once the holder is linked to,
-  interrupted once it is gone; the screen a planned stop saved for a session whose holder is gone at the next start
-  becomes its preview, `unlinked::keep_screens_as_previews`), `planned_stop.rs` (the
-  daemon's planned stop: every terminal handed over to its holder, each handed-over screen saved for the next daemon,
-  the holders parted from and left running, nothing ended or recorded; an ordinary stop asked for meanwhile cuts it
-  short), `handover_check.rs` (the
-  `handover_check` request: given the next daemon's holder floor and version, which running sessions and shell terminals,
-  and which shell terminals of holders not yet reached, a planned stop followed by that daemon would not carry over,
-  judged by `holder::compat::Range`), `archive_cleanup.rs`
-  (a daemon
-  task) and `resume_on_start.rs` (a daemon task: at start, resumes the interrupted sessions when the
-  `resume_sessions_on_start` setting is on, through the same path as resuming an interrupted session; the store lists
-  them, `Store::list_interrupted_sessions`, and the adopted ones are not among them, as they never stopped).
+  `model_change`, `account_sharing`, `accounts`, `settings`, `pages` (a session's page list and a form's submission),
+  `processes` (listing, stopping and keeping the process trees a client sees), `messages`, `auto_switch` (moving a
+  session off an account whose usage limit stopped a turn; lower layers reach it through `AppState`'s hooks), `validate`
+  for the checks of request text fields; the requests that edit settings, a console, a project or an account carry
+  `base_versions` and run through `settings::update_settings_checked`, `consoles::update_console_checked`,
+  `projects::update_project_checked` and `accounts::update_account_requested`, which check under
+  `AppState::checked_write`), plus `console_workdir.rs` (a console's working directory: its instruction file written
+  into it, and its removal), `exit_watch.rs` (the exit watcher every launch starts, and `unregister_live`), `adopt.rs`
+  (at start, matches the terminals the holders kept running with the store: a session's is adopted into a rebuilt
+  `LiveSession` and watched like a launch of the daemon's own, with its messages going through the private server its
+  holder kept running as the terminal's companion, where the provider's `rebuild_launch` links to it again; a shell
+  terminal's is put back, any other is ended; its module doc has the rules), `unlinked.rs` (what a holder that cannot be
+  linked to runs: claimed at start from the store's record of where each launch runs, taken over once the holder is
+  linked to, interrupted once it is gone; the screen a planned stop saved for a session whose holder is gone at the next
+  start becomes its preview, `unlinked::keep_screens_as_previews`), `planned_stop.rs` (the daemon's planned stop: every
+  terminal handed over to its holder, each handed-over screen saved for the next daemon, the holders parted from and
+  left running, nothing ended or recorded; an ordinary stop asked for meanwhile cuts it short), `handover_check.rs` (the
+  `handover_check` request: given the next daemon's holder floor and version, which running sessions and shell
+  terminals, and which shell terminals of holders not yet reached, a planned stop followed by that daemon would not
+  carry over, judged by `holder::compat::Range`), `archive_cleanup.rs` (a daemon task) and `resume_on_start.rs` (a
+  daemon task: at start, resumes the interrupted sessions when the `resume_sessions_on_start` setting is on, through the
+  same path as resuming an interrupted session; the store lists them, `Store::list_interrupted_sessions`, and the
+  adopted ones are not among them, as they never stopped) and `remote_access.rs` (`RemoteAccess`,
+  `AppState::remote_access`: Allow remote access and, on Windows, the browser port beside it, offered only in a daemon
+  that follows the application; applying them opens or closes the browser's way in, the owner socket or on Windows the
+  browser port with the owner pipe, holds or refuses the owner key and closes what it admitted, writes the owner
+  record's `owner-key` and `browser-port=` tokens again and broadcasts `remote_access_updated`, all under one `changing`
+  lock that a rotation of the owner key, `rotate_key`, takes too).
 - `src/session_request/` — a session asking the user to approve something (`request_session`, `request_resume_session`,
   account switch, handoff): `mod.rs` the wait, `registry.rs` the requests the daemon holds, `request.rs` what a request
   is, `change.rs` the account switch and handoff variant, `carry_out.rs` what an approval does, `outcome.rs` the wording
@@ -465,55 +520,130 @@ installs with `--service`).
   and the pipe readers are `platform::proc`'s).
 - `src/platform/` — the only place OS-specific code lives, with no use of anything else in the crate, so any module may
   use it. `build_files.rs` the files a copy of a build holds beside the executable on this host (on Windows `conpty.dll`
-  and the `OpenConsole.exe` of `x64/` and `arm64/`, none elsewhere) and `remove_installer_set_aside`, which `run_daemon` calls at start and which on Windows removes the `<file>.old-<n>` files the desktop installer's hooks moved aside of the executable and its companions (the suffix is shared with `apps/desktop/src-tauri/windows/installer-hooks.nsh`, which a test of the module reads); `descriptors.rs` (Unix) the bound of descriptor numbers a forked child closes or marks (`bound`, and `open_bound`, taken from the listing of open descriptors), the close of every descriptor from one up that the child may run (`close_from`, shared by `proc/server/parent.rs` and the PTY start in `term/unix/start.rs`) and the marking of them close-on-exec instead (`mark_close_on_exec_from`, which `spawn_in_background` on Unix uses); `sleep/` holding the host awake (`Hold`,
-  `available`; macOS IOKit assertions, a Windows power request, Linux's logind inhibitor lock and the session bus's
-  screen saver inhibition over `zbus`), whose answer is `HostFacts::keep_awake`; `proc_table/` the native reads of the system's process table (list, every pid, start time, parent and
-  children, a descriptor's path, sockets, working directory), one reader per OS, shared by the ledger's `table.rs`,
-  `platform::proc` and `terminal/shell/busy.rs`; `open/` the launcher commands `host_open` starts (file manager, default
-  application, system terminal), chosen by an OS name so every OS's choice is tested anywhere
-  (`terminal.rs`'s `host_launch` decides whether the host looks its terminal up on a shell snapshot, so business code compares no OS name), and
+  and the `OpenConsole.exe` of `x64/` and `arm64/`, none elsewhere) and `remove_installer_set_aside`, which `run_daemon`
+  calls at start and which on Windows removes the `<file>.old-<n>` files the desktop installer's hooks moved aside of
+  the executable and its companions (the suffix is shared with `apps/desktop/src-tauri/windows/installer-hooks.nsh`,
+  which a test of the module reads); `descriptors.rs` (Unix) the bound of descriptor numbers a forked child closes or
+  marks (`bound`, and `open_bound`, taken from the listing of open descriptors), the close of every descriptor from one
+  up that the child may run (`close_from`, shared by `proc/server/parent.rs` and the PTY start in `term/unix/start.rs`)
+  and the marking of them close-on-exec instead (`mark_close_on_exec_from`, which `spawn_in_background` on Unix uses);
+  `sleep/` holding the host awake (`Hold`, `available`; macOS IOKit assertions, a Windows power request, Linux's logind
+  inhibitor lock and the session bus's screen saver inhibition over `zbus`), whose answer is `HostFacts::keep_awake`;
+  `proc_table/` the native reads of the system's process table (list, every pid, start time, parent and children, a
+  descriptor's path, sockets, working directory), one reader per OS, shared by the ledger's `table.rs`, `platform::proc`
+  and `terminal/shell/busy.rs`; `open/` the launcher commands `host_open` starts (file manager, default application,
+  system terminal), chosen by an OS name so every OS's choice is tested anywhere (`terminal.rs`'s `host_launch` decides
+  whether the host looks its terminal up on a shell snapshot, so business code compares no OS name), and
   `LAUNCHED_FILE_EXTENSIONS`, the file types the host's shell launches when opened (Windows only), which `path_links`
-  refuses; `local_socket/` the owner-only listening socket with a path (a Unix-domain socket on macOS and Linux, refused on Windows,
-  `AVAILABLE`): `Listener::bind_replacing_stale`, `connect` (the connect itself and every read and write bounded by a timeout), and `check_private_tree`, the judgement that a directory and its
-  ancestors let nobody else enter or rename what is in it, which `browser_socket::bind` relies on; `listener_handover/` handing the daemon's listening TCP socket to the successor it starts itself, so that the loopback port is never unbound between them (Unix; Windows keeps and hands nothing, `unsupported.rs`): `Kept::of` (a close-on-exec duplicate of the listener, kept for the run), `Kept::listener` (a further listener on the same socket), `adopt` (take over the descriptor a predecessor handed over, only `HANDED_FD`, 3, and only a socket listening on `127.0.0.1` at the given port; a refused one is left as it is) and `hand_over_in_child`, for `proc::spawn_in_background` alone, which takes the optional `Kept` and puts it at descriptor 3 in the child; `fs/` what the host does with files: the identity that tells a
-  file apart (with its stat from one handle and the version tag built on it), opening a path without a link in it (the browse
-  boundary) or without waiting, the directory reader a listing walks, the permissions of what the daemon writes (private,
-  kept, owner-only, executable, read-only, private to the user; `keep_private_below` also closes the data directory itself to
-  others on Unix), reading a file only when it is the user's own private regular file (`read_private_file`, never through a
-  link), the name of the account the process runs as (`account_name`), volume roots, the home directory, aliases to files and
-  directories, the exclusive lock `try_lock_file` that `instance_lock.rs` and the Grok trust store take and the shared
-  one `try_lock_file_shared` that `instance_lock::is_running` looks with, the host's
-  scratch directories (`temp_roots`), what git runs as a hook (`is_hook_script`) and setting a directory's modification time
-  (`set_dir_modified`), and what the self-update replaces its executable with (`directory_writable`, `sync_directory`, and
-  `create_new_like`, the staging file made new and never through a link) (contract tests in `fs/contract_tests.rs` hold every host to the same behaviour), and which process holds a lock on a file where the host lists them (`lock_holder`, Linux's `/proc/locks`, read by `fs/lock_table.rs`); `names/` how the host spells names (a name as bytes and back, the components a client may send, git bytes as a
-  path, the lexical comparison key of a path, the path style, the canonical path, which on Windows is the long, plain form (`std::fs::canonicalize`), so a `%TEMP%` written as an 8.3 short path, as on the CI runner, compares equal to its long form; the Windows rules that need no OS call
-  are plain functions tested on every host, the rest a skeleton); `shell/` what the host asks of the user's shell (the login shell
-  and the environment snapshot it gives, finding a binary on a `PATH` as what starts it, the command line a hook runs (and the variant that always exits 0, `command_line_exit_ok`), the owner-only script that holds one (`write_runnable_exit_ok` for the exit-0 form), the time an agent lets a command hook run (`COMMAND_HOOK_TIMEOUT_SECS`, longer on Windows, where a hook's first start of a launch is slow) and `FIRST_HOOK_SLOWDOWN`, the factor that gives the wait for a launch's first report the same slack (`messaging/write_queue.rs` applies it), the shell that runs a user's own command, the git hooks' interpreter, the architectures of the programs the machine runs, native first (`runnable_architectures`), the
-  installed version a binary reports, probed in the launch's environment, and `package_shims.rs`, where Node package
-  managers (npm, pnpm, with its numbered `global\<n>` layouts taken highest first, Yarn classic, Bun, Volta) install a global package beside the shims they write on Windows,
-  as plain path functions tested on every host: `shim_package` gives a `Shim`, none, the package's directory or an unresolved
-  script shim); `proc/` what the host does to the
-  processes the daemon starts (leading a session or a process group, the child handle that tells how an unreaped child stands, asks
-  it to end politely or kills it, sweeps what it left behind and reaps it, the containment that tells one launch's processes from any
-  other's and lists their members where the host can (on Windows a named job per launch, which each child holds a duplicated handle on so the next daemon finds it by name again; on Linux, for an agent launch (`Containment::for_launch`), a cgroup v2 group `cgroup.rs` makes below the cgroup of the process that starts the launch where that cgroup lets it, which the launch's process enters before its program runs (`Containment::enter_before_exec`, a hook in the child; the move just after the start, `ChildHandle::started`, is the fallback where the hook could not), and which the launch's end kills and removes after moving out what it is told to spare, and without which the launch is told by its tag alone; a held launch (`Containment::for_held_launch`) has its group made below the cgroup of the holder that starts its program, `Containment::place_with_host`, which joins it with `Containment::join_launch`, and `Containment::note_host` has the daemon look there for groups of an earlier run), a polite request to end or a kill sent to a process or a group, the process
-  identity and its wire form, the bounded pipe reader, the host's request to end the daemon (`shutdown_requested`), its planned-restart request (`restart_requested`, which `request_restart` sends: `SIGUSR1` on Unix; the command line's `restart` sends it only to a daemon whose key is not recorded, asking every other over loopback; on Windows there is no signal and `request_restart` fails as unsupported), whether a systemd service runs the daemon as its main process (`restarted_by_service_manager`), the executable it runs (`running_image`, `running_image_file` and `names_running_image`, which read the open image, `/proc/self/exe` on Linux, so that an update replacing the file does not change what they say; `image_source`, for the holder build copy; `self_update_host`, whether the host has a release to update to), whether a failure to run a program was its file being busy (`is_text_busy`, `ETXTBSY`), `systemd.rs` (with `systemd_stub.rs` on other Unix hosts) which systemd user service the daemon is the main process of (`user_service_unit`), what systemd says of a user unit (`unit_state`, asking `systemctl --user show`, read by `unit_state.rs`'s `UnitState`) and starting a process as a transient user unit of its own (`start_in_user_unit`), the watch on the application that started it (`watch_parent`), `spawn_in_background` (starting the daemon the command line runs in the background with its stdout and stderr, and stdin when asked, as pipes to the caller, and on Unix a `listener_handover::Kept` as descriptor 3 when given, returning its child and whether the daemon stays in its starter's job), what `start` asks of the host to keep the daemon running after its login (a session of its own on Unix, where every descriptor above the standard three is marked close-on-exec before the daemon's program runs, so that it inherits only its three standard descriptors; on Windows the process is created with an explicit list of inherited handles, so the daemon inherits only its three standard handles, with a hidden console and process group of its own and a breakaway from the starter's job, which where the job refuses it is created again inside the job, and a child type of its own), `start_detached` (starting a process that outlives the daemon, with no stdio on Unix, in a session of its own), `windows/create.rs`, the Windows layer that creates a process with an explicit attribute list: the attribute list and the inheritable handle copy, the creation with three standard handles and the output pipe that the background start and the server start share, and the Windows `start_detached`, which uses only the attribute list, for its parent process (no console or inherited handle and outside the daemon's jobs, by breakaway or else as a child of the desktop application's process, or with a warning in the job when there is none to name or a child of it cannot be created), `server.rs`, a server started as a plain child with no terminal (`ServerChild`: a session of its own, in a launch's containment and the crash table,
-  waited on until its endpoint exists or it reports a port, ended with a polite request, a grace and a kill; what the holder's companions and the daemon's local servers both run as);
-  `server/parent.rs` the Unix owner-death watcher,
-  `server/windows.rs` the atomic job placement and standard-handle inheritance for a server, and `crash/`, the table that kills every process the daemon runs on a PTY
-  when it goes down on an internal failure; contract tests in `proc/contract_tests.rs`); `term/` the terminal backend
-  (starting a process on a PTY from a plain command description (`Command`, which `plain` turns into a process command for a child with no terminal), with its child handle (on Unix `term/unix/start.rs` starts the process itself, `portable-pty` only opening the PTY, so the child can enter its launch's group before its program runs; `term/unix/mod.rs` is the I/O backend); the `Pty` that is read, written,
-  resized and hung up, and tells whose job its foreground is and its slave path; the daemon's own `Input` values, encoded
-  as the host's terminal takes them (`vt.rs`); `TermFacts`, how the backend behaves where business code must know, such
-  as its settle window; contract tests in `term/contract_tests.rs`; `term/windows.rs`'s `process_parameters` is the
-  command-line, environment and working-directory encoder shared by terminal and pipe-backed server creation; on Windows the pseudoconsole is ConPTY, run on the bundled `conpty.dll` beside the daemon's executable when it loads, which starts `OpenConsole.exe` from the same directory or from a subdirectory named for the machine's native architecture (`x64` or `arm64`, which an x64 daemon emulated on ARM64 reads as `arm64`): the installer ships the x64 `conpty.dll` with an `OpenConsole.exe` in each of the two subdirectories (`scripts/fetch-conpty.mjs --installer`), so the x64 DLL on x64 hardware loads `x64\OpenConsole.exe` and under emulation on ARM64 finds `arm64\OpenConsole.exe`; with no DLL, or one that fails to load, the system's pseudoconsole is used (a failed load is logged as a warning), and a DLL that finds no `OpenConsole.exe` starts the inbox console host, which is logged as a warning); on Windows the output is drained after a close that races the last reader's drop, quit keys of a polite stop wait behind a bracketed paste being written rather than landing inside it, and a failed wait in a transfer is reported as an error; `random/` bytes from the host's random source; `policy/` what an administrator sets for a product: the directory they keep its managed files in (`managed_dir`), a Unix program's system configuration directory under `/etc`, none on Windows (`system_config_dir`), and its
-  registry policy (the Windows registry's `Policies` key; elsewhere none), read through
+  refuses; `local_socket/` the owner-only listening socket with a path (a Unix-domain socket on macOS and Linux, refused
+  on Windows, `AVAILABLE`): `Listener::bind_replacing_stale`, `connect` (the connect itself and every read and write
+  bounded by a timeout), and `check_private_tree`, the judgement that a directory and its ancestors let nobody else
+  enter or rename what is in it, which `browser::socket::bind` relies on; `owner_pipe/` the owner endpoint on Windows in
+  its place, a named pipe only the daemon's user can open, named after the data directory (`name_for`), `Listener::bind`
+  and `connect`, which checks the pipe's owner before a byte is sent (refused elsewhere, `AVAILABLE`);
+  `listener_handover/` handing the daemon's listening TCP socket to the successor it starts itself, so that the loopback
+  port is never unbound between them (Unix; Windows keeps and hands nothing, `unsupported.rs`): `Kept::of` (a
+  close-on-exec duplicate of the listener, kept for the run), `Kept::listener` (a further listener on the same socket),
+  `adopt` (take over the descriptor a predecessor handed over, only `HANDED_FD`, 3, and only a socket listening on
+  `127.0.0.1` at the given port; a refused one is left as it is) and `hand_over_in_child`, for
+  `proc::spawn_in_background` alone, which takes the optional `Kept` and puts it at descriptor 3 in the child; `fs/`
+  what the host does with files: the identity that tells a file apart (with its stat from one handle and the version tag
+  built on it), opening a path without a link in it (the browse boundary) or without waiting, the directory reader a
+  listing walks, the permissions of what the daemon writes (private, kept, owner-only, executable, read-only, private to
+  the user; `keep_private_below` also closes the data directory itself to others on Unix), reading a file only when it
+  is the user's own private regular file (`read_private_file`, never through a link), the name of the account the
+  process runs as (`account_name`), volume roots, the home directory, aliases to files and directories, the exclusive
+  lock `try_lock_file` that `instance_lock.rs` and the Grok trust store take and the shared one `try_lock_file_shared`
+  that `instance_lock::is_running` looks with, the host's scratch directories (`temp_roots`), what git runs as a hook
+  (`is_hook_script`) and setting a directory's modification time (`set_dir_modified`), and what the self-update replaces
+  its executable with (`directory_writable`, `sync_directory`, and `create_new_like`, the staging file made new and
+  never through a link) (contract tests in `fs/contract_tests.rs` hold every host to the same behaviour), and which
+  process holds a lock on a file where the host lists them (`lock_holder`, Linux's `/proc/locks`, read by
+  `fs/lock_table.rs`); `names/` how the host spells names (a name as bytes and back, the components a client may send,
+  git bytes as a path, the lexical comparison key of a path, the path style, the canonical path, which on Windows is the
+  long, plain form (`std::fs::canonicalize`), so a `%TEMP%` written as an 8.3 short path, as on the CI runner, compares
+  equal to its long form; the Windows rules that need no OS call are plain functions tested on every host, the rest a
+  skeleton); `shell/` what the host asks of the user's shell (the login shell and the environment snapshot it gives,
+  finding a binary on a `PATH` as what starts it, the command line a hook runs (and the variant that always exits 0,
+  `command_line_exit_ok`), the owner-only script that holds one (`write_runnable_exit_ok` for the exit-0 form), the time
+  an agent lets a command hook run (`COMMAND_HOOK_TIMEOUT_SECS`, longer on Windows, where a hook's first start of a
+  launch is slow) and `FIRST_HOOK_SLOWDOWN`, the factor that gives the wait for a launch's first report the same slack
+  (`messaging/write_queue.rs` applies it), the shell that runs a user's own command, the git hooks' interpreter, the
+  architectures of the programs the machine runs, native first (`runnable_architectures`), the installed version a
+  binary reports, probed in the launch's environment, and `package_shims.rs`, where Node package managers (npm, pnpm,
+  with its numbered `global\<n>` layouts taken highest first, Yarn classic, Bun, Volta) install a global package beside
+  the shims they write on Windows, as plain path functions tested on every host: `shim_package` gives a `Shim`, none,
+  the package's directory or an unresolved script shim); `proc/` what the host does to the processes the daemon starts
+  (leading a session or a process group, the child handle that tells how an unreaped child stands, asks it to end
+  politely or kills it, sweeps what it left behind and reaps it, the containment that tells one launch's processes from
+  any other's and lists their members where the host can (on Windows a named job per launch, which each child holds a
+  duplicated handle on so the next daemon finds it by name again; on Linux, for an agent launch
+  (`Containment::for_launch`), a cgroup v2 group `cgroup.rs` makes below the cgroup of the process that starts the
+  launch where that cgroup lets it, which the launch's process enters before its program runs
+  (`Containment::enter_before_exec`, a hook in the child; the move just after the start, `ChildHandle::started`, is the
+  fallback where the hook could not), and which the launch's end kills and removes after moving out what it is told to
+  spare, and without which the launch is told by its tag alone; a held launch (`Containment::for_held_launch`) has its
+  group made below the cgroup of the holder that starts its program, `Containment::place_with_host`, which joins it with
+  `Containment::join_launch`, and `Containment::note_host` has the daemon look there for groups of an earlier run), a
+  polite request to end or a kill sent to a process or a group, the process identity and its wire form, the bounded pipe
+  reader, the host's request to end the daemon (`shutdown_requested`), its planned-restart request (`restart_requested`,
+  which `request_restart` sends: `SIGUSR1` on Unix; the command line's `restart` sends it only to a daemon whose key is
+  not recorded, asking every other over loopback; on Windows there is no signal and `request_restart` fails as
+  unsupported), whether a systemd service runs the daemon as its main process (`restarted_by_service_manager`), the
+  executable it runs (`running_image`, `running_image_file` and `names_running_image`, which read the open image,
+  `/proc/self/exe` on Linux, so that an update replacing the file does not change what they say; `image_source`, for the
+  holder build copy; `self_update_host`, whether the host has a release to update to), whether a failure to run a
+  program was its file being busy (`is_text_busy`, `ETXTBSY`), `systemd.rs` (with `systemd_stub.rs` on other Unix hosts)
+  which systemd user service the daemon is the main process of (`user_service_unit`), what systemd says of a user unit
+  (`unit_state`, asking `systemctl --user show`, read by `unit_state.rs`'s `UnitState`) and starting a process as a
+  transient user unit of its own (`start_in_user_unit`), the watch on the application that started it (`watch_parent`),
+  `spawn_in_background` (starting the daemon the command line runs in the background with its stdout and stderr, and
+  stdin when asked, as pipes to the caller, and on Unix a `listener_handover::Kept` as descriptor 3 when given,
+  returning its child and whether the daemon stays in its starter's job), what `start` asks of the host to keep the
+  daemon running after its login (a session of its own on Unix, where every descriptor above the standard three is
+  marked close-on-exec before the daemon's program runs, so that it inherits only its three standard descriptors; on
+  Windows the process is created with an explicit list of inherited handles, so the daemon inherits only its three
+  standard handles, with a hidden console and process group of its own and a breakaway from the starter's job, which
+  where the job refuses it is created again inside the job, and a child type of its own), `start_detached` (starting a
+  process that outlives the daemon, with no stdio on Unix, in a session of its own), `windows/create.rs`, the Windows
+  layer that creates a process with an explicit attribute list: the attribute list and the inheritable handle copy, the
+  creation with three standard handles and the output pipe that the background start and the server start share, and the
+  Windows `start_detached`, which uses only the attribute list, for its parent process (no console or inherited handle
+  and outside the daemon's jobs, by breakaway or else as a child of the desktop application's process, or with a warning
+  in the job when there is none to name or a child of it cannot be created), `server.rs`, a server started as a plain
+  child with no terminal (`ServerChild`: a session of its own, in a launch's containment and the crash table, waited on
+  until its endpoint exists or it reports a port, ended with a polite request, a grace and a kill; what the holder's
+  companions and the daemon's local servers both run as); `server/parent.rs` the Unix owner-death watcher,
+  `server/windows.rs` the atomic job placement and standard-handle inheritance for a server, and `crash/`, the table
+  that kills every process the daemon runs on a PTY when it goes down on an internal failure; contract tests in
+  `proc/contract_tests.rs`); `term/` the terminal backend (starting a process on a PTY from a plain command description
+  (`Command`, which `plain` turns into a process command for a child with no terminal), with its child handle (on Unix
+  `term/unix/start.rs` starts the process itself, `portable-pty` only opening the PTY, so the child can enter its
+  launch's group before its program runs; `term/unix/mod.rs` is the I/O backend); the `Pty` that is read, written,
+  resized and hung up, and tells whose job its foreground is and its slave path; the daemon's own `Input` values,
+  encoded as the host's terminal takes them (`vt.rs`); `TermFacts`, how the backend behaves where business code must
+  know, such as its settle window; contract tests in `term/contract_tests.rs`; `term/windows.rs`'s `process_parameters`
+  is the command-line, environment and working-directory encoder shared by terminal and pipe-backed server creation; on
+  Windows the pseudoconsole is ConPTY, run on the bundled `conpty.dll` beside the daemon's executable when it loads,
+  which starts `OpenConsole.exe` from the same directory or from a subdirectory named for the machine's native
+  architecture (`x64` or `arm64`, which an x64 daemon emulated on ARM64 reads as `arm64`): the installer ships the x64
+  `conpty.dll` with an `OpenConsole.exe` in each of the two subdirectories (`scripts/fetch-conpty.mjs --installer`), so
+  the x64 DLL on x64 hardware loads `x64\OpenConsole.exe` and under emulation on ARM64 finds `arm64\OpenConsole.exe`;
+  with no DLL, or one that fails to load, the system's pseudoconsole is used (a failed load is logged as a warning), and
+  a DLL that finds no `OpenConsole.exe` starts the inbox console host, which is logged as a warning); on Windows the
+  output is drained after a close that races the last reader's drop, quit keys of a polite stop wait behind a bracketed
+  paste being written rather than landing inside it, and a failed wait in a transfer is reported as an error; `random/`
+  bytes from the host's random source; `policy/` what an administrator sets for a product: the directory they keep its
+  managed files in (`managed_dir`), a Unix program's system configuration directory under `/etc`, none on Windows
+  (`system_config_dir`), and its registry policy (the Windows registry's `Policies` key; elsewhere none), read through
   `registry.rs`, the Windows-only reader of registry string values; `test_helper.rs` the test binary re-run as the
-  helper process both contract suites start; `ipc/` the private channel a child of the daemon listens on for the daemon's
-  connections alone (`PrivateListen` made before the child starts, which is a Unix socket in a directory only the user can
-  enter (`socket`, offered where `offers_socket`) or a loopback port guarded by a token the daemon hands the child
-  (`loopback`, which Windows uses); its
-  `Address`, `Socket(path)` or `Loopback { token }`, and `Connection`, which connects to either and reads and writes within
-  timeouts; Codex's session server is the user, `adapter/codex/transport/`, through `terminal::server_host`); `HostFacts` (os, path style, file links, whether the host can be held awake, and the host's words for its Trash and settings app; the snapshot's `host`) in `mod.rs`.
+  helper process both contract suites start; `ipc/` the private channel a child of the daemon listens on for the
+  daemon's connections alone (`PrivateListen` made before the child starts, which is a Unix socket in a directory only
+  the user can enter (`socket`, offered where `offers_socket`) or a loopback port guarded by a token the daemon hands
+  the child (`loopback`, which Windows uses); its `Address`, `Socket(path)` or `Loopback { token }`, and `Connection`,
+  which connects to either and reads and writes within timeouts; Codex's session server is the user,
+  `adapter/codex/transport/`, through `terminal::server_host`); `HostFacts` (os, path style, file links, whether the
+  host can be held awake, and the host's words for its Trash and settings app; the snapshot's `host`) in `mod.rs`.
 
 ### Agent records, hooks, adapters and MCP
 
@@ -669,7 +799,7 @@ same scan.
 | foundation | `blocking_pass`, `interface_language`, `loopback`, `platform`, `request_body`, `request_guard`, `text`, `time`, `wire_path` |
 | providers | `providers` |
 | wire | `protocol` |
-| host | `browser_socket`, `env_shell`, `git`, `holder`, `host_open`, `hostfs`, `instance_lock`, `key_file`, `log_file`, `owner_key`, `owner_record`, `paths`, `processes` |
+| host | `browser`, `connection_details`, `env_shell`, `git`, `holder`, `host_open`, `hostfs`, `instance_lock`, `key_file`, `log_file`, `owner_key`, `owner_record`, `paths`, `processes` |
 | storage | `git_workflow`, `store` |
 | state | `state` |
 | workspace | `branch_cleanup`, `branch_origin`, `browse`, `host_tools`, `path_links`, `project_git`, `removal_safety`, `revert_gate`, `self_update`, `terminal` |

@@ -61,8 +61,10 @@ started by hand, by `octoboardd start` or by a service manager.
 server, and serves it on its browser socket, beside the protocol the UI speaks to it (see "The browser socket" below).
 Opening the address `octoboardd address` prints, through the SSH forward it prints with it, loads the full UI, which
 finds the daemon at the address it was loaded from and takes the key from that address. On a host that has such sockets
-the daemon's TCP port serves no UI. The daemon the desktop application bundles carries no UI and serves none: the
-application's window loads the UI the application itself bundles.
+the daemon's TCP port serves no UI. The daemon the desktop application bundles carries the UI as well, and serves it
+the same way, only while its remote access is on (see "Remote access to the desktop application's daemon" in
+`docs/product/who-can-reach-the-daemon.md`); its TCP port serves none, on any system. The application's own windows
+load the UI the application itself bundles. The UI's files are kept compressed inside the daemon, and sent so.
 
 **Who may load it.** The UI's files are the published application and hold nothing secret, and a page's requests for
 its scripts, stylesheets and fonts carry no key, so reading them needs no key: the page itself at `/`, and each other
@@ -114,7 +116,10 @@ shows the same screen at once, saying instead that this address does not open th
 
 **Which daemon serves the browser, and where.** A daemon that runs without the desktop application, whose build carries
 the UI (the server builds), on a host that has Unix-domain sockets (Linux and macOS; Windows has none the daemon uses),
-serves the browser on a socket in its data directory, `~/.octoboard/browser.sock`, and not on its TCP port. Only there
+serves the browser on a socket in its data directory, `~/.octoboard/browser.sock`, and not on its TCP port. So does the
+desktop application's daemon on macOS while its remote access is on, opening and closing the socket as the setting
+turns, under the conditions below; on Windows it serves the browser at a browser port of its own instead (see "Remote
+access to the desktop application's daemon" in `docs/product/who-can-reach-the-daemon.md`). Only there
 does it serve the UI and accept the owner key (see "The owner key" in `docs/product/who-can-reach-the-daemon.md`); the
 launch key opens it too. The TCP port keeps listening on loopback for everything else that reaches the daemon — its
 command line, the agents' helpers, the MCP bridge — and takes the launch key alone. Why the browser is kept off the port

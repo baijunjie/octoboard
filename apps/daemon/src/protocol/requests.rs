@@ -305,7 +305,7 @@ pub enum RequestBody {
     /// `settings_sections` is every section exactly when every console is exported (none
     /// otherwise; an empty list writes no `settings` region), and `include_accounts` is false.
     /// A section is written with the keys the daemon holds, so General carries only
-    /// `interface_language`, and only when the daemon holds one. A request that would export
+    /// `agent_language`, and only when the daemon holds one. A request that would export
     /// nothing is refused with `export_empty`, `consoles: "one"` without a `console` with
     /// `field_required`, and a console that does not exist with `unknown_console`. `console` is
     /// read only for `one`. Reads what is stored; touches no session, runs no `git`.
@@ -806,11 +806,11 @@ pub enum RequestBody {
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]
         keep_sessions_in_own_project: Option<bool>,
-        /// A tag the interface offers (`interface_language::display_name` knows it); any other
-        /// is refused.
+        /// The agent language: a tag the interface offers (`interface_language::display_name`
+        /// knows it); any other is refused.
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]
-        interface_language: Option<String>,
+        agent_language: Option<String>,
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]
         keep_awake: Option<bool>,
@@ -1176,6 +1176,33 @@ pub enum RequestBody {
     /// an update asks `handover_check` first, to tell the user which sessions the restart
     /// interrupts.
     RestartDaemon,
+    /// Turns Allow remote access on or off for the desktop application's daemon. Answered with
+    /// `ack` once it has taken effect, and broadcast as `remote_access_updated` (also when the
+    /// owner socket could not be opened, which `failure` says). Refused with
+    /// `remote_access_unavailable` where the snapshot carries no `remote_access`, and with
+    /// `remote_access_refused_to_browser` on a connection the owner key opened, which a browser
+    /// holds. Turning it off closes the owner socket, refuses the owner key and closes every
+    /// connection it opened. Not offered to agents' settings tools.
+    SetRemoteAccess {
+        allowed: bool,
+    },
+    /// Replaces the owner key with a new one, as `octoboardd address --rotate` does: every page
+    /// opened with the old one is cut off. Answered with `ack`, and broadcast as
+    /// `remote_access_updated` with the new address. Refused with `remote_access_unavailable` where
+    /// the snapshot carries no `remote_access` or it is not `serving`, and with
+    /// `remote_access_refused_to_browser` on a connection the owner key opened.
+    RotateOwnerKey,
+    /// Sets the loopback port the desktop application's daemon serves the browser at on Windows
+    /// while remote access is on (`remote_access.browser_port`). Takes effect at once: while remote
+    /// access is on, the old port is let go, every connection the owner key opened is closed, and
+    /// the new port is listened on (a port already in use is said as `failure`). Answered with
+    /// `ack`, and broadcast as `remote_access_updated`. Refused with `remote_access_unavailable`
+    /// where the snapshot's `remote_access` carries no `browser_port`, and with
+    /// `remote_access_refused_to_browser` on a connection the owner key opened; port 0 does not
+    /// read as a request. Not offered to agents' settings tools.
+    SetRemoteAccessPort {
+        port: std::num::NonZeroU16,
+    },
     /// Checks every project of this console's current git status against its remote, concurrently.
     /// Answered with `ack` at once; the statuses follow as `project_git_status` broadcasts, one per
     /// project as its check finishes. A project already being checked — by an earlier call this
@@ -1332,6 +1359,107 @@ pub enum RequestBody {
         #[cfg_attr(test, schemars(transform = super::schema::required_nullable))]
         target_version: Option<String>,
     },
+}
+
+impl RequestBody {
+    /// Whether the request changes remote access, which a connection the owner key opened may not
+    /// do. Every request is named, so a new one is decided on here.
+    pub fn changes_remote_access(&self) -> bool {
+        match self {
+            Self::SetRemoteAccess { .. }
+            | Self::RotateOwnerKey
+            | Self::SetRemoteAccessPort { .. } => true,
+            Self::CreateConsole { .. }
+            | Self::UpdateConsole { .. }
+            | Self::DeleteConsole { .. }
+            | Self::AddProject { .. }
+            | Self::UpdateProject { .. }
+            | Self::DeleteProject { .. }
+            | Self::ListDir { .. }
+            | Self::DetectDirectoryAgent { .. }
+            | Self::ProbeGitRemote { .. }
+            | Self::ListAgentModels { .. }
+            | Self::LocateConversationToResume { .. }
+            | Self::ExportConfiguration { .. }
+            | Self::InspectConfiguration { .. }
+            | Self::ImportConfiguration { .. }
+            | Self::OpenSession { .. }
+            | Self::ResumeSession { .. }
+            | Self::ArchiveSession { .. }
+            | Self::SwitchSessionAccount { .. }
+            | Self::SetSessionModel { .. }
+            | Self::HandoffSession { .. }
+            | Self::InspectSessionRecords { .. }
+            | Self::ReadSessionHistory { .. }
+            | Self::InspectProjectRemoval { .. }
+            | Self::InspectSessionBranches { .. }
+            | Self::ListProcesses { .. }
+            | Self::ListAllProcesses
+            | Self::StopProcesses { .. }
+            | Self::KeepProcesses { .. }
+            | Self::DeleteSession { .. }
+            | Self::DeleteArchivedSessions { .. }
+            | Self::SetSessionPinned { .. }
+            | Self::SetSessionLocked { .. }
+            | Self::SetSessionColour { .. }
+            | Self::SendMessage { .. }
+            | Self::InterruptSession { .. }
+            | Self::RenameSession { .. }
+            | Self::ReleaseSession { .. }
+            | Self::ListPages { .. }
+            | Self::SubmitPage { .. }
+            | Self::ConfirmTrust { .. }
+            | Self::RemoveTrustedDirectory { .. }
+            | Self::AnswerSessionRequest { .. }
+            | Self::UpdateSettings { .. }
+            | Self::CreateAccount { .. }
+            | Self::UpdateAccount { .. }
+            | Self::DeleteAccount { .. }
+            | Self::InspectAccountTrash { .. }
+            | Self::AddAgent { .. }
+            | Self::RemoveAgent { .. }
+            | Self::ReorderAgents { .. }
+            | Self::ReorderAccounts { .. }
+            | Self::SetDefaultAccountName { .. }
+            | Self::SetAccountDisabled { .. }
+            | Self::SetProviderSetting { .. }
+            | Self::SetAccountSharing { .. }
+            | Self::RefreshAccountQuotas { .. }
+            | Self::StartAccountLogin { .. }
+            | Self::UseResetCredit { .. }
+            | Self::ReadAccountMcpInventory { .. }
+            | Self::SignInAccountMcpServer { .. }
+            | Self::SignOutAccountMcpServer { .. }
+            | Self::CancelAccountMcpSignIn { .. }
+            | Self::CancelAccountLogin { .. }
+            | Self::CheckAgentClis { .. }
+            | Self::UpdateAgentCli { .. }
+            | Self::CheckDaemonUpdate
+            | Self::UpdateDaemon
+            | Self::RestartDaemon
+            | Self::RefreshGitStatus { .. }
+            | Self::PullProjectBranch { .. }
+            | Self::RefreshProjectGitStatus { .. }
+            | Self::CreateShellTerminal { .. }
+            | Self::RenameShellTerminal { .. }
+            | Self::CloseShellTerminal { .. }
+            | Self::OpenProjectTerminal { .. }
+            | Self::OpenProjectDirectory { .. }
+            | Self::RevealProjectPath { .. }
+            | Self::OpenProjectPath { .. }
+            | Self::ProbePathLinks { .. }
+            | Self::OpenPathLink { .. }
+            | Self::RevealPathLink { .. }
+            | Self::PushProjectBranch { .. }
+            | Self::SwitchProjectBranch { .. }
+            | Self::RestoreProjectChanges { .. }
+            | Self::Ping
+            | Self::Shutdown
+            | Self::PlannedStop
+            | Self::HandoverCheck { .. }
+            | Self::SavePastedImage { .. } => false,
+        }
+    }
 }
 
 /// What a `list_processes` asks about: one session, or one project.

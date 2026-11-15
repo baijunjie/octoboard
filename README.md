@@ -147,6 +147,55 @@ loginctl enable-linger "$USER"   # Only if the script says lingering is off: kee
 
 More about the daemon on a server is in [apps/daemon/README.md](apps/daemon/README.md).
 
+### Connecting the desktop app to a server
+
+The macOS and Windows apps open a server's daemon in a window of its own, over SSH. Nothing listens on the network
+beyond the server's SSH: whoever can log in over SSH as the daemon's user can use the daemon.
+
+1. On the server, as the user the daemon runs as, with the daemon running (`octoboardd start` or the service), print
+   the connection details:
+
+   ```sh
+   octoboardd connection
+   ```
+
+   It prints a QR code and one line, `octoboard+ssh://<user>@<host>:<port>?fingerprint=…&octoboardd=…`, holding the
+   host, SSH port, user, the fingerprint of the server's SSH host key and where `octoboardd` is; no password or key.
+   Run over SSH, it takes the address that session reached the server at; otherwise the server's own name, which other
+   machines may not know. When your devices reach the server at another name or port, say so:
+   `octoboardd connection --host server.example.com --ssh-port 2222`. `--text` prints the line alone. The QR code holds
+   the same line, for a mobile app to come; nothing scans it yet.
+2. In the app, choose **New Remote Window** (macOS: the **Remote** menu or the Dock menu; Windows: the window's system
+   menu, opened from its title bar icon or with Alt+Space, or the taskbar icon's jump list). In the window that opens,
+   press **Add remote daemon** and paste the line into **Connection details**: it fills the host, port, user, name and
+   the path of `octoboardd`, and pins the host key, so a server that shows another key is refused. Choose a password
+   or one of your SSH key files, save, and connect; the same window then shows that daemon. Without the
+   details, type the host, port and user in; the app then shows the server's host key at the first connection and pins
+   it once you confirm it, which you can check against `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the
+   server. After the first sign-in the app installs an SSH key of its own for this device and uses it from then on; no
+   password is stored.
+3. **Removing a device**: a device is let in by the SSH key it signs in with. To shut one out, delete its line from
+   `~/.ssh/authorized_keys` of the daemon's user on the server; a key the app installed ends with
+   `Octoboard on <device name>`. A connection already open lasts until it drops. A browser address you gave out is
+   shut out separately, with `octoboardd address --rotate`.
+
+The daemon keeps running when the app quits or the window closes: a remote window only disconnects.
+
+### Connecting to another computer's desktop app
+
+Another computer's macOS or Windows app can be a host too, the same way, through that computer's own SSH server:
+
+1. On the host computer, in the app's **Settings › Remote access**, turn on **Allow remote access**, and turn on the
+   computer's SSH server as the section guides you (macOS: Remote Login; Windows: OpenSSH Server). While remote access
+   is on, the section shows the connection details, as text and as a QR code, with the path of the app's own
+   `octoboardd`. The host in them is the computer's own name: correct it on the other device if that device reaches
+   the computer at another name or address.
+2. On the other device, paste the details into **Connection details** when adding a remote daemon, as for a server.
+   A Windows host's default SSH shell may be the command prompt or PowerShell; either works.
+3. The host's daemon runs only while its app does: keep the app running on the host (it may run in the background).
+   Removing a device is removing its key, as for a server; on a Windows host the key of an administrator is in
+   `%ProgramData%\ssh\administrators_authorized_keys`, any other user's in `%USERPROFILE%\.ssh\authorized_keys`.
+
 ## FAQ
 
 **Do I need to configure my projects again?**

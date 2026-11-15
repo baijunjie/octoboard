@@ -213,8 +213,8 @@ it("turns into an acknowledgement-only failure modal when no other agent can be 
   expect(dialog?.textContent).toContain("No other agent is available to take this session over.");
   expect(dialog?.querySelector("form")).toBeNull();
   expect(dialog?.querySelector('[data-slot="alert-dialog-icon"], [data-slot="modal-icon"]')).not.toBeNull();
-  // Only the acknowledgement is offered, and it is the one thing that closes the dialog.
-  expect(Array.from(dialog?.querySelectorAll("button") ?? []).map((button) => button.textContent)).toEqual(["OK"]);
+  // Only the acknowledgement is offered in the footer; it and the close button are what close the dialog.
+  expect(Array.from(dialog?.querySelectorAll("button") ?? []).filter((button) => !button.matches("[data-slot$=close-trigger]")).map((button) => button.textContent)).toEqual(["OK"]);
   expect(onClose).not.toHaveBeenCalled();
   expect(errorAlerts.getSnapshot()).toEqual([]);
   expect(request.mock.calls.some(([body]) => body.type === "handoff_session")).toBe(false);

@@ -16,7 +16,6 @@ use tauri::{AppHandle, Manager};
 
 use crate::app_settings;
 use crate::diagnostics::diagnostic;
-use crate::menu::APP_NAME;
 use crate::sidecar::{
     daemon_params, give_up_on_daemon, mark_daemon_down, start_attempt, wait_for, DaemonAddress,
     DaemonState, DAEMON_PARAMS,
@@ -92,7 +91,7 @@ pub fn budget_spent_detail(ended: &str, restarts: usize) -> String {
 /// (`updater::replaced_on_disk`), so "installed" is what happened.
 pub fn update_installed_detail(ended: &str) -> String {
     format!(
-        "{ended}. An update is installed and is not applied until {APP_NAME} restarts; the daemon is not restarted before then."
+        "{ended}. An update is installed and is not applied until the app restarts; the daemon is not restarted before then."
     )
 }
 

@@ -33,6 +33,9 @@ that rule. What is the user's alone is never changed through these tools, by any
   `docs/product/consoles.md`);
 - adding, editing or removing an account, or turning one off or back on;
 - adding or removing a trusted folder;
+- turning remote access to the desktop application's daemon on or off, changing its browser port, or rotating its owner
+  key, none of which the tools read either (see `docs/product/remote-access-settings.md`), since opening the computer
+  to other devices is the user's own choice;
 - adding, removing or reordering agents (see "Added agents" and "Reordering and removing an agent" in
   `docs/product/agent-accounts.md`), since the list of added agents decides whether a new session of an agent may be
   opened, or a session handed off to it, at all, from the window or by an agent's tool: a session could otherwise add an
@@ -231,7 +234,7 @@ working directory. Neither the avatar itself nor the console's console session i
 | `daemon_update_check` | Whether a daemon that updates itself checks for a newer release by itself, `true` unless the user turned it off (see "Check for updates automatically" in `docs/product/update-settings.md` and "When the daemon checks" in `docs/product/server-form-updates.md`). Held by every daemon, but only a daemon that updates itself acts on it. |
 | `daemon_update_channel` | The release channel that daemon follows, `stable` (the default) or `beta` (see "Channels" in `docs/product/server-form-updates.md`). |
 | `auto_select_account` | Whether a new session whose account was not named chooses a usable account automatically, preferring the initial agent's soonest weekly reset and trying another added agent when needed (see "Which account a session uses" and "Automatically select an account" in `docs/product/opening-sessions.md`). Read-only. |
-| `interface_language` | The language the daemon holds, which every window of the user shows and sessions are told to talk to the user in, as its tag, or `null` while it holds none (see "The language the daemon holds" in `docs/product/language.md`). |
+| `agent_language` | The agent language, the language sessions are told to talk to the user in, as its tag, or `null` while the daemon holds none (see "The agent language" in `docs/product/language.md`). The language the user's windows show is not the daemon's and is not here. |
 | `default_clone_dir` | The default clone directory (see "Default clone directory" in `docs/product/git-settings.md`). |
 | `git_workflow` | The application-wide git workflow settings, as `development`, `squash_before_delivery`, `rebase_before_delivery`, `delivery` and `revert_gate` (see "The five settings" in `docs/product/git-workflow-settings.md`); `squash_before_delivery`, `rebase_before_delivery` and `delivery` apply only while `development` is not `in_place`; `revert_gate` applies whatever `development` is. |
 | `provider_settings` | For each agent whose provider declares settings that sessions may read, by its name (`claude`, `codex`, `grok`), each such setting by its id with its value in effect, the default included while the user has made no choice: today `claude_compatibility` for Codex and Grok Build, whether the agent's sessions load Claude Code's configuration, and `codex_compatibility` for Claude Code and Grok Build, whether they load Codex's, each `true` or `false` (see "Provider settings", "Claude compatibility" and "Codex compatibility" in `docs/product/per-agent-settings.md`), as in `{"claude": {"codex_compatibility": false}, "codex": {"claude_compatibility": false}, "grok": {"claude_compatibility": false, "codex_compatibility": false}}`. An agent with no such setting has no entry. Read-only. |
@@ -241,13 +244,13 @@ working directory. Neither the avatar itself nor the console's console session i
 
 `update_settings` takes `auto_close_idle_shell_terminals`, `auto_pull_repositories`,
 `auto_delete_unresumable_archives`, `resume_sessions_on_start`, `keep_awake`, `keep_awake_when`, `daemon_update_check`,
-`daemon_update_channel`, `interface_language`, `default_clone_dir` and `git_workflow`, under the rules of the same
+`daemon_update_channel`, `agent_language`, `default_clone_dir` and `git_workflow`, under the rules of the same
 settings in Settings: the switches take `true` or `false`, `keep_awake_when` is `always` or `working` and
 `daemon_update_channel` is `stable` or `beta` (any other text is refused, surrounding whitespace ignored), a clone
-directory must be absolute or start with `~/`, and a blank one goes back to the built-in default. `interface_language`
+directory must be absolute or start with `~/`, and a blank one goes back to the built-in default. `agent_language`
 is a tag of an offered language (see "The offered languages" in `docs/product/language.md`), surrounding whitespace
-ignored; any other text, a blank one included, is refused. It changes the language the daemon holds, as a pick in
-Settings does, and every open window switches to it.
+ignored; any other text, a blank one included, is refused. It changes the agent language, as a pick in Settings does;
+the language of the user's windows stays as it is.
 `git_workflow` is an object of any of the five git workflow settings, with the values `update_project`'s takes
 (`squash_before_delivery`, `rebase_before_delivery` and `delivery` apply only while `development` is not `in_place`, and
 keep their values while it is); an item left out, or given as `null`, stays as it is. A refused value leaves the others
@@ -277,7 +280,7 @@ afterwards. A changed `project_session_launch` reaches a project session at its 
 session sets that value itself. A changed `development`, `squash_before_delivery`, `rebase_before_delivery` or `delivery`,
 application-wide or a project's own, is sure to reach only project sessions begun after it (see "When a change reaches a
 session" in `docs/product/git-workflow-settings.md`). A changed `revert_gate` reaches running sessions at once (see "The
-switch" in `docs/product/revert-gate.md`). A changed `interface_language` reaches sessions as a change made from a
+switch" in `docs/product/revert-gate.md`). A changed `agent_language` reaches sessions as a change made from a
 window does (see "The guidance on the user's language" in `docs/product/launching-agents.md`).
 
 ## Refusals

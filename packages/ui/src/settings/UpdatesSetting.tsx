@@ -20,7 +20,9 @@ import { installedMessageKey } from "../updates/installedMessageKey";
 import { reloadPage } from "../platform/reloadPage";
 import { restartPress } from "../updates/restartPress";
 import type { UpdateState } from "../updates/updateStore";
-import { useUpdates } from "../updates/UpdatesProvider";
+import { useRemoteUpdatePreferences, useUpdates, useUpdateStore } from "../updates/UpdatesProvider";
+import { useDaemonStore } from "../store";
+import { useSettingsWrite } from "./useSettingsWrite";
 import { TitledControl } from "../components/hint/TitledControl";
 import { SettingRow, SwitchSettingRow } from "./SettingRow";
 import { Button } from "../primitives";
@@ -68,18 +70,75 @@ function checkFailed(state: UpdateState): boolean {
  * Download and install once a newer one is found, then Restart now once it is installed (unavailable, with the reason,
  * while an agent's update runs and the daemon would refuse the restart) — beside What is new, the release notes on
  * GitHub of the version the sentence is about and when the last check ended; the switch for the automatic checks; and
- * the channel the application follows. The same for the desktop application and for a daemon that updates itself,
- * which is what the store behind it hides. A daemon that cannot replace its own executable offers no download: the row
- * says so and gives the install command to run by hand below it, with its copy button; a page whose daemon now
- * runs another version offers Reload. The section is listed only where something updates (`SettingsDialog`).
+ * the channel the application follows. The same for the desktop application and for a daemon that updates itself, which
+ * is what the store behind it hides. A daemon that cannot replace its own executable offers no download: the row says
+ * so and gives the install command to run by hand below it, with its copy button; a page whose daemon now runs another
+ * version offers Reload. The section is listed only where something updates (`SettingsDialog`).
  *
  * The sentence is spoken from here, since the update notice's own announcer sits under the Settings modal and is not
  * heard. Once the update's phase has changed while Settings is open, or the restart of an installed update has been
  * held back by an agent's update or let go, whoever caused it (a press of Check for updates or Download and install
  * here, a check that was already running at open ending, a download started from the notice finishing, an automatic
- * check, an agent's update starting or ending), every change of the sentence is spoken; what was there when Settings opened is not.
- * The sentence of a check under way is left unspoken, as the button's pending state says it. */
+ * check, an agent's update starting or ending), every change of the sentence is spoken; what was there when Settings
+ * opened is not. The sentence of a check under way is left unspoken, as the button's pending state says it.
+ *
+ * In the window of a daemon elsewhere, which shows nothing of updates (`UpdatesProvider` gives it no store), the
+ * section holds that daemon's two settings of its updates alone (`RemoteUpdatePreferences`). */
 export function UpdatesSetting(): React.ReactElement {
+  const store = useUpdateStore();
+  const remotePreferences = useRemoteUpdatePreferences();
+  return store ? <OwnUpdatesSetting /> : remotePreferences ? <RemoteUpdatePreferences /> : <></>;
+}
+
+/** The switch for the automatic checks and the channel followed, the two rows every form of the section has. In the
+ * window of a daemon elsewhere (`remote`) the checks are the daemon's own, so the switch's description names the daemon
+ * instead of the app. */
+function UpdatePreferenceRows({ autoCheck, channel, remote, onAutoCheck, onChannel }: { autoCheck: boolean; channel: UpdateChannel; remote?: boolean; onAutoCheck: (value: boolean) => void; onChannel: (channel: UpdateChannel) => void }): React.ReactElement {
+  const t = useT();
+  const channels: { value: UpdateChannel; label: string }[] = [
+    { value: "stable", label: t("settings.updates.channel.stable") },
+    { value: "beta", label: t("settings.updates.channel.beta") },
+  ];
+  return (
+    <>
+      <SwitchSettingRow
+        searchId="updates.autoCheck"
+        label={t("settings.updates.autoCheck.label")}
+        description={
+          remote
+            ? autoCheck ? <Message id="settings.updates.autoCheck.description.remote.on" /> : <Message id="settings.updates.autoCheck.description.remote.off" />
+            : autoCheck ? <Message id="settings.updates.autoCheck.description.on" /> : <Message id="settings.updates.autoCheck.description.off" />
+        }
+        isSelected={autoCheck}
+        onChange={onAutoCheck}
+      />
+      <SettingRow fill searchId="updates.channel" label={t("settings.updates.channel.label")} description={t("settings.updates.channel.description")}>
+        <OptionSelect inline label={t("settings.updates.channel.label")} options={channels} value={channel} onChange={onChannel} />
+      </SettingRow>
+    </>
+  );
+}
+
+/** The daemon's own settings of its updates, written as any of its settings is: no version, no check, no download and
+ * no restart, which are done on the machine the daemon runs on. Listed only where `useRemoteUpdatePreferences` says. */
+function RemoteUpdatePreferences(): React.ReactElement {
+  const autoCheck = useDaemonStore((state) => state.settings.daemon_update_check);
+  const channel = useDaemonStore((state) => state.settings.daemon_update_channel);
+  const write = useSettingsWrite();
+  return (
+    <UpdatePreferenceRows
+      autoCheck={autoCheck}
+      channel={channel}
+      remote
+      onAutoCheck={(value) => write({ daemon_update_check: value }, ["daemon_update_check"])}
+      onChannel={(value) => write({ daemon_update_channel: value }, ["daemon_update_channel"])}
+    />
+  );
+}
+
+/** The section where this window updates something: the desktop application, or the daemon it shows (see
+ * `UpdatesSetting`). */
+function OwnUpdatesSetting(): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
   const now = useNow();
@@ -114,10 +173,6 @@ export function UpdatesSetting(): React.ReactElement {
     }
   }
   const { text: status, shown: shownStatus } = versionStatus(t, state, host.updater);
-  const channels: { value: UpdateChannel; label: string }[] = [
-    { value: "stable", label: t("settings.updates.channel.stable") },
-    { value: "beta", label: t("settings.updates.channel.beta") },
-  ];
   // Pressing Check for updates again is the way to retry, so the mark has no button of its own. A failed
   // automatic check that ends while Settings is open is spoken here, as the mark appearing says nothing by
   // itself; one pressed here is spoken by the error alert dialog it also opens. The sentence of the row is left
@@ -200,16 +255,7 @@ export function UpdatesSetting(): React.ReactElement {
         </div>
         <StatusAnnouncer text={announced} />
       </SettingRow>
-      <SwitchSettingRow
-        searchId="updates.autoCheck"
-        label={t("settings.updates.autoCheck.label")}
-        description={state.autoCheck ? <Message id="settings.updates.autoCheck.description.on" /> : <Message id="settings.updates.autoCheck.description.off" />}
-        isSelected={state.autoCheck}
-        onChange={(value) => store.setAutoCheck(value)}
-      />
-      <SettingRow fill searchId="updates.channel" label={t("settings.updates.channel.label")} description={t("settings.updates.channel.description")}>
-        <OptionSelect inline label={t("settings.updates.channel.label")} options={channels} value={state.channel} onChange={(value) => void store.setChannel(value)} />
-      </SettingRow>
+      <UpdatePreferenceRows autoCheck={state.autoCheck} channel={state.channel} onAutoCheck={(value) => store.setAutoCheck(value)} onChannel={(value) => void store.setChannel(value)} />
     </>
   );
 }

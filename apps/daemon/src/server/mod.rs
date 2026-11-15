@@ -2,8 +2,10 @@
 //!
 //! The same routes are served on two listeners, each behind a guard of its own: the loopback TCP
 //! port ([`router`]), which takes the launch key alone, and, where the daemon serves the browser,
-//! its owner-only socket ([`browser_router`], [`crate::browser_socket`]), which takes the owner
-//! key too and serves the embedded UI. On a host that has such sockets the TCP port serves no UI.
+//! its way in ([`browser_router`], [`crate::browser`]: the owner-only socket, or on Windows the
+//! desktop daemon's browser port and owner pipe), which takes the owner key too and serves the
+//! embedded UI. The TCP port serves no UI on a host that has such sockets, nor in a daemon that
+//! follows the desktop application.
 //!
 //! This file holds the route table and the guard around it, which sits between the two layers that
 //! see to each request's body ([`crate::request_body`]); each route's handler lives beside the
@@ -16,7 +18,7 @@
 //! - [`keys`]: the routes about the keys a request carries: the key check and the owner-key
 //!   rotation.
 //! - [`relay`]: the same helper routes, for the requests a holder relays from its helpers.
-//! - [`ui`]: the browser UI embedded in a server-form build, the fallback for every other path.
+//! - [`ui`]: the browser UI embedded in the build, the fallback for every other path.
 
 pub(crate) mod access;
 mod callbacks;
@@ -35,22 +37,26 @@ use axum::Router;
 
 use crate::state::AppState;
 
-/// The router of the loopback TCP port: the launch key alone, and the embedded UI only on a host
-/// with no browser socket.
+/// The router of the loopback TCP port: the launch key alone, and the embedded UI only for a
+/// daemon that follows no application on a host with no browser socket.
 pub fn router(state: Arc<AppState>) -> Router {
-    router_serving(state, port_files(), false)
+    let files = port_files(state.follows_application());
+    router_serving(state, files, false)
 }
 
-/// The router of the browser socket: the launch key or the owner key, and the embedded UI.
+/// The router of the browser's way in: the launch key or the owner key, and the embedded UI.
 pub fn browser_router(state: Arc<AppState>) -> Router {
     router_serving(state, ui::EMBEDDED, true)
 }
 
 /// The UI files the TCP port serves: none where the browser has a socket of its own, so that no
-/// page that would carry a key is ever opened at the port.
-fn port_files() -> ui::Files {
-    if crate::browser_socket::AVAILABLE {
-        &[]
+/// page that would carry a key is ever opened at the port, and none for a daemon that follows the
+/// application, on any system: its browser has the way in remote access opens, and a page opened at
+/// its port, which the application's window never loads, would only be one a browser could take
+/// for its way in.
+fn port_files(follows_application: bool) -> ui::Files {
+    if crate::browser::socket::AVAILABLE || follows_application {
+        ui::Files::NONE
     } else {
         ui::EMBEDDED
     }
@@ -64,13 +70,7 @@ fn router_serving(state: Arc<AppState>, files: ui::Files, takes_owner_key: bool)
         key: state.key.as_str().into(),
         owner_key: takes_owner_key.then(|| state.owner_key.clone()),
         ui: files,
-        // The owner key is held exactly where the browser socket is served, and is settled before
-        // either router is built.
-        refusal: if !takes_owner_key && state.owner_key.is_held() {
-            access::REFUSED_AT_PORT
-        } else {
-            access::REFUSED
-        },
+        owner_key_elsewhere: (!takes_owner_key).then(|| state.owner_key.clone()),
     };
     routes(state)
         .fallback(move |request| ui::serve(files, request))
@@ -360,7 +360,8 @@ mod tests {
         .expect("the checks ran");
     }
 
-    const UI_FILES: ui::Files = &[("index.html", b"<html>"), ("assets/app-1a.js", b"script")];
+    const UI_FILES: ui::Files =
+        ui::Files::plain(&[("index.html", b"<html>"), ("assets/app-1a.js", b"script")]);
 
     /// The embedded UI's files are served without the key, which a page's asset requests do not
     /// carry, and are found by their path alone; every other path still needs the key.
@@ -448,10 +449,10 @@ mod tests {
     /// would carry a key is ever opened at the port.
     #[test]
     fn the_port_serves_no_ui_where_the_browser_has_a_socket() {
-        if crate::browser_socket::AVAILABLE {
-            assert!(port_files().is_empty());
+        if crate::browser::socket::AVAILABLE {
+            assert!(port_files(false).is_empty());
         } else {
-            assert_eq!(port_files().len(), ui::EMBEDDED.len());
+            assert_eq!(port_files(false).len(), ui::EMBEDDED.len());
         }
     }
 
@@ -490,6 +491,34 @@ mod tests {
             assert_eq!(answered, status, "{request_line}");
             assert_eq!(state.stop_asked(), asks_for_stop, "{request_line}");
         }
+    }
+
+    /// The TCP port of a daemon that follows the application serves no UI on any system, Windows
+    /// included, whatever its build embeds.
+    #[test]
+    fn the_port_of_a_daemon_that_follows_the_application_serves_no_ui() {
+        assert!(port_files(true).is_empty());
+    }
+
+    /// End to end: the port router of a daemon that follows the application answers a page's
+    /// address as any keyless path, and a keyed one with nothing behind it.
+    #[tokio::test]
+    async fn the_port_of_a_daemon_that_follows_the_application_answers_no_page() {
+        let (state, _dir) = app_state("server-follows-no-ui");
+        state.set_follows_application();
+        let port = super::test_support::serve_state(state).await;
+        let host = format!("Host: localhost:{port}");
+        tokio::task::spawn_blocking(move || {
+            for path in ["/", "/index.html"] {
+                assert_eq!(status_of(port, &format!("GET {path}"), &[&host]), 401);
+                assert_eq!(
+                    status_of(port, &keyed(&format!("GET {path}")), &[&host]),
+                    404
+                );
+            }
+        })
+        .await
+        .expect("the checks ran");
     }
 
     /// A build without the `embedded-ui` feature embeds nothing, and then answers exactly as a

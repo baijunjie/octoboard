@@ -198,7 +198,7 @@ it.each([
     expect(alert.textContent).not.toContain(remedy);
     expect(alert.textContent).not.toContain("Report issue");
     // Diagnostic copy controls stay in Error details; the only action outside is the acknowledgement.
-    const actions = [...alert.querySelectorAll("button")].filter((button) => !button.closest("details"));
+    const actions = [...alert.querySelectorAll("button")].filter((button) => !button.closest("details") && button.getAttribute("aria-label") !== "Close");
     expect(actions.map((button) => button.textContent)).toEqual(["OK"]);
   } finally {
     act(() => { toast.clear(); vi.runOnlyPendingTimers(); });

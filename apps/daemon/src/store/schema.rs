@@ -17,7 +17,7 @@ use rusqlite::Connection;
 /// [`MIGRATIONS`], and the released version's schema is kept as `schema/v{N}.sql` and listed in the
 /// test-only `PAST_SCHEMAS`, for the test that migrates a database built from each and compares the
 /// result with a fresh one.
-pub(super) const SCHEMA_VERSION: i64 = 4;
+pub(super) const SCHEMA_VERSION: i64 = 5;
 
 /// The `application_id` of an Octoboard database, "OCTB" in ASCII, written into the file's header
 /// when it is created, so that a SQLite file of another program is told apart from one of ours.
@@ -72,6 +72,13 @@ pub(super) const MIGRATIONS: &[&str] = &[
          created_at INTEGER NOT NULL
      );
      CREATE INDEX pages_session_id ON pages (session_id);",
+    // 4 to 5: the setting that has the desktop application's daemon serve a browser on its owner
+    // socket (Allow remote access), and the port it serves a browser at on Windows; and the
+    // language the daemon held for every window and every session becomes the agent language alone,
+    // the interface language having moved to the clients.
+    "ALTER TABLE settings ADD COLUMN allow_remote_access INTEGER NOT NULL DEFAULT 0;
+     ALTER TABLE settings ADD COLUMN remote_access_port INTEGER;
+     ALTER TABLE settings RENAME COLUMN interface_language TO agent_language;",
 ];
 
 /// Every table, index and trigger of the current schema.
@@ -359,7 +366,7 @@ CREATE TABLE settings (
     default_clone_dir      TEXT,
     -- NULL until a client reports the language the user picked; see
     -- `Store::interface_language`.
-    interface_language     TEXT,
+    agent_language     TEXT,
     -- NULL until the list is first decided; see `Store::added_agents`.
     added_agents           TEXT,
     account_order          TEXT,
@@ -373,11 +380,15 @@ CREATE TABLE settings (
     squash_before_delivery INTEGER NOT NULL DEFAULT 0,
     rebase_before_delivery INTEGER NOT NULL DEFAULT 1,
     delivery            TEXT NOT NULL DEFAULT 'ask',
-    revert_gate         INTEGER NOT NULL DEFAULT 0 , resume_sessions_on_start INTEGER NOT NULL DEFAULT 0, keep_awake INTEGER NOT NULL DEFAULT 0, keep_awake_when TEXT NOT NULL DEFAULT 'working', keep_sessions_in_own_project INTEGER NOT NULL DEFAULT 0, daemon_update_check INTEGER NOT NULL DEFAULT 1, daemon_update_channel TEXT NOT NULL DEFAULT 'stable');
+    revert_gate         INTEGER NOT NULL DEFAULT 0 , resume_sessions_on_start INTEGER NOT NULL DEFAULT 0, keep_awake INTEGER NOT NULL DEFAULT 0, keep_awake_when TEXT NOT NULL DEFAULT 'working', keep_sessions_in_own_project INTEGER NOT NULL DEFAULT 0, daemon_update_check INTEGER NOT NULL DEFAULT 1, daemon_update_channel TEXT NOT NULL DEFAULT 'stable', allow_remote_access INTEGER NOT NULL DEFAULT 0, remote_access_port INTEGER);
 -- `resume_sessions_on_start`, `keep_awake`, `keep_awake_when`, `keep_sessions_in_own_project`,
--- `daemon_update_check` and `daemon_update_channel` are the last columns, spelled as a migration leaves
--- them; see `Store::resume_sessions_on_start`, `Store::keep_awake`, `Store::keep_sessions_in_own_project`
--- and `Store::daemon_update_check`.
+-- `daemon_update_check`, `daemon_update_channel`, `allow_remote_access` and `remote_access_port` are the
+-- last columns, spelled as a migration leaves them; see `Store::resume_sessions_on_start`,
+-- `Store::keep_awake`, `Store::keep_sessions_in_own_project`, `Store::daemon_update_check`,
+-- `Store::allow_remote_access` and `Store::remote_access_port`.
+-- `agent_language` was `interface_language` before version 5, and the comment above it is spelled
+-- as the rename leaves it: it is the column of `Store::agent_language`, NULL until a client reports
+-- its interface language as the first value or the user picks one.
 -- The user's explicit choice for a setting of a provider, as JSON (`true`, `false` or a quoted
 -- choice); a setting with no row follows its default. Rows naming a provider or setting this
 -- build does not declare are kept and ignored. See `Store::provider_settings`.
@@ -904,6 +915,7 @@ mod tests {
         include_str!("schema/v1.sql"),
         include_str!("schema/v2.sql"),
         include_str!("schema/v3.sql"),
+        include_str!("schema/v4.sql"),
     ];
 
     /// The files next to `path` that are backups from before a migration.
@@ -1028,6 +1040,69 @@ mod tests {
                 "created_at"
             ]
         );
+    }
+
+    /// Migrating a version 4 database keeps the language its daemon held as the agent language, so
+    /// sessions go on being told the language they were told before the upgrade.
+    #[test]
+    fn migrating_a_version_4_database_keeps_its_language_as_the_agent_language() {
+        let path = temp_db("migrate-agent-language");
+        {
+            let conn = Connection::open(&path).expect("version 4 database");
+            conn.execute_batch(PAST_SCHEMAS[3])
+                .expect("version 4 schema");
+            conn.pragma_update(None, "user_version", 4)
+                .expect("version");
+            conn.pragma_update(None, "application_id", APPLICATION_ID)
+                .expect("application id");
+            conn.execute_batch(
+                "INSERT INTO settings (id, auto_pull_repositories, interface_language)
+                 VALUES ('singleton', 1, 'ja');",
+            )
+            .expect("settings");
+        }
+
+        let store = Store::open(&path).expect("migrated");
+        assert_eq!(store.agent_language().unwrap().as_deref(), Some("ja"));
+        let settings = store.get_settings().unwrap();
+        assert_eq!(settings.agent_language.as_deref(), Some("ja"));
+        assert!(
+            settings.auto_pull_repositories,
+            "the row's other values stay"
+        );
+    }
+
+    /// Migrating a version 4 database adds Allow remote access, off, and the browser port, unset,
+    /// so a daemon that had neither serves nobody after the upgrade; a database with no language
+    /// held keeps none, and the new settings can be written and read back.
+    #[test]
+    fn migrating_a_version_4_database_leaves_remote_access_off_with_no_port() {
+        let path = temp_db("migrate-remote-access");
+        {
+            let conn = Connection::open(&path).expect("version 4 database");
+            conn.execute_batch(PAST_SCHEMAS[3])
+                .expect("version 4 schema");
+            conn.pragma_update(None, "user_version", 4)
+                .expect("version");
+            conn.pragma_update(None, "application_id", APPLICATION_ID)
+                .expect("application id");
+            conn.execute_batch(
+                "INSERT INTO settings (id, auto_pull_repositories) VALUES ('singleton', 1);",
+            )
+            .expect("settings");
+        }
+
+        let store = Store::open(&path).expect("migrated");
+        assert!(!store.allow_remote_access().unwrap());
+        assert_eq!(store.remote_access_port().unwrap(), None);
+        assert_eq!(store.agent_language().unwrap(), None);
+        assert!(store.get_settings().unwrap().auto_pull_repositories);
+        store.set_allow_remote_access(true).unwrap();
+        store.set_remote_access_port(Some(4000)).unwrap();
+        drop(store);
+        let reopened = Store::open(&path).expect("reopened");
+        assert!(reopened.allow_remote_access().unwrap());
+        assert_eq!(reopened.remote_access_port().unwrap(), Some(4000));
     }
 
     /// Migrating a version 3 database adds the switch that keeps sessions to their own project,
@@ -1207,7 +1282,7 @@ mod tests {
         assert_eq!(user_version(&conn).unwrap(), SCHEMA_VERSION);
         let row: (String, i64, i64, Option<String>, i64) = conn
             .query_row(
-                "SELECT id, auto_pull_repositories, auto_start_quota_windows, interface_language,
+                "SELECT id, auto_pull_repositories, auto_start_quota_windows, agent_language,
                         resume_sessions_on_start
                  FROM settings",
                 [],

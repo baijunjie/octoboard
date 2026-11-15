@@ -58,9 +58,9 @@ async function layout(platform: PlatformAdapter, state: Partial<State> = {}) {
 const DESKTOP: PlatformAdapter = { kind: "tauri", host: MAC_HOST, launchAtLogin, backgroundRun, statusItem };
 const BROWSER: PlatformAdapter = { kind: "browser", host: BROWSER_HOST };
 
-it("shows the language row on its own at the top, then Startup, Window, Power, Terminals and Sorting, where the platform and the daemon's host offer everything", async () => {
+it("shows the interface and agent language rows on their own at the top, then Startup, Window, Power, Terminals and Sorting, where the platform and the daemon's host offer everything", async () => {
   const { ungrouped, groups } = await layout(DESKTOP, { host: { ...HOST, keep_awake: true } });
-  expect(ungrouped).toEqual(["language"]);
+  expect(ungrouped).toEqual(["language", "agent-language"]);
   expect(groups.map(({ key }) => key)).toEqual([
     "settings.general.group.startup",
     "settings.general.group.window",
@@ -86,7 +86,7 @@ it("shows the language row on its own at the top, then Startup, Window, Power, T
 
 it("leaves out the Window and Power groups and the launch-at-login row in a browser on a host that cannot be held awake", async () => {
   const { ungrouped, groups } = await layout(BROWSER);
-  expect(ungrouped).toEqual(["language"]);
+  expect(ungrouped).toEqual(["language", "agent-language"]);
   expect(groups.map(({ key, ids }) => [key, ids])).toEqual([
     ["settings.general.group.startup", ["resume_sessions_on_start"]],
     ["settings.general.group.terminals", ["auto_close_idle_shell_terminals"]],
@@ -102,6 +102,12 @@ it("shows only the background run row in the Window group where the platform has
 it("shows only the menu bar icon row in the Window group where the platform cannot keep the app running", async () => {
   const { groups } = await layout({ kind: "tauri", host: MAC_HOST, statusItem });
   expect(groups.find(({ key }) => key === "settings.general.group.window")?.ids).toEqual(["menu-bar-icon"]);
+});
+
+it("leaves out the Window group in another daemon's window, whose icon has no switch of its own", async () => {
+  const { setVisible: _, ...iconOnly } = statusItem;
+  const { groups } = await layout({ kind: "tauri", host: MAC_HOST, statusItem: iconOnly });
+  expect(groups.map(({ key }) => key)).not.toContain("settings.general.group.window");
 });
 
 it("shows the Power group only when the daemon's own host can be held awake, whatever this window's platform", async () => {

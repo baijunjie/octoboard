@@ -567,6 +567,26 @@ pub fn account_name() -> Option<OsString> {
     account_field(|entry| entry.pw_name)
 }
 
+/// The name this machine gives itself (`gethostname`), or `None` where it has none.
+pub fn host_name() -> Option<OsString> {
+    let mut buffer = [0 as libc::c_char; 256];
+    // SAFETY: the call writes at most `buffer.len()` bytes into `buffer`, which outlives it; the
+    // last byte is set to NUL afterwards, since a name that fills the buffer may not be terminated.
+    let status = unsafe { libc::gethostname(buffer.as_mut_ptr(), buffer.len()) };
+    if status != 0 {
+        return None;
+    }
+    buffer[buffer.len() - 1] = 0;
+    // SAFETY: `buffer` holds a NUL byte, set above at the latest.
+    let name = unsafe { CStr::from_ptr(buffer.as_ptr()) }.to_bytes();
+    (!name.is_empty()).then(|| OsStr::from_bytes(name).to_owned())
+}
+
+/// The directory the SSH server keeps its host keys in.
+pub fn ssh_host_key_dir() -> PathBuf {
+    PathBuf::from("/etc/ssh")
+}
+
 /// The login shell the system user database records for the effective user, as it is written
 /// there, or `None` where it records none.
 pub fn account_shell() -> Option<PathBuf> {

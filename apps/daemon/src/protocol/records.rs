@@ -888,6 +888,7 @@ mod tests {
             host: crate::platform::HostFacts::current().into(),
             keep_awake_held: false,
             shell_terminals: vec![terminal],
+            remote_access: None,
         });
         assert_eq!(snapshot["shell_terminals"], serde_json::json!([record]));
         assert_eq!(

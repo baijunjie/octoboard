@@ -1,6 +1,5 @@
 import React from "react";
 
-import { appConfig } from "../appConfig";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
@@ -39,10 +38,10 @@ export function IncompatibleDaemonScreen({ onQuit }: { onQuit: () => void }): Re
             details: <p>{t("connection.incompatible.versions", { appVersion: appVersion === undefined ? unknown : isolate(appVersion), daemonVersion: daemon ? isolate(daemon.version) : unknown })}</p>,
           }}
           action={desktop
-            ? { label: t("connection.incompatible.quit"), onSelect: onQuit }
+            ? { label: t("common.quit"), onSelect: onQuit }
             : { label: t("connection.incompatible.reload"), onSelect: reloadPage }}
           diagnostic={diagnostic}
-          known={{ title: `${appConfig.name} and its daemon are different versions` }}
+          known={{ title: "The app and its daemon are different versions" }}
         />
       }
     />

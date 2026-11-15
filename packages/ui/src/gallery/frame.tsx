@@ -20,6 +20,7 @@ import { afterFrames, applyDocumentTheme } from "../fixtures/pageFrame";
 import { createUi, settleMotion, stuckExit } from "../fixtures/interact";
 import { prepareStorage } from "./prepare";
 import { LIVE_CHANGE_EVENT } from "./scenario";
+import { fixtureRemoteDaemons } from "./remoteDaemonsFixture";
 import { fixtureUpdater } from "./updaterFixture";
 
 const lazyReadiness = observeLazyReadiness();
@@ -52,10 +53,12 @@ const heldFromStart = heldModifier !== undefined && scenario?.held === "from-sta
 // everything this file imports statically, `./fixtures`, every scenario file and whatever those import included: none
 // of it may read a stored preference at module load, or the scenario opens in the previous one's language (English
 // under `lang=zh-Hans`, say).
-const [{ App }, { AppRoot }, { Toasts }, { selectPlatform }, startup, { useUpdates }] = await Promise.all([
+const [{ App }, { AppRoot }, { Toasts }, { ConnectPage }, { TrayFlyout }, { selectPlatform }, startup, { useUpdates }] = await Promise.all([
   import("../App"),
   import("../AppRoot"),
   import("../shell/Toasts"),
+  import("../shell/ConnectPage"),
+  import("../shell/TrayFlyout"),
   import("../platform"),
   import("../StartupScreen"),
   import("../updates/UpdatesProvider"),
@@ -69,6 +72,9 @@ const { runInBackground } = await import("../lifecycle/runInBackground");
 const { showMenuBarIcon } = await import("../lifecycle/showMenuBarIcon");
 
 const { DaemonFailedScreen, NoAddressMessage, StartupScreen } = startup;
+
+/** The model of the notification-area flyout for a scenario that shows it, built by the app's own menu builder. */
+const trayFlyoutModel = scenario?.trayFlyout ? await (await import("./trayFlyoutFixture")).trayFlyoutModel(scenario.trayFlyout, language, theme) : undefined;
 
 /** What a file the gallery's open dialog hands back holds unless the scenario gives one: a document
  * of the right format with nothing in it. */
@@ -87,17 +93,19 @@ let daemonExited: ((detail: string) => void) | undefined;
  * grants stubbed from the scenario's `macosPermissions` (its System Settings pane refused when it gives a
  * `macosSettingsOpenError`), there being no other way to look at those rows than to really change a system setting, a
  * link opener that refuses with the error of a scenario's `externalLinkError` (otherwise the browser's own opener
- * stands, which opens a new tab), `backgroundRun`, `menuBarIcon` and `launchAtLogin` for a scenario that
- * says so (the General switches; none of them reaches a shell, and the login entry is a stub that keeps the last
- * choice, its list of login items refused when the scenario gives a `launchAtLoginOpenError`), the desktop shell's
- * `notifications` for one that says `desktopNotifications` (nothing is shown or opened; the link to the system's pane
- * only where the scenario's `host` has one), the clipboard taken away for a scenario that says so, and the
- * configuration-file capability stubbed from the scenario's `configuration` (absent where it says the platform has
- * none) so that no download or file picker is raised from a capture, and the exit capability for a `desktopApp` and for
- * a scenario that says `quitRequested`, whose quit request is raised once its steps have run and whose confirmation
- * ends nothing (or fails with the text of its `exitFailure`), the daemon exiting by itself for a scenario that says
- * `daemonExited`, and the updater for a scenario that has one (`updater`), with that same exit capability, since a
- * restart goes through it. Nothing else native; `chrome=1` alone keeps the browser platform kind. */
+ * stands, which opens a new tab), `backgroundRun`, `menuBarIcon` and `launchAtLogin` for a scenario that says so (the
+ * General switches; none of them reaches a shell, and the login entry is a stub that keeps the last choice, its list of
+ * login items refused when the scenario gives a `launchAtLoginOpenError`), the desktop shell's `notifications` for one
+ * that says `desktopNotifications` (nothing is shown or opened; the link to the system's pane only where the scenario's
+ * `host` has one), the clipboard taken away for a scenario that says so, and the configuration-file capability stubbed
+ * from the scenario's `configuration` (absent where it says the platform has none) so that no download or file picker
+ * is raised from a capture, and the exit capability for a `desktopApp` and for a scenario that says `quitRequested`,
+ * whose quit request is raised once its steps have run and whose confirmation ends nothing (or fails with the text of
+ * its `exitFailure`), the daemon exiting by itself for a scenario that says `daemonExited`, and the updater for a
+ * scenario that has one (`updater`), with that same exit capability, since a restart goes through it, the remote
+ * daemons list for a scenario that gives `remoteDaemons`, Remote Login for one that gives `remoteLogin`, and the
+ * flyout's own capability for one that gives `trayFlyout`. Nothing else native; `chrome=1` alone keeps the browser
+ * platform kind. */
 function galleryPlatform(): ReturnType<typeof selectPlatform> {
   const platform = selectPlatform();
   const host = scenario?.host ?? platform.host;
@@ -126,6 +134,24 @@ function galleryPlatform(): ReturnType<typeof selectPlatform> {
     }),
     ...(externalLinkError !== undefined && {
       links: { open: async () => { throw new Error(externalLinkError); } },
+    }),
+    ...(scenario?.remoteDaemons && { remoteDaemons: fixtureRemoteDaemons(scenario.remoteDaemons) }),
+    ...(scenario?.remoteLogin && {
+      remoteLogin: {
+        status: async () => (scenario.remoteLogin === "unknown" ? undefined : scenario.remoteLogin === "on"),
+        openSystemSettings: async () => {},
+      },
+    }),
+    ...(trayFlyoutModel && {
+      // The shell's side of the flyout: the model it built, and nothing to size, choose or close.
+      trayFlyout: {
+        model: async () => trayFlyoutModel,
+        onModel: () => () => {},
+        onOpened: () => () => {},
+        setSize: async () => {},
+        choose: async () => {},
+        close: async () => {},
+      },
     }),
     ...(scenario?.updater && { updater: fixtureUpdater(scenario.updater) }),
     ...((scenario?.desktopApp || scenario?.quitRequested || scenario?.updater || scenario?.daemonExited !== undefined || scenario?.exitFailure !== undefined) && {
@@ -193,7 +219,7 @@ function Crash({ stack }: { stack?: string }): never {
 if (scenario?.shellSettings?.runInBackground !== undefined) runInBackground.set(scenario.shellSettings.runInBackground);
 if (scenario?.shellSettings?.showMenuBarIcon !== undefined) showMenuBarIcon.set(scenario.shellSettings.showMenuBarIcon);
 // A viewer scenario has one too: the viewer's header copies a path through the daemon's notifications.
-const daemon = scenario && !scenario.startup ? createFixtureDaemon(scenario) : undefined;
+const daemon = scenario && !scenario.startup && !scenario.connectPage && !scenario.trayFlyout ? createFixtureDaemon(scenario) : undefined;
 if (daemon && scenario) installReportPageFixture(document, daemon, scenario.id);
 const { ViewerGallery } = scenario?.viewer ? await import("./viewerGallery") : { ViewerGallery: undefined };
 const viewerSubjects = scenario?.viewer ? await scenario.viewer.subjects(language) : undefined;
@@ -204,6 +230,8 @@ const { ButtonsGallery } = scenario?.pendingButtons ? await import("./buttonsGal
 
 function screen(): React.ReactElement {
   if (!scenario) return <p className="p-4">Unknown scenario “{params.get("scenario")}”.</p>;
+  if (scenario.connectPage) return <ConnectPage />;
+  if (scenario.trayFlyout) return <TrayFlyout />;
   if (CodeGallery) return <CodeGallery />;
   if (LicensesGallery && scenario.licensesDialog) return <LicensesGallery state={scenario.licensesDialog} />;
   if (SemanticColoursGallery) return <SemanticColoursGallery />;
@@ -236,6 +264,21 @@ function CheckedOnOpen(): null {
   return null;
 }
 
+/** Makes the page a remote daemon's window as the shell opens one: `?remote=<name>` in its address, which the app reads
+ * only inside the shell's webview (`remoteDaemonName` asks `inTauri`, the IPC bridge the shell injects). The marker is
+ * put on the window only now, after the platform adapter has been chosen: choosing it under the marker would build the
+ * shell's own adapter, whose capabilities need the bridge, in place of the browser's the gallery adds to. What reads
+ * the marker and the name does so as it renders, so the title bar names the daemon and the application's own features
+ * are absent. The daemon is not this machine's (`isLocal`), so what acts on its files is absent too. */
+function enterRemoteWindow(name: string): void {
+  const address = new URL(window.location.href);
+  address.searchParams.set("remote", name);
+  window.history.replaceState(null, "", address);
+  Object.defineProperty(window, "__TAURI_INTERNALS__", { value: {}, configurable: true });
+}
+const platformOfWindow = galleryPlatform();
+if (scenario?.remoteWindow) enterRemoteWindow(scenario.remoteWindow.name);
+
 // No automatic update check follows on its own, which would move a settled view 30 seconds on
 // (`firstCheckDelayMs={null}`): a scenario that wants one says `checked`.
 ReactDOM.createRoot(document.getElementById("root")!, {
@@ -246,8 +289,8 @@ ReactDOM.createRoot(document.getElementById("root")!, {
 }).render(
   <React.StrictMode>
     <AppRoot
-      platform={galleryPlatform()}
-      daemon={daemon}
+      platform={platformOfWindow}
+      daemon={daemon && scenario?.remoteWindow ? { ...daemon, isLocal: false } : daemon}
       nativeSync={false}
       firstCheckDelayMs={null}
       insideUpdates={scenario?.updater?.checked && <CheckedOnOpen />}

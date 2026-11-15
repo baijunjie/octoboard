@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act } from "react";
+import { remoteAccessOffered } from "./remoteAccessOffered";
 import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { translatorFor } from "../i18n/catalog";
@@ -56,11 +57,16 @@ const CASES: { name: string; platform: PlatformAdapter; state: Partial<State> }[
       backgroundRun: { set: async () => {} },
       statusItem: { setMenu: async () => {}, setVisible: async () => {}, onSessionChosen: () => () => {}, onOpened: () => () => {} },
       macosPermissions: { status: async () => ({ screenRecording: false, accessibility: true }), request: async () => false, openSystemSettings: async () => {} },
+      remoteLogin: { status: async () => false, openSystemSettings: async () => {} },
       configurationFile: { save: async () => undefined, open: async () => undefined },
       updater: { currentVersion: async () => "1.0.0", check: async () => undefined, install: async () => {} },
       appMenu: { onSettingsRequested: () => () => {}, setLabels: async () => {} },
     },
-    state: { host: { ...HOST, keep_awake: true }, settings: { ...DEFAULT_SETTINGS, keep_awake: true, git_workflow: { ...DEFAULT_SETTINGS.git_workflow, development: "worktree" } } },
+    state: {
+      host: { ...HOST, keep_awake: true },
+      settings: { ...DEFAULT_SETTINGS, keep_awake: true, git_workflow: { ...DEFAULT_SETTINGS.git_workflow, development: "worktree" } },
+      remoteAccess: { allowed: true, state: "serving", browser_port: null, address: "http://127.0.0.1:3369/?key=k", forward_command: "ssh -N -L 127.0.0.1:3369:/s u@<server>", connection: null, failure: null },
+    },
   },
   {
     name: "a browser",
@@ -98,11 +104,11 @@ async function mountSection(section: SettingsSectionId, platform: PlatformAdapte
 describe.each(CASES)("in $name", ({ platform, state }) => {
   // The Permissions section is listed only where the system has privacy grants to give, the Updates one where the
   // platform updates itself (a daemon that does is the same section over another store).
-  const sections = SETTINGS_SECTION_IDS.filter((id) => (id !== "permissions" || platform.host.os === "macos") && (id !== "updates" || platform.updater !== undefined));
+  const sections = SETTINGS_SECTION_IDS.filter((id) => (id !== "permissions" || platform.host.os === "macos") && (id !== "remote-access" || remoteAccessOffered(platform, state.remoteAccess ?? null)) && (id !== "updates" || platform.updater !== undefined));
 
   it.each(sections)("the %s section renders exactly the entries the search index shows for it, each in its group and worded as indexed", async (section) => {
     const { panel, reads } = await mountSection(section, platform, state);
-    const context: SettingsSearchContext = { platform, keepAwake: state.host?.keep_awake === true, settings: state.settings as Settings, reads };
+    const context: SettingsSearchContext = { platform, keepAwake: state.host?.keep_awake === true, settings: state.settings as Settings, remoteAccess: state.remoteAccess ?? null, reads };
     const rendered = [...panel.querySelectorAll<HTMLElement>("[data-settings-search-id]")];
     const entries = SETTINGS_SEARCH_INDEX[section].filter((entry) => !entry.shown || entry.shown(context));
     expect(rendered.map((element) => element.dataset.settingsSearchId)).toEqual(entries.map((entry) => entry.id));
@@ -130,7 +136,7 @@ async function renderedMatchesIndex(section: SettingsSectionId, overrides: Parti
   const platform: PlatformAdapter = { ...CASES[0]!.platform, ...overrides };
   const state = CASES[0]!.state;
   const { panel, reads } = await mountSection(section, platform, state);
-  const context: SettingsSearchContext = { platform, keepAwake: true, settings: state.settings as Settings, reads };
+  const context: SettingsSearchContext = { platform, keepAwake: true, settings: state.settings as Settings, remoteAccess: state.remoteAccess ?? null, reads };
   return {
     rendered: [...panel.querySelectorAll<HTMLElement>("[data-settings-search-id]")].map((element) => element.dataset.settingsSearchId),
     indexed: SETTINGS_SEARCH_INDEX[section].filter((entry) => !entry.shown || entry.shown(context)).map((entry) => entry.id),

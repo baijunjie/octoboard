@@ -219,10 +219,14 @@ test("the daemon's crate-wide tests cover every file with a whole-crate check", 
   for (const file of covered) assert.ok(wholeCrate.includes(file), `${file} no longer has a whole-crate check`);
 });
 
+// A test reading a file that is no module's source (a capability, a permission file, `lib.rs`) is selected by a change
+// to that file, which runs the crate in full (`rustChanges`); only a `TS` derive or a read of other modules' sources
+// needs an entry in `CRATE_WIDE_TESTS.native`.
 test("the desktop crate has no whole-crate test the module filters would skip", () => {
   assert.deepEqual(CRATE_WIDE_TESTS.native, []);
+  const readsSources = /derive\([^)]*\bTS\b|CARGO_MANIFEST_DIR[^;]*\.join\("src"\)|read_dir\(.*src\/|include_str!\(\s*"[^"]*(?<!\blib|\bmain)\.rs"/;
   for (const file of walk("apps/desktop/src-tauri/src").filter((name) => name.endsWith(".rs"))) {
-    assert.doesNotMatch(read(file), /derive\([^)]*\bTS\b|CARGO_MANIFEST_DIR|read_dir\(.*src/, file);
+    assert.doesNotMatch(read(file), readsSources, file);
   }
 });
 
