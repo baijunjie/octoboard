@@ -5,7 +5,7 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { accountOf, sessionOf } from "../fixtures/builders";
-import type { Account, AccountQuota, Settings } from "../protocol";
+import type { Account, AccountQuota, Session, Settings } from "../protocol";
 import { createStateStore, DaemonProvider } from "../store";
 import { availabilityOf } from "../fixtures/fixtureProviders";
 import { testDaemon } from "../test/testDaemon";
@@ -21,8 +21,8 @@ const work: Account = accountOf("claude-work", "claude", "Work", "/a/work");
 
 const notLoggedIn: AccountQuota = { agent: "claude", account: "claude-work", fetched_at: 0, plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" }, email: null };
 
-function render(settings: Partial<Settings>, ui: React.ReactElement, accountQuotas: AccountQuota[] = []) {
-  const store = createStateStore({ accountQuotas, providers: TEST_PROVIDERS, agentAvailability: availabilityOf(TEST_PROVIDERS) });
+function render(settings: Partial<Settings>, ui: React.ReactElement, accountQuotas: AccountQuota[] = [], sessions: Session[] = []) {
+  const store = createStateStore({ accountQuotas, sessions: new Map(sessions.map((session) => [session.id, session])), providers: TEST_PROVIDERS, agentAvailability: availabilityOf(TEST_PROVIDERS) });
   store.setState({ settings: { ...store.getState().settings, ...settings } });
   const daemon = testDaemon({ store, request: vi.fn(), showNotice: vi.fn() });
   const container = document.body.appendChild(document.createElement("div"));
@@ -37,15 +37,18 @@ function render(settings: Partial<Settings>, ui: React.ReactElement, accountQuot
 
 const confirm = () => Array.from(document.body.querySelectorAll("button")).find((button) => button.textContent === "Switch")!;
 const switching = sessionOf("s-1", "c-1", "p-1", "Fix search", "idle");
-const switchDialog = (account: string | null, onSwitchAccounts: () => void = () => {}) => (
-  <SwitchAccountDialog session={account === null ? { ...switching, account_id: "claude-work" } : switching} account={account} accountName="Work" onClose={() => {}} onSwitchAccounts={onSwitchAccounts} />
-);
+function renderSwitchDialog(settings: Partial<Settings>, account: string | null, onSwitchAccounts: () => void, accountQuotas: AccountQuota[] = []) {
+  const session = account === null ? { ...switching, account_id: "claude-work" } : switching;
+  return render(settings,
+    <SwitchAccountDialog session={session} account={account} accountName="Work" onClose={() => {}} onSwitchAccounts={onSwitchAccounts} />,
+    accountQuotas, [session]);
+}
 
 it("says in the error alert dialog that a switch's target was turned off, switching nothing, and switches once it is back on", async () => {
   const onSwitchAccounts = vi.fn();
   const report = vi.spyOn(errorAlerts, "report").mockImplementation(() => {});
   onTestFinished(() => report.mockRestore());
-  const { store } = render({ accounts: [{ ...work, disabled: true }] }, switchDialog("claude-work", onSwitchAccounts));
+  const { store } = renderSwitchDialog({ accounts: [{ ...work, disabled: true }] }, "claude-work", onSwitchAccounts);
   await act(async () => confirm().click());
   expect(report).toHaveBeenCalledTimes(1);
   expect(report.mock.calls[0]![0].message).toContain("Work");
@@ -64,7 +67,7 @@ it("says in the error alert dialog that a switch's target is not logged in, with
   const onSwitchAccounts = vi.fn();
   const report = vi.spyOn(errorAlerts, "report").mockImplementation(() => {});
   onTestFinished(() => report.mockRestore());
-  const { store } = render({ accounts: [work] }, switchDialog("claude-work", onSwitchAccounts), [notLoggedIn]);
+  const { store } = renderSwitchDialog({ accounts: [work] }, "claude-work", onSwitchAccounts, [notLoggedIn]);
   await act(async () => confirm().click());
   expect(report).toHaveBeenCalledTimes(1);
   expect(report.mock.calls[0]![0]).toMatchObject({ recovery: "accountNotSignedIn" });
@@ -82,7 +85,7 @@ it("refuses a switch to a default account that is turned off in the error alert 
   const onSwitchAccounts = vi.fn();
   const report = vi.spyOn(errorAlerts, "report").mockImplementation(() => {});
   onTestFinished(() => report.mockRestore());
-  render({ accounts: [work], disabled_default_accounts: ["claude"] }, switchDialog(null, onSwitchAccounts));
+  renderSwitchDialog({ accounts: [work], disabled_default_accounts: ["claude"] }, null, onSwitchAccounts);
   await act(async () => confirm().click());
   expect(report).toHaveBeenCalledTimes(1);
   expect(onSwitchAccounts).not.toHaveBeenCalled();

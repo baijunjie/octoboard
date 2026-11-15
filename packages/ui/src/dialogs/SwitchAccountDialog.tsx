@@ -57,16 +57,18 @@ export function SwitchAccountDialog({
   const [scope, setScope] = useState<Scope>("session");
   // A session an account switch already holds is left out: it is on its way, and cannot be claimed twice.
   const targetsIn = ({ sessions: all, queuedAccountSwitches }: Pick<State, "sessions" | "queuedAccountSwitches">, chosen: Scope): Session[] => {
-    const eligible = (candidate: Session) => candidate.console_id === session.console_id
+    const eligible = (candidate: Session) => all.has(candidate.id) && candidate.console_id === session.console_id
       && candidate.agent === session.agent && canSwitchTo(candidate, account) && !holdsAccountSwitch(candidate, queuedAccountSwitches);
     return chosen === "console"
       ? Array.from(all.values()).filter(eligible)
       : sessionWithDescendants(all.values(), all.get(session.id) ?? session).filter(eligible);
   };
   const counts = useDaemonStore(useShallow((s) => ({ session: targetsIn(s, "session").length, console: targetsIn(s, "console").length })));
+  const hasScopeChoice = counts.console > counts.session;
+  const effectiveScope = hasScopeChoice ? scope : "session";
   const { confirmLaunch, confirmation } = useConfirmIncompleteLaunch(onClose);
   const agent = <ProviderName agent={session.agent} />;
-  const several = scope === "console" || counts.session > 1;
+  const several = effectiveScope === "console" || counts.session > 1;
   return (
     <ConfirmDialog
       title={t("dialog.switchAccount.title")}
@@ -74,7 +76,7 @@ export function SwitchAccountDialog({
       message={<p>{t(several ? "dialog.switchAccount.messageAllLaunch" : session.has_conversation ? "dialog.switchAccount.messageLaunch" : "dialog.switchAccount.messageFreshLaunch")}</p>}
       confirmLabel={t("dialog.switchAccount.confirm")}
       // Nothing left to switch in the chosen scope (its sessions began switching after the dialog opened).
-      confirmDisabled={counts[scope] === 0}
+      confirmDisabled={counts[effectiveScope] === 0}
       onCancel={onClose}
       errorTitle={t("dialog.switchAccount.failedTitle")}
       // The set is read once Confirm is pressed, and fixed from then on: sessions opened later never join it.
@@ -97,20 +99,25 @@ export function SwitchAccountDialog({
           return Promise.resolve();
         }
         return confirmLaunch(account, () => {
-          onSwitchAccounts(targetsIn(store.getState(), scope).map((target) => target.id), account, accountName);
+          onSwitchAccounts(targetsIn(store.getState(), effectiveScope).map((target) => target.id), account, accountName);
           onClose();
         });
       }}
       extraControl={
         <>
-          <RadioGroup variant="secondary" label={t("dialog.switchAccount.scopeLabel")} hideLabel value={scope} onChange={(value) => setScope(value as Scope)}>
+          {hasScopeChoice ? <RadioGroup variant="secondary" label={t("dialog.switchAccount.scopeLabel")} hideLabel value={scope} onChange={(value) => setScope(value as Scope)}>
             <Radio value="session" description={t("dialog.switchAccount.countSession", { count: counts.session })}>
               {t("dialog.switchAccount.scopeSession")}
             </Radio>
             <Radio value="console" description={t("dialog.switchAccount.countConsole", { count: counts.console })}>
               {t("dialog.switchAccount.scopeConsole")}
             </Radio>
-          </RadioGroup>
+          </RadioGroup> : counts.session !== 1 ? (
+            <div>
+              <p>{t("dialog.switchAccount.scopeSession")}</p>
+              <p className="text-sm text-app-muted">{t("dialog.switchAccount.countSession", { count: counts.session })}</p>
+            </div>
+          ) : null}
           <p className="text-sm text-app-muted"><Message id="dialog.switchAccount.eligibility" params={{ agent }} /></p>
           {/* Inside this dialog's tree, though it shows in its own layer: a focus scope that is not
               nested in the one beneath it is bounced back to it. */}

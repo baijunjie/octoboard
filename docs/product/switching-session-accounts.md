@@ -16,7 +16,8 @@ logged in" there), nor onto a turned-off one (see "Turning an account off" in `d
 ## Confirming a switch
 
 The confirmation is titled "Switch account"; its body's first sentence names the session and the account it will be
-switched to. It asks which sessions to switch, as two options of a radio group; the first is selected by default:
+switched to. When the console contains eligible sessions outside this session and its descendants, it asks which
+sessions to switch, as two options of a radio group; the first is selected by default:
 
 - **This session and its child sessions** — the session and every session under it: those bound to it, those bound to
   them, and so on to any depth, reached through archived sessions as well.
@@ -24,9 +25,13 @@ switched to. It asks which sessions to switch, as two options of a radio group; 
   sessions, whether independent or reporting to a parent, across all projects in the console.
 
 In both, only sessions of the session's own agent are switched, and archived sessions, sessions already on the target
-account and sessions already being switched (see "While a session is switching" below) are left out. Each option shows
-how many sessions it would switch, kept up to date while the confirmation is open, and Confirm is disabled while the
-chosen option has none. Neither choice changes the console's or projects' account defaults for future sessions.
+account, sessions that have been deleted and sessions already being switched (see "While a session is switching" below)
+are left out. Each option shows how many sessions it would switch. When both scopes cover the same eligible sessions,
+the options are hidden and the switch covers this session and its descendants. With one eligible session there is no
+scope summary; with none or several, the scope and count are shown as plain information. The counts and whether the
+options are offered stay up to date while the confirmation is open. Confirm is disabled while the selected scope has
+no eligible sessions, including when the options are hidden. Neither scope changes the console's or projects' account
+defaults for future sessions.
 
 The submenu disables a used-up account and one that is not logged in, and leaves out a turned-off one (see "Session
 rows" in `docs/product/sidebar-session-rows.md`), so the target account can only become unusable after the

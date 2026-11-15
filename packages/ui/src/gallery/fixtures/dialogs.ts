@@ -675,6 +675,30 @@ export const dialogScenarios: Scenario[] = [
     steps: openSwitchAccount("Release coordinator"),
   },
   {
+    id: "dialog-switch-account-single",
+    group: "Sidebar sessions",
+    category: "normal",
+    title: "Switch account for one session",
+    description: "Only one session can switch, so there are no scope options or count summary. The confirmation keeps the session and target account, the restart explanation, and the eligibility note.",
+    state: {
+      ...switchAccountState,
+      sessions: new Map([...switchAccountState.sessions!].filter(([id]) => id === "s-switch-hub")),
+    },
+    steps: openSwitchAccount("Release coordinator"),
+  },
+  {
+    id: "dialog-switch-account-children-only",
+    group: "Sidebar sessions",
+    category: "normal",
+    title: "Switch account for a session and its children",
+    description: "All eligible sessions belong to this session's tree, so both scopes would switch the same two sessions. A plain scope and count summary replaces the radio options; other agents, archived sessions, sessions already on the target account and other consoles do not add a choice.",
+    state: {
+      ...switchAccountState,
+      sessions: new Map([...switchAccountState.sessions!].filter(([id]) => id !== "s-switch-work")),
+    },
+    steps: openSwitchAccount("Release coordinator"),
+  },
+  {
     id: "dialog-switch-account-partial-failure",
     group: "Sidebar sessions",
     category: "exceptional",
