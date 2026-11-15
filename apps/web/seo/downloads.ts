@@ -55,12 +55,10 @@ export const downloadTabs = [
 
 // The catalog keys of the paragraphs under each desktop app's download button, in order.
 export const appPanelKeys = {
-  macos: ["downloadMacosRequirements", "downloadAgentsNote", "downloadUpdates"],
+  macos: ["downloadMacosRequirements", "downloadUpdates"],
   windows: [
     "downloadWindowsRequirements",
     "downloadWindowsUserOnly",
-    "downloadAgentsNote",
-    "downloadWindowsGit",
     "downloadWindowsSmartScreen",
     "downloadUpdates",
   ],

@@ -23,38 +23,43 @@ arrow keys move between tabs (mirrored in Arabic's right-to-left layout) and wra
 first and last tab; moving selects the tab.
 
 **macOS panel**: a download button for macOS, then that it is for Apple silicon and Intel Macs on macOS 11 or later,
-that the visitor installs the coding-agent CLIs they want to use themselves, and that later versions arrive through the
-app's own updates.
+and that later versions arrive through the app's own updates.
 
 **Windows panel**: a download button for Windows, then that it is for x64 on Windows 10 version 21H2 or later, that on
 Windows 11 on Arm the x64 app runs under emulation, and that the installer downloads Microsoft Edge WebView2 when it is
-missing, which needs an internet connection; that it installs for the visitor's user account only; that the visitor
-installs the coding-agent CLIs themselves; that Claude Code and Codex also need Git for Windows; that the app is not
+missing, which needs an internet connection; that it installs for the visitor's user account only; that the app is not
 code-signed yet, so Microsoft Defender SmartScreen may show "Windows protected your PC", which "More info", then "Run
 anyway" passes; and that later versions arrive through the app's own updates.
 
-**Linux panel**, in order:
+**Linux panel**: an introduction says that it installs `octoboardd`, the Octoboard daemon, on a Linux server without
+root, opened in a browser on the visitor's own machine, and that it is for x86_64 and aarch64, on any distribution.
+Three numbered steps follow:
 
-- that it installs `octoboardd`, the Octoboard daemon, on a Linux server without root, opened in a browser on the
-  visitor's own machine, and that it is for x86_64 and aarch64, on any distribution;
-- the install command, `curl --proto '=https' --tlsv1.2 -fsSL <site origin>/install.sh | sh` (see "The install script" in
-  `docs/product/installing-the-server-form.md`), in a horizontally scrollable, focusable block with a Copy button. A
-  successful copy turns the button's label to Copied for 2 seconds and announces it to screen readers; a copy the
-  browser refuses changes nothing, the command staying selectable;
-- the next steps: run `octoboardd start` on the server, which listens on port 3369 (`--port <port>` picks another),
-  and run `octoboardd address` there, which prints the address and the SSH command that forwards it, such as
-  `ssh -o ExitOnForwardFailure=yes -L 127.0.0.1:3369:/home/<you>/.octoboard/browser.sock <you>@<server>` (see "The
-  browser socket" in `docs/product/server-form.md`); run that command on the visitor's own machine, then open the
-  address in a browser there;
+1. **Install on the server.** The command, `curl --proto '=https' --tlsv1.2 -fsSL <site origin>/install.sh | sh` (see
+   "The install script" in `docs/product/installing-the-server-form.md`), is in a horizontally scrollable, focusable
+   block with a Copy button. A successful copy turns the button's label to Copied for 2 seconds and announces it to
+   screen readers; a copy the browser refuses changes nothing, the command staying selectable.
+2. **Start on the server.** A two-line command block shows `octoboardd start`, then `octoboardd address` to print the
+   address and the SSH command that forwards it.
+3. **Open on the visitor's own machine.** Run the printed SSH command there, keep that connection open, then open the
+   printed address in a browser.
+
+A collapsed options and troubleshooting disclosure follows, available without JavaScript too. It holds:
+
 - the PATH caveat: when the install says `~/.local/bin` is not on the PATH, run `octoboardd start` by the full path it
   prints, or add the directory to the PATH;
-- the service: replacing the command's final `sh` with `sh -s -- --service` installs it as a systemd user service that
-  starts at once, `--port <port>` choosing another port; the script then turns lingering on, which keeps the service
-  running after logout and starting at boot, and only when it says it could not does the visitor run
+- the default port, 3369 (`--port <port>` picks another), and an example of the SSH command printed with the server's
+  details, `ssh -o ExitOnForwardFailure=yes -L 127.0.0.1:3369:/home/<you>/.octoboard/browser.sock <you>@<server>` (see
+  "The browser socket" in `docs/product/server-form.md`);
+- the service: replacing the install command's final `sh` with `sh -s -- --service` installs it as a systemd user
+  service that starts at once, `--port <port>` choosing another port; the script then turns lingering on, which keeps
+  the service running after logout and starting at boot, and only when it says it could not does the visitor run
   `loginctl enable-linger "$USER"` once, possibly with sudo;
-- upgrading: run the install command again, then `octoboardd restart`;
-- links to the archive of each architecture, x86_64 and aarch64;
-- the terminal demonstration (below).
+- upgrading: run the install command again, then `octoboardd restart`.
+
+After the disclosure, links to each architecture's archive, x86_64 and aarch64, use the website's download-button
+appearance, wrapping onto new lines where needed. The terminal demonstration (below) follows them. The agent-readable
+Markdown uses headings for the three steps and the options, retaining all commands and troubleshooting content in full.
 
 Commands and code read left to right in every language, Arabic included. Under the panels, a link opens the
 repository's releases page, listing every release.

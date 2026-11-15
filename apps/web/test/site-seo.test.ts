@@ -238,7 +238,7 @@ test("agent documents follow the pages and carry the download and install inform
   assert.ok(page.includes(`[Download for Windows](${downloads.windows})`));
   assert.ok(page.includes("curl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh | sh"));
   assert.ok(page.includes("`sh -s -- --service`"));
-  assert.ok(page.includes("`octoboardd start`"));
+  assert.ok(page.includes("```sh\noctoboardd start\noctoboardd address\n```"));
   assert.ok(
     page.includes(`\`ssh -o ExitOnForwardFailure=yes -L 127.0.0.1:${port}:/home/<you>/.octoboard/browser.sock <you>@<server>\``),
   );
@@ -258,8 +258,8 @@ test("agent documents follow the pages and carry the download and install inform
   assert.match(home, /Requirements and installation steps for each system are on the download page\./);
   assert.equal(home.includes("x64-setup.exe"), false);
   assert.match(page, /installs Octoboard for your user account only/);
-  assert.match(page, /Claude Code and Codex also need Git for Windows/);
-  assert.match(page, /Install the coding-agent CLIs you want to use yourself/);
+  assert.doesNotMatch(page, /Claude Code and Codex also need Git for Windows/);
+  assert.doesNotMatch(page, /Install the coding-agent CLIs you want to use yourself/);
   assert.match(home, /The app is free and open source under the MIT License\./);
   assert.equal(home.includes("Awaiting instructions"), false);
   assert.match(home, /Switch accounts\. Continue the task\./);
@@ -268,6 +268,45 @@ test("agent documents follow the pages and carry the download and install inform
   for (const locale of locales) {
     const body = files[markdownFile(locale.code === "en" ? "/" : `/${locale.code}/`)];
     const catalog = messages[locale.code];
+    const download = files[markdownFile(locale.code === "en" ? "/download/" : `/${locale.code}/download/`)];
+    for (const key of [
+      "downloadMacosRequirements", "downloadWindowsRequirements", "downloadWindowsUserOnly",
+      "downloadWindowsSmartScreen", "downloadUpdates",
+    ]) {
+      const text = catalog[key].replaceAll("{appName}", "Octoboard");
+      assert.ok(download.includes(text), `${locale.code}: missing installation guidance: ${key}`);
+    }
+    for (const key of ["downloadAgentsNote", "downloadWindowsGit"]) {
+      assert.equal(download.includes(catalog[key]), false, `${locale.code}: unrelated setup guidance: ${key}`);
+    }
+    const steps = [
+      `### ${catalog.downloadInstallStep}`,
+      "```sh\ncurl --proto '=https' --tlsv1.2 -fsSL https://octoboard.dev/install.sh | sh\n```",
+      `### ${catalog.downloadStartStep}`,
+      "```sh\noctoboardd start\noctoboardd address\n```",
+      `### ${catalog.downloadOpenStep}`,
+      catalog.downloadBrowserSteps,
+      `### ${catalog.downloadOptionsLabel}`,
+    ];
+    let previousStep = -1;
+    for (const step of steps) {
+      const position = download.indexOf(step);
+      assert.ok(position > previousStep, `${locale.code}: missing or reordered Linux step: ${step}`);
+      previousStep = position;
+    }
+    const options = download.slice(previousStep);
+    for (const command of [
+      "`~/.local/bin`",
+      "`octoboardd start`",
+      "`octoboardd address`",
+      `\`ssh -o ExitOnForwardFailure=yes -L 127.0.0.1:${port}:/home/<you>/.octoboard/browser.sock <you>@<server>\``,
+      "`--port <port>`",
+      "`sh -s -- --service`",
+      '`loginctl enable-linger "$USER"`',
+      "`octoboardd restart`",
+    ]) {
+      assert.ok(options.includes(command), `${locale.code}: missing Linux option: ${command}`);
+    }
     for (const key of ["faqProjectIsolationAnswer", "faqAgentChoiceAnswer"]) {
       const answer = catalog[key].replaceAll("{appName}", "Octoboard");
       assert.ok(body.includes(answer), `${locale.code}: current FAQ answer`);

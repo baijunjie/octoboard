@@ -270,7 +270,6 @@
   "workspaceSeoSummary": "Gérez vos comptes Claude Code, Codex et Grok Build dans un espace open source pour macOS et Windows, avec un serveur Linux. Suivez l’utilisation, changez de compte et coordonnez vos agents de programmation entre projets.",
   "faqRemoteHostsAnswer": "En partie. Sous Linux, {appName} s’exécute sur un serveur, agents compris, et vous l’utilisez depuis le navigateur de votre propre ordinateur. Exécuter des agents sur d’autres hôtes depuis un espace de travail de bureau est prévu, mais n’est pas encore disponible.",
   "privacyRemoteHostsBody": "{appName} peut aussi s’exécuter sur un serveur Linux que vous installez et gérez vous-même. Ses données sont stockées sur ce serveur et ses agents s’y exécutent, et non sur des serveurs exploités par {operatorName}. Vous l’utilisez depuis le navigateur de votre propre ordinateur : l’interface transite par le réseau entre le serveur et votre ordinateur, dans votre connexion SSH. Exécuter des agents sur d’autres hôtes depuis un espace de travail de bureau est prévu et n’est pas encore disponible. Cette politique ne couvre pas cette fonctionnalité.",
-  "downloadServerReach": "Lancez ensuite {start} sur le serveur (port {defaultPort} par défaut ; {port} en choisit un autre), puis lancez-y {address} : la commande affiche l’adresse et la commande SSH qui la transfère, par exemple {forward}. Lancez cette commande sur votre propre ordinateur, puis ouvrez-y l’adresse dans un navigateur.",
   "downloadServiceSteps": "Pour l’installer comme service utilisateur systemd qui démarre aussitôt, remplacez le dernier {plain} par {option} et ajoutez {port} pour un autre port. Le script active ensuite le lingering, pour que le service continue après la déconnexion et démarre au boot ; s’il indique qu’il n’a pas pu le faire, lancez {linger} une fois (sudo peut être nécessaire).",
   "downloadUpgrade": "Pour mettre à jour, relancez la commande d’installation, puis {restart}.",
   "downloadPathNote": "Si l’installation indique que {binDir} n’est pas dans votre PATH, lancez {start} avec le chemin complet qu’elle affiche, ou ajoutez {binDir} à votre PATH.",
@@ -291,5 +290,12 @@
   "downloadAgentsNote": "Installez vous-même les CLI des agents de programmation que vous voulez utiliser.",
   "platformsDownloadPointer": "Les prérequis et les étapes d’installation de chaque système sont sur la page de téléchargement.",
   "downloadDemoReplayLabel": "Rejouer l’animation de démonstration",
-  "downloadDemoSummary": "Démonstration des étapes ci-dessus : un terminal sur le serveur installe et démarre {appName} et affiche son adresse, puis un terminal sur votre propre ordinateur redirige le port avec SSH, et un navigateur ouvre cette adresse et affiche l’interface d’{appName}."
+  "downloadDemoSummary": "Démonstration des étapes ci-dessus : un terminal sur le serveur installe et démarre {appName} et affiche son adresse, puis un terminal sur votre propre ordinateur redirige le port avec SSH, et un navigateur ouvre cette adresse et affiche l’interface d’{appName}.",
+  "downloadInstallStep": "Installer sur le serveur",
+  "downloadStartStep": "Démarrer sur le serveur",
+  "downloadOpenStep": "Ouvrir sur votre ordinateur",
+  "downloadOptionsLabel": "Options et dépannage",
+  "downloadPortNote": "Le port par défaut est {defaultPort} ; utilisez {port} pour le changer. {address} affiche une commande SSH adaptée à votre serveur, par exemple {forward}.",
+  "downloadBrowserSteps": "Sur votre ordinateur, exécutez la commande SSH affichée ci-dessus. Gardez cette connexion ouverte, puis ouvrez l’adresse indiquée dans votre navigateur.",
+  "downloadServerReach": "Lancez ensuite {start} sur le serveur (port {defaultPort} par défaut ; {port} en choisit un autre), puis lancez-y {address} : la commande affiche l’adresse et la commande SSH qui la transfère, par exemple {forward}. Lancez cette commande sur votre propre ordinateur, puis ouvrez-y l’adresse dans un navigateur."
 }

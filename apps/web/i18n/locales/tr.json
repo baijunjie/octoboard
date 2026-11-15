@@ -270,7 +270,6 @@
   "workspaceSeoSummary": "Claude Code, Codex ve Grok Build hesaplarını macOS ve Windows için açık kaynaklı bir çalışma alanında ve bir Linux sunucusunda yönetin. Kullanımı izleyin, hesap değiştirin ve kodlama ajanlarını projeler arasında koordine edin.",
   "faqRemoteHostsAnswer": "Kısmen. Linux’ta {appName}, ajanlarıyla birlikte bir sunucuda çalışır ve onu kendi bilgisayarınızın tarayıcısından kullanırsınız. Ajanları tek bir masaüstü çalışma alanından başka sunucularda çalıştırmak planlanıyor, ancak henüz kullanılamıyor.",
   "privacyRemoteHostsBody": "{appName}, kendi kurup yönettiğiniz bir Linux sunucusunda da çalışabilir. Verileri o sunucuda saklanır ve ajanları orada çalışır; {operatorName} tarafından işletilen sunucular kullanılmaz. Onu kendi bilgisayarınızın tarayıcısından kullanırsınız: arayüz, SSH bağlantınızın içinde, sunucu ile bilgisayarınız arasında ağ üzerinden iletilir. Ajanları tek bir masaüstü çalışma alanından başka sunucularda çalıştırmak planlanıyor ve henüz kullanılamıyor. Bu politika söz konusu özelliği kapsamaz.",
-  "downloadServerReach": "Ardından sunucuda {start} komutunu çalıştırın (varsayılan bağlantı noktası {defaultPort}’dir; başka birini {port} ile seçersiniz) ve orada {address} komutunu da çalıştırın: komut adresi ve onu yönlendiren SSH komutunu yazdırır, örneğin {forward}. Bu komutu kendi bilgisayarınızda çalıştırın, sonra adresi o bilgisayardaki bir tarayıcıda açın.",
   "downloadServiceSteps": "Hemen başlayan bir systemd kullanıcı hizmeti olarak kurmak için son {plain} yerine {option} yazın; başka bir bağlantı noktası için {port} ekleyin. Betik ardından lingering özelliğini açar; böylece hizmet oturumu kapattıktan sonra da çalışır ve açılışta başlar. Açamadığını bildirirse {linger} komutunu bir kez çalıştırın (sudo gerekebilir).",
   "downloadUpgrade": "Yükseltmek için kurulum komutunu yeniden çalıştırın, ardından {restart} komutunu çalıştırın.",
   "downloadPathNote": "Kurulum {binDir} dizininin PATH içinde olmadığını bildirirse {start} komutunu yazdırdığı tam yolla çalıştırın ya da {binDir} dizinini PATH’e ekleyin.",
@@ -291,5 +290,12 @@
   "downloadAgentsNote": "Kullanmak istediğiniz kodlama ajanı CLI’larını kendiniz kurun.",
   "platformsDownloadPointer": "Her sistemin gereksinimleri ve kurulum adımları indirme sayfasında.",
   "downloadDemoReplayLabel": "Demo animasyonunu yeniden oynat",
-  "downloadDemoSummary": "Yukarıdaki adımların gösterimi: sunucudaki bir terminal {appName}’u kurar, başlatır ve adresini yazdırır; ardından kendi bilgisayarınızdaki bir terminal bağlantı noktasını SSH ile yönlendirir, bir tarayıcı da bu adresi açıp {appName} arayüzünü gösterir."
+  "downloadDemoSummary": "Yukarıdaki adımların gösterimi: sunucudaki bir terminal {appName}’u kurar, başlatır ve adresini yazdırır; ardından kendi bilgisayarınızdaki bir terminal bağlantı noktasını SSH ile yönlendirir, bir tarayıcı da bu adresi açıp {appName} arayüzünü gösterir.",
+  "downloadInstallStep": "Sunucuya kurun",
+  "downloadStartStep": "Sunucuda başlatın",
+  "downloadOpenStep": "Bilgisayarınızda açın",
+  "downloadOptionsLabel": "Seçenekler ve sorun giderme",
+  "downloadPortNote": "Varsayılan bağlantı noktası {defaultPort}; değiştirmek için {port} kullanın. {address}, sunucunuzun bilgileriyle bir SSH komutu yazdırır; örneğin {forward}.",
+  "downloadBrowserSteps": "Bilgisayarınızda yukarıda yazdırılan SSH komutunu çalıştırın. Bağlantıyı açık tutun, ardından yazdırılan adresi tarayıcınızda açın.",
+  "downloadServerReach": "Ardından sunucuda {start} komutunu çalıştırın (varsayılan bağlantı noktası {defaultPort}’dir; başka birini {port} ile seçersiniz) ve orada {address} komutunu da çalıştırın: komut adresi ve onu yönlendiren SSH komutunu yazdırır, örneğin {forward}. Bu komutu kendi bilgisayarınızda çalıştırın, sonra adresi o bilgisayardaki bir tarayıcıda açın."
 }

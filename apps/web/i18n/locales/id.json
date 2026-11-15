@@ -270,7 +270,6 @@
   "workspaceSeoSummary": "Kelola akun Claude Code, Codex, dan Grok Build dalam ruang kerja sumber terbuka untuk macOS dan Windows, beserta server Linux. Pantau penggunaan, ganti akun, dan koordinasikan agen pemrograman lintas proyek.",
   "faqRemoteHostsAnswer": "Sebagian. Di Linux, {appName} berjalan di server beserta agennya, dan Anda memakainya dari browser di komputer Anda sendiri. Menjalankan agen di host lain dari satu ruang kerja desktop masih direncanakan dan belum tersedia.",
   "privacyRemoteHostsBody": "{appName} juga dapat berjalan di server Linux yang Anda siapkan dan kelola sendiri. Datanya disimpan di server itu dan agennya berjalan di sana, bukan di server yang dioperasikan {operatorName}. Anda menggunakannya dari browser di komputer Anda sendiri: antarmukanya berpindah melalui jaringan antara server dan komputer Anda, di dalam koneksi SSH Anda. Menjalankan agen di host lain dari satu ruang kerja desktop masih direncanakan dan belum tersedia. Kebijakan ini tidak mencakup fitur tersebut.",
-  "downloadServerReach": "Lalu jalankan {start} di server (port bawaannya {defaultPort}; {port} memilih port lain), dan jalankan {address} di sana: perintah itu mencetak alamat dan perintah SSH yang meneruskannya, misalnya {forward}. Jalankan perintah tersebut di komputer Anda sendiri, lalu buka alamatnya di browser di komputer itu.",
   "downloadServiceSteps": "Untuk memasangnya sebagai layanan pengguna systemd yang langsung berjalan, ganti {plain} terakhir dengan {option}, dan tambahkan {port} untuk port lain. Skrip lalu menyalakan lingering agar layanan tetap berjalan setelah Anda keluar dan mulai saat boot; jika skrip menyatakan tidak berhasil, jalankan {linger} sekali (mungkin perlu sudo).",
   "downloadUpgrade": "Untuk memperbarui, jalankan perintah instalasi lagi, lalu {restart}.",
   "downloadPathNote": "Jika instalasi menyatakan {binDir} tidak ada di PATH Anda, jalankan {start} dengan path lengkap yang ditampilkannya, atau tambahkan {binDir} ke PATH Anda.",
@@ -291,5 +290,12 @@
   "downloadAgentsNote": "Pasang sendiri CLI agen pemrograman yang ingin Anda gunakan.",
   "platformsDownloadPointer": "Persyaratan dan langkah pemasangan untuk setiap sistem ada di halaman unduhan.",
   "downloadDemoReplayLabel": "Putar ulang animasi demo",
-  "downloadDemoSummary": "Demo langkah di atas: terminal di server memasang dan menjalankan {appName} lalu menampilkan alamatnya, kemudian terminal di komputer Anda sendiri meneruskan port lewat SSH, dan browser membuka alamat itu serta menampilkan antarmuka {appName}."
+  "downloadDemoSummary": "Demo langkah di atas: terminal di server memasang dan menjalankan {appName} lalu menampilkan alamatnya, kemudian terminal di komputer Anda sendiri meneruskan port lewat SSH, dan browser membuka alamat itu serta menampilkan antarmuka {appName}.",
+  "downloadInstallStep": "Instal di server",
+  "downloadStartStep": "Jalankan di server",
+  "downloadOpenStep": "Buka di komputer Anda",
+  "downloadOptionsLabel": "Opsi dan pemecahan masalah",
+  "downloadPortNote": "Port bawaan adalah {defaultPort}; gunakan {port} untuk mengubahnya. {address} menampilkan perintah SSH dengan detail server Anda, misalnya {forward}.",
+  "downloadBrowserSteps": "Di komputer Anda, jalankan perintah SSH yang ditampilkan di atas. Biarkan koneksi tetap terbuka, lalu buka alamat yang ditampilkan di browser.",
+  "downloadServerReach": "Lalu jalankan {start} di server (port bawaannya {defaultPort}; {port} memilih port lain), dan jalankan {address} di sana: perintah itu mencetak alamat dan perintah SSH yang meneruskannya, misalnya {forward}. Jalankan perintah tersebut di komputer Anda sendiri, lalu buka alamatnya di browser di komputer itu."
 }

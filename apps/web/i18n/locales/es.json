@@ -270,7 +270,6 @@
   "workspaceSeoSummary": "Gestiona cuentas de Claude Code, Codex y Grok Build en un espacio de código abierto para macOS y Windows, con un servidor Linux. Consulta el uso, cambia de cuenta y coordina agentes de programación entre proyectos.",
   "faqRemoteHostsAnswer": "En parte. En Linux, {appName} se ejecuta en un servidor, con sus agentes, y lo usas desde el navegador de tu propio equipo. Ejecutar agentes en otros hosts desde un espacio de escritorio está previsto, pero aún no está disponible.",
   "privacyRemoteHostsBody": "{appName} también puede ejecutarse en un servidor Linux que configures y administres tú. Sus datos se almacenan en ese servidor y sus agentes se ejecutan allí, no en servidores de {operatorName}. Lo usas desde el navegador de tu propio equipo: la interfaz viaja por la red entre el servidor y tu equipo, dentro de tu conexión SSH. Ejecutar agentes en otros hosts desde un espacio de escritorio está previsto y aún no está disponible. Esta política no cubre esa función.",
-  "downloadServerReach": "Después ejecuta {start} en el servidor (usa el puerto {defaultPort}; con {port} eliges otro) y ejecuta allí {address}: el comando muestra la dirección y el comando SSH que la reenvía, como {forward}. Ejecuta ese comando en tu propio equipo y abre la dirección en un navegador de ese equipo.",
   "downloadServiceSteps": "Para instalarlo como servicio de usuario de systemd que arranca de inmediato, sustituye el último {plain} por {option} y añade {port} para usar otro puerto. Después, el script activa lingering para que el servicio siga funcionando al cerrar sesión y arranque con el sistema; si indica que no pudo, ejecuta {linger} una vez (puede requerir sudo).",
   "downloadUpgrade": "Para actualizar, vuelve a ejecutar el comando de instalación y después {restart}.",
   "downloadPathNote": "Si la instalación indica que {binDir} no está en tu PATH, ejecuta {start} con la ruta completa que muestra o añade {binDir} a tu PATH.",
@@ -291,5 +290,12 @@
   "downloadAgentsNote": "Instala tú mismo las CLI de los agentes de programación que quieras usar.",
   "platformsDownloadPointer": "Los requisitos y los pasos de instalación de cada sistema están en la página de descarga.",
   "downloadDemoReplayLabel": "Repetir la animación de demostración",
-  "downloadDemoSummary": "Demostración de los pasos anteriores: una terminal en el servidor instala e inicia {appName} y muestra su dirección; después, una terminal en tu propio equipo redirige el puerto con SSH, y un navegador abre esa dirección y muestra la interfaz de {appName}."
+  "downloadDemoSummary": "Demostración de los pasos anteriores: una terminal en el servidor instala e inicia {appName} y muestra su dirección; después, una terminal en tu propio equipo redirige el puerto con SSH, y un navegador abre esa dirección y muestra la interfaz de {appName}.",
+  "downloadInstallStep": "Instalar en el servidor",
+  "downloadStartStep": "Iniciar en el servidor",
+  "downloadOpenStep": "Abrir en tu equipo",
+  "downloadOptionsLabel": "Opciones y solución de problemas",
+  "downloadPortNote": "El puerto predeterminado es {defaultPort}; usa {port} para cambiarlo. {address} muestra un comando SSH con los datos de tu servidor, por ejemplo {forward}.",
+  "downloadBrowserSteps": "En tu equipo, ejecuta el comando SSH que aparece arriba. Mantén la conexión abierta y abre la dirección indicada en el navegador.",
+  "downloadServerReach": "Después ejecuta {start} en el servidor (usa el puerto {defaultPort}; con {port} eliges otro) y ejecuta allí {address}: el comando muestra la dirección y el comando SSH que la reenvía, como {forward}. Ejecuta ese comando en tu propio equipo y abre la dirección en un navegador de ese equipo."
 }

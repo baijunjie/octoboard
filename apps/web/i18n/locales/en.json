@@ -270,7 +270,6 @@
   "workspaceSeoSummary": "Manage Claude Code, Codex and Grok Build accounts in one open source workspace for macOS and Windows, plus a Linux server. Track usage, switch accounts and coordinate coding agents across projects.",
   "faqRemoteHostsAnswer": "Partly. On Linux, {appName} runs on a server, agents included, and you use it from a browser on your own machine. Driving agents on other hosts from one desktop workspace is planned, but is not available yet.",
   "privacyRemoteHostsBody": "{appName} can also run on a Linux server that you set up and manage. Its data is stored on that server and its agents run there, not on servers operated by {operatorName}. You use it from the browser on your own machine: the interface travels over the network between the server and your machine, inside your SSH connection. Driving agents on other hosts from one desktop workspace is planned and is not available yet. This policy does not cover that feature.",
-  "downloadServerReach": "Then run {start} on the server (it listens on port {defaultPort}; {port} picks another), and run {address} there: it prints the address and the SSH command that forwards it, such as {forward}. Run that command on your own machine, then open the address in a browser there.",
   "downloadServiceSteps": "To install it as a systemd user service that starts right away, replace the final {plain} with {option}, and add {port} for another port. The script then turns on lingering, so the service keeps running after you log out and starts at boot; if it says it could not, run {linger} once (it may need sudo).",
   "downloadUpgrade": "To upgrade, run the install command again, then {restart}.",
   "downloadPathNote": "If the install says {binDir} is not on your PATH, run {start} by the full path it prints, or add {binDir} to your PATH.",
@@ -291,5 +290,12 @@
   "downloadAgentsNote": "Install the coding-agent CLIs you want to use yourself.",
   "platformsDownloadPointer": "Requirements and installation steps for each system are on the download page.",
   "downloadDemoReplayLabel": "Replay the demo animation",
-  "downloadDemoSummary": "Demo of the steps above: a terminal on the server installs and starts {appName} and prints its address, then a terminal on your own machine forwards the port with SSH, and a browser opens that address and shows the {appName} interface."
+  "downloadDemoSummary": "Demo of the steps above: a terminal on the server installs and starts {appName} and prints its address, then a terminal on your own machine forwards the port with SSH, and a browser opens that address and shows the {appName} interface.",
+  "downloadInstallStep": "Install on the server",
+  "downloadStartStep": "Start on the server",
+  "downloadOpenStep": "Open on your computer",
+  "downloadOptionsLabel": "Options and troubleshooting",
+  "downloadPortNote": "The default port is {defaultPort}; use {port} to change it. {address} prints an SSH command using your server details, for example {forward}.",
+  "downloadBrowserSteps": "On your computer, run the SSH command printed above. Keep that connection open, then open the printed address in your browser.",
+  "downloadServerReach": "Then run {start} on the server (it listens on port {defaultPort}; {port} picks another), and run {address} there: it prints the address and the SSH command that forwards it, such as {forward}. Run that command on your own machine, then open the address in a browser there."
 }

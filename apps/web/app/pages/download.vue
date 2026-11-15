@@ -4,6 +4,7 @@ import {
   detectDownloadTab,
   downloadTabs,
   isDownloadTab,
+  linuxCommandParts,
   releasesUrl,
   serverDownloads,
   type DownloadTab,
@@ -121,18 +122,35 @@ onBeforeUnmount(() => window.removeEventListener("hashchange", onHashChange));
         <template v-else>
           <p>{{ t("downloadLinuxDescription") }}</p>
           <p>{{ t("downloadLinuxRange") }}</p>
-          <InstallCommand />
-          <CommandMessage keypath="downloadServerReach" />
-          <CommandMessage keypath="downloadPathNote" />
-          <CommandMessage keypath="downloadServiceSteps" />
-          <CommandMessage keypath="downloadUpgrade" />
+          <ol class="download-steps">
+            <li>
+              <h3>{{ t("downloadInstallStep") }}</h3>
+              <InstallCommand />
+            </li>
+            <li>
+              <h3>{{ t("downloadStartStep") }}</h3>
+              <pre class="download-start" dir="ltr"><code>{{ linuxCommandParts.start }}
+              {{ linuxCommandParts.address }}</code></pre>
+            </li>
+            <li>
+              <h3>{{ t("downloadOpenStep") }}</h3>
+              <p>{{ t("downloadBrowserSteps") }}</p>
+            </li>
+          </ol>
+          <details class="download-options">
+            <summary>{{ t("downloadOptionsLabel") }}</summary>
+            <CommandMessage keypath="downloadPathNote" />
+            <CommandMessage keypath="downloadPortNote" />
+            <CommandMessage keypath="downloadServiceSteps" />
+            <CommandMessage keypath="downloadUpgrade" />
+          </details>
           <p class="download-archives">
             <span>{{ t("downloadArchivesLabel") }}</span>
             <a
               v-for="target in serverDownloads"
               :key="target.id"
               :href="downloads[target.id]"
-              class="text-link"
+              class="button"
             >{{ t("downloadArchive", { architecture: target.architecture }) }}</a>
           </p>
           <TerminalDemo />
