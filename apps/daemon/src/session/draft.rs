@@ -29,6 +29,13 @@ pub(super) struct Draft {
     /// When the keys went in and what kind they were, what an empty box read off the screen is
     /// judged against.
     keys: KeyTiming,
+    /// The edit count when the latest message of Octoboard's went in, and that message's text
+    /// ([`Self::message_written`]): what the submit key retried for a message left unsent checks
+    /// that nothing the user typed can be in the box with it.
+    written: Option<(u64, String)>,
+    /// How many messages of Octoboard's have gone in ([`Self::message_written`]): tells one write
+    /// from the next, even of the same text with nothing typed between.
+    messages: u64,
 }
 
 /// When the keys typed into the session went in and what kind they were: what an empty input box
@@ -317,7 +324,7 @@ impl Draft {
     }
 
     /// Whether the mirror knows of text typed into the box that nothing since removed.
-    fn knows_text(&self) -> bool {
+    pub(super) fn knows_text(&self) -> bool {
         self.escape.is_empty() && self.text.as_ref().is_some_and(|text| !text.is_empty())
     }
 
@@ -368,15 +375,54 @@ impl Draft {
         self.text = Some(Vec::new());
     }
 
-    /// Notes that a message of Octoboard's went into the input at `now`, after every key typed so
-    /// far. The agent took those keys before the message, so whatever text they brought back was
+    /// Notes that Octoboard's own keys emptied the input box, as a whole frame showed with nothing
+    /// else written since (`crate::session::draft_clear`): whatever was typed before is gone from
+    /// it, so it holds nothing any more. Never while a key is still waiting for the rest of its
+    /// bytes, which the clearing refuses.
+    pub(super) fn cleared_by_octoboard(&mut self) {
+        if self.overflowed {
+            return;
+        }
+        self.submitted = self.edited;
+        self.escape.clear();
+        self.text = Some(Vec::new());
+    }
+
+    /// Notes that the agent put a stashed draft back in the box after a message of Octoboard's went
+    /// in: text of the user's that no key typed now, counted as an edit after that message, so the
+    /// box is not taken to hold that message alone and a message waits on the draft as on any
+    /// other. The mirror's text is left as it was: the draft it typed is the one put back.
+    pub(super) fn restored_by_agent(&mut self) {
+        self.edited += 1;
+    }
+
+    /// Notes that a message of Octoboard's, `prompt`, went into the input at `now`, after every key
+    /// typed so far. The agent took those keys before the message, so whatever text they brought back was
     /// in the box with it, sent or stashed with it, or drawn back where the box shows it: no key
     /// typed before can still bring text in late. Except the key that may insert typed less than
     /// [`KEY_SETTLE`] before: what it does can take longer than reading it (an image pasted with
     /// Ctrl-V, a prompt loaded from history), so it still holds. Nor is an Esc after the message
     /// a second press.
-    pub(super) fn message_written(&mut self, now: Instant) {
+    pub(super) fn message_written(&mut self, now: Instant, prompt: &str) {
         self.keys.message_written(now);
+        self.messages += 1;
+        self.written = Some((self.edited, prompt.to_string()));
+    }
+
+    /// Whether anything has been typed into the input since the latest message of Octoboard's went
+    /// in (since the start, where none has).
+    pub(super) fn typed_since_message(&self) -> bool {
+        self.written.as_ref().map_or(0, |(edited, _)| *edited) != self.edited
+    }
+
+    /// Which write the latest message of Octoboard's was, counting from 1, or 0 where none went in.
+    pub(super) fn message_count(&self) -> u64 {
+        self.messages
+    }
+
+    /// The text of the latest message of Octoboard's that went in, if any.
+    pub(super) fn message_text(&self) -> Option<&str> {
+        self.written.as_ref().map(|(_, text)| text.as_str())
     }
 
     /// Whether the latest key, typed less than [`KEY_SETTLE`] before `now`, may have left text in
@@ -542,6 +588,65 @@ mod tests {
         assert!(draft.sent_after_fragment(Some("later"), AgentId::GROK));
         draft.prompt_sent(Some("sent before"), AgentId::GROK);
         assert!(!draft.sent_after_fragment(Some("sent before"), AgentId::GROK));
+    }
+
+    /// The message a write records as the latest is the one the caller names, not the latest
+    /// submission the record kept: past the record's room the submissions are no longer kept at all.
+    #[test]
+    fn the_message_written_is_the_text_the_caller_names() {
+        let now = Instant::now();
+        let mut draft = Draft::default();
+        assert_eq!(draft.message_text(), None);
+        draft.message_written(now, "mine");
+        assert_eq!(draft.message_text(), Some("mine"));
+        assert!(!draft.typed_since_message());
+
+        let mut overflowed = Draft::default();
+        for at in 0..300 {
+            overflowed.submission(None, format!("message {at}"));
+        }
+        assert!(overflowed.overflowed);
+        overflowed.message_written(now, "after the overflow");
+        assert_eq!(overflowed.message_text(), Some("after the overflow"));
+
+        let mut other = Draft::default();
+        other.submission(None, "someone else".to_string());
+        other.message_written(now, "mine");
+        assert_eq!(other.message_text(), Some("mine"));
+        draft.typed(b"x", 10, now);
+        assert!(draft.typed_since_message());
+        draft.message_written(now, "next");
+        assert_eq!(draft.message_text(), Some("next"));
+        assert!(!draft.typed_since_message());
+    }
+
+    /// Octoboard's own keys that emptied the box leave the typing record holding nothing; text
+    /// the record knew of is gone with them. A record that has overflowed keeps holding.
+    #[test]
+    fn a_box_octoboard_emptied_leaves_the_record_holding_nothing() {
+        let typed = Instant::now();
+        let mut draft = Draft::default();
+        draft.typed(b"draft", 10, typed);
+        assert!(draft.holds() && draft.knows_text());
+        draft.cleared_by_octoboard();
+        assert!(!draft.holds() && !draft.knows_text());
+
+        // Text typed and removed again leaves none for the record to know of, though it still holds.
+        let mut removed = Draft::default();
+        removed.typed(b"ab\x7f\x7f", 10, typed);
+        assert!(removed.holds() && !removed.knows_text());
+        removed.typed(b"cd", 11, typed);
+        assert!(removed.knows_text());
+
+        let mut overflowed = Draft::default();
+        for at in 0..300 {
+            overflowed.submission(None, format!("message {at}"));
+        }
+        overflowed.cleared_by_octoboard();
+        assert!(
+            overflowed.holds(),
+            "an overflowed record cannot tell what is left"
+        );
     }
 
     /// Keys that leave the box empty — a lone Esc, text cleared again, a recalled prompt whose
@@ -739,7 +844,7 @@ mod tests {
 
         let mut draft = Draft::default();
         draft.typed(b"\x1b", 10, typed);
-        draft.message_written(typed + KEY_SETTLE);
+        draft.message_written(typed + KEY_SETTLE, "message");
         draft.typed(b"\x1b", 10, soon);
         draft.shown_empty(11, soon + KEY_SETTLE * 4);
         assert!(
@@ -770,7 +875,7 @@ mod tests {
         draft.shown_empty(12, typed + KEY_SETTLE * 4);
         assert!(draft.holds());
         draft.submission(None, "message".to_string());
-        draft.message_written(typed + KEY_SETTLE);
+        draft.message_written(typed + KEY_SETTLE, "message");
         assert!(!draft.may_hold_unknown_text());
         draft.shown_empty(12, typed + KEY_SETTLE * 4);
         assert!(!draft.holds());
@@ -806,9 +911,9 @@ mod tests {
         let typed = Instant::now();
         let mut draft = Draft::default();
         draft.typed(b"\x16", 10, typed);
-        draft.message_written(typed + KEY_SETTLE - Duration::from_millis(1));
+        draft.message_written(typed + KEY_SETTLE - Duration::from_millis(1), "message");
         assert!(draft.may_hold_unknown_text());
-        draft.message_written(typed + KEY_SETTLE);
+        draft.message_written(typed + KEY_SETTLE, "message");
         assert!(!draft.may_hold_unknown_text());
     }
 

@@ -530,12 +530,7 @@ impl Target for LiveSession {
     /// own.
     fn press(&self, keys: &[Input]) -> Result<bool, PartialWrite> {
         let input = self.pty.lock_input();
-        if self.is_frozen()
-            || self.poll_exit()
-            || !self.allows_automatic_input()
-            || self.trust.holds_writes()
-            || self.look_for_dialog().current.is_some()
-        {
+        if self.is_frozen() || self.poll_exit() || !self.takes_automatic_keys() {
             return Ok(false);
         }
         self.input_writes.fetch_add(1, Ordering::AcqRel);

@@ -129,6 +129,12 @@ describe("the registry in errors/codes.ts", () => {
     }
   });
 
+  it("marks text the user wrote exactly where the catalogs label it", () => {
+    for (const [code, record] of records) {
+      expect(has(`${messageKey(code)}.detailLabel`), code).toBe(record.detailLabel === true);
+    }
+  });
+
   it("words every variant", () => {
     for (const [code, record] of records) {
       for (const variant of Object.keys(record.variants ?? {})) expect(has(`${messageKey(code)}.${variant}`), `${code}.${variant}`).toBe(true);

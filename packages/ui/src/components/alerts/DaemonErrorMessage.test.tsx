@@ -22,6 +22,8 @@ import { TEST_PROVIDERS, UNPRESENTED_PROVIDER } from "../../test/testProviders";
 import { DaemonErrorMessage } from "./DaemonErrorMessage";
 import { hasErrorDetails, hasErrorRemedy, hasRawDetails } from "./errorPartPresence";
 import { ErrorAlert } from "./ErrorAlert";
+import { fakeTimers } from "../../test/clock";
+import { ViewerHost } from "../../viewer/viewerTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -933,4 +935,126 @@ describe("a failure that states only its cause", () => {
   it("says no cause where the system's text names none, or where the sentence is the cause", () => {
     expect(mountApart(trashFailed("something else")).body.textContent).toBe("The directory could not be moved to the Trash.");
   });
+});
+
+describe("a draft cleared from an input box", () => {
+  const CHINESE = "远程的菜单栏图标中";
+  const label = (body: Element, text: string) => [...body.querySelectorAll("span[id]")].find((span) => span.textContent === text);
+
+  it.each([CHINESE, "مسودة لم تكتمل\nsecond line"])("shows the draft %j whole in the body, under its label, in its own direction, wrapped, with nothing raw", (draft) => {
+    const error = new CodedError("plain", "draft_discarded", { agent: "Claude Code", detail: draft });
+    const { body, raw } = mountApart(error);
+    expect(hasErrorDetails(error)).toBe(true);
+    expect(hasRawDetails(error)).toBe(false);
+    expect(raw.textContent).toBe("");
+    const block = body.querySelector("pre")!;
+    expect(block.textContent).toBe(draft);
+    expect(block.getAttribute("dir")).toBe("auto");
+    // Its long lines wrap, unlike a diagnostic's; the copy button still copies the text as it is.
+    expect(block.classList.contains("whitespace-pre-wrap")).toBe(true);
+    const group = label(body, "Draft content")?.parentElement;
+    expect(group?.contains(block)).toBe(true);
+    expect(group?.querySelector("button")).not.toBeNull();
+    expect(body.textContent).not.toContain("Error details");
+  });
+
+  it("describes its alert by the explanation alone, the draft being a block of its own after it", () => {
+    raiseError(new CodedError("plain", "draft_discarded", { agent: "Claude Code", detail: CHINESE }), { title: "Draft" });
+    mount(<ErrorAlerts />);
+    const alert = document.querySelector('[role="alertdialog"]')!;
+    const description = document.getElementById(alert.getAttribute("aria-describedby")!)!;
+    expect(description.textContent).toContain("cleared the draft");
+    expect(description.textContent).toContain("copy it below");
+    expect(description.textContent).not.toContain(CHINESE);
+    const block = alert.querySelector("pre")!;
+    expect(block.textContent).toBe(CHINESE);
+    expect(description.contains(block)).toBe(false);
+    // The draft comes after the explanation, not before it.
+    expect(description.compareDocumentPosition(block) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(alert.querySelectorAll("pre")).toHaveLength(1);
+    expect(alert.textContent).not.toContain("Error details");
+  });
+
+  it("describes an alert with no draft attached by its whole body", () => {
+    raiseError(new CodedError("plain", "session_locked", {}), { title: "Locked" });
+    mount(<ErrorAlerts />);
+    const alert = document.querySelector('[role="alertdialog"]')!;
+    const description = document.getElementById(alert.getAttribute("aria-describedby")!)!;
+    const prose = alert.querySelector<HTMLElement>(".whitespace-pre-wrap")!;
+    expect(prose.textContent).not.toBe("");
+    expect(description.contains(prose)).toBe(true);
+    expect(description.textContent).toContain(prose.textContent);
+  });
+
+  it("names the text, not error details, when copying the draft fails", async () => {
+    const error = new CodedError("plain", "draft_discarded", { agent: "Claude Code", detail: CHINESE });
+    const failures: string[] = [];
+    fakeTimers();
+    const original = document.execCommand;
+    Object.assign(document, { execCommand: () => false });
+    onTestFinished(() => void Object.assign(document, { execCommand: original }));
+    const container = mount(
+      <ViewerHost clipboard={{ writeText: async () => Promise.reject(new Error("denied")) }} notifications={{ notice: () => {}, error: (message) => void failures.push(message) }}>
+        <DaemonErrorMessage error={error} />
+      </ViewerHost>,
+    );
+    act(() => {
+      const button = container.querySelector<HTMLButtonElement>('button[aria-label="Copy"]')!;
+      for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) button.dispatchEvent(new MouseEvent(type, { bubbles: true, button: 0 }));
+    });
+    await act(async () => {});
+    expect(failures).toEqual(["Could not copy the text"]);
+  });
+
+  it("says when only part of the draft was cleared and that the message waits, under a title of its own", () => {
+    const error = new CodedError("plain", "draft_discarded", { agent: "Claude Code", detail: CHINESE, cleared: "part" });
+    const { body } = mountApart(error);
+    expect(body.textContent).toContain("cleared part of the draft");
+    expect(body.textContent).toContain("waits until the input box is empty");
+    expect(body.textContent).toContain("part of it may still be in the input box");
+    expect(label(body, "Draft content")?.parentElement?.contains(body.querySelector("pre"))).toBe(true);
+    expect(body.querySelector("pre")!.textContent).toBe(CHINESE);
+    raiseError(error, { title: "Draft" });
+    mount(<ErrorAlerts />);
+    const alert = document.querySelector('[role="alertdialog"]')!;
+    expect(alert.querySelector("h2")?.textContent).toBe("Draft partly cleared");
+  });
+
+  it("puts the draft on a line of its own after the message as plain text", () => {
+    const text = daemonMessage("en", "draft_discarded", { agent: "Claude Code", detail: CHINESE }, "fallback", createStateStore({}).getState());
+    expect(text.endsWith(`\n${CHINESE}`)).toBe(true);
+    expect(text).not.toContain("{detail}");
+  });
+
+  it("puts the draft of a partial clear on a line of its own after the message as plain text", () => {
+    const text = daemonMessage("en", "draft_discarded", { agent: "Claude Code", detail: CHINESE, cleared: "part" }, "fallback", createStateStore({}).getState());
+    expect(text).toContain("cleared part of the draft");
+    expect(text.endsWith(`\n${CHINESE}`)).toBe(true);
+  });
+
+  it("words the label in the language in use", () => {
+    const error = new CodedError("plain", "draft_discarded", { agent: "Claude Code", detail: CHINESE });
+    const { body } = mountApart(error);
+    act(() => setLanguage("zh-Hans"));
+    const localized = format("zh-Hans", "daemon.draft_discarded.detailLabel");
+    expect(localized).not.toBe(format("en", "daemon.draft_discarded.detailLabel"));
+    expect(label(body, localized)?.parentElement?.contains(body.querySelector("pre"))).toBe(true);
+    expect(label(body, "Draft content")).toBeUndefined();
+    expect(body.querySelector("pre")!.textContent).toBe(CHINESE);
+  });
+
+  it("shows no block of its own where the notice carries no draft", () => {
+    const error = new CodedError("plain", "draft_discarded", { agent: "Claude Code" });
+    const { body } = mountApart(error);
+    expect(body.querySelector("pre")).toBeNull();
+    expect(label(body, "Draft content")).toBeUndefined();
+  });
+});
+
+it("no longer says that an unconfirmed draft save may have sent the message with the draft", () => {
+  const error = new CodedError("plain", "draft_save_unconfirmed", { agent: "Claude Code" });
+  const { body } = mountApart(error);
+  const text = body.textContent ?? "";
+  expect(text).toContain("did not write its message");
+  expect(text).not.toMatch(/may have been sent|may include|with the draft|unfinished/i);
 });

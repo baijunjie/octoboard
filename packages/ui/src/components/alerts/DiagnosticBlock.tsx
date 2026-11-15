@@ -13,8 +13,11 @@ export const DiagnosticLabelContext = createContext<string | undefined>(undefine
 
 /** Raw diagnostics preserve their original line breaks and indentation in every surface. Their height is capped at
  * 40% of the viewport, with both axes scrollable from the named keyboard region. The copy control stays outside the
- * scroller so it is always reachable, never faded, and copies the original text rather than the visible portion. */
-export function DiagnosticBlock({ children, labelledBy }: { children: string; labelledBy?: string }): ReactElement {
+ * scroller so it is always reachable, never faded, and copies the original text rather than the visible portion.
+ * Diagnostics read left to right and keep their lines unwrapped; text the user wrote, shown in such a block
+ * (`detailLabel`), takes `dir="auto"` and `wrap`, its long lines wrapping on screen while the copy keeps them whole,
+ * and a `failedText` that does not call it error details. */
+export function DiagnosticBlock({ children, labelledBy, dir = "ltr", wrap = false, failedText }: { children: string; labelledBy?: string; dir?: "ltr" | "auto"; wrap?: boolean; failedText?: string }): ReactElement {
   const t = useT();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollbarWidth, setScrollbarWidth] = useState(0);
@@ -33,15 +36,15 @@ export function DiagnosticBlock({ children, labelledBy }: { children: string; la
   return (
     <Surface variant="secondary" className={`${CODE_SURFACE_CLASS} relative shrink-0 ${region.ring}`}>
       <FadedScroller
-        dir="ltr"
+        dir={dir}
         ref={scrollRef}
         region={region}
-        className="min-w-0 max-w-full max-h-[40vh] overflow-auto rounded-md [&>.app-code-block]:pe-7"
+        className="min-w-0 max-w-full max-h-[40vh] overflow-auto rounded-md [&>.app-code-block]:pr-7"
       >
-        <CodeBlock dir="ltr" wrap={false} flush>{children}</CodeBlock>
+        <CodeBlock dir={dir} wrap={wrap} flush>{children}</CodeBlock>
       </FadedScroller>
       <div className="absolute top-[calc(var(--spacing)*3+0.5lh)] z-10 -translate-y-1/2 rounded-md bg-surface-secondary" style={{ right: `calc(${scrollbarWidth}px + var(--spacing))` }}>
-        <CopyButton text={children} failedText={t("error.copyDetailsFailed")} size="xs" variant="tertiary" className="diagnostic-copy-button rounded-md" />
+        <CopyButton text={children} failedText={failedText ?? t("error.copyDetailsFailed")} size="xs" variant="tertiary" className="diagnostic-copy-button rounded-md" />
       </div>
     </Surface>
   );

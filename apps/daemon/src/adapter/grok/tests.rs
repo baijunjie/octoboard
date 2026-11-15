@@ -451,6 +451,14 @@ fn the_role_text_travels_in_rules() {
     );
 }
 
+/// Grok Build has no measured collapsed-paste placeholder, so none is recognised as one.
+#[test]
+fn grok_recognises_no_collapsed_paste() {
+    assert!(!GrokProvider
+        .screen()
+        .collapsed_paste("[Pasted text #1 +24 lines]"));
+}
+
 /// The stash is used from the first version measured to take it, and never on an unknown one.
 #[test]
 fn the_stash_is_used_only_from_the_measured_version() {

@@ -34,6 +34,12 @@ impl ScreenReader for GrokScreen {
         })
     }
 
+    /// Measured on 1.0.70 under "Keys that interrupt a turn" in `docs/agent-cli-reference.md`:
+    /// the interrupt clears a draft with it mid-turn, before its Ctrl-C.
+    fn clears_input_box_with_ctrl_u(&self) -> bool {
+        true
+    }
+
     fn trust_screen(&self) -> &'static Screen {
         &TRUST
     }

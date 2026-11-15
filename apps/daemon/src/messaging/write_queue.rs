@@ -523,39 +523,9 @@ impl AppState {
             .is_some_and(|current| Arc::ptr_eq(&current, &live));
         self.announce_refusals(id, live.agent);
         if matches!(outcome, Drain::Unsent(_)) && still_running {
-            // The user can inspect a retry that submits the current composer, including any new
-            // edits they made. A later message must not repeat the already written payload. A
-            // prompt reported after the message withdraws the notice.
-            live.notice_unsent(|retry| {
-                let notice = if retry {
-                    Notice::new(
-                        notice_code::MESSAGE_NOT_SENT,
-                        format!(
-                            "{} wrote a message into this session, but {} has not confirmed \
-                             sending it. After three seconds its submit key is retried once, \
-                             without repeating the text, and later messages may proceed. Answer \
-                             pending dialogs first.",
-                            crate::APP_NAME,
-                            live.agent.label()
-                        ),
-                        &[("agent", live.agent.label()), ("submit_retry", "once")],
-                    )
-                } else {
-                    Notice::new(
-                        notice_code::MESSAGE_NOT_SENT,
-                        format!(
-                            "{} did not send a message {} wrote into this session, so it is \
-                             waiting in the session's input box. {} writes nothing more into the \
-                             session until a prompt is sent.",
-                            live.agent.label(),
-                            crate::APP_NAME,
-                            crate::APP_NAME
-                        ),
-                        &[("agent", live.agent.label())],
-                    )
-                };
-                self.broadcast(notice.about(id));
-            });
+            // A later message must not repeat the already written payload. A prompt reported after
+            // the message withdraws the notice.
+            live.notice_unsent(|retry| self.broadcast(unsent_notice(live.agent, retry).about(id)));
         }
         if matches!(outcome, Drain::Diverted(_)) && still_running {
             self.broadcast(
@@ -887,6 +857,39 @@ impl AppState {
     /// so nothing would ever release what was queued ahead of it.
     pub fn discard_outbox(&self, id: &str) {
         self.outbox.forget(id);
+    }
+}
+
+/// The `message_not_sent` notice for a message left unsent in `agent`'s input box: with `retry`, its
+/// submit key is still to be pressed once more where the box holds nothing but the message
+/// (`LiveSession::retry_unsent_submit`); without, it waits there for the user.
+pub(crate) fn unsent_notice(agent: AgentId, retry: bool) -> Notice {
+    if retry {
+        Notice::new(
+            notice_code::MESSAGE_NOT_SENT,
+            format!(
+                "{} wrote a message into this session, but {} has not confirmed sending it. After \
+                 three seconds its submit key is pressed once more, without repeating the text, if \
+                 the input box holds nothing but the message, and later messages may proceed. \
+                 Answer pending dialogs first.",
+                crate::APP_NAME,
+                agent.label()
+            ),
+            &[("agent", agent.label()), ("submit_retry", "once")],
+        )
+    } else {
+        Notice::new(
+            notice_code::MESSAGE_NOT_SENT,
+            format!(
+                "{} did not send a message {} wrote into this session, so it is waiting in the \
+                 session's input box. {} writes nothing more into the session until a prompt is \
+                 sent.",
+                agent.label(),
+                crate::APP_NAME,
+                crate::APP_NAME
+            ),
+            &[("agent", agent.label())],
+        )
     }
 }
 

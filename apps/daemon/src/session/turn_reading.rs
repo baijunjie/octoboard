@@ -11,7 +11,7 @@
 //! typed at the prompt lets a message in without waiting for the agent to draw the prompt a cancel
 //! puts back, so an Esc counts as mid-turn on any running title not yet followed by the prompt,
 //! however old ([`TitleActivity::last_said_running`]). See `docs/product/interrupting-turns.md`,
-//! section "When a key is sent", and `docs/product/message-delivery.md`, section "Keys that leave
+//! section "When a key is sent", and `docs/product/draft-preservation.md`, section "Keys that leave
 //! the composer empty are confirmed by the screen".
 
 use std::cell::OnceCell;

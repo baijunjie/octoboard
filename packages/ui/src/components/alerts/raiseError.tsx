@@ -7,7 +7,7 @@ import { errorAlerts, type ErrorAlertRequest } from "./errorAlerts";
  * about a session, the session's id, with the name its request carries for a session that may be gone. The alert names
  * the session from the store when it shows (`AlertSessionLines`), not here. */
 export function errorAlertOf(request: NotificationRequest): ErrorAlertRequest {
-  const { title, body, details, remedyInBody } = errorAlertParts(request);
+  const { title, body, details, remedyInBody, attached } = errorAlertParts(request);
   return {
     message: request.message,
     session: request.session,
@@ -17,6 +17,7 @@ export function errorAlertOf(request: NotificationRequest): ErrorAlertRequest {
     recovery: request.recovery,
     title,
     content: body,
+    attached,
     details,
     remedyInBody,
   };

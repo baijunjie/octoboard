@@ -1137,6 +1137,14 @@ fn codex_action_markers_are_activity_items_rather_than_task_text() {
     }
 }
 
+/// Codex has no measured collapsed-paste placeholder, so none is recognised as one.
+#[test]
+fn codex_recognises_no_collapsed_paste() {
+    assert!(!CodexProvider
+        .screen()
+        .collapsed_paste("[Pasted text #1 +24 lines]"));
+}
+
 /// Codex has no stash the daemon uses, whatever its version.
 #[test]
 fn codex_never_uses_a_stash() {

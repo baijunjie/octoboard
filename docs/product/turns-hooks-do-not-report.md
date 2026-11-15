@@ -82,10 +82,9 @@ the session to its prompt as soon as either shows the cancel, normally within ab
 
 After a cancel before any output, Claude Code puts the prompt's text back in its input box. For a message Octoboard
 has for the session from then on, whether the session reads *working* or at its prompt at the time, that text is a
-draft like one the user typed (see "Messages held until a session can take them" in
-`docs/product/message-delivery.md`): where the agent's native stash is used, it is set aside around the message and
-put back after; otherwise the message waits out the draft protection grace period and then goes in after that text
-and is sent together with it. A cancel made by `interrupt_session` clears that text first (see "The input box
+draft like one the user typed (see `docs/product/draft-preservation.md`): where the agent's native stash is used, it
+is set aside around the message and put back after; otherwise the message waits out the draft protection grace period,
+and then the text is cleared from the input box before the message goes in, the user being sent the text it held. A cancel made by `interrupt_session` clears that text first (see "The input box
 afterwards" in `docs/product/interrupting-turns.md`); a cancel the user makes in the terminal is left as the agent
 leaves it.
 

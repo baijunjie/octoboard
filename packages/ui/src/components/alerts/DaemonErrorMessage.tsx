@@ -34,8 +34,10 @@ export function DaemonErrorTitle(): React.ReactElement {
  * fix, the lead lines of several groups), then the raw text that was not written for the reader (a
  * diagnostic block, the system's own message, raw entries). `further` and `raw` are those two halves of
  * `details` apart, for a surface whose body is the application's own words and keeps only the raw text
- * behind a disclosure (the error alert dialog). */
-export type DaemonErrorPart = "summary" | "remedy" | "details" | "further" | "raw";
+ * behind a disclosure (the error alert dialog). `own` is text the user wrote that the failure carries
+ * (`detailLabel`), under its label: the whole message and `details` show it after the explanation, unless the
+ * surface shows it apart (`ownTextApart`, the error alert dialog). */
+export type DaemonErrorPart = "summary" | "remedy" | "details" | "further" | "raw" | "own";
 
 /** What a `session_branches_not_removed` alert names, grouped by why each is still there: a lead
  * line per group over a list of names as code chips, with a locked worktree's uncommitted changes
@@ -86,8 +88,21 @@ function LeftBranchDetail({ name, detail }: { name: string; detail: string }): R
   );
 }
 
+/** Text the user wrote that a failure carries (`detailLabel`), under its label, which names the block's region
+ * once it scrolls. It reads in its own direction, its long lines wrap, and its copy button copies it as it is. */
+function OwnText({ label, text }: { label: MessageKey; text: string }): React.ReactElement {
+  const t = useT();
+  const id = useId();
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <span id={id}><Message id={label} params={{} as never} /></span>
+      <DiagnosticBlock labelledBy={id} dir="auto" wrap failedText={t("error.copyTextFailed")}>{text}</DiagnosticBlock>
+    </div>
+  );
+}
+
 /** A failure with names or technical literals set apart as chips in the catalog's wording. */
-function CodedDaemonMessage({ error, part }: { error: CodedError; part?: DaemonErrorPart }): React.ReactElement | null {
+function CodedDaemonMessage({ error, part, ownTextApart }: { error: CodedError; part?: DaemonErrorPart; ownTextApart?: boolean }): React.ReactElement | null {
   // Kept out of the React Compiler: the message the code is worded under (`messageCode`) depends on the announced
   // daemon host, state outside React that `useT` re-renders this for, which its memoization by `error` would not see.
   "use no memo";
@@ -167,7 +182,9 @@ function CodedDaemonMessage({ error, part }: { error: CodedError; part?: DaemonE
   const remedy = recovery ?? (parts.nestedRemedy && structuredNested && hasErrorRemedy(structuredNested) ? <DaemonErrorMessage error={structuredNested} part="remedy" /> : null);
   const nestedFurther = structuredNested ? <DaemonErrorMessage error={structuredNested} part="further" /> : null;
   const nestedRaw = structuredNested ? <DaemonErrorMessage error={structuredNested} part="raw" /> : null;
-  const explanation = <>{further}{reasonLines}{nestedFurther}</>;
+  const ownText = parts.ownText ? <OwnText label={parts.ownText.label} text={parts.ownText.text} /> : null;
+  if (part === "own") return ownText;
+  const explanation = <>{further}{reasonLines}{nestedFurther}{ownTextApart ? null : ownText}</>;
   const raw = <>{actionableRaw}{sharingRaw}{diagnostic}{unwordedRaw}{nestedRaw}</>;
   if (part === "details") return <>{explanation}{raw}</>;
   if (part === "further") return explanation;
@@ -185,7 +202,7 @@ function CodedDaemonMessage({ error, part }: { error: CodedError; part?: DaemonE
   if (part === "summary" || (!reasonLine && !hasErrorRemedy(error) && !hasErrorDetails(error))) return sentence;
   // With no opening sentence and nothing else of the application's own, the body is empty rather than an empty column, so the
   // alert lays out the remedy it adds as its first line.
-  if (summaryless && !remedy && !further && !reasonLines && !nestedFurther) return null;
+  if (summaryless && !remedy && !further && !reasonLines && !nestedFurther && (ownTextApart || !ownText)) return null;
   // The whole message is the application's own words; the raw text is the `raw` part, kept behind a disclosure.
   return (
     <div className="flex min-w-0 flex-col gap-2">
@@ -211,12 +228,13 @@ export function ShellTimeoutCommand({ params: { shell, command, timeout } }: { p
 
 /** Structured failures retain their metadata; `summary` is inline-safe for AlertDescription (empty for a code with
  * `noSummary`), `remedy` holds the one main thing to do (also inline-safe) and `details` the further explanation, then
- * the raw blocks (`further` and `raw` apart). Omitting `part` renders the complete message in the application's own
- * words: the sentence, the remedy and the further explanation, never the raw text; a code with `noSummary` has no
- * sentence, and its whole message is empty where nothing else of the application's own remains. A failure the
- * application has no words for shows its generic sentence, and its raw message is its `details` and its `raw` (with a
- * script error's stack). */
-export function DaemonErrorMessage({ error, showTitle = true, part }: { error: ErrorPresentation; showTitle?: boolean; part?: DaemonErrorPart }): React.ReactElement | null {
+ * the raw blocks (`further` and `raw` apart), and `own` the text the user wrote that the failure carries. Omitting
+ * `part` renders the complete message in the application's own words: the sentence, the remedy and the further
+ * explanation, then the user's own text unless `ownTextApart` (a surface that shows it on its own), never the raw
+ * text; a code with `noSummary` has no sentence, and its whole message is empty where nothing else remains. A failure
+ * the application has no words for shows its generic sentence, and its raw message is its `details` and its `raw`
+ * (with a script error's stack). */
+export function DaemonErrorMessage({ error, showTitle = true, part, ownTextApart }: { error: ErrorPresentation; showTitle?: boolean; part?: DaemonErrorPart; ownTextApart?: boolean }): React.ReactElement | null {
   const t = useT();
   if (typeof error !== "string" && isUncataloguedFailure(error)) {
     if (part === undefined || part === "summary") return <>{t(uncataloguedSummaryKey(error))}</>;
@@ -224,13 +242,14 @@ export function DaemonErrorMessage({ error, showTitle = true, part }: { error: E
     const diagnostic = unexpectedFailureDiagnostic(error);
     return part === "raw" && diagnostic !== "" ? <DiagnosticBlock>{diagnostic}</DiagnosticBlock> : null;
   }
-  if (typeof error !== "string" && !hasShellTimeoutDetails(error) && hasCodeParams(error)) return <CodedDaemonMessage error={error} part={part} />;
+  if (typeof error !== "string" && !hasShellTimeoutDetails(error) && hasCodeParams(error)) return <CodedDaemonMessage error={error} part={part} ownTextApart={ownTextApart} />;
   if (typeof error === "string" || !hasShellTimeoutDetails(error)) {
     if (part === "summary" || !part) return <>{errorText(error)}</>;
     const detail = error instanceof ActionableError ? error.detail : undefined;
     return detail && (part === "details" || part === "raw") ? <DiagnosticBlock>{detail}</DiagnosticBlock> : null;
   }
   if (part === "summary") return <>{t("daemon.shell_environment_timeout.cause")}</>;
+  if (part === "own") return null;
   const consequence = <Message id="daemon.shell_environment_timeout.sessionsBlocked" />;
   if (part === "remedy") return <span className="block">{t("daemon.shell_environment_timeout.recovery")}</span>;
   if (part === "raw") return null;

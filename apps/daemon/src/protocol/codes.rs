@@ -805,9 +805,15 @@ pub mod notice_code {
     /// the other accounts'. `params` names the `account`, its `name` and the database's `path`.
     pub const UNSHARED_STATE_DATABASE: Code = Code("unshared_state_database");
     /// The session's agent did not confirm, within the protection window, stashing the draft in its
-    /// input box before a message was written, so the message went into the input as it was and
-    /// may have been sent with the draft. `params` names the `agent`.
+    /// input box before a message was written, so the message was not written with it: it waits
+    /// for the box to empty, and past the draft's grace the box is cleared first
+    /// (`DRAFT_DISCARDED`). `params` names the `agent`.
     pub const DRAFT_SAVE_UNCONFIRMED: Code = Code("draft_save_unconfirmed");
+    /// Past the draft's grace, with no stash to take it, the draft in the session's input box was
+    /// cleared, at least in part, so that a message would not be sent together with it. `params`
+    /// names the `agent` and carries the draft's text as the screen showed it as `detail` (a
+    /// collapsed paste only as the placeholder the agent shows for it).
+    pub const DRAFT_DISCARDED: Code = Code("draft_discarded");
     /// A message went in while the draft was stashed, but the agent did not confirm restoring the
     /// draft in time: keys typed meanwhile are released into the input as it is, and the message is
     /// not sent again. `params` names the `agent`.

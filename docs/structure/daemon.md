@@ -406,7 +406,7 @@ installs with `--service`).
   traffic, `plain_text.rs` output without its escape sequences, `shell/` project shell terminals).
 - `src/session/` — one running agent process (`LiveSession`; `LiveSession::host_renders` says whether its titles
   come off the parsed screen's title changes and a provider's placeholder reads as an empty input box), input and
-  message-write gates (the daemon's own writes,
+  message-write gates (`LiveSession::takes_automatic_keys` is the one check an automatic key or message goes in under; the daemon's own writes,
   a message's paste and Enter, the stash, interrupt and trust keys, are `platform::term::Input` values; a client's
   keystrokes and query replies go in raw), `term/` launch and writing a message into the process (through a
   `MessageTransport` where the launch started the provider's own server, otherwise the guarded bracketed-paste write
@@ -423,7 +423,11 @@ installs with `--service`).
   `AfterExit`), `draft.rs` (a mirror of the keys typed into the input, matching the prompts the agent reports
   submitted, with `KeyTiming`, when and what kind of keys went in, kept apart from it), `draft_hold.rs` (the release of the hold typed
   keys keep on Octoboard's messages, and the checks a message written past the draft's grace waits on: `settle_input`,
-  `release_draft_hold`, `schedule_draft_release` on `LiveSession`), `output_pace.rs` (whether the parsed screen shows a
+  `release_draft_hold`, `schedule_draft_release` on `LiveSession`), `draft_clear.rs` (clearing a user's draft with Ctrl-U
+  past the grace period, so that an automatic message is written alone and the text handed back in a `draft_discarded`
+  notice: `LiveSession::write_after_clearing`), `input_box_clear.rs` (the run of Ctrl-U presses on a provider's input box,
+  each seen on the screen before the next, which that clear and an interrupt's clearing of the prompt share),
+  `output_pace.rs` (whether the parsed screen shows a
   whole frame, from the agent's recent output), `paste_apart.rs` (submitting a message whose Enter has to wait until the
   agent has taken its paste; `NotSubmitted`),
   `swap.rs`, `input_box.rs`, `dialogs.rs`, `trust/` folder-trust confirmations (`carry.rs` the `TrustCarrier` interface of a provider that records the trust in
@@ -439,7 +443,8 @@ installs with `--service`).
   through OSC 7501, only for an agent whose provider has no status integration).
   `screen.rs` is the `ScreenReader` trait, how one provider's terminal screens, input box and title read, which
   `AgentProvider::screen` gives (`NoScreen` is the default that recognises nothing; `user_action_title` is the title
-  text a provider shows when only the user can act; `input_placeholder` the hint an empty input box shows; `Interrupt` how a provider's turn is interrupted, including the
+  text a provider shows when only the user can act; `input_placeholder` the hint an empty input box shows; `clears_input_box_with_ctrl_u` and `collapsed_paste` what
+  a provider's Ctrl-U does to its box and the placeholder it shows for a long paste; `Interrupt` how a provider's turn is interrupted, including the
   wording of messages left waiting in its own queue past a cancel); the modules above keep only what is
   done with a reading (the dialogs are kept as `DialogPattern` and `DialogKind`), and read it through the session's
   provider.

@@ -10,15 +10,16 @@ type Failure = { code: string; params: MessageParams; message: string };
 
 /** Whether `DaemonErrorMessage` has anything for `part="details"` of this failure, answered without rendering, so an
  * alert knows whether it has a Details button to offer. What counts is further explanation in the application's own
- * words (a reason for the cause, the lead of a group of names) and raw text: a diagnostic block, the entries of a
- * failure, the system's own message of a failure the application has no words for. */
+ * words (a reason for the cause, the lead of a group of names), text the user wrote that the failure carries
+ * (`detailLabel`), and raw text: a diagnostic block, the entries of a failure, the system's own message of a failure
+ * the application has no words for. */
 export function hasErrorDetails(error: Failure): boolean {
   if (hasRawDetails(error)) return true;
   const parts = daemonErrorParts(error);
   if (parts.uncatalogued) return false;
   if (parts.shellTimeout) return true;
   if (!parts.worded) return false;
-  if (parts.left || parts.further) return true;
+  if (parts.left || parts.further || parts.ownText) return true;
   if (parts.sharing?.hasReasonLine) return true;
   return parts.nested !== undefined && hasErrorDetails(parts.nested);
 }
@@ -34,6 +35,12 @@ export function hasRawDetails(error: Failure): boolean {
   if (parts.left) return parts.left.some((item) => !!leftBranchDetail(item));
   if (parts.sharing?.items || parts.sharing?.raw || parts.diagnostic || parts.unworded) return true;
   return parts.nested !== undefined && hasRawDetails(parts.nested);
+}
+
+/** Whether `DaemonErrorMessage` has anything for `part="own"`: text the user wrote that the failure carries
+ * (`detailLabel`), answered without rendering. */
+export function hasOwnText(error: Failure): boolean {
+  return daemonErrorParts(error).ownText !== undefined;
 }
 
 /** Whether `DaemonErrorMessage` has anything for `part="remedy"`: the failure's recovery sentence, the one

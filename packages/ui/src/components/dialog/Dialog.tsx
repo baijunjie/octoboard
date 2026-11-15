@@ -102,6 +102,7 @@ function DialogFrame({
   focusesItselfOnOpen,
   topLayerAtMount,
   fullScreen = false,
+  describedBy,
 }: {
   /** Text, or an element for a title that needs markup of its own (a file name kept left to right). */
   title: string | React.ReactElement;
@@ -127,6 +128,10 @@ function DialogFrame({
   alert?: boolean;
   /** The dialog is a failure modal, announced and described as an alert dialog whatever frame it is in. */
   failing?: boolean;
+  /** The element an alert dialog is described by, in place of its whole body: for a body that also holds a block of its
+   * own, labelled and reachable apart, which the description would otherwise read out whole (an error alert's
+   * `attached`). */
+  describedBy?: string;
   /** An error requires its acknowledgement button, with no implicit dismissal. */
   dismissable?: boolean;
   /** While set, Escape does not close the dialog, whether it reaches react-aria's modal or arrives while a tooltip is
@@ -302,7 +307,7 @@ function DialogFrame({
       topLayer={topLayer}
       containerClassName={!fullScreen && size === "viewer" ? "max-desktop:p-4" : undefined}
       role={failing ? "alertdialog" : undefined}
-      describedBy={alerting ? bodyId : undefined}
+      describedBy={alerting ? describedBy ?? bodyId : undefined}
       className={
         fullScreen
           ? "control-fills bg-panel-sidebar overflow-hidden p-0"
@@ -363,6 +368,8 @@ export function Dialog({ failure, ...props }: DialogFrameProps & {
   failure?: AcknowledgementView;
 }): React.ReactElement {
   const t = useT();
+  // What describes a failure that holds a block of its own apart (`attached`): its explanation, not the block.
+  const descriptionId = useId();
   if (!failure) return <DialogFrame {...(props as DialogFrameProps)} />;
   return (
     <DialogFrame
@@ -377,8 +384,9 @@ export function Dialog({ failure, ...props }: DialogFrameProps & {
       headerLeading={<ModalStatusIcon status="danger" />}
       title={alertTitle(t, failure)}
       footer={<Button autoFocus variant="danger" onPress={props.onClose}>{t("error.acknowledge")}</Button>}
+      describedBy={failure.attached ? descriptionId : undefined}
     >
-      <ErrorAlertBody alert={failure} />
+      <ErrorAlertBody alert={failure} descriptionId={failure.attached ? descriptionId : undefined} />
     </DialogFrame>
   );
 }

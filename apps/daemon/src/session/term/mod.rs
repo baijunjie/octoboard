@@ -586,8 +586,9 @@ pub fn send_message(session: &LiveSession, text: &str) -> Result<(), PartialWrit
 /// puts back at the front of its queue for the stop to save for the next daemon, as it does with
 /// every message the barrier stops.
 /// The input write checks for an empty, acknowledged composer or saves and restores the draft
-/// through a supported native stash. Preservation has a bounded grace period; after expiry,
-/// delivery may include unfinished user input and retained keys are released into the current editor.
+/// through a supported native stash. Preservation has a bounded grace period; after expiry, the
+/// user's edits need no acknowledgement, a draft no stash can take is cleared first where the agent
+/// has a measured key for it, and the message is never written together with text in the composer.
 /// The caller also holds messages while a modal dialog is up,
 /// because the paste is discarded but the trailing Enter confirms whatever option is highlighted —
 /// at Claude Code's trust dialog that exits the session, and at Grok's approval modal it selects
@@ -598,7 +599,7 @@ pub fn send_message_with_id(
     session: &LiveSession,
     text: &str,
     logical_id: &str,
-    allow_mixed: bool,
+    past_grace: bool,
     writes_stopped: &dyn Fn() -> bool,
 ) -> Result<Route, PartialWrite> {
     if let Some(transport) = &session.transport {
@@ -641,7 +642,7 @@ pub fn send_message_with_id(
         unreachable!("a message is framed as a paste");
     };
     session
-        .write_message_input(&framed, prompt, allow_mixed)
+        .write_message_input(&framed, prompt, past_grace)
         .map(|()| Route::Terminal)
 }
 

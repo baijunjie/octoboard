@@ -7,7 +7,7 @@ import { isUncataloguedFailure } from "../../errors/uncataloguedFailure";
 import { errorText } from "../../errors/errorText";
 import { isolate } from "../../i18n/isolate";
 import { DaemonErrorMessage, type DaemonErrorPart } from "./DaemonErrorMessage";
-import { hasErrorDetails, hasErrorRemedy, hasRawDetails } from "./errorPartPresence";
+import { hasErrorDetails, hasErrorRemedy, hasOwnText, hasRawDetails } from "./errorPartPresence";
 import { RecoveryGuidance } from "./ErrorGuidance";
 
 /** The details of a failure for an alert's Details popover or an empty-state failure's details surface
@@ -20,6 +20,12 @@ export function errorDetails(error: ErrorPresentation): React.ReactNode {
  * when it has none. A toast has no Details, so it holds none of this. */
 export function rawErrorDetails(error: ErrorPresentation): React.ReactNode {
   return typeof error !== "string" && hasRawDetails(error) ? <DaemonErrorMessage error={error} part="raw" /> : undefined;
+}
+
+/** The text the user wrote that a failure carries (`detailLabel` in `codes.ts`), under its label, for a surface that
+ * shows it apart from the failure's message (the error alert dialog), or nothing when it carries none. */
+export function ownTextOf(error: ErrorPresentation): React.ReactNode {
+  return typeof error !== "string" && hasOwnText(error) ? <DaemonErrorMessage error={error} part="own" /> : undefined;
 }
 
 /** The one main thing to do about a failure, in the application's own words, shown in the alert's

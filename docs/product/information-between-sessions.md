@@ -40,8 +40,9 @@ kept for its resume as the information itself would be (see "Information for an 
 cannot be delivered — the owner is archived, or has no process running for another reason — does not fail the delivery
 to the receiver; the sender is told the owner was not copied.
 
-Delivery is the same as for any other message, including its draft protection and other holds: see "Messages held
-until a session can take them" in `docs/product/message-delivery.md`. A receiver with no process running is the
+Delivery is the same as for any other message, including its draft protection and other holds: see
+`docs/product/draft-preservation.md` and "Messages held until a session can take them" in
+`docs/product/message-delivery.md`. A receiver with no process running is the
 exception: an interrupted one has the information kept for its resume (see "Information for an interrupted session"
 below), one a change of its account's sharing is restarting has it held for the resumed process (see "When a change is
 carried out" in `docs/product/sharing-the-default-configuration.md`), and any other refuses it. A receiver reading as

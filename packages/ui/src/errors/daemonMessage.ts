@@ -272,6 +272,6 @@ export function daemonMessage(
   if (reason) return `${text}\n${format(language, reason, {})}${code === CODE.account_sharing_failed && params.detail ? `\n${params.detail}` : ""}`;
   // A repair that names no entry keeps its reason only in the daemon's English message.
   if (code === CODE.account_sharing_repair_failed && fallback) return `${text}\n${fallback}`;
-  // As plain text the diagnostic follows on a line of its own.
-  return (code === CODE.project_branches_not_determined || code === CODE.account_sharing_failed || code === CODE.path_link_refused) && params.detail ? `${text}\n${params.detail}` : text;
+  // As plain text the diagnostic, or the user's own text (`detailLabel`), follows on a line of its own.
+  return (code === CODE.project_branches_not_determined || code === CODE.account_sharing_failed || code === CODE.path_link_refused || codeRecord(code)?.detailLabel) && params.detail ? `${text}\n${params.detail}` : text;
 }

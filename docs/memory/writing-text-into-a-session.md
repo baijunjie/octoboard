@@ -48,7 +48,9 @@ interrupt a turn" in `docs/agent-cli-reference.md`). So:
   before choosing a bound, and end each wait as soon as what it waits for is seen, so a generous bound only slows the
   report of a real failure.
 - Where the step reads or clears the agent's input box, hold `AppState::pause_outbox` for the session from before
-  the first key until it is done, so a queued message does not land in or join text left in the box, and read the box
+  the first key until it is done, so a queued message does not land in or join text left in the box. The exception is
+  a step typed from inside the queue's own write of a message (as `apps/daemon/src/session/draft_clear.rs` is): that
+  write already owns the session's one drainer, so no other message can be written meanwhile. Read the box
   from `screen_text_undimmed`: Claude Code draws the hints of an empty box faint (a fresh session's `❯ Try "…"`,
   `❯ Press up to edit queued messages`), and the plain screen text reads them as typed text. Do not blank faint cells
   in a reader of your own: over a hint, Claude Code's cursor is an inverse cell outside the faint run, which
@@ -58,6 +60,34 @@ interrupt a turn" in `docs/agent-cli-reference.md`). So:
   the outbox does not cover a message written just before. So a step that acts on a non-empty box soon after a write —
   a stash key above all, which would stash the message itself — first waits, bounded, for the box to empty, as
   `LiveSession::settled_composer` does after `note_message_written`.
+- Decide on a key, or on writing a message because the box is empty, only from a box read off a whole frame. The
+  parsed screen takes the agent's output chunk by chunk, so between two chunks of one redraw (as at the start of a
+  turn) it can show text that is gone, or an empty box that still holds text. `LiveSession::composer()` and
+  `settled_composer()` read the screen as it stands and serve only as a cheap first look; the decision waits with
+  `LiveSession::wait_for_whole_frame`, then reads with `read_box` (or `composer_for_draft`) under the input lock, and
+  refuses, to be retried, where the output total it returns is `None` (the frame was not whole: a synchronized update
+  open, or output in the last 50 ms; `apps/daemon/src/session/output_pace.rs`).
+- Keys the daemon types itself do not pass through the typing record (`Draft` in `apps/daemon/src/session/draft.rs`),
+  which counts only what clients type and holds Octoboard's messages while it knows of text typed into the box. A
+  step whose own keys change what the box holds tells the record in the same step as the write, under the input lock
+  (`Draft::cleared_by_octoboard` once a clear shows on a whole frame); otherwise later messages wait on text the box
+  no longer holds. Text the agent puts back by itself, such as a draft restored from its native stash, is told to it
+  too (`Draft::restored_by_agent`).
+
+## A step that protects the user's text fails toward the message waiting, for this message and every later one
+
+Applies to daemon code on the path of a message into a session whose input box may hold the user's text: a stash, a
+clear, a check that the box is empty. Where such a step fails or cannot be confirmed (a stash the agent did not
+confirm, a press not seen, a box not read off a whole frame), refuse the write so the message stays queued and is
+retried; never fall back to writing it into the box as it stands. A switch that turns the step off after a failure
+ends once the state that caused it has moved (as `stash_unsettled_at` ends at the next prompt sent), and the path it
+sends later messages onto must itself keep the text safe: a process-wide "native stash off" that fell back to
+writing as it stood mixed messages into drafts hours after the one failure, with nothing in the log. So a test of
+such a failure also sends the next message after it and asserts that message does not join the text; tests of the
+failing message alone passed while that bug stood.
+
+Every refusal, discard or possible mixing of the user's text logs a `tracing::warn!` naming the session: the daemon
+log is the only trace afterwards, as the agent's transcript shows nothing of a message never submitted.
 
 ## A gate on a terminal mode the agent sets reads the mode as it stands, after reading the agent's whole start-up output
 

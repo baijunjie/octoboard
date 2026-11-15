@@ -195,6 +195,7 @@ export const zhHans: Translation<"other"> = {
   "error.issue.openFailedTitle": "无法打开 Issue 页面",
   "error.diagnostics": "错误详情",
   "error.copyDetailsFailed": "无法复制错误详情",
+  "error.copyTextFailed": "无法复制文本",
   "error.details": "详情",
   "error.title": "错误",
   "error.alertSession": "会话：{session}",
@@ -348,8 +349,13 @@ export const zhHans: Translation<"other"> = {
   "daemon.message_refused": "{agent} 拒绝了 {appName} 为此会话写入的一条消息，因此未发送。后续消息会继续发送。原因：{detail}",
   "daemon.submit_retry_failed.summary": "{agent} 未确认已发送 {appName} 写入此会话的一条消息，应用也未能再次按下 {enter}。",
   "daemon.submit_retry_failed.recovery": "请检查输入框。如果消息还在，请手动按 {enter}，不要再次粘贴。",
-  "daemon.draft_save_unconfirmed.summary": "{agent} 未确认保存此会话输入框中的草稿，因此 {appName} 直接将消息写入了输入框。",
-  "daemon.draft_save_unconfirmed.recovery": "请检查对话：这条消息可能已与草稿一起发送。",
+  "daemon.draft_save_unconfirmed.summary": "{agent} 未确认保存此会话输入框中的草稿，因此 {appName} 没有写入消息。",
+  "daemon.draft_save_unconfirmed.recovery": "消息会等到输入框为空时再写入。请发送或清空草稿；否则 {appName} 稍后会先清空草稿，并显示其中的内容。",
+  "daemon.draft_discarded.summary": "{appName} 清空了此会话输入框中的草稿，以免消息与草稿一起发送。",
+  "daemon.draft_discarded.recovery": "如需保留草稿，请复制下方内容，再粘贴回输入框。",
+  "daemon.draft_discarded.detailLabel": "草稿内容",
+  "daemon.draft_discarded.part.summary": "为免消息与草稿一起发送，{appName} 清空了此会话输入框中的部分草稿。消息会等到输入框为空时再写入，输入框有变化后 {appName} 会再试一次。",
+  "daemon.draft_discarded.part.recovery": "如需保留草稿，请复制下方内容；输入框中可能还留有其中一部分。",
   "daemon.draft_restore_unconfirmed.summary": "{appName} 发送消息后，{agent} 未确认已将草稿放回此会话的输入框。",
   "daemon.draft_restore_unconfirmed.recovery": "发送输入框中的内容前，请先检查。",
   "daemon.draft_restore_unconfirmed.details": "草稿暂存期间在会话中输入的内容会写入当前的输入框，这条消息不会再次发送。",
@@ -682,13 +688,15 @@ export const zhHans: Translation<"other"> = {
   "daemon.message_acceptance_unconfirmed":
     "{agent} 未确认已接收 {appName} 写入此会话的一条消息。这条消息可能已在队列中，应用不会再次发送。后续消息最多暂缓三秒，或直到发送下一条提示。请先检查对话，再决定是否重新发送这条消息。",
   "daemon.message_not_sent.retry":
-    "{agent} 尚未确认发送 {appName} 写入此会话的消息。应用会再尝试提交一次输入框中的现有内容，不会重复粘贴消息。如有待回答的弹窗，请先处理。",
+    "{agent} 尚未确认发送 {appName} 写入此会话的消息。仅当输入框中只有这条消息时，应用才会再按一次提交键，不会重复粘贴消息。如有待回答的弹窗，请先处理。",
   "daemon.message_discarded_by_dialog":
     "{appName} 向此会话写入消息时，{agent} 弹出了对话框并丢弃了这条消息。对话框被回应后，应用会重新写入。",
   "daemon.message_diverted_by_view":
     "{appName} 向此会话写入消息时，{agent} 正显示其后台智能体的视图，消息因此进入了该视图，而没有进入对话。请检查此会话。",
   "daemon.submit_retry_failed": "{agent} 未确认已发送 {appName} 写入此会话的一条消息，应用也未能再次按下 {enter}。请检查输入框。如果消息还在，请手动按 {enter}，不要再次粘贴。原因：{detail}",
-  "daemon.draft_save_unconfirmed": "{agent} 未确认保存此会话输入框中的草稿，因此 {appName} 直接将消息写入了输入框。请检查对话：这条消息可能已与草稿一起发送。",
+  "daemon.draft_save_unconfirmed": "{agent} 未确认保存此会话输入框中的草稿，因此 {appName} 没有写入消息。消息会等到输入框为空时再写入。请发送或清空草稿；否则 {appName} 稍后会先清空草稿，并显示其中的内容。",
+  "daemon.draft_discarded": "{appName} 清空了此会话输入框中的草稿，以免消息与草稿一起发送。如需保留草稿，请将其粘贴回输入框。",
+  "daemon.draft_discarded.part": "为免消息与草稿一起发送，{appName} 清空了此会话输入框中的部分草稿。消息会等到输入框为空时再写入，输入框有变化后 {appName} 会再试一次。如需保留草稿，请复制下方内容；输入框中可能还留有其中一部分。",
   "daemon.draft_restore_unconfirmed":
     "{appName} 发送消息后，{agent} 未确认已将草稿放回此会话的输入框。草稿暂存期间在会话中输入的内容会写入当前的输入框，这条消息不会再次发送。发送输入框中的内容前，请先检查。",
   "daemon.typing_held":
@@ -709,6 +717,8 @@ export const zhHans: Translation<"other"> = {
   "daemon.message_refused.alertTitle": "消息被拒绝",
   "daemon.submit_retry_failed.alertTitle": "提交未获确认",
   "daemon.draft_save_unconfirmed.alertTitle": "草稿保存未获确认",
+  "daemon.draft_discarded.alertTitle": "草稿已清空",
+  "daemon.draft_discarded.part.alertTitle": "草稿已部分清空",
   "daemon.draft_restore_unconfirmed.alertTitle": "草稿恢复未获确认",
   "daemon.typing_held.alertTitle": "输入已暂缓",
   "daemon.typing_blocked.alertTitle": "消息未完整写入",

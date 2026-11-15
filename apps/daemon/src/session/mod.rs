@@ -8,18 +8,22 @@
 //! whether a turn is running for everything that acts on it, and `title_interrupt` a cancel that
 //! left no other trace off that reading, `dialogs` finds the dialogs only a person can answer,
 //! `trust/` presses the folder-trust confirmation, `input_box` reads what the agent's input box
-//! holds off its screen, `draft` mirrors the input to match the prompts that were submitted and
-//! times the keys typed, `draft_hold` ends the hold those keys keep on Octoboard's messages once
-//! the box is drawn empty, `output_pace` tells whether its parsed screen shows a whole frame,
-//! `swap` handles the native composer stashes that keep editor state inside the CLI while a message
-//! uses the input, and `paste_apart` submits a message whose Enter has to wait until the agent has
-//! taken its paste, and `usage_limit` holds where the process stands with the hold on Octoboard's
-//! writes after a turn stopped on its account's usage limit.
+//! holds off its screen, `input_box_clear` empties it a Ctrl-U at a time, `draft` mirrors the input
+//! to match the prompts that were submitted and times the keys typed, `draft_hold` ends the hold
+//! those keys keep on Octoboard's messages once the box is drawn empty, `output_pace` tells whether
+//! its parsed screen shows a whole frame, `swap` handles the native composer stashes that keep
+//! editor state inside the CLI while a message uses the input, `draft_clear` clears a draft out of
+//! the way of a message past the draft's grace where no stash can take it, `paste_apart` submits a
+//! message whose Enter has to wait until the agent has taken its paste, and `usage_limit` holds
+//! where the process stands with the hold on Octoboard's writes after a turn stopped on its
+//! account's usage limit.
 
 pub(crate) mod dialogs;
 mod draft;
+mod draft_clear;
 mod draft_hold;
 pub(crate) mod input_box;
+mod input_box_clear;
 pub(crate) mod interrupt;
 mod output_pace;
 mod paste_apart;
@@ -142,6 +146,14 @@ pub struct LiveSession {
     /// What the release of the hold the user's keys keep on Octoboard's messages works from; see
     /// [`draft_hold`].
     draft_hold: draft_hold::DraftHold,
+    /// What stood when a press clearing the input box was not seen to change it (`draft_clear`): no
+    /// key clears it again until the box shows something else, a prompt is reported, a turn ends,
+    /// or a while has passed.
+    unseen_clear: Mutex<Option<draft_clear::UnseenClear>>,
+    /// The message Octoboard wrote last, while its being alone in the box holds a draft clear back
+    /// (`draft_clear`): which write it was (`Draft::message_count`), since when, and whether the
+    /// user has been told it waits.
+    own_message_held: Mutex<Option<(u64, Instant, bool)>>,
     /// The acknowledgement count of the unconfirmed message the user was told was not sent, until a
     /// prompt reported after it withdraws that ([`Self::note_prompt_sent`]). Taken before
     /// `unsent_at` where both are.
@@ -269,6 +281,8 @@ impl LiveSession {
             unsent_at: Mutex::new(None),
             unsent_retry_scheduled: AtomicBool::new(false),
             draft_hold: draft_hold::DraftHold::default(),
+            unseen_clear: Mutex::new(None),
+            own_message_held: Mutex::new(None),
             unsent_notice: Mutex::new(None),
             uncertain_at: Mutex::new(None),
             agent_error_at: Mutex::new(None),
@@ -313,6 +327,16 @@ impl LiveSession {
         drop(observer);
         // Reports the program made before then are applied now.
         self.apply_program_status();
+    }
+
+    /// Whether a key or a message of Octoboard's may go into the session now: nothing holds its
+    /// automatic input ([`Self::allows_automatic_input`]), its trust confirmation is not holding
+    /// writes, and no dialog only the user can answer is up. Read under the input lock, right
+    /// before the write.
+    fn takes_automatic_keys(&self) -> bool {
+        self.allows_automatic_input()
+            && !self.trust.holds_writes()
+            && self.look_for_dialog().current.is_none()
     }
 
     /// Consult hook and lifecycle holds without retaining the observer lock across state reads.
@@ -578,12 +602,28 @@ impl LiveSession {
     /// Checks the composer and the unacknowledged user input under the same lock as the write.
     /// A rendered empty box acknowledges that input only off a screen that can no longer predate
     /// it ([`Self::composer_for_draft`]); keys still waiting in the child's input are not.
-    /// An expired protection budget bypasses editor checks but never dialogs or process lifetime.
+    /// Past the draft's grace (`past_grace`) the keys typed need not be acknowledged, but the box
+    /// must still read empty ([`Self::past_grace_refusal`]), and dialogs and the process's lifetime
+    /// are checked as ever.
     fn write_empty_message_input(
         &self,
         message: &[Input],
         prompt: &str,
-        allow_mixed: bool,
+        past_grace: bool,
+    ) -> Result<(), PartialWrite> {
+        self.write_message_into_empty_box(message, prompt, past_grace, None)
+    }
+
+    /// [`Self::write_empty_message_input`], for a box Octoboard's own keys have just emptied where
+    /// `cleared` is the count of writes after its last key (`draft_clear`): refused if anything
+    /// else has written since, and otherwise, in the same step as the write, the typing record is
+    /// told the box holds nothing any more ([`Draft::cleared_by_octoboard`]).
+    fn write_message_into_empty_box(
+        &self,
+        message: &[Input],
+        prompt: &str,
+        past_grace: bool,
+        cleared: Option<u64>,
     ) -> Result<(), PartialWrite> {
         let input = self.pty.lock_input();
         if self.pty.is_frozen() {
@@ -592,17 +632,22 @@ impl LiveSession {
         if self.input_swap_active() {
             return Err(swap::blocked("an input replacement holds the composer"));
         }
-        if !self.allows_automatic_input()
-            || self.trust.holds_writes()
-            || self.look_for_dialog().current.is_some()
-        {
+        if !self.takes_automatic_keys() {
             return Err(swap::blocked(
                 "the session is waiting for user action or showing a dialog or trust confirmation",
             ));
         }
         let mut draft = self.draft.lock().expect("draft lock poisoned");
+        if let Some(cleared) = cleared {
+            if self.input_writes.load(Ordering::Acquire) != cleared {
+                return Err(swap::blocked(
+                    "something else wrote into the session after its input box was cleared",
+                ));
+            }
+            draft.cleared_by_octoboard();
+        }
         if self.checks_composer
-            && !allow_mixed
+            && !past_grace
             && (self.stash_shown() || {
                 let (composer, _) = self.composer_for_draft(&mut draft);
                 draft.holds() || composer.as_deref() != Some("")
@@ -616,7 +661,7 @@ impl LiveSession {
                 ),
             });
         }
-        if self.checks_composer && allow_mixed {
+        if self.checks_composer && past_grace {
             if let Some(refusal) = self.past_grace_refusal(&draft) {
                 return Err(swap::blocked(refusal));
             }
@@ -626,7 +671,7 @@ impl LiveSession {
         self.input_writes.fetch_add(1, Ordering::AcqRel);
         let written = self.pty.write_input_locked(&input, now);
         if written.is_ok() {
-            draft.message_written(Instant::now());
+            draft.message_written(Instant::now(), prompt);
             self.end_torn_run();
             self.note_message_written();
         }
@@ -634,7 +679,30 @@ impl LiveSession {
         drop(input);
         written?;
         // Only a box found empty above has to show the message alone.
-        self.submit_rest(now, rest, self.checks_composer && !allow_mixed)
+        self.submit_rest(now, rest, self.checks_composer && !past_grace)
+    }
+
+    /// Whether an input box that shows `text` holds nothing but `message`, the message Octoboard
+    /// wrote last: nothing at all, the message itself (compared without whitespace, so wrapping does
+    /// not count), or one placeholder the agent shows for a long paste
+    /// ([`screen::ScreenReader::collapsed_paste`]).
+    fn holds_only_the_message(&self, text: &str, message: Option<&str>) -> bool {
+        let bare = |text: &str| {
+            text.chars()
+                .filter(|c| !c.is_whitespace())
+                .collect::<String>()
+        };
+        let shown = bare(text);
+        if shown.is_empty() {
+            return true;
+        }
+        let Some(message) = message else {
+            return false;
+        };
+        shown == bare(message)
+            || crate::adapter::provider(self.agent)
+                .screen()
+                .collapsed_paste(text.trim())
     }
 
     pub(crate) fn note_launch_prompt(&self, prompt: String) {
@@ -792,6 +860,12 @@ impl LiveSession {
         }
     }
 
+    /// Presses the submit key once more for a message marked unsent ([`Self::mark_unsent`]), once
+    /// its grace has passed, and says whether it did. Never where the Enter could send something
+    /// of the user's with the message: keys typed since the message went in end the retry, the hold
+    /// staying until a prompt is reported, and a box that shows anything but the message itself,
+    /// or is not read off a whole frame, puts it off to the next look, for [`UNSENT_RETRY_BOUND`]
+    /// at most, after which the retry ends as for typed keys.
     fn retry_unsent_submit(
         &self,
         permits_submit: impl FnOnce() -> bool,
@@ -807,6 +881,16 @@ impl LiveSession {
         {
             return Ok(false);
         }
+        // Read before the mark is locked, in the order every writer takes the locks.
+        let (typed, alone) = {
+            let draft = self.draft.lock().expect("draft lock poisoned");
+            let (composer, whole, _) = self.read_box();
+            let alone = whole.is_some()
+                && composer
+                    .as_deref()
+                    .is_some_and(|text| self.holds_only_the_message(text, draft.message_text()));
+            (draft.typed_since_message(), alone)
+        };
         let mut unsent = self.unsent_at.lock().expect("unsent mark lock poisoned");
         let Some((before, started, retry)) = *unsent else {
             return Ok(false);
@@ -818,11 +902,22 @@ impl LiveSession {
         if !retry || started.elapsed() < crate::messaging::outbox::DRAFT_WAIT {
             return Ok(false);
         }
+        if typed || (!alone && started.elapsed() >= UNSENT_RETRY_BOUND) {
+            // What the user typed may be in the box with the message, and the Enter would send it
+            // along; or the box has shown more than the message for too long to wait on it. The
+            // message waits for the user to send it, and holds the queue until then; the caller
+            // tells the user so ([`Self::schedule_unsent_submit_retry`]).
+            *unsent = Some((before, started, false));
+            tracing::warn!(session = %self.id, typed, "the submit key of a message left unsent is not retried: the input box may hold more than the message");
+            return Ok(false);
+        }
+        if !alone {
+            return Ok(false);
+        }
         // The payload was already written. Retry only its submit key, once, rather than appending
-        // it a second time. New user text in the composer may be included under delivery priority.
+        // it a second time.
         *unsent = None;
         drop(unsent);
-        self.native_stash.store(false, Ordering::Release);
         self.input_writes.fetch_add(1, Ordering::AcqRel);
         self.pty.write_input_locked(&input, &[Input::Enter])?;
         Ok(true)
@@ -851,7 +946,21 @@ impl LiveSession {
         let launch = self.launch_id.clone();
         runtime.spawn_blocking(move || {
             let Some(live) = state.live_session(&id).filter(|live| live.launch_id == launch) else { return; };
-            if let Err(error) = live.retry_unsent_submit(|| state.permits_automatic_input(&id)) {
+            let retried = live.retry_unsent_submit(|| state.permits_automatic_input(&id));
+            // A retry that ended without its key (`retry_unsent_submit`) leaves the message waiting
+            // for the user, which the notice now says, as it does for a message no retry follows.
+            let ended = matches!(retried, Ok(false))
+                && live
+                    .unsent_at
+                    .lock()
+                    .expect("unsent mark lock poisoned")
+                    .is_some_and(|(.., retry)| !retry);
+            if ended {
+                live.notice_unsent(|retry| {
+                    state.broadcast(crate::messaging::write_queue::unsent_notice(live.agent, retry).about(&id));
+                });
+            }
+            if let Err(error) = retried {
                 let detail = error.to_string();
                 tracing::error!(session = %id, %detail, "submit-key retry failed");
                 state.broadcast(
@@ -983,6 +1092,11 @@ impl LiveSession {
     }
 }
 
+/// How long after a message was marked unsent its submit key is still retried while the input box
+/// shows more than the message ([`LiveSession::retry_unsent_submit`]): past it, the retry ends and
+/// the user is told the message waits for them.
+const UNSENT_RETRY_BOUND: Duration = Duration::from_secs(30);
+
 #[cfg(test)]
 mod tests {
     use crate::platform::term::Input;
@@ -1009,9 +1123,169 @@ mod tests {
         assert!(!live.retry_unsent_submit(|| true).unwrap());
         assert!(live.unsent_waiting());
         assert_eq!(live.input_writes(), before);
-        live.on_output(b"\x1b[2J\x1b[1;1H");
+        draw_box(&live, "");
         assert!(live.retry_unsent_submit(|| true).unwrap());
         assert!(!live.unsent_waiting());
+    }
+
+    /// Claude Code's screen with `text` in its input box, drawn as a whole frame.
+    fn draw_box(live: &super::LiveSession, text: &str) {
+        let rule = "\u{2500}".repeat(60);
+        live.on_output(format!("\x1b[2J\x1b[30;1H{rule}\r\n\u{276f} {text}\r\n{rule}").as_bytes());
+        live.settle_input();
+    }
+
+    /// A Claude Code session whose message "peer" went in and was left unsent, its draft grace
+    /// spent so that the submit key may be retried.
+    fn unsent_session(name: &str) -> crate::test_support::StandIn {
+        let live = crate::test_support::fake_live_session(
+            name,
+            crate::protocol::AgentId::CLAUDE,
+            120,
+            40,
+            "sleep 30",
+        )
+        .with_composer();
+        draw_box(&live, "");
+        live.write_message_input(&[Input::Text("peer".into())], "peer", false)
+            .unwrap();
+        live.mark_unsent(0);
+        *live.unsent_at.lock().unwrap() = Some((
+            0,
+            std::time::Instant::now() - crate::messaging::outbox::DRAFT_WAIT,
+            true,
+        ));
+        live
+    }
+
+    /// The submit key retried for a message left unsent never sends the user's text with it: keys
+    /// typed since the message went in end the retry, the message holding the queue until a prompt
+    /// is reported; a box that shows more than the message puts the retry off; a box that shows the
+    /// message alone, as itself or as the placeholder of a long paste, gets it.
+    #[test]
+    fn a_submit_retry_never_sends_the_users_text_with_the_message() {
+        let live = unsent_session("unsent-typed");
+        live.write_terminal_input(b" and more").unwrap();
+        draw_box(&live, "peer and more");
+        let before = live.input_writes();
+        assert!(!live.retry_unsent_submit(|| true).unwrap());
+        assert_eq!(live.input_writes(), before, "no Enter");
+        assert!(live.unsent_waiting(), "the message still holds the queue");
+        assert_eq!(
+            live.unsent_at.lock().unwrap().map(|(.., retry)| retry),
+            Some(false)
+        );
+        draw_box(&live, "peer");
+        assert!(
+            !live.retry_unsent_submit(|| true).unwrap(),
+            "not retried later either"
+        );
+        assert_eq!(live.input_writes(), before);
+
+        let live = unsent_session("unsent-more");
+        draw_box(&live, "peer and something else");
+        let before = live.input_writes();
+        assert!(!live.retry_unsent_submit(|| true).unwrap());
+        assert_eq!(live.input_writes(), before);
+        assert_eq!(
+            live.unsent_at.lock().unwrap().map(|(.., retry)| retry),
+            Some(true)
+        );
+        draw_box(&live, "pe er");
+        assert!(
+            live.retry_unsent_submit(|| true).unwrap(),
+            "the message alone, wrapped"
+        );
+        assert_eq!(live.input_writes(), before + 1);
+
+        let live = unsent_session("unsent-placeholder");
+        draw_box(&live, "[Pasted text #1 +24 lines]");
+        assert!(live.retry_unsent_submit(|| true).unwrap());
+        let live = unsent_session("unsent-placeholder-and-text");
+        draw_box(&live, "[Pasted text #1 +24 lines] and more]");
+        assert!(!live.retry_unsent_submit(|| true).unwrap());
+    }
+
+    /// The submit key is retried only on a box read off a whole frame: one that cannot be read, or
+    /// that shows nothing off a frame still being drawn, may hide what the Enter would send, so
+    /// the retry is put off to the next look and the message keeps holding the queue.
+    #[test]
+    fn a_submit_retry_waits_for_a_box_it_can_read_off_a_whole_frame() {
+        let live = unsent_session("unsent-unreadable");
+        live.on_output(b"\x1b[2J\x1b[Ha screen with no input box on it");
+        live.settle_input();
+        let before = live.input_writes();
+        assert!(!live.retry_unsent_submit(|| true).unwrap());
+        assert_eq!(live.input_writes(), before, "no Enter into a box not read");
+        assert!(live.unsent_waiting());
+        assert_eq!(
+            live.unsent_at.lock().unwrap().map(|(.., retry)| retry),
+            Some(true),
+            "put off, not given up"
+        );
+        draw_box(&live, "");
+        assert!(live.retry_unsent_submit(|| true).unwrap());
+
+        let live = unsent_session("unsent-torn");
+        // Empty, but inside an open synchronized update: the frame may hide the user's text.
+        let rule = "\u{2500}".repeat(60);
+        live.on_output(
+            format!("\x1b[?2026h\x1b[2J\x1b[30;1H{rule}\r\n\u{276f} \r\n{rule}").as_bytes(),
+        );
+        live.settle_input();
+        let before = live.input_writes();
+        assert!(!live.retry_unsent_submit(|| true).unwrap());
+        assert_eq!(live.input_writes(), before, "no Enter off a torn frame");
+        live.on_output(b"\x1b[?2026l");
+        live.settle_input();
+        assert!(live.retry_unsent_submit(|| true).unwrap());
+    }
+
+    /// What a box may hold for the submit key to be retried on it: nothing, the message itself
+    /// however the box wraps it, or the one placeholder Claude Code shows for a long paste; never
+    /// anything beside it, nor a placeholder that is only part of the text.
+    #[test]
+    fn only_the_message_itself_leaves_a_box_for_the_submit_retry() {
+        let live = crate::test_support::fake_live_session(
+            "box-alone",
+            crate::protocol::AgentId::CLAUDE,
+            120,
+            40,
+            "sleep 30",
+        );
+        let alone = |text: &str, message: Option<&str>| live.holds_only_the_message(text, message);
+        assert!(alone("", Some("peer")));
+        assert!(alone("  \n ", None));
+        assert!(alone("peer", Some("peer")));
+        assert!(alone(
+            "a long\nmessage\n wrapped",
+            Some("a long message  wrapped")
+        ));
+        assert!(alone("[Pasted text #3]", Some("peer")));
+        assert!(alone(" [Pasted text #12 +24 lines] ", Some("peer")));
+        assert!(
+            !alone("远程的菜单栏图标中", Some("peer")),
+            "the user's own text"
+        );
+        assert!(!alone("peer 远程的菜单栏图标中", Some("peer")));
+        assert!(
+            !alone("peer", None),
+            "no message is known to be the one in the box"
+        );
+        assert!(!alone("[Pasted text #1 +24 lines] more", Some("peer")));
+        assert!(!alone("more [Pasted text #1]", Some("peer")));
+        assert!(!alone("[Pasted text #1] [Pasted text #2]", Some("peer")));
+        for odd in [
+            "[Pasted text #]",
+            "[Pasted text #a]",
+            "[Pasted text #1 +]",
+            "[Pasted text #1 +x lines]",
+            "[Pasted text #1 +2 line]",
+            "[Pasted text #1 +2 lines",
+            "[pasted text #1]",
+        ] {
+            assert!(!alone(odd, Some("peer")), "{odd}");
+        }
     }
 
     #[test]
@@ -1030,6 +1304,7 @@ mod tests {
             std::time::Instant::now() - crate::messaging::outbox::DRAFT_WAIT,
             true,
         ));
+        draw_box(&live, "");
         let before = live.input_writes();
         assert!(!live.retry_unsent_submit(|| false).unwrap());
         assert!(live.unsent_waiting());
@@ -1049,6 +1324,136 @@ mod tests {
         live.note_prompt_sent(None);
         assert!(!live.retry_unsent_submit(|| true).unwrap());
         assert_eq!(live.input_writes(), before + 1);
+    }
+
+    /// The submit key retried for a message left unsent leaves native stashing as it was: the retry
+    /// is no reason to stop using the agent's stash for later drafts.
+    #[test]
+    fn a_submit_retry_leaves_native_stashing_on() {
+        let live = unsent_session("unsent-stash");
+        live.enable_native_stash(true);
+        draw_box(&live, "");
+        assert!(live.retry_unsent_submit(|| true).unwrap());
+        assert!(live.native_stash.load(std::sync::atomic::Ordering::Acquire));
+    }
+
+    /// A box that shows more than the message puts the retry off only for [`super::UNSENT_RETRY_BOUND`]:
+    /// past it the retry ends with no Enter, the message waits for the user and holds the queue, the
+    /// user is told so again without a retry in it, and the retry is never scheduled again.
+    #[test]
+    fn a_submit_retry_ends_once_the_box_has_shown_more_than_the_message_for_the_bound() {
+        let started = |age: std::time::Duration| std::time::Instant::now() - age;
+        let set_started = |live: &crate::test_support::StandIn, age| {
+            *live.unsent_at.lock().unwrap() = Some((0, started(age), true));
+        };
+        let retry_of = |live: &crate::test_support::StandIn| {
+            live.unsent_at.lock().unwrap().map(|(.., retry)| retry)
+        };
+
+        // Within the bound the retry is only put off.
+        let live = unsent_session("unsent-within-bound");
+        set_started(&live, super::UNSENT_RETRY_BOUND / 2);
+        draw_box(&live, "peer and something else");
+        let before = live.input_writes();
+        assert!(!live.retry_unsent_submit(|| true).unwrap());
+        assert_eq!(retry_of(&live), Some(true), "put off, not given up");
+        assert_eq!(live.input_writes(), before);
+
+        // Past it the retry ends, whether the box shows more or cannot be read off a whole frame.
+        for (name, box_text) in [("more", Some("peer and something else")), ("torn", None)] {
+            let live = unsent_session(&format!("unsent-past-bound-{name}"));
+            set_started(&live, super::UNSENT_RETRY_BOUND);
+            match box_text {
+                Some(text) => draw_box(&live, text),
+                None => {
+                    live.on_output(b"\x1b[2J\x1b[Ha screen with no input box on it");
+                    live.settle_input();
+                }
+            }
+            let before = live.input_writes();
+            assert!(!live.retry_unsent_submit(|| true).unwrap(), "{name}");
+            assert_eq!(live.input_writes(), before, "{name}: no Enter");
+            assert_eq!(retry_of(&live), Some(false), "{name}");
+            assert!(
+                live.unsent_waiting(),
+                "{name}: the message still holds the queue"
+            );
+            live.schedule_unsent_submit_retry();
+            assert!(
+                !live
+                    .unsent_retry_scheduled
+                    .load(std::sync::atomic::Ordering::Acquire),
+                "{name}: no further retry is scheduled"
+            );
+            let mut told = None;
+            live.notice_unsent(|retry| told = Some(retry));
+            assert_eq!(told, Some(false), "{name}: told again, without a retry");
+        }
+
+        // A box that shows the message alone is never past the bound: its Enter is pressed.
+        let live = unsent_session("unsent-alone-past-bound");
+        set_started(&live, super::UNSENT_RETRY_BOUND * 2);
+        draw_box(&live, "peer");
+        let before = live.input_writes();
+        assert!(live.retry_unsent_submit(|| true).unwrap());
+        assert_eq!(live.input_writes(), before + 1);
+    }
+
+    /// A retry that ends on the bound tells the user as one ended by typing does: a
+    /// `message_not_sent` notice with no retry in it.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_retry_ended_by_the_bound_is_announced_without_a_retry() {
+        let id = "retry-bound";
+        let (state, dir) = crate::test_support::app_state(id);
+        state
+            .store
+            .insert_console(&crate::test_support::console(&dir))
+            .unwrap();
+        state
+            .store
+            .insert_session(&crate::test_support::bare_session(
+                id,
+                crate::protocol::SessionKind::Project,
+            ))
+            .unwrap();
+        let live = crate::test_support::fake_live_session(
+            id,
+            crate::protocol::AgentId::CLAUDE,
+            120,
+            40,
+            "sleep 30",
+        )
+        .with_composer();
+        state.register_live(live.clone());
+        let mut events = state.subscribe();
+        draw_box(&live, "");
+        live.write_message_input(&[Input::Text("peer".into())], "peer", false)
+            .unwrap();
+        live.mark_unsent(0);
+        *live.unsent_at.lock().unwrap() = Some((
+            0,
+            std::time::Instant::now() - super::UNSENT_RETRY_BOUND,
+            true,
+        ));
+        draw_box(&live, "peer and something else");
+        let before = live.input_writes();
+        live.schedule_unsent_submit_retry();
+        let params = tokio::time::timeout(crate::test_support::PATIENCE, async {
+            loop {
+                if let crate::protocol::Event::SessionNotice { code, params, .. } =
+                    events.recv().await.expect("the event stream ended")
+                {
+                    if code == crate::protocol::notice_code::MESSAGE_NOT_SENT {
+                        break params;
+                    }
+                }
+            }
+        })
+        .await
+        .expect("no notice that the retry ended");
+        assert_eq!(params.get("submit_retry"), None);
+        assert_eq!(live.input_writes(), before, "no Enter");
+        assert!(live.unsent_waiting());
     }
 
     /// A message the write left in its input box, its submit key pressed or held back, holds
@@ -1145,6 +1550,8 @@ mod tests {
         assert!(ready.contains("ready"), "{ready}");
         state.register_live(live.clone());
         let mut events = state.subscribe();
+        // The box shows nothing beside the message, so the retry is due.
+        draw_box(&live, "");
         live.hang_up();
         live.mark_unsent(0);
         *live.unsent_at.lock().unwrap() = Some((
@@ -1176,6 +1583,65 @@ mod tests {
             Some("Claude Code")
         );
         assert!(!notice.2.get("detail").expect("a detail").is_empty());
+    }
+
+    /// A retry the user's typing ends tells the user again, as a notice with no retry in it: the
+    /// message now waits in the box for them, and the notice that promised a retry is no longer
+    /// true.
+    #[tokio::test(flavor = "multi_thread")]
+    async fn a_retry_ended_by_typing_is_announced_without_a_retry() {
+        let id = "retry-ended";
+        let (state, dir) = crate::test_support::app_state(id);
+        state
+            .store
+            .insert_console(&crate::test_support::console(&dir))
+            .unwrap();
+        state
+            .store
+            .insert_session(&crate::test_support::bare_session(
+                id,
+                crate::protocol::SessionKind::Project,
+            ))
+            .unwrap();
+        let live = crate::test_support::fake_live_session(
+            id,
+            crate::protocol::AgentId::CLAUDE,
+            120,
+            40,
+            "sleep 30",
+        )
+        .with_composer();
+        state.register_live(live.clone());
+        let mut events = state.subscribe();
+        draw_box(&live, "");
+        live.write_message_input(&[Input::Text("peer".into())], "peer", false)
+            .unwrap();
+        live.mark_unsent(0);
+        *live.unsent_at.lock().unwrap() = Some((
+            0,
+            std::time::Instant::now() - crate::messaging::outbox::DRAFT_WAIT,
+            true,
+        ));
+        live.write_terminal_input(b" and more").unwrap();
+        draw_box(&live, "peer and more");
+        let before = live.input_writes();
+        live.schedule_unsent_submit_retry();
+        let params = tokio::time::timeout(crate::test_support::PATIENCE, async {
+            loop {
+                if let crate::protocol::Event::SessionNotice { code, params, .. } =
+                    events.recv().await.expect("the event stream ended")
+                {
+                    if code == crate::protocol::notice_code::MESSAGE_NOT_SENT {
+                        break params;
+                    }
+                }
+            }
+        })
+        .await
+        .expect("no notice that the retry ended");
+        assert_eq!(params.get("submit_retry"), None);
+        assert_eq!(live.input_writes(), before, "no Enter");
+        assert!(live.unsent_waiting());
     }
 
     #[test]

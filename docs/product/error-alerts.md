@@ -111,7 +111,9 @@ is running (`handoff_move_failed`, `handoff_archive_failed`) has neither line: i
 and refers to the original session by its role, the two usually sharing a name. The
 rest of the body is in Octoboard's own words — what happened, the next step, any further explanation — and holds no raw
 text: that is only under the collapsed **Error details** disclosure at the body's end (see "Names and diagnostic
-details" below). The body's opening sentence (after any session and location lines) is optional: it is there only for
+details" below). The one exception is text the user wrote that a failure hands back, such as the draft a
+`draft_discarded` notice carries: it is shown in a block of its own after the explanation and the next step, and before
+the disclosure (see "Names and diagnostic details" below). The body's opening sentence (after any session and location lines) is optional: it is there only for
 what the title leaves unexplained, such as a cause or what the failure left as it was, and never says the title again in
 other words; when the title says it all, the body starts with the next step. It has one acknowledgement button. Escape,
 a click outside and a close button cannot dismiss it, and it never dismisses itself. Acknowledgement does not retry the
@@ -471,6 +473,16 @@ padding; the button reserves neither a header row nor a right-hand column. Extra
 lets the tail of a line be brought clear of the button. It copies the complete original text, including line breaks,
 indentation, and leading and trailing whitespace. It is available before the daemon connects too. A successful copy
 and a failed copy follow "Copy buttons" in `docs/product/labels-and-tooltips.md`.
+
+**Text the user wrote** that a failure hands back — today only the draft Octoboard cleared from a session's input box
+(`draft_discarded`, see "The draft and typing notices" in `docs/product/draft-preservation.md`) — is not raw text and
+not part of a sentence either. In an error alert it is shown in the body, after the explanation and the next step and
+outside Error details, under a label of its own that also names its scrolling region, in a block like a diagnostic
+block: the same tinted surface, height limit, vertical scrolling and Copy button, which copies the complete original
+text. Unlike a diagnostic, it keeps its own text direction, and its long lines wrap rather than scroll sideways; a copy
+that fails says the text could not be copied rather than the error details. The alert's accessible description leaves the
+block out, so assistive technology does not read it out with the explanation; the block is reached on its own, by its
+label. Where the failure is shown as plain text, the text follows the message on a line of its own.
 
 A reason Octoboard words itself remains part of the explanation; it is not turned into a diagnostic block simply because
 it accompanies an error. Unrecognized daemon messages retain the daemon's own readable wording as their raw text, after

@@ -51,6 +51,10 @@ export interface CodeRecord extends MessageFacets {
   /** Producer-confirmed CLI, shell and sharing diagnostics: its `detail` is shown as a block of its own, and the rich
    * sentence (`daemon.<code>.summary`) leaves it out. */
   detailBlock?: true;
+  /** The failure's `detail` is text the user wrote, not raw diagnostics (a draft cleared from an input box): it is shown
+   * after the explanation, under the label `daemon.<code>.detailLabel`, in its own direction, wrapped and with its copy
+   * button, never behind "Error details"; as plain text it follows the message on a line of its own. */
+  detailLabel?: true;
   /** `false` where `detailBlock` is set but the catalog has no `.summary`, so the plain sentence stays. */
   summaryForDetail?: false;
   /** Has a step of its own: `daemon.<code>.summary` says what happened and `.recovery` that step. */
@@ -174,6 +178,7 @@ const CORE_CODES = {
   directory_unavailable: { origin: "daemon", recovery: "openFileManager", detailBlock: true, noSummary: true },
   directory_unreachable: { origin: "daemon", recovery: "path", codeParams: ["path"], variants: { accountPermissions: { codeParams: ["path"] } }, variantOf: (_params, os) => notMacOS(os) },
   directory_unreadable: { origin: "daemon", recovery: "access", detailBlock: true, recoveryLine: true, codeParams: ["path"], variants: { accountPermissions: { codeParams: ["path"] } }, variantOf: (_params, os) => notMacOS(os) },
+  draft_discarded: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true, detailLabel: true, variantOf: (params) => (params.cleared === "part" ? "part" : undefined) },
   draft_restore_unconfirmed: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true },
   draft_save_unconfirmed: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true },
   // The export dialog keeps Export unavailable while nothing is chosen, so only a client that does not guard it

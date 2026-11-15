@@ -221,6 +221,7 @@ export const en = {
   "error.issue.openFailedTitle": "Could not open the Issue page",
   "error.diagnostics": "Error details",
   "error.copyDetailsFailed": "Could not copy the error details",
+  "error.copyTextFailed": "Could not copy the text",
   "error.details": "Details",
   "error.title": "Error",
   "error.alertSession": "Session: {session}",
@@ -385,9 +386,15 @@ export const en = {
   "daemon.submit_retry_failed.recovery":
     "Check the input box. If the message is still there, press {enter} without pasting it again.",
   "daemon.draft_save_unconfirmed.summary":
-    "{agent} did not confirm saving the draft in this session's input box, so {appName} wrote its message into the input box as it was.",
+    "{agent} did not confirm saving the draft in this session's input box, so {appName} did not write its message there.",
   "daemon.draft_save_unconfirmed.recovery":
-    "Check the conversation: the message may have been sent together with the draft.",
+    "The message waits until the input box is empty. Send or clear the draft, or {appName} will clear it shortly and show what it held.",
+  "daemon.draft_discarded.summary":
+    "{appName} cleared the draft in this session's input box so that a message would not be sent together with it.",
+  "daemon.draft_discarded.recovery": "To keep the draft, copy it below and paste it back into the input box.",
+  "daemon.draft_discarded.detailLabel": "Draft content",
+  "daemon.draft_discarded.part.summary": "{appName} cleared part of the draft in this session's input box so that a message would not be sent together with it. The message waits until the input box is empty, and {appName} tries again once the box changes.",
+  "daemon.draft_discarded.part.recovery": "To keep the draft, copy it below; part of it may still be in the input box.",
   "daemon.draft_restore_unconfirmed.summary":
     "{agent} did not confirm putting the draft back into this session's input box after {appName} sent its message.",
   "daemon.draft_restore_unconfirmed.recovery": "Check the input box before sending what it holds.",
@@ -773,7 +780,7 @@ export const en = {
   "daemon.message_acceptance_unconfirmed":
     "{agent} did not confirm that it accepted a message {appName} wrote into this session. The message may already be queued, and the application will not send it again. Later messages are held for at most three seconds or until another prompt is sent. Check the conversation before deciding whether to send the message again.",
   "daemon.message_not_sent.retry":
-    "{agent} has not confirmed sending a message {appName} wrote into this session. The application will try submitting the current input once more, without pasting the message again. Answer any pending dialog first.",
+    "{agent} has not confirmed sending a message {appName} wrote into this session. The application will press the submit key once more, without pasting the message again, but only if the input box holds nothing but the message. Answer any pending dialog first.",
   "daemon.message_discarded_by_dialog":
     "{agent} showed a dialog while {appName} wrote a message into this session and discarded the message. The application will write it again once the dialog has been answered.",
   "daemon.message_diverted_by_view":
@@ -781,7 +788,10 @@ export const en = {
   "daemon.submit_retry_failed":
     "{agent} did not confirm sending a message {appName} wrote into this session, and the application could not press {enter} again. Check the input box. If the message is still there, press {enter} without pasting it again. Reason: {detail}",
   "daemon.draft_save_unconfirmed":
-    "{agent} did not confirm saving the draft in this session's input box, so {appName} wrote its message into the input box as it was. Check the conversation: the message may have been sent together with the draft.",
+    "{agent} did not confirm saving the draft in this session's input box, so {appName} did not write its message there. The message waits until the input box is empty. Send or clear the draft, or {appName} will clear it shortly and show what it held.",
+  "daemon.draft_discarded":
+    "{appName} cleared the draft in this session's input box so that a message would not be sent together with it. To keep the draft, paste it back into the input box.",
+  "daemon.draft_discarded.part": "{appName} cleared part of the draft in this session's input box so that a message would not be sent together with it. The message waits until the input box is empty, and {appName} tries again once the box changes. To keep the draft, copy it below; part of it may still be in the input box.",
   "daemon.draft_restore_unconfirmed":
     "{agent} did not confirm putting the draft back into this session's input box after {appName} sent its message. What was typed into the session while the draft was set aside goes into the input box as it is now, and the message is not sent again. Check the input box before sending what it holds.",
   "daemon.typing_held":
@@ -804,6 +814,8 @@ export const en = {
   "daemon.message_refused.alertTitle": "Message refused",
   "daemon.submit_retry_failed.alertTitle": "Submit not confirmed",
   "daemon.draft_save_unconfirmed.alertTitle": "Draft save not confirmed",
+  "daemon.draft_discarded.alertTitle": "Draft cleared",
+  "daemon.draft_discarded.part.alertTitle": "Draft partly cleared",
   "daemon.draft_restore_unconfirmed.alertTitle": "Draft restore not confirmed",
   "daemon.typing_held.alertTitle": "Typing held back",
   "daemon.typing_blocked.alertTitle": "Message partly written",

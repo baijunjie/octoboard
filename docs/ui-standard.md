@@ -1599,7 +1599,11 @@ acknowledgement button, the dialog's primary, stands at the trailing edge. Its b
 application's own words: the explanation, the remedy and any further explanation follow one another without an Alert
 inside the dialog. What is not written for the reader — a message passed through from the system, Git, the daemon or an
 agent, a stack, a diagnostic block — is never part of that prose, not even as a reference chip: it sits behind an
-"Error details" disclosure under the body, each block on a surface of its own. A failure the application has no words
+"Error details" disclosure under the body, each block on a surface of its own. The one exception is text of the user's
+own that the alert hands back for the user to keep, such as a draft Octoboard cleared from a session's input box: it is
+not a diagnostic, so it is shown in the body after the prose and the remedy, as a `DiagnosticBlock` under a label of its
+own naming the text, never behind Error details, and it is left out of the dialog's accessible description, so opening
+the alert does not read the whole text; the block stays a named region reached with the keyboard. A failure the application has no words
 for opens with a sentence for its cause where the raw text names one it recognises (a full disk, a refused access, a
 failed connection, or that the operation could not be completed) and with "Something unexpected went wrong." only where
 it is unexpected, its raw text behind Error details either way.
@@ -1999,7 +2003,9 @@ own sit on a secondary `Surface` of their own, never straight on the dialog, Ale
 summary or label naming them outside that surface; they preserve their text, direction and indentation, and long content
 remains scrollable and reachable from the keyboard, the focus ring drawn on the surface. Every diagnostic block uses
 `DiagnosticBlock`: no automatic line wrapping, a maximum height of 40% of the viewport, and scrolling on either axis
-when needed. Overflow on either axis makes the block a named, keyboard-reachable region; content that fits adds no
+when needed. Text of the user's own handed back in an error alert (see "The error alert dialog") is the exception: its
+block wraps long lines (`wrap`), takes its direction from the text (`dir="auto"`) and names its copy failure for text,
+not error details (`failedText`); copying still yields the original text. Overflow on either axis makes the block a named, keyboard-reachable region; content that fits adds no
 scrolling tab stop. The vertical edges fade while they hide content. A floating, extra-small `tertiary` `CopyButton`
 stays at the surface's top-right corner outside the scroller and its fade, without a reserved row or column. It is
 centred vertically on the first code line, so it is centred in a single-line block, and has no added shadow. As an

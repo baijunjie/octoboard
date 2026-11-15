@@ -14,11 +14,12 @@ export function alertTitle(t: ReturnType<typeof useT>, alert: ErrorAlertView): s
   return alert.title ?? t(alert.classification.kind === "unexpected" ? "error.unexpected.title" : "error.title");
 }
 
-/** What an error alert says in its body: the explanation, the remedy or the report guidance, and the raw text behind
- * "Error details". The error alert dialog and a dialog that turns into a failure modal share it. `issueGuidance` is the
+/** What an error alert says in its body: the explanation, the remedy or the report guidance, a block of its own the
+ * alert carries apart (`attached`: text the user wrote, under its label, which `descriptionId` keeps out of the
+ * alert's description by naming the explanation alone), and the raw text behind "Error details". The error alert dialog and a dialog that turns into a failure modal share it. `issueGuidance` is the
  * sentence asking for a report of an unexpected failure (see `useIssueReport`), which a failure modal, never about an
  * unexpected failure, has no need of. */
-export function ErrorAlertBody({ alert, issueGuidance }: { alert: ErrorAlertView; issueGuidance?: React.ReactNode }): React.ReactElement {
+export function ErrorAlertBody({ alert, issueGuidance, descriptionId }: { alert: ErrorAlertView; issueGuidance?: React.ReactNode; descriptionId?: string }): React.ReactElement {
   // What is said besides the remedy that comes first (see `additionalRecovery`): what a recognised system failure asks
   // for in the case of a move that could not be undone, or what a failed handoff left behind.
   const also = alert.error === undefined ? undefined : additionalRecovery(alert.error);
@@ -27,7 +28,7 @@ export function ErrorAlertBody({ alert, issueGuidance }: { alert: ErrorAlertView
     <>
       {/* Hidden when empty, as for a code with no opening sentence (`noSummary` in `codes.ts`), so it adds no gap above
         the remedy. An alert about a session names it first. */}
-      <div className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere] empty:hidden">
+      <div id={descriptionId} className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere] empty:hidden">
         <AlertSessionLines session={alert.session} fallbackName={alert.sessionName} />
         {alert.content ?? alert.message}
       </div>
@@ -40,6 +41,8 @@ export function ErrorAlertBody({ alert, issueGuidance }: { alert: ErrorAlertView
       {/* Said even for an unexpected failure, since a failed handoff's line is about what it left behind (an original
         still open, both sessions running), not a remedy of the failure. */}
       {!alert.failures?.length && also && (alert.classification.kind === "unexpected" || also !== alert.classification.recovery) && <p><RecoveryGuidance recovery={also} /></p>}
+      {/* After the explanation and the remedies, outside the description (`descriptionId`): a labelled block of its own. */}
+      {alert.attached}
       {alert.details ? <DetailsDisclosure>{alert.details}</DetailsDisclosure> : null}
     </>
   );

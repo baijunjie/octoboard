@@ -8,6 +8,7 @@ use crate::messaging::delivery::{self, Delivery, WhenBlocked};
 use crate::protocol::{AgentId, CodedError, Session, SessionStatus};
 use crate::session::input_box::captures::*;
 use crate::session::input_box::input_box;
+use crate::session::input_box_clear::PRESS_OVERRIDE;
 use crate::state::AppState;
 use crate::test_support::{
     app_state, console, console_session, fake_live_session, watched_live_session, ScratchDir,

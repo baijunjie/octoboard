@@ -1,19 +1,25 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { expect, it, onTestFinished, vi } from "vitest";
+import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { LanguageProvider } from "../../i18n/react";
 import { PlatformProvider } from "../../platform/react";
 import { activate, mountForTooltip } from "../hint/tooltipTestSupport";
 import { DiagnosticBlock, DiagnosticLabelContext } from "./DiagnosticBlock";
 import { BROWSER_HOST } from "../../test/hosts";
+import { ViewerHost } from "../../viewer/viewerTestSupport";
 import { fakeTimers, runOutTimers } from "../../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+const originalExecCommand = document.execCommand;
+afterEach(() => {
+  document.execCommand = originalExecCommand;
+});
+
 const TEXT = "  first line\r\n\tindented line\n" + "a long message ".repeat(100) + "\n\n";
 
-function mount({ text = TEXT, labelledBy, disclosure }: { text?: string; labelledBy?: string; disclosure?: string } = {}) {
+function mount({ text = TEXT, labelledBy, disclosure, dir, wrap }: { text?: string; labelledBy?: string; disclosure?: string; dir?: "ltr" | "auto"; wrap?: boolean } = {}) {
   // Before anything mounts: the frame HeroUI's overflow watch reports from is armed on the faked clock.
   fakeTimers();
   const writeText = vi.fn(async (_text: string) => {});
@@ -22,7 +28,7 @@ function mount({ text = TEXT, labelledBy, disclosure }: { text?: string; labelle
     <PlatformProvider value={{ kind: "browser", host: BROWSER_HOST, clipboard: { writeText } }}>
       <LanguageProvider>
         <DiagnosticLabelContext.Provider value={disclosure}>
-          <DiagnosticBlock labelledBy={labelledBy}>{text}</DiagnosticBlock>
+          <DiagnosticBlock labelledBy={labelledBy} dir={dir} wrap={wrap}>{text}</DiagnosticBlock>
         </DiagnosticLabelContext.Provider>
       </LanguageProvider>
     </PlatformProvider>,
@@ -51,6 +57,26 @@ it("copies the complete original text including indentation, line endings and tr
   await act(async () => {});
   expect(writeText).toHaveBeenCalledExactlyOnceWith(TEXT);
   expect(container.querySelector('button[aria-label="Copied"]')).not.toBeNull();
+});
+
+it("reads diagnostics left to right unless the text is the user's own, which takes its own direction", () => {
+  const diagnostic = mount();
+  expect(diagnostic.scroller.getAttribute("dir")).toBe("ltr");
+  expect(diagnostic.container.querySelector("pre")!.getAttribute("dir")).toBe("ltr");
+  const own = mount({ dir: "auto" });
+  expect(own.scroller.getAttribute("dir")).toBe("auto");
+  expect(own.container.querySelector("pre")!.getAttribute("dir")).toBe("auto");
+});
+
+it.each([TEXT, "远程的菜单栏图标中\n还没有改完的那一行"])("wraps the long lines of text of the user's own on screen and still copies %j unchanged", async (text) => {
+  const { container, writeText } = mount({ text, dir: "auto", wrap: true });
+  const pre = container.querySelector("pre")!;
+  expect(pre.classList.contains("whitespace-pre-wrap")).toBe(true);
+  expect(pre.classList.contains("whitespace-pre")).toBe(false);
+  expect(pre.textContent).toBe(text);
+  activate(container.querySelector<HTMLButtonElement>('button[aria-label="Copy"]')!);
+  await act(async () => {});
+  expect(writeText).toHaveBeenCalledExactlyOnceWith(text);
 });
 
 function layout(width: number, height: number): void {
@@ -91,4 +117,28 @@ it.each([
   await settle();
   expect(scroller.getAttribute("aria-labelledby")).toBe(expected);
   expect(scroller.hasAttribute("aria-label")).toBe(false);
+});
+
+/** A block whose clipboard refuses, with the failure alert's message that comes back. */
+async function copyThatFails(failedText?: string): Promise<string> {
+  fakeTimers();
+  Object.assign(document, { execCommand: vi.fn(() => false) });
+  const error = vi.fn();
+  const container = mountForTooltip(
+    <ViewerHost clipboard={{ writeText: async () => Promise.reject(new Error("denied")) }} notifications={{ notice: vi.fn(), error }}>
+      <DiagnosticBlock failedText={failedText}>{TEXT}</DiagnosticBlock>
+    </ViewerHost>,
+  );
+  activate(container.querySelector<HTMLButtonElement>('button[aria-label="Copy"]')!);
+  await act(async () => {});
+  expect(error).toHaveBeenCalledOnce();
+  return error.mock.calls[0]![0] as string;
+}
+
+it("says it could not copy the error details when its copy fails", async () => {
+  expect(await copyThatFails()).toBe("Could not copy the error details");
+});
+
+it("says what its caller gives, not error details, when its copy fails", async () => {
+  expect(await copyThatFails("Could not copy the text")).toBe("Could not copy the text");
 });

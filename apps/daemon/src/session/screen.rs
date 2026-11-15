@@ -66,6 +66,22 @@ pub trait ScreenReader: Send + Sync {
         false
     }
 
+    /// Whether `text`, the whole of what the input box shows, is the placeholder the provider shows
+    /// for a long paste instead of its text, for telling that a box holds nothing but a message
+    /// written there (`crate::session::LiveSession::retry_unsent_submit`).
+    fn collapsed_paste(&self, _text: &str) -> bool {
+        false
+    }
+
+    /// Whether Ctrl-U is measured to delete a line of the provider's input box a press (the line
+    /// break before the cursor at the start of a line) and to do nothing else, so that a draft can
+    /// be cleared out of the way of a message past the draft's grace
+    /// (`crate::session::draft_clear`). Where it is not, such a message waits for the box to be
+    /// emptied by the user instead.
+    fn clears_input_box_with_ctrl_u(&self) -> bool {
+        false
+    }
+
     /// The provider's folder-trust confirmation and how it is pressed (`crate::session::trust`).
     /// The default is a screen that is never sighted, its messages held for a hook up to the hook
     /// fallback.
@@ -173,6 +189,8 @@ mod tests {
         assert_eq!(screen.as_submitted("typed"), "typed");
         assert!(!screen.pasted_image_path_loses_enter());
         assert!(!screen.stash_shown(text));
+        assert!(!screen.clears_input_box_with_ctrl_u());
+        assert!(!screen.collapsed_paste("[Pasted text #1]"));
         let fixture = spec_fixture();
         let spec = fixture.spec();
         let plan = provider(AgentId::TEST).plan(&spec).expect("a plan");

@@ -42,7 +42,7 @@ Reporting is refused, or fails without accepting the report, when:
   The reason names the owner, says the user has been told, and tells the session to tell the user in its terminal what
   the report says rather than report again. When the report itself was written only in part while the owner's draft
   was stashed, only the report was dropped, and the reason says so, adding that the owner's input box may hold part of
-  it (see "A message only partly written while the draft is stashed" in `docs/product/message-delivery.md`);
+  it (see "A message only partly written while the draft is stashed" in `docs/product/draft-preservation.md`);
 - its owner is a Codex session whose own queue refused the report outright (see "A message Codex's own queue refuses"
   in `docs/product/message-delivery.md`). The error is `message_refused`, naming the owner and its agent and giving
   Codex's reason: the report to the owner was refused by its agent's queue, the report was not delivered, the reporting

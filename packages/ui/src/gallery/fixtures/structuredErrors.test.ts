@@ -33,6 +33,8 @@ const UNSHOWN: Array<{ code: string; params: Record<string, string> }> = [
   { code: "terminal_input_lost", params: { shell_terminal: shellTerminal.id } },
   { code: "submit_retry_failed", params: { agent: "Codex", detail: "Broken pipe (os error 32) (0 bytes written)" } },
   { code: "draft_save_unconfirmed", params: { agent: "Codex" } },
+  { code: "draft_discarded", params: { agent: "Claude Code", detail: "远程的菜单栏图标中" } },
+  { code: "draft_discarded", params: { agent: "Claude Code", detail: "远程的菜单栏图标中", cleared: "part" } },
   { code: "draft_restore_unconfirmed", params: { agent: "Codex" } },
   { code: "typing_held", params: { agent: "Codex" } },
   { code: "typing_blocked", params: { agent: "Codex" } },

@@ -549,6 +549,123 @@ fn past_the_grace_a_message_goes_in_on_a_torn_frame_once_the_retries_have_lasted
     assert!(!run_going_on(&live), "the message written ended the run");
 }
 
+/// Keys that typed text and removed it again leave no text the typing record knows of: such a box
+/// read empty off a torn frame takes the run's wait as any other does, though the keys still hold.
+#[test]
+fn past_the_grace_keys_that_left_no_text_take_the_torn_frame_wait() {
+    let live = torn_session("torn-removed");
+    keep_torn(&live);
+    assert!(refused_as_torn(&live));
+    age_run(&live, super::TORN_FRAME_WAIT * 2, std::time::Duration::ZERO);
+    live.write_terminal_input(b"ab\x7f\x7f").unwrap();
+    keep_torn(&live);
+    let draft = live.draft.lock().unwrap();
+    assert!(draft.holds() && !draft.knows_text());
+    drop(draft);
+    assert_eq!(refusal_now(&live), None);
+}
+
+/// Past the grace, while the typing record knows of text typed into the box that nothing since
+/// removed, a box read empty off a frame not drawn whole never lets a message in, however long the
+/// retries have run: the frame may hide that text. The message goes in once a whole frame shows the box empty.
+#[test]
+fn past_the_grace_a_torn_empty_box_over_held_keys_waits_for_a_whole_frame() {
+    let live = torn_session("torn-held");
+    keep_torn(&live);
+    assert!(refused_as_torn(&live));
+    age_run(&live, super::TORN_FRAME_WAIT * 2, std::time::Duration::ZERO);
+    live.write_terminal_input(b"draft").unwrap();
+    keep_torn(&live);
+    assert!(live.draft.lock().unwrap().holds());
+    assert!(refused_as_torn(&live), "the run's wait does not apply");
+    let before = live.input_writes();
+    let error = live
+        .write_message_input(&[Input::Text("peer".into())], "peer", true)
+        .unwrap_err();
+    assert_eq!(error.written, 0);
+    assert_eq!(live.input_writes(), before);
+
+    live.on_output(b"\x1b[?2026l");
+    settle(&live);
+    live.write_message_input(&[Input::Text("peer".into())], "peer", true)
+        .unwrap();
+    assert_eq!(live.input_writes(), before + 1);
+}
+
+/// Past the grace a box that shows text, read off a whole frame, refuses a message, whatever the
+/// keys typed are known to have left in it: no message is written together with a draft.
+#[test]
+fn past_the_grace_a_box_that_shows_text_refuses_the_message() {
+    use crate::protocol::AgentId;
+    use crate::session::input_box::captures::DRAFT;
+    let live = crate::test_support::fake_live_session(
+        "text-refused",
+        AgentId::CLAUDE,
+        140,
+        45,
+        "sleep 30",
+    )
+    .with_composer();
+    draw(&live, &empty_box(AgentId::CLAUDE));
+    live.write_terminal_input(b"draft text").unwrap();
+    draw(&live, &drawn(DRAFT));
+    settle(&live);
+    let refusal = refusal_now(&live).expect("text in the box refuses the message");
+    assert!(refusal.contains("holds text"), "{refusal}");
+}
+
+/// Past the grace a box that cannot be read refuses a message while the typing record holds text
+/// the user typed, whatever the keys were: the text may be in the box. Once the box can be read,
+/// and shows nothing, the message goes in.
+#[test]
+fn past_the_grace_an_unreadable_box_over_typed_text_refuses_the_message() {
+    use crate::protocol::AgentId;
+    let live = crate::test_support::fake_live_session(
+        "unreadable-typed",
+        AgentId::CLAUDE,
+        140,
+        45,
+        "sleep 30",
+    )
+    .with_composer();
+    draw(&live, &empty_box(AgentId::CLAUDE));
+    live.write_terminal_input(b"draft").unwrap();
+    draw(&live, b"a screen with no input box on it");
+    settle(&live);
+    assert!(live.draft.lock().unwrap().holds());
+    let refusal = refusal_now(&live).expect("an unreadable box over typed text refuses");
+    assert!(refusal.contains("cannot be read"), "{refusal}");
+    let before = live.input_writes();
+    let error = live
+        .write_message_input(&[Input::Text("peer".into())], "peer", true)
+        .unwrap_err();
+    assert_eq!(error.written, 0);
+    assert_eq!(live.input_writes(), before);
+    draw(&live, &empty_box(AgentId::CLAUDE));
+    settle(&live);
+    live.write_message_input(&[Input::Text("peer".into())], "peer", true)
+        .unwrap();
+    assert_eq!(live.input_writes(), before + 1);
+}
+
+/// A box that cannot be read refuses nothing where no key of the user's could have left text in
+/// it, as when the agent's screen has not drawn its box yet.
+#[test]
+fn past_the_grace_an_unreadable_box_with_nothing_typed_refuses_nothing() {
+    use crate::protocol::AgentId;
+    let live = crate::test_support::fake_live_session(
+        "unreadable-fresh",
+        AgentId::CLAUDE,
+        140,
+        45,
+        "sleep 30",
+    )
+    .with_composer();
+    draw(&live, b"a screen with no input box on it");
+    settle(&live);
+    assert_eq!(refusal_now(&live), None);
+}
+
 /// The retries of a held message come on the session watch's period, two seconds, and later where
 /// the host is busy: they are one run, so the message goes in once the run has lasted the wait.
 #[test]
@@ -609,7 +726,8 @@ fn a_torn_frame_refusal_long_after_the_last_one_starts_a_new_run() {
 }
 
 /// A reading that is no torn frame ends the run: a box read off a whole frame, or a box that is
-/// not empty; a torn frame afterwards has the whole wait again.
+/// not empty, which itself refuses the message, since none is written together with text in the
+/// box; a torn frame afterwards has the whole wait again.
 #[test]
 fn a_reading_that_is_not_a_torn_frame_ends_the_run() {
     use crate::protocol::AgentId;
@@ -629,7 +747,12 @@ fn a_reading_that_is_not_a_torn_frame_ends_the_run() {
             draw(&live, &drawn(DRAFT));
         }
         settle(&live);
-        assert_eq!(refusal_now(&live), None, "whole frame: {whole_frame}");
+        if whole_frame {
+            assert_eq!(refusal_now(&live), None);
+        } else {
+            let refusal = refusal_now(&live).expect("text in the box refuses the message");
+            assert!(refusal.contains("holds text"), "{refusal}");
+        }
         assert!(!run_going_on(&live), "whole frame: {whole_frame}");
 
         // A run that had lasted the wait would have let this one in.

@@ -3,8 +3,9 @@
 //! Each ticket keeps its first delivery-attempt time across retries, except one refused while the
 //! session's input is held for a draft or a fragment, whose grace starts again once the hold ends,
 //! and one the session's own server held back, whose grace starts again once, at most.
-//! Draft protection can delay writing only for a bounded grace period; afterwards a write may
-//! include unfinished user input.
+//! Draft protection waits for the user's edits only for a bounded grace period; afterwards a draft
+//! no stash can take is cleared before the message is written, and a message is never written
+//! together with text in the input box (`crate::session::LiveSession::write_message_input`).
 //! Lifecycle holds, trust confirmations and agent dialogs remain separate reasons to wait.
 //!
 //! A physical partial write cannot be repeated without duplicating its accepted prefix. It and
@@ -30,7 +31,8 @@
 //!
 //! For the delivery contract see docs/product/message-delivery.md's
 //! "Messages held until a session can take them" section, and for a fragment written while the
-//! draft was stashed its "A message only partly written while the draft is stashed" section.
+//! draft was stashed docs/product/draft-preservation.md's "A message only partly written while the
+//! draft is stashed" section.
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -42,7 +44,8 @@ use crate::session::dialogs::Sighting;
 use crate::session::term::{self, Route};
 use crate::session::LiveSession;
 
-/// How long draft preservation may delay an automatic message before combined delivery is allowed.
+/// How long draft preservation waits for the user's edits to be confirmed before an automatic
+/// message no longer waits on them, and a draft no stash can take is cleared out of its way.
 pub(crate) const DRAFT_WAIT: Duration = Duration::from_secs(3);
 
 /// What a drain amounted to.
@@ -693,12 +696,12 @@ impl Outbox {
     pub fn drain(&self, session: &LiveSession, prompts: &impl PromptSignal) -> Drain {
         self.drain_with(
             &session.id,
-            &mut |ticket, text, allow_mixed| {
+            &mut |ticket, text, past_grace| {
                 term::send_message_with_id(
                     session,
                     text,
                     &format!("{}:{ticket}", session.launch_id),
-                    allow_mixed,
+                    past_grace,
                     &|| prompts.writes_stopped(),
                 )
             },
@@ -878,8 +881,8 @@ impl Outbox {
                     }
                     // A hold on the input, or the agent's own server holding the message back, is
                     // no wait for a draft, which the message's grace measures: spent behind it, the
-                    // grace would let the message join whatever the user has in the box the moment
-                    // the terminal takes it.
+                    // grace would have whatever the user has in the box cleared out of the
+                    // message's way the moment the terminal takes it.
                     // Started again once a message, so that a session flipping between the two kinds
                     // of hold cannot keep a message waiting past its grace.
                     let held_by_server = partial
@@ -2062,7 +2065,8 @@ mod tests {
     }
 
     /// A message refused while the session's input is held keeps none of its draft grace, so once
-    /// the hold ends it gets the whole grace again rather than joining what is in the box.
+    /// the hold ends it gets the whole grace again rather than having the draft cleared out of its
+    /// way.
     #[test]
     fn a_hold_on_the_input_spends_none_of_a_message_s_draft_grace() {
         let outbox = Outbox::default();
@@ -2073,19 +2077,19 @@ mod tests {
             outbox.drain_with("s", &mut |_, _, _| Err(partial(0)), &HeldInput),
             Drain::Pending
         );
-        let mut mixed = None;
+        let mut past = None;
         assert_eq!(
             outbox.drain_with(
                 "s",
-                &mut |_, _, allow_mixed| {
-                    mixed = Some(allow_mixed);
+                &mut |_, _, past_grace| {
+                    past = Some(past_grace);
                     Ok(Route::Terminal)
                 },
                 &MidTurn
             ),
             Drain::Clear
         );
-        assert_eq!(mixed, Some(false));
+        assert_eq!(past, Some(false));
     }
 
     #[test]
@@ -2462,8 +2466,10 @@ mod tests {
         }
     }
 
+    /// A draft left in the box holds a message through its grace only: past it, with no stash to
+    /// take the draft, the box is cleared and the message written into it alone.
     #[test]
-    fn an_unsubmitted_draft_does_not_prevent_delivery_after_the_grace_period() {
+    fn an_unsubmitted_draft_is_cleared_out_of_the_way_after_the_grace_period() {
         let outbox = Outbox::default();
         let live = crate::test_support::fake_live_session(
             "bounded-draft",
@@ -2489,8 +2495,24 @@ mod tests {
             queued.1,
             Some(Instant::now() - DRAFT_WAIT),
         );
+        let agent = live.clone();
+        let screen = std::thread::spawn(move || {
+            let deadline = Instant::now() + crate::test_support::PATIENCE;
+            while agent.input_writes() == before {
+                assert!(Instant::now() < deadline, "no key cleared the box");
+                std::thread::sleep(Duration::from_millis(2));
+            }
+            // The Ctrl-U shows: the box is empty.
+            let rule = "\u{2500}".repeat(60);
+            agent.on_output(format!("\x1b[2J\x1b[30;1H{rule}\r\n\u{276f} \r\n{rule}").as_bytes());
+        });
         assert_eq!(outbox.drain(&live, &MidTurn), Drain::Clear);
-        assert_eq!(live.input_writes(), before + 1);
+        screen.join().unwrap();
+        assert_eq!(
+            live.input_writes(),
+            before + 2,
+            "one Ctrl-U, then the message"
+        );
         assert_eq!(outbox.len(&live.id), 0);
     }
 
@@ -2499,9 +2521,9 @@ mod tests {
         let outbox = Outbox::default();
         let ticket = outbox.push("s", "automatic").unwrap();
         let mut allowances = Vec::new();
-        let mut write = |seen, _: &str, allow_mixed| {
+        let mut write = |seen, _: &str, past_grace| {
             assert_eq!(seen, ticket);
-            allowances.push(allow_mixed);
+            allowances.push(past_grace);
             Err(PartialWrite {
                 written: 0,
                 error: std::io::ErrorKind::WouldBlock.into(),

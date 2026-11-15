@@ -13,138 +13,13 @@ the turn still running, and Codex steers one written into its terminal into the 
 "Messages through Codex's own queue" below) runs it as a turn of its own after the running one. What becomes of such
 messages when an owner interrupts the turn is in "Messages during an interrupt" in `docs/product/interrupting-turns.md`.
 
-**Draft preservation has a bounded wait.** On supported launches, Octoboard first tries to deliver the automatic
-message separately while preserving the user's draft, without waiting for the user to finish typing:
-
-- **Claude Code 2.1.274 or later and Grok Build 1.0.70 or later:** when Octoboard recognises a nonempty composer and
-  can safely use the agent's native stash, it saves the draft, confirms the stash and an empty composer, then sends
-  the automatic message. The agent restores the draft automatically after submission; Octoboard does not toggle the
-  stash a second time. An existing stash of the user's is never overwritten by another stash operation.
-  Claude Code additionally requires a verifiable Ctrl-S stash binding in the configuration this launch uses; an
-  overridden binding or an unreadable or unrecognised keybindings file disables this path.
-- **Codex 0.166.0 or later, on a launch with its private app server** (see "Codex's private app server" in
-  `docs/product/per-agent-launch-specifics.md`): automatic messages go into Codex's own queue and leave the composer
-  untouched, so none of the composer checks, the native stash or the three-second grace period below applies to them
-  (see "Messages through Codex's own queue" below).
-- **Any other Codex launch:** Octoboard uses no stash of Codex's, so its automatic messages take the guarded terminal
-  delivery below.
-
-Octoboard reads the composer off the session's screen with faint text left out, so Claude Code's hints in an empty
-box — a fresh session's placeholder, and "Press up to edit queued messages" while a message waits for the turn to
-end — read as an empty composer; text typed there replaces the hint and reads as a draft. A message Octoboard has
-just written into an empty composer can still be drawn there for a moment before the agent takes it, so before the
-next message is checked for a draft, Octoboard waits up to 500 ms after that write for the composer to read empty; only
-text still there after that counts as a draft. Octoboard therefore does not stash a message of its own.
-
-During a native stash and restoration, the user's continued typing is temporarily retained and replayed in order after
-the draft's restoration is confirmed, released as described below if confirmation times out, or discarded if the message
-reaches the input only in part (see "A message only partly written while the draft is stashed" below). Output and
-terminal responses continue meanwhile. If a dialog is shown during recovery, earlier retained keystrokes wait until it
-is gone; newly typed answers can answer the dialog once restoration is confirmed or the protection times out, and are
-not added to the draft's tracked edits. Successful restoration preserves multiline text and long collapsed pastes.
-Claude Code retains the cursor position; Grok Build restores the cursor at the end. Attachment restoration has
-not been verified and is not guaranteed.
-
-Saving and restoring a native stash share one three-second confirmation window. If saving is not confirmed in time,
-Octoboard sends the `draft_save_unconfirmed` notice and writes the message into the current composer with Enter,
-which may submit unfinished user text with it; it does not send a second stash key. If the complete message was
-written but restoration is not confirmed in time, Octoboard sends the `draft_restore_unconfirmed` notice and releases
-retained typing into the current input without repeating the message. Either timeout disables native stashing for
-that running process. A dialog still holds earlier retained keys until it closes; after a timeout they can be
-released without a stash marker confirming restoration. While retained typing cannot all be replayed yet — a dialog
-is up or the terminal is not taking it, also once the confirmation window has run out with the stash unsettled —
-Octoboard sends the `typing_held` notice. If the process ends before restoration is confirmed, Octoboard sends the
-`typing_lost` notice: the retained typing is not replayed into a resumed session.
-
-**The draft and typing notices.** Each is sent to every client about the session, naming its agent (`agent`);
-`typing_lost` also carries `bytes`, the amount of retained typing lost. Of `draft_save_unconfirmed`,
-`draft_restore_unconfirmed` and `typing_held`, one stash and its recovery send only the first that applies;
-`typing_blocked` and `typing_lost` are sent whenever they apply. The window shows each as an error alert (see
-`docs/product/error-alerts.md`) naming the session and where it is: a known failure with no remedy beyond its own
-text, not an unexpected one.
-
-| Notice | Alert title | What the alert says |
-|---|---|---|
-| `draft_save_unconfirmed` | "Draft save not confirmed" | The agent did not confirm saving the draft, so Octoboard wrote its message into the input box as it was; the user is to check the conversation, since the message may have been sent together with the draft. |
-| `draft_restore_unconfirmed` | "Draft restore not confirmed" | The agent did not confirm putting the draft back after the message was sent; the user is to check the input box before sending what it holds. Its details add that what was typed while the draft was set aside goes into the input box as it is now, and that the message is not sent again. |
-| `typing_held` | "Typing held back" | Some of what was typed while Octoboard wrote a message has not reached the agent yet; the user is to answer any dialog the session shows. Its details add that the agent is showing a dialog or not taking input, and that what was held back is typed in, in order, once it takes input again. |
-| `typing_blocked` | "Message partly written" | Only part of a message Octoboard wrote reached the input box, and it will not be sent again; the user is to check the input box and remove what is left of the message before sending a prompt. Its details add that what was typed while the message was written is discarded on the next key, that typing goes straight to the agent from then on, and that Octoboard's other messages wait until a prompt is sent. |
-| `typing_lost` | "Typing lost" | The session ended before the agent confirmed putting its draft back, so what was typed meanwhile is lost and is not typed in when the session is resumed. |
-
-**When separate delivery cannot be used, delivery takes priority after three seconds.** Each message gets a draft
-protection grace period from its first delivery attempt; retries and continued typing do not reset it. The exception is
-a message refused while the session's input is held for draft preservation — a draft being stashed or restored, or a
-partly written message (see "A message only partly written while the draft is stashed" below): its grace period starts
-again from its first attempt after the hold ends. So does a message a Codex session's private app server held back
-before the terminal took it (see "Messages through Codex's own queue" below): its grace period starts again from its
-first attempt after the server first held it back. It starts again that way once per message only, so time the server
-holds the message back after that counts toward the grace period. During the grace period, ordinary terminal delivery
-requires a recognised empty composer and confirmation that preceding user edits were submitted. A delayed report for an
-earlier prompt, an automatic message or a background completion does not confirm a newer draft. An unsupported stash, an
-existing stash, an unrecognised composer, unconfirmed edits or an incomplete input sequence can hold delivery
-temporarily; an Esc typed on its own counts as a complete key once it is 500 ms old, so it holds nothing as an
-incomplete sequence after that, and does not keep the native stash from being used. Once the grace period has elapsed,
-the next delivery attempt no longer waits for edits to be confirmed: a composer that reads empty takes the message
-directly, and one that shows text has it stashed around the message where the agent's native stash can be used. Only
-where it cannot — an agent without one, such as Codex, a stash already shown, an unfinished key, an unreadable composer,
-or a stash the agent did not confirm — is the message written into the current input and submitted with whatever
-unfinished user text is there. Such a write still waits while a key the user typed less than half a second ago may have
-put text into the composer that is not drawn yet. A composer read empty off a frame not drawn whole (see the first
-condition under "Keys that leave the composer empty are confirmed by the screen" below) holds the message for 2 seconds
-of retries in all, since an agent that keeps redrawing, as one mid-turn can, may never show a whole frame: the retries
-refused for that reason form a run, which goes on while each comes within 10 seconds of the one before, and ends once a
-message is written or the composer is read off a whole frame. Once the run has lasted 2 seconds, the message is written
-on such a reading. A retry held for another reason — a key typed less than half a second ago, or the unreadable composer
-below — neither starts the run nor ends it. Draft protection therefore does not wait indefinitely for an ordinary prompt
-or a new process. The one exception is a composer that cannot be read at all after a key that can put unknown text into
-it (see below): the message then waits past the grace period, with no bound, until the composer can be read again or a
-typed prompt is matched, since a view that hides the composer, such as a picker, would take the message's keys. Claude
-Code's composer is read while it shows a prompt recalled from history under its `History` rule. This grace period does
-not raise the session's hand.
-
-**Keys that leave the composer empty are confirmed by the screen.** User edits are confirmed by the agent reporting a
-prompt sent that they account for, or, for keys no submitted prompt accounts for — an Esc, Ctrl-U, Ctrl-C, text typed
-and cleared again, a prompt sent that no hook matched — by the composer reading empty once all of these hold:
-
-- the empty composer is read off a whole frame: no synchronized-output update (`ESC[?2026h` to `ESC[?2026l`, which
-  Codex and Grok Build wrap each frame in) is open, the agent's output has been quiet for 50 ms, and nothing arrives
-  while the screen is read. An update open for 1 second or more counts as over, so an agent that never closes one
-  does not keep the screen from showing a whole frame; an update opened again before it is closed keeps the time it
-  was first opened;
-- the agent has printed output since the user's last key. A single Esc typed at the prompt while no other key held
-  the session is the exception: it needs no output after it, since an agent can print nothing for an Esc at an empty
-  prompt and such an Esc types no text. It counts as typed at the prompt only while neither the title nor the agent's
-  reported status last showed a turn running, and the agent's hooks do not report one running either, as they can
-  right after a prompt is sent, while the title still shows the prompt; an Esc typed during a turn cancels it, and the
-  prompt the agent puts back can come after any output, so it waits for output like any other key. So does retained
-  typing replayed after a native stash (see above), whose timing is not known;
-- that key is at least 500 ms old;
-- no input sequence the user typed is still incomplete; a single Esc counts as a complete key once it is 500 ms old,
-  as above, and a key typed after that is a key of its own, not the rest of a sequence;
-- Octoboard's record of the typing knows of no text typed into the composer that nothing since removed: text typed
-  and left there still holds as a draft, even over a composer that reads empty;
-- no key typed since the last prompt Octoboard matched to a prompt the agent reported sending is one that can put
-  text into the composer that Octoboard cannot know.
-
-**Keys that can put unknown text into the composer hold even over an empty one.** The text they bring can be drawn later
-than the empty composer is read, and a message written meanwhile would go in after it. Such a key holds until the agent
-reports sending a prompt that Octoboard matches to an Enter typed at or after the key, Octoboard writes a message at
-least half a second after the key, or the grace period elapses. They are: a prompt recalled from history (Up, Down,
-Ctrl-P, Ctrl-N, Ctrl-R), a completion (Tab), a suggestion accepted (Right, End, Ctrl-E, Ctrl-F), a yank (Ctrl-Y, Alt-Y),
-a paste or a stash brought back with Ctrl-V or Ctrl-S, an undo, Esc pressed twice within two seconds with no message of
-Octoboard's written between the presses (which can bring back an earlier prompt to edit), Enter on text that begins with
-`/` or contains `@` (it can take a completion the agent's menu offers), and any other key not known to only remove text,
-move the cursor back or do nothing. The keys known to do only that are Ctrl-A, Ctrl-B, Ctrl-C, Ctrl-D, Ctrl-K, Ctrl-L,
-Ctrl-U, Ctrl-W, Backspace, Delete, Alt-B, Alt-D, Alt-Backspace, Left and Home (plain or with modifiers), and a single
-Esc. Text pasted through the terminal's bracketed paste is text Octoboard knows, and holds as typed text does.
-
-A message queued while keys held the session is written as soon as the composer is confirmed empty, unless another
-hold applies, rather than waiting out the grace period: while a message is queued, the session's screen is checked for
-this about every quarter of a second.
-
-The deadline never answers a recognised dialog or trust confirmation, overrides an agent's permission wait, or writes
-into an ended or frozen session. Such holds must clear first. A partial terminal write remains a delivery failure;
-Octoboard does not repair a broken paste or replay retained typing into it (see below).
+**Text in the session's input box holds a message too.** Octoboard does not write a message into a terminal together
+with a draft the session's input box shows: it sets the draft aside with the agent's native stash where it can, and
+otherwise waits a grace period of three seconds for the user; past it, Claude Code's and Grok Build's input box is
+cleared first and the user is told what it held, and Codex's keeps the message waiting until the user empties it. A
+message that goes into Codex's own queue (see "Messages through Codex's own queue" below) leaves the input box alone.
+The rules, the cases where text the screen does not show can still go in with a message, and the notices are in
+`docs/product/draft-preservation.md`.
 
 Octoboard retries queued messages automatically when the session can take them, including after its input box is
 redrawn. A sender told its message was queued must not send it again. The ordinary queue lifetime below still applies:
@@ -286,7 +161,8 @@ on screen and, for Claude Code, until the agent is reading its input:
   for as long as it runs: they are never let through on time alone.
 
 These startup and trust holds do not prevent the user from answering in the terminal. The temporary retention of
-typing during native draft preservation is described above. A client's direct request to write into a session
+typing during native draft preservation is described in "Draft preservation has a bounded wait" in
+`docs/product/draft-preservation.md`. A client's direct request to write into a session
 (`send_message` in the daemon's client protocol) is refused instead of queued while the trust hold lasts, with the
 error code `session_trust_pending`, saying to send it once the confirmation has been answered, or once the session
 has finished starting if none appears.
@@ -350,7 +226,7 @@ part way through a write, part of that message is left sitting in the session's 
 Octoboard writes next would be run together with it, so that message and everything queued behind it
 are dropped rather than delivered spoiled. A message written while the draft is stashed is the exception: the session
 then holds Octoboard's later writes, so only that message is lost (see "A message only partly written while the draft
-is stashed" below), and nothing below applies to it.
+is stashed" in `docs/product/draft-preservation.md`), and nothing below applies to it.
 
 Octoboard does not try to repair the line. The damage is expected to be bounded on its own — the next message written
 into the session closes the leftover fragment and goes in with it — so the cost would be one spoiled message rather than
@@ -391,31 +267,6 @@ message — is not included in `writes_held`. When no other listed hold applies,
 or, on a Codex session whose messages go into Codex's own queue, for Codex to take them (see "Messages through Codex's
 own queue" below).
 
-## A message only partly written while the draft is stashed
-
-If only part of a message reaches the input after Octoboard pressed the stash key, whether or not saving was confirmed,
-the message is lost: it is not sent again, and what the input holds is unknown — a paste left open, the message's text
-without its Enter, the draft perhaps still stashed. Native stashing is off for the rest of the process, and Octoboard
-sends the `typing_blocked` notice. Then:
-
-- Typing retained while the message was written is never replayed. The user's next key in the terminal — not what an
-  attached terminal sends by itself — discards it and goes straight into the session, as every key after it does.
-- Everything else Octoboard writes into the session — messages, interrupt keys, trust answers, the submit-key retry of
-  a message left unsent — stays held until the agent reports a prompt sent after the user has typed again, or until
-  the process ends. A prompt reported before the user types again does not end the hold, nor does one submitted
-  before the message was written: a late hook report of an earlier prompt, or a prompt the agent sends again by
-  itself, as a retry or from its own queue.
-- Messages queued behind the lost one stay queued, with any sent meanwhile, and are written in order once the hold
-  ends. Nothing is dropped with it, so no `queued_messages_dropped` notice is sent: `typing_blocked` tells the user
-  instead.
-- The sender whose own message it was is answered `queued_messages_lost` with `fragment: "held"`: the message could
-  not be written in full into the session, so it was dropped; messages queued behind it stay queued; the session's
-  input box may hold part of it, and Octoboard writes nothing more into the session until a prompt is sent, so a
-  message sent now waits until then. A sender whose message was queued behind it is told it was queued.
-
-A partial write outside a native stash is not covered by this: it drops the message and its queue (see "Messages
-held until a session can take them" above).
-
 ## Messages through Codex's own queue
 
 On a Codex launch with its private app server (see "Codex's private app server" in
@@ -453,7 +304,8 @@ delayed by any of this: the queue is looked at only once the key is in.
 **What still holds it.** The holds in "Messages held until a session can take them" above apply as they do to the
 terminal: such a message waits while the session is being stopped, while its trust confirmation may be up, while it
 shows a screen only the user can answer, and under the other holds listed there. The draft-preservation checks and
-their grace period do not apply, and nor do the checks of "A message written but not sent" below.
+their grace period (see `docs/product/draft-preservation.md`) do not apply, and nor do the checks of "A message written
+but not sent" below.
 
 **Which conversation it goes to.** Always the session's own, identified once and kept while its process runs: on a
 resume, the resumed conversation; on a new session, the first conversation of the user's that the server reports
@@ -471,7 +323,8 @@ messages: even while the user has switched to another task there, they go to the
   still starting, or the agent command center open with no task — the message waits in the session's queue, and is
   tried again every 2 seconds, and as soon as the server reports the session's conversation started.
 - The message goes through the guarded terminal delivery instead, with its draft checks and grace period (restarted
-  once after the server held it back, as "Messages held until a session can take them" above says), when the server cannot be reached, a request to it fails, or
+  once after the server held it back, as "The draft grace period" in `docs/product/draft-preservation.md` says), when
+  the server cannot be reached, a request to it fails, or
   the session's conversation cannot be told apart: several conversations the user started are loaded, or
   conversations are loaded none of which the user started. Each message is judged on its own, so the next one tries
   the queue again.
@@ -663,13 +516,17 @@ through Codex's own queue" above) is not written into the terminal, so none of t
   process that was written to is still running when the check ends. The window shows it as an error alert (see
   `docs/product/error-alerts.md`) titled "Message not sent", naming the session and where it is:
   - For a message the check above left unsent the notice carries `submit_retry: "once"`, and the alert says the agent
-    has not confirmed sending the message, and that Octoboard will retry its submit key once after three seconds,
-    without pasting the text again. The user is told to answer pending dialogs first and check the automatic retry; if
-    the message still waits in the composer, press Enter without pasting it again.
-  - For a Codex message left in its input box on a Windows host (its Enter held back, or pressed and not taken) the
-    notice carries no `submit_retry`, and the alert says the agent did not send the message, so it is waiting in the
-    session's input box, and that Octoboard writes nothing more into the session until a prompt is sent. The user is
-    told to open the session, check the message waiting in its input box and press Enter to send it.
+    has not confirmed sending the message, and that Octoboard will press its submit key once more after three seconds,
+    without pasting the text again, but only if the input box holds nothing but the message. The user is told to answer
+    pending dialogs first and check the automatic retry; if the message still waits in the composer, press Enter
+    without pasting it again.
+  - Without `submit_retry` the alert says the agent did not send the message, so it is waiting in the session's input
+    box, and that Octoboard writes nothing more into the session until a prompt is sent. The user is told to open the
+    session, check the message waiting in its input box and press Enter to send it. This is sent for a Codex message
+    left in its input box on a Windows host (its Enter held back, or pressed and not taken), again for a message whose
+    submit-key retry ended without its key (below), and for a message Octoboard wrote earlier that has stayed alone in
+    the input box for 30 seconds while a later message waits on it (see "Clearing a draft past the grace period" in
+    `docs/product/draft-preservation.md`).
 - **The notice is withdrawn** once the agent reports a prompt sent after the message the notice was about — the
   message's own report arriving late, the submit-key retry having worked, or the user pressing Enter: every client is
   sent `session_notice_withdrawn` naming the session and the code `message_not_sent`, and the window closes that
@@ -678,17 +535,23 @@ through Codex's own queue" above) is not written into the terminal, so none of t
 - Later messages wait until the agent reports another submitted prompt or, for a message the check left unsent, the
   single submit-key retry is attempted; behind a Codex message left in its input box on a Windows host, only a prompt
   the agent reports releases them. If a prompt has already been reported, Octoboard skips the retry. Otherwise, three
-  seconds after the message was
-  marked unsent, it presses Enter once into the current input, which may include the user's later edits. A recognised
-  dialog or trust confirmation must clear first. Once the attempt is made, the hold clears even without another
-  submitted-prompt report, and later messages can proceed under the other holds above. If writing the submit key fails,
+  seconds after the message was marked unsent, it presses Enter once, but never where the Enter could send the user's
+  text with the message. If anything has been typed into the session since the message was written, there is no retry
+  at all. Otherwise the input box must read, off a whole frame, nothing but the message itself (compared without
+  whitespace, so wrapping does not count), Claude Code's placeholder for a long paste (`[Pasted text #1 +24 lines]`) or
+  nothing at all; until it does, the retry waits for a later look, for 30 seconds after the message was marked unsent at
+  most. A retry that ends without its key, for typed keys or that bound, sends the `message_not_sent` notice again
+  without `submit_retry`, and the message holds later messages until the agent reports a prompt sent (the user sends or
+  clears it). A recognised dialog or trust confirmation must clear first. Once the attempt is made, the hold clears even
+  without another submitted-prompt report, and later messages can proceed under the other holds above. If writing the
+  submit key fails,
   every client is sent the `submit_retry_failed` notice about that session, naming its agent and carrying the failed
   write's reason. The window shows it as an error alert titled "Submit not confirmed", saying the agent has not confirmed
   sending the message and Octoboard could not press Enter again, and telling the user to check the input box and, if the
   message is still there, press Enter without pasting it again. The key is not retried again and the message is not
   written again.
 - A message left unsent after its draft was put in the agent's native stash (see "Draft preservation has a bounded
-  wait" above) still counts as sent for the draft's protection: restoring the stash is the agent's, and the user's own
+  wait" in `docs/product/draft-preservation.md`) still counts as sent for the draft's protection: restoring the stash is the agent's, and the user's own
   send of the message, which brings the draft back, ends the protection. No agent both uses a native stash and has its
   submit key checked as above today, so this case is not reached yet.
 - The hold belongs to the session's process that was written to and ends with it, as its queue does: a session resumed
@@ -721,8 +584,9 @@ every client, gets the `message_not_sent` notice.
   written. A Codex message written into the terminal on a Windows daemon host is checked only as "Codex on a Windows
   daemon host" above says. A message Codex's own queue takes counts as delivered once the queue has accepted it, with
   the acceptance rule in "A message whose acceptance is uncertain" above.
-- A message written through a native stash whose input recovery remains pending: the recovery rules above apply,
-  and the message is not reported as an unsent draft or retried.
+- A message written through a native stash whose input recovery remains pending: the recovery rules in "Draft
+  preservation has a bounded wait" in `docs/product/draft-preservation.md` apply, and the message is not reported as an
+  unsent draft or retried.
 - Which prompt was sent. The prompt's text is not matched against the message: a prompt the user sends within those
   seconds is taken as the message sent.
 

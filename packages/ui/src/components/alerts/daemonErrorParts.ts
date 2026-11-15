@@ -34,6 +34,8 @@ export type DaemonErrorParts = {
   sharing?: { items?: SharingFailureItem[]; raw?: string; hasReasonLine: boolean };
   /** Verbatim diagnostic output the failure carries. */
   diagnostic?: string;
+  /** Text the user wrote that the failure carries (`detailLabel`), and the key of the label it is shown under. */
+  ownText?: { label: MessageKey; text: string };
   /** A cause the application has no words for: its raw text, and the generic sentence that stands for it. */
   unworded?: { raw: string; summary: PlainMessageKey };
   /** The catalog key of the failure's recovery sentence. */
@@ -65,6 +67,10 @@ export function daemonErrorParts(error: Failure): DaemonErrorParts {
   const unwordedRaw = unwordedReason(error.code, error.params);
   const recovery = `${messageKey(messageCode(error.code, error.params))}.recovery`;
   const diagnostic = !reason && (record?.detailBlock || hasTrustDiagnostic(error.code, error.params)) && error.params.detail ? error.params.detail : undefined;
+  // The variant's own label where the catalog gives one, else the code's.
+  const variantLabel = `${messageKey(messageCode(error.code, error.params))}.detailLabel`;
+  const ownLabel = isMessageKey(variantLabel) ? variantLabel : `${messageKey(error.code)}.detailLabel`;
+  const ownText = record?.detailLabel && error.params.detail && isMessageKey(ownLabel) ? { label: ownLabel, text: error.params.detail } : undefined;
   return {
     uncatalogued,
     shellTimeout,
@@ -74,6 +80,7 @@ export function daemonErrorParts(error: Failure): DaemonErrorParts {
     further: furtherKey(error.code, error.params),
     sharing: reason && { items: sharingFailureItems(error.code, error.params), raw: reason.raw, hasReasonLine: sharingReasonKey(error.params.cause) !== undefined },
     diagnostic,
+    ownText,
     unworded: unwordedRaw === undefined ? undefined : { raw: unwordedRaw, summary: record?.nested ? uncataloguedSummaryKey(new CodedError(unwordedRaw, error.params.reason_code ?? error.code, error.params)) : "daemon.trust_reason.unexpected" },
     recovery: record?.recoveryLine && isMessageKey(recovery) ? recovery : undefined,
     nested: nestedFailure(error),

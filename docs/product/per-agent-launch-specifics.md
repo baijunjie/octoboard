@@ -165,8 +165,10 @@ the session's git running the user's own hooks with no report and no revert gate
 
 Automatic messages go into Codex's own queue on a launch with the private app server, leaving the composer untouched
 (see "Messages through Codex's own queue" in `docs/product/message-delivery.md`). On any other launch they reach Codex
-through its terminal, like any other agent's: Octoboard uses no stash of Codex's to set a draft aside, so they take the
-guarded terminal delivery in "Messages held until a session can take them" in `docs/product/message-delivery.md`.
+through its terminal, like any other agent's: Octoboard uses no stash of Codex's to set a draft aside, and clears no
+draft of Codex's either, so a draft in its composer holds them until the user sends or empties it (see
+`docs/product/draft-preservation.md`), under the holds in "Messages held until a session can take them" in
+`docs/product/message-delivery.md`.
 
 An explicit Codex permission preset chosen in Settings applies on every launch of any of its accounts, a resume
 included. Each is passed as three per-launch configuration overrides:

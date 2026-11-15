@@ -234,10 +234,13 @@ fn write_hold_explanation(hold: WriteHold) -> &'static str {
         }
         WriteHold::UnsentMessage => {
             "A message written into it has not been confirmed sent; the user has been told. \
-             After a three-second grace period its submit key is retried once, without repeating \
-             the message text, unless a prompt was already submitted. Later messages wait for that \
-             attempt or a submitted prompt; dialogs and trust confirmations must be answered first. \
-             Do not send the message text again."
+             After a three-second grace period its submit key is pressed once more, without \
+             repeating the message text, unless a prompt was already submitted, and only while \
+             its input box holds that message alone; the retry ends, and the message waits for \
+             the user, if anything is typed into the session or the box has held more than the \
+             message for 30 seconds. Later messages wait for that attempt or a submitted prompt; \
+             dialogs and trust confirmations must be answered first. Do not send the message text \
+             again."
         }
     }
 }

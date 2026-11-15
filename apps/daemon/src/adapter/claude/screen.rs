@@ -44,6 +44,32 @@ impl ScreenReader for ClaudeScreen {
             .any(|line| line.contains("› stashed"))
     }
 
+    /// `[Pasted text #<n>]` or `[Pasted text #<n> +<lines> lines]`, as Claude Code draws a long
+    /// paste in its box (`docs/agent-cli-reference.md` records a message left there as
+    /// `[Pasted text #1 +4 lines]`).
+    fn collapsed_paste(&self, text: &str) -> bool {
+        let digits =
+            |part: &str| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit());
+        let Some(inner) = text
+            .strip_prefix("[Pasted text #")
+            .and_then(|rest| rest.strip_suffix(']'))
+        else {
+            return false;
+        };
+        match inner.split_once(" +") {
+            None => digits(inner),
+            Some((number, lines)) => {
+                digits(number) && lines.strip_suffix(" lines").is_some_and(digits)
+            }
+        }
+    }
+
+    /// Measured on 2.1.310 under "Keys that interrupt a turn" in `docs/agent-cli-reference.md`:
+    /// the interrupt clears a prompt Claude Code put back with it.
+    fn clears_input_box_with_ctrl_u(&self) -> bool {
+        true
+    }
+
     fn trust_screen(&self) -> &'static Screen {
         &TRUST
     }

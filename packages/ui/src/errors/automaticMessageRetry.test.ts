@@ -29,3 +29,11 @@ it.each(["en", "zh-Hans"] as const)("distinguishes automatic submit retry from l
   });
   expect(format(language, "error.recovery.submitRetry", { enter: "Enter" })).toContain("Enter");
 });
+
+it("says the retry presses the submit key only where the input box holds nothing but the message, and differs from the wording with no retry in every language", () => {
+  const params = { agent: "Claude Code", appName: "Octoboard" };
+  expect(format("en", "daemon.message_not_sent.retry", params)).toContain("only if the input box holds nothing but the message");
+  for (const language of ["en", "de", "ja", "zh-Hans", "ar"] as const) {
+    expect(format(language, "daemon.message_not_sent.retry", params), language).not.toBe(format(language, "daemon.message_not_sent", params));
+  }
+});

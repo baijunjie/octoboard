@@ -1,10 +1,10 @@
 //! The release of the hold the keys typed into a session keep on Octoboard's messages, and the
 //! checks a message written past the draft's grace still waits on: both read the agent's input box
 //! off the screen, off a screen that shows a whole frame (`output_pace`) and can no longer predate
-//! the keys (`draft`'s key timing); past the grace, a frame not drawn whole is waited on for a
-//! bounded time only. The rules are in `docs/product/message-delivery.md`, section "Messages held
-//! until a session can take them", under "Keys that leave the composer empty are confirmed by the
-//! screen" and the paragraph before it on the grace period.
+//! the keys (`draft`'s key timing); past the grace, an empty box read off a frame not drawn whole is
+//! waited on for a bounded time only, and a box that shows text is never written into. The rules
+//! are in `docs/product/draft-preservation.md`, sections "Keys that leave the composer empty are
+//! confirmed by the screen" and "The draft grace period".
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
@@ -33,7 +33,8 @@ pub(super) struct DraftHold {
 }
 
 /// How long a message past the draft's grace waits, retry after retry, on a box read empty off a
-/// frame not drawn whole before it goes in on that reading. An agent that keeps printing, as one
+/// frame not drawn whole before it goes in on that reading, where the typing record knows of no text
+/// typed into the box that nothing since removed ([`Draft::knows_text`]). An agent that keeps printing, as one
 /// redrawing its spinner mid-turn many times a second can, is never quiet long enough for a whole
 /// frame ([`OutputPace::whole_frame`]), and past the grace delivery takes priority over the text a
 /// frame read in part may hide.
@@ -44,6 +45,32 @@ const TORN_FRAME_WAIT: Duration = Duration::from_secs(2);
 /// in between. Several times the period of the session watch's retry of a held queue (two seconds),
 /// so that retries on that period, late by however much a busy host makes them, keep the run going.
 const TORN_RUN_GAP: Duration = Duration::from_secs(10);
+
+/// How long a write that is to act on text in the agent's input box (stash it, or clear it) waits
+/// for the screen to show a whole frame before it reads the box ([`LiveSession::wait_for_whole_frame`]).
+/// An idle agent is still within the 50 ms a whole frame takes; one redrawing mid-turn is still that
+/// long now and then between redraws. A write that finds no whole frame in this time is refused
+/// and retried.
+const WHOLE_FRAME_WAIT: Duration = Duration::from_millis(500);
+
+/// [`WHOLE_FRAME_WAIT`], except under a test that keeps the frame torn on purpose and lowers it with
+/// `WHOLE_FRAME_WAIT_OVERRIDE`, so that its own reading comes straight after it set the frame up.
+/// Read on the writer's thread.
+fn whole_frame_wait() -> Duration {
+    #[cfg(test)]
+    {
+        WHOLE_FRAME_WAIT_OVERRIDE
+            .with(std::cell::Cell::get)
+            .unwrap_or(WHOLE_FRAME_WAIT)
+    }
+    #[cfg(not(test))]
+    WHOLE_FRAME_WAIT
+}
+
+#[cfg(test)]
+thread_local! {
+    pub(super) static WHOLE_FRAME_WAIT_OVERRIDE: std::cell::Cell<Option<Duration>> = const { std::cell::Cell::new(None) };
+}
 
 impl LiveSession {
     /// Notes a chunk of output, read now, before the parsed screen takes it in, so that a reading
@@ -97,10 +124,19 @@ impl LiveSession {
         (composer, whole)
     }
 
+    /// Waits, for [`WHOLE_FRAME_WAIT`] at most and without the input lock, until the screen shows a
+    /// whole frame ([`Self::shows_whole_frame`]), and says whether it did. A reading taken after it
+    /// still checks the frame itself ([`Self::read_box`]).
+    pub(super) fn wait_for_whole_frame(&self) -> bool {
+        super::wait::wait_for(whole_frame_wait(), || {
+            self.shows_whole_frame(Instant::now()) || self.is_frozen()
+        })
+    }
+
     /// The text in the agent's input box as the screen shows it now (`None` where no box is
     /// recognised), the output total the screen was read at where it showed a whole frame, and the
     /// time it was read.
-    fn read_box(&self) -> (Option<String>, Option<u64>, Instant) {
+    pub(super) fn read_box(&self) -> (Option<String>, Option<u64>, Instant) {
         // The total first, the pace next: a chunk counted in the total has been noted in the pace
         // already, and one taken in after the total was read changes the total read again below.
         let output = self.output_total();
@@ -194,16 +230,21 @@ impl LiveSession {
         });
     }
 
-    /// Why a message written past the draft's grace, which may join what the box holds but only
-    /// text that shows, has to wait, if it does; read with the input lock held and `draft` locked.
-    /// It waits, the watch's retry coming back to it, while the box cannot be read after a key that
-    /// may have brought back text the mirror cannot know, such as a prompt from history; while the
-    /// latest key may have put text in the box that is not drawn yet; and while a box read empty
-    /// comes from a frame read in part, for [`TORN_FRAME_WAIT`] of retries at most. Once the text
-    /// shows, the stash takes it where the agent has one (`Self::write_message_input`).
+    /// Why a message written past the draft's grace, which no longer waits for the keys typed to
+    /// be confirmed but is never written together with text in the box, has to wait, if it does;
+    /// read with the input lock held and `draft` locked. It waits, the watch's retry coming back to
+    /// it, while the box shows text; while the box cannot be read and any key typed into it is not
+    /// yet confirmed ([`Draft::holds`]), whatever it typed or removed, or may have brought back text
+    /// the mirror cannot know, such as a prompt from history: an unreadable box cannot show that
+    /// such keys left it empty; while the latest key may have put text in the box that is not drawn
+    /// yet; and while a box read empty comes from a frame read in part, for [`TORN_FRAME_WAIT`] of
+    /// retries at most, or with no bound while the typing record knows of text typed into it that
+    /// nothing since removed ([`Draft::knows_text`]). Text that shows is stashed or cleared out of
+    /// the message's way before it comes here (`Self::write_message_input`).
     pub(super) fn past_grace_refusal(&self, draft: &Draft) -> Option<&'static str> {
         let (composer, whole, now) = self.read_box();
-        if composer.is_none() && draft.may_hold_unknown_text() {
+        // Any unconfirmed key, not only known text: the box cannot be read to show what it did.
+        if composer.is_none() && (draft.holds() || draft.may_hold_unknown_text()) {
             return Some(
                 "the session's input box cannot be read after keys that may have put text in it",
             );
@@ -211,9 +252,23 @@ impl LiveSession {
         if draft.text_may_be_undrawn(now) {
             return Some("keys just typed into the session may not be drawn in its input box yet");
         }
-        if composer.as_deref() != Some("") || whole.is_some() {
+        if composer.as_ref().is_some_and(|text| !text.is_empty()) {
+            self.end_torn_run();
+            return Some(
+                "the session's input box holds text, which a message is never written with",
+            );
+        }
+        if composer.is_none() || whole.is_some() {
             self.end_torn_run();
             return None;
+        }
+        // Text the typing record knows was typed and not since removed may be what the frame hides:
+        // such a box waits for a whole frame, however long, and is no part of a run.
+        if draft.knows_text() {
+            return Some(
+                "the session's input box was read empty off a frame not yet drawn whole, while \
+                 text typed into it is not known to have left it",
+            );
         }
         // The run is kept when the wait is over, until a message is written
         // ([`Self::end_torn_run`]): a write that fails for another reason waits no longer next

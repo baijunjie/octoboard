@@ -52,6 +52,9 @@ Where to start, by question:
 - [Interrupting a session's turn](product/interrupting-turns.md) — how a parent stops a child session's running turn.
 - [Message delivery](product/message-delivery.md) — how messages are written into a running session and held when it
   cannot take them.
+- [Draft preservation](product/draft-preservation.md) — how an automatic message is kept from being sent with the
+  user's half-typed draft: the native stash, the grace period, clearing the draft and handing it back, and which keys
+  hold a message.
 - [Messages held after a usage limit](product/messages-held-after-a-usage-limit.md) — how Octoboard's messages are
   held once a session's turn stopped on its account's usage limit, the user's own messages, and what releases the hold.
 

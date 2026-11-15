@@ -563,6 +563,42 @@ mod tests {
     use crate::adapter::tests::spec_fixture;
     use crate::providers::{ProviderSettings, SettingValue};
 
+    /// Claude Code's collapsed paste is `[Pasted text #<n>]` or `[Pasted text #<n> +<m> lines]`,
+    /// the whole of the box's text and nothing near it.
+    #[test]
+    fn a_collapsed_paste_is_recognised_strictly() {
+        let screen = crate::adapter::provider(crate::protocol::AgentId::CLAUDE).screen();
+        for placeholder in [
+            "[Pasted text #1]",
+            "[Pasted text #12]",
+            "[Pasted text #1 +24 lines]",
+            "[Pasted text #3 +0 lines]",
+        ] {
+            assert!(screen.collapsed_paste(placeholder), "{placeholder}");
+        }
+        for text in [
+            "",
+            "Pasted text #1",
+            "[Pasted text #]",
+            "[Pasted text #a]",
+            "[Pasted text #1",
+            "[Pasted text #1 +]",
+            "[Pasted text #1 + lines]",
+            "[Pasted text #1 +x lines]",
+            "[Pasted text #1 +-2 lines]",
+            "[Pasted text #1 +2 line]",
+            "[Pasted text #1 +2 lines",
+            "[Pasted text #1 +2 lines] more",
+            "more [Pasted text #1]",
+            "[Pasted text #1] [Pasted text #2]",
+            "[pasted text #1]",
+            "[Pasted text #1 +2]",
+            " [Pasted text #1]",
+        ] {
+            assert!(!screen.collapsed_paste(text), "{text:?}");
+        }
+    }
+
     #[test]
     fn terminal_titles_lose_the_status_glyph_and_the_placeholder() {
         let task = |raw| ClaudeProvider.task_title(raw, &[]);

@@ -32,6 +32,17 @@ const codexSession = sessionOf("s-api-codex", console_.id, api.id, "Review the r
 const grokProject = projectOf("p-grok-home", console_.id, "Home", { path: "/Users/dev" });
 const grokSession = sessionOf("s-web-grok", console_.id, grokProject.id, "Tidy the stylesheet", "working", { agent: "grok" });
 const sessions = [...SAMPLE.sessions, codexSession, grokSession];
+// A draft a person was typing when the app cleared it: more lines than fit under the block's 40% height cap, a URL with
+// no spaces that is wider than the dialog (its line must wrap anyway), a collapsed-paste placeholder as Claude Code
+// shows one, and Chinese text.
+const LONG_DRAFT = [
+  "远程的菜单栏图标中",
+  "还没有改完的那一行",
+  "[Pasted text #1 +24 lines]",
+  "Next steps once the export is merged:",
+  ...Array.from({ length: 16 }, (_, index) => `${index + 1}. 检查第 ${index + 1} 项设置是否同步到所有已打开的会话`),
+  "Reference: https://example.com/projects/octoboard/reviews/summary-layout/overflow-cases?tab=remaining&filter=unresolved&sort=updated-descending",
+].join("\n");
 const LONG_TITLE_WORD = "ProductionDeploymentCompatibilityRollbackReadinessChecklist";
 // A project session whose title is far longer than the others', with a word that cannot break.
 const longTitled = sessionOf("s-web-long", console_.id, web.id, `Reconcile the summary layout with the ${LONG_TITLE_WORD} export and review the remaining overflow cases`, "idle");
@@ -542,6 +553,15 @@ export const noticeScenarios: Scenario[] = [
     description: "An error alert titled \"Typing lost\", with the session line above the message and no Report issue button. The body is a single sentence, that the session ended before the agent (Codex, a chip) confirmed putting its draft back and what was typed into it meanwhile is lost and not typed in when the session is resumed: look that it is laid out without a details block or a recovery line, and that nothing is left as a gap where they would be.",
     state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
     notifications: [sessionNoticeNotification(codexSession.id, "typing_lost", { agent: "Codex", bytes: "37" })],
+  },
+  {
+    id: "toast-draft-discarded",
+    group: TRUST,
+    category: "exceptional",
+    title: "Draft cleared, with a long draft to copy back",
+    description: "An error alert titled \"Draft cleared\", with the session line above the message (the session and its project each a chip) and no Report issue button: a notice about this session, not an unexpected error. The summary says the app cleared the draft in the session's input box so that a message would not be sent together with it; the recovery line says to copy the draft below and paste it back to keep it. Below it, in the body and not behind an Error details disclosure (there is none), the label \"Draft content\" names a block holding the draft as the input box showed it, line breaks kept, on a surface of its own with a copy button that copies the whole draft. The draft is long, with a URL without spaces much wider than the dialog and a collapsed-paste placeholder among its lines: look that every line wraps inside the block, the URL included, with no sideways scroll, that the block stops growing at 40% of the window height and scrolls vertically only, that the copy button stays in view while it scrolls, that the block takes its direction from the draft's first strong character as a whole, not line by line (a draft starting in Arabic or Hebrew has the whole block start at the right), and that the label, block and copy button sit as in the other detail blocks.",
+    state: snapshotState({ consoles: [console_], projects: [web, api, grokProject], sessions }),
+    notifications: [sessionNoticeNotification("s-web-1", "draft_discarded", { agent: "Claude Code", detail: LONG_DRAFT })],
   },
   {
     id: "toast-message-notices",

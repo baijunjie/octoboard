@@ -37,6 +37,10 @@ export interface ErrorAlertRequest {
    * contradict it. Set where the body is the failure's own message, from `errorAlertParts`, by every route that raises
    * an alert for one. */
   remedyInBody?: boolean;
+  /** A block shown after the body, on its own and outside the alert's description: text the user wrote that a failure
+   * carries (`detailLabel` in `codes.ts`), under its own label, which a screen reader reaches as a region of its own
+   * rather than hearing it read out with the explanation. */
+  attached?: ReactNode;
   /** The plain text of what `details` holds, for an alert that has no `error` to read it from: the issue report an
    * unexpected failure offers is built from the errors and from this, never from the rendered `details`. */
   diagnostic?: string;

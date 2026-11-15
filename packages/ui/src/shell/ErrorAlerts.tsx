@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
+import React, { useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { RecoveryLink, recoveryAction, type RecoveryAction } from "../components/alerts/ErrorGuidance";
 import { alertFailures, errorAlerts } from "../components/alerts/errorAlerts";
@@ -53,6 +53,8 @@ function ErrorAlertHost(): React.ReactElement | null {
   useLayoutEffect(() => { setError(raised); }, [raised]);
   const acknowledge = useRef<HTMLButtonElement>(null);
   const issue = useIssueReport(error?.classification.kind === "unexpected" ? alertFailures(error, "report") : undefined);
+  // What describes an alert that holds a block of its own apart (`attached`): its explanation, not the block.
+  const descriptionId = useId();
   // Focus the alert in the render after the one that mounted it, before the task that raised it ends, and nowhere
   // else: its `Dialog` never puts focus on it by itself, not even when the alert it replaces leaves focus on `<body>`
   // (until then it holds focus on an empty element inside the alert; see `focusesItselfOnOpen`).
@@ -87,13 +89,14 @@ function ErrorAlertHost(): React.ReactElement | null {
       onClose={() => {}}
       focusesItselfOnOpen
       topLayerAtMount
+      describedBy={error.attached ? descriptionId : undefined}
       footer={<>
         {unexpected && issue.link}
         {action && <RecoveryControl action={action} session={session} />}
         <Button ref={acknowledge} variant="danger" onPress={() => errorAlerts.acknowledge()}>{t("error.acknowledge")}</Button>
       </>}
     >
-      <ErrorAlertBody alert={error} issueGuidance={issue.guidance} />
+      <ErrorAlertBody alert={error} issueGuidance={issue.guidance} descriptionId={error.attached ? descriptionId : undefined} />
     </Dialog>
   );
 }
