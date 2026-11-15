@@ -44,8 +44,8 @@ user's own network does:
   that order), with `NO_PROXY` exempting a host; HTTP proxies and SOCKS proxies (`socks://`, `socks4://`, `socks4a://`,
   `socks5://`, `socks5h://`) both work. Each name counts in upper or lower case, the upper-case spelling winning where
   both are set. On Windows, which names its variables without regard to case, a name counts in any case (`Https_Proxy`,
-  `No_Proxy`); where the environment holds several spellings of one name and neither the upper- nor the lower-case one,
-  the spelling that sorts first by character code wins;
+  `No_Proxy`): where the upper-case spelling is not set, any spelling that differs from it only in case counts, the
+  lower-case one included, and of several such spellings the one that sorts first by character code wins;
 - trusting the system's certificate store, so a corporate certificate authority that inspects TLS is accepted;
 - always to the public registry: a custom registry set in an `.npmrc` is not read.
 
