@@ -1392,16 +1392,16 @@ async fn an_update_that_ends_without_a_word_is_recorded_as_failed() {
 
 #[test]
 fn a_socks_proxy_that_refuses_is_a_failed_lookup_and_not_a_panic() {
-    let closed = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-    let port = closed.local_addr().unwrap().port();
-    drop(closed);
+    let closed = crate::test_support::ClosedPort::new();
+    let port = closed.port();
     let env = HashMap::from([("ALL_PROXY".to_owned(), format!("socks5://127.0.0.1:{port}"))]);
     let started = Instant::now();
 
     let result = latest::NpmRegistry.latest_version("@openai/codex", &env);
 
     assert!(matches!(result, Err(Failure::Failed(_))), "{result:?}");
-    assert!(started.elapsed() < Duration::from_secs(10));
+    assert!(started.elapsed() < crate::test_support::PATIENCE);
+    drop(closed);
 }
 
 // An output file is made private by its mode on Unix; on Windows it inherits the directory's

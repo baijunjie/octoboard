@@ -2,23 +2,26 @@
 //! asks for it the rest of its session: what in the process's reach, its job, is on its console,
 //! one by one. What left the console, started detached or on a console of its own, is left
 //! running, as a tree a launch keeps or carries over to another must be: nothing can leave a job.
-//! There is no abort handler: an aborting process on Windows ends at once, and what it leaves is
-//! ended by the next start of the daemon. Listing a job reads into a static buffer, so nothing on
-//! the path allocates.
+//! The kill then waits, bounded, for what it ended to be gone, so that nothing it killed still runs
+//! once the daemon has. There is no abort handler: an aborting process on Windows ends at once,
+//! and what it leaves is ended by the next start of the daemon. Listing a job and noting what was
+//! ended use static buffers, so nothing on the path allocates.
 
 use std::cell::UnsafeCell;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use windows_sys::Win32::Foundation::{CloseHandle, DuplicateHandle, DUPLICATE_SAME_ACCESS, HANDLE};
+use windows_sys::Win32::Foundation::{
+    CloseHandle, DuplicateHandle, GetLastError, DUPLICATE_SAME_ACCESS, ERROR_ACCESS_DENIED, HANDLE,
+};
 use windows_sys::Win32::System::JobObjects::{
     IsProcessInJob, JobObjectBasicProcessIdList, QueryInformationJobObject,
 };
 use windows_sys::Win32::System::Threading::{
-    GetCurrentProcess, OpenProcess, TerminateProcess, PROCESS_QUERY_LIMITED_INFORMATION,
-    PROCESS_TERMINATE,
+    GetCurrentProcess, OpenProcess, TerminateProcess, WaitForSingleObject, INFINITE,
+    PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE, PROCESS_TERMINATE,
 };
 
-use super::super::{console_of, Console};
+use super::super::{console_of, ended_wait, Console};
 use super::SLOTS;
 use crate::platform::proc::ChildHandle;
 
@@ -29,7 +32,7 @@ const KILLED: u32 = 1;
 /// handle's value within 32 bits, so the copy fits half a slot.
 fn duplicate(handle: HANDLE) -> Option<u64> {
     let mut copy: HANDLE = std::ptr::null_mut();
-    // SAFETY: both handles are open for the call; the copy is closed by `release`.
+    // SAFETY: both handles are open for the call; the copy is closed by whoever holds it: `release`, or the kill.
     let made = unsafe {
         DuplicateHandle(
             GetCurrentProcess(),
@@ -106,17 +109,39 @@ static SCRATCH: Scratch = Scratch(UnsafeCell::new(PidList {
     pids: [0; 4096],
 }));
 
-/// Whether something is using [`SCRATCH`]: a second kill from another thread does without the
-/// sweeps and keeps to the processes themselves.
+/// The processes a kill ended, or found already on their way out, which it waits for to be gone:
+/// the handle, and whether it was opened for the wait and is closed after it (a member a sweep
+/// found) or is a slot's own. Room for as many as one job lists. Handed out by
+/// [`SCRATCH_CLAIMED`].
+struct EndedList {
+    len: usize,
+    ended: [(usize, bool); 4096],
+}
+
+struct Ended(UnsafeCell<EndedList>);
+
+// SAFETY: only the holder of `SCRATCH_CLAIMED` touches the contents.
+unsafe impl Sync for Ended {}
+
+static ENDED: Ended = Ended(UnsafeCell::new(EndedList {
+    len: 0,
+    ended: [(0, false); 4096],
+}));
+
+/// Whether something is using [`SCRATCH`] and [`ENDED`]: a second kill from another thread does
+/// without the sweeps and the wait, and keeps to ending the processes themselves.
 static SCRATCH_CLAIMED: AtomicBool = AtomicBool::new(false);
 
 /// Kills every registered process outright, and for a slot that asks for it what is in its reach
-/// on its console. It reads atomics and calls plain system calls, and allocates nothing.
+/// on its console, then waits for what it ended to be gone ([`wait_for_ended`]). It reads atomics
+/// and calls plain system calls, and allocates nothing.
 ///
 /// Another thread can free a slot, closing its handles, between the read of the slot and the
 /// calls here; the value may then name a closed handle, or one reused for another object, which
 /// the calls refuse unless it is a process handle again. A window that narrow is accepted, as on
-/// Unix.
+/// Unix. What the wait holds is a copy of the process handle made here, before the kill, so the
+/// slot's owner closing its own handle once the process has exited cannot leave the wait on a
+/// handle value reused for another object.
 pub(super) fn kill_all() {
     let claimed = !SCRATCH_CLAIMED.swap(true, Ordering::AcqRel);
     for slot in &SLOTS {
@@ -128,22 +153,76 @@ pub(super) fn kill_all() {
         let job = value >> 32;
         // Read before the kill, though the system still answers it for a process that has ended.
         let console = (job != 0 && claimed).then(|| console_of(process));
-        // SAFETY: a handle the slot holds.
-        unsafe { TerminateProcess(process, KILLED) };
+        // The copy is made before the kill, while the slot's handle is likeliest still open.
+        let copy = if claimed { duplicate(process) } else { None };
+        if end(process) {
+            if let Some(copy) = copy {
+                note_ended(handle(copy), true);
+            }
+        } else if let Some(copy) = copy {
+            // SAFETY: a handle made here and not noted.
+            unsafe { CloseHandle(handle(copy)) };
+        }
         // A process on no console, or on one the system does not name, is swept no further.
         if let Some(Console::Host(host)) = console {
             kill_members(handle(job), host);
         }
     }
     if claimed {
+        wait_for_ended();
         SCRATCH_CLAIMED.store(false, Ordering::Release);
     }
 }
 
+/// Ends `process`, and answers whether it is on its way out: ended now, or refused as one already
+/// ending is (`ACCESS_DENIED`).
+fn end(process: HANDLE) -> bool {
+    // SAFETY: plain calls on a handle the caller holds open.
+    unsafe { TerminateProcess(process, KILLED) != 0 || GetLastError() == ERROR_ACCESS_DENIED }
+}
+
+/// Keeps `process` for [`wait_for_ended`], which closes it after the wait when `close`. A list
+/// that is full waits for no more: a handle that would be closed is closed at once. The caller
+/// holds `SCRATCH_CLAIMED`.
+fn note_ended(process: HANDLE, close: bool) {
+    // SAFETY: the caller holds `SCRATCH_CLAIMED`, so nothing else reads or writes the list.
+    let list = unsafe { &mut *ENDED.0.get() };
+    if list.len < list.ended.len() {
+        list.ended[list.len] = (process as usize, close);
+        list.len += 1;
+    } else if close {
+        // SAFETY: a handle the caller opened and nothing else closes.
+        unsafe { CloseHandle(process) };
+    }
+}
+
+/// Waits until every process the kill noted is gone, for `ended_wait` at most in all, and closes
+/// the handles opened for the wait. `TerminateProcess` only starts the end: an ended process still
+/// runs down, listed and holding what it held, after the call returns, so without the wait the
+/// daemon could be gone while what it killed still runs. The caller holds `SCRATCH_CLAIMED`.
+fn wait_for_ended() {
+    let deadline = std::time::Instant::now() + ended_wait();
+    // SAFETY: the caller holds `SCRATCH_CLAIMED`, so nothing else reads or writes the list.
+    let list = unsafe { &mut *ENDED.0.get() };
+    for &(process, close) in &list.ended[..list.len] {
+        let left = deadline.saturating_duration_since(std::time::Instant::now());
+        let millis = u32::try_from(left.as_millis()).unwrap_or(INFINITE - 1);
+        // SAFETY: a process handle, with `SYNCHRONIZE`, open for the calls; one opened for the wait
+        // is closed once.
+        unsafe {
+            WaitForSingleObject(handle(process as u64), millis);
+            if close {
+                CloseHandle(handle(process as u64));
+            }
+        }
+    }
+    list.len = 0;
+}
+
 /// Kills every process in `job` attached to the console the host with pid `host` serves, opened by
-/// the pid the job lists and checked to be in the job still. One pass: the daemon is going down,
-/// and a process that starts another while it is killed is not chased. The caller holds
-/// `SCRATCH_CLAIMED`.
+/// the pid the job lists and checked to be in the job still, and notes each for the wait. One
+/// pass: the daemon is going down, and a process that starts another while it is killed is not
+/// chased. The caller holds `SCRATCH_CLAIMED`.
 fn kill_members(job: HANDLE, host: u32) {
     let list = SCRATCH.0.get();
     // SAFETY: the caller holds `SCRATCH_CLAIMED`, so nothing else reads or writes the list, which
@@ -163,10 +242,10 @@ fn kill_members(job: HANDLE, host: u32) {
     // SAFETY: as above; the call filled `listed` entries.
     let pids = unsafe { &(&*list).pids[..((*list).listed as usize).min(4096)] };
     for &pid in pids {
-        // SAFETY: plain calls on a handle opened here and closed below.
+        // SAFETY: plain calls on a handle opened here, and closed here or after the wait.
         unsafe {
             let process = OpenProcess(
-                PROCESS_TERMINATE | PROCESS_QUERY_LIMITED_INFORMATION,
+                PROCESS_TERMINATE | PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SYNCHRONIZE,
                 0,
                 pid as u32,
             );
@@ -177,10 +256,12 @@ fn kill_members(job: HANDLE, host: u32) {
             if IsProcessInJob(process, job, &mut member) != 0
                 && member != 0
                 && console_of(process) == Console::Host(host)
+                && end(process)
             {
-                TerminateProcess(process, KILLED);
+                note_ended(process, true);
+            } else {
+                CloseHandle(process);
             }
-            CloseHandle(process);
         }
     }
 }

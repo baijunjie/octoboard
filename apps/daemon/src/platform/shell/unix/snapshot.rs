@@ -388,7 +388,8 @@ mod tests {
             // write goes to a file of its own and is renamed into place: a plain overwrite
             // truncates the file first, and a shell started in that moment reads half a script.
             let path = std::env::temp_dir().join("octoboardd-env-shell-test-shell-dispatcher");
-            let staging = path.with_extension(format!("{}", std::process::id()));
+            let staging =
+                crate::platform::names::with_suffix(&path, &format!(".{}", std::process::id()));
             std::fs::write(
                 &staging,
                 "#!/bin/sh\n\

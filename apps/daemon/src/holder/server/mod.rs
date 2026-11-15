@@ -235,32 +235,7 @@ pub async fn run_until(
     let registry_dir = config.registry_dir.clone();
     let holder_id = config.holder_id.clone();
     let first_link_deadline = config.first_link_deadline;
-    let relay_deadline = config.relay_deadline;
-    let (exit, mut exiting) = watch::channel(false);
-    let holder = Arc::new(Holder {
-        config,
-        instance_id: uuid::Uuid::new_v4().to_string(),
-        secret,
-        terminals: Mutex::new(HashMap::new()),
-        pending: Mutex::new(HashSet::new()),
-        companions: Mutex::new(HashMap::new()),
-        ending: AtomicUsize::new(0),
-        link: Mutex::new(LinkSlot {
-            generation: 0,
-            current: None,
-            sink: None,
-            last_run: None,
-            superseded_runs: HashSet::new(),
-        }),
-        helpers: Arc::new(Helpers {
-            launches: Launches::default(),
-            relays: Relays::new(relay_deadline),
-        }),
-        last_parting: Mutex::new(LastParting::None),
-        draining: AtomicBool::new(false),
-        ever_linked: AtomicBool::new(false),
-        exit,
-    });
+    let (holder, mut exiting) = Holder::new(config, secret);
     let registry_written = registry_dir.clone();
     tokio::task::spawn_blocking(move || registry::write(&registry_written, &entry))
         .await?
@@ -278,12 +253,8 @@ pub async fn run_until(
         }
     });
 
-    let app = Router::new()
-        .route("/daemon", get(daemon_link))
-        .with_state(holder.clone())
-        .merge(helpers::router(holder.helpers.clone()));
     let served = tokio::select! {
-        served = axum::serve(listener, app) => Some(served),
+        served = axum::serve(listener, app(holder.clone())) => Some(served),
         _ = exiting.wait_for(|exiting| *exiting) => None,
         _ = stop => {
             tracing::info!("the holder was asked to end; it ends its programs");
@@ -296,6 +267,18 @@ pub async fn run_until(
         Some(Err(err)) => Err(err).context("serving the daemon link"),
         _ => Ok(()),
     }
+}
+
+/// The holder's whole listener: the daemon link and the helper routes.
+fn app(holder: Arc<Holder>) -> Router {
+    Router::new()
+        .route("/daemon", get(daemon_link))
+        .with_state(holder.clone())
+        .merge(helpers::router(holder.helpers.clone()))
+        // The helper routes carry it already; this covers the daemon link, a method it does not
+        // take and the fallback too, none of which holds a body: each is answered once the request's
+        // body has been read and thrown away.
+        .layer(axum::middleware::from_fn(crate::request_body::drain_unread))
 }
 
 async fn daemon_link(
@@ -315,6 +298,37 @@ async fn daemon_link(
 }
 
 impl Holder {
+    /// A holder that has served nothing yet, with the receiver of its exit.
+    fn new(config: HolderConfig, secret: String) -> (Arc<Self>, watch::Receiver<bool>) {
+        let relay_deadline = config.relay_deadline;
+        let (exit, exiting) = watch::channel(false);
+        let holder = Arc::new(Self {
+            config,
+            instance_id: uuid::Uuid::new_v4().to_string(),
+            secret,
+            terminals: Mutex::new(HashMap::new()),
+            pending: Mutex::new(HashSet::new()),
+            companions: Mutex::new(HashMap::new()),
+            ending: AtomicUsize::new(0),
+            link: Mutex::new(LinkSlot {
+                generation: 0,
+                current: None,
+                sink: None,
+                last_run: None,
+                superseded_runs: HashSet::new(),
+            }),
+            helpers: Arc::new(Helpers {
+                launches: Launches::default(),
+                relays: Relays::new(relay_deadline),
+            }),
+            last_parting: Mutex::new(LastParting::None),
+            draining: AtomicBool::new(false),
+            ever_linked: AtomicBool::new(false),
+            exit,
+        });
+        (holder, exiting)
+    }
+
     fn terminals(&self) -> MutexGuard<'_, HashMap<String, Arc<Terminal>>> {
         self.terminals.lock().unwrap_or_else(|err| err.into_inner())
     }

@@ -24,6 +24,7 @@
 
 use std::sync::Arc;
 
+use axum::body::Body;
 use axum::extract::{Request, State};
 use axum::http::StatusCode;
 use axum::middleware::Next;
@@ -76,13 +77,20 @@ impl Admission {
 /// `Host` [`headers_allowed`] turns away, and 401 to one that carries neither the launch key nor,
 /// where this listener takes it, the owner key, unless it asks for an embedded UI file this
 /// listener serves. The owner key is read on every request, so a rotation takes effect on the next
-/// one, and a connection it admitted is told of the rotation through its [`Admission`].
+/// one, and a connection it admitted is told of the rotation through its [`Admission`]. It runs
+/// inside [`drain_unread`](crate::request_body::drain_unread), so a refusal is answered only once
+/// the request's body has been read and thrown away, and outside
+/// [`buffer`](crate::request_body::buffer), which holds the body of a request a key admitted; a
+/// request for an embedded UI file, which no key vouches for, is passed on with an empty body.
 pub async fn guard(State(access): State<Access>, mut request: Request, next: Next) -> Response {
     if !headers_allowed(request.headers()) {
         return (StatusCode::FORBIDDEN, "forbidden origin or host").into_response();
     }
     if ui::file(access.ui, request.method(), request.uri().path()).is_some() {
-        return next.run(request).await;
+        // No key vouched for this request, so its body is not held: the route gets none, and
+        // `drain_unread` outside reads and throws away what the caller sends.
+        let (parts, _unread) = request.into_parts();
+        return next.run(Request::from_parts(parts, Body::empty())).await;
     }
     let query = request.uri().query();
     let admission = if key_matches(query, &access.key) {
@@ -133,5 +141,37 @@ mod tests {
                 .is_err(),
             "the launch key's admission was revoked"
         );
+    }
+
+    /// A request for a UI file, which needs no key, is let through without its body being held:
+    /// the route sees an empty one (and so may run at once), and the answer still waits for the body to be
+    /// read.
+    #[tokio::test]
+    async fn an_unkeyed_ui_request_has_its_body_drained_not_held() {
+        use crate::test_support::body_first::status_once_the_body_is_in;
+
+        let access = Access {
+            key: "key".into(),
+            owner_key: None,
+            ui: &[("index.html", b"<html>")],
+            refusal: REFUSED,
+        };
+        let seen = Arc::new(std::sync::Mutex::new(None));
+        let app = {
+            let seen = seen.clone();
+            axum::Router::new()
+                .fallback(move |body: axum::body::Bytes| async move {
+                    *seen.lock().unwrap() = Some(body.len());
+                    StatusCode::OK
+                })
+                .layer(axum::middleware::from_fn(crate::request_body::buffer))
+                .layer(axum::middleware::from_fn_with_state(access, guard))
+                .layer(axum::middleware::from_fn(crate::request_body::drain_unread))
+        };
+        let status =
+            status_once_the_body_is_in(app, "GET /index.html", &["Host: 127.0.0.1:4000"], || {})
+                .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(*seen.lock().unwrap(), Some(0), "the body was held");
     }
 }

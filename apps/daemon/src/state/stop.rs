@@ -609,12 +609,7 @@ mod tests {
             state.request_planned_restart(),
             Err(RestartRefusal::FollowsApplication)
         );
-        assert!(
-            tokio::time::timeout(std::time::Duration::from_millis(100), state.await_stop())
-                .await
-                .is_err(),
-            "a refused restart asked for a stop"
-        );
+        assert!(!state.stop_asked(), "a refused restart asked for a stop");
         state.request_planned_stop();
         assert_eq!(
             state.await_stop().await,

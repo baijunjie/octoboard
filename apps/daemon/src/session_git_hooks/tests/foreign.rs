@@ -541,14 +541,14 @@ fn a_push_is_not_refused_by_the_verdict() {
 #[test]
 fn a_daemon_that_cannot_be_reached_does_not_refuse_the_update() {
     let (fixture, other) = with_foreign_repository();
-    fixture
-        .port
-        .store(ClosedPort::new().port, Ordering::Relaxed);
+    let closed = ClosedPort::new();
+    fixture.port.store(closed.port(), Ordering::Relaxed);
 
     let output = commit_empty(&fixture, &other);
 
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
     assert!(succeeds(output), "{stderr}");
+    drop(closed);
 }
 
 #[test]

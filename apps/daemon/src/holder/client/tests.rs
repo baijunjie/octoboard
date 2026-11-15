@@ -332,11 +332,17 @@ async fn a_holder_lost_with_a_spawn_pending_ends_the_wait() {
     assert!(started.elapsed() < PATIENCE);
 }
 
-/// A holder that welcomes the daemon once and hangs up, and takes no second connection.
+/// A holder that welcomes the daemon once and hangs up, and takes no second connection. Its port
+/// is a `ClosedPort`'s, which the caller keeps for as long as it expects connections refused: a
+/// port the listener took from the system could be handed to a parallel test binding port 0 once
+/// the listener is dropped.
 #[cfg(unix)]
-async fn one_shot_holder() -> u16 {
-    let listener = TcpListener::bind("127.0.0.1:0").await.expect("a port");
-    let port = listener.local_addr().unwrap().port();
+async fn one_shot_holder() -> (u16, crate::test_support::ClosedPort) {
+    let closed = crate::test_support::ClosedPort::new();
+    let port = closed.port();
+    let listener = TcpListener::bind(("127.0.0.1", port))
+        .await
+        .expect("the port");
     tokio::spawn(async move {
         let (stream, _) = listener.accept().await.expect("the daemon connects");
         drop(listener);
@@ -350,7 +356,7 @@ async fn one_shot_holder() -> u16 {
             .expect("the welcome");
         socket.close(None).await.ok();
     });
-    port
+    (port, closed)
 }
 
 /// A stand-in for a holder's process, which a registry file names by its identity, reaped as soon
@@ -405,7 +411,7 @@ impl StandIn {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_link_that_cannot_be_opened_again_for_now_is_pending_and_never_ends_the_holder() {
     let dir = ScratchDir::new("client-link-dropped");
-    let port = one_shot_holder().await;
+    let (port, _closed) = one_shot_holder().await;
     let stand_in = StandIn::start();
     let entry = stand_in.entry("dropped", port);
     // Its file is there: the holder did not end on its own.
@@ -521,7 +527,7 @@ async fn a_holder_that_refuses_connections_for_a_while_is_linked_to_again() {
 #[tokio::test(flavor = "multi_thread")]
 async fn a_link_that_drops_to_a_holder_without_a_registry_file_is_lost_and_nothing_is_signalled() {
     let dir = ScratchDir::new("client-no-file");
-    let port = one_shot_holder().await;
+    let (port, _closed) = one_shot_holder().await;
     let mut stand_in = std::process::Command::new("sleep")
         .arg("60")
         .spawn()
@@ -1939,7 +1945,7 @@ fn a_holder_started_in_the_daemons_service_counts_while_it_starts_and_not_once_i
             holder_id,
             pid: std::process::id(),
             started: String::new(),
-            port: closed.port,
+            port: closed.port(),
             secret: "secret".to_string(),
             version: "test".to_string(),
             build_id: "test".to_string(),

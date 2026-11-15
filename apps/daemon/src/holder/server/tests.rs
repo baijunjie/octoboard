@@ -399,6 +399,50 @@ fn pid_of(reply: &FromHolder) -> u32 {
     }
 }
 
+/// What the holder's own layer answers around the daemon link and the fallback waits for the
+/// request's body too: a path nothing serves, a method the link does not take, a link request that
+/// is not a handshake. The whole listener is driven in memory with a body the test holds back.
+#[tokio::test]
+async fn the_daemon_link_and_the_fallback_answer_only_once_the_request_body_is_read() {
+    let dir = ScratchDir::new("holder-body-first");
+    let (holder, _exiting) = Holder::new(
+        HolderConfig {
+            registry_dir: dir.join("holders"),
+            holder_id: "holder-body-first".to_string(),
+            version: "test".to_string(),
+            build_id: "test-build".to_string(),
+            exe: std::env::current_exe().unwrap(),
+            first_link_deadline: PATIENCE,
+            relay_deadline: PATIENCE,
+        },
+        "secret".to_string(),
+    );
+    let host = "Host: 127.0.0.1:4000";
+    let handshake = [
+        host,
+        "Connection: Upgrade",
+        "Upgrade: websocket",
+        "Sec-WebSocket-Version: 13",
+        "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==",
+    ];
+    for (request_line, headers, status) in [
+        ("POST /nowhere", &[host][..], 404),
+        ("POST /daemon?secret=secret", &[host][..], 405),
+        // Not an upgrade the connection can take, which the extractor refuses with `426`.
+        ("GET /daemon?secret=secret", &handshake[..], 426),
+        ("POST /hook/s1?key=wrong", &[host][..], 401),
+    ] {
+        let answered = crate::test_support::body_first::status_once_the_body_is_in(
+            app(holder.clone()),
+            request_line,
+            headers,
+            || {},
+        )
+        .await;
+        assert_eq!(answered, status, "{request_line}");
+    }
+}
+
 /// A daemon that was taken over from, and so superseded, cannot take the holder back: its hello is
 /// refused, and the newer daemon's link is left as it is.
 #[tokio::test(flavor = "multi_thread")]

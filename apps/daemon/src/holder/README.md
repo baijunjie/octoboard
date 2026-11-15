@@ -12,7 +12,9 @@ held; `start` is the one place production code spawns a terminal), [`../coordina
 (at start, matches the terminals the holders kept with the store), [`../server/relay.rs`](../server/relay.rs) (the
 daemon's end of the helper requests a holder relays), [`../cli/holder.rs`](../cli/holder.rs) (the CLI mode),
 [`../request_guard.rs`](../request_guard.rs) (the Origin/Host rules and key compare the holder's helper routes share
-with the daemon's guard) and [`../platform/build_files.rs`](../platform/build_files.rs). The process ledger treats a
+with the daemon's guard), [`../request_body.rs`](../request_body.rs) (reads every request's body before any answer:
+`drain_unread` outermost, so a refused request's body is read and thrown away, and `buffer` inside the Origin/Host
+check, so only an admitted request's body is held) and [`../platform/build_files.rs`](../platform/build_files.rs). The process ledger treats a
 holder and what it starts as the daemon's own; see [`../processes/ledger/README.md`](../processes/ledger/README.md).
 
 ## Where things are

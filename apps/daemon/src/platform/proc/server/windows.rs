@@ -8,8 +8,8 @@ use std::os::windows::io::{AsRawHandle, OwnedHandle};
 
 use windows_sys::Win32::Foundation::WAIT_FAILED;
 use windows_sys::Win32::System::Threading::{
-    ResumeThread, TerminateProcess, WaitForSingleObject, CREATE_NEW_PROCESS_GROUP,
-    CREATE_NO_WINDOW, CREATE_SUSPENDED, INFINITE, PROC_THREAD_ATTRIBUTE_JOB_LIST,
+    ResumeThread, WaitForSingleObject, CREATE_NEW_PROCESS_GROUP, CREATE_NO_WINDOW,
+    CREATE_SUSPENDED, INFINITE, PROC_THREAD_ATTRIBUTE_JOB_LIST,
 };
 
 use crate::platform::proc::{
@@ -73,11 +73,7 @@ pub(super) fn start(
     let handle = match finish() {
         Ok(handle) => handle,
         Err(error) => {
-            // SAFETY: this is the server just created here. It is still in its owner-bound job.
-            unsafe {
-                TerminateProcess(process.as_raw_handle(), 1);
-                WaitForSingleObject(process.as_raw_handle(), INFINITE);
-            }
+            crate::platform::proc::end_and_wait(process.as_raw_handle());
             return Err(error);
         }
     };

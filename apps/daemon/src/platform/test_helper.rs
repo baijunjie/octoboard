@@ -22,8 +22,11 @@ pub(crate) fn args(helper: &str) -> [OsString; 3] {
 }
 
 /// Writes `pid` to `path` whole, through a rename, so that `wait_for_pid` never reads half of it.
+/// The partial file is named after the whole of `path`, extension and all: helpers that write pid
+/// files differing only in their extension at once (`starter.plain`, `starter.background`) would
+/// otherwise write one partial file, and the rename of one would carry off the other's pid.
 pub(crate) fn write_pid(path: &Path, pid: u32) {
-    let partial = path.with_extension("partial");
+    let partial = crate::platform::names::with_suffix(path, ".partial");
     std::fs::write(&partial, pid.to_string()).expect("the pid is written");
     std::fs::rename(partial, path).expect("the pid is in place");
 }

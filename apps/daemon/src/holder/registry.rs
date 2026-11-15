@@ -164,7 +164,10 @@ mod tests {
         let listener = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
         let port = listener.local_addr().unwrap().port();
         assert!(!nothing_listens(port));
-        drop(listener);
-        assert!(nothing_listens(port));
+        // Not the listener's own port once it is dropped: a test binding port 0 in parallel can be
+        // handed it.
+        assert!(nothing_listens(
+            crate::test_support::ClosedPort::new().port()
+        ));
     }
 }

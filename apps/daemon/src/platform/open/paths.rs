@@ -164,13 +164,43 @@ fn answered_within(
     wait: std::time::Duration,
     call: impl FnOnce() -> Result<(), String> + Send + 'static,
 ) -> Result<(), String> {
+    let (answered, _call) = asked(call)?;
+    answer_within(&answered, wait)
+}
+
+/// Where the answer of a call from [`asked`] arrives.
+#[cfg_attr(
+    not(windows),
+    allow(dead_code, reason = "only Windows opens through a shell call")
+)]
+type Answered = std::sync::mpsc::Receiver<Result<(), String>>;
+
+/// Starts `call` on a thread of its own, and hands back where its answer arrives and the thread.
+/// A call that ends without answering, by panicking, leaves the receiver disconnected.
+#[cfg_attr(
+    not(windows),
+    allow(dead_code, reason = "only Windows opens through a shell call")
+)]
+fn asked(
+    call: impl FnOnce() -> Result<(), String> + Send + 'static,
+) -> Result<(Answered, std::thread::JoinHandle<()>), String> {
     let (answer, answered) = std::sync::mpsc::sync_channel(1);
-    std::thread::Builder::new()
+    let call = std::thread::Builder::new()
         .name("shell-open".into())
         .spawn(move || {
             let _ = answer.send(call());
         })
         .map_err(|err| format!("the shell could not be asked to open it: {err}"))?;
+    Ok((answered, call))
+}
+
+/// What a call from [`asked`] answers on `answered`, or success once `wait` has passed without an
+/// answer (see [`answered_within`]).
+#[cfg_attr(
+    not(windows),
+    allow(dead_code, reason = "only Windows opens through a shell call")
+)]
+fn answer_within(answered: &Answered, wait: std::time::Duration) -> Result<(), String> {
     match answered.recv_timeout(wait) {
         Ok(result) => result,
         Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Ok(()),
@@ -457,11 +487,17 @@ mod tests {
     #[test]
     fn a_shell_call_that_does_not_answer_in_time_is_taken_as_handed_over() {
         let quick = std::time::Duration::from_millis(50);
-        assert_eq!(answered_within(quick, || Ok(())), Ok(()));
-        assert_eq!(
-            answered_within(crate::test_support::PATIENCE, || Err("refused".into())),
-            Err("refused".to_string())
-        );
+        // What a call that has ended answered, or that it ended without an answer, is read only
+        // once its thread has been joined, so a call slower to end than `quick` cannot be taken
+        // for one still showing a window.
+        let ended = |call: fn() -> Result<(), String>| {
+            let (answered, call) = asked(call).unwrap();
+            let _ = call.join();
+            answer_within(&answered, quick)
+        };
+        assert_eq!(ended(|| Ok(())), Ok(()));
+        assert_eq!(ended(|| Err("refused".into())), Err("refused".to_string()));
+        assert!(ended(|| panic!("the call failed")).is_err());
         let (release, held) = std::sync::mpsc::channel::<()>();
         let started = std::time::Instant::now();
         assert_eq!(
@@ -473,7 +509,6 @@ mod tests {
         );
         assert!(started.elapsed() < crate::test_support::PATIENCE);
         drop(release);
-        assert!(answered_within(quick, || panic!("the call failed")).is_err());
     }
 
     #[cfg(not(windows))]

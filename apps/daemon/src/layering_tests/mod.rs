@@ -28,12 +28,14 @@
 
 mod os_tokens;
 mod scan;
+mod source_rules;
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use scan::{scan_crate, Scan};
 
 const RULE_DOC: &str = "docs/structure/daemon.md, section \"Dependency direction\"";
+const SOURCE_RULES_DOC: &str = "docs/structure/daemon.md, section \"Source rules\"";
 const THIS_FILE: &str = "apps/daemon/src/layering_tests/mod.rs";
 const OS_TOKENS_FILE: &str = "apps/daemon/src/layering_tests/os_tokens.rs";
 
@@ -46,6 +48,7 @@ const LAYERS: &[(&str, &[&str])] = &[
             "interface_language",
             "loopback",
             "platform",
+            "request_body",
             "request_guard",
             "text",
             "time",
@@ -213,6 +216,45 @@ fn os_tokens_appear_only_in_the_platform_layer() {
          {}\n\nOS-specific code belongs under `src/platform/` ({RULE_DOC}). Move the site there; \
          the allow-list in {OS_TOKENS_FILE} is transitional and only shrinks, so a new entry is \
          not the way out, and a stale one is removed.",
+        problems.join("\n  ")
+    );
+}
+
+#[test]
+fn a_window_change_trap_is_written_only_in_the_test_support_helper() {
+    let mut problems = Vec::new();
+    source_rules::check_window_change(&source_rules::sources(), &mut problems);
+    assert!(
+        problems.is_empty(),
+        "a shell trap for the window-change signal outside `test_support/resize.rs`:\n  {}\n\nA shell trap \
+         that does work for it loses a resize that arrives while the trap runs; script it with \
+         `test_support::resize::reports_size` ({SOURCE_RULES_DOC}).",
+        problems.join("\n  ")
+    );
+}
+
+#[test]
+fn a_process_is_ended_on_windows_only_where_it_is_then_waited_for() {
+    let mut problems = Vec::new();
+    source_rules::check_terminate_process(&source_rules::sources(), &mut problems);
+    assert!(
+        problems.is_empty(),
+        "`TerminateProcess` called where nothing waits for the process to be gone:\n  {}\n\nOn \
+         Windows a process is gone only once its handle is signalled; end it through \
+         `platform::proc` ({SOURCE_RULES_DOC}).",
+        problems.join("\n  ")
+    );
+}
+
+#[test]
+fn a_temporary_file_is_named_after_the_whole_name_of_the_file_it_becomes() {
+    let mut problems = Vec::new();
+    source_rules::check_temporary_names(&source_rules::sources(), &mut problems);
+    assert!(
+        problems.is_empty(),
+        "a temporary file named by replacing an extension:\n  {}\n\nTwo files that differ only \
+         in their extension share such a name, and a rename through it carries one's content \
+         into the other; name it with `platform::names::with_suffix` ({SOURCE_RULES_DOC}).",
         problems.join("\n  ")
     );
 }

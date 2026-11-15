@@ -130,7 +130,7 @@ fn a_fifo_at_a_config_path_does_not_hold_the_launch() {
         let _ = done.send(plan_isolated(&fixture.spec()).is_ok());
     });
     assert_eq!(
-        finished.recv_timeout(std::time::Duration::from_secs(10)),
+        finished.recv_timeout(crate::test_support::PATIENCE),
         Ok(true),
         "the launch was held by a FIFO or did not plan"
     );

@@ -96,7 +96,7 @@ fn a_pty_probe() {
         )
         .unwrap();
     }
-    let partial = Path::new(&report).with_extension("partial");
+    let partial = crate::platform::names::with_suffix(Path::new(&report), ".partial");
     std::fs::write(&partial, out).expect("the report is written");
     std::fs::rename(partial, &report).expect("the report is in place");
     std::thread::sleep(PATIENCE * 2);

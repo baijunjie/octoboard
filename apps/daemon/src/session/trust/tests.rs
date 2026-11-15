@@ -197,13 +197,23 @@ fn quoted(path: &Path) -> String {
     format!("'{}'", path.display())
 }
 
+/// The part of a Grok stand-in's script that saves its trust store as Grok does, by replacing
+/// `store` with `wrote`, a file beside it holding the whole store Grok writes. Not by printing the
+/// text into `store`: bash's `printf` writes it a line at a time, so the carrier, which polls the
+/// session's copy of the store, can read an entry whose `trusted = true` line is there and whose
+/// later lines are not yet, and carry that.
+fn saves_store(wrote: &Path, store: &Path) -> String {
+    format!("mv {} {}", quoted(wrote), quoted(store))
+}
+
 /// The start of a stand-in script: reads the three captures into `$SCREEN`, `$AFTER_DOWN` and
-/// `$DISMISSED`, so that the rest of the conversation can use shell builtins alone. Every
-/// exec of the stand-in's shell is a chance for endpoint-security software to stall it for
-/// seconds, and a stall in the middle of the conversation lands inside `answer`'s own
-/// timeouts, which a test cannot stretch; a stall here only delays the start, which the
-/// tests' waits absorb. `read -d ''` takes a whole file (the captures hold no NUL), keeping its
-/// final newlines.
+/// `$DISMISSED`, so that the conversation can use shell builtins alone. Every exec of the
+/// stand-in's shell is a chance for endpoint-security software to stall it for seconds, and a
+/// stall in the middle of the conversation lands inside `answer`'s own timeouts, which a test
+/// cannot stretch; a stall here only delays the start, which the tests' waits absorb. The one
+/// exec left in the conversation is the Grok stand-in's `mv` ([`saves_store`]): a stall there
+/// lands inside the carrier's `record_wait`, which is `PATIENCE`. `read -d ''` takes a whole file
+/// (the captures hold no NUL), keeping its final newlines.
 fn load_captures() -> String {
     load(&[
         ("SCREEN", "claude_trust_screen.bin"),
@@ -2952,10 +2962,9 @@ async fn grok_answered_in_the_terminal_still_has_its_entry_carried() {
     std::fs::write(&wrote, entry).expect("what Grok writes");
     let script = [
         load(&[("SCREEN", "grok_trust_screen.bin")]),
-        format!("IFS= read -r -d '' WROTE < {}", quoted(&wrote)),
         show("SCREEN"),
         take(1, &quoted(&received)),
-        format!("printf '%s' \"$WROTE\" > {}", quoted(&session_store)),
+        saves_store(&wrote, &session_store),
         "sleep 30".to_string(),
     ]
     .join("; ");
@@ -3033,11 +3042,10 @@ async fn grok_is_pressed_behind_its_animation_and_its_entry_reaches_the_users_st
             ("SCREEN", "grok_trust_screen.bin"),
             ("ANIMATION", "grok_trust_animation.bin"),
         ]),
-        format!("IFS= read -r -d '' WROTE < {}", quoted(&wrote)),
         show("SCREEN"),
         "for frame in 1 2 3 4 5 6 7 8 9 10; do printf '%s' \"$ANIMATION\"; done".to_string(),
         take(1, &quoted(&received)),
-        format!("printf '%s' \"$WROTE\" > {}", quoted(&session_store)),
+        saves_store(&wrote, &session_store),
         "sleep 30".to_string(),
     ]
     .join("; ");
@@ -3375,7 +3383,9 @@ async fn a_hook_before_the_bound_releases_and_claude_code_has_no_fallback() {
     assert!(live.trust.holds_writes());
     on_hook(&state, &live);
     assert!(!live.trust.holds_writes());
-    tokio::time::sleep(Duration::from_millis(700)).await;
+    // The clock runs past the bound, so the fallback's timer fires and what it sets off runs to
+    // its end before this returns: the absence below is the fallback having looked and refused.
+    crate::test_support::runtime_advanced(Duration::from_millis(700)).await;
     assert!(!live.trust.released_without_hook.load(Ordering::Acquire));
 }
 

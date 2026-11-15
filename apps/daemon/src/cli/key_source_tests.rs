@@ -351,7 +351,7 @@ fn git_hook_route_cases(
         let closed = ClosedPort::new();
         let port = match (launch, &stand_in) {
             (_, Some(stand_in)) => Some(stand_in.port.to_string()),
-            (Launch::Closed, None) => Some(closed.port.to_string()),
+            (Launch::Closed, None) => Some(closed.port().to_string()),
             _ => None,
         };
         let mut arguments = vec![mode, "--session", "a"];
@@ -435,7 +435,7 @@ fn a_branch_a_job_of_an_ended_session_creates_is_still_recorded_for_the_session(
             .record_in(&home.join(".octoboard"), TEST_KEY)
             .unwrap();
         let closed_port = ClosedPort::new();
-        let closed = closed_port.port.to_string();
+        let closed = closed_port.port().to_string();
         let gone = key_file(&fixture.dir, "run-a-key", None);
         let mut command = helper_in(
             &home,
@@ -484,7 +484,7 @@ fn a_helper_of_an_earlier_builds_dispatcher_is_served_through_the_daemons_record
     let dir = ScratchDir::new("key-source-earlier-build");
     let old_key_file = key_file(&dir, "old-key", Some(TEST_KEY));
     let closed_port = ClosedPort::new();
-    let closed = closed_port.port.to_string();
+    let closed = closed_port.port().to_string();
     let cases: [(&str, &[&str], &[u8], &str); 2] = [
         (
             "git-ref",

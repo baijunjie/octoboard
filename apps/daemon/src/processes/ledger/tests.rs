@@ -207,7 +207,7 @@ fn sleeper() {
         unsafe {
             libc::signal(libc::SIGTERM, libc::SIG_IGN)
         };
-        let partial = Path::new(&ready).with_extension("tmp");
+        let partial = crate::platform::names::with_suffix(Path::new(&ready), ".tmp");
         std::fs::write(&partial, std::process::id().to_string()).unwrap();
         std::fs::rename(&partial, &ready).unwrap();
     }
@@ -250,7 +250,7 @@ fn respawning(dir: &Path) -> ! {
         .and_then(|n| n.parse().ok())
         .unwrap_or(0);
     let file = dir.join(format!("gen-{generation}"));
-    let partial = file.with_extension("tmp");
+    let partial = crate::platform::names::with_suffix(&file, ".tmp");
     std::fs::write(&partial, std::process::id().to_string()).unwrap();
     std::fs::rename(&partial, &file).unwrap();
     let mut signal = 0;
@@ -3134,5 +3134,38 @@ fn a_tree_whose_top_exited_is_still_running_through_the_member_that_ran_on() {
     assert_eq!(
         ledger.trees_still_running("s1", std::slice::from_ref(&key)),
         Some(vec![key])
+    );
+}
+
+/// The temporary a ledger file is written through is named after the whole file, so a file beside
+/// it that has the ledger file's name with another extension is not taken for it: saving the
+/// ledger leaves it alone and leaves no temporary behind.
+#[test]
+fn saving_the_ledger_leaves_a_file_named_like_its_stem_alone() {
+    let dir = ScratchDir::new("ledger-save-names");
+    let path = dir.join(persist::LEDGER_FILE);
+    let neighbour = dir.join("process-ledger.partial");
+    std::fs::write(&neighbour, "another file's content").unwrap();
+
+    persist::save(&path, &this_boot()).unwrap();
+
+    assert_eq!(
+        std::fs::read_to_string(&neighbour).unwrap(),
+        "another file's content",
+        "a file beside the ledger's was written through or renamed away"
+    );
+    assert!(matches!(persist::load(&path), persist::Loaded::Read(read) if read == this_boot()));
+    let mut left: Vec<_> = std::fs::read_dir(&*dir)
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    left.sort();
+    assert_eq!(
+        left,
+        [
+            std::ffi::OsString::from(persist::LEDGER_FILE),
+            std::ffi::OsString::from("process-ledger.partial"),
+        ],
+        "a temporary was left behind"
     );
 }

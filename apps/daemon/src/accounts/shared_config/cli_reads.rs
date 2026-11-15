@@ -25,11 +25,19 @@ struct DirUse {
     /// holds it on top of the hold kept by turning its sharing off, and accounts of different
     /// agents may be pointed at the same directory.
     holds: usize,
+    /// Runs of [`start`] waiting for a hold to end, for a test to see that one has reached its
+    /// wait.
+    #[cfg(test)]
+    waiting: usize,
 }
 
 impl DirUse {
     fn is_unused(&self) -> bool {
-        self.reads == 0 && self.long_runs == 0 && self.holds == 0
+        #[cfg(test)]
+        let nobody_waits = self.waiting == 0;
+        #[cfg(not(test))]
+        let nobody_waits = true;
+        self.reads == 0 && self.long_runs == 0 && self.holds == 0 && nobody_waits
     }
 }
 
@@ -80,13 +88,24 @@ impl Drop for Run {
 fn start(dir: Option<&Path>, long: bool) -> Option<Run> {
     let key = key(dir?);
     let mut dirs = REGISTRY.dirs.lock().expect("cli reads lock poisoned");
+    #[cfg(test)]
+    let mut counted = false;
     while dirs.get(&key).is_some_and(|entry| entry.holds > 0) {
+        #[cfg(test)]
+        if !counted {
+            dirs.get_mut(&key).expect("held").waiting += 1;
+            counted = true;
+        }
         dirs = REGISTRY
             .changed
             .wait(dirs)
             .expect("cli reads lock poisoned");
     }
     let entry = dirs.entry(key.clone()).or_default();
+    #[cfg(test)]
+    if counted {
+        entry.waiting -= 1;
+    }
     if long {
         entry.long_runs += 1;
     } else {
@@ -171,6 +190,18 @@ pub(crate) fn is_held(dir: &Path) -> bool {
         .expect("cli reads lock poisoned")
         .get(&key(dir))
         .is_some_and(|entry| entry.holds > 0)
+}
+
+/// How many runs are waiting for `dir`'s hold to end: what a test that must know a run reached its
+/// wait before it lets the hold go looks at.
+#[cfg(test)]
+pub(crate) fn waiting(dir: &Path) -> usize {
+    REGISTRY
+        .dirs
+        .lock()
+        .expect("cli reads lock poisoned")
+        .get(&key(dir))
+        .map_or(0, |entry| entry.waiting)
 }
 
 impl Drop for Hold {

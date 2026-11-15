@@ -165,6 +165,14 @@ command lines until it ends. A new client therefore sends the key, and either se
 the origins above. A client reaching the daemon under any other host name is refused until the rule is widened
 (`host_allowed` in `apps/daemon/src/request_guard.rs`).
 
+Every request's body is read before any answer goes out, a refusal (`403`, `401`), a `404` and a `405` included, so a
+client may write a request's head and its body separately and still read the answer instead of a connection reset. The
+Host, Origin and key checks come first: a refused request has its body read and thrown away, never held, and an admitted
+one is held whole before its route runs. A body is read up to 2 MiB, the most any route takes: one whose `Content-Length`
+is over that, or a chunked one that passes it, is answered `413` after the checks, without the rest being read, and a
+client that sends more anyway may find its connection reset in place of the answer. A body whose framing is malformed
+is answered `400`.
+
 ## What every client implements
 
 The conventions a client has to follow whatever it does, each in a few lines; the details stay in the sections linked.

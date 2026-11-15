@@ -828,7 +828,8 @@ fn fake_agent_dispatcher() -> &'static Path {
     static DISPATCHER: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
     DISPATCHER.get_or_init(|| {
         let path = std::env::temp_dir().join("octoboardd-fake-agent-dispatcher");
-        let staging = path.with_extension(format!("{}", std::process::id()));
+        let staging =
+            crate::platform::names::with_suffix(&path, &format!(".{}", std::process::id()));
         std::fs::write(&staging, "#!/bin/sh\n. \"$0.body\"\n")
             .expect("write fake agent dispatcher");
         #[cfg(unix)]
@@ -904,7 +905,8 @@ fn compiled(label: &str, source: &str) -> std::path::PathBuf {
     if path.is_file() {
         return path;
     }
-    let staging = path.with_extension(format!("{}.exe", std::process::id()));
+    let staging =
+        crate::platform::names::with_suffix(&path, &format!(".{}.exe", std::process::id()));
     let script = format!(
         "Add-Type -Language CSharp -OutputType ConsoleApplication -OutputAssembly '{}' \
          -TypeDefinition @'\n{source}\n'@",

@@ -69,11 +69,24 @@ can exhaust waits bounded in single seconds even when the code under test behave
   `apps/daemon/src/processes/ledger/stop.rs`). A window a passing test always waits out in full
   keeps its real figure under test (`switch_settle` in `restart.rs`), and a case where the window is
   not what is tested sets a zero override once its fixture is ready.
-- Do not prove that something did not happen by sleeping a fixed window first. Give the
-  production path a `#[cfg(test)]` observable — a counter, or the `JoinHandle` of the task that
+- Do not prove that something did not happen by a window — a fixed sleep first, or a short
+  `tokio::time::timeout(..).is_err()` or `recv_timeout(..).is_err()` around the event: a worker slowed by the suite's
+  load satisfies it as well as a correct one. Read what the code has already decided instead: after a synchronous call,
+  its own state (`state.stop_asked()`) or a non-blocking `try_recv()` on a queue filled before the answer goes out.
+  Otherwise give the production path a `#[cfg(test)]` observable — a counter, or the `JoinHandle` of the task that
   would act — and wait on it or assert it; a counter for work handed to `spawn_blocking` or another
   thread is incremented before the handoff, so it is final once the call under test returns
-  (`holder_signal_attempts` in `apps/daemon/src/holder/client/mod.rs`).
+  (`holder_signal_attempts` in `apps/daemon/src/holder/client/mod.rs`). To show a call is held back, wait for a
+  count of callers at its wait (`waiting` in `apps/daemon/src/accounts/shared_config/cli_reads.rs`), not for it to
+  stay unreturned for a while. Where the absence is what the code's own timer decides, a paused clock advanced past the
+  production bound (`test_support::runtime_advanced`) runs that timer and what it sets off before the assertion —
+  only where nothing on that path waits on real I/O.
+- Where the code under test turns its own wait running out into an outcome — a call still running when the wait ends
+  counts as handed over, a run not admitted in time as refused — a test asserting any other outcome first makes sure
+  the work has ended: join the worker's thread or await its handle (split the production function so the test gets
+  it, as `asked` and `answer_within` in `apps/daemon/src/platform/open/paths.rs` are), or wait on a `#[cfg(test)]`
+  observable of the point reached. Otherwise a worker the load slows outlasts the wait, and the timeout's outcome is
+  read as the code's answer. Only the case where running out is the outcome under test goes through the timed wait.
 
 To recognise it: failures only under a parallel run, a run far slower than usual,
 `--test-threads=1` passing, and a trivial exec (`/usr/bin/true`) timed in a loop alongside the
@@ -99,6 +112,16 @@ freshly exec'd test binary) and is hit only under the suite's load, as a fixture
   particular thread, and unblocking it on another thread never delivers it — and a Rust fixture run from the test
   binary runs on libtest's test thread, not the main thread. Linux delivers it, so a pass there proves nothing. An
   ignored disposition (`SIG_IGN`) survives `exec`, so a fixture that only ignores the signal sets it before `exec`.
+
+## A stand-in writes a file the daemon polls the way the real program does, never line by line
+
+Applies to daemon test stand-ins (shell scripts, fake CLIs) that write a file the code under test polls or watches: a
+store the agent saves, a record, a pid file. A shell redirect writes a line at a time (`printf '%s' "$TEXT" > file`
+is one write per line), so a poll can read a prefix that already parses — an entry whose first lines are there and
+whose later ones are not — and act on it. The real program, which replaces the file in one rename, never shows that
+state, so the test fails intermittently on a path production never takes. Where the real program replaces the file,
+write the whole content beside it during the fixture's setup and have the stand-in `mv` it into place; write in place
+only where the real program does too.
 
 ## Assert a stand-in session was sent nothing behind a marker, and that it was sent something by waiting for it
 
@@ -244,4 +267,7 @@ Applies to daemon tests that connect to a loopback port expecting the connection
 drop the listener to get one: the system hands that port to the next test in parallel that binds port 0, and the
 connection reaches that test's server instead of being refused. Holding the port in a bound socket that never listens
 does not work either: on macOS the connection times out rather than being refused. `ClosedPort::new()` picks a port
-below the ephemeral range, which no other test is given.
+below the ephemeral range, which no other test is given for as long as the `ClosedPort` lives. Keep it in a local for as
+long as the test relies on the port, and name the port through `closed.port()`: every finder in a binary starts at the
+same place, so a `ClosedPort` dropped at once (`ClosedPort::new().port()` stored for later) has its port bound by the
+next finder, and the connection reaches that test's listener instead of being refused.

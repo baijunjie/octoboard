@@ -36,7 +36,8 @@ struct Left {
 /// itself that the stand-in outlived a recoverable panic. The stand-in has two helpers there. One
 /// is on its console and holds on when the console closes, which the host ends only after a grace
 /// of about five seconds: still running when the child has just ended, unless the cleanup's sweep
-/// of the stand-in's session, what is on its console, ended it when the main thread panicked. The
+/// of the stand-in's session, what is on its console, ended it when the main thread panicked; the
+/// kill waits for what it ended to be gone before the child goes on, so by then it is. The
 /// other was started apart from the stand-in, so it has left the session, as a tree a launch keeps
 /// or carries over has: it is in the stand-in's job, which nothing can leave, and survives every
 /// case. Nothing is cleaned up on an abort, which ends a Windows process without running anything

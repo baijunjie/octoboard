@@ -41,7 +41,7 @@ use crate::state::{AppState, Running};
 pub(crate) use change::{carry_out, lock_account, Changing, Locked, Refused};
 pub(crate) use cli_reads::{admitted_reading, hold, is_missing, running_long, Run};
 #[cfg(test)]
-pub(crate) use cli_reads::{is_held, reading_account};
+pub(crate) use cli_reads::{is_held, reading_account, waiting};
 pub(crate) use items::{
     config_dir, config_file, history_dir, history_lines, thread_database, SharedItem,
 };

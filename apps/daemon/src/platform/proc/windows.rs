@@ -67,7 +67,8 @@ const PROCESS_CONSOLE_HOST_PROCESS: PROCESSINFOCLASS = 49;
 /// Unix a status that is not success.
 const KILLED: u32 = 1;
 
-/// How long [`PendingSweep::wait`] waits for the processes a sweep ended to be gone.
+/// How long [`PendingSweep::wait`], and the crash cleanup's kill (`crash::kill_all`), wait for the
+/// processes they ended to be gone.
 /// `TerminateProcess` only starts the end: the process still runs down, still listed and still
 /// holding its handles, a port among them, after its exit code says it exited. That takes
 /// milliseconds; one still there after this is stuck in the kernel, and is not waited for any
@@ -76,7 +77,7 @@ const ENDED_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
 
 /// [`ENDED_WAIT`], under test widened to [`crate::test_support::PATIENCE`]: the wait ends as soon
 /// as the processes are gone, so a passing test pays nothing for it.
-fn ended_wait() -> std::time::Duration {
+pub(super) fn ended_wait() -> std::time::Duration {
     #[cfg(test)]
     return ENDED_WAIT.max(crate::test_support::PATIENCE);
     #[cfg(not(test))]
@@ -622,6 +623,27 @@ fn terminate(process: HANDLE) -> Sent {
         Sent::Gone
     } else {
         Sent::Failed(err)
+    }
+}
+
+/// Ends the process `process` is a handle on, for a cleanup or a test that needs it gone, and
+/// waits until it is, for [`ended_wait`] at most: `TerminateProcess` only starts the end, and a
+/// process still running down holds the handles it inherited. A process already on its way out,
+/// refused while it is not signalled yet, is waited for all the same. The handle needs
+/// `PROCESS_TERMINATE` and `SYNCHRONIZE`. Blocking.
+pub(crate) fn end_and_wait(process: HANDLE) {
+    match terminate(process) {
+        Sent::Delivered | Sent::Gone => {}
+        Sent::Failed(err) if err.raw_os_error() == Some(ERROR_ACCESS_DENIED as i32) => {}
+        Sent::Failed(err) => {
+            tracing::warn!(%err, "ending a process failed");
+            return;
+        }
+    }
+    let millis = u32::try_from(ended_wait().as_millis()).unwrap_or(INFINITE - 1);
+    // SAFETY: the handle is open, with `SYNCHRONIZE`, for the call.
+    if unsafe { WaitForSingleObject(process, millis) } == WAIT_TIMEOUT {
+        tracing::warn!("a process ended is still not gone");
     }
 }
 

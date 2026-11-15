@@ -549,7 +549,7 @@ mod tests {
             let _ = done.send(plan.is_ok_and(|notice| notice.is_none()));
         });
         assert_eq!(
-            finished.recv_timeout(std::time::Duration::from_secs(10)),
+            finished.recv_timeout(crate::test_support::PATIENCE),
             Ok(true),
             "the launch was held by a FIFO or did not plan"
         );

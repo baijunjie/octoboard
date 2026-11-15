@@ -30,11 +30,6 @@ use crate::wire_path;
 
 // -- the gate-hook process --------------------------------------------------------
 
-/// A port nothing listens on, that no parallel test is given.
-fn closed_port() -> u16 {
-    ClosedPort::new().port
-}
-
 /// What the stand-in starts for `octoboardd gate-hook` where it is told to run the real one: this
 /// test binary, running only this test, with the arguments in the environment, whose status is the
 /// hook's.
@@ -375,7 +370,11 @@ fn the_hook_side_takes_only_an_answer_as_a_reason_to_run_the_gate() {
     assert_eq!(ask(daemon.port, "nobody"), None);
     set_revert_gate(&fixture, false);
     assert_eq!(ask(daemon.port, "a"), None);
-    assert_eq!(ask(closed_port(), "a"), None, "no daemon is no answer");
+    assert_eq!(
+        ask(ClosedPort::new().port(), "a"),
+        None,
+        "no daemon is no answer"
+    );
     assert_eq!(
         ask_through(&launch_route(daemon.port, "wrong"), "a", &repo),
         None,
@@ -929,7 +928,8 @@ fn a_job_its_session_left_running_is_still_gated_through_the_daemons_record() {
     ended.status = crate::protocol::SessionStatus::Archived;
     ended.ended_at = Some(crate::time::now_millis());
     fixture.state.store.update_session(&ended).unwrap();
-    fixture.port.store(closed_port(), Ordering::Relaxed);
+    let closed = ClosedPort::new();
+    fixture.port.store(closed.port(), Ordering::Relaxed);
     let repo = fixture.repo.to_path_buf();
     let (old, squashed) = squash_with_changed_base(&fixture);
     let args = ["update-ref", "refs/heads/main", &squashed, &old];
@@ -1109,10 +1109,12 @@ fn ordinary_commits_rebases_and_pushes_pass_the_real_gate() {
 #[test]
 fn a_daemon_that_cannot_be_reached_lets_everything_through() {
     let (fixture, _) = project_with_remote();
-    fixture.port.store(closed_port(), Ordering::Relaxed);
+    let closed = ClosedPort::new();
+    fixture.port.store(closed.port(), Ordering::Relaxed);
 
     ok(&fixture, &["commit", "-q", "--allow-empty", "-m", "next"]);
     ok(&fixture, &["push", "-q", "--force", "origin", "main"]);
+    drop(closed);
 }
 
 #[test]

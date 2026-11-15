@@ -11,6 +11,8 @@
 //! - [`stand_in`]: a stand-in live session on a PTY that ends itself, the fake agent CLIs, and
 //!   the reads of what reached them.
 //! - [`background`]: the commands a stand-in agent starts in the background, spelled for each host.
+//! - [`body_first`]: a request driven in memory with a body the test holds back, for the tests of
+//!   what answers before a body is in.
 //! - [`processes`]: the waits on a fixture process a test spawned (the pid it recorded, running a
 //!   scenario again when it was killed before recording one, and its being gone) and the wait for
 //!   a condition that runs off the async runtime.
@@ -22,6 +24,9 @@
 //!   runs in a cgroup other than the daemon's, and the launch group and cgroup reads of the tests of
 //!   what runs in a launch's group; named as `cgroups::ChildCgroup`, not re-exported.
 //! - `fixture` (Windows): the processes a test starts where a Unix test has perl start them.
+//! - `resize` (Unix): the shell script that reports its terminal's size each time it is resized,
+//!   the one place the daemon's sources trap the window-change signal; named as
+//!   `resize::reports_size`, not re-exported.
 //! - [`closed_port`]: a loopback port that refuses connections.
 //! - [`git`]: the environment a test's `git` runs in together with the repositories it builds
 //!   with it, the state a read must leave untouched and the stale stat that makes a read want to
@@ -36,6 +41,7 @@ use std::time::Duration;
 
 pub(crate) mod app;
 pub(crate) mod background;
+pub(crate) mod body_first;
 #[cfg(target_os = "linux")]
 pub(crate) mod cgroups;
 pub(crate) mod clock;
@@ -46,6 +52,8 @@ pub(crate) mod git;
 pub(crate) mod owner_team;
 pub(crate) mod processes;
 pub(crate) mod programs;
+#[cfg(unix)]
+pub(crate) mod resize;
 pub(crate) mod scratch;
 pub(crate) mod sessions;
 pub(crate) mod stand_in;

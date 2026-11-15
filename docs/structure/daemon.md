@@ -117,7 +117,9 @@ starts; `admit` gives a connection the key admitted a `Revocation` that resolves
 whether it follows an application, whether a service manager starts its successor, which systemd unit it runs as, which daemon it took over from (`Predecessor`) and whether it holds an owner key, and the owner-only key record,
 `daemon.key`, which four things read: `address`; `stop` and `restart` on every host, to recognise a successor by its key
 where its record does not name its predecessor; `stop` on Windows and `restart` on every host, which ask over loopback; and the git hook modes'
-fallback; the `_in` reads take the data directory from their caller), `request_guard.rs` (the
+fallback; the `_in` reads take the data directory from their caller), `request_body.rs` (the layers
+that read a request's body before anything answers, the daemon's listener and the holders' alike: a refused request's
+is read and thrown away, only an admitted one's is held, up to a limit of 2 MiB), `request_guard.rs` (the
 Origin/Host rules, the key compare and the key generator that the daemon's guard and the holders' helper routes and
 secret share), `paths.rs` (where Octoboard keeps its files under the data directory), `text.rs` (`trimmed_or_none`, free
 text as stored, and `without_paste_wrapper`, a prompt with the wrapper an agent puts around a paste taken off),
@@ -662,7 +664,7 @@ same scan.
 
 | Layer | Modules |
 |---|---|
-| foundation | `blocking_pass`, `interface_language`, `loopback`, `platform`, `request_guard`, `text`, `time`, `wire_path` |
+| foundation | `blocking_pass`, `interface_language`, `loopback`, `platform`, `request_body`, `request_guard`, `text`, `time`, `wire_path` |
 | providers | `providers` |
 | wire | `protocol` |
 | host | `browser_socket`, `env_shell`, `git`, `holder`, `host_open`, `hostfs`, `instance_lock`, `key_file`, `log_file`, `owner_key`, `owner_record`, `paths`, `processes` |
@@ -712,6 +714,27 @@ gated by `cfg` or kept out of the shared tests.
 
 The rule has no exceptions and no allow-list: a site outside `platform` fails the test with its `file:line` and token. A
 new site is never excused: it goes under `platform`.
+
+## Source rules
+
+Tests in `src/layering_tests/` (the checks are `layering_tests/source_rules.rs`) that read every `.rs` file under `src`,
+test sources included, with comments removed and string literals kept (the shell scripts tests run are literals). Each
+names the sanctioned place for what it bans and has no allow-list of sites; a violation fails with its `file:line`.
+
+- `a_window_change_trap_is_written_only_in_the_test_support_helper`: a shell `trap` for `WINCH` (the
+  word on a line after `trap `, as in a script a test runs) appears only in `test_support/resize.rs`; a mention of
+  `SIGWINCH` in Rust code is not one and passes. Bash 5 clears a signal's pending count once its trap has run, so a trap that does work
+  (reading the size) loses a resize that arrives meanwhile; a script reports a size with
+  `test_support::resize::reports_size`, whose trap only sets a variable that the loop reads.
+- `a_process_is_ended_on_windows_only_where_it_is_then_waited_for`: `TerminateProcess(` is called only in
+  `platform/proc/windows.rs` and `platform/proc/crash/windows.rs` (each waits, bounded, until the process handle is
+  signalled). Anything else, test support included, ends a process through
+  `platform::proc` (`end_and_wait` for the cleanup of a start that failed, the sweeps otherwise);
+  `test_support::kill` waits through it.
+- `a_temporary_file_is_named_after_the_whole_name_of_the_file_it_becomes`: no `with_extension("partial")`, `"tmp"`,
+  `"temp"`, `"new"`, `"staging"` and no `with_extension` given the process id. A temporary beside `path` is
+  `platform::names::with_suffix(path, ".partial")`, which appends to the whole file name, so `starter.plain` and
+  `starter.background` never share one.
 
 ## Where new code goes
 
@@ -802,6 +825,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Whether a session's agent is in a turn, before acting on it | `LiveSession::turn_reading` and `TurnReading` (`src/session/turn_reading.rs`): a new consumer adds a method there that says which way it errs, rather than combining the title's activity, the dialog sighting and the hooks' status itself |
 | Write the daemon's own paste or key into a terminal | `platform::term` (`Pty::write_input` with `Input`), which a held terminal answers over the link (`holder::client::HeldTerminal`) |
 | Give a helper process the launch key | never in its arguments: a file for the `octoboardd` helpers that take `--key-file` (`src/key_file.rs`: `write` makes it owner-only, `read` reads it), the same file for the git hook helpers, whose path the `OCTOBOARD_DAEMON_CREDENTIAL_PATH` variable carries (`src/session_git_hooks/`; no variable the git hooks need has `KEY`, `SECRET` or `TOKEN` in its name, which an agent's filter strips where its default excludes are on); the key itself is never in an environment, which agents write into files; Claude Code's own HTTP hook URL carries it inside the owner-only settings file (`src/adapter/claude/`) |
+| Read a request's body before any answer goes out, the body limit and its `413` | `src/request_body.rs` (`drain_unread`, outermost; `buffer`, inside the guard); the daemon's router and a holder's listener layer them |
 | Check a request's Origin and Host, compare a key, make a key | `src/request_guard.rs` (`headers_allowed`, `key_matches`, `same_secret`, `generate_key`); the daemon's guard is `src/server/access.rs`, and a holder's helper routes use it too |
 | Run an agent's CLI as an account for a short query | `src/adapter/account_cli.rs`: `query` (admits the run, held to `Bounds::agent_query`), `AdmittedCommand::run`, and `run_query` only where the account's directory is already held (a sign-in); `failure_detail` words a failure |
 | An account's directory | `adapter::account_dir` (the pinned directory, else the agent's default; `src/adapter/account_cli.rs`) |

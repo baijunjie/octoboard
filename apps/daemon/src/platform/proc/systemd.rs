@@ -530,7 +530,7 @@ mod tests {
             Err(err) => format!("{:?}\n{err}", err.kind()),
         };
         let result = PathBuf::from(result);
-        let partial = result.with_extension("partial");
+        let partial = crate::platform::names::with_suffix(&result, ".partial");
         std::fs::write(&partial, answer).expect("the answer is written");
         std::fs::rename(partial, result).expect("the answer is in place");
     }
@@ -543,7 +543,7 @@ mod tests {
             return;
         };
         let result = PathBuf::from(result);
-        let partial = result.with_extension("partial");
+        let partial = crate::platform::names::with_suffix(&result, ".partial");
         let managed = crate::platform::proc::restarted_by_service_manager(false);
         std::fs::write(&partial, format!("{:?}", user_service_unit(managed))).expect("written");
         std::fs::rename(partial, result).expect("in place");

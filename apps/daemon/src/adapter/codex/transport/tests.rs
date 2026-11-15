@@ -54,6 +54,19 @@ fn loopback() -> (CodexTransport, TcpListener, String) {
     (fixture_transport(endpoint), listener, token)
 }
 
+/// A loopback transport whose port refuses connections, and the `ClosedPort` that keeps the port
+/// closed: it is a port below the ephemeral range, and while the `ClosedPort` lives no other
+/// finder in this binary is given it. A listener of `loopback` that is dropped hands its port back
+/// to the system, which gives it to a parallel test binding port 0.
+fn refused_loopback() -> (CodexTransport, crate::test_support::ClosedPort) {
+    let closed = crate::test_support::ClosedPort::new();
+    let transport = fixture_transport(Endpoint::Loopback {
+        port: closed.port(),
+        token: "the-token".to_string(),
+    });
+    (transport, closed)
+}
+
 /// What the fake server answers a request with.
 enum Answer {
     Result(Value),
@@ -600,8 +613,7 @@ fn a_second_start_reports_what_the_first_started() {
     drop(transport);
     server.join().unwrap();
     // Nobody listening: the connection is refused at once rather than left to time out.
-    let (transport, listener, _) = loopback();
-    drop(listener);
+    let (transport, _closed) = refused_loopback();
     assert_eq!(transport.start_queue(), QueueStart::Nothing);
     transport.shared.identify("main");
     assert!(matches!(transport.start_queue(), QueueStart::Failed(_)));
@@ -1426,8 +1438,7 @@ fn a_wait_told_of_is_withdrawn_when_the_acceptance_is_unconfirmed() {
 /// What the session was told of a wait is withdrawn when the server is stopped.
 #[test]
 fn a_wait_told_of_is_withdrawn_when_the_server_stops() {
-    let (mut transport, listener, _) = loopback();
-    drop(listener);
+    let (mut transport, _closed) = refused_loopback();
     transport.shared.identify("thread");
     let released = telling_of_waits(&mut transport);
     transport.stop();

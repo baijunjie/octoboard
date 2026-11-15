@@ -47,11 +47,11 @@ use windows_sys::Win32::System::Pipes::{
 };
 use windows_sys::Win32::System::Threading::{
     CreateEventW, CreateProcessW, DeleteProcThreadAttributeList, InitializeProcThreadAttributeList,
-    ResumeThread, SetEvent, TerminateProcess, UpdateProcThreadAttribute, WaitForMultipleObjects,
-    WaitForSingleObject, CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT,
-    EXTENDED_STARTUPINFO_PRESENT, INFINITE, LPPROC_THREAD_ATTRIBUTE_LIST, PROCESS_INFORMATION,
-    PROC_THREAD_ATTRIBUTE_DESKTOP_APP_POLICY, PROC_THREAD_ATTRIBUTE_JOB_LIST,
-    PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, STARTF_USESTDHANDLES, STARTUPINFOEXW,
+    ResumeThread, SetEvent, UpdateProcThreadAttribute, WaitForMultipleObjects, WaitForSingleObject,
+    CREATE_SUSPENDED, CREATE_UNICODE_ENVIRONMENT, EXTENDED_STARTUPINFO_PRESENT, INFINITE,
+    LPPROC_THREAD_ATTRIBUTE_LIST, PROCESS_INFORMATION, PROC_THREAD_ATTRIBUTE_DESKTOP_APP_POLICY,
+    PROC_THREAD_ATTRIBUTE_JOB_LIST, PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, STARTF_USESTDHANDLES,
+    STARTUPINFOEXW,
 };
 use windows_sys::Win32::System::IO::{CancelIoEx, GetOverlappedResult, OVERLAPPED};
 
@@ -163,9 +163,6 @@ const EXIT_SETTLE: Duration = Duration::from_millis(200);
 
 /// The size the host's pipes are created with, for each direction.
 const PIPE_BUFFER: u32 = 64 * 1024;
-
-/// The exit code a process that could not be taken on is ended with.
-const KILLED: u32 = 1;
 
 /// `PROCESS_CREATION_DESKTOP_APP_BREAKAWAY_DISABLE_PROCESS_TREE`, the desktop app policy under
 /// which what a process starts, and what that starts in turn, stays in the process's jobs.
@@ -831,8 +828,7 @@ fn spawn_joining(
     let child = match taken_on {
         Ok(child) => child,
         Err(err) => {
-            // SAFETY: the handle is open; the process is the one just started.
-            unsafe { TerminateProcess(shared.process.as_raw_handle(), KILLED) };
+            crate::platform::proc::end_and_wait(shared.process.as_raw_handle());
             shared.close_console();
             return Err(err);
         }
@@ -1026,8 +1022,7 @@ fn start_process(
                 Ok(())
             });
         if let Err(err) = joined {
-            // SAFETY: the handle is open; the process is the one just created.
-            unsafe { TerminateProcess(process.as_raw_handle(), KILLED) };
+            crate::platform::proc::end_and_wait(process.as_raw_handle());
             return Err(err);
         }
     }

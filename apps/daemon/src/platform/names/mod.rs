@@ -108,9 +108,48 @@ pub fn lexical_key(path: &Path) -> OsString {
     host::lexical_key(path)
 }
 
+/// `path` with `suffix` appended to its whole file name, extension included: the name of a
+/// temporary, or a companion file, beside it. `Path::with_extension` replaces the extension
+/// instead, so two files that differ only in theirs (`starter.plain`, `starter.background`) get
+/// one name, and a write-then-rename through it carries one file's content into the other.
+pub fn with_suffix(path: &Path, suffix: &str) -> PathBuf {
+    let mut name = path.as_os_str().to_owned();
+    name.push(suffix);
+    PathBuf::from(name)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_suffix_goes_after_the_whole_name_so_files_differing_in_extension_stay_apart() {
+        let plain = with_suffix(Path::new("dir/starter.plain"), ".partial");
+        assert_eq!(plain, Path::new("dir/starter.plain.partial"));
+        assert_ne!(
+            plain,
+            with_suffix(Path::new("dir/starter.background"), ".partial")
+        );
+        assert_eq!(
+            with_suffix(Path::new("noext"), ".tmp"),
+            Path::new("noext.tmp")
+        );
+    }
+
+    /// Only the file name is the suffix's: a dot in a directory is not an extension, a name with
+    /// several dots keeps every one, and the directories are the path's own.
+    #[test]
+    fn a_suffix_keeps_the_directories_and_every_dot_of_the_name() {
+        assert_eq!(
+            with_suffix(Path::new("a.d/b.c/file.tar.gz"), ".partial"),
+            Path::new("a.d/b.c/file.tar.gz.partial")
+        );
+        assert_eq!(
+            with_suffix(Path::new("/abs/.hidden"), ".1234"),
+            Path::new("/abs/.hidden.1234")
+        );
+        assert_eq!(with_suffix(Path::new("x.json"), ""), Path::new("x.json"));
+    }
 
     /// A Windows name need not be valid UTF-16; one with an unpaired surrogate goes to its WTF-8
     /// bytes and back to itself, and the bytes name a component the host takes.

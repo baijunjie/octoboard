@@ -159,7 +159,7 @@ fn child_file(dir: &Path, name: &str) -> PathBuf {
     }
 }
 
-fn collect_rs(dir: &Path, found: &mut dyn FnMut(&Path)) {
+pub(super) fn collect_rs(dir: &Path, found: &mut dyn FnMut(&Path)) {
     for entry in std::fs::read_dir(dir).unwrap() {
         let path = entry.unwrap().path();
         if path.is_dir() {

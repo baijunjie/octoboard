@@ -1750,7 +1750,9 @@ async fn a_change_waits_for_a_short_read_and_holds_new_ones_back() {
     );
     assert!(!is_link(&account.join("settings.json")));
 
-    // A read starting now waits for the change.
+    // A read starting now waits for the change. It is seen waiting before `reading` ends, so the
+    // change cannot have linked the file by then: a read admitted past the hold would answer that
+    // the file is not linked, and the answer below shows it was admitted only after the change.
     let (sent, read_started) = std::sync::mpsc::channel();
     let next = {
         let account = account.clone();
@@ -1760,10 +1762,11 @@ async fn a_change_waits_for_a_short_read_and_holds_new_ones_back() {
             drop(reading);
         })
     };
-    assert!(read_started
-        .recv_timeout(std::time::Duration::from_millis(200))
-        .is_err());
-
+    let watched = account.clone();
+    assert!(
+        test_support::within(test_support::PATIENCE, move || waiting(&watched) == 1).await,
+        "the read never reached its wait"
+    );
     drop(reading);
     change.await.unwrap().unwrap();
     assert!(read_started.recv_timeout(test_support::PATIENCE).unwrap());

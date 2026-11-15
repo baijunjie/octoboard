@@ -154,7 +154,8 @@ pub(crate) fn records_pid_then_waits(pid_file: &str) -> String {
     format!("sleep 30 </dev/null >/dev/null 2>&1 & echo {SHELL_PID} > {pid_file}; wait")
 }
 
-/// Ends `pid` at once, without a chance to clean up; a pid already gone is no error.
+/// Ends `pid` at once, without a chance to clean up; a pid already gone is no error. On Windows it
+/// returns once the process is gone (bounded), not once the end has started.
 pub(crate) fn kill(pid: i32) {
     host::kill(pid);
 }
@@ -275,8 +276,8 @@ mod host {
 mod host {
     use windows_sys::Win32::Foundation::{CloseHandle, HANDLE, WAIT_OBJECT_0};
     use windows_sys::Win32::System::Threading::{
-        GetExitCodeProcess, OpenProcess, TerminateProcess, WaitForSingleObject,
-        PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE, PROCESS_TERMINATE,
+        GetExitCodeProcess, OpenProcess, WaitForSingleObject, PROCESS_QUERY_LIMITED_INFORMATION,
+        PROCESS_SYNCHRONIZE, PROCESS_TERMINATE,
     };
 
     /// Runs `with` on a handle to `pid` opened for `access`, or answers `None` where it cannot be
@@ -294,9 +295,10 @@ mod host {
     }
 
     pub(super) fn kill(pid: i32) {
-        // SAFETY: the handle is open for termination for the call.
-        with_process(pid, PROCESS_TERMINATE, |handle| unsafe {
-            TerminateProcess(handle, 1)
+        // Waits until the process is gone, as the daemon's own kills do: a test that asserts on what
+        // the process held (a port, a file, its place in the process table) finds it released.
+        with_process(pid, PROCESS_TERMINATE | PROCESS_SYNCHRONIZE, |handle| {
+            crate::platform::proc::end_and_wait(handle)
         });
     }
 

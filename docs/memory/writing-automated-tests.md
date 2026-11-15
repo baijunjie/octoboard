@@ -44,6 +44,20 @@ that renders its children as bare text, as the `AgentAccountsSection` tests' `Fa
 Assert that the lookup found something before asserting about it, or assert on the text of an element the markup
 still has (the row, the name line) rather than on a leaf found by its text.
 
+## Fix an intermittent failure at its race, and make it fail on demand first
+
+Applies to a test in any scope that fails only sometimes — in CI, under the full suite's load, on another platform.
+Before changing anything, name the race: which two things, in which order, make it fail. Then make it fail every time
+by injecting a delay at that point — a pause between a write and its rename, a sleep in the worker before it answers,
+a load run beside it — and keep that delay in while checking the fix: a fix that cannot be shown failing without it is
+a guess. The cause is as often the fixture or the product as the test (a stand-in writing a file line by line, a kill
+returning before its processes were gone, a server answering before it read the request), and the fix goes there.
+Never a longer timeout, a retry, a sleep, a looser assertion or a serialized run.
+
+Then look for the same shape across the tree and fix every site, not only the one that failed; where the shape can be
+recognised in the source text, ban it with a source scan that names the sanctioned form, as the daemon's are
+(`docs/structure/daemon.md`, "Source rules").
+
 ## Under test there is a fourth provider with nothing of its own: never hard-code the provider list
 
 Applies to any daemon or `packages/ui` test that loops over the providers or picks some of them. Tests register a

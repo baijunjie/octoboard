@@ -508,8 +508,7 @@ fn run(steps: &[Op]) {
 /// helpers of one test do, would otherwise write through the same one, and one of them would
 /// write the other's text or find it gone when it renames it.
 fn write_whole(file: &Path, text: &str) {
-    let mut partial = file.as_os_str().to_owned();
-    partial.push(".tmp");
+    let partial = crate::platform::names::with_suffix(file, ".tmp");
     std::fs::write(&partial, text).expect("write the file");
     std::fs::rename(&partial, file).expect("rename the file into place");
 }

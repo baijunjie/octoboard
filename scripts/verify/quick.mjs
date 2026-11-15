@@ -115,6 +115,9 @@ export const CRATE_WIDE_TESTS = {
     { filter: "protocol::", test: "the_bindings_and_the_schema_agree_on_every_property", why: "the cross-check (`protocol/crosscheck.rs`) compares both renderings of every wire type and scans every source file that derives `TS`", covers: [...WIRE_TYPE_FILES, "src/protocol/crosscheck.rs"] },
     { filter: "records::history::", test: "every_opening_octoboard_writes_with_is_matched", why: "scans every source file for `*_OPENING` constants", covers: ["src/records/history.rs"] },
     { filter: "layering_tests::", test: "every_top_level_module_depends_only_downward_or_as_listed", why: "scans every source file's `crate::` paths against the daemon's layer order", covers: ["src/layering_tests/scan.rs"] },
+    { filter: "layering_tests::", test: "a_window_change_trap_is_written_only_in_the_test_support_helper", why: "scans every source file for a shell trap of the window-change signal", covers: ["src/layering_tests/source_rules.rs"] },
+    { filter: "layering_tests::", test: "a_process_is_ended_on_windows_only_where_it_is_then_waited_for", why: "scans every source file for a raw `TerminateProcess(`", covers: ["src/layering_tests/source_rules.rs"] },
+    { filter: "layering_tests::", test: "a_temporary_file_is_named_after_the_whole_name_of_the_file_it_becomes", why: "scans every source file for a temporary named with `with_extension` or `set_extension`", covers: ["src/layering_tests/source_rules.rs"] },
   ],
   native: [],
 };

@@ -5,7 +5,8 @@
 //! its owner-only socket ([`browser_router`], [`crate::browser_socket`]), which takes the owner
 //! key too and serves the embedded UI. On a host that has such sockets the TCP port serves no UI.
 //!
-//! This file holds the route table and the guard around it; each route's handler lives beside the
+//! This file holds the route table and the guard around it, which sits between the two layers that
+//! see to each request's body ([`crate::request_body`]); each route's handler lives beside the
 //! protocol it speaks:
 //!
 //! - [`control`]: the control socket, `/ws/control`.
@@ -73,10 +74,15 @@ fn router_serving(state: Arc<AppState>, files: ui::Files, takes_owner_key: bool)
     };
     routes(state)
         .fallback(move |request| ui::serve(files, request))
+        // Inside the guard, so that only a request it lets in has its body held.
+        .layer(axum::middleware::from_fn(crate::request_body::buffer))
         .layer(axum::middleware::from_fn_with_state(
             access,
             crate::server::access::guard,
         ))
+        // Outside the guard, so that a refusal too is answered only once the body is read, and
+        // without holding it.
+        .layer(axum::middleware::from_fn(crate::request_body::drain_unread))
 }
 
 fn routes(state: Arc<AppState>) -> Router {
@@ -286,12 +292,8 @@ mod tests {
         let body: serde_json::Value = serde_json::from_str(&body).expect("a JSON body");
         assert_eq!(body["reason"], "follows_application");
         assert!(body["message"].is_string(), "{body}");
-        assert!(
-            tokio::time::timeout(std::time::Duration::from_millis(200), state.await_stop())
-                .await
-                .is_err(),
-            "a refused restart asked for a stop"
-        );
+        // The refusal is synchronous, so it has decided by the time the answer is read.
+        assert!(!state.stop_asked(), "a refused restart asked for a stop");
     }
 
     /// The request answers `202` and asks for a planned restart.
@@ -450,6 +452,43 @@ mod tests {
             assert!(port_files().is_empty());
         } else {
             assert_eq!(port_files().len(), ui::EMBEDDED.len());
+        }
+    }
+
+    /// Every answer of the real router, refusals and the fallback included, waits for the request's
+    /// body, including the routes that never take one. The router is driven in memory with a body
+    /// the test holds back, so that a route that answers from the head alone is found out by a
+    /// poll, not a wait; a refusal has the body read and thrown away, and a route is reached only
+    /// once the body is in.
+    #[tokio::test]
+    async fn no_answer_goes_out_before_the_request_body_is_read() {
+        let (state, _dir) = app_state("server-body-first");
+        let host = "Host: 127.0.0.1:4000";
+        let forbidden = [host, "Origin: https://evil.example"];
+        for (request_line, headers, status) in [
+            ("POST /shutdown", &forbidden[..], 403),
+            ("POST /shutdown", &[host][..], 401),
+            (&keyed("POST /nowhere")[..], &[host][..], 404),
+            (&keyed("POST /key-check")[..], &[host][..], 405),
+            (&keyed("POST /owner-key/rotate")[..], &[host][..], 409),
+            // Last: it asks for the stop, which the cases before must not have.
+            (&keyed("POST /shutdown")[..], &[host][..], 202),
+        ] {
+            let asks_for_stop = request_line.starts_with("POST /shutdown?key=");
+            let answered = crate::test_support::body_first::status_once_the_body_is_in(
+                router(state.clone()),
+                request_line,
+                headers,
+                || {
+                    assert!(
+                        !state.stop_asked(),
+                        "{request_line} reached its route before its body was in"
+                    )
+                },
+            )
+            .await;
+            assert_eq!(answered, status, "{request_line}");
+            assert_eq!(state.stop_asked(), asks_for_stop, "{request_line}");
         }
     }
 

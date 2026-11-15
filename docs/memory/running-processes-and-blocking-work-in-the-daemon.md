@@ -53,9 +53,13 @@ Applies to daemon code and tests that end a process on Windows, or wait for one 
 a port or file handle it held is free, its scratch directory can be removed, the daemon's process table no longer lists
 it. `TerminateProcess` only starts the end, and the exit code can read as exited while the process still runs down,
 still listed and still holding its handles. So wait, bounded, until the process handle (opened with `SYNCHRONIZE`) is
-signalled. End a launch's leftovers through `platform::proc` (`kill_leftovers`, or `start_kill_leftovers` and then
-`PendingSweep::wait` off the runtime and outside any lock), which waits so; a test asks `test_support::is_running` or
-`assert_stops_running`, which answer as the process table does, never the exit code.
+signalled, and end processes only through `platform::proc`'s waiting paths (only they may call `TerminateProcess`:
+`docs/structure/daemon.md`, "Source rules"): one process — the cleanup of a start that failed, a test's
+`test_support::kill` — with `end_and_wait` (blocking); a launch's leftovers with `kill_leftovers`, or
+`start_kill_leftovers` and then `PendingSweep::wait` off the runtime and outside any lock. This holds on the way out
+too: the crash kill waits for what it ended before the daemon exits, so nothing it killed still runs once the daemon
+has. A test asks `test_support::is_running` or `assert_stops_running`, which answer as the process table does, never
+the exit code.
 
 ## A process that may have a controlling terminal never takes a login-shell snapshot
 

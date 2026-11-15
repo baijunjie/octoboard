@@ -877,7 +877,7 @@ fn a_fifo_or_an_oversized_config_counts_as_unreadable() {
         fixture
     });
     assert_eq!(
-        finished.recv_timeout(std::time::Duration::from_secs(10)),
+        finished.recv_timeout(crate::test_support::PATIENCE),
         Ok(true),
         "the launch was held by a FIFO or did not plan"
     );

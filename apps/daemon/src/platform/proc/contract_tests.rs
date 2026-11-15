@@ -234,16 +234,13 @@ fn a_process_started_in_the_background_inherits_nothing_else() {
 /// What the `start_background_beside_inheritable` helper does: holds the write end of a pipe open
 /// for inheritance (a handle on Windows, a descriptor above the standard three on Unix), starts a
 /// `park` helper the plain way and another for the background ([`spawn_in_background`]), lets go
-/// of the write end, and writes to the `outcome` sibling of `pid_file` `ok` when a read on the
-/// pipe ends only once the plain helper has been ended (which shows the handle was inheritable),
+/// of the write end, and writes to the `outcome` sibling of `pid_file` `ok` when the
+/// pipe hangs up only once the plain helper has been ended (which shows the handle was inheritable),
 /// while the other runs on; what went otherwise if not. Then it ends both. It runs in a process
 /// of its own, where no other test starts a process meanwhile that would inherit the write end
-/// too and hold the read up.
+/// too and hold the pipe open.
 fn background_beside_inheritable(pid_file: &Path) {
-    use std::io::Read;
-    use std::sync::mpsc;
-
-    let (mut reader, writer) = std::io::pipe().expect("a pipe");
+    let (reader, writer) = std::io::pipe().expect("a pipe");
     make_inheritable(&writer);
 
     let plain_file = pid_file.with_extension("plain");
@@ -262,20 +259,20 @@ fn background_beside_inheritable(pid_file: &Path) {
     wait_for_pid(&background_file);
     drop(writer);
 
-    // The read ends only once no process holds the write end; it goes on in a thread of its own
-    // until then.
-    let (ended_tx, ended) = mpsc::channel();
-    std::thread::spawn(move || {
-        let mut byte = [0u8; 1];
-        let _ = ended_tx.send(reader.read(&mut byte).map(|read| read == 0));
-    });
-    let outcome = if ended.recv_timeout(Duration::from_millis(500)).is_ok() {
-        "the read ended while the plain helper ran: the write end was not inheritable"
+    // The pipe has hung up once no process holds the write end, which the kernel settles as the
+    // last holder lets go, so the answer is read off the pipe, not off a wait that a slow
+    // machine would cut short.
+    let outcome = if hung_up(&reader) {
+        "the pipe hung up while the plain helper ran: the write end was not inheritable"
     } else {
         plain.kill().expect("the plain helper is ended");
         plain.wait().expect("the plain helper is reaped");
-        if !matches!(ended.recv_timeout(PATIENCE / 2), Ok(Ok(true))) {
-            "the read did not end once the plain helper was ended: the background helper holds \
+        let deadline = Instant::now() + PATIENCE / 2;
+        while !hung_up(&reader) && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        if !hung_up(&reader) {
+            "the pipe did not hang up once the plain helper was ended: the background helper holds \
              the write end"
         } else if !is_running(background.id() as i32) {
             "the background helper ended"
@@ -288,6 +285,45 @@ fn background_beside_inheritable(pid_file: &Path) {
     background.kill().ok();
     background.wait().ok();
     std::fs::write(pid_file.with_extension("outcome"), outcome).expect("the outcome is written");
+}
+
+/// Whether no process holds the write end of the pipe `reader` reads from any more, without
+/// waiting for it.
+#[cfg(unix)]
+fn hung_up(reader: &std::io::PipeReader) -> bool {
+    use std::os::fd::AsRawFd;
+
+    let mut polled = libc::pollfd {
+        fd: reader.as_raw_fd(),
+        events: libc::POLLIN,
+        revents: 0,
+    };
+    // SAFETY: one valid pollfd; a zero timeout does not wait.
+    let ready = unsafe { libc::poll(&mut polled, 1, 0) };
+    assert_ne!(ready, -1, "the pipe is polled");
+    polled.revents & libc::POLLHUP != 0
+}
+
+/// Whether no process holds the write end of the pipe `reader` reads from any more, without
+/// waiting for it.
+#[cfg(windows)]
+fn hung_up(reader: &std::io::PipeReader) -> bool {
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Foundation::ERROR_BROKEN_PIPE;
+    use windows_sys::Win32::System::Pipes::PeekNamedPipe;
+
+    // SAFETY: the handle is open; nothing is read or asked for.
+    let peeked = unsafe {
+        PeekNamedPipe(
+            reader.as_raw_handle(),
+            std::ptr::null_mut(),
+            0,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        )
+    };
+    peeked == 0 && std::io::Error::last_os_error().raw_os_error() == Some(ERROR_BROKEN_PIPE as i32)
 }
 
 /// Makes `writer` inherited by every process started the plain way.
@@ -1111,4 +1147,47 @@ fn only_linux_on_x86_64_and_arm64_is_a_host_that_updates_itself() {
         not(any(target_arch = "x86_64", target_arch = "aarch64"))
     ))]
     assert!(!self_update_host());
+}
+
+/// A process the cleanup after a failed start ends is gone once the call returns, not only on its
+/// way out: it would hold what it inherited until it ran down. Ending one that is gone is
+/// harmless.
+#[cfg(windows)]
+#[test]
+fn a_process_ended_and_waited_for_is_gone_when_the_call_returns() {
+    use std::os::windows::io::AsRawHandle;
+
+    let dir = ScratchDir::new("proc-end-and-wait");
+    let pid_file = dir.join("helper");
+    let mut child = start("park", &pid_file, |_| {});
+    let mut guard = KillOnDrop(vec![child.id() as i32]);
+    wait_for_pid(&pid_file);
+
+    end_and_wait(child.as_raw_handle());
+    assert!(
+        !is_running(child.id() as i32),
+        "the call returned before the process was gone"
+    );
+    assert!(!wait_for_exit(&mut child).success());
+    // The handle is still open, and the process is already gone.
+    end_and_wait(child.as_raw_handle());
+    guard.0.clear();
+}
+
+/// What test support kills is gone when it returns, so that a test asserting on what the process
+/// held (a port, its place in the process table) finds it released.
+#[cfg(windows)]
+#[test]
+fn a_process_test_support_kills_is_gone_when_the_call_returns() {
+    let dir = ScratchDir::new("proc-support-kill");
+    let pid_file = dir.join("helper");
+    let mut child = start("park", &pid_file, |_| {});
+    let pid = wait_for_pid(&pid_file);
+
+    crate::test_support::kill(pid);
+    assert!(
+        !is_running(pid),
+        "kill returned before the process was gone"
+    );
+    assert!(!wait_for_exit(&mut child).success());
 }

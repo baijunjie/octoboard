@@ -343,8 +343,12 @@ mod tests {
         assert!(!cwd.missing);
         assert!(memory(me.id).is_some_and(|bytes| bytes > 0));
 
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let port = listener.local_addr().unwrap().port();
+        // A port below the ephemeral range, and kept from every other `ClosedPort` of this process
+        // while this test holds it, so that no parallel test binds it once the listener is
+        // dropped.
+        let reserved = crate::test_support::ClosedPort::new();
+        let port = reserved.port();
+        let listener = std::net::TcpListener::bind(("127.0.0.1", port)).unwrap();
         assert!(listening_ports(&[pid]).contains(&port));
         drop(listener);
         assert!(!listening_ports(&[pid]).contains(&port));

@@ -3604,7 +3604,10 @@ mod real_fetcher {
     #[test]
     fn a_host_that_cannot_be_reached_is_a_failure_to_reach_it_not_a_status() {
         let closed = crate::test_support::ClosedPort::new();
-        let (result, body) = get(&format!("https://127.0.0.1:{}/manifest.json", closed.port));
+        let (result, body) = get(&format!(
+            "https://127.0.0.1:{}/manifest.json",
+            closed.port()
+        ));
         assert!(matches!(result, Err(FetchError::Failed(_))), "{result:?}");
         assert!(body.is_empty());
     }
@@ -4213,7 +4216,8 @@ mod starting_with_a_fallback {
     /// back is final, and the build put back is started again.
     #[test]
     fn with_no_listener_only_the_build_put_back_is_started_again() {
-        let port = crate::test_support::ClosedPort::new().port;
+        let closed = crate::test_support::ClosedPort::new();
+        let port = closed.port();
         let unhanded = || Call {
             handed: false,
             port_free: true,
@@ -4226,5 +4230,6 @@ mod starting_with_a_fallback {
         let (started, calls, _) = run(None, port, &[Failed, Started], true);
         assert!(started);
         assert_eq!(calls, [unhanded(), unhanded()]);
+        drop(closed);
     }
 }

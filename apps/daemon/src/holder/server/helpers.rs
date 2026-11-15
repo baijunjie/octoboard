@@ -5,7 +5,10 @@
 //! The holder checks the key before anything is relayed: it has to be one the holder issued, and
 //! belong to the session the path names (for the MCP route, whose path holds the session's token
 //! and not its id, any launch's key does, and the daemon resolves the token). What a request
-//! asks is the daemon's to judge, so the holder reads no body.
+//! asks is the daemon's to judge, so the holder reads no body, beyond taking each admitted request
+//! whole and reading a refused one out before it answers (`crate::request_body`). The exception
+//! is a request refused for a wrong key: the key is checked inside the handler, after its `Bytes`
+//! extractor, so that request is held whole before it is refused.
 
 use std::sync::Arc;
 
@@ -36,8 +39,13 @@ pub(super) fn router(helpers: Arc<Helpers>) -> Router {
         .route("/revert-gate/:session", post(ask_revert_gate))
         .route("/mcp/:token", post(ask_mcp))
         .with_state(helpers)
+        // Inside the check, so that only a request it lets in has its body held.
+        .layer(axum::middleware::from_fn(crate::request_body::buffer))
         // Around the finished router, so a route added later cannot end up outside it.
         .layer(axum::middleware::from_fn(origin_and_host))
+        // Outside it, so that the 403 too is answered only once the request's body is read, and
+        // without holding it.
+        .layer(axum::middleware::from_fn(crate::request_body::drain_unread))
 }
 
 /// Turns away what a browser page on another site could send, whatever the route and the key.
@@ -323,22 +331,17 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(no_key, 401, "no key at all");
-        // Nothing of any of it was relayed.
-        assert!(
-            tokio::time::timeout(Duration::from_millis(200), frames.recv())
-                .await
-                .is_err()
-        );
-
-        // The key of the session itself gets through.
-        assert!(post(port, &key, "/hook/s1", b"{}")
+        // The key of the session itself gets through. Its report, of a body of its own, is the
+        // first frame the daemon is handed: had a refused request been relayed, it would be queued
+        // ahead of it and come first, whenever the relay task got to it.
+        assert!(post(port, &key, "/hook/s1", b"first")
             .await
             .unwrap()
             .is_empty());
-        assert!(matches!(
-            next(&mut frames).await,
-            FromHolder::Relay { waits: false, .. }
-        ));
+        let FromHolder::Relay { body, waits, .. } = next(&mut frames).await else {
+            panic!("not a relay");
+        };
+        assert_eq!((body.as_slice(), waits), (&b"first"[..], false));
     }
 
     #[tokio::test]
@@ -356,12 +359,6 @@ mod tests {
             .await
             .expect_err("refused");
         assert_eq!(crate::loopback::error_status(&err), Some(401));
-        assert!(
-            tokio::time::timeout(Duration::from_millis(200), frames.recv())
-                .await
-                .is_err(),
-            "nothing of it was relayed"
-        );
 
         let relays = served.helpers.relays.clone();
         let answering = tokio::spawn(async move {
@@ -394,6 +391,40 @@ mod tests {
             .await
             .expect_err("refused");
         assert_eq!(crate::loopback::error_status(&err), Some(401));
+    }
+
+    /// The helper routes' refusals and fallback wait for the request's body, as the daemon's do,
+    /// and a report is queued only once it is in. The router is driven in memory with a body the
+    /// test holds back; no daemon is linked, so what is queued stays queued.
+    #[tokio::test]
+    async fn no_answer_goes_out_before_the_request_body_is_read() {
+        let helpers = Arc::new(Helpers {
+            launches: Launches::default(),
+            relays: Relays::new(PATIENCE),
+        });
+        let key = helpers.launches.issue("t1", "s1", None).unwrap();
+        let host = "Host: 127.0.0.1:4000";
+        for (request_line, headers, status) in [
+            (format!("POST /hook/s1?key={key}0"), vec![host], 401),
+            (
+                format!("POST /hook/s1?key={key}"),
+                vec![host, "Origin: https://evil.example"],
+                403,
+            ),
+            (format!("POST /nowhere?key={key}"), vec![host], 404),
+            (format!("POST /hook/s1?key={key}"), vec![host], 200),
+        ] {
+            let answered = crate::test_support::body_first::status_once_the_body_is_in(
+                router(helpers.clone()),
+                &request_line,
+                &headers,
+                || assert_eq!(helpers.relays.queued(), 0, "{request_line}"),
+            )
+            .await;
+            assert_eq!(answered, status, "{request_line}");
+        }
+        // Only the report that was let in was queued.
+        assert_eq!(helpers.relays.queued(), 1);
     }
 
     #[tokio::test]

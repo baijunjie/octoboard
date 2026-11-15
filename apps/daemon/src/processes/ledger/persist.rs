@@ -347,7 +347,7 @@ pub(super) fn load(path: &Path) -> Loaded {
 /// Moves the file at `path` to the name beside it that says it could not be read, replacing an
 /// earlier one there, and answers that name.
 pub(super) fn set_aside(path: &Path) -> std::path::PathBuf {
-    let aside = path.with_extension("json.unreadable");
+    let aside = crate::platform::names::with_suffix(path, ".unreadable");
     if let Err(err) = std::fs::rename(path, &aside) {
         tracing::warn!(path = %path.display(), %err, "moving the unreadable process ledger file aside failed");
     }
@@ -367,7 +367,7 @@ fn write_atomically(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     }
     replace_file(
         path,
-        &path.with_extension("partial"),
+        &crate::platform::names::with_suffix(path, ".partial"),
         bytes,
         Permissions::Private,
     )

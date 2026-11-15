@@ -184,7 +184,7 @@ fn a_launch_route_that_refuses_the_key_or_is_not_listening_goes_on_to_the_daemon
         let stand_in = launch.map(StandIn::start);
         // A port below every system's ephemeral range, so no other test is handed it meanwhile.
         let closed = ClosedPort::new();
-        let port = stand_in.as_ref().map_or(closed.port, |s| s.port);
+        let port = stand_in.as_ref().map_or(closed.port(), |s| s.port);
         let routes = Routes {
             launch: Some((port, LAUNCH_KEY.to_string())),
             data,

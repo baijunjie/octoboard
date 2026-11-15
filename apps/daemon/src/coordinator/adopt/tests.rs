@@ -418,13 +418,14 @@ async fn an_adopted_sessions_screen_is_rebuilt_from_the_tail_marked_inexact_and_
     let (state, dir) = console_with_project_and_accounts("adopt-inexact");
     record(&state, "s1", SessionStatus::Working);
     let run_dir = dir.join("run");
-    let script = "printf 'first line\\r\\nsecond line\\r\\n'; \
-                  trap 'echo \"size $(stty size)\"' WINCH; echo ready; while :; do sleep 0.05; done";
+    let script = crate::test_support::resize::reports_size(
+        "printf 'first line\\r\\nsecond line\\r\\n'; echo ready",
+    );
     let pid = left_running_script(
         &dir,
         "t1",
         session_meta("s1", &run_dir.join("s1")),
-        script,
+        &script,
         Size { rows: 24, cols: 80 },
     );
     let _guard = KillOnDrop(vec![pid]);
@@ -487,9 +488,9 @@ async fn a_screen_saved_at_the_handover_is_restored_with_the_tail_replayed_over_
             &dir,
             "t1",
             session_meta("s1", &run_dir.join("s1")),
-            "trap 'echo \"size $(stty size)\"' WINCH; \
-             printf 'history before\\r\\n'; printf 'written since\\r\\n'; \
-             while :; do sleep 0.05; done",
+            &crate::test_support::resize::reports_size(
+                "printf 'history before\\r\\n'; printf 'written since\\r\\n'",
+            ),
             Size { rows: 24, cols: 80 },
         );
         let _guard = KillOnDrop(vec![pid]);

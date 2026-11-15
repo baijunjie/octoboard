@@ -437,10 +437,17 @@ mod tests {
         assert!(Builds::new(builds_dir.clone()).sweep(&registry_dir));
         assert!(builds_dir.join("odd").is_dir());
 
-        // Once nothing does, it is gone.
+        // Once nothing does, it is gone. The file names a port that is kept from every other
+        // test until the sweep is done: the listener's own, dropped, can be handed to a test
+        // binding port 0 in parallel, and a `ClosedPort` dropped at once can be the port the next
+        // finder in this binary binds.
         drop(listener);
+        let closed = crate::test_support::ClosedPort::new();
+        entry.port = closed.port();
+        registry::write(&registry_dir, &entry).unwrap();
         assert!(Builds::new(builds_dir.clone()).sweep(&registry_dir));
         assert!(!builds_dir.join("odd").exists());
+        drop(closed);
     }
 
     #[test]
