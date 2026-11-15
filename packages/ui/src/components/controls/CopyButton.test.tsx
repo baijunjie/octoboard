@@ -2,6 +2,7 @@
 import { act } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 
+import { errorAlerts } from "../alerts/errorAlerts";
 import { Dialog } from "../dialog/Dialog";
 import type { PlatformAdapter } from "../../platform";
 import { ViewerHost } from "../../viewer/viewerTestSupport";
@@ -52,7 +53,8 @@ it("says so in a notification when there is no clipboard and the selection copy 
   const { button, error } = mount();
   press(button!);
   await act(async () => {});
-  expect(error).toHaveBeenCalledWith("Could not copy the text");
+  expect(errorAlerts.getSnapshot()[0]).toMatchObject({ title: "Could not copy the text", message: "The clipboard could not be written to." });
+  expect(error).toHaveBeenCalledWith("The clipboard could not be written to.");
   expect(button!.getAttribute("aria-label")).toBe("Copy");
 });
 
@@ -181,7 +183,8 @@ it("says so in a notification when neither way copies, and stays in its first st
   const { button, error } = mount({ failedText: "Could not copy the path" }, { writeText: async () => Promise.reject(new Error("denied")) });
   press(button!);
   await act(async () => {});
-  expect(error).toHaveBeenCalledWith("Could not copy the path");
+  expect(errorAlerts.getSnapshot()[0]).toMatchObject({ title: "Could not copy the path", message: "The clipboard could not be written to." });
+  expect(error).toHaveBeenCalledWith("The clipboard could not be written to.");
   expect(button!.getAttribute("aria-label")).toBe("Copy");
 });
 

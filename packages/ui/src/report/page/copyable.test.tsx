@@ -104,7 +104,7 @@ it("raises the error alert with the catalog's copy-failed text when the copy fai
   const writeText = vi.fn(async (_text: string) => { throw new Error("denied"); });
   const { host } = await renderBlock({ type: "copyable", text: "secret" }, {}, writeText);
   await click(copyButton(host));
-  expect(errorAlerts.getSnapshot().map((alert) => alert.message)).toEqual(["Could not copy the text"]);
+  expect(errorAlerts.getSnapshot().map((alert) => [alert.title, alert.message])).toEqual([["Could not copy the text", "The clipboard could not be written to."]]);
   expect(copyButton(host).getAttribute("aria-label")).toBe("Copy");
 });
 

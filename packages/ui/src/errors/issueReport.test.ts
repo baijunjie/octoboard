@@ -223,12 +223,12 @@ it("describes a thrown error with its sanitized message and stack, and the envir
 
 it("gives an actionable failure only its kind, code and parameter names, never their values, its message or a title of its own", () => {
   const locked = new CodedError("Localized wording about Secret Project", "session_locked", { path: "/Users/alice/p", name: "Secret Project" });
-  const plain = new ActionableError("Could not write /Users/alice/Secret Project", "clipboard");
+  const plain = new ActionableError("Could not write /Users/alice/Secret Project", "clipboardCopy");
   const { title, body } = parse(issueReportUrl(BASE, facts([{ error: locked }, { error: plain }])));
   expect(title).toBe("Unexpected error");
   expect(body).toContain("- Code: `session_locked`");
   expect(body).toContain("- Parameters: `name`, `path`");
-  expect(body).toContain("- Kind: actionable (clipboard)");
+  expect(body).toContain("- Kind: actionable (clipboardCopy)");
   for (const leaked of ["alice", "Secret", "Localized", "```"]) expect(body).not.toContain(leaked);
 });
 

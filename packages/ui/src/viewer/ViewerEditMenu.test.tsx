@@ -164,9 +164,9 @@ it("reports a clipboard failure as a copy error with a localized title", async (
   await chooseItem("Copy");
   expect(errorAlerts.getSnapshot()).toHaveLength(1);
   expect(errorAlerts.getSnapshot()[0]).toMatchObject({
-    message: "Could not copy the selection",
+    title: "Could not copy the selection",
+    message: "The clipboard could not be written to.",
     classification: { kind: "actionable", recovery: "clipboardCopy" },
-    title: "Could not copy",
   });
   errorAlerts.acknowledge();
 });

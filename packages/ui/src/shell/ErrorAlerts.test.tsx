@@ -209,7 +209,7 @@ it("puts the application's version, from the platform, in the report", async () 
 
 it("neither walks the records nor builds a report for an actionable failure that has only a message", () => {
   mount();
-  act(() => errorAlerts.report({ message: "Copy failed", recovery: "clipboard" }));
+  act(() => errorAlerts.report({ message: "Copy failed", recovery: "clipboardCopy" }));
   expect(document.querySelector('[role="alertdialog"]')).not.toBeNull();
   expect(reportLink()).toBeUndefined();
   expect(vi.mocked(recordNames)).not.toHaveBeenCalled();
@@ -227,7 +227,7 @@ it("carries the detail of a lifecycle failure into the report", () => {
 
 it("retains explicit clipboard recovery metadata through the queue", () => {
   mount();
-  const error = new ActionableError("Copy failed", "clipboard");
+  const error = new ActionableError("Copy failed", "clipboardRetry");
   act(() => errorAlerts.report({ message: error.message, error }));
   expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("Allow clipboard access");
 });

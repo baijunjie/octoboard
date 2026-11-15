@@ -43,7 +43,7 @@ export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId }:
         if (text === "") controller.pasteImage(destination);
         else controller.paste(text, destination);
       },
-      (cause: unknown) => raiseError(new ActionableError(t("terminal.pasteFailed"), "clipboard", { cause }), { title: t("terminal.pasteFailedTitle") }),
+      (cause: unknown) => raiseError(new ActionableError(t("terminal.pasteFailed"), "clipboardPaste", { cause }), { title: t("terminal.pasteFailedTitle") }),
     );
   };
   return (
@@ -71,7 +71,7 @@ export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId }:
         {
           label: t("terminal.copy"), icon: Copy, disabled: !selection,
           reason: !selection && mouseReporting ? { state: t(OPTION_FORCES_SELECTION ? "terminal.copyHint.mac" : "terminal.copyHint") } : undefined,
-          onClick: () => { void copyText(selection, { clipboard }).catch((cause: unknown) => raiseError(new ActionableError(t("terminal.copyFailed"), "clipboard", { cause }), { title: t("common.copyFailedTitle") })); },
+          onClick: () => { void copyText(selection, { clipboard }).catch((cause: unknown) => raiseError(new ActionableError(t("common.copyFailedCause"), "clipboardTerminalCopy", { cause }), { title: t("terminal.copyFailed") })); },
         },
         {
           label: t("terminal.paste"), icon: ClipboardPaste, disabled: !clipboard?.readText || inputSession !== sessionId,

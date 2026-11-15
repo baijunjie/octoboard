@@ -51,7 +51,7 @@ export function ViewerEditMenu({ region, selectAll, source }: {
   };
   const copyItem = {
     label: t("common.copy"), icon: Copy,
-    onClick: () => { void copyText(selection, { clipboard }).catch((cause: unknown) => raiseError(new ActionableError(t("viewer.copyFailed"), "clipboardCopy", { cause }), { title: t("common.copyFailedTitle") })); },
+    onClick: () => { void copyText(selection, { clipboard }).catch((cause: unknown) => raiseError(new ActionableError(t("common.copyFailedCause"), "clipboardCopy", { cause }), { title: t("viewer.copyFailed") })); },
   };
   const selectAllItem = { label: t("viewer.selectAll"), icon: TextSelect, onClick: () => { selectingAll.current = true; } };
   return (

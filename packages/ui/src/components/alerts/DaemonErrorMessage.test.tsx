@@ -5,6 +5,7 @@ import { createRoot } from "react-dom/client";
 import { describe, expect, it, onTestFinished } from "vitest";
 
 import { ErrorAlerts } from "../../shell/ErrorAlerts";
+import { errorAlerts } from "./errorAlerts";
 import { raiseError } from "./raiseError";
 import { CODES } from "../../errors/codes";
 import { daemonMessage } from "../../errors/daemonMessage";
@@ -1003,7 +1004,8 @@ describe("a draft cleared from an input box", () => {
       for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) button.dispatchEvent(new MouseEvent(type, { bubbles: true, button: 0 }));
     });
     await act(async () => {});
-    expect(failures).toEqual(["Could not copy the text"]);
+    expect(failures).toEqual(["The clipboard could not be written to."]);
+    expect(errorAlerts.getSnapshot()[0]).toMatchObject({ title: "Could not copy the text" });
   });
 
   it("says when only part of the draft was cleared and that the message waits, under a title of its own", () => {

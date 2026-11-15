@@ -156,7 +156,7 @@ it("preserves local typed remedies and OS causes through presentation", () => {
   const cause = Object.assign(new Error("write failed"), { code: "ENOSPC" });
   const failure = new Error("operation failed", { cause });
   expect(classifyError(errorPresentation(failure))).toEqual({ kind: "actionable", recovery: "diskSpace" });
-  expect(classifyError(new ActionableError("translated", "clipboard"))).toEqual({ kind: "actionable", recovery: "clipboard" });
+  expect(classifyError(new ActionableError("translated", "clipboardCopy"))).toEqual({ kind: "actionable", recovery: "clipboardCopy" });
   expect(classifyError(new ActionableError("translated", "fileWrite", { cause }))).toEqual({ kind: "actionable", recovery: "diskSpace" });
 });
 
@@ -175,8 +175,8 @@ it.each(["issueAddress", "openExternal"] as const)("keeps %s recovery specific t
 it("keeps different recovery metadata and daemon details as separate queued failures", () => {
   errorAlerts.report({ message: "same", error: new CodedError("same", "session_locked", { session: "a" }) });
   errorAlerts.report({ message: "same", error: new CodedError("same", "session_locked", { session: "b" }) });
-  errorAlerts.report({ message: "same", recovery: "clipboard" });
-  errorAlerts.report({ message: "same", recovery: "clipboard" });
+  errorAlerts.report({ message: "same", recovery: "clipboardCopy" });
+  errorAlerts.report({ message: "same", recovery: "clipboardCopy" });
   expect(errorAlerts.getSnapshot()).toHaveLength(3);
 });
 

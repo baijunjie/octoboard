@@ -9,7 +9,7 @@ import { copyText } from "./copyText";
 export interface CopyNotice {
   /** The notice that says the text was copied; none when the caller shows that itself (`onCopied`). */
   copied?: string;
-  /** What the error alert says when the copy fails. */
+  /** The error alert's title when the copy fails, naming what was not copied. */
   failed: string;
   /** Called once the text is on the clipboard. */
   onCopied?: () => void;
@@ -17,7 +17,7 @@ export interface CopyNotice {
   anchor?: Element | null;
 }
 
-/** Puts text on the clipboard and says how it went: a notice when it is copied (`copied`), or the error alert saying
+/** Puts text on the clipboard and says how it went: a notice when it is copied (`copied`), or the error alert titled
  * `failed` when it could not be. The one place a copy raises that alert. */
 export function useCopyWithNotice(): (text: string, notice: CopyNotice) => void {
   const t = useT();
@@ -29,7 +29,7 @@ export function useCopyWithNotice(): (text: string, notice: CopyNotice) => void 
         onCopied?.();
         if (copied) daemon?.showNotice(copied);
       },
-      (cause: unknown) => raiseError(new ActionableError(failed, "clipboard", { cause }), { title: t("common.copyFailedTitle") }),
+      (cause: unknown) => raiseError(new ActionableError(t("common.copyFailedCause"), "clipboardRetry", { cause }), { title: failed }),
     );
   };
 }

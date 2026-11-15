@@ -40,8 +40,8 @@ describe("programCopyHandler", () => {
     await copyWith(() => Promise.reject(new Error("denied")));
     expect(report).toHaveBeenCalledOnce();
     const { error, ...alert } = report.mock.lastCall![0];
-    expect(alert).toMatchObject({ message: "terminal.copyFailed", title: "common.copyFailedTitle" });
-    expect((error as ActionableError).recovery).toBe("clipboard");
+    expect(alert).toMatchObject({ message: "common.copyFailedCause", title: "terminal.programCopyFailed" });
+    expect((error as ActionableError).recovery).toBe("clipboardTerminalCopy");
   });
 
   it("stays quiet when a browser refuses a copy without a user gesture", async () => {

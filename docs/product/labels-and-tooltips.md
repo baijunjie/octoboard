@@ -295,8 +295,8 @@ in `docs/product/report-page-components.md`). For all of them:
 - Where the system asks for reduced motion, the icons change without fading.
 - Where the platform has no clipboard, or it refuses, the button copies through the browser's selection copy instead: a
   hidden text is selected and copied by the document, without moving focus off the button and with the page's own
-  selection put back. A copy that neither way allows changes nothing on the button and raises an error alert saying the
-  text could not be copied (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`).
+  selection put back. A copy that neither way allows changes nothing on the button and raises an error alert titled
+  with what was not copied (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`).
 
 Copy actions in menus are top-level items grouped separately from other actions: a row's relative and absolute path
 choices, a project's name and absolute directory path, **Copy session ID** in a session's action menu and the terminal's

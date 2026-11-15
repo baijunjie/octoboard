@@ -272,7 +272,7 @@ it("reports a clipboard failure", async () => {
   const { daemon, project } = mountApp(false, clipboard);
   await openProjectMenu(project.name);
   await press("Copy project name");
-  expect(errorAlerts.getSnapshot()).toEqual([expect.objectContaining({ message: "Could not copy the project name", title: "Could not copy", classification: expect.objectContaining({ kind: "actionable", recovery: "clipboard" }) })]);
+  expect(errorAlerts.getSnapshot()).toEqual([expect.objectContaining({ title: "Could not copy the project name", message: "The clipboard could not be written to.", classification: expect.objectContaining({ kind: "actionable", recovery: "clipboardRetry" }) })]);
   expect(daemon.showNotice).not.toHaveBeenCalled();
 });
 
@@ -293,7 +293,7 @@ it("reports a session ID clipboard failure", async () => {
   const { daemon } = mountApp(false, clipboard, true);
   await press(`Actions for session ${isolate("Fix bug")}`);
   await press("Copy session ID");
-  expect(errorAlerts.getSnapshot()).toEqual([expect.objectContaining({ message: "Could not copy the session ID", title: "Could not copy", classification: expect.objectContaining({ kind: "actionable", recovery: "clipboard" }) })]);
+  expect(errorAlerts.getSnapshot()).toEqual([expect.objectContaining({ title: "Could not copy the session ID", message: "The clipboard could not be written to.", classification: expect.objectContaining({ kind: "actionable", recovery: "clipboardRetry" }) })]);
   expect(daemon.showNotice).not.toHaveBeenCalled();
 });
 

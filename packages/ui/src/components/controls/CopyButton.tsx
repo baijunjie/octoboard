@@ -27,7 +27,7 @@ export const COPIED_HOLD_MS = 2000;
  * props are the `Button`'s (`size`, `variant`, `className`, `focusOnPress`) and the caller
  * sets them to fit the place it sits in. An icon-only button's accessible name is the tooltip's
  * text. Where the platform has no clipboard, or it refuses, it copies through a selection (see
- * `copyText`). A copy that fails opens the error alert saying `failedText`.
+ * `copyText`). A copy that fails opens the error alert titled `failedText`.
  */
 export function CopyButton({
   text,
@@ -43,7 +43,7 @@ export function CopyButton({
   beforeCopyText?: string;
   /** The tooltip once copied; "Copied" by default. */
   afterCopyText?: string;
-  /** What the error alert says when the copy fails. */
+  /** The error alert's title when the copy fails. */
   failedText: string;
   /** A label drawn before the icon. */
   children?: React.ReactNode;

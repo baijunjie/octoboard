@@ -41,7 +41,7 @@ export function programCopyHandler(
     clipboard.writeText(text).catch((cause: unknown) => {
       if (cause instanceof DOMException && cause.name === "NotAllowedError") return;
       const { t } = report();
-      raiseError(new ActionableError(t("terminal.copyFailed"), "clipboard", { cause }), { title: t("common.copyFailedTitle") });
+      raiseError(new ActionableError(t("common.copyFailedCause"), "clipboardTerminalCopy", { cause }), { title: t("terminal.programCopyFailed") });
     });
   };
 }

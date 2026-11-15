@@ -25,7 +25,7 @@ export function useCodeSurface(): { style: React.CSSProperties; surface: string;
   return { style: { backgroundColor: background, color: foreground }, surface: background, boxClass: "rounded-lg border border-current/25" };
 }
 
-/** The words of a block's copy button: its name ("Copy {label}" where the block has a label) and what the error alert says
+/** The words of a block's copy button: its name ("Copy {label}" where the block has a label) and the error alert's title
  * when the copy fails. */
 export function useCopyNames(label: string | undefined): { copyText: string; failedText: string } {
   const t = useT();

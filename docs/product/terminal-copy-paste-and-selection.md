@@ -72,10 +72,11 @@ clipboard. Only writes are honoured:
 - where the platform has no clipboard nothing is put on it; the text is still offered to Copy in the editing menu, which
   falls back to the browser's selection copy.
 
-A write the clipboard fails shows the same error alert as a failed Copy, with its clipboard remedy (see "Recovery and
-unexpected errors" in `docs/product/error-alerts.md`). A browser's refusal of a copy the user did not just make (no
-recent gesture, or the page not focused) stays silent, so in a browser that refuses every such copy (Safari) a program's
-copy can fail without notice; Copy in the editing menu, a gesture of the user's, then puts it there.
+A write the clipboard fails shows an error alert saying the text the program sent could not be copied, with the same
+clipboard remedy as a failed Copy (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`). A
+browser's refusal of a copy the user did not just make (no recent gesture, or the page not focused) stays silent, so in
+a browser that refuses every such copy (Safari) a program's copy can fail without notice; Copy in the editing menu, a
+gesture of the user's, then puts it there.
 
 ## The menu offers what a program copied
 

@@ -207,9 +207,10 @@ it.each(["Copy", "Paste"])("reports %s failures with localized text", async (act
   await choose(action);
   expect(errorAlerts.getSnapshot()).toHaveLength(1);
   expect(errorAlerts.getSnapshot()[0]).toMatchObject({
-    message: action === "Copy" ? "Could not copy the selection" : "Could not paste from the clipboard",
-    classification: { kind: "actionable", recovery: "clipboard" },
-    title: action === "Copy" ? "Could not copy" : "Could not paste",
+    // A failed copy is titled with what was not copied and says why; a failed paste likewise, with its own way out.
+    title: action === "Copy" ? "Could not copy the selection" : "Could not paste",
+    message: action === "Copy" ? "The clipboard could not be written to." : "The clipboard could not be read.",
+    classification: { kind: "actionable", recovery: action === "Copy" ? "clipboardTerminalCopy" : "clipboardPaste" },
   });
   errorAlerts.acknowledge();
 });

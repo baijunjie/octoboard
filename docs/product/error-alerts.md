@@ -78,19 +78,19 @@ identifies the failure and preserves available details. Its title says in plain 
 failed — "Could not start the session", "Could not export the configuration" — and names no session, account or other
 subject (see "What an open dialog, menu or popover covers" in `docs/product/window-layout.md`). Every alert raised by a
 user's action, and every one a daemon broadcast raises, has such a title: the action's — "Could not save the
-setting", "Could not hand off the session", "Could not switch branches", "Could not copy", or, for a session's
-**Resume**, "Could not reopen the session" when it is archived and "Could not resume the session" otherwise — or the
-daemon code's own, as "Branches and worktrees not removed" (`session_branches_not_removed`) and "Branches and worktrees
-left in place" (`project_branches_not_determined`) are. A daemon code's own title wins over the action's wherever the
-failure carries a code that has one — for an alert a daemon broadcast raises and for the failure of any action — with one
-exception: a dialog's answer that fails takes that dialog's failure title for its action, whatever code the failure
-carries. That covers a form dialog's submit or a confirmation's confirm that fails while the dialog waits on it, the
-dialog staying open under the alert, and two answers whose failure usually comes once their dialog has closed: a trust
-dialog go-ahead (see "The trust dialog" in `docs/product/folder-trust.md`) and an approval or a refusal of another
-session's request (see "The confirmation dialog" in `docs/product/session-requests.md`). A go-ahead whose answer went
-through, and only carrying Grok Build's trust entry into the user's store failed (`trust_not_carried_over`), is not a
-failed answer: it keeps that code's own title, "Trust not carried over". The handoff dialog has one more
-exception: a handoff that fails once the receiving session is running (`handoff_move_failed`,
+setting", "Could not hand off the session", "Could not switch branches", "Could not copy the session ID", or, for a
+session's **Resume**, "Could not reopen the session" when it is archived and "Could not resume the session" otherwise —
+or the daemon code's own, as "Branches and worktrees not removed" (`session_branches_not_removed`) and "Branches and
+worktrees left in place" (`project_branches_not_determined`) are. A daemon code's own title wins over the action's
+wherever the failure carries a code that has one — for an alert a daemon broadcast raises and for the failure of any
+action — with one exception: a dialog's answer that fails takes that dialog's failure title for its action, whatever
+code the failure carries. That covers a form dialog's submit or a confirmation's confirm that fails while the dialog
+waits on it, the dialog staying open under the alert, and two answers whose failure usually comes once their dialog
+has closed: a trust dialog go-ahead (see "The trust dialog" in `docs/product/folder-trust.md`) and an approval or a
+refusal of another session's request (see "The confirmation dialog" in `docs/product/session-requests.md`). A go-ahead
+whose answer went through, and only carrying Grok Build's trust entry into the user's store failed
+(`trust_not_carried_over`), is not a failed answer: it keeps that code's own title, "Trust not carried over". The
+handoff dialog has one more exception: a handoff that fails once the receiving session is running (`handoff_move_failed`,
 `handoff_archive_failed`) is no failed try, so its alert keeps the code's own title, "Could not finish the handoff",
 instead of the dialog's. Anything else a dialog hands on as it closes, such as a change of model, fails as any other
 action does.
@@ -122,12 +122,13 @@ contract closes it, or a recovery action navigates Settings and closes its accou
 closing Settings" in `docs/product/settings.md`).
 
 Errors are queued and normally shown one at a time in arrival order. An identical failure already waiting for
-acknowledgement is not queued again: its message, affected session, original diagnostic message, recovery category
-and available daemon code and parameters must all match. Pending errors survive changes between the application's
-screens until acknowledged. They are shown over whichever screen the window is on, so an error nothing caught, or an
-Issue page that could not be opened, still raises one over the screens for a daemon that could not start, for a daemon
-of another version, for an address that does not open the daemon, for a UI that failed and for no daemon address or key
-being known, which raise none of their own.
+acknowledgement is not queued again: its title (where the alert was given one as fixed text), message, affected
+session, original diagnostic message, recovery category and available daemon code and parameters must all match. Two
+copies of different things that fail, such as a path and a session ID, are therefore both shown. Pending errors
+survive changes between the application's screens until acknowledged. They are shown over whichever screen the window
+is on, so an error nothing caught, or an Issue page that could not be opened, still raises one over the screens for a
+daemon that could not start, for a daemon of another version, for an address that does not open the daemon, for a UI
+that failed and for no daemon address or key being known, which raise none of their own.
 
 When the last pending alert is acknowledged and keyboard focus has nowhere to return to — the control that had it is
 gone, as when a dialog closed before the alert appeared, or the dialog under the alert never had it, as when the alert
@@ -565,9 +566,19 @@ For example:
   (`unknown_console`, `unknown_project`, `unknown_shell_terminal`, `unknown_page`, `unknown_commit`) — such as closing a
   shell terminal that is already gone — asks the user to refresh the affected view or select the current project or
   session again, then retry.
-- A clipboard failure explains granting clipboard access or using the terminal's keyboard copy and paste shortcuts.
-  A failed Copy in the file viewer's text menu asks instead to allow clipboard access if prompted, then copy again or
-  use the keyboard copy shortcut.
+- A copy that fails (for a copy that falls back to the browser's selection copy, only when that fails too) is titled
+  with what was not copied — "Could not copy the path", "Could not copy the selection", "Could not copy the session
+  ID", "Could not copy the text the program sent" for a program's OSC 52 copy — and its body says the clipboard could
+  not be written to. A failed clipboard read for the terminal's Paste is titled "Could not paste", and its body says
+  the clipboard could not be read. The remedy depends on where it failed:
+  - **a copy button, or a menu's copy of a path, a name or an ID** (and **Copy install command** in the server form's
+    update notice): allow clipboard access if prompted, then copy again;
+  - **the terminal's Copy, and a program's OSC 52 copy**: allow clipboard access if prompted, then copy again or use
+    the terminal's keyboard copy shortcut;
+  - **Copy in the file viewer's text menu**: allow clipboard access if prompted, then copy again or use the keyboard
+    copy shortcut;
+  - **the terminal's Paste**: allow clipboard access if prompted, then paste again or use the terminal's keyboard paste
+    shortcut.
 - A failure of Git — Git could not read something (`git_failed`), or a clone or push failed — asks the user to open the
   project's terminal from its action menu, resolve the Git error, including remote access or an unfinished Git
   operation, then retry. A branch switch that failed is local, so its remedy is the same without remote access: it

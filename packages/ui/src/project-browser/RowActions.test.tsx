@@ -2,6 +2,7 @@
 import { act } from "react";
 import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
+import { errorAlerts } from "../components/alerts/errorAlerts";
 import { isolate } from "../i18n/isolate";
 import type { PlatformAdapter } from "../platform";
 import { OpenShellTerminal, RowActions, RowPathScope } from "./RowActions";
@@ -94,7 +95,8 @@ it("says so when the clipboard refuses", async () => {
   act(() => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((entry) => entry.textContent === "Copy relative path")!.click());
   await flush();
   expect(notifications.notice).not.toHaveBeenCalled();
-  expect(notifications.error).toHaveBeenCalledWith("Could not copy the path");
+  expect(errorAlerts.getSnapshot()[0]).toMatchObject({ title: "Could not copy the path", message: "The clipboard could not be written to." });
+  expect(notifications.error).toHaveBeenCalledWith("The clipboard could not be written to.");
 });
 
 it("offers Copy path where the platform has no clipboard, copying through the selection", async () => {

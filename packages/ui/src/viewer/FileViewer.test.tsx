@@ -882,7 +882,8 @@ it("says when the path could not be copied", async () => {
   const notifications = { notice: vi.fn(), error: vi.fn() };
   show(modified(), undefined, { clipboard: { writeText: async () => Promise.reject(new Error("no")) }, notifications });
   await act(async () => button("Copy path").click());
-  expect(notifications.error).toHaveBeenCalledWith("Could not copy the path");
+  expect(errorAlerts.getSnapshot()[0]).toMatchObject({ title: "Could not copy the path", message: "The clipboard could not be written to." });
+  expect(notifications.error).toHaveBeenCalledWith("The clipboard could not be written to.");
   expect(notifications.notice).not.toHaveBeenCalled();
 });
 
@@ -1186,7 +1187,7 @@ it("shows a copy failure from the content menu as an error with a copy title", a
   await rightClick(region);
   await chooseItem("Copy");
   expect(errorAlerts.getSnapshot()).toHaveLength(1);
-  expect(errorAlerts.getSnapshot()[0]).toMatchObject({ message: "Could not copy the selection", title: "Could not copy" });
+  expect(errorAlerts.getSnapshot()[0]).toMatchObject({ title: "Could not copy the selection", message: "The clipboard could not be written to." });
   errorAlerts.acknowledge();
 });
 

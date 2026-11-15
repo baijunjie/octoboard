@@ -78,7 +78,7 @@ function viewOf(request: ErrorAlertRequest): { view: ErrorAlertView; signature: 
     classifications[index],
     source instanceof CodedError && source.code !== CODE.unexpected_error ? [source.code, source.message, Object.entries(source.params).sort(([a], [b]) => a.localeCompare(b))] : errorText(errorPresentation(source)),
   ]);
-  const signature = JSON.stringify([request.message, request.session, metadata]);
+  const signature = JSON.stringify([typeof request.title === "string" ? request.title : undefined, request.message, request.session, metadata]);
   // The one remedy of every failure the alert is about, if there is one (it can carry a button for it).
   const first = classifications[0];
   const sharedRecovery = first.kind === "actionable" && classifications.every((failure) => failure.kind === "actionable" && failure.recovery === first.recovery) ? first.recovery : undefined;

@@ -3,6 +3,7 @@ import { act } from "react";
 import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { LanguageProvider } from "../../i18n/react";
+import { errorAlerts } from "./errorAlerts";
 import { PlatformProvider } from "../../platform/react";
 import { activate, mountForTooltip } from "../hint/tooltipTestSupport";
 import { DiagnosticBlock, DiagnosticLabelContext } from "./DiagnosticBlock";
@@ -119,7 +120,7 @@ it.each([
   expect(scroller.hasAttribute("aria-label")).toBe(false);
 });
 
-/** A block whose clipboard refuses, with the failure alert's message that comes back. */
+/** A block whose clipboard refuses, with the failure alert's title that comes back; its message is the clipboard's. */
 async function copyThatFails(failedText?: string): Promise<string> {
   fakeTimers();
   Object.assign(document, { execCommand: vi.fn(() => false) });
@@ -131,14 +132,15 @@ async function copyThatFails(failedText?: string): Promise<string> {
   );
   activate(container.querySelector<HTMLButtonElement>('button[aria-label="Copy"]')!);
   await act(async () => {});
-  expect(error).toHaveBeenCalledOnce();
-  return error.mock.calls[0]![0] as string;
+  expect(error).toHaveBeenCalledExactlyOnceWith("The clipboard could not be written to.");
+  expect(errorAlerts.getSnapshot()).toHaveLength(1);
+  return errorAlerts.getSnapshot()[0]!.title as string;
 }
 
-it("says it could not copy the error details when its copy fails", async () => {
+it("titles its alert as not copying the error details when its copy fails", async () => {
   expect(await copyThatFails()).toBe("Could not copy the error details");
 });
 
-it("says what its caller gives, not error details, when its copy fails", async () => {
+it("titles its alert with what its caller gives, not error details, when its copy fails", async () => {
   expect(await copyThatFails("Could not copy the text")).toBe("Could not copy the text");
 });

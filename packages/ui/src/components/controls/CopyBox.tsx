@@ -16,7 +16,7 @@ export const COPY_BUTTON_INSET = "pe-9";
  * diff's, drawn under 8px of padding) where it has a fill of its own, so the backing matches it. The box keeps
  * `COPY_BUTTON_INSET` of room at the end of its content for the longest line to be scrolled clear. The box takes `dir`
  * (`auto` follows the text) so that the button sits at the end of the text it copies. `copyText` is the button's name
- * and `failedText` what the error alert says when the copy fails: the caller words both, since what is copied is its own.
+ * and `failedText` the error alert's title when the copy fails: the caller words both, since what is copied is its own.
  * Copying is not editing, so the button works on a page that is read-only, in history or submitted. */
 export function CopyBox({ text, copyText, failedText, dir, surface, tint, children }: {
   text: string;
