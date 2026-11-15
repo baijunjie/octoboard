@@ -300,6 +300,10 @@ export interface ClipboardCapability {
    * holding no text (empty, or only an image) answers `""` rather than rejecting, as the clipboard
    * a native paste hands the page does. */
   readText?(): Promise<string>;
+  /** Reads an image only when the user chooses Paste, as `readText` does: a clipboard holding none answers
+   * `undefined` rather than rejecting. The bytes are an image file of a format a browser decodes (PNG from a
+   * desktop shell). May ask for permission or reject. */
+  readImage?(): Promise<Blob | undefined>;
 }
 
 /** The release stream the user follows: `beta` is offered every release, `stable` only those without a

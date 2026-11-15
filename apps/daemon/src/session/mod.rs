@@ -16,7 +16,8 @@
 //! the way of a message past the draft's grace where no stash can take it, `paste_apart` submits a
 //! message whose Enter has to wait until the agent has taken its paste, and `usage_limit` holds
 //! where the process stands with the hold on Octoboard's writes after a turn stopped on its
-//! account's usage limit.
+//! account's usage limit. `pasted_image` keeps an image the user pasted as a file in its scratch
+//! directory, for the agent to read by path.
 
 pub(crate) mod dialogs;
 mod draft;
@@ -27,6 +28,7 @@ mod input_box_clear;
 pub(crate) mod interrupt;
 mod output_pace;
 mod paste_apart;
+pub(crate) mod pasted_image;
 mod program_status;
 pub(crate) mod screen;
 mod swap;

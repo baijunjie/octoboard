@@ -693,6 +693,14 @@ pub enum RequestBody {
         session: String,
         text: String,
     },
+    /// Saves an image the user pasted into the terminal of a running session as a file on the daemon
+    /// host, for its agent to read by path: `data` is the image as a PNG, JPEG, GIF or WebP file,
+    /// base64-encoded, of at most 10 MiB decoded (see `crate::session::pasted_image`). Answered with
+    /// `pasted_image_saved`. Refused with `unknown_session` or `session_not_running`.
+    SavePastedImage {
+        session: String,
+        data: String,
+    },
     /// Stops the turn the session's agent is running, keeping its process and conversation; see
     /// `crate::session::interrupt`.
     InterruptSession {

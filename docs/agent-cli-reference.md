@@ -3015,3 +3015,12 @@ each failing silently or destructively if ignored:
   hold the prompt anyway). Octoboard's shaping against it is in `apps/daemon/src/session/term/image_path.rs` and in
   "Messages held until a session can take them" in `docs/product/message-delivery.md`; Codex and Grok Build were not
   measured. Measured with the shaped message: sent both idle and mid-turn.
+- All three take a bracketed paste of an image file's absolute path as an attached image, shown as `[Image #1]` in
+  the input box in place of the path (measured in November 2026 on **Codex 0.167.1** in a PTY, and through the desktop
+  app on Codex, Claude Code and **Grok Build 1.0.77**, whose preview names the file's format, size and path). Codex
+  reads a path containing spaces as plain text unless it is single-quoted, and then reads it as an image. An empty
+  bracketed paste is a different matter: Claude Code and Grok Build take it as the cue to read the system clipboard
+  themselves (Grok's own documentation lists `Cmd+V` for a screenshot on macOS), Codex ignores it and reads the clipboard
+  only on its own key, `Ctrl+V` (its hint: "Paste an image with `Ctrl+V` to attach it to your next message."). Either
+  clipboard read reaches only the clipboard of the machine the agent runs on. Octoboard's paste of a clipboard image
+  therefore pastes a saved file's path (`docs/product/pasting-images.md`).

@@ -24,7 +24,8 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 const readText = vi.fn();
-vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ readText: () => readText() }));
+const readImage = vi.fn();
+vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ readText: () => readText(), readImage: () => readImage() }));
 
 /** Puts the shell's `host` query parameter on the page, as the desktop shell does when it opens the window. */
 function reportHost(facts: unknown): void {
@@ -34,6 +35,9 @@ function reportHost(facts: unknown): void {
 beforeEach(() => reportHost(MAC_HOST));
 
 afterEach(() => {
+  readImage.mockReset();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   invoke.mockReset();
   listeners.clear();
   window.history.replaceState(null, "", "/");
@@ -244,4 +248,77 @@ it("reads a clipboard without text as empty text, as a native paste does", async
 it("still rejects a clipboard read that failed for another reason", async () => {
   readText.mockRejectedValue("The native clipboard is not accessible due to being held by another party.");
   await expect(tauriPlatform().clipboard!.readText!()).rejects.toBe("The native clipboard is not accessible due to being held by another party.");
+});
+
+const NOTHING_ON_CLIPBOARD = "The clipboard contents were not available in the requested format or the clipboard is empty.";
+
+describe("reading an image from the clipboard", () => {
+  /** What the plugin hands back: an image that reads its size and its raw RGBA pixels, and is closed once read. */
+  const close = vi.fn();
+  beforeEach(() => close.mockClear());
+  const pluginImage = (width: number, height: number, rgba: Uint8Array) => ({ size: async () => ({ width, height }), rgba: async () => rgba, close: () => { close(); return Promise.resolve(); } });
+
+  /** A canvas that records what is drawn on it and encodes to `encoded` (null for an encoding that fails), and an
+   * `ImageData` that keeps what it is made of: jsdom has neither. */
+  function stubCanvas(encoded: Blob | null, context: object | null = {}) {
+    const drawn: { data: Uint8ClampedArray; width: number; height: number; at: [number, number] }[] = [];
+    const sizes: [number, number][] = [];
+    vi.stubGlobal("ImageData", class { constructor(readonly data: Uint8ClampedArray, readonly width: number, readonly height: number) {} });
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(function (this: HTMLCanvasElement) {
+      sizes.push([this.width, this.height]);
+      return context && ({ putImageData: (image: { data: Uint8ClampedArray; width: number; height: number }, x: number, y: number) => drawn.push({ ...image, at: [x, y] }) } as unknown as CanvasRenderingContext2D);
+    } as typeof HTMLCanvasElement.prototype.getContext);
+    const toBlob = vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation((callback, type) => callback(encoded && new Blob([encoded], { type: type ?? "" })));
+    return { drawn, sizes, toBlob };
+  }
+
+  it("answers the pixels the plugin read, drawn at their own size, as a PNG", async () => {
+    const rgba = Uint8Array.from([1, 2, 3, 255, 4, 5, 6, 255]);
+    readImage.mockResolvedValue(pluginImage(2, 1, rgba));
+    const canvas = stubCanvas(new Blob(["png bytes"]));
+    const image = await tauriPlatform().clipboard!.readImage!();
+    expect(image?.type).toBe("image/png");
+    expect(await image!.text()).toBe("png bytes");
+    expect(canvas.sizes).toEqual([[2, 1]]);
+    expect(canvas.drawn).toHaveLength(1);
+    expect(canvas.drawn[0]).toMatchObject({ width: 2, height: 1, at: [0, 0] });
+    expect(Array.from(canvas.drawn[0].data)).toEqual(Array.from(rgba));
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("closes the image after reading it, and a close that fails changes nothing", async () => {
+    const image = { ...pluginImage(1, 1, Uint8Array.from([0, 0, 0, 255])), close: () => { close(); return Promise.reject(new Error("already closed")); } };
+    readImage.mockResolvedValue(image);
+    stubCanvas(new Blob(["png bytes"]));
+    await expect(tauriPlatform().clipboard!.readImage!()).resolves.toBeInstanceOf(Blob);
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("closes the image when its pixels cannot be read", async () => {
+    readImage.mockResolvedValue({ ...pluginImage(1, 1, new Uint8Array(4)), rgba: async () => { throw new Error("unreadable"); } });
+    stubCanvas(new Blob(["x"]));
+    await expect(tauriPlatform().clipboard!.readImage!()).rejects.toThrow("unreadable");
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it("answers nothing for a clipboard that holds no image", async () => {
+    readImage.mockRejectedValue(NOTHING_ON_CLIPBOARD);
+    await expect(tauriPlatform().clipboard!.readImage!()).resolves.toBeUndefined();
+  });
+
+  it("still rejects a read that failed for another reason", async () => {
+    readImage.mockRejectedValue("The native clipboard is not accessible due to being held by another party.");
+    await expect(tauriPlatform().clipboard!.readImage!()).rejects.toBe("The native clipboard is not accessible due to being held by another party.");
+  });
+
+  it("rejects when the pixels cannot be drawn or encoded, rather than answering no image", async () => {
+    readImage.mockResolvedValue(pluginImage(1, 1, Uint8Array.from([0, 0, 0, 255])));
+    stubCanvas(new Blob(["x"]), null);
+    await expect(tauriPlatform().clipboard!.readImage!()).rejects.toBeInstanceOf(Error);
+    vi.restoreAllMocks();
+    stubCanvas(null);
+    await expect(tauriPlatform().clipboard!.readImage!()).rejects.toBeInstanceOf(Error);
+    // Closed whether or not the pixels could be encoded, so the shell's copy of them does not leak.
+    expect(close).toHaveBeenCalledTimes(2);
+  });
 });

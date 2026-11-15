@@ -83,11 +83,11 @@ one group, with no divider between them.
   reason given.
   Where the platform has no clipboard, or it refuses, the text is copied through the browser's selection copy instead.
 - **Paste** reads text from the clipboard and sends it as terminal input, respecting the running program's bracketed
-  paste mode, as Cmd+V / Ctrl+V does. A clipboard holding no text (only an image, say) is pasted as an empty paste
-  rather than refused, which is how an agent's input knows to fetch the image from the clipboard itself. It is disabled
-  without clipboard reading support, saying under its name that the clipboard is unavailable, and while the selected
-  session cannot accept input, with no reason given (the terminal itself shows why, by its reconnecting spinner, its
-  disconnected notice or the cover of a process that cannot be reached).
+  paste mode, as Cmd+V / Ctrl+V does. A clipboard holding no text but an image pastes the path of a file the image is
+  saved as (see `docs/product/pasting-images.md`); one holding neither is pasted as an empty paste rather than refused.
+  It is disabled without clipboard reading support, saying under its name that the clipboard is unavailable, and while
+  the selected session cannot accept input, with no reason given (the terminal itself shows why, by its reconnecting
+  spinner, its disconnected notice or the cover of a process that cannot be reached).
 - **Select all** selects the terminal's contents, including its available scrollback, for copying.
 
 The clipboard is read only when Paste is chosen, so merely opening the menu does not request clipboard access. If

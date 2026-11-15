@@ -37,7 +37,11 @@ export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId }:
     void clipboard.readText().then(
       (text) => {
         // A permission prompt may outlive the session that asked for it.
-        if (mounted.current && currentSession.current === destination && controllerRef.current === controller) controller.paste(text, destination);
+        if (!mounted.current || currentSession.current !== destination || controllerRef.current !== controller) return;
+        // No text: what a paste of an image is, which the controller turns into the image's path for a session whose
+        // agent reads one, and into an empty paste for any other terminal or clipboard.
+        if (text === "") controller.pasteImage(destination);
+        else controller.paste(text, destination);
       },
       (cause: unknown) => raiseError(new ActionableError(t("terminal.pasteFailed"), "clipboard", { cause }), { title: t("terminal.pasteFailedTitle") }),
     );

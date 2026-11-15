@@ -13,6 +13,7 @@ import { revealPathTarget } from "./links/revealPathTarget";
 import { openPathTarget } from "./links/openPathTarget";
 import type { HoveredTerminalLink } from "./links/terminalLinks";
 import { programCopyHandler } from "./osc52";
+import { pasteImageHandlers } from "./pastedImage";
 import { terminalFontSize } from "./terminalFontSize";
 import { TerminalController, type TerminalControllerOptions, type TermStatus } from "./TerminalController";
 
@@ -37,6 +38,7 @@ export function useTerminalController({
   inputHeld = false,
   project,
   viewFile,
+  pasteImages = false,
   options,
 }: {
   controllerRef: RefObject<TerminalController | undefined>;
@@ -59,6 +61,10 @@ export function useTerminalController({
   project: string | null | undefined;
   /** Shows a project file a path in the output named. Without it such a path opens in the default application. */
   viewFile?: (file: ViewedFile) => void;
+  /** Whether an image pasted into the terminal is saved for the session's agent and its path pasted (an agent session's
+   * terminal), rather than pasted as the clipboard's text, empty or not (a shell). Read once, when the controller is
+   * built. */
+  pasteImages?: boolean;
   /** Read once, when the controller is built. */
   options?: Omit<TerminalControllerOptions, "host">;
 }): void {
@@ -86,6 +92,7 @@ export function useTerminalController({
         openLink: links && ((url) => links.open(url).catch((cause: unknown) => reportExternalLinkFailure(latest.current.t, url, cause))),
         onLinkHover: (link) => setLinkRef.current?.(link),
         copyToClipboard: programCopyHandler(clipboard, () => latest.current),
+        pasteImage: pasteImages ? pasteImageHandlers(() => latest.current, clipboard?.readImage?.bind(clipboard)) : undefined,
         pathLinks: {
           pathStyle,
           probe: async (paths) => {

@@ -245,10 +245,10 @@ function tauriNotifications(host: HostFacts): NotificationCapability {
   };
 }
 
-/** How the clipboard plugin rejects a read when the clipboard holds no text: it passes on only the
- * message of `arboard::Error::ContentNotAvailable`, which names no kind to tell it by.
+/** How the clipboard plugin rejects a read when the clipboard holds nothing in the format asked for (no text, no
+ * image): it passes on only the message of `arboard::Error::ContentNotAvailable`, which names no kind to tell it by.
  * The text follows the arboard release `Cargo.lock` resolves: check it whenever that changes. */
-const NO_TEXT_ON_CLIPBOARD = "The clipboard contents were not available in the requested format or the clipboard is empty.";
+const NOTHING_ON_CLIPBOARD = "The clipboard contents were not available in the requested format or the clipboard is empty.";
 
 /** Through the shell's plugin, not `navigator.clipboard`: the web API is only offered to a secure
  * context, and the packaged window's custom scheme is not reliably counted as one. */
@@ -259,8 +259,25 @@ function tauriClipboard(): ClipboardCapability {
       try {
         return await readText();
       } catch (err) {
-        if (String(err) === NO_TEXT_ON_CLIPBOARD) return "";
+        if (String(err) === NOTHING_ON_CLIPBOARD) return "";
         throw err;
+      }
+    },
+    async readImage() {
+      const { readImage } = await import("@tauri-apps/plugin-clipboard-manager");
+      let image;
+      try {
+        image = await readImage();
+      } catch (err) {
+        if (String(err) === NOTHING_ON_CLIPBOARD) return undefined;
+        throw err;
+      }
+      try {
+        const [{ width, height }, rgba] = await Promise.all([image.size(), image.rgba()]);
+        return await pngOfRgba(rgba, width, height);
+      } finally {
+        // The image is a resource on the shell's side, which holds its pixels until it is closed.
+        void image.close().catch(() => {});
       }
     },
     async writeText(text) {
@@ -268,6 +285,19 @@ function tauriClipboard(): ClipboardCapability {
       await writeText(text);
     },
   };
+}
+
+/** The PNG of an image's raw RGBA pixels, which is what the plugin reads an image as. */
+async function pngOfRgba(rgba: Uint8Array, width: number, height: number): Promise<Blob> {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("no canvas to draw the clipboard image on");
+  context.putImageData(new ImageData(new Uint8ClampedArray(rgba), width, height), 0, 0);
+  return new Promise((resolve, reject) =>
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("the clipboard image could not be encoded"))), "image/png"),
+  );
 }
 
 /** Through the shell's own commands (`configuration_file.rs`), which raise the system's dialogs and

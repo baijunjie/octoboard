@@ -15,7 +15,7 @@ let root: Root;
 let container: HTMLDivElement;
 let target: HTMLDivElement;
 let input: HTMLTextAreaElement;
-let controller: { selectedText: string; programCopiedText?: string; mouseReporting?: boolean; inputSessionId?: string; selectAll: () => void; pathLinkAt: ReturnType<typeof vi.fn>; revealPathLink: ReturnType<typeof vi.fn>; paste: ReturnType<typeof vi.fn>; focus: () => void };
+let controller: { selectedText: string; programCopiedText?: string; mouseReporting?: boolean; inputSessionId?: string; selectAll: () => void; pathLinkAt: ReturnType<typeof vi.fn>; revealPathLink: ReturnType<typeof vi.fn>; paste: ReturnType<typeof vi.fn>; pasteImage: ReturnType<typeof vi.fn>; focus: () => void };
 let clipboard: ClipboardCapability | undefined;
 let sessionId: string;
 const controllerRef = { current: undefined as TerminalController | undefined };
@@ -31,7 +31,7 @@ beforeEach(() => {
   input = target.appendChild(document.createElement("textarea"));
   targetRef.current = target;
   controller = {
-    selectedText: "", inputSessionId: "s-1", paste: vi.fn(), pathLinkAt: vi.fn(), revealPathLink: vi.fn(async () => {}), focus: () => input.focus(),
+    selectedText: "", inputSessionId: "s-1", paste: vi.fn(), pasteImage: vi.fn(), pathLinkAt: vi.fn(), revealPathLink: vi.fn(async () => {}), focus: () => input.focus(),
     selectAll: () => { controller.selectedText = "all terminal output"; },
   };
   controllerRef.current = controller as unknown as TerminalController;
@@ -108,6 +108,45 @@ it("reads the clipboard only for Paste and sends it to the captured session", as
   await choose("Paste");
   expect(clipboard!.readText).toHaveBeenCalledOnce();
   expect(controller.paste).toHaveBeenCalledWith("clipboard text", "s-1");
+});
+
+it("pastes the text and reads no image when the clipboard holds text", async () => {
+  const readImage = vi.fn(async () => new Blob(["x"], { type: "image/png" }));
+  clipboard = { ...clipboard!, readImage };
+  render();
+  await open();
+  await choose("Paste");
+  expect(readImage).not.toHaveBeenCalled();
+  expect(controller.pasteImage).not.toHaveBeenCalled();
+  expect(controller.paste).toHaveBeenCalledExactlyOnceWith("clipboard text", "s-1");
+});
+
+it("leaves a clipboard with no text to the controller, for the captured session, reading no image itself", async () => {
+  const readImage = vi.fn(async () => new Blob(["x"], { type: "image/png" }));
+  clipboard = { writeText: vi.fn(async () => {}), readText: vi.fn(async () => ""), readImage };
+  render();
+  await open();
+  await choose("Paste");
+  // The controller reads the image itself, and only if it takes images.
+  expect(readImage).not.toHaveBeenCalled();
+  expect(controller.pasteImage).toHaveBeenCalledExactlyOnceWith("s-1");
+  expect(controller.paste).not.toHaveBeenCalled();
+});
+
+it("pastes no image into a session the menu was dismissed from while the text was read", async () => {
+  let finish!: (text: string) => void;
+  const readImage = vi.fn(async () => new Blob(["x"], { type: "image/png" }));
+  clipboard = { writeText: vi.fn(async () => {}), readText: vi.fn(() => new Promise<string>((resolve) => { finish = resolve; })), readImage };
+  render();
+  await open();
+  await choose("Paste");
+  sessionId = "s-2";
+  controller.inputSessionId = "s-2";
+  render();
+  await act(async () => finish(""));
+  expect(readImage).not.toHaveBeenCalled();
+  expect(controller.pasteImage).not.toHaveBeenCalled();
+  expect(controller.paste).not.toHaveBeenCalled();
 });
 
 it("reads no clipboard for a Paste chosen after the controller stopped taking input", async () => {

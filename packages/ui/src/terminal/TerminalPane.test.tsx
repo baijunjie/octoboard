@@ -26,7 +26,7 @@ import { resetTerminalFontSize, terminalFontSize } from "./terminalFontSize";
 import type { TermStatus } from "./TerminalController";
 import { LOADING_LIMIT_MS, TerminalPane, type TerminalPaneHandle } from "./TerminalPane";
 import { BROWSER_HOST } from "../test/hosts";
-import { fakeTimers } from "../test/clock";
+import { afterQueuedWork, fakeTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -41,9 +41,12 @@ const { FakeController } = vi.hoisted(() => {
       onPaintedChange?: (painted: boolean) => void;
       openLink?: (url: string) => Promise<void>;
       pathLinks?: { open: (target: { path: string; line?: number; view?: { worktree?: string; path: string } }) => Promise<void> };
+      pasteImage?: { save: (image: Blob, sessionId: string) => Promise<string | undefined>; read?: () => Promise<Blob | undefined> };
     }) {
       FakeController.last = this;
     }
+    /** The image paste handlers the pane gave the controller, if any. */
+    get pasteImage() { return this.callbacks.pasteImage; }
     openPath(target: { path: string; line?: number; view?: { worktree?: string; path: string } }): Promise<void> | undefined {
       return this.callbacks.pathLinks?.open(target);
     }
@@ -2128,5 +2131,39 @@ describe("the terminal's focus ring", () => {
     FakeController.last.settle("open");
     FakeController.last.paint();
     expect(surface(container).className).toMatch(/ring-2/);
+  });
+});
+
+describe("pasting an image into the agent's terminal", () => {
+  it("is given to the controller, saving through the daemon the image it is handed and answering the path to paste", async () => {
+    request.mockImplementation(async (body) => (body.type === "save_pasted_image" ? { type: "pasted_image_saved", id: null, path: "/data/run/s-1/pasted/paste-1-0.png" } : { type: "ack", id: null }));
+    onTestFinished(() => { request.mockImplementation(async (body) => (body.type === "read_session_history" ? { type: "session_history", id: null, session: "", messages: [] } : { type: "ack", id: null })); });
+    // jsdom's FileReader, which reads the image, finishes on a timer: it needs the real clock, which nothing else in this test arms a timer on.
+    fakeTimers({ toFake: ["Date"] });
+    mount();
+    const pasting = FakeController.last.pasteImage!;
+    expect(pasting).toBeDefined();
+    await expect(pasting.save(new Blob([Uint8Array.from([1, 2, 3])], { type: "image/png" }), "s-1")).resolves.toBe("/data/run/s-1/pasted/paste-1-0.png");
+    expect(request).toHaveBeenCalledWith({ type: "save_pasted_image", session: "s-1", data: "AQID" });
+  });
+
+  it("reads the image through the platform's clipboard where it has one to read", async () => {
+    const image = new Blob(["x"], { type: "image/png" });
+    const readImage = vi.fn(async () => image);
+    platform.clipboard = { writeText: async () => {}, readImage };
+    onTestFinished(() => { platform.clipboard = undefined; });
+    mount();
+    // Only the terminal's paste reads, never the pane's setup.
+    expect(readImage).not.toHaveBeenCalled();
+    await expect(FakeController.last.pasteImage!.read!()).resolves.toBe(image);
+    expect(readImage).toHaveBeenCalledOnce();
+  });
+
+  it("has nothing to read where the platform's clipboard cannot read an image", async () => {
+    platform.clipboard = { writeText: async () => {} };
+    onTestFinished(() => { platform.clipboard = undefined; });
+    mount();
+    expect(FakeController.last.pasteImage!.read).toBeUndefined();
+    await afterQueuedWork();
   });
 });

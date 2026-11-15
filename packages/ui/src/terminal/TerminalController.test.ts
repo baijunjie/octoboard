@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 import { windowAttention } from "../components/announce/windowTestSupport";
 import type { HostFacts } from "../platform/host";
 import { BROWSER_HOST, MAC_HOST, WINDOWS_HOST } from "../test/hosts";
-import { RESIZE_SETTLE_MS, TerminalController } from "./TerminalController";
+import { RESIZE_SETTLE_MS, TerminalController, type TerminalControllerHandlers } from "./TerminalController";
 import { resetTerminalFontSize, terminalFontSize } from "./terminalFontSize";
 import { afterQueuedWork, fakeTimers } from "../test/clock";
 
@@ -256,8 +256,9 @@ beforeEach(async () => {
   await mountController(BROWSER_HOST);
 });
 
-/** Makes `controller` anew on `host`, its terminal `term` mounted in `container`. */
-async function mountController(host: HostFacts) {
+/** Makes `controller` anew on `host`, its terminal `term` mounted in `container`; `handlers` are added to the ones every
+ * test has. */
+async function mountController(host: HostFacts, handlers: Partial<TerminalControllerHandlers> = {}) {
   painted = [];
   copied = [];
   controller = new TerminalController(
@@ -265,6 +266,7 @@ async function mountController(host: HostFacts) {
       onStatusChange: () => {},
       onPaintedChange: (value) => painted.push(value),
       copyToClipboard: (text) => copied.push(text),
+      ...handlers,
     },
     "dark",
     { host },
@@ -728,6 +730,216 @@ it("drops paste after its destination changed or input became unavailable", () =
   controller.detach({ keepScreenFor: "s-new" });
   controller.paste("stopped text", "s-new");
   expect(lastSocket().sent.filter((entry) => ArrayBuffer.isView(entry))).toEqual([]);
+});
+
+/** What reached the session as keys, as text, in the order sent. */
+const sentText = () => lastSocket().sent.filter((entry) => ArrayBuffer.isView(entry)).map((entry) => new TextDecoder().decode(entry as Uint8Array));
+const bracketed = (text: string) => `\x1b[200~${text}\x1b[201~`;
+
+describe("pasting an image", () => {
+  const PATH = "/data/run/s-img/pasted/paste-1-0.png";
+  const png = () => new File(["png bytes"], "image.png", { type: "image/png" });
+
+  /** A native paste event, as the webview raises it: `text` and `files` are what `clipboardData` holds. */
+  function nativePaste({ text = "", files = [] }: { text?: string; files?: File[] } = {}) {
+    const event = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "clipboardData", { value: { getData: (type: string) => (type === "text/plain" ? text : ""), files } });
+    return event;
+  }
+
+  /** What xterm's own paste listener, on its element below the container, is given. */
+  let reachedXterm: Event[];
+
+  /** Controller with the image handlers `pasting` over a session `s-img` that is open to input. */
+  async function mountPasting(pasting: Partial<NonNullable<TerminalControllerHandlers["pasteImage"]>> | undefined) {
+    controller.dispose();
+    await mountController(BROWSER_HOST, pasting && { pasteImage: { save: vi.fn(async () => PATH), ...pasting } });
+    reachedXterm = [];
+    term.element!.addEventListener("paste", (event) => reachedXterm.push(event));
+    controller.attach("s-img", url("s-img"), false);
+    lastSocket().open();
+  }
+
+  /** The deferred answer of a handler, to settle at the test's own time. */
+  function deferred<T>() {
+    let resolve!: (value: T) => void;
+    let reject!: (reason: unknown) => void;
+    const promise = new Promise<T>((done, fail) => {
+      resolve = done;
+      reject = fail;
+    });
+    return { promise, resolve, reject };
+  }
+
+  it("pastes the path the image was saved as, in place of an event xterm never sees", async () => {
+    const save = vi.fn(async () => PATH);
+    await mountPasting({ save });
+    const image = png();
+    const event = nativePaste({ files: [image] });
+    term.element!.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    expect(reachedXterm).toHaveLength(0);
+    await vi.waitFor(() => expect(sentText()).toEqual([bracketed(PATH)]));
+    expect(save).toHaveBeenCalledExactlyOnceWith(image, "s-img");
+  });
+
+  it("leaves a paste with text to xterm, whatever else the clipboard holds", async () => {
+    const save = vi.fn(async () => PATH);
+    const read = vi.fn(async () => new Blob(["x"], { type: "image/png" }));
+    await mountPasting({ save, read });
+    const event = nativePaste({ text: "some text", files: [png()] });
+    term.element!.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    expect(reachedXterm).toEqual([event]);
+    await afterQueuedWork();
+    expect(save).not.toHaveBeenCalled();
+    expect(read).not.toHaveBeenCalled();
+    expect(sentText()).toEqual([]);
+  });
+
+  it("reads the clipboard itself when the event carries no image, and pastes the path of what it holds", async () => {
+    const image = new Blob(["png bytes"], { type: "image/png" });
+    const save = vi.fn(async () => PATH);
+    const read = vi.fn(async () => image);
+    await mountPasting({ save, read });
+    const event = nativePaste({ files: [new File(["x"], "a.txt", { type: "text/plain" })] });
+    term.element!.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    expect(reachedXterm).toHaveLength(0);
+    await vi.waitFor(() => expect(sentText()).toEqual([bracketed(PATH)]));
+    expect(save).toHaveBeenCalledExactlyOnceWith(image, "s-img");
+  });
+
+  it("pastes an empty paste, once, when the clipboard holds no image", async () => {
+    const save = vi.fn(async () => PATH);
+    await mountPasting({ save, read: async () => undefined });
+    term.element!.dispatchEvent(nativePaste());
+    await vi.waitFor(() => expect(sentText()).toEqual([bracketed("")]));
+    await afterQueuedWork();
+    expect(sentText()).toEqual([bracketed("")]);
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it("pastes an empty paste, saying nothing, when the clipboard cannot be read", async () => {
+    await mountPasting({ read: async () => { throw new Error("denied"); } });
+    term.element!.dispatchEvent(nativePaste());
+    await vi.waitFor(() => expect(sentText()).toEqual([bracketed("")]));
+    await afterQueuedWork();
+    expect(sentText()).toEqual([bracketed("")]);
+  });
+
+  it("leaves a paste with no text and no image to xterm where the platform cannot read an image", async () => {
+    const save = vi.fn(async () => PATH);
+    await mountPasting({ save, read: undefined });
+    const event = nativePaste();
+    term.element!.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    expect(reachedXterm).toEqual([event]);
+    await afterQueuedWork();
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it("still takes an image the event carries where the platform cannot read one", async () => {
+    await mountPasting({ read: undefined });
+    const event = nativePaste({ files: [png()] });
+    term.element!.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    await vi.waitFor(() => expect(sentText()).toEqual([bracketed(PATH)]));
+  });
+
+  it("pastes nothing when saving the image failed", async () => {
+    await mountPasting({ save: async () => undefined });
+    term.element!.dispatchEvent(nativePaste({ files: [png()] }));
+    await afterQueuedWork();
+    expect(sentText()).toEqual([]);
+  });
+
+  it("pastes nothing once the input has moved to another session while the image was saved", async () => {
+    const saving = deferred<string | undefined>();
+    await mountPasting({ save: () => saving.promise });
+    term.element!.dispatchEvent(nativePaste({ files: [png()] }));
+    const staleSocket = lastSocket();
+    controller.attach("s-other", url("s-other"), false);
+    lastSocket().open();
+    saving.resolve(PATH);
+    await afterQueuedWork();
+    expect(sentText()).toEqual([]);
+    expect(staleSocket.sent.filter((entry) => ArrayBuffer.isView(entry))).toEqual([]);
+  });
+
+  it("pastes nothing once the input has moved while the clipboard was read", async () => {
+    const reading = deferred<Blob | undefined>();
+    const save = vi.fn(async () => PATH);
+    await mountPasting({ save, read: () => reading.promise });
+    term.element!.dispatchEvent(nativePaste());
+    controller.detach({ keepScreenFor: "s-img" });
+    reading.resolve(new Blob(["x"], { type: "image/png" }));
+    await afterQueuedWork();
+    expect(lastSocket().sent.filter((entry) => ArrayBuffer.isView(entry))).toEqual([]);
+  });
+
+  it("takes no paste event while no session has the input", async () => {
+    await mountPasting({ read: async () => new Blob(["x"], { type: "image/png" }) });
+    controller.detach({ keepScreenFor: "s-img" });
+    const event = nativePaste({ files: [png()] });
+    term.element!.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    expect(reachedXterm).toEqual([event]);
+  });
+
+  it("leaves every paste to xterm in a terminal that does not take images", async () => {
+    await mountPasting(undefined);
+    const event = nativePaste({ files: [png()] });
+    term.element!.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+    expect(reachedXterm).toEqual([event]);
+  });
+
+  describe("as a paste the menu makes", () => {
+    it("pastes the path of the image it was given", async () => {
+      const image = new Blob(["png bytes"], { type: "image/png" });
+      const save = vi.fn(async () => PATH);
+      await mountPasting({ save });
+      controller.pasteImage("s-img", image);
+      await vi.waitFor(() => expect(sentText()).toEqual([bracketed(PATH)]));
+      expect(save).toHaveBeenCalledExactlyOnceWith(image, "s-img");
+    });
+
+    it("pastes the path of the image its own read finds", async () => {
+      const image = new Blob(["png bytes"], { type: "image/png" });
+      const save = vi.fn(async () => PATH);
+      await mountPasting({ save, read: async () => image });
+      controller.pasteImage("s-img");
+      await vi.waitFor(() => expect(sentText()).toEqual([bracketed(PATH)]));
+      expect(save).toHaveBeenCalledExactlyOnceWith(image, "s-img");
+    });
+
+    it.each([
+      ["no read at all", undefined],
+      ["a clipboard with no image", () => Promise.resolve(undefined)],
+      ["a read that throws", () => { throw new Error("denied"); }],
+      ["a clipboard that cannot be read", () => Promise.reject(new Error("denied"))],
+    ])("pastes an empty paste for %s", async (_name, read) => {
+      const save = vi.fn(async () => PATH);
+      await mountPasting({ save, read });
+      controller.pasteImage("s-img");
+      await vi.waitFor(() => expect(sentText()).toEqual([bracketed("")]));
+      expect(save).not.toHaveBeenCalled();
+    });
+
+    it("pastes nothing for a session the input has left", async () => {
+      await mountPasting({});
+      controller.pasteImage("s-gone", new Blob(["x"], { type: "image/png" }));
+      await afterQueuedWork();
+      expect(sentText()).toEqual([]);
+    });
+
+    it("pastes an empty paste in a terminal that does not take images, reading nothing", async () => {
+      await mountPasting(undefined);
+      controller.pasteImage("s-img");
+      await vi.waitFor(() => expect(sentText()).toEqual([bracketed("")]));
+    });
+  });
 });
 
 describe("keyboard focus on attaching a session the user picked", () => {

@@ -1026,6 +1026,14 @@ impl PtyCore {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
+    /// The process's scratch directory, none once it has been removed with the process.
+    pub fn scratch_dir(&self) -> Option<std::path::PathBuf> {
+        self.scratch_dir
+            .lock()
+            .expect("scratch dir mutex poisoned")
+            .clone()
+    }
+
     fn clean_scratch_dir(&self) {
         let dir = self
             .scratch_dir

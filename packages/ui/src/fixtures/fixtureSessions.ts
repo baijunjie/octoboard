@@ -10,7 +10,7 @@ import { CONSOLE_SESSION_COLOURS } from "../sessions/sessionColours";
 import { applyDaemonEvent } from "../store";
 import type { AccountGuards } from "./fixtureAccounts";
 import type { ProcessLedger } from "./fixtureProcesses";
-import { neverReplied, type FixtureContext, type Handlers } from "./fixtureContext";
+import { HOME, neverReplied, type FixtureContext, type Handlers } from "./fixtureContext";
 
 /** How long a tree's top process must have run before an archive's inspection lists it: what started a moment ago is
  * a command still finishing (the daemon's `ASK_AFTER`, repeated here as the fixture stands on the daemon's side). */
@@ -28,6 +28,7 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
   const { launchAccount, refuseIfSharingChanges, refuseIfDisabled, refuseIfQuotaExhausted, refuseIfNotSignedIn } = guards;
   const { treesOfSession, oldestFirst, keepTrees, refuseUnkeepable, endSessions } = ledger;
   let openedSessionCount = 0;
+  let pastedImageCount = 0;
   // The daemon remembers its ordinal counter independently of session history. Seed it from
   // fixture ordinals once, so renaming or deleting a session never reuses an ordinal.
   const initial = store.getState();
@@ -261,6 +262,12 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
       const updated = { ...session, colour: body.colour };
       store.setState((state) => ({ sessions: new Map(state.sessions).set(body.session, updated) }));
       return { type: "ack", id: null };
+    },
+    save_pasted_image: (body) => {
+      const session = store.getState().sessions.get(body.session);
+      if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: `unknown session ${body.session}` });
+      // Where the daemon writes it (the session's scratch directory); the image itself is not kept.
+      return { type: "pasted_image_saved", id: null, path: `${HOME}/.octoboard/run/${session.id}/pasted/paste-${Date.now()}-${++pastedImageCount}.png` };
     },
     locate_conversation_to_resume: () => {
       const located = scenario.conversationLocation ?? { kind: "not_found" as const };

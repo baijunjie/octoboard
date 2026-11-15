@@ -436,6 +436,8 @@ installs with `--service`).
   `output_pace.rs` (whether the parsed screen shows a
   whole frame, from the agent's recent output), `paste_apart.rs` (submitting a message whose Enter has to wait until the
   agent has taken its paste; `NotSubmitted`),
+  `pasted_image.rs` (an image the user pasted into the terminal, written as a file under the process's scratch directory
+  (`PtyCore::scratch_dir`) for the agent to read by path: the `save_pasted_image` request, answered by `pasted_image_saved`),
   `swap.rs` (the stash of the draft around a message, the hold on the input while it is recovered, which
   a bound ends so that a message is not held without end, and `write_message_input_as`, the queue's write of a message
   under its id), `input_box.rs`, `dialogs.rs`, `trust/` folder-trust confirmations (`carry.rs` the `TrustCarrier` interface of a provider that records the trust in

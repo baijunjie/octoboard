@@ -581,6 +581,18 @@ pub(crate) fn fake_live_session(
     live
 }
 
+/// [`fake_live_session`] with `scratch` as the session's scratch directory, which the stand-in's end removes.
+pub(crate) fn fake_live_session_in(
+    id: &str,
+    agent: AgentId,
+    script: &str,
+    scratch: std::path::PathBuf,
+) -> StandIn {
+    let live = stand_in_with_scratch(id, agent, 80, 24, bash_command(script), Some(scratch));
+    live.trust.end_watch();
+    live
+}
+
 /// [`fake_live_session`] running `program` rather than a Bash script.
 pub(crate) fn fake_live_session_running(
     id: &str,
@@ -786,9 +798,34 @@ fn stand_in_of(
     agent: AgentId,
     cols: u16,
     rows: u16,
+    cmd: crate::platform::term::Command,
+    carried_trust: Option<std::sync::Arc<dyn crate::session::trust::TrustCarrier>>,
+    tag: Option<&crate::processes::ledger::ProcessTag>,
+) -> StandIn {
+    stand_in_launched(id, agent, cols, rows, cmd, carried_trust, tag, None)
+}
+
+fn stand_in_with_scratch(
+    id: &str,
+    agent: AgentId,
+    cols: u16,
+    rows: u16,
+    cmd: crate::platform::term::Command,
+    scratch_dir: Option<std::path::PathBuf>,
+) -> StandIn {
+    stand_in_launched(id, agent, cols, rows, cmd, None, None, scratch_dir)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn stand_in_launched(
+    id: &str,
+    agent: AgentId,
+    cols: u16,
+    rows: u16,
     mut cmd: crate::platform::term::Command,
     carried_trust: Option<std::sync::Arc<dyn crate::session::trust::TrustCarrier>>,
     tag: Option<&crate::processes::ledger::ProcessTag>,
+    scratch_dir: Option<std::path::PathBuf>,
 ) -> StandIn {
     if let Some(tag) = tag {
         tag.containment().prepare(&mut cmd);
@@ -809,7 +846,7 @@ fn stand_in_of(
         spawned: spawned.into(),
         checks_composer: false,
         transport: None,
-        scratch_dir: None,
+        scratch_dir,
         resolves_approvals_itself: false,
         carried_trust,
         before_scratch_removal: None,

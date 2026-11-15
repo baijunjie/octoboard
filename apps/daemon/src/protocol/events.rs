@@ -522,6 +522,12 @@ pub enum Event {
         session_id: String,
         pages: Vec<String>,
     },
+    /// The reply to `save_pasted_image`: the absolute path, on the daemon host, of the file the image
+    /// was saved as.
+    PastedImageSaved {
+        id: Option<String>,
+        path: String,
+    },
     /// The reply to `probe_path_links`: one entry per asked path, in the order asked.
     PathLinks {
         id: Option<String>,

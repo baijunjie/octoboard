@@ -891,6 +891,18 @@ async fn handle_inner(
             Ok(None)
         }
 
+        RequestBody::SavePastedImage { session, data } => {
+            let state = Arc::clone(state);
+            let path = tokio::task::spawn_blocking(move || {
+                crate::session::pasted_image::save(&state, &session, &data)
+            })
+            .await??;
+            Ok(Some(Event::PastedImageSaved {
+                id: request_id,
+                path: path.to_string_lossy().into_owned(),
+            }))
+        }
+
         RequestBody::InterruptSession { session } => {
             let crate::session::interrupt::Interrupted {
                 interrupted,

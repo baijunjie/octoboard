@@ -147,7 +147,8 @@ their cascade order does not depend on which screen opened first.
 - `src/terminal/` — the xterm.js terminal: controller and the surface it draws on, pane, reconnect, the reading of its
   output as text, the font size (`terminalFontSize.ts`: the client-held, persisted preference the controller applies to every
   terminal; `terminalFontShortcut.ts`: `useTerminalFontShortcuts`, mounted in `App.tsx`, which runs the three Terminal
-  shortcut commands), path `links/`, project `shell/` terminals (with their tabs), archived-session `history/`;
+  shortcut commands), `pastedImage.ts` (a clipboard image pasted into an agent session's terminal: sent to the daemon to be saved, and its
+  path pasted in its place; `TerminalController.pasteImage` is the entry, `ClipboardCapability.readImage` supplies the image to a paste that carries none), path `links/`, project `shell/` terminals (with their tabs), archived-session `history/`;
   xterm's private members are reached from two adapters only: `xtermInternals.ts` (`watchUserInput`, the mark that
   tells the user's input from xterm's own replies) and `links/terminalLinks.ts` (OSC 8 link data).
 - `src/report/` — a session's report panel: `ReportPanel.tsx` (pager, header badges, the drafts and the pending or

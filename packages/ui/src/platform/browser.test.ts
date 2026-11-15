@@ -107,6 +107,49 @@ it("keeps clipboard writing available in a browser without clipboard reading", (
   expect(browserPlatform().clipboard?.writeText).toBeDefined();
 });
 
+describe("reading an image from the clipboard", () => {
+  const item = (types: Record<string, Blob>) => ({ types: Object.keys(types), getType: vi.fn(async (type: string) => types[type]) });
+
+  it("is offered only where the browser can read the clipboard's items", () => {
+    vi.stubGlobal("navigator", { clipboard: { writeText: async () => {}, readText: async () => "" } });
+    expect(browserPlatform().clipboard?.readImage).toBeUndefined();
+    vi.stubGlobal("navigator", { clipboard: { writeText: async () => {}, read: async () => [] } });
+    expect(browserPlatform().clipboard?.readImage).toBeDefined();
+  });
+
+  it("does not read at setup", () => {
+    const read = vi.fn(async () => []);
+    vi.stubGlobal("navigator", { clipboard: { writeText: async () => {}, read } });
+    browserPlatform();
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it("answers the first image among the items, in the format the browser holds it in", async () => {
+    const jpeg = new Blob(["jpeg"], { type: "image/jpeg" });
+    const png = new Blob(["png"], { type: "image/png" });
+    const text = item({ "text/plain": new Blob(["text"]) });
+    const first = item({ "text/html": new Blob(["html"]), "image/jpeg": jpeg });
+    const second = item({ "image/png": png });
+    vi.stubGlobal("navigator", { clipboard: { writeText: async () => {}, read: async () => [text, first, second] } });
+    await expect(browserPlatform().clipboard!.readImage!()).resolves.toBe(jpeg);
+    expect(first.getType).toHaveBeenCalledExactlyOnceWith("image/jpeg");
+    expect(second.getType).not.toHaveBeenCalled();
+  });
+
+  it("answers nothing for a clipboard with no image, or with no items", async () => {
+    vi.stubGlobal("navigator", { clipboard: { writeText: async () => {}, read: async () => [item({ "text/plain": new Blob(["text"]) })] } });
+    await expect(browserPlatform().clipboard!.readImage!()).resolves.toBeUndefined();
+    vi.stubGlobal("navigator", { clipboard: { writeText: async () => {}, read: async () => [] } });
+    await expect(browserPlatform().clipboard!.readImage!()).resolves.toBeUndefined();
+  });
+
+  it("rejects when the browser refuses the read, as a denied permission does", async () => {
+    const denied = new DOMException("Read permission denied.", "NotAllowedError");
+    vi.stubGlobal("navigator", { clipboard: { writeText: async () => {}, read: async () => { throw denied; } } });
+    await expect(browserPlatform().clipboard!.readImage!()).rejects.toBe(denied);
+  });
+});
+
 describe("the host facts", () => {
   it.each([
     ["MacIntel", "macos", "meta"],

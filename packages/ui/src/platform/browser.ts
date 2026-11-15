@@ -77,14 +77,24 @@ function webLinks(): NonNullable<PlatformAdapter["links"]> {
   };
 }
 
-/** The async Clipboard API, which writes text from a user gesture without a permission prompt;
- * absent where the page is not a secure context. */
+/** The async Clipboard API, which writes text from a user gesture without a permission prompt and reads (text, an
+ * image) after the user allows it; absent where the page is not a secure context. */
 function webClipboard(): NonNullable<PlatformAdapter["clipboard"]> | undefined {
   if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) return undefined;
   return {
     writeText: (text) => navigator.clipboard.writeText(text),
     ...(navigator.clipboard.readText && { readText: () => navigator.clipboard.readText() }),
+    ...(typeof navigator.clipboard.read === "function" && { readImage: readClipboardImage }),
   };
+}
+
+/** The first image among the clipboard's items, in the format the browser offers it. */
+async function readClipboardImage(): Promise<Blob | undefined> {
+  for (const item of await navigator.clipboard.read()) {
+    const type = item.types.find((candidate) => candidate.startsWith("image/"));
+    if (type) return item.getType(type);
+  }
+  return undefined;
 }
 
 function webNotifications(): NonNullable<PlatformAdapter["notifications"]> {

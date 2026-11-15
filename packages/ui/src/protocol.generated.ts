@@ -2157,6 +2157,11 @@ export type Event = {
   pages: Array<string>,
 }
 | {
+  "type": "pasted_image_saved",
+  id: string | null,
+  path: string,
+}
+| {
   "type": "path_links",
   id: string | null,
   links: Array<PathLink>,
@@ -4049,6 +4054,11 @@ export type Request = {
   text: string,
 }
   | {
+  "type": "save_pasted_image",
+  session: string,
+  data: string,
+}
+  | {
   "type": "interrupt_session",
   session: string,
 }
@@ -4914,6 +4924,11 @@ export type RequestBody = {
   "type": "send_message",
   session: string,
   text: string,
+}
+| {
+  "type": "save_pasted_image",
+  session: string,
+  data: string,
 }
 | {
   "type": "interrupt_session",

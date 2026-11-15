@@ -267,6 +267,7 @@ export function TerminalPane({
     inputHeld: livePending,
     project: session?.project_id,
     viewFile: onViewFile,
+    pasteImages: true,
   });
   const syncSession = useCallback(() => {
     const controller = controllerRef.current;

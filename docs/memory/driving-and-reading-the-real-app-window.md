@@ -137,6 +137,13 @@ forward between two steps of one, and the click and the Enter after it edited a 
 capture taken after the input is the only way to know where it landed, so take one between steps rather than reading the
 next step's result as proof of the last.
 
+Make that check, and every accessibility or System Events target, by the PID of the instance under test, never by
+process or application name. A verification bundle built with its own identifier and product name still runs an
+executable named `octoboard`, the same as the user's installed app, so a name matches whichever of the two answers
+first: clicks and Return presses meant for a verification window, guarded only by "the frontmost process is
+`octoboard`", have landed in the user's own Octoboard. Before each global click or key, compare the frontmost
+application's PID with the instance's, and skip the input when they differ.
+
 It cuts the other way too: whatever is typed while Octoboard sits frontmost lands in it. Left frontmost on an agent's
 sign-in screen, stray keystrokes completed a real Codex sign-in through the default browser, which was already
 signed in to the account. So hand focus back after each GUI step, and never leave the window frontmost on a sign-in

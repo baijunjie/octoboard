@@ -530,6 +530,21 @@ describe("the fixture daemon's session colour", () => {
   });
 });
 
+describe("the fixture daemon's pasted images", () => {
+  const owner = consoleOf("c", "Main");
+  const hub = sessionOf("hub", owner.id, undefined, "Hub", "idle");
+  const scenario = { state: snapshotState({ consoles: [owner], sessions: [hub] }) };
+
+  it("answers an image pasted into a known session with a path under its scratch directory, and refuses an unknown session", async () => {
+    const daemon = createFixtureDaemon(scenario);
+    const saved = await daemon.request({ type: "save_pasted_image", session: hub.id, data: "aGVsbG8=" });
+    expect(saved.path).toMatch(/^\/Users\/dev\/\.octoboard\/run\/hub\/pasted\/paste-\d+-1\.png$/);
+    const next = await daemon.request({ type: "save_pasted_image", session: hub.id, data: "aGVsbG8=" });
+    expect(next.path).not.toBe(saved.path);
+    await expect(daemon.request({ type: "save_pasted_image", session: "missing", data: "aGVsbG8=" })).rejects.toMatchObject({ code: "unknown_session" });
+  });
+});
+
 describe("the fixture daemon's project file trees", () => {
   it("searches unopened descendants by filename and returns sorted project-relative paths", async () => {
     const daemon = createFixtureDaemon({

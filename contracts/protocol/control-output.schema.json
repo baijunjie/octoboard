@@ -4919,6 +4919,30 @@
                 "null"
               ]
             },
+            "path": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "pasted_image_saved"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "path"
+          ],
+          "description": "The reply to `save_pasted_image`: the absolute path, on the daemon host, of the file the image\nwas saved as."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "links": {
               "type": "array",
               "items": {

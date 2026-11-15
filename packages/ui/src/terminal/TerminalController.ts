@@ -35,6 +35,7 @@ import {
   type SelectionGuard,
   writeInSlices,
 } from "./terminalOutput";
+import { imageInPaste } from "./pastedImage";
 import { watchUserInput } from "./xtermInternals";
 import { XTERM_THEMES } from "./xtermThemes";
 
@@ -85,6 +86,19 @@ export interface TerminalControllerHandlers {
    * written before the screen's session was attached: a live session's first paint, a process-less session's
    * saved output, or what was still queued when the screen was reset. */
   copyToClipboard?: (text: string) => void;
+  /** How an image the user pastes reaches the session's agent: saved as a file where the daemon runs, its path pasted
+   * in the image's place (see `pasteImage`). Absent for a terminal whose process is not an agent, which gets the
+   * paste as the clipboard's text, empty or not. */
+  pasteImage?: {
+    /** Saves `image` for the session and resolves to the text to paste in its place. Shows its own failures and then
+     * resolves to `undefined`, which pastes nothing. */
+    save: (image: Blob, sessionId: string) => Promise<string | undefined>;
+    /** Reads the image the clipboard holds, for a paste that carries none itself (a menu's Paste, and a native one
+     * the webview hands no image): `undefined` when it holds none. Called only by a terminal that takes images; a
+     * rejection pastes an empty paste without a word, as before images were pasted. Absent where the platform cannot
+     * read one, which leaves such a paste empty. */
+    read?: () => Promise<Blob | undefined>;
+  };
   /** What the daemon makes of the file paths in the output, for the session on screen: absent where
    * there is no daemon to ask, which leaves paths as plain text. */
   pathLinks?: {
@@ -390,6 +404,23 @@ export class TerminalController {
       },
       { capture: true, signal },
     );
+    // A paste of an image arrives as an event with no text: xterm would send an empty paste, which only some agents
+    // answer by reading the clipboard themselves, and only on the machine the clipboard is on. Ahead of xterm's own
+    // listeners, which sit on its element and its textarea below the container.
+    container.addEventListener(
+      "paste",
+      (event) => {
+        const sessionId = this.inputSessionId;
+        const pasting = this.handlers.pasteImage;
+        if (!pasting || !sessionId || event.clipboardData?.getData("text/plain")) return;
+        const image = imageInPaste(event.clipboardData);
+        if (!image && !pasting.read) return;
+        event.preventDefault();
+        event.stopPropagation();
+        this.pasteImage(sessionId, image);
+      },
+      { capture: true, signal },
+    );
     // xterm reports pointer motion to a program that tracks any motion in the SGR encodings (Claude
     // Code's fullscreen view does) as the user's input, and clears its own selection on any user input. A selection forced
     // under mouse reporting (Option-drag on macOS) would then be gone the moment the pointer moved on
@@ -536,11 +567,35 @@ export class TerminalController {
   /**
    * Checks the destination again after a clipboard read and lets xterm apply bracketed paste. Empty
    * text is pasted too, as a native paste of a clipboard without text is: a program such as an agent's
-   * input reads an empty bracketed paste as the cue to fetch an image from the clipboard itself.
+   * input reads an empty bracketed paste as the cue to fetch an image from the clipboard itself, which
+   * is all a terminal that cannot save images (`pasteImage`) has to offer.
    */
   paste(text: string, sessionId: string): void {
     if (this.inputSessionId !== sessionId) return;
     this.term.paste(text);
+  }
+
+  /**
+   * Pastes the image a paste with no text stands for: `image` where the paste carried one, otherwise the one
+   * `pasteImage.read` finds on the clipboard. A session that takes images gets the path of the file the image was
+   * saved as, which every agent reads as an attached image wherever the daemon runs; any other terminal (which never
+   * reads the clipboard for an image, since that may ask for permission), a platform that cannot read one, a clipboard
+   * that holds none or one that could not be read gets what a paste of no text always was, an empty one. The
+   * destination is checked again once the image is read and saved, each of which may take a prompt or a transfer.
+   */
+  pasteImage(sessionId: string, image?: Blob): void {
+    const pasting = this.handlers.pasteImage;
+    if (!pasting || !(image || pasting.read)) return this.paste("", sessionId);
+    new Promise<Blob | undefined>((resolve) => resolve(image ?? pasting.read?.()))
+      .then(
+        (blob) => (blob ? pasting.save(blob, sessionId) : ""),
+        () => "",
+      )
+      .then((text) => {
+        if (text !== undefined) this.paste(text, sessionId);
+      })
+      // `save` shows its own failures, so a rejection here has nothing more to tell the user.
+      .catch(() => {});
   }
 
   /**

@@ -35,7 +35,7 @@ const { FakeController } = vi.hoisted(() => {
     }
     fits = 0;
     inputLabel: string | undefined;
-    constructor(private callbacks: { onStatusChange: (status: TermStatus) => void }) {
+    constructor(readonly callbacks: { onStatusChange: (status: TermStatus) => void; pasteImage?: unknown }) {
       FakeController.last = this;
     }
     mount(element: HTMLElement): void {
@@ -909,4 +909,9 @@ it("writes the pending sentence at once when the shown shell turns pending, even
   setAttended(true);
   advance(AFTER_FOCUS_MOVE_DELAY_MS * 3);
   expect(sentenceSpoken(container)).toHaveLength(1);
+});
+
+it("keeps the shell's paste to the clipboard's text, giving its terminal no image paste", () => {
+  mount();
+  expect(FakeController.last.callbacks.pasteImage).toBeUndefined();
 });
