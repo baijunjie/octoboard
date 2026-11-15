@@ -13,9 +13,10 @@ held; `start` is the one place production code spawns a terminal), [`../coordina
 daemon's end of the helper requests a holder relays), [`../cli/holder.rs`](../cli/holder.rs) (the CLI mode),
 [`../request_guard.rs`](../request_guard.rs) (the Origin/Host rules and key compare the holder's helper routes share
 with the daemon's guard), [`../request_body.rs`](../request_body.rs) (reads every request's body before any answer:
-`drain_unread` outermost, so a refused request's body is read and thrown away, and `buffer` inside the Origin/Host
-check, so only an admitted request's body is held) and [`../platform/build_files.rs`](../platform/build_files.rs). The process ledger treats a
-holder and what it starts as the daemon's own; see [`../processes/ledger/README.md`](../processes/ledger/README.md).
+`drain_unread` outermost, so a refused request's body is read and thrown away, and `buffer` inside the Origin/Host check
+and the key check of the helper routes, so only an admitted request's body is held) and
+[`../platform/build_files.rs`](../platform/build_files.rs). The process ledger treats a holder and what it starts as the
+daemon's own; see [`../processes/ledger/README.md`](../processes/ledger/README.md).
 
 ## Where things are
 
@@ -41,10 +42,10 @@ holder and what it starts as the daemon's own; see [`../processes/ledger/README.
 - `server/` — the holder. `mod.rs` the listener, the link and the exit rule (and the companions no terminal has bound
   yet), `terminal.rs` one terminal's threads and its 1 MiB raw tail (and what a handover restarted it with),
   `companion.rs` a terminal's companion (its endpoint, start, readiness wait, exit watch and end), `offline.rs` the
-  recogniser of the queries it answers itself while no daemon is linked,
-  `launches.rs` the per-launch keys it issues, `helpers.rs` the helper routes on its port (`/hook`,
-  `/git-ref`, `/context-window`, `/revert-gate`, `/mcp`: the daemon's paths and bodies, with the launch's key bound to the
-  terminal and its session), `relay.rs` the path of those requests to the daemon.
+  recogniser of the queries it answers itself while no daemon is linked, `launches.rs` the per-launch keys it issues,
+  `helpers.rs` the helper routes on its port (`/hook`, `/git-ref`, `/context-window`, `/revert-gate`, `/mcp`: the
+  daemon's paths and bodies, with the launch's key bound to the terminal and its session, checked by a middleware before
+  any body is taken), `relay.rs` the path of those requests to the daemon.
 - `client/` — the daemon's side. `mod.rs` `Holders` (starts a holder on the first terminal, adopts the existing ones,
   tries again those it cannot link to yet, ends a holder), `link.rs` the link and its reconnect rules, `held.rs`
   `HeldTerminal` and `HeldReader`, `companion.rs` `HeldCompanion`, `relay.rs` the types of the relayed requests,

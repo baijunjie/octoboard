@@ -293,6 +293,12 @@ octoboardd update --rollback
 It works on the installation, not through the running daemon, in its own process, and never restarts anything: a daemon
 running from the executable it replaces runs on as the build it started as until `octoboardd restart`.
 
+It reads the manifest and downloads the archive through the proxy its own environment names, the environment of the
+shell it was run from, not the login shell environment the daemon uses (see "When the daemon checks" above): reading
+that would start the login shell, which would stop the command when it runs in a terminal. Which variables name the
+proxy, in what order and case, and how `NO_PROXY` exempts a host, are as for the agent CLI lookup (see "Where the latest
+version comes from" in `docs/product/agent-cli-updates.md`); like the daemon, it trusts the system's certificates.
+
 - **`octoboardd update`** checks the channel and, when a newer version is available, downloads, checks and replaces the
   executable as "Downloading and replacing the executable" above describes, saying when it starts downloading. It then
   says which file it updated, from which version to which, that the previous build is kept as `octoboardd.previous`, and

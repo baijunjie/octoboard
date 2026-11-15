@@ -166,12 +166,14 @@ the origins above. A client reaching the daemon under any other host name is ref
 (`host_allowed` in `apps/daemon/src/request_guard.rs`).
 
 Every request's body is read before any answer goes out, a refusal (`403`, `401`), a `404` and a `405` included, so a
-client may write a request's head and its body separately and still read the answer instead of a connection reset. The
-Host, Origin and key checks come first: a refused request has its body read and thrown away, never held, and an admitted
-one is held whole before its route runs. A body is read up to 2 MiB, the most any route takes: one whose `Content-Length`
-is over that, or a chunked one that passes it, is answered `413` after the checks, without the rest being read, and a
-client that sends more anyway may find its connection reset in place of the answer. A body whose framing is malformed
-is answered `400`.
+client may write a request's head and its body separately and still read the answer instead of a connection reset. This
+holds for the daemon's listeners and a process holder's helper routes alike. The Host, Origin and key checks come first
+(on a holder, also that the key is the launch key of the session the path names or, on `/mcp/:token`, of a launch not
+bound to another token): a refused request has its body read and thrown away, never held, and an admitted one is held
+whole before its route runs. A body is read up to 2 MiB, the most any route takes: one whose `Content-Length` is over
+that, or a chunked one that passes it, is answered `413` after the checks, without the rest being read, and a client
+that sends more anyway may find its connection reset in place of the answer. A body whose framing is malformed is
+answered `400`.
 
 ## What every client implements
 
