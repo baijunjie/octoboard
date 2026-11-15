@@ -4,8 +4,9 @@
 //! session's input is held for a draft or a fragment, whose grace starts again once the hold ends,
 //! and one the session's own server held back, whose grace starts again once, at most.
 //! Draft protection waits for the user's edits only for a bounded grace period; afterwards a draft
-//! no stash can take is cleared before the message is written, and a message is never written
-//! together with text in the input box (`crate::session::LiveSession::write_message_input`).
+//! no stash can take is cleared before the message is written, and a message goes in together with
+//! text in the input box only once that text has resisted clearing for a bounded wait
+//! (`crate::session::LiveSession::write_message_input`).
 //! Lifecycle holds, trust confirmations and agent dialogs remain separate reasons to wait.
 //!
 //! A physical partial write cannot be repeated without duplicating its accepted prefix. It and
@@ -63,8 +64,9 @@ pub enum Drain {
     Lost,
     /// The message with this ticket was written in part while the session's draft was stashed
     /// ([`crate::session::HeldFragment`]). It is gone, but the session holds Octoboard's later
-    /// writes until a prompt is sent after it, so nothing written next can run together with the
-    /// fragment: the queue behind it stays, and is written in order once the hold ends.
+    /// writes until a prompt is sent after it, or each message's bounded wait runs out
+    /// (`crate::session::LiveSession::write_message_input`): the queue behind it stays, and is
+    /// written in order.
     Fragmented(Ticket),
     /// The native queue may have accepted this ticket; it is never submitted again.
     Uncertain(Ticket),

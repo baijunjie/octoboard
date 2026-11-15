@@ -165,8 +165,8 @@ the session's git running the user's own hooks with no report and no revert gate
 
 Automatic messages go into Codex's own queue on a launch with the private app server, leaving the composer untouched
 (see "Messages through Codex's own queue" in `docs/product/message-delivery.md`). On any other launch they reach Codex
-through its terminal, like any other agent's: Octoboard uses no stash of Codex's to set a draft aside, and clears no
-draft of Codex's either, so a draft in its composer holds them until the user sends or empties it (see
+through its terminal, like any other agent's: Octoboard uses no stash of Codex's to set a draft aside, so past the
+grace a draft in its composer is cleared with Ctrl-U before the message is written, as on the other agents (see
 `docs/product/draft-preservation.md`), under the holds in "Messages held until a session can take them" in
 `docs/product/message-delivery.md`.
 

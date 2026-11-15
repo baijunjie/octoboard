@@ -33,9 +33,6 @@ pub(super) struct Draft {
     /// ([`Self::message_written`]): what the submit key retried for a message left unsent checks
     /// that nothing the user typed can be in the box with it.
     written: Option<(u64, String)>,
-    /// How many messages of Octoboard's have gone in ([`Self::message_written`]): tells one write
-    /// from the next, even of the same text with nothing typed between.
-    messages: u64,
 }
 
 /// When the keys typed into the session went in and what kind they were: what an empty input box
@@ -62,6 +59,11 @@ struct KeyTiming {
     /// reads the box.
     lone_escape_at: Option<Instant>,
 }
+
+/// How long after its last byte a key sequence still waiting for the rest of its bytes no longer
+/// keeps out a message written as the box stands ([`Draft::sequence_abandoned`]), as long as a
+/// message waits on a draft it cannot clear (`crate::session::draft_clear::UNCLEARABLE_DRAFT_WAIT`).
+const ABANDONED_SEQUENCE: Duration = Duration::from_secs(30);
 
 /// How soon after an Esc a second one counts as the double press that brings back an earlier
 /// prompt to edit (Claude Code's rewind, Codex's backtrack). Claude Code's own window is about a
@@ -315,6 +317,18 @@ impl Draft {
             && (self.escape.is_empty() || self.lone_escape_settled(now))
     }
 
+    /// Whether the latest key went in [`ABANDONED_SEQUENCE`] or more before `now`: a key sequence
+    /// still waiting for the rest of its bytes — a bracketed paste never closed, an `ESC [` that an
+    /// Alt-[ left — then no longer keeps out a message written into the box as it stands
+    /// (`crate::session::LiveSession::write_message_into_box`), so that a message never waits on
+    /// it without end. Nothing else takes it as complete: no stash key and no clearing key goes in
+    /// on it.
+    pub(super) fn sequence_abandoned(&self, now: Instant) -> bool {
+        self.keys
+            .typed_at
+            .is_some_and(|(at, _)| now.saturating_duration_since(at) >= ABANDONED_SEQUENCE)
+    }
+
     fn lone_escape_settled(&self, now: Instant) -> bool {
         self.escape == [0x1b] && self.keys.latest_settled(now)
     }
@@ -405,7 +419,6 @@ impl Draft {
     /// a second press.
     pub(super) fn message_written(&mut self, now: Instant, prompt: &str) {
         self.keys.message_written(now);
-        self.messages += 1;
         self.written = Some((self.edited, prompt.to_string()));
     }
 
@@ -413,11 +426,6 @@ impl Draft {
     /// in (since the start, where none has).
     pub(super) fn typed_since_message(&self) -> bool {
         self.written.as_ref().map_or(0, |(edited, _)| *edited) != self.edited
-    }
-
-    /// Which write the latest message of Octoboard's was, counting from 1, or 0 where none went in.
-    pub(super) fn message_count(&self) -> u64 {
-        self.messages
     }
 
     /// The text of the latest message of Octoboard's that went in, if any.
@@ -942,6 +950,30 @@ mod tests {
         assert!(draft.at_input_boundary(typed + KEY_SETTLE));
         draft.typed(b"[1;", 10, typed);
         assert!(!draft.at_input_boundary(typed + KEY_SETTLE * 4));
+    }
+
+    /// A key sequence that never gets the rest of its bytes — a bracketed paste never closed, the
+    /// `ESC [` an Alt-[ leaves — is abandoned once its last byte is `ABANDONED_SEQUENCE` old, and
+    /// not before; it still is no input boundary, which a stash or a clearing key waits for.
+    #[test]
+    fn an_incomplete_sequence_is_abandoned_after_a_while_but_stays_incomplete() {
+        for first in [&b"\x1b[200~draft"[..], &b"\x1b["[..]] {
+            let typed = Instant::now();
+            let mut draft = Draft::default();
+            draft.typed(first, 10, typed);
+            assert!(
+                !draft.sequence_abandoned(typed + ABANDONED_SEQUENCE - KEY_SETTLE),
+                "{first:?}"
+            );
+            assert!(
+                draft.sequence_abandoned(typed + ABANDONED_SEQUENCE),
+                "{first:?}"
+            );
+            assert!(
+                !draft.at_input_boundary(typed + ABANDONED_SEQUENCE),
+                "{first:?}"
+            );
+        }
     }
 
     #[test]

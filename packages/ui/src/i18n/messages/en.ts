@@ -362,7 +362,7 @@ export const en = {
   "daemon.queued_messages_lost.details": "The input line may be holding part of a message {appName} could not finish writing, and the next message written into the session will be run together with it.",
   "daemon.queued_messages_lost.held.summary": "The message could not be written in full into this session, so it was dropped.",
   "daemon.queued_messages_lost.held.recovery": "Check the session's input box before sending a prompt.",
-  "daemon.queued_messages_lost.held.details": "The session's input box may be holding part of the message. {appName} writes nothing more into the session until a prompt is sent, so any messages queued behind the dropped one, and any sent now, wait until then.",
+  "daemon.queued_messages_lost.held.details": "The session's input box may be holding part of the message. Messages queued behind the dropped one, and any sent now, wait for a prompt to be sent, each for about a minute at most; after that, each is written into the input box together with what the box holds.",
   "daemon.source_changed.summary": "{path} changed while it was being read.",
   "daemon.source_changed.recovery": "Try again.",
   "daemon.trust_directory_too_broad.summary": "{path} is too broad to trust as a whole.",
@@ -395,6 +395,18 @@ export const en = {
   "daemon.draft_discarded.detailLabel": "Draft content",
   "daemon.draft_discarded.part.summary": "{appName} cleared part of the draft in this session's input box so that a message would not be sent together with it. The message waits until the input box is empty, and {appName} tries again once the box changes.",
   "daemon.draft_discarded.part.recovery": "To keep the draft, copy it below; part of it may still be in the input box.",
+  "daemon.message_sent_with_draft.summary": "{appName} could not clear the draft from this session's input box, so its message was sent together with the draft.",
+  "daemon.message_sent_with_draft.recovery": "Check the session. To keep the draft, copy it below.",
+  "daemon.message_sent_with_draft.detailLabel": "Draft content",
+  "daemon.message_sent_with_draft.unread.summary": "{appName} could not clear this session's input box, so its message was sent together with whatever the box held.",
+  "daemon.message_sent_with_draft.unread.recovery": "Check the session.",
+  "daemon.message_sent_with_draft.previous.summary": "The previous message from {appName} was still unsent in this session's input box, so the new message was sent together with it.",
+  "daemon.message_sent_with_draft.previous.recovery": "Check the session.",
+  "daemon.message_sent_with_draft.previousAndDraft.summary": "The previous message from {appName} was still unsent in this session's input box, with text typed after it, so the new message was sent together with both.",
+  "daemon.message_sent_with_draft.previousAndDraft.recovery": "Check the session. To keep what the input box held, copy it below.",
+  "daemon.message_sent_with_draft.previousAndDraft.detailLabel": "Input box content",
+  "daemon.message_waits_on_input.summary": "A message from {appName} is waiting because this session's input box cannot be read. A list or another view may be covering it.",
+  "daemon.message_waits_on_input.recovery": "Close the list or view, or send or clear what the input box holds, so the message can go in.",
   "daemon.draft_restore_unconfirmed.summary":
     "{agent} did not confirm putting the draft back into this session's input box after {appName} sent its message.",
   "daemon.draft_restore_unconfirmed.recovery": "Check the input box before sending what it holds.",
@@ -409,7 +421,7 @@ export const en = {
     "Only part of the message written into this session reached its input box. The message will not be sent again.",
   "daemon.typing_blocked.recovery": "Check the input box and remove what is left of the message before sending a prompt.",
   "daemon.typing_blocked.details":
-    "What was typed into the session while the message was written is discarded when you type again, and what you type from then on goes straight to {agent}. Other messages from {appName} wait until a prompt is sent.",
+    "What was typed into the session while the message was written is discarded when you type again, and what you type from then on goes straight to {agent}. Other messages from {appName} wait for a prompt to be sent, each for about a minute at most; after that, each is written into the input box together with what the box holds.",
   "daemon.terminal_input_lost.summary": "The terminal disconnected before it had taken everything typed into it.",
   "daemon.terminal_input_lost.recovery": "Check the terminal's input line before continuing.",
   "daemon.terminal_input_lost.session.summary": "The terminal of session {session} disconnected before it had taken everything typed into it.",
@@ -683,7 +695,7 @@ export const en = {
     "This session's agent is showing, or may be about to show, its trust confirmation. Send the message once that is answered, or once the session has finished starting if none appears.",
   "daemon.queued_messages_lost":
     "A message queued for this session could not be written in full, so it and everything queued behind it were dropped. The input line may be holding part of a message {appName} could not finish writing, and the next message written into the session will be run together with it. Check the session's input line before sending anything else.",
-  "daemon.queued_messages_lost.held": "The message could not be written in full into this session, so it was dropped. The session's input box may be holding part of the message. {appName} writes nothing more into the session until a prompt is sent, so any messages queued behind the dropped one, and any sent now, wait until then. Check the session's input box before sending a prompt.",
+  "daemon.queued_messages_lost.held": "The message could not be written in full into this session, so it was dropped. The session's input box may be holding part of the message. Messages queued behind the dropped one, and any sent now, wait for a prompt to be sent, each for about a minute at most; after that, each is written into the input box together with what the box holds. Check the session's input box before sending a prompt.",
   "daemon.page_not_current": "This page is no longer current, so its form can no longer be submitted.",
   "daemon.page_already_submitted": "This page was already submitted, so its form cannot be submitted again.",
   "daemon.invalid_path": "{path} is not a valid path in this project.",
@@ -776,7 +788,7 @@ export const en = {
   "daemon.sharing_messages_dropped":
     "{appName} dropped messages held back for a session while its account's sharing changed, because the session was not restarted.",
   "daemon.message_not_sent":
-    "{agent} did not send a message {appName} wrote into this session, so it is waiting in the session's input box. The application writes nothing more into the session until a prompt is sent.",
+    "{agent} did not send a message {appName} wrote into this session, so it is waiting in the session's input box. The application holds its next message for up to 30 seconds, waiting for a prompt to be sent; after that, it writes the next message into the input box together with what the box holds.",
   "daemon.message_acceptance_unconfirmed":
     "{agent} did not confirm that it accepted a message {appName} wrote into this session. The message may already be queued, and the application will not send it again. Later messages are held for at most three seconds or until another prompt is sent. Check the conversation before deciding whether to send the message again.",
   "daemon.message_not_sent.retry":
@@ -792,12 +804,17 @@ export const en = {
   "daemon.draft_discarded":
     "{appName} cleared the draft in this session's input box so that a message would not be sent together with it. To keep the draft, paste it back into the input box.",
   "daemon.draft_discarded.part": "{appName} cleared part of the draft in this session's input box so that a message would not be sent together with it. The message waits until the input box is empty, and {appName} tries again once the box changes. To keep the draft, copy it below; part of it may still be in the input box.",
+  "daemon.message_sent_with_draft": "{appName} could not clear the draft from this session's input box, so its message was sent together with the draft. Check the session. To keep the draft, copy it below.",
+  "daemon.message_sent_with_draft.unread": "{appName} could not clear this session's input box, so its message was sent together with whatever the box held. Check the session.",
+  "daemon.message_sent_with_draft.previous": "The previous message from {appName} was still unsent in this session's input box, so the new message was sent together with it. Check the session.",
+  "daemon.message_sent_with_draft.previousAndDraft": "The previous message from {appName} was still unsent in this session's input box, with text typed after it, so the new message was sent together with both. Check the session. To keep what the input box held, copy it below.",
+  "daemon.message_waits_on_input": "A message from {appName} is waiting because this session's input box cannot be read. A list or another view may be covering it. Close the list or view, or send or clear what the input box holds, so the message can go in.",
   "daemon.draft_restore_unconfirmed":
     "{agent} did not confirm putting the draft back into this session's input box after {appName} sent its message. What was typed into the session while the draft was set aside goes into the input box as it is now, and the message is not sent again. Check the input box before sending what it holds.",
   "daemon.typing_held":
     "Some of what was typed into this session while {appName} wrote a message into it has not reached {agent} yet. {agent} is showing a dialog or is not taking input. What was held back is typed in, in order, once it takes input again. If the session shows a dialog, answer it.",
   "daemon.typing_blocked":
-    "Only part of the message written into this session reached its input box. The message will not be sent again. What was typed into the session while the message was written is discarded when you type again, and what you type from then on goes straight to {agent}. Other messages from {appName} wait until a prompt is sent. Check the input box and remove what is left of the message before sending a prompt.",
+    "Only part of the message written into this session reached its input box. The message will not be sent again. What was typed into the session while the message was written is discarded when you type again, and what you type from then on goes straight to {agent}. Other messages from {appName} wait for a prompt to be sent, each for about a minute at most; after that, each is written into the input box together with what the box holds. Check the input box and remove what is left of the message before sending a prompt.",
   "daemon.typing_lost":
     "This session ended before {agent} confirmed putting its draft back, so what was typed into it meanwhile is lost and is not typed in when the session is resumed.",
   "daemon.account_switched_automatically": "{from} ({agent}) reached its usage limit, so {appName} switched {session} to {account}.",
@@ -816,6 +833,11 @@ export const en = {
   "daemon.draft_save_unconfirmed.alertTitle": "Draft save not confirmed",
   "daemon.draft_discarded.alertTitle": "Draft cleared",
   "daemon.draft_discarded.part.alertTitle": "Draft partly cleared",
+  "daemon.message_sent_with_draft.alertTitle": "Message sent with the draft",
+  "daemon.message_sent_with_draft.previous.alertTitle": "Message sent with the previous one",
+  "daemon.message_sent_with_draft.unread.alertTitle": "Message sent with the input box's content",
+  "daemon.message_sent_with_draft.previousAndDraft.alertTitle": "Message sent with the previous one and the draft",
+  "daemon.message_waits_on_input.alertTitle": "Message waiting to go in",
   "daemon.draft_restore_unconfirmed.alertTitle": "Draft restore not confirmed",
   "daemon.typing_held.alertTitle": "Typing held back",
   "daemon.typing_blocked.alertTitle": "Message partly written",

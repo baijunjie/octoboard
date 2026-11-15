@@ -1137,12 +1137,27 @@ fn codex_action_markers_are_activity_items_rather_than_task_text() {
     }
 }
 
-/// Codex has no measured collapsed-paste placeholder, so none is recognised as one.
+/// Codex's placeholder for a long paste, as 0.167.1 draws it, is recognised as one, and nothing
+/// else is: not Claude Code's, nor text around Codex's own.
 #[test]
-fn codex_recognises_no_collapsed_paste() {
-    assert!(!CodexProvider
-        .screen()
-        .collapsed_paste("[Pasted text #1 +24 lines]"));
+fn codex_recognises_its_own_collapsed_paste_only() {
+    let screen = CodexProvider.screen();
+    assert!(screen.collapsed_paste("[Pasted Content 2400 chars]"));
+    for text in [
+        "[Pasted text #1 +24 lines]",
+        "[Pasted Content chars]",
+        "[Pasted Content 12a chars]",
+        "tail [Pasted Content 2400 chars]",
+    ] {
+        assert!(!screen.collapsed_paste(text), "{text}");
+    }
+}
+
+/// Codex's Ctrl-U is measured to clear its composer a line a press, so a draft past the grace is
+/// cleared out of a message's way.
+#[test]
+fn codex_clears_its_composer_with_ctrl_u() {
+    assert!(CodexProvider.screen().clears_input_box_with_ctrl_u());
 }
 
 /// Codex has no stash the daemon uses, whatever its version.

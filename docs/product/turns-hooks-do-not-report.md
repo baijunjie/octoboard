@@ -165,8 +165,9 @@ What follows the move:
   `docs/product/reporting-to-owners.md`). A message held while the turn ran is released.
 - Should Grok still report a turn end for that turn afterwards, that turn end is taken as how the turn really ended, and
   the turn is reported on as any other is.
-- The prompt Grok put back in its composer stays there, and a message Octoboard writes from then on goes in after it. A
-  cancel made by `interrupt_session` clears it first (see "The input box afterwards" in
+- The prompt Grok put back in its composer stays there, and for a message Octoboard writes from then on it is a draft
+  like one the user typed (see `docs/product/draft-preservation.md`). A cancel made by `interrupt_session` clears it
+  first (see "The input box afterwards" in
   `docs/product/interrupting-turns.md`); a cancel the user makes in the terminal is left as Grok leaves it.
 - The agent's process is still running, so the session is at its prompt, *paused*, and not *interrupted*.
 

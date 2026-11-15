@@ -77,7 +77,7 @@ pub trait ScreenReader: Send + Sync {
     /// break before the cursor at the start of a line) and to do nothing else, so that a draft can
     /// be cleared out of the way of a message past the draft's grace
     /// (`crate::session::draft_clear`). Where it is not, such a message waits for the box to be
-    /// emptied by the user instead.
+    /// emptied by the user, for a bounded time, and then goes in as the box stands.
     fn clears_input_box_with_ctrl_u(&self) -> bool {
         false
     }

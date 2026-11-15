@@ -150,10 +150,21 @@ pub struct LiveSession {
     /// key clears it again until the box shows something else, a prompt is reported, a turn ends,
     /// or a while has passed.
     unseen_clear: Mutex<Option<draft_clear::UnseenClear>>,
-    /// The message Octoboard wrote last, while its being alone in the box holds a draft clear back
-    /// (`draft_clear`): which write it was (`Draft::message_count`), since when, and whether the
-    /// user has been told it waits.
-    own_message_held: Mutex<Option<(u64, Instant, bool)>>,
+    /// The message that past its grace found a draft in the input box, by its identity
+    /// ([`Self::message_key`]), and since when (`draft_clear`): once
+    /// [`draft_clear::UNCLEARABLE_DRAFT_WAIT`] has passed and the box still cannot be emptied, it
+    /// goes into the box as the box stands. Also whether the user has been told the message waits
+    /// on a box only they can bring back into view (`draft_clear::LiveSession::waits_on_input_due`).
+    /// Forgotten once a message goes in.
+    unclearable_since: Mutex<Option<(String, Instant, bool)>>,
+    /// The identity of the message whose write is under way, as the queue knows it
+    /// (`term::send_message_with_id`), while it is ([`Self::write_message_input_as`]).
+    writing: Mutex<Option<String>>,
+    /// Since when the message marked unsent (`unsent_at`) has waited for the user to send it, its
+    /// submit key not to be retried: it holds later messages for
+    /// [`draft_clear::UNCLEARABLE_DRAFT_WAIT`] from then, after which the next goes into the box
+    /// with it ([`Self::unsent_hold_over`]). Taken after `unsent_at` where both are.
+    unsent_waits_since: Mutex<Option<Instant>>,
     /// The acknowledgement count of the unconfirmed message the user was told was not sent, until a
     /// prompt reported after it withdraws that ([`Self::note_prompt_sent`]). Taken before
     /// `unsent_at` where both are.
@@ -282,7 +293,9 @@ impl LiveSession {
             unsent_retry_scheduled: AtomicBool::new(false),
             draft_hold: draft_hold::DraftHold::default(),
             unseen_clear: Mutex::new(None),
-            own_message_held: Mutex::new(None),
+            unclearable_since: Mutex::new(None),
+            writing: Mutex::new(None),
+            unsent_waits_since: Mutex::new(None),
             unsent_notice: Mutex::new(None),
             uncertain_at: Mutex::new(None),
             agent_error_at: Mutex::new(None),
@@ -611,25 +624,40 @@ impl LiveSession {
         prompt: &str,
         past_grace: bool,
     ) -> Result<(), PartialWrite> {
-        self.write_message_into_empty_box(message, prompt, past_grace, None)
+        self.write_message_into_box(message, prompt, past_grace, BoxIs::Read)
     }
 
-    /// [`Self::write_empty_message_input`], for a box Octoboard's own keys have just emptied where
-    /// `cleared` is the count of writes after its last key (`draft_clear`): refused if anything
-    /// else has written since, and otherwise, in the same step as the write, the typing record is
-    /// told the box holds nothing any more ([`Draft::cleared_by_octoboard`]).
-    fn write_message_into_empty_box(
+    /// [`Self::write_empty_message_input`], with what the box is taken to hold as `box_is` says:
+    /// read as the grace requires; emptied by Octoboard's own keys ([`BoxIs::Cleared`]), refused if
+    /// anything else has written since, and otherwise, in the same step as the write, the typing
+    /// record told the box holds nothing any more ([`Draft::cleared_by_octoboard`]); or holding
+    /// text no key could clear for [`draft_clear::UNCLEARABLE_DRAFT_WAIT`]
+    /// ([`BoxIs::Unclearable`]), written into as it stands. A box read past the grace that keeps
+    /// the message waiting on text it may hold and no key can clear (an unreadable box, or one read
+    /// empty off a frame not drawn whole, while the typing record knows of text typed into it)
+    /// is written into as it stands too, once that wait has run out for this message. Such a write
+    /// still waits for a dialog, a key not yet complete and a key that may not be drawn yet, and
+    /// every client is told what the box held ([`Self::report_sent_with_draft`]). A box that
+    /// cannot be read after keys whose text is not all known keeps the message waiting, a view
+    /// such as a picker perhaps hiding it, and has the user told once it has waited as long
+    /// ([`Self::waits_on_input_due`]).
+    fn write_message_into_box(
         &self,
         message: &[Input],
         prompt: &str,
         past_grace: bool,
-        cleared: Option<u64>,
+        box_is: BoxIs<'_>,
     ) -> Result<(), PartialWrite> {
         let input = self.pty.lock_input();
         if self.pty.is_frozen() {
             return Err(swap::archived_refusal());
         }
-        if self.input_swap_active() {
+        // A hold on the input that has lasted its bound no longer keeps a message written as the
+        // box stands out ([`Self::input_swap_held_too_long`]).
+        let through_hold = self.input_swap_active();
+        if through_hold
+            && !(matches!(box_is, BoxIs::Unclearable { .. }) && self.input_swap_held_too_long())
+        {
             return Err(swap::blocked("an input replacement holds the composer"));
         }
         if !self.takes_automatic_keys() {
@@ -638,7 +666,7 @@ impl LiveSession {
             ));
         }
         let mut draft = self.draft.lock().expect("draft lock poisoned");
-        if let Some(cleared) = cleared {
+        if let BoxIs::Cleared(cleared) = box_is {
             if self.input_writes.load(Ordering::Acquire) != cleared {
                 return Err(swap::blocked(
                     "something else wrote into the session after its input box was cleared",
@@ -646,8 +674,16 @@ impl LiveSession {
             }
             draft.cleared_by_octoboard();
         }
+        let (mut as_it_stands, unsent, read_before) = match box_is {
+            BoxIs::Unclearable {
+                unsent,
+                read_before,
+            } => (true, unsent, read_before),
+            _ => (false, false, None),
+        };
         if self.checks_composer
             && !past_grace
+            && !as_it_stands
             && (self.stash_shown() || {
                 let (composer, _) = self.composer_for_draft(&mut draft);
                 draft.holds() || composer.as_deref() != Some("")
@@ -661,9 +697,81 @@ impl LiveSession {
                 ),
             });
         }
-        if self.checks_composer && past_grace {
+        if self.checks_composer && past_grace && !as_it_stands {
             if let Some(refusal) = self.past_grace_refusal(&draft) {
-                return Err(swap::blocked(refusal));
+                if refusal.waits_on_user {
+                    let tell = self.waits_on_input_due(prompt);
+                    drop(draft);
+                    drop(input);
+                    if tell {
+                        self.tell_waits_on_input();
+                    }
+                    return Err(swap::blocked(refusal.reason));
+                }
+                if !refusal.unclearable || !self.unclearable_wait_over(prompt) {
+                    return Err(swap::blocked(refusal.reason));
+                }
+                as_it_stands = true;
+            }
+        }
+        // What the box held as the message went in with it, and whether that was only the message
+        // Octoboard wrote last; or the draft a clear's presses turned out to have emptied it of.
+        let mut held = None;
+        let mut emptied = None;
+        if as_it_stands {
+            let now = Instant::now();
+            if !draft.at_input_boundary(now) && !draft.sequence_abandoned(now) {
+                return Err(swap::blocked(
+                    "a key typed into the session is still waiting for the rest of its bytes",
+                ));
+            }
+            if draft.text_may_be_undrawn(now) {
+                return Err(swap::blocked(
+                    "keys just typed into the session may not be drawn in its input box yet",
+                ));
+            }
+            let (composer, whole, _) = self.read_box();
+            // A box that cannot be read after a key that may have brought in text the typing
+            // record cannot know may be hidden by a view such as a picker, which would take the
+            // message's keys: the message waits for the user, who is told after a while.
+            if composer.is_none() && draft.may_hold_unknown_text() {
+                let tell = self.waits_on_input_due(prompt);
+                drop(draft);
+                drop(input);
+                if tell {
+                    self.tell_waits_on_input();
+                }
+                return Err(swap::blocked(
+                    "the session's input box cannot be read after keys that may have put text in \
+                     it",
+                ));
+            }
+            // A box seen empty off a whole frame holds nothing the message could go in with,
+            // whatever the typing record still holds: it is written as into any empty box, and the
+            // record told so.
+            let empty = composer.as_deref() == Some("") && whole.is_some();
+            if empty {
+                draft.cleared_by_octoboard();
+                // The presses of a clear before this write emptied the box after all: what they
+                // removed is told once the message is in.
+                emptied = read_before;
+            } else {
+                let text = composer.filter(|text| !text.is_empty());
+                let typed = draft.typed_since_message();
+                let kind = match text.as_deref() {
+                    // The message left unsent with what was typed after it.
+                    Some(_) if unsent && typed => draft_clear::Held::MessageAndDraft,
+                    Some(text)
+                        if !typed && self.holds_only_the_message(text, draft.message_text()) =>
+                    {
+                        draft_clear::Held::Message
+                    }
+                    _ => draft_clear::Held::Draft,
+                };
+                // A draft a clear began on before this write is handed back whole, what the clear
+                // removed included.
+                let text = read_before.map(str::to_string).or(text);
+                held = Some((text, kind));
             }
         }
         let (now, rest) = paste_apart::split(message, self.submits_paste_apart());
@@ -671,13 +779,31 @@ impl LiveSession {
         self.input_writes.fetch_add(1, Ordering::AcqRel);
         let written = self.pty.write_input_locked(&input, now);
         if written.is_ok() {
+            if held.is_some() {
+                // What the box held goes with the message: the typing record holds nothing of it.
+                draft.cleared_by_octoboard();
+            }
             draft.message_written(Instant::now(), prompt);
             self.end_torn_run();
             self.note_message_written();
+            self.end_unclearable_wait();
+            if through_hold {
+                self.note_forced_through_hold(prompt);
+            }
         }
         drop(draft);
+        if written.is_ok() && unsent {
+            // The message left unsent goes with this one: it holds nothing any more.
+            self.end_unsent_hold();
+        }
         drop(input);
         written?;
+        if let Some((text, kind)) = held {
+            self.report_sent_with_draft(text.as_deref(), kind);
+        }
+        if let Some(draft) = emptied {
+            self.report_draft_cleared(draft);
+        }
         // Only a box found empty above has to show the message alone.
         self.submit_rest(now, rest, self.checks_composer && !past_grace)
     }
@@ -772,6 +898,7 @@ impl LiveSession {
         if after_fragment {
             self.end_input_takeover();
         }
+        self.end_hold_forced_through(prompt);
         self.prompts_sent.fetch_add(1, Ordering::AcqRel);
         *self
             .agent_error_at
@@ -812,8 +939,12 @@ impl LiveSession {
 
     /// Records that a message written when the count stood at `before` was not sent.
     pub fn mark_unsent(&self, before: u64) {
-        *self.unsent_at.lock().expect("unsent mark lock poisoned") =
-            Some((before, Instant::now(), true));
+        let mut unsent = self.unsent_at.lock().expect("unsent mark lock poisoned");
+        *unsent = Some((before, Instant::now(), true));
+        *self
+            .unsent_waits_since
+            .lock()
+            .expect("unsent wait lock poisoned") = None;
     }
 
     /// Records that a message written when the count stood at `before` was left in the input box,
@@ -821,8 +952,13 @@ impl LiveSession {
     /// [`Self::mark_unsent`] records, but no retry presses the key once more, which could answer
     /// whatever has come up in the box's place.
     pub fn mark_not_submitted(&self, before: u64) {
-        *self.unsent_at.lock().expect("unsent mark lock poisoned") =
-            Some((before, Instant::now(), false));
+        let mut unsent = self.unsent_at.lock().expect("unsent mark lock poisoned");
+        let now = Instant::now();
+        *unsent = Some((before, now, false));
+        *self
+            .unsent_waits_since
+            .lock()
+            .expect("unsent wait lock poisoned") = Some(now);
     }
 
     /// Has `tell` tell the user that the message marked unsent was not sent, given whether its
@@ -846,18 +982,59 @@ impl LiveSession {
         tell(retry);
     }
 
-    /// Whether a message marked unsent is still taken to be waiting in the input box: until the
-    /// agent reports a prompt sent after it or the bounded submit-key retry runs.
+    /// Whether a message marked unsent is still taken to be waiting in the input box, holding later
+    /// messages: until the agent reports a prompt sent after it or the bounded submit-key retry
+    /// runs, and, once it waits for the user to send it, for
+    /// [`draft_clear::UNCLEARABLE_DRAFT_WAIT`] at most ([`Self::unsent_hold_over`]).
     pub fn unsent_waiting(&self) -> bool {
         let mut unsent_at = self.unsent_at.lock().expect("unsent mark lock poisoned");
         match *unsent_at {
-            Some((before, _, _)) if self.prompts_sent() <= before => true,
+            Some((before, _, _)) if self.prompts_sent() <= before => !self.user_wait_over(),
             Some(_) => {
                 *unsent_at = None;
                 false
             }
             None => false,
         }
+    }
+
+    /// Whether the message marked unsent has waited for the user to send it for
+    /// [`draft_clear::UNCLEARABLE_DRAFT_WAIT`]; read with `unsent_at` locked.
+    fn user_wait_over(&self) -> bool {
+        self.unsent_waits_since
+            .lock()
+            .expect("unsent wait lock poisoned")
+            .is_some_and(|since| since.elapsed() >= draft_clear::UNCLEARABLE_DRAFT_WAIT)
+    }
+
+    /// Whether a message marked unsent, still not reported sent, has waited for the user to send
+    /// it for as long as it holds later messages ([`Self::unsent_waiting`]): the next message then
+    /// goes into the input box with it, as the box stands (`Self::write_message_input`).
+    pub(super) fn unsent_hold_over(&self) -> bool {
+        let unsent_at = self.unsent_at.lock().expect("unsent mark lock poisoned");
+        unsent_at.is_some_and(|(before, _, _)| self.prompts_sent() <= before)
+            && self.user_wait_over()
+    }
+
+    /// Forgets the message marked unsent, once a message has gone into the box with it.
+    fn end_unsent_hold(&self) {
+        let mut unsent_at = self.unsent_at.lock().expect("unsent mark lock poisoned");
+        *unsent_at = None;
+        *self
+            .unsent_waits_since
+            .lock()
+            .expect("unsent wait lock poisoned") = None;
+    }
+
+    /// The identity the wait of the message `prompt` on a draft is kept under
+    /// ([`Self::unclearable_since`]): the queue's for the message whose write is under way, or,
+    /// for a write made directly (as under test), its text.
+    pub(super) fn message_key(&self, prompt: &str) -> String {
+        self.writing
+            .lock()
+            .expect("writing lock poisoned")
+            .clone()
+            .unwrap_or_else(|| prompt.to_string())
     }
 
     /// Presses the submit key once more for a message marked unsent ([`Self::mark_unsent`]), once
@@ -905,9 +1082,14 @@ impl LiveSession {
         if typed || (!alone && started.elapsed() >= UNSENT_RETRY_BOUND) {
             // What the user typed may be in the box with the message, and the Enter would send it
             // along; or the box has shown more than the message for too long to wait on it. The
-            // message waits for the user to send it, and holds the queue until then; the caller
-            // tells the user so ([`Self::schedule_unsent_submit_retry`]).
+            // message waits for the user to send it, and holds the queue until then, for a bounded
+            // time ([`Self::unsent_hold_over`]); the caller tells the user so
+            // ([`Self::schedule_unsent_submit_retry`]).
             *unsent = Some((before, started, false));
+            *self
+                .unsent_waits_since
+                .lock()
+                .expect("unsent wait lock poisoned") = Some(Instant::now());
             tracing::warn!(session = %self.id, typed, "the submit key of a message left unsent is not retried: the input box may hold more than the message");
             return Ok(false);
         }
@@ -1090,6 +1272,24 @@ impl LiveSession {
     pub fn is_exit_settled(&self) -> bool {
         self.exit_settled.load(Ordering::Acquire)
     }
+}
+
+/// What a message's write takes the agent's input box to hold
+/// ([`LiveSession::write_message_into_box`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BoxIs<'a> {
+    /// What the write reads off the screen, as the draft's grace requires.
+    Read,
+    /// Emptied by Octoboard's own keys (`draft_clear`), the count of writes after the last of them.
+    Cleared(u64),
+    /// Text no key could clear for [`draft_clear::UNCLEARABLE_DRAFT_WAIT`]: the message goes in
+    /// as the box stands. `unsent` where the text is a message left unsent that waited that long
+    /// for the user to send it ([`LiveSession::unsent_hold_over`]); `read_before`, the draft as a
+    /// clear read it before its first press, where one ran.
+    Unclearable {
+        unsent: bool,
+        read_before: Option<&'a str>,
+    },
 }
 
 /// How long after a message was marked unsent its submit key is still retried while the input box
@@ -1746,5 +1946,40 @@ mod tests {
                 .is_err());
             assert_eq!(live.input_writes(), before);
         }
+    }
+
+    /// A message left unsent holds later messages with no bound while its submit key may still be
+    /// retried; once the retry has given up, because the user typed after it, the hold lasts
+    /// [`super::draft_clear::UNCLEARABLE_DRAFT_WAIT`] from then, and a new message marked unsent
+    /// has a hold of its own.
+    #[test]
+    fn a_message_left_unsent_holds_later_ones_for_a_bounded_time_once_its_retry_has_ended() {
+        let wait = super::draft_clear::UNCLEARABLE_DRAFT_WAIT;
+        let began = |live: &super::LiveSession, ago: std::time::Duration| {
+            *live.unsent_waits_since.lock().unwrap() =
+                Some(std::time::Instant::now().checked_sub(ago).unwrap());
+        };
+        let live = unsent_session("unsent-bounded");
+        assert!(live.unsent_waiting(), "the retry is still to come");
+        assert!(!live.unsent_hold_over());
+
+        live.write_terminal_input(b" and more").unwrap();
+        draw_box(&live, "peer and more");
+        assert!(
+            !live.retry_unsent_submit(|| true).unwrap(),
+            "the retry ends"
+        );
+        assert!(live.unsent_waiting(), "held for the user from then");
+        assert!(!live.unsent_hold_over());
+        began(&live, wait / 2);
+        assert!(live.unsent_waiting() && !live.unsent_hold_over());
+        began(&live, wait);
+        assert!(!live.unsent_waiting(), "the hold is over");
+        assert!(live.unsent_hold_over());
+
+        // A message of its own marked unsent has its own hold, with no bound while its retry is due.
+        live.mark_unsent(0);
+        assert!(live.unsent_waiting());
+        assert!(!live.unsent_hold_over());
     }
 }

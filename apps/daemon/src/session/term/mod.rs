@@ -542,13 +542,14 @@ pub const FRAGMENT_HAZARD: &str = concat!(
 );
 
 /// [`FRAGMENT_HAZARD`] for a session that holds its later writes behind the fragment until the user
-/// sends a prompt, which submits the input line: nothing is run together with it, but a message sent
-/// meanwhile waits.
+/// sends a prompt, which submits the input line, for a bounded time: a message sent meanwhile waits,
+/// and once the hold and its own wait have run out it goes in together with what the input box
+/// holds (`docs/product/draft-preservation.md`, "When the composer cannot be cleared").
 pub const HELD_FRAGMENT: &str = concat!(
-    "the session's input box may be holding part of it. ",
+    "the session's input box may be holding part of it. Messages written into the session \
+     wait for a prompt to be sent, each for about a minute at most; after that, ",
     env!("OCTOBOARD_APP_NAME"),
-    " writes nothing more into the session until a prompt is sent, so a message \
-     sent now waits until then."
+    " writes each into the input box together with what the box holds."
 );
 
 /// Acceptance could not be established after the queue request was sent. Retrying could duplicate
@@ -588,7 +589,8 @@ pub fn send_message(session: &LiveSession, text: &str) -> Result<(), PartialWrit
 /// The input write checks for an empty, acknowledged composer or saves and restores the draft
 /// through a supported native stash. Preservation has a bounded grace period; after expiry, the
 /// user's edits need no acknowledgement, a draft no stash can take is cleared first where the agent
-/// has a measured key for it, and the message is never written together with text in the composer.
+/// has a measured key for it, and the message goes in together with text in the composer only once
+/// that text has resisted clearing for a bounded wait.
 /// The caller also holds messages while a modal dialog is up,
 /// because the paste is discarded but the trailing Enter confirms whatever option is highlighted —
 /// at Claude Code's trust dialog that exits the session, and at Grok's approval modal it selects
@@ -642,7 +644,7 @@ pub fn send_message_with_id(
         unreachable!("a message is framed as a paste");
     };
     session
-        .write_message_input(&framed, prompt, past_grace)
+        .write_message_input_as(logical_id, &framed, prompt, past_grace)
         .map(|()| Route::Terminal)
 }
 

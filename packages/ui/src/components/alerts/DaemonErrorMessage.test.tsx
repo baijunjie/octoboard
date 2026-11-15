@@ -1051,6 +1051,110 @@ describe("a draft cleared from an input box", () => {
   });
 });
 
+describe("a message sent with the text in an input box that could not be cleared", () => {
+  const CHINESE = "远程的菜单栏图标中";
+  const label = (body: Element, text: string) => [...body.querySelectorAll("span[id]")].find((span) => span.textContent === text);
+  const alertOf = (error: CodedError) => {
+    raiseError(error, { title: "Message" });
+    mount(<ErrorAlerts />);
+    return document.querySelector('[role="alertdialog"]')!;
+  };
+
+  it.each([
+    ["the draft", { agent: "Codex", detail: CHINESE }, "sent together with the draft", "Draft content"],
+    ["the previous message and the text typed after it", { agent: "Codex", detail: CHINESE, held: "message_and_draft" }, "with text typed after it", "Input box content"],
+  ])("hands %s back whole as a block of its own after the explanation, under its label, with a copy button", (_, params, wording, blockLabel) => {
+    const error = new CodedError("plain", "message_sent_with_draft", params);
+    const { body, raw } = mountApart(error);
+    expect(hasErrorDetails(error)).toBe(true);
+    expect(hasRawDetails(error)).toBe(false);
+    expect(raw.textContent).toBe("");
+    expect(body.textContent).toContain(wording);
+    expect(body.textContent).toContain("copy it below");
+    const block = body.querySelector("pre")!;
+    expect(block.textContent).toBe(CHINESE);
+    expect(block.getAttribute("dir")).toBe("auto");
+    expect(block.classList.contains("whitespace-pre-wrap")).toBe(true);
+    const group = label(body, blockLabel)?.parentElement;
+    expect(group?.contains(block)).toBe(true);
+    expect(group?.querySelector("button")).not.toBeNull();
+    expect(body.textContent).not.toContain("Error details");
+    // Describes its alert by the explanation alone: the text is the block that follows it.
+    const alert = alertOf(error);
+    const description = document.getElementById(alert.getAttribute("aria-describedby")!)!;
+    expect(description.textContent).not.toContain(CHINESE);
+    expect(description.contains(alert.querySelector("pre"))).toBe(false);
+    expect(alert.querySelector("pre")!.textContent).toBe(CHINESE);
+  });
+
+  it.each([
+    ["with the draft, under its own title", { agent: "Codex", detail: CHINESE }, "Message sent with the draft"],
+    ["with the previous message, under a title of its own", { agent: "Codex", held: "message" }, "Message sent with the previous one"],
+    ["with the previous message and the text typed after it, under a title of its own", { agent: "Codex", detail: CHINESE, held: "message_and_draft" }, "Message sent with the previous one and the draft"],
+    ["with an input box that could not be read, under a title of its own", { agent: "Codex" }, "Message sent with the input box's content"],
+  ])("titles the alert of a message sent %s", (_, params, title) => {
+    const alert = alertOf(new CodedError("plain", "message_sent_with_draft", params));
+    expect(alert.querySelector("h2")?.textContent).toBe(title);
+  });
+
+  it("says that the previous message was in the box, with no block, where no text could be handed back", () => {
+    const error = new CodedError("plain", "message_sent_with_draft", { agent: "Codex", held: "message" });
+    const { body } = mountApart(error);
+    expect(body.textContent).toContain("previous message");
+    expect(body.textContent).toContain("still unsent");
+    expect(body.querySelector("pre")).toBeNull();
+    expect(label(body, "Draft content")).toBeUndefined();
+  });
+
+  it("says that the box held whatever it held, with no block, where the box could not be read", () => {
+    const error = new CodedError("plain", "message_sent_with_draft", { agent: "Codex" });
+    const { body } = mountApart(error);
+    expect(body.textContent).toContain("whatever the box held");
+    expect(body.querySelector("pre")).toBeNull();
+    expect(label(body, "Draft content")).toBeUndefined();
+    const alert = alertOf(error);
+    expect(alert.querySelector("h2")?.textContent).not.toBe("");
+    expect(alert.querySelector("pre")).toBeNull();
+  });
+
+  it("puts the text on a line of its own after the message as plain text, for each variant that carries it", () => {
+    const state = createStateStore({}).getState();
+    for (const params of [{ agent: "Codex", detail: CHINESE }, { agent: "Codex", detail: CHINESE, held: "message_and_draft" }] as Record<string, string>[]) {
+      const text = daemonMessage("en", "message_sent_with_draft", params, "fallback", state);
+      expect(text.endsWith(`\n${CHINESE}`)).toBe(true);
+      expect(text).not.toMatch(/\{[a-zA-Z_]+\}/);
+    }
+    for (const params of [{ agent: "Codex" }, { agent: "Codex", held: "message" }] as Record<string, string>[]) {
+      const text = daemonMessage("en", "message_sent_with_draft", params, "fallback", state);
+      expect(text).not.toContain(CHINESE);
+      expect(text).not.toMatch(/\{[a-zA-Z_]+\}/);
+      expect(text.trim()).not.toBe("");
+    }
+  });
+
+  it("words the label in the language in use", () => {
+    const error = new CodedError("plain", "message_sent_with_draft", { agent: "Codex", detail: CHINESE });
+    const { body } = mountApart(error);
+    act(() => setLanguage("zh-Hans"));
+    const localized = format("zh-Hans", "daemon.message_sent_with_draft.detailLabel");
+    expect(localized).not.toBe("Draft content");
+    expect(label(body, localized)?.parentElement?.contains(body.querySelector("pre"))).toBe(true);
+    expect(label(body, "Draft content")).toBeUndefined();
+    expect(body.querySelector("pre")!.textContent).toBe(CHINESE);
+  });
+
+  it("tells that a message waits on an input box that cannot be read, under its own title, with the way out", () => {
+    const error = new CodedError("plain", "message_waits_on_input", { agent: "Claude Code" });
+    const { body } = mountApart(error);
+    expect(body.textContent).toContain("waiting because this session's input box cannot be read");
+    expect(body.textContent).toContain("send or clear what the input box holds");
+    expect(body.querySelector("pre")).toBeNull();
+    const alert = alertOf(error);
+    expect(alert.querySelector("h2")?.textContent).toBe("Message waiting to go in");
+    expect(body.textContent).toContain("Close the list or view");
+  });
+});
+
 it("no longer says that an unconfirmed draft save may have sent the message with the draft", () => {
   const error = new CodedError("plain", "draft_save_unconfirmed", { agent: "Claude Code" });
   const { body } = mountApart(error);

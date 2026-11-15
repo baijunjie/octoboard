@@ -754,8 +754,8 @@ pub mod notice_code {
     pub const TRUST_ANSWER_FAILED: Code = Code("trust_answer_failed");
     pub const TRUST_NOT_CARRIED_OVER: Code = Code("trust_not_carried_over");
     /// A message written into the session was not sent by its agent and is waiting in the input
-    /// box; nothing more is written into the session until a prompt is sent. `params` names the
-    /// `agent`.
+    /// box; later messages wait for a prompt to be sent, for 30 seconds at most once the message
+    /// waits on the user, and then go into the box with it. `params` names the `agent`.
     pub const MESSAGE_NOT_SENT: Code = Code("message_not_sent");
     /// The session's agent did not confirm accepting a message written into its own queue. The
     /// message may already be queued, and is not sent again. `params` names the `agent`.
@@ -814,6 +814,21 @@ pub mod notice_code {
     /// names the `agent` and carries the draft's text as the screen showed it as `detail` (a
     /// collapsed paste only as the placeholder the agent shows for it).
     pub const DRAFT_DISCARDED: Code = Code("draft_discarded");
+    /// Past the draft's grace, text in the session's input box that no key could clear held a
+    /// message for 30 seconds, so the message was written into the box as it stood and may be sent
+    /// together with that text. `params` names the `agent` and carries the text the box showed
+    /// before the write as `detail` (the draft as read before a clear began, where one did),
+    /// absent where it showed none or could not be read; `held: "message"` where that text was
+    /// only the message Octoboard wrote before, left unsent, and no `detail` then; `held:
+    /// "message_and_draft"` where it was that message with text typed after it, which waited 30
+    /// seconds for the user to send it.
+    pub const MESSAGE_SENT_WITH_DRAFT: Code = Code("message_sent_with_draft");
+    /// Past the draft's grace, a message has waited 30 seconds on the session's input box, which
+    /// cannot be read after keys that may have brought text into it and may be hidden behind a
+    /// list or another view that would take the message's keys: it keeps waiting until the user
+    /// closes it, or sends or clears what the box holds. Sent once a message. `params` names the
+    /// `agent`.
+    pub const MESSAGE_WAITS_ON_INPUT: Code = Code("message_waits_on_input");
     /// A message went in while the draft was stashed, but the agent did not confirm restoring the
     /// draft in time: keys typed meanwhile are released into the input as it is, and the message is
     /// not sent again. `params` names the `agent`.
@@ -823,9 +838,9 @@ pub mod notice_code {
     pub const TYPING_HELD: Code = Code("typing_held");
     /// Only part of a message written while a draft was stashed reached the input. It is not sent
     /// again. Keys typed while it was written are dropped, unreplayed, when the user next types, and
-    /// their keys go straight in from then on; Octoboard writes nothing more into the session, and
-    /// keeps what is queued behind the message, until a prompt is submitted after that. `params`
-    /// names the `agent`.
+    /// their keys go straight in from then on; Octoboard's later messages, the queue behind the
+    /// message included, wait until a prompt is submitted after that, each for a bounded time, and
+    /// then go into the input box as it stands. `params` names the `agent`.
     pub const TYPING_BLOCKED: Code = Code("typing_blocked");
     /// The session's process ended before the draft's restoration was confirmed, so the keys typed
     /// meanwhile are not replayed into a resumed session. `params` names the `agent` and the

@@ -250,8 +250,10 @@ impl PromptSignal for HookPrompts<'_> {
         self.live.input_recovery_pending().is_some()
     }
 
+    /// A hold that has lasted its bound no longer starts a message's grace again, so the message
+    /// can come past it (`LiveSession::input_swap_held_too_long`).
     fn input_held(&self) -> bool {
-        self.live.input_swap_active()
+        self.live.input_swap_active() && !self.live.input_swap_held_too_long()
     }
 
     fn usage_limit_held(&self) -> bool {
@@ -882,8 +884,9 @@ pub(crate) fn unsent_notice(agent: AgentId, retry: bool) -> Notice {
             notice_code::MESSAGE_NOT_SENT,
             format!(
                 "{} did not send a message {} wrote into this session, so it is waiting in the \
-                 session's input box. {} writes nothing more into the session until a prompt is \
-                 sent.",
+                 session's input box. {} holds its next message for up to 30 seconds, waiting for \
+                 a prompt to be sent; after that, it writes the next message into the input box together \
+                 with what the box holds.",
                 agent.label(),
                 crate::APP_NAME,
                 crate::APP_NAME

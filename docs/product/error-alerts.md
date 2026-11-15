@@ -474,8 +474,9 @@ lets the tail of a line be brought clear of the button. It copies the complete o
 indentation, and leading and trailing whitespace. It is available before the daemon connects too. A successful copy
 and a failed copy follow "Copy buttons" in `docs/product/labels-and-tooltips.md`.
 
-**Text the user wrote** that a failure hands back — today only the draft Octoboard cleared from a session's input box
-(`draft_discarded`, see "The draft and typing notices" in `docs/product/draft-preservation.md`) — is not raw text and
+**Text the user wrote** that a failure hands back — today the draft Octoboard cleared from a session's input box
+(`draft_discarded`) and what the input box held when Octoboard's message was sent together with it
+(`message_sent_with_draft`; see "The draft and typing notices" in `docs/product/draft-preservation.md`) — is not raw text and
 not part of a sentence either. In an error alert it is shown in the body, after the explanation and the next step and
 outside Error details, under a label of its own that also names its scrolling region, in a block like a diagnostic
 block: the same tinted surface, height limit, vertical scrolling and Copy button, which copies the complete original

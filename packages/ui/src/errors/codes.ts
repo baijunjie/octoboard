@@ -241,6 +241,8 @@ const CORE_CODES = {
   message_discarded_by_dialog: { origin: "daemon" },
   message_diverted_by_view: { origin: "daemon" },
   message_not_sent: { origin: "daemon", recovery: "unsentMessage", failureNotice: true, alertTitle: true, variantOf: (params) => params.submit_retry === "once" ? "retry" : undefined },
+  message_sent_with_draft: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true, detailLabel: true, variantOf: (params) => (params.held === "message" ? "previous" : params.held === "message_and_draft" ? "previousAndDraft" : params.detail ? undefined : "unread") },
+  message_waits_on_input: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true },
   // A relaunch that ends at once with a new model most likely does not take that model, and leaves the session not
   // running.
   model_change_did_not_come_up: { origin: "daemon", recovery: "modelChange" },

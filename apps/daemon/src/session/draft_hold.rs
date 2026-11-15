@@ -2,7 +2,8 @@
 //! checks a message written past the draft's grace still waits on: both read the agent's input box
 //! off the screen, off a screen that shows a whole frame (`output_pace`) and can no longer predate
 //! the keys (`draft`'s key timing); past the grace, an empty box read off a frame not drawn whole is
-//! waited on for a bounded time only, and a box that shows text is never written into. The rules
+//! waited on for a bounded time only, and a box that shows text is not written into while that
+//! text may yet be cleared (`draft_clear`). The rules
 //! are in `docs/product/draft-preservation.md`, sections "Keys that leave the composer empty are
 //! confirmed by the screen" and "The draft grace period".
 
@@ -72,6 +73,30 @@ thread_local! {
     pub(super) static WHOLE_FRAME_WAIT_OVERRIDE: std::cell::Cell<Option<Duration>> = const { std::cell::Cell::new(None) };
 }
 
+/// Why a message past the draft's grace waits ([`LiveSession::past_grace_refusal`]).
+pub(super) struct PastGraceRefusal {
+    pub(super) reason: &'static str,
+    /// Whether it waits on text the box may hold that no key can clear, which it does only for
+    /// [`super::draft_clear::UNCLEARABLE_DRAFT_WAIT`]; past that it goes in as the box stands.
+    pub(super) unclearable: bool,
+    /// Whether it waits, with no bound, on the user: a box that cannot be read after keys whose
+    /// text is not all known, which a view such as a picker may be hiding, and which would take
+    /// the message's keys. The user is told once the wait has lasted
+    /// [`super::draft_clear::UNCLEARABLE_DRAFT_WAIT`] (`LiveSession::waits_on_input_due`).
+    pub(super) waits_on_user: bool,
+}
+
+impl PastGraceRefusal {
+    /// A refusal that holds the message for as long as its cause stands.
+    fn holding(reason: &'static str) -> Self {
+        Self {
+            reason,
+            unclearable: false,
+            waits_on_user: false,
+        }
+    }
+}
+
 impl LiveSession {
     /// Notes a chunk of output, read now, before the parsed screen takes it in, so that a reading
     /// which finds the chunk on the screen also finds it noted ([`Self::composer_for_draft`]).
@@ -120,6 +145,9 @@ impl LiveSession {
         let (composer, whole, now) = self.read_box();
         if let (Some(""), Some(output)) = (composer.as_deref(), whole) {
             draft.shown_empty(output, now);
+            // A box seen empty ends the draft a message was waiting on: a draft typed after it
+            // starts a wait of its own (`draft_clear`).
+            self.end_unclearable_wait();
         }
         (composer, whole)
     }
@@ -231,44 +259,64 @@ impl LiveSession {
     }
 
     /// Why a message written past the draft's grace, which no longer waits for the keys typed to
-    /// be confirmed but is never written together with text in the box, has to wait, if it does;
-    /// read with the input lock held and `draft` locked. It waits, the watch's retry coming back to
-    /// it, while the box shows text; while the box cannot be read and any key typed into it is not
-    /// yet confirmed ([`Draft::holds`]), whatever it typed or removed, or may have brought back text
-    /// the mirror cannot know, such as a prompt from history: an unreadable box cannot show that
-    /// such keys left it empty; while the latest key may have put text in the box that is not drawn
-    /// yet; and while a box read empty comes from a frame read in part, for [`TORN_FRAME_WAIT`] of
-    /// retries at most, or with no bound while the typing record knows of text typed into it that
-    /// nothing since removed ([`Draft::knows_text`]). Text that shows is stashed or cleared out of
-    /// the message's way before it comes here (`Self::write_message_input`).
-    pub(super) fn past_grace_refusal(&self, draft: &Draft) -> Option<&'static str> {
+    /// be confirmed but is never written together with text in the box while that text may yet be
+    /// cleared, has to wait, if it does; read with the input lock held and `draft` locked. It
+    /// waits, the watch's retry coming back to it, while the box shows text; while the box cannot
+    /// be read and any key typed into it is not yet confirmed ([`Draft::holds`]), whatever it
+    /// typed or removed, or may have brought back text the mirror cannot know, such as a prompt
+    /// from history: an unreadable box cannot show that such keys left it empty; while the latest
+    /// key may have put text in the box that is not drawn yet; and while a box read empty comes
+    /// from a frame read in part, for [`TORN_FRAME_WAIT`] of retries at most, or, while the typing
+    /// record knows of text typed into it that nothing since removed ([`Draft::knows_text`]),
+    /// until the wait for text no key can clear runs out ([`PastGraceRefusal::unclearable`]). Text
+    /// that shows is stashed or cleared out of the message's way before it comes here
+    /// (`Self::write_message_input`).
+    pub(super) fn past_grace_refusal(&self, draft: &Draft) -> Option<PastGraceRefusal> {
         let (composer, whole, now) = self.read_box();
         // Any unconfirmed key, not only known text: the box cannot be read to show what it did.
         if composer.is_none() && (draft.holds() || draft.may_hold_unknown_text()) {
-            return Some(
-                "the session's input box cannot be read after keys that may have put text in it",
-            );
+            // Keys that typed text, removed it or moved the cursor bring nothing the record cannot
+            // know, so the wait on them is bounded. After a key that may have brought text in
+            // (a prompt from history, a completion, a yank, an unknown key), the box may be hidden
+            // by a view such as a picker, which would take the message's keys, so the message
+            // waits for the user, who is told after a while.
+            let unclearable = !draft.may_hold_unknown_text();
+            return Some(PastGraceRefusal {
+                reason: "the session's input box cannot be read after keys that may have put text \
+                         in it",
+                unclearable,
+                waits_on_user: !unclearable,
+            });
         }
         if draft.text_may_be_undrawn(now) {
-            return Some("keys just typed into the session may not be drawn in its input box yet");
+            return Some(PastGraceRefusal::holding(
+                "keys just typed into the session may not be drawn in its input box yet",
+            ));
         }
         if composer.as_ref().is_some_and(|text| !text.is_empty()) {
             self.end_torn_run();
-            return Some(
+            return Some(PastGraceRefusal::holding(
                 "the session's input box holds text, which a message is never written with",
-            );
+            ));
         }
         if composer.is_none() || whole.is_some() {
             self.end_torn_run();
+            if whole.is_some() {
+                // Seen empty: the draft a message waited on is gone (`draft_clear`).
+                self.end_unclearable_wait();
+            }
             return None;
         }
         // Text the typing record knows was typed and not since removed may be what the frame hides:
-        // such a box waits for a whole frame, however long, and is no part of a run.
+        // such a box waits for a whole frame, as long as the wait for text no key can clear
+        // allows, and is no part of a run.
         if draft.knows_text() {
-            return Some(
-                "the session's input box was read empty off a frame not yet drawn whole, while \
-                 text typed into it is not known to have left it",
-            );
+            return Some(PastGraceRefusal {
+                reason: "the session's input box was read empty off a frame not yet drawn whole, \
+                         while text typed into it is not known to have left it",
+                unclearable: true,
+                waits_on_user: false,
+            });
         }
         // The run is kept when the wait is over, until a message is written
         // ([`Self::end_torn_run`]): a write that fails for another reason waits no longer next
@@ -276,7 +324,9 @@ impl LiveSession {
         if self.note_torn_refusal(now) {
             return None;
         }
-        Some("the session's input box was read empty off a frame not yet drawn whole")
+        Some(PastGraceRefusal::holding(
+            "the session's input box was read empty off a frame not yet drawn whole",
+        ))
     }
 
     /// Notes a reading at `now` of a box empty off a frame not drawn whole, which continues the run

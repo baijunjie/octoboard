@@ -71,7 +71,7 @@ fn own_message_settle() -> Duration {
 
 #[cfg(test)]
 thread_local! {
-    static OWN_MESSAGE_SETTLE_OVERRIDE: std::cell::Cell<Option<Duration>> = const { std::cell::Cell::new(None) };
+    pub(super) static OWN_MESSAGE_SETTLE_OVERRIDE: std::cell::Cell<Option<Duration>> = const { std::cell::Cell::new(None) };
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -96,6 +96,28 @@ pub(crate) enum RecoveryPhase {
     Replaying,
 }
 
+impl InputSwap {
+    /// Moves to `phase`, noting when the input began to be held where it was not.
+    fn enter(&mut self, phase: RecoveryPhase) {
+        if self.phase.is_none() {
+            self.held_since = Some(Instant::now());
+        }
+        self.phase = Some(phase);
+    }
+
+    /// Ends the phase, and the hold on the input with it.
+    fn leave(&mut self) {
+        self.phase = None;
+        self.held_since = None;
+        self.forced = None;
+    }
+}
+
+/// How long a phase may hold Octoboard's messages back before one goes into the input box as it
+/// stands ([`LiveSession::input_swap_held_too_long`]): as long as a message waits on a draft it
+/// cannot clear.
+const SWAP_HOLD_BOUND: Duration = super::draft_clear::UNCLEARABLE_DRAFT_WAIT;
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum InputRoute {
     Direct,
@@ -106,6 +128,13 @@ pub(super) enum InputRoute {
 #[derive(Default)]
 pub(super) struct InputSwap {
     phase: Option<RecoveryPhase>,
+    /// Since when a phase has stood without a break, the input held for it, or since a message last
+    /// went in past it ([`LiveSession::input_swap_held_too_long`]).
+    held_since: Option<Instant>,
+    /// The message that went into the input box past a hold for a partly written message, whose
+    /// prompt, once the agent reports it, shows the fragment went with it and ends the hold
+    /// ([`LiveSession::end_hold_forced_through`]).
+    forced: Option<String>,
     buffered: VecDeque<Vec<u8>>,
     bytes: usize,
     pending: bool,
@@ -203,6 +232,79 @@ impl LiveSession {
         swap.pending.then_some(swap.phase).flatten()
     }
 
+    /// Whether a phase has held the input for [`SWAP_HOLD_BOUND`] without a break: a message then
+    /// goes into the input box as it stands rather than wait on it without end
+    /// (`Self::write_message_input`).
+    pub(crate) fn input_swap_held_too_long(&self) -> bool {
+        let swap = self.swap.lock().expect("input swap lock poisoned");
+        swap.phase.is_some()
+            && swap
+                .held_since
+                .is_some_and(|since| since.elapsed() >= SWAP_HOLD_BOUND)
+    }
+
+    /// Puts the input in `phase`, held since `ago`, for a test of what a long hold allows.
+    #[cfg(test)]
+    pub(super) fn hold_input_since(&self, phase: RecoveryPhase, ago: Duration) {
+        let mut swap = self.swap.lock().expect("input swap lock poisoned");
+        swap.phase = Some(phase);
+        swap.held_since = Some(Instant::now() - ago);
+    }
+
+    /// Ends the hold [`Self::hold_input_since`] put on the input.
+    #[cfg(test)]
+    pub(super) fn end_input_hold(&self) {
+        self.swap.lock().expect("input swap lock poisoned").leave();
+    }
+
+    /// Notes that the message `prompt` went into the input box past the hold on it: the hold's
+    /// time starts again, so the next message waits it out afresh, and a hold for a partly written
+    /// message ends once the agent reports a prompt that holds this one
+    /// ([`Self::end_hold_forced_through`]).
+    pub(super) fn note_forced_through_hold(&self, prompt: &str) {
+        let mut swap = self.swap.lock().expect("input swap lock poisoned");
+        if swap.phase.is_none() {
+            return;
+        }
+        swap.held_since = Some(Instant::now());
+        if matches!(
+            swap.phase,
+            Some(RecoveryPhase::Fragmented | RecoveryPhase::TakenOver)
+        ) {
+            swap.forced = Some(prompt.to_string());
+        }
+    }
+
+    /// Ends a hold for a partly written message once the agent reports `reported`, a prompt that
+    /// holds the message that went in past it ([`Self::note_forced_through_hold`]): the fragment
+    /// was in the box, so it went with that prompt, and nothing is left for a later message to
+    /// join. Compared without whitespace, as the agent may wrap or trim it.
+    pub(super) fn end_hold_forced_through(&self, reported: Option<&str>) {
+        let bare = |text: &str| {
+            text.chars()
+                .filter(|c| !c.is_whitespace())
+                .collect::<String>()
+        };
+        let mut swap = self.swap.lock().expect("input swap lock poisoned");
+        let Some(forced) = swap.forced.as_deref() else {
+            return;
+        };
+        if !matches!(
+            swap.phase,
+            Some(RecoveryPhase::Fragmented | RecoveryPhase::TakenOver)
+        ) || !reported.is_some_and(|reported| bare(reported).contains(&bare(forced)))
+        {
+            return;
+        }
+        swap.leave();
+        swap.buffered.clear();
+        swap.bytes = 0;
+        swap.pending = false;
+        swap.reported = false;
+        swap.allow_dialog_input = false;
+        swap.pending_since = None;
+    }
+
     pub(crate) fn input_swap_active(&self) -> bool {
         self.swap
             .lock()
@@ -238,7 +340,7 @@ impl LiveSession {
                 // Nothing is left for a recovery pass to replay or time out.
                 swap.pending = false;
                 swap.pending_since = None;
-                swap.phase = Some(RecoveryPhase::TakenOver);
+                swap.enter(RecoveryPhase::TakenOver);
                 drop(swap);
                 tracing::warn!(session = %self.id, discarded, "the user typed after a partly written message; retained keyboard input was discarded");
                 return Ok(InputRoute::Direct);
@@ -300,7 +402,10 @@ impl LiveSession {
     }
 
     fn set_swap_phase(&self, phase: RecoveryPhase) {
-        self.swap.lock().expect("input swap lock poisoned").phase = Some(phase);
+        self.swap
+            .lock()
+            .expect("input swap lock poisoned")
+            .enter(phase);
     }
 
     fn wait_for_swap(&self, restored: bool, deadline: Instant) -> bool {
@@ -336,13 +441,34 @@ impl LiveSession {
         self.pty.write_input_locked(&input, &[Input::Ctrl('s')])
     }
 
+    /// [`Self::write_message_input`] for the message the queue knows as `id`, under which its wait on
+    /// a draft is kept ([`Self::message_key`]), so that two messages of the same text wait apart.
+    pub(crate) fn write_message_input_as(
+        &self,
+        id: &str,
+        message: &[Input],
+        prompt: &str,
+        past_grace: bool,
+    ) -> Result<(), PartialWrite> {
+        struct Writing<'a>(&'a LiveSession);
+        impl Drop for Writing<'_> {
+            fn drop(&mut self) {
+                *self.0.writing.lock().expect("writing lock poisoned") = None;
+            }
+        }
+        *self.writing.lock().expect("writing lock poisoned") = Some(id.to_string());
+        let _writing = Writing(self);
+        self.write_message_input(message, prompt, past_grace)
+    }
+
     /// `Ok` means the entire payload reached the CLI, even when restoration is still pending.
     /// An error counts only payload bytes, so callers never retry an already submitted message.
     ///
-    /// A message is never written together with text in the box. A box that shows text has it
-    /// stashed around the message where the agent's native stash can be used; where it cannot, the
-    /// message waits for the box to empty during the draft's grace, and past it has the box cleared
-    /// first (`Self::write_after_clearing`), or keeps waiting where the box cannot be cleared.
+    /// A message is not written together with text in the box while that text may yet be set aside
+    /// or cleared. A box that shows text has it stashed around the message where the agent's native
+    /// stash can be used; where it cannot, the message waits for the box to empty during the
+    /// draft's grace, and past it has the box cleared first (`Self::write_after_clearing`), or,
+    /// where the box cannot be cleared, waits a bounded time and then goes in as the box stands.
     pub(crate) fn write_message_input(
         &self,
         message: &[Input],
@@ -351,6 +477,26 @@ impl LiveSession {
     ) -> Result<(), PartialWrite> {
         if !self.checks_composer {
             return self.write_empty_message_input(message, prompt, past_grace);
+        }
+        // A message left unsent that has waited its while for the user to send it, or a hold on the
+        // input (a partly written message, typing not yet replayed) that has lasted as long and
+        // kept this message out, past its grace, for as long again: this one goes into the box as
+        // it stands, rather than clear it away or wait on without end. A message within its grace
+        // waits for the hold to end and takes the stash or the clear.
+        let unsent = self.unsent_hold_over();
+        let held = past_grace && self.input_swap_active();
+        // Noted first, so the message's own wait starts with its first such attempt.
+        let waited = held && self.input_hold_wait_over(prompt);
+        if unsent || (waited && self.input_swap_held_too_long()) {
+            return self.write_message_into_box(
+                message,
+                prompt,
+                true,
+                BoxIs::Unclearable {
+                    unsent,
+                    read_before: None,
+                },
+            );
         }
         match self.settled_composer().as_deref() {
             // Nothing to stash or clear: the write's own checks hold the message where they must.
@@ -373,7 +519,10 @@ impl LiveSession {
                     // Text that shows ends a run of readings of an empty box off frames not drawn
                     // whole (`Self::past_grace_refusal`).
                     self.end_torn_run();
-                    if whole.is_none() {
+                    // Past the grace such a box goes to the clear, which neither stashes nor clears
+                    // it but has the message wait on it for a bounded time only
+                    // (`Self::write_after_clearing`).
+                    if whole.is_none() && !past_grace {
                         return Err(blocked(
                             "the session's input box shows text off a frame not yet drawn whole",
                         ));
@@ -383,6 +532,7 @@ impl LiveSession {
             }
             let shows_text = composer.as_ref().is_some_and(|text| !text.is_empty());
             let native = shows_text
+                && whole.is_some()
                 && self.native_stash_usable(&swap)
                 && self
                     .draft
@@ -392,7 +542,7 @@ impl LiveSession {
                 && !self.stash_shown()
                 && self.takes_automatic_keys();
             if native {
-                swap.phase = Some(RecoveryPhase::StashRequested);
+                swap.enter(RecoveryPhase::StashRequested);
                 Way::Stash
             } else if shows_text && past_grace {
                 Way::Clear
@@ -497,6 +647,7 @@ impl LiveSession {
             self.input_writes.fetch_add(1, Ordering::AcqRel);
             self.pty.write_input_locked(&input, now)?;
             draft.message_written(Instant::now(), prompt);
+            self.end_unclearable_wait();
         }
         // Not required to show the message alone: only Codex submits a paste apart, and it has no
         // stash.
@@ -540,10 +691,10 @@ impl LiveSession {
             .mark_fragment(prompt);
         {
             let mut swap = self.swap.lock().expect("input swap lock poisoned");
-            swap.phase = Some(RecoveryPhase::Fragmented);
+            swap.enter(RecoveryPhase::Fragmented);
             swap.reported = false;
         }
-        self.report_input_recovery(notice_code::TYPING_BLOCKED, "Only part of an automatic message reached the input. It will not be sent again. Keyboard input retained while it was written is discarded when the user next types, and later keys go straight in; automatic input, the queue behind the message included, waits until the agent reports a prompt submitted after that.");
+        self.report_input_recovery(notice_code::TYPING_BLOCKED, "Only part of an automatic message reached the input. It will not be sent again. Keyboard input retained while it was written is discarded when the user next types, and later keys go straight in; automatic input, the queue behind the message included, waits until the agent reports a prompt submitted after that; each message waits for a bounded time, then goes into the input box as it stands.");
     }
 
     /// Ends a takeover after a fragment once the agent reports a prompt submitted after it. Only a
@@ -554,7 +705,7 @@ impl LiveSession {
         if swap.phase != Some(RecoveryPhase::TakenOver) {
             return;
         }
-        swap.phase = None;
+        swap.leave();
         swap.pending = false;
         swap.reported = false;
         swap.allow_dialog_input = false;
@@ -564,7 +715,7 @@ impl LiveSession {
     fn release_input_protection(&self) {
         {
             let mut swap = self.swap.lock().expect("input swap lock poisoned");
-            swap.phase = Some(RecoveryPhase::ReleasePending);
+            swap.enter(RecoveryPhase::ReleasePending);
             swap.allow_dialog_input = true;
         }
         if !self.finish_input_swap() {
@@ -618,7 +769,7 @@ impl LiveSession {
         }
         {
             let mut swap = self.swap.lock().expect("input swap lock poisoned");
-            swap.phase = Some(RecoveryPhase::Replaying);
+            swap.enter(RecoveryPhase::Replaying);
             swap.allow_dialog_input = true;
         }
         loop {
@@ -628,7 +779,7 @@ impl LiveSession {
             let data = {
                 let mut swap = self.swap.lock().expect("input swap lock poisoned");
                 let Some(data) = swap.buffered.pop_front() else {
-                    swap.phase = None;
+                    swap.leave();
                     swap.pending = false;
                     swap.reported = false;
                     swap.allow_dialog_input = false;

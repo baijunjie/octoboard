@@ -801,6 +801,21 @@ its text lands in the composer behind a literal `[200~`. With Octoboard's title 
 `project-name`) the activity item is a braille spinner while a turn runs, and the title is back to the project or thread
 name once the Esc has landed.
 
+**Keys that clear the composer** (0.167.1, measured 2026-11-15 on macOS: the ordinary TUI in a PTY of 100 by 40, no
+private app server, a scratch `CODEX_HOME` with a fake key and a local stand-in for its inference API that never
+answers, so a submitted prompt keeps a turn running; launched with `--dangerously-bypass-hook-trust`,
+`check_for_update_on_startup=false`, Octoboard's `tui.terminal_title` and `notice.hide_rate_limit_model_nudge=true`).
+Ctrl-U deletes from the cursor back to the start of its line, and at the start of a line the line break before it, so
+a three-line paste took five presses to empty, each press changing the composer on the screen; a line wrapped over three
+rows went in one press, as did a collapsed paste (`[Pasted Content 2400 chars]`, the placeholder a 2,400-character
+bracketed paste is shown as) together with the text before it on its line. With the cursor moved back into a line, a
+press left the text after the cursor, and a second press, at the start of the first line, changed nothing. On an empty
+composer it does nothing: no hint, no exit. Mid-turn it clears the same way and the turn runs on ("Working" kept
+counting, and no "Conversation interrupted" was shown), and Codex stayed up throughout. No undo hint is shown. End
+(`ESC[F`) moves the cursor to the end of its own line only, idle and mid-turn, after which a press clears that whole
+line; with the cursor on an earlier line of a multi-line draft the lines below are left, and Ctrl-End (`ESC[1;5F`) did
+not move the cursor at all, so no key was found that puts the cursor at the end of the whole draft.
+
 **An MCP server's environment and secret headers can come from Codex's own environment.** Besides `command`, `args`,
 `env`, `url` and `http_headers`, a server under `mcp_servers.<key>` accepts `cwd`, `env_vars` (names of variables
 forwarded from Codex's own environment to a stdio server), `env_http_headers` (a header name mapped to the variable

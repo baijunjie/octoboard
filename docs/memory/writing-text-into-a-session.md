@@ -74,20 +74,34 @@ interrupt a turn" in `docs/agent-cli-reference.md`). So:
   no longer holds. Text the agent puts back by itself, such as a draft restored from its native stash, is told to it
   too (`Draft::restored_by_agent`).
 
-## A step that protects the user's text fails toward the message waiting, for this message and every later one
+## No message waits without end on the input box: protect the user's text first, then bound the wait per message
 
 Applies to daemon code on the path of a message into a session whose input box may hold the user's text: a stash, a
-clear, a check that the box is empty. Where such a step fails or cannot be confirmed (a stash the agent did not
-confirm, a press not seen, a box not read off a whole frame), refuse the write so the message stays queued and is
-retried; never fall back to writing it into the box as it stands. A switch that turns the step off after a failure
-ends once the state that caused it has moved (as `stash_unsettled_at` ends at the next prompt sent), and the path it
-sends later messages onto must itself keep the text safe: a process-wide "native stash off" that fell back to
-writing as it stood mixed messages into drafts hours after the one failure, with nothing in the log. So a test of
-such a failure also sends the next message after it and asserts that message does not join the text; tests of the
-failing message alone passed while that bug stood.
+clear, a check that the box is empty, a hold on the session's input. Delivering the message comes first; what the user
+sees is in `docs/product/draft-preservation.md`, "When the composer cannot be cleared".
 
-Every refusal, discard or possible mixing of the user's text logs a `tracing::warn!` naming the session: the daemon
-log is the only trace afterwards, as the agent's transcript shows nothing of a message never submitted.
+- On every attempt, try the steps that keep the text safe first: the agent's native stash, then the clear. Where one
+  fails or cannot be confirmed (a stash the agent did not confirm, a press not seen, a box not read off a whole frame),
+  refuse the write so the message stays queued and is retried.
+- Bound every wait such a step or hold causes by `draft_clear::UNCLEARABLE_DRAFT_WAIT`
+  (`apps/daemon/src/session/draft_clear.rs`); past it the message is written into the box as it stands. A new refusal
+  or hold on this path gets the same bound. The only waits left unbounded are the ones that section of the product doc
+  names (a dialog, a trust confirmation, a wait for the user's action, and an unreadable box after a key that may bring
+  in unknown text, which still tells the user once the bound has passed).
+- Keep the bound per message, under the queue's identity for it (`LiveSession::message_key`), never under its text (a
+  later message with the same text would inherit a spent wait) and never per session or process: a hold bound kept
+  once for the session let every later message past it skip its grace and go in as the box stood, and a process-wide
+  "native stash off" after one failure mixed messages into drafts hours later. A switch that turns a step off ends once
+  the state that caused it has moved (as `stash_unsettled_at` ends at the next prompt sent). So a test of a forced
+  write also sends the next message after it and asserts that message waits out its own grace and its own bound;
+  tests of the failing message alone pass while that bug stands.
+- The write as the box stands hands back what the box held in exactly one notice: `message_sent_with_draft` carrying
+  the draft as read before any clear in the same attempt, or `draft_discarded` where the write is then refused or the
+  box turns out empty. Text a clear removed is never lost unseen, and never reported twice.
+
+Every refusal, start of a wait, discard or write with the user's text logs a `tracing::warn!` naming the session, never the
+text itself: the daemon log is the only trace afterwards, as the agent's transcript shows nothing of a message never
+submitted.
 
 ## A gate on a terminal mode the agent sets reads the mode as it stands, after reading the agent's whole start-up output
 

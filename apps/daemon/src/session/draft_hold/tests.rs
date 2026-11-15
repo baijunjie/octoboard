@@ -467,6 +467,7 @@ fn keep_torn(live: &crate::session::LiveSession) {
 fn refusal_now(live: &crate::session::LiveSession) -> Option<&'static str> {
     let draft = live.draft.lock().unwrap();
     live.past_grace_refusal(&draft)
+        .map(|refusal| refusal.reason)
 }
 
 fn refused_as_torn(live: &crate::session::LiveSession) -> bool {

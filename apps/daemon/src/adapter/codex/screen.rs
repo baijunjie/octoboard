@@ -28,6 +28,23 @@ impl ScreenReader for CodexScreen {
         typed.trim()
     }
 
+    /// `[Pasted Content <n> chars]`, as Codex 0.167.1 draws a long paste in its composer (under
+    /// "Keys that clear the composer" in `docs/agent-cli-reference.md`).
+    fn collapsed_paste(&self, text: &str) -> bool {
+        text.strip_prefix("[Pasted Content ")
+            .and_then(|rest| rest.strip_suffix(" chars]"))
+            .is_some_and(|count| {
+                !count.is_empty() && count.bytes().all(|byte| byte.is_ascii_digit())
+            })
+    }
+
+    /// Measured on 0.167.1 under "Keys that clear the composer" in `docs/agent-cli-reference.md`:
+    /// a press deletes back to the start of the line, at its start the line break before it, idle
+    /// and mid-turn alike, with no interrupt and no exit.
+    fn clears_input_box_with_ctrl_u(&self) -> bool {
+        true
+    }
+
     fn trust_screen(&self) -> &'static Screen {
         &TRUST
     }

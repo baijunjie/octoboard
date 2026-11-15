@@ -422,15 +422,21 @@ installs with `--service`).
   `before_scratch_removal`, what a launch and an adopted session both do once the process is reaped: stop the transport and run
   `AfterExit`), `draft.rs` (a mirror of the keys typed into the input, matching the prompts the agent reports
   submitted, with `KeyTiming`, when and what kind of keys went in, kept apart from it), `draft_hold.rs` (the release of the hold typed
-  keys keep on Octoboard's messages, and the checks a message written past the draft's grace waits on: `settle_input`,
-  `release_draft_hold`, `schedule_draft_release` on `LiveSession`), `draft_clear.rs` (clearing a user's draft with Ctrl-U
-  past the grace period, so that an automatic message is written alone and the text handed back in a `draft_discarded`
-  notice: `LiveSession::write_after_clearing`), `input_box_clear.rs` (the run of Ctrl-U presses on a provider's input box,
+  keys keep on Octoboard's messages, and the checks a message written past the draft's grace waits on, none of them
+  without end: `settle_input`, `release_draft_hold`, `schedule_draft_release` on `LiveSession`), `draft_clear.rs`
+  (clearing a user's draft with Ctrl-U past the grace period, so that an automatic message is written alone and the
+  text handed back in a `draft_discarded` notice: `LiveSession::write_after_clearing`; where the box cannot be cleared
+  the message's wait is bounded by `UNCLEARABLE_DRAFT_WAIT`, kept per message under its queue id, after which the message
+  goes into the box as it stands, the clients told in a `message_sent_with_draft` notice, and a box that stays unreadable
+  gets a `message_waits_on_input` notice; `LiveSession::write_message_into_box` in `mod.rs` is that write, told what the
+  box holds by `BoxIs`: read, cleared or unclearable), `input_box_clear.rs` (the run of Ctrl-U presses on a provider's input box,
   each seen on the screen before the next, which that clear and an interrupt's clearing of the prompt share),
   `output_pace.rs` (whether the parsed screen shows a
   whole frame, from the agent's recent output), `paste_apart.rs` (submitting a message whose Enter has to wait until the
   agent has taken its paste; `NotSubmitted`),
-  `swap.rs`, `input_box.rs`, `dialogs.rs`, `trust/` folder-trust confirmations (`carry.rs` the `TrustCarrier` interface of a provider that records the trust in
+  `swap.rs` (the stash of the draft around a message, the hold on the input while it is recovered, which
+  a bound ends so that a message is not held without end, and `write_message_input_as`, the queue's write of a message
+  under its id), `input_box.rs`, `dialogs.rs`, `trust/` folder-trust confirmations (`carry.rs` the `TrustCarrier` interface of a provider that records the trust in
   a per-session home; `screen.rs` reads a provider's screen off the recent output, or off the parsed screen where
   `TermFacts::host_renders` says the output is the host's repaint, `TrustState::reads_screen`; there Codex's watch ends
   at its composer rather than its title, and Claude Code's readiness, otherwise its bracketed paste after the first

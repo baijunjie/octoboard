@@ -238,9 +238,10 @@ fn write_hold_explanation(hold: WriteHold) -> &'static str {
              repeating the message text, unless a prompt was already submitted, and only while \
              its input box holds that message alone; the retry ends, and the message waits for \
              the user, if anything is typed into the session or the box has held more than the \
-             message for 30 seconds. Later messages wait for that attempt or a submitted prompt; \
-             dialogs and trust confirmations must be answered first. Do not send the message text \
-             again."
+             message for 30 seconds. Later messages wait for that attempt or a submitted prompt, \
+             and once the message waits for the user, for 30 seconds at most, after which the next \
+             goes into the input box with it; dialogs and trust confirmations must be answered \
+             first. Do not send the message text again."
         }
     }
 }

@@ -15,8 +15,9 @@ messages when an owner interrupts the turn is in "Messages during an interrupt" 
 
 **Text in the session's input box holds a message too.** Octoboard does not write a message into a terminal together
 with a draft the session's input box shows: it sets the draft aside with the agent's native stash where it can, and
-otherwise waits a grace period of three seconds for the user; past it, Claude Code's and Grok Build's input box is
-cleared first and the user is told what it held, and Codex's keeps the message waiting until the user empties it. A
+otherwise waits a grace period of three seconds for the user; past it, the input box is cleared first and the user is
+told what it held. Where it cannot be cleared, the message waits 30 seconds more and then goes in with the text, and the
+user is told so and handed that text back. A
 message that goes into Codex's own queue (see "Messages through Codex's own queue" below) leaves the input box alone.
 The rules, the cases where text the screen does not show can still go in with a message, and the notices are in
 `docs/product/draft-preservation.md`.
@@ -521,11 +522,13 @@ through Codex's own queue" above) is not written into the terminal, so none of t
     pending dialogs first and check the automatic retry; if the message still waits in the composer, press Enter
     without pasting it again.
   - Without `submit_retry` the alert says the agent did not send the message, so it is waiting in the session's input
-    box, and that Octoboard writes nothing more into the session until a prompt is sent. The user is told to open the
-    session, check the message waiting in its input box and press Enter to send it. This is sent for a Codex message
+    box, and that Octoboard holds its next message for up to 30 seconds for a prompt to be sent, after which it writes
+    the next message into the input box together with what the box holds. The user is told to open the session, check
+    the message waiting in its input box and press Enter to send it. This is sent for a Codex message
     left in its input box on a Windows host (its Enter held back, or pressed and not taken), again for a message whose
-    submit-key retry ended without its key (below), and for a message Octoboard wrote earlier that has stayed alone in
-    the input box for 30 seconds while a later message waits on it (see "Clearing a draft past the grace period" in
+    submit-key retry ended without its key (below). A message Octoboard wrote earlier that stays alone in the input box
+    while a later message waits on it is not reported so: after 30 seconds the later message goes in with it, and the
+    user is sent `message_sent_with_draft` instead (see "When the composer cannot be cleared" in
     `docs/product/draft-preservation.md`).
 - **The notice is withdrawn** once the agent reports a prompt sent after the message the notice was about — the
   message's own report arriving late, the submit-key retry having worked, or the user pressing Enter: every client is
@@ -534,7 +537,7 @@ through Codex's own queue" above) is not written into the terminal, so none of t
   ignores the withdrawal; later prompts withdraw nothing more.
 - Later messages wait until the agent reports another submitted prompt or, for a message the check left unsent, the
   single submit-key retry is attempted; behind a Codex message left in its input box on a Windows host, only a prompt
-  the agent reports releases them. If a prompt has already been reported, Octoboard skips the retry. Otherwise, three
+  the agent reports releases them, within the bound below. If a prompt has already been reported, Octoboard skips the retry. Otherwise, three
   seconds after the message was marked unsent, it presses Enter once, but never where the Enter could send the user's
   text with the message. If anything has been typed into the session since the message was written, there is no retry
   at all. Otherwise the input box must read, off a whole frame, nothing but the message itself (compared without
@@ -542,7 +545,10 @@ through Codex's own queue" above) is not written into the terminal, so none of t
   nothing at all; until it does, the retry waits for a later look, for 30 seconds after the message was marked unsent at
   most. A retry that ends without its key, for typed keys or that bound, sends the `message_not_sent` notice again
   without `submit_retry`, and the message holds later messages until the agent reports a prompt sent (the user sends or
-  clears it). A recognised dialog or trust confirmation must clear first. Once the attempt is made, the hold clears even
+  clears it), for 30 seconds at most: then the next message goes into the input box with it, as the box stands, and
+  every client is sent `message_sent_with_draft` (see "When the composer cannot be cleared" in
+  `docs/product/draft-preservation.md`). A Codex message left in its input box on a Windows host waits for the user
+  the same way, from when it was left there. A recognised dialog or trust confirmation must clear first. Once the attempt is made, the hold clears even
   without another submitted-prompt report, and later messages can proceed under the other holds above. If writing the
   submit key fails,
   every client is sent the `submit_retry_failed` notice about that session, naming its agent and carrying the failed
