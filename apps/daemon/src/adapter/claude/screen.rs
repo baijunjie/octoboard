@@ -233,6 +233,28 @@ const DIALOGS: &[DialogPattern] = &[
             "Yes,setautomodeasmydefaultpermissionmode",
         ],
     ),
+    // The access request of Claude Code's computer-use MCP server (`request_access`; title read
+    // from the 2.1.325 executable, footer from a user's screenshot), raised from inside a running
+    // tool call, so no `PermissionRequest` hook announces it, and the terminal title goes back to
+    // the prompt while it waits. A paste is dropped and the Enter picks the focused row: Deny by
+    // default, which refuses Claude the apps, or Allow if the user moved the focus. The footer must
+    // be a row of its own, so a transcript quoting the title and the footer on one line does not
+    // match.
+    DialogPattern::all_of(
+        "claude_computer_use_access",
+        WrittenMessage::Discarded,
+        &["ComputerUsewantstocontroltheseapps"],
+    )
+    .with_row("Entertoconfirm\u{B7}Esctocancel"),
+    // The same request when Accessibility or Screen Recording is not granted (2.1.325, read from
+    // the executable, not reproduced): its rows open System Settings or try again, and it is drawn
+    // in the same frame, so its footer is taken to be the access request's.
+    DialogPattern::all_of(
+        "claude_computer_use_permissions",
+        WrittenMessage::Discarded,
+        &["ComputerUseneedsmacOSpermissions"],
+    )
+    .with_row("Entertoconfirm\u{B7}Esctocancel"),
     // Focus moved from the prompt to the task list under the prompt box: a paste is dropped, and
     // the Enter opens a subagent's view (or, on the main row inside one, returns to the
     // conversation). The hints are rows of their own, so a transcript quoting them in a sentence

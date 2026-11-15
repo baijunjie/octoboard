@@ -292,7 +292,8 @@ error code `session_trust_pending`, saying to send it once the confirmation has 
 has finished starting if none appears.
 
 **Messages are also held while the agent shows a screen only the user can answer.** Some of the agents' own screens
-run no hook and set no terminal title, and a message's paste and Enter would answer them: the message is thrown away
+run no hook and set no terminal title that says the user is wanted (one raised mid-turn leaves Claude Code's title back
+at its prompt, as a cancel would), and a message's paste and Enter would answer them: the message is thrown away
 and the Enter picks whatever option is highlighted, or the text is sent somewhere other than the conversation.
 Octoboard recognises these screens on the session's rendered screen, and while one is up everything it writes into
 the session is queued as above. Each has a code, which the owners' tools report (see the end of this section):
@@ -304,6 +305,8 @@ the session is queued as above. Each has a code, which the owners' tools report 
 | Claude Code | "Resume from summary", offered at a resume | `claude_resume_from_summary` |
 | Claude Code | A notice that waits for Enter, ending "Enter to continue · Esc to cancel" | `claude_notice` |
 | Claude Code | "Make auto mode your default permission mode?", offered once when the account's settings name a default permission mode other than auto, after the prompt box at a launch or once a turn ends; its focused answer, picked by a message's Enter, would make auto the account's default | `claude_auto_mode_default` |
+| Claude Code | "Computer Use wants to control these apps", the access request of its computer-use MCP server, raised mid-turn from inside the tool call with no permission hook; a message's paste is dropped and its Enter picks the focused answer: by default it refuses the access, or grants it if the focus was moved to Allow | `claude_computer_use_access` |
+| Claude Code | "Computer Use needs macOS permissions", shown by the same request in its place while Accessibility or Screen Recording is not granted; a message's Enter would open System Settings or try again | `claude_computer_use_permissions` |
 | Claude Code | Its list of background agents under the prompt box, with the focus moved onto it | `claude_agent_list_focus` |
 | Claude Code | A background subagent's view, showing that subagent's transcript in place of the conversation | `claude_subagent_view` |
 | Claude Code | Its agents view, where what is typed starts another background session | `claude_agents_view` |
@@ -743,18 +746,19 @@ reported the prompt sent in time and such a screen came up meanwhile, what becam
 screen:
 
 - **A dialog that throws the message away** — "Resume this conversation?" at a launch, "Resume from summary", a notice
-  that waits for Enter, "Make auto mode your default permission mode?", or the focused list of background agents.
-  Nothing of the message is in the input box. It goes back to the front of the session's queue and is written again once
-  the dialog is gone, and, being written again, it is checked again. No unsent hold is set. When the message's own Enter
-  has already closed the dialog, it is written again straight away, within the same delivery — at most once per
-  delivery, so a dialog that every write brings back cannot keep the sender waiting; a dialog still up, or one that
-  comes back, leaves the message queued until it is gone. Every client is sent the `message_discarded_by_dialog` notice
-  about the session, naming its agent, provided the process written to is still running; the window shows it as a toast
-  (see `docs/product/toasts.md`), not an error alert, titled with where the session is, saying the agent showed a dialog
-  while Octoboard wrote a message into the session and discarded it, and that the message is written again once the
-  dialog has been answered. A sender is told what its message came to: when it was written again within the same
-  delivery, what that second write came to — delivered, left unsent, or queued again; otherwise that it was queued, as
-  for a session that cannot take one, which is also what the sender of any message waiting behind it is told.
+  that waits for Enter, "Make auto mode your default permission mode?", the computer-use access request or its macOS
+  permissions screen, or the focused list of background agents. Nothing of the message is in the input box. It goes back
+  to the front of the session's queue and is written again once the dialog is gone, and, being written again, it is
+  checked again. No unsent hold is set. When the message's own Enter has already closed the dialog, it is written again
+  straight away, within the same delivery — at most once per delivery, so a dialog that every write brings back cannot
+  keep the sender waiting; a dialog still up, or one that comes back, leaves the message queued until it is gone. Every
+  client is sent the `message_discarded_by_dialog` notice about the session, naming its agent, provided the process
+  written to is still running; the window shows it as a toast (see `docs/product/toasts.md`), not an error alert, titled
+  with where the session is, saying the agent showed a dialog while Octoboard wrote a message into the session and
+  discarded it, and that the message is written again once the dialog has been answered. A sender is told what its
+  message came to: when it was written again within the same delivery, what that second write came to — delivered, left
+  unsent, or queued again; otherwise that it was queued, as for a session that cannot take one, which is also what the
+  sender of any message waiting behind it is told.
 - **A view of background agents** — a subagent's view or the agents view. The message has gone to the subagent, or
   started another background session, so it is not written again: that would deliver it twice. No unsent hold is set;
   the rest of the queue waits until the view is left, as it does behind any screen that holds messages. Every client is

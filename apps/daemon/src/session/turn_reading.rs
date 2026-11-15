@@ -35,6 +35,9 @@ pub(crate) struct TurnReading<'a> {
     /// Whether one of the dialogs only a person can answer was up at the latest look
     /// ([`LiveSession::agent_dialog`]).
     dialog_up: bool,
+    /// When the screen last showed a dialog go away
+    /// ([`crate::session::dialogs::Sighting::gone_at`]).
+    dialog_gone_at: Option<Instant>,
     /// Whether the title says the agent waits on the user (Codex's `Action Required`).
     action_title: bool,
     /// The record's own status and the status the session reads as the agent's
@@ -49,12 +52,14 @@ impl LiveSession {
             let observer = self.title.lock().expect("title observer lock poisoned");
             (observer.activity, observer.state.clone())
         };
+        let sighting = self.dialog_sighting();
         TurnReading {
             live: self,
             state,
             at: Instant::now(),
             activity,
-            dialog_up: self.agent_dialog().is_some(),
+            dialog_up: sighting.current.is_some(),
+            dialog_gone_at: sighting.gone_at,
             action_title: self.needs_user_action(),
             statuses: OnceCell::new(),
         }
@@ -126,10 +131,17 @@ impl TurnReading<'_> {
     }
 
     /// Whether the title has gone back to the prompt since `armed`, the count of stops taken
-    /// earlier, held there for `settle`, and no dialog is up: a turn that went back to its prompt
-    /// with no hook, for the title's cancel watch.
+    /// earlier, held there for `settle`, and no dialog is up nor has gone away within `settle`: a
+    /// turn that went back to its prompt with no hook, for the title's cancel watch. A dialog
+    /// raised mid-turn leaves the title at the prompt while it is up, and the agent can take a
+    /// moment after the answer to show its turn running again, so the settle starts over when the
+    /// dialog goes.
     pub(crate) fn settled_at_prompt(&self, armed: u64, settle: Duration) -> bool {
-        !self.dialog_up && self.activity.settled_at_prompt(armed, self.at, settle)
+        !self.dialog_up
+            && self
+                .dialog_gone_at
+                .is_none_or(|gone| self.at.saturating_duration_since(gone) >= settle)
+            && self.activity.settled_at_prompt(armed, self.at, settle)
     }
 }
 

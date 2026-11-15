@@ -486,9 +486,9 @@ subscription credentials against a local stub). None runs a hook, and `idle_prom
   "Enter to confirm · Esc to cancel" (from 70 minutes and 100k tokens, adjustable with
   `CLAUDE_CODE_RESUME_THRESHOLD_MINUTES` and `CLAUDE_CODE_RESUME_TOKEN_THRESHOLD`). A blind Enter runs `/compact`.
 
-What Octoboard does about the dialogs above and the screens below, the notice that waits for Enter, the auto-mode nudge
-and the views of background agents, is in "Messages held until a session can take them" in
-`docs/product/message-delivery.md`.
+What Octoboard does about the dialogs above and the screens below, the notice that waits for Enter, the auto-mode nudge,
+the computer-use access request and the views of background agents, is in "Messages held until a session can take them"
+in `docs/product/message-delivery.md`.
 
 **A notice that waits for Enter** (2.1.308): in `auto` mode with `ANTHROPIC_BASE_URL` pointing elsewhere, the first
 classifier call of a session raised "We're changing auto mode to no longer charge for classifier requests …" mid-turn,
@@ -508,6 +508,19 @@ Body text, then unnumbered rows "Yes, set auto mode as my default permission mod
 dropped and a CR picks the focused row; an Enter within 150 ms of it mounting is ignored. Yes switches the session to
 auto, writes `permissions.defaultMode: "auto"` into the user settings and sets `hasSeenAutoDefaultNudge`; No and Esc
 only set `hasSeenAutoDefaultNudge`.
+
+**The computer-use access request** (read from the 2.1.325 executable and a user's screenshot, not reproduced). The
+built-in computer-use MCP server's `request_access` raises "Computer Use wants to control these apps" (the same title
+for one app) from inside the running tool call: `PreToolUse` has already moved the session to working, no
+`PermissionRequest` comes, and the title glyph goes back to `✳` while it waits. Below the reason and the apps it shows
+"N other apps will be hidden while Claude works." and two options, "Deny, and tell Claude what to do differently (esc)"
+(focused by default) and "Allow for this session (N app[s])", with printable keys off; the screenshot's footer reads
+"Enter to confirm · Esc to cancel". A paste is dropped and an Enter picks the focused option. When Accessibility or
+Screen Recording is not granted it shows "Computer Use needs macOS permissions" in its place, in the same frame, with
+each permission's state, "Grant the missing permissions in System Settings, then select 'Try again'." and rows "Open
+System Settings → Accessibility", "Open System Settings → Screen Recording" and "Try again" (read from the executable
+only; its footer is taken to be the same). Claude Code may take a moment after the answer to show its turn running again
+(not measured).
 
 **Views of background agents** (2.1.307, reproduced against a local stub). A turn that starts an `Agent` with
 `run_in_background` adds a task list under the prompt box — a filled `⏺ main` row and a row per agent — and the hint

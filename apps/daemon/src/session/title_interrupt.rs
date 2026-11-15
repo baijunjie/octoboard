@@ -41,7 +41,8 @@
 //! changes the glyphs, and a running frame and the prompt title after it read from the PTY in one
 //! chunk, of which only the last title is seen. A prompt title while one of
 //! `crate::session::dialogs`' dialogs is up is a turn waiting on the user, with no hook to say so,
-//! and is not counted either.
+//! and is not counted either, nor for [`SETTLE`] after the dialog goes, since the agent can take a
+//! moment after the answer to show its turn running again (`TurnReading::settled_at_prompt`).
 //!
 //! Codex reports its own cancels (`Interrupt`), so its title is not watched for one.
 

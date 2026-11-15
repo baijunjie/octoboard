@@ -6,9 +6,11 @@
 //! starts a new conversation), its "Resume from summary" runs `/compact`, and Codex's and Grok
 //! Build's own screens (sign-in, a working-directory chooser, a model migration, a usage limit)
 //! take the Enter as well. So do Claude Code's views of its background agents, where what is sent
-//! goes to a subagent or starts another session. None runs a hook or sets a terminal title, so the
-//! only evidence is the screen. A session showing one holds its writes and reads as waiting for the
-//! user ([`crate::state::WriteHold::AgentDialog`]); it is let go the moment the screen shows none.
+//! goes to a subagent or starts another session. None runs a hook or sets a terminal title that
+//! says the user is wanted (one raised mid-turn leaves Claude Code's title back at its prompt, as a
+//! cancel would), so the only evidence is the screen. A session showing one holds its writes and
+//! reads as waiting for the user ([`crate::state::WriteHold::AgentDialog`]); it is let go the
+//! moment the screen shows none.
 //!
 //! **Recognition** is from the rendered screen (the parsed terminal, visible rows only), never from
 //! the byte stream, with all whitespace removed on both sides: Claude Code places words with cursor
@@ -24,7 +26,7 @@
 //! ([`crate::session::screen::ScreenReader::dialogs`]); adding one is one more entry there.
 
 use std::sync::{Arc, Weak};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::protocol::AgentId;
 use crate::session::LiveSession;
@@ -127,6 +129,12 @@ impl DialogPattern {
         }
     }
 
+    /// The same dialog, also requiring `row`, whitespace-free, as a row of its own.
+    pub const fn with_row(mut self, row: &'static str) -> Self {
+        self.row = Some(row);
+        self
+    }
+
     /// The same dialog, of `kind`.
     pub const fn of_kind(mut self, kind: DialogKind) -> Self {
         self.dialog.kind = kind;
@@ -167,6 +175,11 @@ pub struct Sighting {
     pub discarded_seen: u64,
     /// The same for a dialog that diverts messages to a view of background agents.
     pub diverted_seen: u64,
+    /// When the screen was last seen with no dialog after one, the dialog gone. A title back at
+    /// the prompt while a dialog was up counts as settled only from here (see
+    /// `crate::session::title_interrupt`): an agent that raised the dialog mid-turn can take a
+    /// moment after the answer to show its turn running again.
+    pub gone_at: Option<Instant>,
 }
 
 impl Sighting {
@@ -179,6 +192,11 @@ impl Sighting {
             changes: self.changes + u64::from(current != self.current),
             discarded_seen: self.discarded_seen + seen(WrittenMessage::Discarded),
             diverted_seen: self.diverted_seen + seen(WrittenMessage::Diverted),
+            gone_at: if current.is_none() && self.current.is_some() {
+                Some(Instant::now())
+            } else {
+                self.gone_at
+            },
         }
     }
 }
@@ -290,6 +308,12 @@ mod tests {
     // it has no footer.
     const AUTO_DEFAULT: &str = "\u{23FA} Auto mode lets Claude handle permission prompts automatically.\n\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\n Make auto mode your default permission mode?\n\n  Auto mode lets Claude handle permission prompts automatically. Claude checks each tool call for risky actions and\n  prompt injection before executing, runs the ones it assesses as lower-risk, and blocks the rest.\n\n  \u{276F} Yes, set auto mode as my default permission mode\n    No, keep manual mode\n";
     const AUTO_DEFAULT_NO_FOCUSED: &str = " Make auto mode your default permission mode?\n\n  Auto mode lets Claude handle permission prompts automatically.\n\n    Yes, set auto mode as my default permission mode\n  \u{276F} No, keep accept edits\n";
+    // Claude Code's computer-use access request, drawn as in a user's screenshot (strings read from
+    // the 2.1.325 executable), with the focus moved to Allow.
+    const COMPUTER_USE_ACCESS: &str = "\u{25CF} Calling computer-use \u{B7} 8h 24m 2s\u{2026}\n\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\u{2500}\n Computer Use wants to control these apps\n\n  \u{2502} Drive the isolated verification build to connect to a test Linux daemon over SSH.\n\n  \u{25C9} Octoboard Verification\n\n 2 other apps will be hidden while Claude works.\n\n  Deny, and tell Claude what to do differently (esc)\n\u{276F} Allow for this session (1 app)\n\n Enter to confirm \u{B7} Esc to cancel\n";
+    // Its macOS permissions screen, laid out as the access request is, with strings read from the
+    // 2.1.325 executable.
+    const COMPUTER_USE_PERMISSIONS: &str = " Computer Use needs macOS permissions\n\n  Accessibility: not granted\n  Screen Recording: granted\n\n  Grant the missing permissions in System Settings, then select \"Try again\".\n\n\u{276F} Open System Settings \u{2192} Accessibility\n  Try again\n\n Enter to confirm \u{B7} Esc to cancel\n";
     const AGENTS_VIEW: &str = "New sessions: Opus 5.5 · medium effort\n0 awaiting input · 1 working · 0 completed\nYour conversation moved to the background — enter opens it · esc returns to it\n❯ describe a task for a new session\n  enter to return · space to reply · ctrl+x to delete · ? for shortcuts\n";
 
     #[test]
@@ -345,6 +369,16 @@ mod tests {
             ),
             (AgentId::CLAUDE, AGENTS_VIEW, "claude_agents_view"),
             (AgentId::CLAUDE, CLAUDE_NOTICE, "claude_notice"),
+            (
+                AgentId::CLAUDE,
+                COMPUTER_USE_ACCESS,
+                "claude_computer_use_access",
+            ),
+            (
+                AgentId::CLAUDE,
+                COMPUTER_USE_PERMISSIONS,
+                "claude_computer_use_permissions",
+            ),
             (AgentId::CLAUDE, AUTO_DEFAULT, "claude_auto_mode_default"),
             (
                 AgentId::CLAUDE,
@@ -376,6 +410,22 @@ mod tests {
         assert_eq!(written(VIEW_LIST_FOCUS), WrittenMessage::Discarded);
         assert_eq!(written(AGENTS_VIEW), WrittenMessage::Diverted);
         assert_eq!(written(AUTO_DEFAULT), WrittenMessage::Discarded);
+        assert_eq!(written(COMPUTER_USE_ACCESS), WrittenMessage::Discarded);
+        assert_eq!(written(COMPUTER_USE_PERMISSIONS), WrittenMessage::Discarded);
+    }
+
+    #[test]
+    fn a_sighting_notes_when_a_dialog_goes_away_and_keeps_it_otherwise() {
+        let launch = recognise(AgentId::CLAUDE, RESUME_AT_LAUNCH);
+        let idle = recognise(AgentId::CLAUDE, RESUME_IDLE);
+        let nothing = Sighting::default();
+        assert_eq!(nothing.after(None).gone_at, None);
+        assert_eq!(nothing.after(launch).gone_at, None);
+        let gone = nothing.after(launch).after(None);
+        let at = gone.gone_at.expect("the dialog going is noted");
+        assert_eq!(gone.after(None).gone_at, Some(at));
+        assert_eq!(gone.after(launch).gone_at, Some(at));
+        assert_eq!(gone.after(launch).after(idle).gone_at, Some(at));
     }
 
     #[test]
@@ -403,6 +453,10 @@ mod tests {
             "\u{25CF} matches \u{300C}\u{2191}/\u{2193} to select\u{300D} and \u{300C}Enter to view \u{B7} x to stop\u{300D}\n",
             // A transcript quoting the auto mode prompt's title, without its option.
             "> why did it ask \"Make auto mode your default permission mode?\"\n",
+            // A transcript quoting the computer-use access request's title, without its footer.
+            "> it said \"Computer Use wants to control these apps\"\n",
+            // A transcript row quoting both the title and the footer.
+            "\u{25CF} \"Computer Use wants to control these apps\" \u{2026} \"Enter to confirm \u{B7} Esc to cancel\"\n",
             "",
         ] {
             assert_eq!(recognise(AgentId::CLAUDE, screen), None, "{screen}");

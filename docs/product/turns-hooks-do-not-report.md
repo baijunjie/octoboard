@@ -67,7 +67,10 @@ the session to its prompt as soon as either shows the cancel, normally within ab
   the turn running, Octoboard has applied every hook event it has received for the session, and the session still reads
   *working*. The same `✳` comes up when a turn ends normally and when a permission prompt or question waits on the user,
   but the hook events that come with those have moved the session by then, and a session they moved stays where they put
-  it.
+  it. A dialog that waits on the user with no hook (see "Messages held until a session can take them" in
+  `docs/product/message-delivery.md`), such as Claude Code's computer-use access request raised mid-turn, also leaves
+  the title at `✳`: while one is on the screen the title is not read as a cancel, and once it goes, that second's wait
+  starts over, so the turn has time to show itself running again after the user answers.
 
   Once the terminal answers its OSC 7501 support query, Claude Code 2.1.322 drops these glyphs from its title and
   reports its state instead: `working` when a turn starts, `idle` when it is cancelled (about 80 ms after the Esc,

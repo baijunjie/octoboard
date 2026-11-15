@@ -333,6 +333,35 @@ fn a_dialog_stops_an_interrupt_and_a_settled_prompt() {
         .settled_at_prompt(0, Duration::ZERO));
 }
 
+/// Once a dialog raised mid-turn goes away, the title left at the prompt while it was up is
+/// settled only after the settle counted from the dialog going, however long ago the title stopped,
+/// so the agent has time to show its turn running again after the answer.
+#[test]
+fn the_settle_starts_over_when_a_dialog_goes_away() {
+    let fixture = bound("dialog-gone", AgentId::CLAUDE, SessionStatus::Working);
+    let settle = Duration::from_secs(1);
+    running_title_sent(&fixture.live, STALE);
+    fixture
+        .live
+        .title
+        .lock()
+        .unwrap()
+        .activity
+        .note(Some(Shown::AtPrompt), before_now(STALE / 2));
+    fixture.live.on_output(DIALOG);
+    fixture.live.look_for_dialog();
+    fixture.live.on_output(b"\x1b[2J\x1b[H");
+    fixture.live.look_for_dialog();
+    assert!(fixture.live.agent_dialog().is_none(), "the dialog is gone");
+    assert!(
+        !fixture.live.turn_reading().settled_at_prompt(0, settle),
+        "the settle counts from the dialog going, not from the title's stop"
+    );
+
+    fixture.live.dialogs.lock().unwrap().gone_at = Some(before_now(settle * 2));
+    assert!(fixture.live.turn_reading().settled_at_prompt(0, settle));
+}
+
 /// Codex's title waiting on the user keeps the interrupt key out, though a report says its turn
 /// runs: the agent's status reads as waiting for the user.
 #[test]

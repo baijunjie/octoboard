@@ -344,6 +344,11 @@ impl LiveSession {
         self.dialogs.lock().expect("dialogs lock poisoned").current
     }
 
+    /// What the screen showed at the latest look, whoever made it ([`Self::agent_dialog`]).
+    pub(crate) fn dialog_sighting(&self) -> Sighting {
+        *self.dialogs.lock().expect("dialogs lock poisoned")
+    }
+
     /// Looks at the screen now for a dialog and notes what it shows. Takes the sighting lock and
     /// then the output's, never the other way round, so the reader thread can call it between
     /// chunks.
