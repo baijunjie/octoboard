@@ -19,6 +19,10 @@ import path from "node:path";
 import { localValue } from "../lib/env.mjs";
 
 const GIB = 1024 ** 3;
+// Set in the environment of a command that runs under a slot already held for it (`pnpm verify`'s heavy
+// steps, `heavy.mjs`'s command), so a heavy script it starts runs at once instead of waiting on that slot.
+export const HELD_ENV = "OCTOBOARD_HEAVY_SLOT_HELD";
+
 // A slot directory is made before its owner file is written; one without an owner for this long is orphaned.
 export const NO_OWNER_GRACE_MS = 10_000;
 

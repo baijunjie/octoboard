@@ -185,9 +185,10 @@ Applies to the `packages/ui` component tests (`vitest` under jsdom) that render 
   settle is not folded into a shared render helper that such tests also call.
 - A `lazy` object caches its resolution for the module's lifetime, so only the **first** test in a file that renders
   that object ever suspends; every later one is rescued by it and passes on file order alone. A clean whole-file run
-  therefore says nothing — check a test of this kind by running it on its own (`vitest run <file> -t "<name>"`), which
-  leaves the rest skipped and the cache cold. The caching is per `lazy` object, not per module: two exports built with
-  `lazy` give one file two separate first tests, and a test that renders one surface and then the other settles twice.
+  therefore says nothing — check a test of this kind by running it on its own (`pnpm --filter @octoboard/ui test <file>
+  -t "<name>"`), which leaves the rest skipped and the cache cold. The caching is per `lazy` object, not per module: two
+  exports built with `lazy` give one file two separate first tests, and a test that renders one surface and then the
+  other settles twice.
 
 ## A dialog test waits out the dialog's own mount refocus before any step whose focus it asserts
 

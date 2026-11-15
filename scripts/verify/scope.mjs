@@ -107,6 +107,9 @@ const RUST_PACKAGES = ["daemon", "native"];
 const notMarkdown = (prefix) => new RegExp(`^${prefix.replaceAll("/", "\\/")}(?!.*\\.md$)`);
 
 export const RULES = [
+  // `scripts/verify/heavy.mjs` is run by the UI's test scripts and the root Rust and Windows scripts, but selects
+  // only the verify package: `heavy.test.mjs` covers the wrapper on its own, and selecting the UI and both crates
+  // for it would run their full suites in a quick run whenever it changes.
   { match: ["scripts/verify/", "scripts/verify.mjs", "scripts/hooks/", "scripts/lib/", "scripts/format-staged.mjs", "scripts/pre-push.mjs"], consumers: ["verify"], why: "the verification command, the hook scripts, the shared script libraries and their tests (the two top-level hook paths are forwarding stubs for older installed hooks)" },
   { match: [notMarkdown("packages/ui/")], consumers: ["ui"], why: "the UI package" },
   { match: [notMarkdown("apps/web/")], consumers: ["web"], why: "the website" },

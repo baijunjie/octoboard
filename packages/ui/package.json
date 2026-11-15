@@ -20,9 +20,10 @@
     "build:preview": "vite build --config vite.preview.config.ts",
     "compiler:bailouts": "node scripts/compiler-bailouts.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "node ../../scripts/verify/heavy.mjs vitest run",
+    "test:related": "node ../../scripts/verify/heavy.mjs vitest related --run",
     "typecheck:app": "tsc --noEmit -p tsconfig.app.json",
-    "test:app": "vitest run --exclude 'src/gallery/**' --exclude 'src/fixtures/**' --exclude 'src/website-preview/**' --exclude 'scripts/gallery*' --exclude 'scripts/wkbench/**'"
+    "test:app": "node ../../scripts/verify/heavy.mjs vitest run --exclude 'src/gallery/**' --exclude 'src/fixtures/**' --exclude 'src/website-preview/**' --exclude 'scripts/gallery*' --exclude 'scripts/wkbench/**'"
   },
   "dependencies": {
     "@heroui/react": "^3.2.6",

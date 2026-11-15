@@ -21,7 +21,11 @@ scripts from this directory.
 - `pnpm compiler:bailouts` — lists the components and hooks the React Compiler leaves uncompiled (all of `src/`, or the
   files given), exiting 1 when there are any.
 - `pnpm test` — `vitest run`: the unit tests beside the code, plus jsdom tests for stateful classes and components.
+  Arguments narrow it (`pnpm test <file> -t "<name>"`).
+- `pnpm test:related` — `vitest related --run` over the files given: the tests that import them.
 - `pnpm test:app` — application tests, excluding the gallery, fixtures, website preview and WKWebView benchmark tests.
+- The three test scripts wait for a machine-wide heavy-step slot first (`scripts/verify/heavy.mjs`), shared with
+  `pnpm verify` and every other worktree's test runs.
 - `pnpm build` — generates third-party license data, runs `typecheck:app` and the i18n catalog check (`vitest run
   src/i18n`), then writes `dist/` with relative asset paths.
 - `pnpm build:preview` — builds the website demonstration into `dist-preview/` with `vite.preview.config.ts`

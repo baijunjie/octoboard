@@ -199,6 +199,12 @@ the earlier steps do not run them separately (the related tests a step runs to c
   checking, and tests never read. The full checks, builds and full test suites included, run only before pushing. Checks
   used specifically to establish a changed rule while implementing it remain appropriate; neither they nor the quick
   check replace push verification.
+- Run Rust and UI tests, clippy and the Windows cross-check only through the package scripts, never `cargo test`,
+  `cargo clippy` or `vitest` directly: `pnpm test:rust [cargo arguments]`, `pnpm clippy:rust`, `pnpm check:windows`,
+  `pnpm --filter @octoboard/ui test [<file>]` and `pnpm --filter @octoboard/ui test:related <files>`. They wait for
+  the machine-wide heavy-step slot `pnpm verify` uses (`scripts/verify/heavy.mjs`), so sessions testing at once queue
+  instead of running the machine out of memory; a wait message names what holds the slot. The wait can take minutes,
+  so run them with a long timeout or in the background.
 - Before committing, the `pre-commit` hook runs `scripts/hooks/format-staged.mjs` (the same as `pnpm format:staged`):
   format only staged supported source files, preserving unstaged edits. A partial commit (`git commit <paths>`) is
   refused; stage the files and commit without paths. A checkout without the script (a branch older than the hook)

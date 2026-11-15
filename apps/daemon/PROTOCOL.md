@@ -261,7 +261,7 @@ descriptions are rendered from the wire types and committed, each by a daemon te
 are out of date and, run with `OCTOBOARD_WRITE_BINDINGS=1`, rewrites them instead:
 
 - **The JSON Schema** (draft 2020-12) in `contracts/protocol/`, the language-neutral description a client in another
-  language is generated from: `OCTOBOARD_WRITE_BINDINGS=1 cargo test -p octoboardd protocol::schema`. Each file is
+  language is generated from: `OCTOBOARD_WRITE_BINDINGS=1 pnpm test:rust -p octoboardd protocol::schema`. Each file is
   one channel and direction (`control-input`, `control-output`, `terminal-input`, `terminal-output`) and is the schema
   of one text frame on it, with every named type a `$defs` entry and each field's meaning in its `description`; its
   `x-octoboard-protocol` states the generation, the channel and the direction. A request is described as the daemon
@@ -273,7 +273,7 @@ are out of date and, run with `OCTOBOARD_WRITE_BINDINGS=1`, rewrites them instea
   events and the behaviour behind them; the schema has each field's type, and a daemon test holds the schema and the
   TypeScript bindings below to the same optional and nullable fields.
 - **The TypeScript bindings**, `packages/ui/src/protocol.generated.ts`:
-  `OCTOBOARD_WRITE_BINDINGS=1 cargo test -p octoboardd bindings`, which also writes the generation as
+  `OCTOBOARD_WRITE_BINDINGS=1 pnpm test:rust -p octoboardd bindings`, which also writes the generation as
   `PROTOCOL_GENERATION`, so a client built from them cannot drift from the daemon's number.
 
 ### The MCP contract

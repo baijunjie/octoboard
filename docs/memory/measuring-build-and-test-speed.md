@@ -28,6 +28,9 @@ sessions building and testing in their own worktrees, often short of memory, whi
 
 - Do not run the heavy steps of one verification side by side: under that load it gains almost nothing and adds memory
   pressure.
+- Run tests and Rust checks through the package scripts that queue for the heavy-step slot (`pnpm test:rust`, the UI's
+  `pnpm test` / `test:related`), never `cargo test` or `vitest` directly: on 2026-11-15 four sessions each compiling the
+  daemon's test binary with a direct `cargo test` ran the 16 GiB machine out of memory while the slot sat unused.
 - Do not move tests to CI: tests stay local by the user's decision. Merges are local fast-forwards with no PR flow, so
   CI test runs would need branch pushes and macOS runner minutes.
 - Do not point worktrees at one shared `CARGO_TARGET_DIR`: cargo locks its build directory for a whole build, so
@@ -58,7 +61,7 @@ the run's CPU unchanged (about 436-462 s after, 436-438 s before) and its wall t
 the longest file, from about 14 % of the summed file time to at most 4 %.
 
 - Profile the file on its own first, from `packages/ui`:
-  `npx vitest run <file> --execArgv=--cpu-prof --execArgv=--cpu-prof-dir=<dir>` writes one profile per file, and
+  `pnpm test <file> --execArgv=--cpu-prof --execArgv=--cpu-prof-dir=<dir>` writes one profile per file, and
   `--reporter=json --outputFile=<path> --includeTaskLocation` gives each test's duration. A hotspot found there (a
   dependency, a shared test helper) is fixed where it lives and helps every file; a file slow only because it holds
   many tests is the one to split. Time a test spends idle in a required wait costs no CPU, and a parallel run absorbs

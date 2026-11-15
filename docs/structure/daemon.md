@@ -616,7 +616,7 @@ installs with `--service`).
 ## Dependency direction
 
 Enforced by the test `layering_tests::every_top_level_module_depends_only_downward_or_as_listed` in
-`src/layering_tests/` (`cargo test -p octoboardd layering_tests`). Its `LAYERS` and `UPWARD` constants
+`src/layering_tests/` (`pnpm test:rust -p octoboardd layering_tests`). Its `LAYERS` and `UPWARD` constants
 (`layering_tests/mod.rs`; the scanner is `layering_tests/scan.rs`) are the source of truth; the two tables below keep in
 step with them, and an edge that must point upward is added to `UPWARD` and to the allow-list table together, with its
 reason.

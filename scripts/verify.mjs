@@ -11,7 +11,7 @@ import path from "node:path";
 import { git, run } from "./lib/git.mjs";
 import { changedFiles, chooseBase, requirePushedTree } from "./verify/changes.mjs";
 import { assertRepositoryEnvironmentCleared } from "./verify/environment.mjs";
-import { acquireSlot, describeWait } from "./verify/lock.mjs";
+import { acquireSlot, describeWait, HELD_ENV } from "./verify/lock.mjs";
 import { clearFailure, failedFiles, narrowedFiles, readFailure, recordFailure, REPORT_ENV } from "./verify/rerun.mjs";
 import { quickSteps } from "./verify/quick.mjs";
 import { MENU_KEYS_FILE, planScope } from "./verify/scope.mjs";
@@ -198,14 +198,20 @@ for (const step of pending) {
   if (step.heavy && last?.[0].heavy) last.push(step);
   else groups.push([step]);
 }
+const inheritedHold = Boolean(process.env[HELD_ENV]);
 for (const group of groups) {
   let release = () => {};
-  if (group[0].heavy) {
+  // A run started under a slot already held for it (`verify/heavy.mjs`) does not wait on that slot.
+  if (group[0].heavy && !inheritedHold) {
     release = await acquireSlot(`${path.basename(root)}: ${group.map((step) => step.label).join(", then ")}`, {
       onWait: (holders, ahead) => console.log(`verify: heavy step "${group[0].label}" is waiting for a free slot; ${describeWait(holders, ahead)}`),
     });
   }
+  // The steps' heavy scripts (`pnpm test:rust` and the like, which go through `verify/heavy.mjs`) run under
+  // this hold rather than queue for a second slot.
+  if (group[0].heavy) process.env[HELD_ENV] = "1";
   for (const step of group) await runStep(step, key, current.tree);
+  if (!inheritedHold) delete process.env[HELD_ENV];
   release();
 }
 if (!recorded) {

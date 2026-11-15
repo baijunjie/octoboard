@@ -61,7 +61,10 @@ directory, `hooks/`, `lib/`) runs as the `verify` package's tests.
    file nothing imports.
 5. **Slots** (`lock.mjs`). Heavy steps take a machine-wide slot shared by every worktree (first come, first served;
    consecutive heavy steps share one hold). The number of slots follows cores and memory and is overridden by
-   `OCTOBOARD_VERIFY_SLOTS`. The UI's gallery sweep takes the same lock.
+   `OCTOBOARD_VERIFY_SLOTS`. The UI's gallery sweep takes the same lock, and so do the package scripts that run
+   tests and Rust checks on their own (`pnpm test:rust`, `clippy:rust`, `check:windows`, and the UI's `test`,
+   `test:related` and `test:app`), through `heavy.mjs`. A heavy step marks its commands as running under its hold
+   (`HELD_ENV`), so those scripts run at once inside `pnpm verify` instead of waiting on the slot it holds.
 6. **Quick mode** (`quick.mjs`, `--quick`). The normal plan without builds and without the two full test suites; UI and
    Rust tests narrow to what the changes reach (`vitest related`, and cargo module filters), falling back to a full
    suite where the reach cannot be traced. A file outside the UI package runs the UI tests that read it
@@ -133,7 +136,7 @@ retention and timing measurements are documented in the [Rust cache module](../.
   the full UI suite in a quick run until `UI_READERS` names its readers; the tests fail when an entry leaves a reader
   out.
 - A script that other packages import is named in the matching rule (`scripts/lib/git.mjs`, `scripts/lib/env.mjs`,
-  `lock.mjs`).
+  `lock.mjs`). One they only run, `heavy.mjs`, selects the verify package alone, as `scope.mjs` explains.
 - A test that creates a temporary Git repository calls `assertRepositoryEnvironmentCleared` at module startup before
   any Git operation. A hook launcher uses `withoutRepositoryEnvironment` for its verification child; changing the
   working directory alone does not isolate a Git fixture.
@@ -146,6 +149,8 @@ retention and timing measurements are documented in the [Rust cache module](../.
 - `changes.mjs`: `chooseBase`, `resolveBase`, `resolveLocalTargetBase`, `remoteTargetBase` (the one
   merge-base-with-the-remote-target function, also used by the pre-push hook), `resolveRemoteTargetBase`,
   `changedFiles`, `requirePushedTree`.
-- `lock.mjs`: `acquireSlot`; `stamp.mjs`: `readStamp`, `recordPass`; `rerun.mjs`: the failed-file record; `tree.mjs`:
-  `workingTree`.
+- `heavy.mjs`: `node scripts/verify/heavy.mjs <command> [arguments]` runs a command once it holds a slot
+  (`OCTOBOARD_HEAVY_SLOT_ROOT` moves the slots, for tests).
+- `lock.mjs`: `acquireSlot`, `HELD_ENV`; `stamp.mjs`: `readStamp`, `recordPass`; `rerun.mjs`: the failed-file record;
+  `tree.mjs`: `workingTree`.
 - `environment.mjs`: `withoutRepositoryEnvironment`, `assertRepositoryEnvironmentCleared`.

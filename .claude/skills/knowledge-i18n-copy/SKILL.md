@@ -492,8 +492,9 @@ are now wrong or it leaves out one thing, the meaning has changed.
 - **Resources and commands**: catalogs are TypeScript modules in `packages/ui/src/i18n/messages/<language>.ts`,
   registered in `CATALOGS`; placeholders are named `{name}`, and a count-dependent message is a plural object by CLDR
   category. `pnpm --filter ./packages/ui typecheck` fails on a translated catalog missing a message or plural category;
-  `pnpm --filter ./packages/ui exec vitest run src/i18n` (`catalog.test.ts`, also run by the package's `build`) checks
-  plural categories and that each translation keeps the English placeholders. (`packages/ui/src/i18n/catalog.ts`; `packages/ui/src/i18n/catalog.test.ts`; `packages/ui/package.json`)
+  `pnpm --filter ./packages/ui test src/i18n` (`catalog.test.ts`, also run by the package's `build`) checks plural
+  categories and that each translation keeps the English placeholders. (`packages/ui/src/i18n/catalog.ts`;
+  `packages/ui/src/i18n/catalog.test.ts`; `packages/ui/package.json`)
 - **How UI code uses the catalog**: a component looks messages up through `useT()`; the module-level `t()` is only for
   code outside React. A helper that returns display text takes the `Translate` function as its first parameter, and a
   module-level table stores a `PlainMessageKey`, looked up at render. A sentence with a variable part is one message
