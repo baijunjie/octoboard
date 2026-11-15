@@ -44,7 +44,7 @@ pub(crate) mod wait;
 mod rendered_tests;
 
 use draft::Draft;
-#[cfg(all(test, windows))]
+#[cfg(test)]
 pub(crate) use paste_apart::submits_paste_apart_for;
 pub(crate) use paste_apart::NotSubmitted;
 use std::io;

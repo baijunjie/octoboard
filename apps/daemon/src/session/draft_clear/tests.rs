@@ -182,6 +182,20 @@ fn discarded(events: &mut tokio::sync::broadcast::Receiver<Event>) -> Vec<(Strin
         .collect()
 }
 
+/// The screens `agent` draws for a message `text` written into its emptied box, for
+/// [`answer_presses`] to draw after the presses that emptied it. No screens where the message's
+/// paste and its Enter go in one write. Where the host hands a paste over as keys and the agent
+/// reads an Enter in the same burst as a line break (Codex on a Windows console), the daemon writes
+/// the Enter apart, only once the box shows the whole paste (`crate::session::paste_apart`), as the
+/// agent draws it: the box holding the message after the paste, and empty again after the Enter.
+fn message_taken(agent: AgentId, text: &str) -> Vec<Vec<u8>> {
+    if crate::session::submits_paste_apart_for(agent) {
+        vec![draw(agent, &[text]), draw(agent, &[])]
+    } else {
+        Vec::new()
+    }
+}
+
 /// Draws `screens` one after another, each once the session has taken one more write than when
 /// the one before was drawn, and fails when a write comes before the screen it should wait for:
 /// each press is written only once the one before shows.
@@ -677,7 +691,9 @@ async fn a_codex_draft_is_cleared_before_the_message() {
     let live = fixture.live();
     let mut events = fixture.state.subscribe();
     fixture.type_draft(AgentId::CODEX, &["draft"]);
-    let screen = answer_presses(live.clone(), vec![draw(AgentId::CODEX, &[])]);
+    let mut screens = vec![draw(AgentId::CODEX, &[])];
+    screens.extend(message_taken(AgentId::CODEX, "peer"));
+    let screen = answer_presses(live.clone(), screens);
     let framed = crate::session::term::frame_message(AgentId::CODEX, "peer");
     live.write_message_input(&framed, "peer", true).unwrap();
     screen.join().unwrap();
@@ -1692,7 +1708,9 @@ async fn a_codex_collapsed_paste_is_cleared_with_one_press_and_reported_as_its_p
     let live = fixture.live();
     let mut events = fixture.state.subscribe();
     fixture.type_draft(AgentId::CODEX, &[PLACEHOLDER]);
-    let screen = answer_presses(live.clone(), vec![draw(AgentId::CODEX, &[])]);
+    let mut screens = vec![draw(AgentId::CODEX, &[])];
+    screens.extend(message_taken(AgentId::CODEX, "peer"));
+    let screen = answer_presses(live.clone(), screens);
     let framed = crate::session::term::frame_message(AgentId::CODEX, "peer");
     live.write_message_input(&framed, "peer", true).unwrap();
     screen.join().unwrap();
@@ -1715,14 +1733,13 @@ async fn a_codex_draft_over_several_lines_is_cleared_a_press_at_a_time() {
     let live = fixture.live();
     let mut events = fixture.state.subscribe();
     fixture.type_draft(AgentId::CODEX, &[FIRST, SECOND]);
-    let screen = answer_presses(
-        live.clone(),
-        vec![
-            draw(AgentId::CODEX, &[FIRST, ""]),
-            draw(AgentId::CODEX, &[FIRST]),
-            draw(AgentId::CODEX, &[]),
-        ],
-    );
+    let mut screens = vec![
+        draw(AgentId::CODEX, &[FIRST, ""]),
+        draw(AgentId::CODEX, &[FIRST]),
+        draw(AgentId::CODEX, &[]),
+    ];
+    screens.extend(message_taken(AgentId::CODEX, "peer"));
+    let screen = answer_presses(live.clone(), screens);
     let framed = crate::session::term::frame_message(AgentId::CODEX, "peer");
     live.write_message_input(&framed, "peer", true).unwrap();
     screen.join().unwrap();

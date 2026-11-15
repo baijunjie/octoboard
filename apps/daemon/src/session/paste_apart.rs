@@ -169,8 +169,9 @@ impl Pasted {
 
     /// How the box `rows` show the message. Codex replaces a large paste with
     /// `[Pasted Content <n> chars]`, as captured with a bracketed paste on macOS
-    /// (`testdata/codex_hooked_empty.bin`); that it does so for a paste it took as keys, and
-    /// counts the characters as written, is assumed.
+    /// (`testdata/codex_hooked_empty.bin`), and does so for a paste it took as keys, counting the
+    /// characters as written, as measured on Windows (0.166.0, under "Keys that clear the
+    /// composer" in `docs/agent-cli-reference.md`).
     fn shown_in(&self, rows: &[String]) -> Shown {
         let shown = squeezed(&rows.concat());
         if shown == self.squeezed || (!self.alone && shown.contains(&self.squeezed)) {

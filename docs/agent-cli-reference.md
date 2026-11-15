@@ -815,6 +815,12 @@ counting, and no "Conversation interrupted" was shown), and Codex stayed up thro
 (`ESC[F`) moves the cursor to the end of its own line only, idle and mid-turn, after which a press clears that whole
 line; with the cursor on an earlier line of a multi-line draft the lines below are left, and Ctrl-End (`ESC[1;5F`) did
 not move the cursor at all, so no key was found that puts the cursor at the end of the whole draft.
+On Windows the same held (0.166.0, native ARM64, measured 2026-11-16 on Windows 11 ARM64 with the same scratch home
+and stand-in, through `node-pty`'s pseudoconsole on the inbox console host, its default, rather than the daemon's own
+with the bundled one): each press deleted back to the start of the line, three lines written as one burst of keys (line
+feeds between them) took five presses, a 2,400-character burst of keys showed as `[Pasted Content 2400 chars]` and went
+in one press, a bracketed paste of the same 2,400 characters showed and cleared the same way, a press mid-turn cleared
+the composer with the turn running on, and Codex stayed up.
 
 **An MCP server's environment and secret headers can come from Codex's own environment.** Besides `command`, `args`,
 `env`, `url` and `http_headers`, a server under `mcp_servers.<key>` accepts `cwd`, `env_vars` (names of variables
@@ -1440,8 +1446,8 @@ on Windows. Measured on 0.163.0 and 0.166.0:
   server that dies leaves the TUI retrying `Reconnecting to server… (52s)` for good; a server started again on the same
   address is reconnected to, with the draft kept. Killing only the server's process left a command the model was
   running (`PING.EXE`) alive.
-- Not measured on Windows: a non-elevated (medium integrity) run, a long collapsed paste, x64, and Octoboard's own
-  generated hook scripts, MCP server, developer instructions and reviewer overrides.
+- Not measured on Windows: a non-elevated (medium integrity) run, a long collapsed paste through the app server, x64,
+  and Octoboard's own generated hook scripts, MCP server, developer instructions and reviewer overrides.
 
 ## Moving a conversation to another config directory
 
