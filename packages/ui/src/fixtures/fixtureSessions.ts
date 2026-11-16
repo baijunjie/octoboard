@@ -451,8 +451,15 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
       if (outcome !== undefined) return fail(outcome.error);
       return { type: "ack", id: null };
     },
-    answer_session_request: () => {
+    answer_session_request: (body) => {
       if (scenario.sessionRequestAnswerError) return fail(scenario.sessionRequestAnswerError);
+      if (!store.getState().sessionRequests.some((request) => request.requestId === body.request_id)) {
+        return fail({ code: "session_request_answered", params: {}, message: "this is not a waiting session request: it was answered already" });
+      }
+      // The request stops waiting, as the daemon broadcasts it, so its dialog moves on. What approving would then do
+      // (starting, switching or handing off a session, answered with `session_opened` rather than this ack) is left
+      // out, and so is lowering the requesting session's raised hand, whose earlier status the fixture does not keep.
+      applyDaemonEvent(store, { type: "session_request_closed", request_id: body.request_id, reason: body.approve ? "approved" : "refused" });
       return { type: "ack", id: null };
     },
     confirm_trust: (body) => {

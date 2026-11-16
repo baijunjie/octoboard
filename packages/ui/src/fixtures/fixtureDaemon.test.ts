@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { currentLanguage, t } from "../i18n/language";
-import type { NotificationRequest, State, WindowNotification } from "../store";
+import type { NotificationRequest, SessionRequest, State, WindowNotification } from "../store";
 import { broadcastNotification } from "../store/notifications";
 
 import type { Agent, ClientRequestBody, PageContent, Settings, SettingsSection } from "../protocol";
@@ -1978,14 +1978,30 @@ describe("the fixture daemon's trust answers", () => {
 
 describe("the fixture daemon's session request answers", () => {
   const answer = { type: "answer_session_request", request_id: "r-1", approve: true } as const;
+  const refusal = { code: "session_request_not_waiting", params: {}, message: "not waiting" };
+  const waiting = (requestId: string): SessionRequest => ({ requestId, session: "s-1", kind: "project", console: "c", project: "p", agent: "claude", branches: [], requestedAt: 1, action: "start" });
+  const pendingIds = (daemon: ReturnType<typeof createFixtureDaemon>) => daemon.store.getState().sessionRequests.map((r) => r.requestId);
+  const daemonWaiting = (extra: Partial<Fixture> = {}) => createFixtureDaemon({ state: snapshotState({ sessionRequests: [waiting("r-1"), waiting("r-2")] }), ...extra });
 
-  it("refuses an answer with the error a scenario names", async () => {
-    const refusal = { code: "session_request_not_waiting", params: {}, message: "not waiting" };
-    await expect(createFixtureDaemon({ sessionRequestAnswerError: refusal, state: snapshotState({}) }).request(answer)).rejects.toMatchObject({ code: "session_request_not_waiting" });
+  it("refuses an answer with the error a scenario names and leaves every request waiting", async () => {
+    const daemon = daemonWaiting({ sessionRequestAnswerError: refusal });
+    await expect(daemon.request({ ...answer, approve: true })).rejects.toMatchObject({ code: "session_request_not_waiting" });
+    await expect(daemon.request({ ...answer, approve: false })).rejects.toMatchObject({ code: "session_request_not_waiting" });
+    expect(pendingIds(daemon)).toEqual(["r-1", "r-2"]);
   });
 
-  it("acknowledges an answer otherwise", async () => {
-    await expect(createFixtureDaemon({ state: snapshotState({}) }).request(answer)).resolves.toEqual({ type: "ack", id: null });
+  // The real daemon answers an approval with `session_opened` once it has carried the request out; the fixture
+  // deliberately does not simulate that, so only an acknowledgement is asked for.
+  it.each([true, false])("acknowledges an answer with approve %s and stops that request waiting, leaving the others", async (approve) => {
+    const daemon = daemonWaiting();
+    await expect(daemon.request({ ...answer, approve })).resolves.toMatchObject({ type: "ack" });
+    expect(pendingIds(daemon)).toEqual(["r-2"]);
+  });
+
+  it("refuses an answer to a request that is not waiting and leaves the waiting ones", async () => {
+    const daemon = daemonWaiting();
+    await expect(daemon.request({ ...answer, request_id: "r-missing" })).rejects.toMatchObject({ code: "session_request_answered" });
+    expect(pendingIds(daemon)).toEqual(["r-1", "r-2"]);
   });
 });
 
