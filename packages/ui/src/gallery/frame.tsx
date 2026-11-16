@@ -12,6 +12,7 @@ import { observeLazyReadiness } from "../components/hooks/lazyReadiness";
 import { isLanguage, type Language } from "../i18n/languages";
 import { galleryFailure } from "../fixtures/banner";
 import { readHost } from "../platform/host";
+import { LinkForwardError } from "../platform/linkForwardError";
 import { SCENARIOS } from "./fixtures";
 import { installFakeTerminal } from "../fixtures/fakeTerminal";
 import { galleryAppMenu } from "./appMenu";
@@ -19,8 +20,11 @@ import { holdPrimaryModifier } from "./heldModifier";
 import { afterFrames, applyDocumentTheme } from "../fixtures/pageFrame";
 import { createUi, settleMotion, stuckExit } from "../fixtures/interact";
 import { prepareStorage } from "./prepare";
+import { looseRequestSender } from "../requests";
+import type { ClientRequestBody } from "../protocol";
 import { LIVE_CHANGE_EVENT } from "./scenario";
 import { fixtureRemoteDaemons } from "./remoteDaemonsFixture";
+import { fixtureRemoteFiles, fixtureRemoteForwards } from "./remoteShellFixture";
 import { fixtureUpdater } from "./updaterFixture";
 
 const lazyReadiness = observeLazyReadiness();
@@ -53,11 +57,10 @@ const heldFromStart = heldModifier !== undefined && scenario?.held === "from-sta
 // everything this file imports statically, `./fixtures`, every scenario file and whatever those import included: none
 // of it may read a stored preference at module load, or the scenario opens in the previous one's language (English
 // under `lang=zh-Hans`, say).
-const [{ App }, { AppRoot }, { Toasts }, { ConnectPage }, { TrayFlyout }, { selectPlatform }, startup, { useUpdates }] = await Promise.all([
+const [{ App }, { AppRoot }, { Toasts }, { TrayFlyout }, { selectPlatform }, startup, { useUpdates }] = await Promise.all([
   import("../App"),
   import("../AppRoot"),
   import("../shell/Toasts"),
-  import("../shell/ConnectPage"),
   import("../shell/TrayFlyout"),
   import("../platform"),
   import("../StartupScreen"),
@@ -104,7 +107,9 @@ let daemonExited: ((detail: string) => void) | undefined;
  * its `exitFailure`), the daemon exiting by itself for a scenario that says `daemonExited`, and the updater for a
  * scenario that has one (`updater`), with that same exit capability, since a restart goes through it, the remote
  * daemons list for a scenario that gives `remoteDaemons`, Remote Login for one that gives `remoteLogin`, and the
- * flyout's own capability for one that gives `trayFlyout`. Nothing else native; `chrome=1` alone keeps the browser
+ * flyout's own capability for one that gives `trayFlyout`; for a remote window, the ports its shell forwards
+ * (`remoteForwards`), the copy of a remote file it stores and opens (`remoteFiles`) and a link opener that fails as the
+ * shell's forwarding does (`forwardFailure`). Nothing else native; `chrome=1` alone keeps the browser
  * platform kind. */
 function galleryPlatform(): ReturnType<typeof selectPlatform> {
   const platform = selectPlatform();
@@ -135,7 +140,12 @@ function galleryPlatform(): ReturnType<typeof selectPlatform> {
     ...(externalLinkError !== undefined && {
       links: { open: async () => { throw new Error(externalLinkError); } },
     }),
+    ...(scenario?.forwardFailure !== undefined && {
+      links: { open: async (url: string) => { throw new LinkForwardError(scenario.forwardFailure!, Number(new URL(url).port)); } },
+    }),
     ...(scenario?.remoteDaemons && { remoteDaemons: fixtureRemoteDaemons(scenario.remoteDaemons) }),
+    ...(scenario?.remoteForwards && { remoteForwards: fixtureRemoteForwards(scenario.remoteForwards) }),
+    ...(scenario?.remoteFiles && { remoteFiles: fixtureRemoteFiles() }),
     ...(scenario?.remoteLogin && {
       remoteLogin: {
         status: async () => (scenario.remoteLogin === "unknown" ? undefined : scenario.remoteLogin === "on"),
@@ -219,7 +229,19 @@ function Crash({ stack }: { stack?: string }): never {
 if (scenario?.shellSettings?.runInBackground !== undefined) runInBackground.set(scenario.shellSettings.runInBackground);
 if (scenario?.shellSettings?.showMenuBarIcon !== undefined) showMenuBarIcon.set(scenario.shellSettings.showMenuBarIcon);
 // A viewer scenario has one too: the viewer's header copies a path through the daemon's notifications.
-const daemon = scenario && !scenario.startup && !scenario.connectPage && !scenario.trayFlyout ? createFixtureDaemon(scenario) : undefined;
+const fixtureDaemon = scenario && !scenario.startup && !scenario.trayFlyout ? createFixtureDaemon(scenario) : undefined;
+/** How long a read of a file is held back: the real daemon reads on a blocking thread and answers over a socket, so its
+ * reply never lands in the task that asked, while the fixture's resolves at once. A viewer that a click on a terminal link
+ * opens asks for its file from an effect, and the render that commits what it asked for follows that task: a reply that
+ * beat it would be taken for one to a file no longer shown, and the viewer would stay loading. */
+const FILE_READ_LATENCY_MS = 10;
+const daemon = fixtureDaemon && {
+  ...fixtureDaemon,
+  request: looseRequestSender(async (body: ClientRequestBody) => {
+    if (body.type === "read_project_file" || body.type === "read_path_link") await new Promise((resolve) => setTimeout(resolve, FILE_READ_LATENCY_MS));
+    return fixtureDaemon.request(body);
+  }),
+};
 if (daemon && scenario) installReportPageFixture(document, daemon, scenario.id);
 const { ViewerGallery } = scenario?.viewer ? await import("./viewerGallery") : { ViewerGallery: undefined };
 const viewerSubjects = scenario?.viewer ? await scenario.viewer.subjects(language) : undefined;
@@ -230,7 +252,6 @@ const { ButtonsGallery } = scenario?.pendingButtons ? await import("./buttonsGal
 
 function screen(): React.ReactElement {
   if (!scenario) return <p className="p-4">Unknown scenario “{params.get("scenario")}”.</p>;
-  if (scenario.connectPage) return <ConnectPage />;
   if (scenario.trayFlyout) return <TrayFlyout />;
   if (CodeGallery) return <CodeGallery />;
   if (LicensesGallery && scenario.licensesDialog) return <LicensesGallery state={scenario.licensesDialog} />;

@@ -304,6 +304,8 @@ function mountPeeking() {
         onConsoleEnter={vi.fn()}
         onConsoleLeave={vi.fn()}
         hoverOpensSidebar
+        remoteDevicesShown={false}
+        onOpenRemoteDevices={() => {}}
         onOpenDialog={vi.fn()}
         onSelectSession={vi.fn()}
         onOpenArchive={vi.fn()}

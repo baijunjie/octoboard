@@ -4,7 +4,7 @@
   "title": "Octoboard control socket: client to daemon",
   "description": "One text frame a client sends on `/ws/control`: a request, or a browse request, told apart by `type`. See `apps/daemon/PROTOCOL.md`.",
   "x-octoboard-protocol": {
-    "generation": 5,
+    "generation": 6,
     "channel": "control",
     "direction": "input"
   },
@@ -137,6 +137,59 @@
             "project",
             "path"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "project": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "read_path_link"
+            }
+          },
+          "required": [
+            "type",
+            "path"
+          ],
+          "description": "Reads the file a path link names, as `probe_path_links` resolved it: a file of the project\nor of a temp root, whatever its type. Resolved again by the rules of `open_path_link`, but\nnever a directory a client named, and nothing is opened on the host."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "file": {
+              "$ref": "#/$defs/RangeFile"
+            },
+            "offset": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "length": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0,
+              "description": "The bytes wanted; more than the cap is answered with the cap."
+            },
+            "version": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "read_file_range"
+            }
+          },
+          "required": [
+            "type",
+            "file",
+            "offset",
+            "length"
+          ],
+          "description": "Reads up to `budget::MAX_RANGE_BYTES` of a live file from `offset`, for a client that copies\na file in parts. Every part resolves the file again by the rules of the read `file` mirrors;\n`version`, the one an earlier part reported, makes a file that has changed since\n`source_changed`."
         },
         {
           "type": "object",
@@ -1038,6 +1091,55 @@
         }
       ]
     },
+    "RangeFile": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "project": {
+              "type": "string"
+            },
+            "worktree": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "project"
+            }
+          },
+          "required": [
+            "kind",
+            "project",
+            "path"
+          ],
+          "description": "A file of the project or of one of its worktrees, as `read_project_file` reads it live."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "project": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "path_link"
+            }
+          },
+          "required": [
+            "kind",
+            "path"
+          ],
+          "description": "The file a path link names, as `read_path_link` reads it."
+        }
+      ],
+      "description": "The live file a `read_file_range` reads."
+    },
     "ReadFrom": {
       "oneOf": [
         {
@@ -1617,7 +1719,7 @@
           "required": [
             "type"
           ],
-          "description": "The configuration document, answered with `configuration_exported`: the regions picked by\n`consoles` (`one`, the console `console`; `all`; or `none`), `settings_sections` (the\napplication settings of those sections of Settings, written in one `settings` region) and\n`include_accounts` (the account structure, never a credential). Absent fields keep their\nolder meaning: `consoles` is `one` when `console` is given and `all` otherwise,\n`settings_sections` is every section exactly when every console is exported (none\notherwise; an empty list writes no `settings` region), and `include_accounts` is false.\nA section is written with the keys the daemon holds, so General carries only\n`agent_language`, and only when the daemon holds one. A request that would export\nnothing is refused with `export_empty`, `consoles: \"one\"` without a `console` with\n`field_required`, and a console that does not exist with `unknown_console`. `console` is\nread only for `one`. Reads what is stored; touches no session, runs no `git`.\n`include_paths` says whether each project's absolute directory path is written; absent is\ntrue. False writes only the directory's name, and a remote that cannot be cloned from (a\nlocal path) is left out, so the file reveals no project path of this machine. An account\ndirectory is always written, whatever it says."
+          "description": "The configuration document, answered with `configuration_exported`: the regions picked by\n`consoles` (`one`, the console `console`; `all`; or `none`), `settings_sections` (the\napplication settings of those sections of Settings, written in one `settings` region) and\n`include_accounts` (the account structure, never a credential). Absent fields keep their\nolder meaning: `consoles` is `one` when `console` is given and `all` otherwise,\n`settings_sections` is every section exactly when every console is exported (none\notherwise; an empty list writes no `settings` region), and `include_accounts` is false.\nA section is written with the keys the daemon holds, so General carries only\n`interface_language`, and only when the daemon holds one. A request that would export\nnothing is refused with `export_empty`, `consoles: \"one\"` without a `console` with\n`field_required`, and a console that does not exist with `unknown_console`. `console` is\nread only for `one`. Reads what is stored; touches no session, runs no `git`.\n`include_paths` says whether each project's absolute directory path is written; absent is\ntrue. False writes only the directory's name, and a remote that cannot be cloned from (a\nlocal path) is left out, so the file reveals no project path of this machine. An account\ndirectory is always written, whatever it says."
         },
         {
           "type": "object",
@@ -2523,9 +2625,9 @@
             "keep_sessions_in_own_project": {
               "type": "boolean"
             },
-            "agent_language": {
+            "interface_language": {
               "type": "string",
-              "description": "The agent language: a tag the interface offers (`interface_language::display_name`\nknows it); any other is refused."
+              "description": "A tag the interface offers (`interface_language::display_name` knows it); any other\nis refused."
             },
             "keep_awake": {
               "type": "boolean"

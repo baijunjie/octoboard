@@ -7,7 +7,10 @@
 //! `.ssh/authorized_keys` lists, so installing a device key can be seen working. Its connections
 //! can be dropped while it keeps listening, as a network that went away and came back. It can stand
 //! in for a host that signs in through keyboard-interactive alone, as PAM hosts do, and for one
-//! that never finishes some commands.
+//! that never finishes some commands. It refuses a `direct-tcpip` channel unless it is told to carry
+//! them, to a listener of the test, and then reports a port nothing answers at (or a loopback address
+//! it is told nothing listens on) as a connection that failed, as OpenSSH on Unix does, or, told to
+//! stand in for Win32-OpenSSH, confirms the channel and then closes it.
 
 use std::sync::{Arc, Mutex};
 
@@ -15,7 +18,7 @@ use russh::keys::ssh_key::private::Ed25519Keypair;
 use russh::keys::ssh_key::LineEnding;
 use russh::keys::{HashAlg, PrivateKey};
 use russh::server::{self, Auth, Msg, Response as Answers, Session, VerifiedPublicKey};
-use russh::{Channel, ChannelId, MethodKind, MethodSet};
+use russh::{Channel, ChannelId, ChannelOpenFailure, MethodKind, MethodSet};
 
 use crate::remote::octoboardd::{Shell, SHELL_PROBE};
 use tokio::net::TcpListener;
@@ -66,6 +69,18 @@ pub struct Behaviour {
     pub methods: Methods,
     /// The commands (whole, as run) the host starts and never finishes.
     pub hang: Vec<String>,
+    /// The port of this computer a `direct-tcpip` channel (to whatever port) is carried to; `None`
+    /// refuses them as a host that does not allow forwarding does.
+    pub forward_to: Option<u16>,
+    /// The loopback addresses a `direct-tcpip` channel asks for that nothing listens on, as for a server
+    /// listening on the other family alone.
+    pub not_listening_on: Vec<String>,
+    /// How long the host takes to find that nothing listens where a `direct-tcpip` channel asks, as a
+    /// Windows host does while its connect attempt is retried. Channels are answered each on its own.
+    pub refusal_delay: std::time::Duration,
+    /// Whether a `direct-tcpip` channel to where nothing listens is confirmed and then closed, as
+    /// Win32-OpenSSH does, rather than refused.
+    pub confirms_then_closes: bool,
 }
 
 /// How the host takes the password.
@@ -124,6 +139,8 @@ struct Shared {
     authentications: usize,
     keyboard_interactive_starts: usize,
     connections: usize,
+    /// The host and port each `direct-tcpip` channel asked for.
+    forwarded: Vec<(String, u32)>,
     sessions: Vec<JoinHandle<()>>,
 }
 
@@ -157,6 +174,7 @@ impl TestServer {
             while let Ok((stream, _)) = listener.accept().await {
                 let handler = Host {
                     shared: accepting.clone(),
+                    direct: Default::default(),
                 };
                 let config = config.clone();
                 // The host's side of the connection runs on one end of a pipe, the client's TCP
@@ -205,6 +223,22 @@ impl TestServer {
         self.shared.lock().unwrap().connections
     }
 
+    /// The host and port each `direct-tcpip` channel asked for, in order.
+    pub fn forwarded(&self) -> Vec<(String, u32)> {
+        self.shared.lock().unwrap().forwarded.clone()
+    }
+
+    /// Changes the port `direct-tcpip` channels are carried to from now on.
+    pub fn set_forward_to(&self, port: Option<u16>) {
+        self.shared.lock().unwrap().behaviour.forward_to = port;
+    }
+
+    /// Changes the loopback addresses nothing listens on from now on.
+    pub fn set_not_listening_on(&self, hosts: &[&str]) {
+        self.shared.lock().unwrap().behaviour.not_listening_on =
+            hosts.iter().map(|host| (*host).to_owned()).collect();
+    }
+
     /// Changes how the host answers from now on.
     pub fn set_address(&self, address: Option<(u32, Vec<u8>, Vec<u8>)>) {
         self.shared.lock().unwrap().behaviour.address = address;
@@ -227,6 +261,8 @@ impl Drop for TestServer {
 
 struct Host {
     shared: Arc<Mutex<Shared>>,
+    /// The `direct-tcpip` channels, whose data goes to their own stream and is not echoed.
+    direct: Arc<Mutex<std::collections::HashSet<ChannelId>>>,
 }
 
 impl Host {
@@ -272,6 +308,7 @@ impl Host {
             }
         }
         if let (Some(home), Some(_)) = (&shared.behaviour.home, command.strip_prefix("sh -c ")) {
+            let _spawning = crate::spawning();
             let output = std::process::Command::new("sh")
                 .arg("-c")
                 .arg(command)
@@ -398,6 +435,67 @@ impl server::Handler for Host {
         Ok(())
     }
 
+    async fn channel_open_direct_tcpip(
+        &mut self,
+        channel: Channel<Msg>,
+        host_to_connect: &str,
+        port_to_connect: u32,
+        _originator_address: &str,
+        _originator_port: u32,
+        reply: server::ChannelOpenHandle,
+        _session: &mut Session,
+    ) -> Result<(), Self::Error> {
+        let (to, listening, confirms_then_closes, refusal_delay) = {
+            let mut shared = self.shared.lock().unwrap();
+            shared
+                .forwarded
+                .push((host_to_connect.to_owned(), port_to_connect));
+            let behaviour = &shared.behaviour;
+            (
+                behaviour.forward_to,
+                !behaviour
+                    .not_listening_on
+                    .iter()
+                    .any(|host| host == host_to_connect),
+                behaviour.confirms_then_closes,
+                behaviour.refusal_delay,
+            )
+        };
+        let Some(to) = to else {
+            reply
+                .reject(ChannelOpenFailure::AdministrativelyProhibited)
+                .await;
+            return Ok(());
+        };
+        // Answered on a task of its own, so that a channel the host is slow to answer holds up no other.
+        let direct = self.direct.clone();
+        tokio::spawn(async move {
+            // Connected before the channel is confirmed, as OpenSSH does.
+            let connected = if listening {
+                tokio::net::TcpStream::connect(("127.0.0.1", to)).await.ok()
+            } else {
+                tokio::time::sleep(refusal_delay).await;
+                None
+            };
+            let Some(mut target) = connected else {
+                if confirms_then_closes {
+                    direct.lock().unwrap().insert(channel.id());
+                    reply.accept().await;
+                    let _ = channel.eof().await;
+                    let _ = channel.close().await;
+                } else {
+                    reply.reject(ChannelOpenFailure::ConnectFailed).await;
+                }
+                return;
+            };
+            direct.lock().unwrap().insert(channel.id());
+            reply.accept().await;
+            let mut stream = channel.into_stream();
+            let _ = tokio::io::copy_bidirectional(&mut stream, &mut target).await;
+        });
+        Ok(())
+    }
+
     async fn exec_request(
         &mut self,
         channel: ChannelId,
@@ -428,6 +526,9 @@ impl server::Handler for Host {
         data: &[u8],
         session: &mut Session,
     ) -> Result<(), Self::Error> {
+        if self.direct.lock().unwrap().contains(&channel) {
+            return Ok(());
+        }
         session.data(channel, data.to_vec())?;
         Ok(())
     }
@@ -437,6 +538,9 @@ impl server::Handler for Host {
         channel: ChannelId,
         session: &mut Session,
     ) -> Result<(), Self::Error> {
+        if self.direct.lock().unwrap().contains(&channel) {
+            return Ok(());
+        }
         session.exit_status_request(channel, 0)?;
         session.eof(channel)?;
         session.close(channel)?;

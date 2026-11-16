@@ -36,18 +36,19 @@ export function SettingsGroupCard({ title, lines, choice }: { title: string; lin
 
 /**
  * The application settings of a configuration as cards grouped the way the Settings dialog groups them: General,
- * Appearance, Agent behavior, Git, Keyboard shortcuts and Cleanup, each titled with its section's name, in the order of
- * the sections and, within a group, of the lines that section shows. With `current` (this machine's values) it is the
+ * Appearance, Agent behavior, Git, Keyboard shortcuts and Cleanup, each titled with its section's name, in the order
+ * of the sections and, within a group, of the lines that section shows. With `current` (this machine's values) it is the
  * review's: each line says what applying `settings` would change, and the git workflow lists the items that would
  * change with what each is now. Without it, it is the result's: each line says what `settings` were applied as, the git
  * workflow listing its values. The daemon holds the switches, when Prevent sleep holds and the git workflow; the lines
  * of what only the client holds or carries are the caller's: `clientLine` words one of `clientSettings` (appearance,
- * interface language, agent language, which the daemon holds but is worded the same way, Markdown style, terminal font
- * size, run in background, menu bar icon), `sorting` is the session order's line, `cloneDir` is the default clone
- * directory's line and `shortcuts` the keyboard shortcuts', each absent when the document carries none. Only the
- * `sections` given are drawn (all of them when absent), and a group with no line is not drawn: what `settings` lacks
- * has no line. With `choices` (the review's) every section drawn is a card with a checkbox for importing it, drawn even
- * with no line and collapsed while unchecked (see `SettingsGroupCard`).
+ * language, which the daemon holds but is worded the same way, Markdown style, terminal font size, run in background,
+ * menu bar icon),
+ * `sorting` is the session order's line, `cloneDir` is the default clone directory's line and `shortcuts` the keyboard
+ * shortcuts', each absent when the document carries none. Only the `sections` given are drawn (all of them when
+ * absent), and a group with no line is not drawn: what `settings` lacks has no line. With `choices` (the review's)
+ * every section drawn is a card with a checkbox for importing it, drawn even with no line and collapsed while unchecked
+ * (see `SettingsGroupCard`).
  */
 export function SettingsGroups({
   settings,
@@ -101,7 +102,7 @@ export function SettingsGroups({
         choice={choices?.general}
         title={t("settings.section.general")}
         lines={[
-          ...clientLines("interface_language", "agent_language"),
+          ...clientLines("interface_language"),
           ...generalSwitches("resume_sessions_on_start"),
           ...clientLines("run_in_background", "show_menu_bar_icon"),
           ...generalSwitches("keep_awake"),

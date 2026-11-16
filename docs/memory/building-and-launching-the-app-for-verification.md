@@ -93,6 +93,12 @@ anything read off an exec'd app about launch timing, first paint, or what is on 
 `open` still gives the run everything the shell gave it: `--env VAR=value` per variable to override, `-o` and
 `--stderr` for the app's own output, `-n` to force a second instance.
 
+The one launch `open` cannot stage is a launch at login, which the shell recognises by the Apple event that opened it
+(`apps/desktop/src-tauri/src/launch_at_login/macos.rs`). Stage it without registering a login item or logging out:
+open the bundle through `NSWorkspace.openApplication(at:configuration:)` with an `OpenConfiguration` whose
+`appleEvent` is an `aevt`/`oapp` event carrying `keyAEPropData` = `lgit`, and pass the throwaway environment in the
+configuration's `environment`.
+
 ## Isolate a packaged verification with a build-time app identifier and a throwaway environment
 
 On macOS, a throwaway `HOME` isolates the daemon, but does not isolate WKWebView. The daemon keeps its database,
@@ -146,13 +152,19 @@ in the middle of whatever they are doing. Ask the user before running such a che
 kept under the verification identifier's service (`<identifier>.remote-daemon-key`). Tests never need it: they take
 the in-memory store in `apps/desktop/src-tauri/src/remote/credentials.rs`.
 
+On macOS that store is looked up under `HOME`, so with a throwaway `HOME` the login fails instead: macOS shows a
+system "Keychain Not Found" dialog (Cancel / Reset To Defaults) and the device key's install fails as "user
+cancelled". Never press Reset To Defaults. Symlink `<throwaway HOME>/Library/Keychains` to the real
+`~/Library/Keychains` before launching, and if the dialog has already appeared, quit and start a fresh app process
+after adding the link: a running process keeps its failed lookup.
+
 To test other system languages, pass them for that launch only:
-`open <scratch-app> --args -AppleLanguages '(zh-Hans-CN, en)'`. This steers only a profile with no
-`octoboard.language` key: the first load keeps its pick there, and every later launch of that profile shows the kept
-language whatever the system prefers. So each test of the initial pick needs a fresh unique profile; the daemon plays
-no part in the interface language, and a fresh daemon data directory matters only for the agent language, which a
-daemon holding none takes from the first connecting window. To inspect a profile value, open the sqlite file normally
-rather than with `immutable=1`: the app's last write may still be in the WAL, which `immutable=1` skips.
+`open <scratch-app> --args -AppleLanguages '(zh-Hans-CN, en)'`. This steers only a launch whose profile has no
+`octoboard.language` key and whose daemon holds no language: the first load keeps its pick in the profile and, on
+connecting, reports it to the daemon, which keeps it, and from then on every window of that daemon shows the daemon's
+language whatever the system prefers. So each test of the initial pick needs a fresh unique profile and a fresh daemon
+data directory. To inspect a profile value, open the sqlite file normally rather than with `immutable=1`: the app's
+last write may still be in the WAL, which `immutable=1` skips.
 
 Keep the `.app` and throwaway directories on the internal disk when the checkout is on a removable volume. An ad-hoc
 build has a fresh code identity each time, so macOS's consent prompt for access to that volume can recur on every run.
@@ -167,6 +179,12 @@ inside the throwaway home and open that project's shell terminal (see "Starting 
 agent terminal runs. It is not the same drawing: shell terminals use xterm's DOM renderer and only the agent terminal
 draws with WebGL, so a WebGL renderer defect (garbled or stale glyphs) neither shows nor can be confirmed fixed in a
 shell terminal; such a check needs an agent terminal.
+
+Such a check, and any other that needs an agent session to exist but no model turn to succeed, can have one: put a
+dummy key in the `settings.json` of the Claude Code config directory the run uses
+(`"env": {"ANTHROPIC_API_KEY": "<dummy>"}`; the same works for a Windows VM user that is not signed in). The daemon
+goes on reporting the account as not logged in until its next quota reading, so send `refresh_account_quotas` for it
+and wait for the reading before `open_session`.
 
 ## Reload a dev window fully before judging a defect in it
 

@@ -8,6 +8,7 @@ import { OpenShellTerminal } from "./project-browser/RowActions";
 import { ConnectionBanner } from "./shell/ConnectionBanner";
 import { IncompatibleDaemonScreen } from "./shell/IncompatibleDaemonScreen";
 import { KeyRefusedScreen } from "./shell/KeyRefusedScreen";
+import { ContentMain } from "./components/panel/ContentMain";
 import { ContentPanel } from "./shell/ContentPanel";
 import { HandoffOnUnmount } from "./components/focus/HandoffOnUnmount";
 import { PaneResizeHandle } from "./layout/PaneResizeHandle";
@@ -27,13 +28,20 @@ import { useQuickCreateSession } from "./dialogs/useQuickCreateSession";
 import { raiseError } from "./components/alerts/raiseError";
 import { CodedError } from "./errors/codedError";
 import { useT } from "./i18n/react";
+import type { Console, Project } from "./protocol";
+import { usePlatform } from "./platform/react";
+import { RemoteDevicePage } from "./remoteDaemons/RemoteDevicePage";
+import { RemoteDevicesProvider } from "./remoteDaemons/RemoteDevices";
+import { RemoteDevicesSidebar } from "./remoteDaemons/RemoteDevicesSidebar";
+import { remoteDaemonsOffered } from "./remoteDaemons/remoteDaemonsOffered";
 import { liveOwner, ownerKey, type AsideOwner } from "./layout/asideOwner";
 import { columnSpan, isDockEasing } from "./layout/paneDockMotion";
+import { useRemoteDevicesPage } from "./app/useRemoteDevicesPage";
 import { useRegionCycle } from "./layout/useRegionCycle";
 import { ExitConfirmDialog } from "./lifecycle/ExitConfirmDialog";
 import { useAppExit } from "./lifecycle/useAppExit";
 import { useGitStatusSchedule } from "./lifecycle/useGitStatusSchedule";
-import { useAgentLanguageSeed } from "./lifecycle/useAgentLanguageSeed";
+import { useInterfaceLanguage } from "./lifecycle/useInterfaceLanguage";
 import { useNativeAppsSync } from "./lifecycle/useNativeAppsSync";
 import { useStatusItemMenu } from "./statusItem/useStatusItemMenu";
 import { useWaitingNotifications } from "./lifecycle/useWaitingNotifications";
@@ -68,6 +76,7 @@ import { useOpenSessionInApp } from "./components/host/useOpenSessionInApp";
 import { terminalEmptyState } from "./app/emptyState";
 import { TerminalPane } from "./terminal/TerminalPane";
 import { useTerminalFontShortcuts } from "./terminal/terminalFontShortcut";
+import { StartupFramed } from "./StartupScreen";
 import { WelcomeScreen } from "./WelcomeScreen";
 import { useAnnouncement } from "./app/useAnnouncement";
 import { useAppNavigation } from "./app/useAppNavigation";
@@ -87,13 +96,26 @@ import { useSessionActions } from "./app/useSessionActions";
 import { useSessionRequests } from "./app/useSessionRequests";
 import { useTerminalFocus } from "./app/useTerminalFocus";
 
-export function App(): React.ReactElement {
+/** What stands in for the consoles and projects while the daemon cannot be used, whatever an earlier connection loaded. */
+const NO_CONSOLES = new Map<string, Console>();
+const NO_PROJECTS = new Map<string, Project>();
+
+/**
+ * The window of the local daemon. While that daemon cannot be used (it is connecting or not answering, speaks another
+ * protocol generation, refused the page's key, or `startupScreen` says it failed to start) the window shows that state
+ * where the session UI would be, and the rail holds only the Remote devices button: remote connections are the shell's,
+ * and need no daemon, so the Remote devices page works all the same, when it is asked for.
+ */
+export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {}): React.ReactElement {
   const t = useT();
   const { request, reconnect, store, isLocal } = useDaemon();
   const connectionState = useDaemonStore((s) => s.connectionState);
   const hosts = useDaemonStore((s) => s.hosts);
-  const consoles = useDaemonStore((s) => s.consoles);
-  const projects = useDaemonStore((s) => s.projects);
+  const offline = startupScreen !== undefined || connectionState === "incompatible" || connectionState === "keyRefused" || !hosts;
+  const storedConsoles = useDaemonStore((s) => s.consoles);
+  const storedProjects = useDaemonStore((s) => s.projects);
+  const consoles = offline ? NO_CONSOLES : storedConsoles;
+  const projects = offline ? NO_PROJECTS : storedProjects;
   const agentAvailability = useDaemonStore((s) => s.agentAvailability);
   const accounts = useDaemonStore((s) => s.settings.accounts);
   const defaultAccountNames = useDaemonStore((s) => s.settings.default_account_names);
@@ -121,12 +143,25 @@ export function App(): React.ReactElement {
   const hasAside = asideOwner !== undefined;
   const sidebarView = useSidebarView(consoleList);
   useGitStatusSchedule();
-  useAgentLanguageSeed();
+  useInterfaceLanguage();
   useNativeAppsSync();
 
   const currentConsole = sidebarView.currentConsole;
+  // The Remote devices page, in the application's own window (`useRemoteDevicesPage`): while it shows it takes the
+  // content area's place, and the sidebar lists the saved devices in place of the console's sessions. The session UI is
+  // hidden and not unmounted, so the terminals and everything else go on as they were.
+  const platform = usePlatform();
+  const devicesOffered = remoteDaemonsOffered(platform);
+  const devices = useRemoteDevicesPage({
+    capability: devicesOffered ? platform.remoteDaemons : undefined,
+    consoleId: currentConsole?.id,
+    sessionId: selectedSession?.id,
+    offline,
+  });
+  const devicesShown = devices.shown;
   const {
     noConsoles,
+    noSidebar,
     ownerKind,
     ownerOrder,
     reportSessionId,
@@ -175,10 +210,17 @@ export function App(): React.ReactElement {
     selectedSession,
     selectedSessionId,
     focusTerminal,
+    sidebarWithoutConsole: devicesShown,
+  });
+  const chooseDevice = useStableHandler((id: string) => {
+    devices.remember(id);
+    // A drawer (a narrow window) has done what it was opened for, as it has for a session.
+    if (panes.sidebarOpen) panes.closeSidebar();
   });
   // A maximized panel (`covered`) or a floating one over it takes the agent area out of reach: inert, so its
   // regions are not pressable and their status text is lost until it is exposed again.
   const agentAreaInert = covered || floatingShown;
+
   const {
     archiveScope,
     setArchiveScopeByUser,
@@ -195,7 +237,7 @@ export function App(): React.ReactElement {
     stableOpenArchive,
   } = useArchiveView({ consoles, projects, revealArchive, sidebarOpen: panes.sidebarOpen, closeSidebar: panes.closeSidebar, handOffToTerminal });
 
-  useFirstConsoleHandoff(hosts !== undefined && noConsoles, dialogRequest?.kind === "new-console");
+  useFirstConsoleHandoff(!offline && noConsoles, dialogRequest?.kind === "new-console");
 
   // The terminal offers the next action for the current console and focus scope, even while the
   // sidebar previews another console. A selected session or an archive keeps that offer hidden.
@@ -215,19 +257,20 @@ export function App(): React.ReactElement {
     shown: {
       topbar: true,
       rail: !railAway,
-      welcome: noConsoles,
-      sidebar: !noConsoles && panes.sidebarShown,
-      archive: archiveOpen && !agentAreaInert,
-      terminal: (selectedSession !== undefined || emptyHasAction) && !archiveOpen && !agentAreaInert,
+      devices: devicesShown,
+      welcome: noConsoles && !devicesShown,
+      sidebar: !noSidebar && panes.sidebarShown,
+      archive: archiveOpen && !agentAreaInert && !devicesShown,
+      terminal: (selectedSession !== undefined || emptyHasAction) && !archiveOpen && !agentAreaInert && !devicesShown,
       banner: connectionState === "reconnecting" || connectionState === "closed",
       update: updateNoticeShown,
     },
-    panels: shownPanelRegions(asideOverlay && !panes.asidePeek.active ? undefined : ownerStack, ownerKind),
+    panels: devicesShown ? {} : shownPanelRegions(asideOverlay && !panes.asidePeek.active ? undefined : ownerStack, ownerKind),
     focusTerminal,
   });
 
   const { sidebarColumnPhase, setSidebarColumnPhase, sidebarWidth, asideWidth, asideLayout, asideFloat } = usePaneWidths({
-    noConsoles,
+    noSidebar,
     isNarrow,
     sidebarDocked: panes.sidebarDocked,
     stackedPanelCount: stackedPanels.length,
@@ -256,10 +299,11 @@ export function App(): React.ReactElement {
     setAsideOwner,
     setArchiveScopeByUser,
   });
-  // A removed project's browser state has nothing left to apply to.
+  // A removed project's browser state has nothing left to apply to. `projects` is empty while `offline`, so pruning then
+  // would wipe every project's persisted state.
   useEffect(() => {
-    if (hosts) forgetProjectsOtherThan(new Set(projects.keys()));
-  }, [projects, hosts]);
+    if (!offline) forgetProjectsOtherThan(new Set(projects.keys()));
+  }, [projects, offline]);
   // What the aside showed goes with its owner; focus that was inside it goes to the terminal.
   useEffect(() => refocusIfLost(focusTerminal), [ownerKey(asideOwner)]);
 
@@ -424,10 +468,15 @@ export function App(): React.ReactElement {
     sidebarShown: panes.sidebarShown,
     selectSession,
     focusTerminal,
+    suspended: devicesShown,
   });
 
+  // Nothing is recorded while the page shows and the list of devices is not read yet, which would name a device that is
+  // not the one it settles on. Without the daemon the status it shows is the first place there is to go back to, so it
+  // is recorded from the start, as a place that is gone once the daemon can be used.
   const { canGoBack, canGoForward, stableBack, stableForward, stableCommitPreview } = useAppNavigation({
-    ready: hosts !== undefined,
+    ready: !(devicesShown && !devices.list.entriesRead),
+    offline,
     focus: sidebarView.focus,
     setFocus: sidebarView.setFocus,
     selectConsole: sidebarView.selectConsole,
@@ -450,6 +499,9 @@ export function App(): React.ReactElement {
     previewing,
     shownConsole,
     focusTerminal,
+    devices: devicesShown ? (devices.device ?? "") : undefined,
+    deviceIds: new Set(devices.list.entries.map((entry) => entry.id)),
+    setDevices: devices.follow,
   });
 
   const { stableArchiveSession } = useArchiveSession({
@@ -485,7 +537,7 @@ export function App(): React.ReactElement {
   } = useRowRequests();
   usePaneSwipe({
     asideFloats,
-    noConsoles,
+    noSidebar,
     sidebarOpen: panes.sidebarOpen,
     toggleSidebar: panes.toggleSidebar,
     closeSidebar: panes.closeSidebar,
@@ -512,55 +564,107 @@ export function App(): React.ReactElement {
   const focusAfterModal = useStableHandler(() => focusAfterLoss(focusTerminal));
   useEffect(() => setFocusAfterModalLoss(focusAfterModal), [focusAfterModal]);
 
-  // A daemon of another protocol generation: nothing it sent is shown, whatever an earlier connection had loaded.
-  if (connectionState === "incompatible") return <IncompatibleDaemonScreen onRestart={exit.restartNow} />;
+  // What the window says while the local daemon cannot be used, where the session UI would be. A daemon of another
+  // protocol generation: nothing it sent is shown, whatever an earlier connection had loaded. The page's key is no longer
+  // the daemon's, so nothing can load or be retried: the same, with the way to a working address. Nothing to show until
+  // the first snapshot: the banner with the Retry the client offers once it has given up is there with it (below),
+  // otherwise this would say it is connecting forever with nothing the user can do about it.
+  let status: React.ReactNode;
+  if (startupScreen !== undefined) status = startupScreen;
+  else if (connectionState === "incompatible") status = <IncompatibleDaemonScreen onRestart={exit.restartNow} />;
+  else if (connectionState === "keyRefused") status = <KeyRefusedScreen />;
+  else if (!hosts) {
+    status = (
+      <ContentMain className="items-center justify-center text-app-muted">
+        {connectionState === "closed" ? t("app.daemonNotAnswering") : t("app.connecting")}
+      </ContentMain>
+    );
+  }
 
-  // The page's key is no longer the daemon's, so nothing can load or be retried: the same, with the way to a working
-  // address.
-  if (connectionState === "keyRefused") return <KeyRefusedScreen />;
-
-  // Nothing to show until the first snapshot. The toasts belong here all the same, and so does the
-  // banner with the Retry the client offers once it has given up — otherwise this screen would say
-  // it is connecting forever with nothing the user can do about it.
-  if (!hosts) {
+  // A window with no Remote devices page (a browser, a remote daemon's window) has nothing else to show while the daemon
+  // cannot be used: the status is the whole window. While the first snapshot is awaited the toasts belong there all
+  // the same.
+  if (offline && !devicesOffered) {
+    if (connectionState === "incompatible" || connectionState === "keyRefused" || startupScreen !== undefined) return <>{status}</>;
     return (
       <div className="flex h-full flex-col">
         <BareTitleBar />
         <Toasts focusTerminal={focusTerminal} />
-        <ContentPanel bare>
-          <div className="flex flex-1 items-center justify-center text-app-muted">
-            {connectionState === "closed" ? t("app.daemonNotAnswering") : t("app.connecting")}
-          </div>
-        </ContentPanel>
-        {/* Mounted only while closed, unlike the main screen's always-mounted banner, so its focus
-            handoff does not run as it goes; nothing is lost, as this screen has no terminal and an
-            empty bar to hand focus to. */}
-        {connectionState === "closed" && (
-          <ConnectionBanner state={connectionState} onRetry={reconnect} focusTerminal={focusTerminal} />
-        )}
+        <ContentPanel bare>{status}</ContentPanel>
+        {connectionState === "closed" && <ConnectionBanner state={connectionState} onRetry={reconnect} focusTerminal={focusTerminal} />}
       </div>
     );
   }
 
-  return (
+  // The sidebar with its scrim and the handle of its width: the sessions' of the console, or while the Remote devices page
+  // shows, the devices'.
+  const sidebar = (
+    <>
+      <Scrim open={panes.sidebarOpen} label={t(devicesShown ? "app.closeDevices" : "app.closeSessions")} onClose={panes.closeSidebar} />
+      <Sidebar
+        projects={projectList}
+        selectedSessionId={selectedSessionId}
+        shownConsole={shownConsole}
+        focus={previewing ? undefined : sidebarView.focus}
+        onSelectSession={stableSelectFromSidebar}
+        onSwitchConsoleSession={stableSwitchConsoleSession}
+        onOpenConsoleSession={stableOpenConsoleSession}
+        onOpenDialog={stableOpenDialog}
+        onQuickCreateSession={stableQuickCreateSession}
+        onFocus={stableFocus}
+        onOpenArchive={stableOpenArchive}
+        visibleProjectPanels={visibleProjectPanels}
+        onOpenProjectPanel={stableOpenProjectPanel}
+        onOpenProjectDirectory={isLocal === false ? undefined : stableOpenProjectDirectory}
+        onOpenSystemTerminal={isLocal === false ? undefined : stableOpenSystemTerminal}
+        onOpenRepository={stableOpenRepository}
+        onCopyProjectName={stableCopyProjectName}
+        onLoadProjectCopyPathItem={stableLoadProjectCopyPathItem}
+        onCopySessionId={stableCopySessionId}
+        onPullProjectBranch={stablePullProjectBranch}
+        onPushProjectBranch={stablePushProjectBranch}
+        onLoadProjectBranches={stableLoadProjectBranches}
+        onSetSessionColour={stableSetSessionColour}
+        onSetLocked={stableSetLocked}
+        onBindSession={stableBindSession}
+        onSetPinned={stableSetPinned}
+        onReopenSession={stableReopenSession}
+        onArchiveSession={stableArchiveSession}
+        onOpenSettings={stableOpenSettingsAt}
+        open={panes.sidebarOpen || (!asideFloats && panes.sidebarPeek.active)}
+        drawerAway={isNarrow && !panes.sidebarOpen && !panes.sidebarPeek.active}
+        peek={isNarrow || !panes.sidebarDocked ? panes.sidebarPeek : undefined}
+        onPeekPress={devicesShown ? undefined : stableCommitPreview}
+        devices={devicesShown ? { label: t("remoteDevices.label"), content: <RemoteDevicesSidebar /> } : undefined}
+        onColumnPhase={setSidebarColumnPhase}
+        sidebarWidth={sidebarWidth}
+      />
+      {!isNarrow && panes.sidebarDocked && sidebarColumnPhase === "open" && (
+        <PaneResizeHandle side="sidebar" paneWidth={sidebarWidth} />
+      )}
+    </>
+  );
+
+  const screen = (
     <div data-sidebar-dockable={!isNarrow} data-pane-docked={(!isNarrow && panes.sidebarDocked) || asideDocked} className="relative flex h-full flex-col">
       <Toasts focusTerminal={focusTerminal} />
       <TitleBar
+        devicesShown={devicesShown}
         sidebarShown={panes.sidebarShown}
         sidebarRevealOnly={isNarrow && !asideFloats}
-        hasSidebar={!noConsoles}
-        sidebarSpan={noConsoles ? 0 : columnSpan(sidebarColumnPhase, sidebarWidth.width)}
+        hasSidebar={!noSidebar}
+        sidebarSpan={noSidebar ? 0 : columnSpan(sidebarColumnPhase, sidebarWidth.width)}
         sidebarEasing={isDockEasing(sidebarColumnPhase)}
         onToggleSidebar={stableToggleSidebar}
         onSidebarToggleEnter={panes.sidebarPeek.reveal}
         onSidebarToggleLeave={panes.sidebarPeek.leave}
-        asideSpan={asideDocked ? asideWidth.width : 0}
+        asideSpan={asideDocked && !devicesShown ? asideWidth.width : 0}
         asidePinned={asidePinned}
         onToggleAsideDocked={ownerKind && !asideFloats ? toggleAsideDocked : undefined}
         asideAutomatic={!asideDockable}
         asideRevealed={panes.asidePeek.active}
         onAsideHoverChange={stableHoverAside}
-        panelToggles={ownerKind ? availableKinds.map((kind) => {
+        panelToggles={ownerKind && !devicesShown ? availableKinds.map((kind) => {
           const entry = PANEL_ENTRIES[kind];
           const open = openPanels.includes(kind) && (!asideOverlay || panes.asidePeek.active);
           return {
@@ -578,15 +682,17 @@ export function App(): React.ReactElement {
         onBack={stableBack}
         onForward={stableForward}
         focusTerminal={focusTerminal}
-        selectedSession={selectedSession}
+        selectedSession={offline ? undefined : selectedSession}
         viewTrail={
-          archiveOpen && archiveConsole
-            ? archiveProject
-              ? [archiveConsole.name, archiveProject.name, t("archive.heading.project")]
-              : archiveBoundTo
-                ? [archiveConsole.name, sessionDisplayTitle(t, archiveBoundTo), t("archive.heading.boundSessions")]
-                : [archiveConsole.name, t("archive.heading.consoleSessions")]
-            : undefined
+          devicesShown
+            ? [t("remoteDevices.label"), ...(devices.device !== undefined && !devices.adding ? [devices.list.entries.find((entry) => entry.id === devices.device)!.name] : [])]
+            : archiveOpen && archiveConsole
+              ? archiveProject
+                ? [archiveConsole.name, archiveProject.name, t("archive.heading.project")]
+                : archiveBoundTo
+                  ? [archiveConsole.name, sessionDisplayTitle(t, archiveBoundTo), t("archive.heading.boundSessions")]
+                  : [archiveConsole.name, t("archive.heading.consoleSessions")]
+              : undefined
         }
       />
       <div className="flex min-h-0 flex-1">
@@ -596,11 +702,18 @@ export function App(): React.ReactElement {
           selectedSessionId={selectedSessionId}
           consoles={consoleList}
           currentConsoleId={sidebarView.currentConsole?.id}
-          onSelectConsole={stableSwitchConsole}
-          onConsoleEnter={panes.sidebarPeek.hoverConsole}
-          onConsoleLeave={panes.sidebarPeek.leaveConsole}
+          onSelectConsole={(id) => {
+            devices.leave();
+            stableSwitchConsole(id);
+          }}
+          // The sidebar lists the devices while the page shows, so a console's avatar has no sessions to float in.
+          onConsoleEnter={devicesShown ? noop : panes.sidebarPeek.hoverConsole}
+          onConsoleLeave={devicesShown ? noop : panes.sidebarPeek.leaveConsole}
           onRailHoverChange={(hovered) => hovered ? panes.sidebarPeek.hoverRail() : panes.sidebarPeek.leaveRail()}
-          hoverOpensSidebar={panes.sidebarPeek.peekable}
+          hoverOpensSidebar={panes.sidebarPeek.peekable && !devicesShown}
+          remoteDevicesShown={devicesShown}
+          onOpenRemoteDevices={devices.show}
+          offline={offline}
           onOpenDialog={stableOpenDialog}
           onSelectSession={stableSelectFromSidebar}
           onOpenArchive={stableOpenArchive}
@@ -612,8 +725,16 @@ export function App(): React.ReactElement {
           focusTerminal={focusTerminal}
         />
         <ContentPanel startsAtEdge={railOnDemand}>
-          {/* The same as `noConsoles`, read off the console itself so that it narrows. */}
-          {shownConsole === undefined ? (
+          {/* With no console the welcome screen stands in for the session UI (read off the console itself, so that it
+              narrows), unless the page of devices is shown, which has the sidebar of its own. Without the daemon there is
+              no session UI to keep: the status stands where it would be, and the page, once asked for, has its sidebar
+              alone. */}
+          {offline && !devicesShown ? (
+            // The region F6 reaches the status's Restart or Report issue by, as it does the welcome screen's controls.
+            <div data-region="welcome" className="flex min-h-0 min-w-0 flex-1 flex-col">
+              <StartupFramed.Provider value>{status}</StartupFramed.Provider>
+            </div>
+          ) : shownConsole === undefined && !devicesShown ? (
             <WelcomeScreen ref={welcomeRef} onOpenDialog={openDialog} />
           ) : (
             <>
@@ -624,163 +745,138 @@ export function App(): React.ReactElement {
                 from="[data-region=sidebar], [data-region=archive], [data-region=terminal], [data-region=aside], [data-region^=panel-]"
                 to={focusNewConsole}
               />
-              <Scrim open={panes.sidebarOpen} label={t("app.closeSessions")} onClose={panes.closeSidebar} />
               {/* A panel floating over the agent terminal is dismissed by a press beside it, as the
                   drawer is; the top bar, with the panel's own toggle, stays out of it. */}
-              <Scrim open={floatingShown} label={t("panel.close")} onClose={floating.close} clearOfRail={false} />
-              <Sidebar
-                projects={projectList}
-                selectedSessionId={selectedSessionId}
-                shownConsole={shownConsole}
-                focus={previewing ? undefined : sidebarView.focus}
-                onSelectSession={stableSelectFromSidebar}
-                onSwitchConsoleSession={stableSwitchConsoleSession}
-                onOpenConsoleSession={stableOpenConsoleSession}
-                onOpenDialog={stableOpenDialog}
-                onQuickCreateSession={stableQuickCreateSession}
-                onFocus={stableFocus}
-                onOpenArchive={stableOpenArchive}
-                visibleProjectPanels={visibleProjectPanels}
-                onOpenProjectPanel={stableOpenProjectPanel}
-                onOpenProjectDirectory={isLocal === false ? undefined : stableOpenProjectDirectory}
-                onOpenSystemTerminal={isLocal === false ? undefined : stableOpenSystemTerminal}
-                onOpenRepository={stableOpenRepository}
-                onCopyProjectName={stableCopyProjectName}
-                onLoadProjectCopyPathItem={stableLoadProjectCopyPathItem}
-                onCopySessionId={stableCopySessionId}
-                onPullProjectBranch={stablePullProjectBranch}
-                onPushProjectBranch={stablePushProjectBranch}
-                onLoadProjectBranches={stableLoadProjectBranches}
-                onSetSessionColour={stableSetSessionColour}
-                onSetLocked={stableSetLocked}
-                onBindSession={stableBindSession}
-                onSetPinned={stableSetPinned}
-                onReopenSession={stableReopenSession}
-                onArchiveSession={stableArchiveSession}
-                onOpenSettings={stableOpenSettingsAt}
-                open={panes.sidebarOpen || (!asideFloats && panes.sidebarPeek.active)}
-                drawerAway={isNarrow && !panes.sidebarOpen && !panes.sidebarPeek.active}
-                peek={isNarrow || !panes.sidebarDocked ? panes.sidebarPeek : undefined}
-                onPeekPress={stableCommitPreview}
-                onColumnPhase={setSidebarColumnPhase}
-                sidebarWidth={sidebarWidth}
-              />
-              {!isNarrow && panes.sidebarDocked && sidebarColumnPhase === "open" && (
-                <PaneResizeHandle side="sidebar" paneWidth={sidebarWidth} />
-              )}
-              {/* Floating panes leave the agent area its full width; horizontal overflow remains a
+              <HiddenWhile hidden={devicesShown}>
+                <Scrim open={floatingShown} label={t("panel.close")} onClose={floating.close} clearOfRail={false} />
+              </HiddenWhile>
+              {sidebar}
+              {/* Without the daemon there is no session UI at all, only the devices' sidebar and the page. */}
+              {!offline && (
+                <HiddenWhile hidden={devicesShown}>
+                  {/* Floating panes leave the agent area its full width; horizontal overflow remains a
                   guard while the docked sidebar's column is changing width. The scroll container's
                   own shadow reaches the sidebar without being clipped by its overflow. */}
-              <main className="relative flex min-w-0 flex-1 overflow-x-auto pane-docked:shadow-(--panel-shadow)">
-                {/* The flex basis matches the width allocator's 400px floor, so the pane keeps its
+                  <ContentMain className="overflow-x-auto">
+                    {/* The flex basis matches the width allocator's 400px floor, so the pane keeps its
                     allocated width and the terminal grows into the remaining space. Phone mode removes the floor. */}
-                {/* The agent area and docked pane share a layer below resize handles and floating
+                    {/* The agent area and docked pane share a layer below resize handles and floating
                     cards, so the cards' edges and shadows can paint over the terminal's outer inset.
                     The scroll container casts the sidebar shadow. */}
-                <div ref={agentAreaRef} inert={agentAreaInert} className={`relative flex min-h-0 ${asideFloats ? "min-w-0 flex-1" : "min-w-[400px] flex-[1_1_400px]"} pane-docked:z-1`}>
-                  <ArchiveLayer
-                    view={archiveOpen && archiveConsole ? {
-                      console: archiveConsole,
-                      project: archiveProject,
-                      boundTo: archiveBoundTo,
-                      sessions: archiveSessions,
-                      consoles,
-                      projects,
-                      accounts,
-                      defaultNames: defaultAccountNames,
-                      providers,
-                      selectedSessionId,
-                      onSelect: stableSelectSession,
-                      onReopen: stableReopenSession,
-                      nativeApps,
-                      nativeAppsUnseen,
-                      onOpenInApp: stableOpenSessionInApp,
-                      onRefreshNativeApps: stableRefreshNativeApps,
-                      onOpenDialog: stableOpenDialog,
-                      dialogOpen: dialogRequest !== undefined,
-                      onClose: closeArchive,
-                      restore: archiveRestore,
-                      onViewState: onArchiveViewState,
-                    } : undefined}
-                  />
-                  <TerminalPane
-                    exposed={!agentAreaInert}
-                    ref={terminalRef}
-                    resizing={isDockEasing(sidebarColumnPhase)}
-                    onViewFile={viewLinkedFile}
-                    onSelectSession={stableSelectSession}
-                    restoreFocus={focusTerminal}
-                    behindArchive={archiveOpen}
-                    noSelection={selectedSessionId === undefined}
-                    session={selectedSession}
-                    onResume={resumeSession}
-                    resuming={selectedSessionId !== undefined && resumingIds.has(selectedSessionId)}
-                    modalOpen={otherModalOpen || settingsOpen}
-                    onAddProject={emptyState?.kind === "add-project" && currentConsole
-                      ? () => openDialog({ kind: "new-project", console: currentConsole })
-                      : undefined}
-                    noAgents={emptyState?.kind === "no-agents" ? emptyState.reason : undefined}
-                    onAddAgent={() => openSettingsAt("accounts", { addAgent: true })}
-                    newSession={emptyState && currentConsole && (emptyState.kind === "new-session" || emptyState.kind === "new-console-session")
-                      ? {
-                        message: t(emptyState.kind === "new-session" ? "sidebar.project.openSession" : "sidebar.consoleSessions.empty"),
-                        label: t(emptyState.kind === "new-session" ? "sidebar.project.openSession" : "sidebar.consoleSessions.new"),
-                        onPress: () => emptyState.kind === "new-session"
-                          ? openDialog({ kind: "new-session", console: currentConsole, project: emptyState.project, binding: emptyState.binding })
-                          : openConsoleSession(currentConsole),
-                      }
-                      : undefined}
-                  />
-                </div>
-                {asideOwner && (
-                  <OpenShellTerminal.Provider value={stableOpenShellTerminal}>
-                    <ProcessPanelProvider value={processPanel}>
-                      <RightPane
-                        owner={asideOwner}
-                        project={asideProject}
-                        layout={asideLayout}
-                        active={asideOverlay ? panes.asidePeek.active : paneShown || panes.asidePeek.active}
-                        selectedSessionId={selectedSessionId}
-                        reportSessionId={reportSessionId}
-                        focusTerminal={focusTerminal}
-                        peekKind={peekKind}
-                        onViewFile={viewLinkedFile}
-                        onDismiss={() => panes.asidePeek.hide()}
-                        onPanelClose={notePanelClosed}
-                        maximizeArea={agentAreaRef}
-                        areaEasing={isDockEasing(sidebarColumnPhase)}
-                        float={asideFloat}
-                        overlay={asideOverlay}
-                        onHoverChange={stableHoverAside}
-                        resizeHandle={asideOverlay ? <PaneResizeHandle side="aside" paneWidth={asideWidth} floating region={panelRegion((stackedPanels[0] ?? peekKind) as PanelKind)} /> : undefined}
-                        floating={asideFloats && ownerStack ? { stack: ownerStack, onClose: floating.close } : undefined}
+                    <div ref={agentAreaRef} inert={agentAreaInert} className={`relative flex min-h-0 ${asideFloats ? "min-w-0 flex-1" : "min-w-[400px] flex-[1_1_400px]"} pane-docked:z-1`}>
+                      <ArchiveLayer
+                        view={archiveOpen && archiveConsole ? {
+                          console: archiveConsole,
+                          project: archiveProject,
+                          boundTo: archiveBoundTo,
+                          sessions: archiveSessions,
+                          consoles,
+                          projects,
+                          accounts,
+                          defaultNames: defaultAccountNames,
+                          providers,
+                          selectedSessionId,
+                          onSelect: stableSelectSession,
+                          onReopen: stableReopenSession,
+                          nativeApps,
+                          nativeAppsUnseen,
+                          onOpenInApp: stableOpenSessionInApp,
+                          onRefreshNativeApps: stableRefreshNativeApps,
+                          onOpenDialog: stableOpenDialog,
+                          dialogOpen: dialogRequest !== undefined,
+                          onClose: closeArchive,
+                          restore: archiveRestore,
+                          onViewState: onArchiveViewState,
+                        } : undefined}
                       />
-                    </ProcessPanelProvider>
-                  </OpenShellTerminal.Provider>
-                )}
-              </main>
-              {asideOwner && asideDocked && (
-                <>
-                  {/* First among what goes away with the pane, so focus on its handle is still found. */}
-                  <HandoffOnUnmount from="[role=separator][data-pane=aside]" to={focusTerminal} />
-                  <PaneResizeHandle side="aside" paneWidth={asideWidth} region={panelRegion(stackedPanels[0] as PanelKind)} />
-                </>
+                      <TerminalPane
+                        exposed={!agentAreaInert && !devicesShown}
+                        ref={terminalRef}
+                        resizing={isDockEasing(sidebarColumnPhase)}
+                        onViewFile={viewLinkedFile}
+                        onSelectSession={stableSelectSession}
+                        restoreFocus={focusTerminal}
+                        behindArchive={archiveOpen}
+                        noSelection={selectedSessionId === undefined}
+                        session={selectedSession}
+                        onResume={resumeSession}
+                        resuming={selectedSessionId !== undefined && resumingIds.has(selectedSessionId)}
+                        modalOpen={otherModalOpen || settingsOpen}
+                        onAddProject={emptyState?.kind === "add-project" && currentConsole
+                          ? () => openDialog({ kind: "new-project", console: currentConsole })
+                          : undefined}
+                        noAgents={emptyState?.kind === "no-agents" ? emptyState.reason : undefined}
+                        onAddAgent={() => openSettingsAt("accounts", { addAgent: true })}
+                        newSession={emptyState && currentConsole && (emptyState.kind === "new-session" || emptyState.kind === "new-console-session")
+                          ? {
+                            message: t(emptyState.kind === "new-session" ? "sidebar.project.openSession" : "sidebar.consoleSessions.empty"),
+                            label: t(emptyState.kind === "new-session" ? "sidebar.project.openSession" : "sidebar.consoleSessions.new"),
+                            onPress: () => emptyState.kind === "new-session"
+                              ? openDialog({ kind: "new-session", console: currentConsole, project: emptyState.project, binding: emptyState.binding })
+                              : openConsoleSession(currentConsole),
+                          }
+                          : undefined}
+                      />
+                    </div>
+                    {asideOwner && (
+                      <OpenShellTerminal.Provider value={stableOpenShellTerminal}>
+                        <ProcessPanelProvider value={processPanel}>
+                          <RightPane
+                            owner={asideOwner}
+                            project={asideProject}
+                            layout={asideLayout}
+                            active={asideOverlay ? panes.asidePeek.active : paneShown || panes.asidePeek.active}
+                            selectedSessionId={selectedSessionId}
+                            reportSessionId={reportSessionId}
+                            focusTerminal={focusTerminal}
+                            peekKind={peekKind}
+                            onViewFile={viewLinkedFile}
+                            onDismiss={() => panes.asidePeek.hide()}
+                            onPanelClose={notePanelClosed}
+                            maximizeArea={agentAreaRef}
+                            areaEasing={isDockEasing(sidebarColumnPhase)}
+                            float={asideFloat}
+                            overlay={asideOverlay}
+                            onHoverChange={stableHoverAside}
+                            resizeHandle={asideOverlay ? <PaneResizeHandle side="aside" paneWidth={asideWidth} floating region={panelRegion((stackedPanels[0] ?? peekKind) as PanelKind)} /> : undefined}
+                            floating={asideFloats && ownerStack ? { stack: ownerStack, onClose: floating.close } : undefined}
+                          />
+                        </ProcessPanelProvider>
+                      </OpenShellTerminal.Provider>
+                    )}
+                  </ContentMain>
+                  {asideOwner && asideDocked && (
+                    <>
+                      {/* First among what goes away with the pane, so focus on its handle is still found. */}
+                      <HandoffOnUnmount from="[role=separator][data-pane=aside]" to={focusTerminal} />
+                      <PaneResizeHandle side="aside" paneWidth={asideWidth} region={panelRegion(stackedPanels[0] as PanelKind)} />
+                    </>
+                  )}
+                </HiddenWhile>
               )}
             </>
           )}
+          {devicesShown && <RemoteDevicePage drawerOpen={panes.sidebarOpen} />}
         </ContentPanel>
       </div>
+      {/* Without the daemon none of this has anything to work on. */}
       {/* A login started in Settings opens its authorization page for as long as the window lives, Settings open or not. */}
-      <LoginPageOpener />
+      {!offline && <LoginPageOpener />}
       {/* An update of an agent's CLI asked for in Settings that fails is told whether or not Settings is still open. */}
-      <AgentCliUpdateAlerts />
-      <UpdateNotice focusTerminal={focusTerminal} />
-      <ConnectionBanner state={connectionState} onRetry={reconnect} focusTerminal={focusTerminal} />
-      <div ref={announcementRef}>
-        <AttendedStatusAnnouncer text={announcementText} />
-      </div>
-      {settingsOpen && <SettingsDialog navigation={settingsNavigation} onClose={closeSettings} />}
-      {dialogRequest && (
+      {!offline && <AgentCliUpdateAlerts />}
+      {!offline && <UpdateNotice focusTerminal={focusTerminal} />}
+      {/* Without the daemon, mounted only while closed, so that its focus handoff does not run as the daemon connects;
+          nothing is lost, as there is no terminal and an empty bar to hand focus to. */}
+      {(!offline || (connectionState === "closed" && startupScreen === undefined)) && (
+        <ConnectionBanner state={connectionState} onRetry={reconnect} focusTerminal={focusTerminal} />
+      )}
+      {!offline && (
+        <div ref={announcementRef}>
+          <AttendedStatusAnnouncer text={announcementText} />
+        </div>
+      )}
+      {settingsOpen && !offline && <SettingsDialog navigation={settingsNavigation} onClose={closeSettings} />}
+      {dialogRequest && !offline && (
         <RequestedDialog
           dialog={dialogRequest}
           onClose={closeDialog}
@@ -790,16 +886,32 @@ export function App(): React.ReactElement {
           onResumeSession={resumeFromDialog}
         />
       )}
-      {launchConfirmation}
-      {linkedFile && (
+      {!offline && launchConfirmation}
+      {linkedFile && !offline && (
         <LazyLinkedFileViewer
           file={linkedFile}
           onOpenFile={setLinkedFile}
           onClose={closeLinkedFile}
         />
       )}
-      <PendingQuestionDialog />
-      <ExitConfirmDialog exit={exit} />
+      {!offline && <PendingQuestionDialog />}
+      {!offline && <ExitConfirmDialog exit={exit} />}
     </div>
   );
+  return devicesOffered ? (
+    <RemoteDevicesProvider capability={platform.remoteDaemons!} list={devices.list} selectedId={devices.device} shown={devicesShown} onShow={devices.show} onSelect={chooseDevice} onAdd={() => panes.sidebarOpen && panes.closeSidebar()} onAddingChange={devices.setAdding}>
+      {screen}
+    </RemoteDevicesProvider>
+  ) : (
+    screen
+  );
 }
+
+/** What stays mounted while the Remote devices page takes its place: out of the layout, the document's outline and the
+ * focus order (`display: none`), as the terminals and the panes keep their state, and as part of the content panel's
+ * row (`display: contents`) otherwise. */
+function HiddenWhile({ hidden, children }: { hidden: boolean; children: React.ReactNode }): React.ReactElement {
+  return <div className={hidden ? "hidden" : "contents"}>{children}</div>;
+}
+
+const noop = () => {};

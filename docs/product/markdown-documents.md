@@ -88,11 +88,13 @@ resolve to a path inside the project, which stays its text: a `javascript:` addr
 backslash or that cannot be decoded.
 
 **Links.** An absolute `http:`, `https:` or `mailto:` address is a link only when the window can hand it to the user's
-own browser or mail client — to a new tab, in the UI opened in a browser. Following it does not move the viewer. It
-carries that address as its tooltip; its accessible description says it opens externally. Document links, including
-image links, have no external-link icon. One with no text of its own reads as the address. While opening is pending,
-repeated activations do not open another destination; a failed opening reports the failure and gives the address to
-open by hand.
+own browser or mail client — to a new tab, in the UI opened in a browser. In a remote window of the desktop application
+an address on the remote machine's own loopback opens through a forwarded port (see "Loopback addresses of the remote
+machine" in `docs/product/links-and-files-in-a-remote-window.md`). An address whose host is an IPv6 literal in brackets
+(`http://[::1]:3000/`) is a link as any other. Following it does not move the viewer. It carries that address as its
+tooltip; its accessible description says it opens externally. Document links, including image links, have no
+external-link icon. One with no text of its own reads as the address. While opening is pending, repeated activations do
+not open another destination; a failed opening reports the failure and gives the address to open by hand.
 
 A relative link that resolves to a project file opens that file in the viewer, replacing the file that was open. There
 is no way back to the previous document from the link itself. The link carries the path within the project as its

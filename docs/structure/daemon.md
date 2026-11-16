@@ -386,14 +386,14 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   held to (the upstream-lookup budgets live in `git/remote_branches.rs`). `scope.rs` resolves the project, directory and
   worktree a request works in (and a path for a host action: `resolve_project_path`, `resolve_project_directory`,
   `project_live_roots`); `changes.rs` lists the worktree's changes and `change_read.rs` reads one change for them, for
-  `compare.rs` and for `commits.rs`; `content.rs` encodes a body for the wire.
+  `compare.rs` and for `commits.rs`; `content.rs` encodes a body for the wire; `live.rs` reads the live files under a scope: a whole regular file (`read_file`, and `read_resolved` for a path already resolved, which `path_links::read` uses too) and a part of one (`read_range`, answering `read_file_range`, which a client copying a file reads it in parts with).
 - `src/hostfs/` — host filesystem work: bounded reads, regular-file reads and appends, device/inode identity, listing,
   whole-file replacement, Trash, small entry steps (`modified`, `remove_any`, `is_same_path`), `dir_key`, and the one
   place a path is resolved against the disk (`canonical`, over `platform::names::canonical`) and compared as written
   (`lexical_key`, `lexically_within`, over `platform::names::lexical_key`).
 - `src/host_open/`, `src/path_links/` — opening the file manager, default application or terminal (every launcher runs
   through one bounded runner, and what each host's launcher is comes from `platform::open`; `host_open/native_app.rs`
-  opens an agent's desktop application at a URL its scheme names); probing and opening the paths a terminal shows, where `path_links/resolve.rs` is the one
+  opens an agent's desktop application at a URL its scheme names); probing, reading (`read`, the one way a click on a file shows it) and opening the paths a terminal shows, where `path_links/resolve.rs` is the one
   place that decides what a link may reach and what is only shown rather than launched.
 - `src/env_shell/` — the user's real shell environment agents are launched with (the host's login-shell snapshot from
   `platform::shell`, less the variables that mark an agent session, kept under the freshness rules of `cache.rs`), and
@@ -542,7 +542,7 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   and `terminal/shell/busy.rs`; `open/` the launcher commands `host_open` starts (file manager, default application,
   system terminal), chosen by an OS name so every OS's choice is tested anywhere (`terminal.rs`'s `host_launch` decides
   whether the host looks its terminal up on a shell snapshot, so business code compares no OS name), and
-  `LAUNCHED_FILE_EXTENSIONS`, the file types the host's shell launches when opened (Windows only), which `path_links`
+  the launchable file types read from `config/launchable-extensions.json` (`launchable_extensions`, shared with the desktop shell and the UI; `launched_file_extensions`, the part the host's shell launches when opened, Windows only), which `path_links`
   refuses, and `open/native_app.rs`, whether the host has an application registered for a URL scheme (macOS Launch
   Services, Windows' protocol association lookup) and the launch that opens a URL with it; `local_socket/` the owner-only listening socket with a path (a Unix-domain socket on macOS and Linux, refused
   on Windows, `AVAILABLE`): `Listener::bind_replacing_stale`, `connect` (the connect itself and every read and write
@@ -642,7 +642,9 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   a DLL that finds no `OpenConsole.exe` starts the inbox console host, which is logged as a warning); on Windows the
   output is drained after a close that races the last reader's drop, quit keys of a polite stop wait behind a bracketed
   paste being written rather than landing inside it, and a failed wait in a transfer is reported as an error; `random/`
-  bytes from the host's random source; `policy/` what an administrator sets for a product: the directory they keep its
+  bytes from the host's random source; `net/` the names and addresses another computer reaches this one by (the Bonjour
+  `.local` name on macOS, the host or computer name elsewhere, and the addresses of the active interfaces through
+  `getifaddrs` or `GetAdaptersAddresses`, filtered and ordered in `net/mod.rs`); `policy/` what an administrator sets for a product: the directory they keep its
   managed files in (`managed_dir`), a Unix program's system configuration directory under `/etc`, none on Windows
   (`system_config_dir`), and its registry policy (the Windows registry's `Policies` key; elsewhere none), read through
   `registry.rs`, the Windows-only reader of registry string values; `test_helper.rs` the test binary re-run as the

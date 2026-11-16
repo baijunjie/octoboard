@@ -3,7 +3,7 @@
 // The UI imports it only through `protocol.ts`, which re-exports it.
 
 /** The protocol generation this file describes; see `hello`. */
-export const PROTOCOL_GENERATION = 5;
+export const PROTOCOL_GENERATION = 6;
 
 /**
  * A named config directory of one agent, kept once for the whole application and referred to by
@@ -540,6 +540,21 @@ export type BrowseRequest = {
   worktree?: string,
   path: string,
   from?: ReadFrom,
+}
+  | {
+  "type": "read_path_link",
+  project?: string,
+  path: string,
+}
+  | {
+  "type": "read_file_range",
+  file: RangeFile,
+  offset: number,
+  /**
+   * The bytes wanted; more than the cap is answered with the cap.
+   */
+  length: number,
+  version?: string,
 }
   | {
   "type": "list_project_changes",
@@ -1608,18 +1623,11 @@ export type DocumentSessionOrder = {
  */
 export type DocumentSettings = {
   /**
-   * The interface language tag, which only the client holds, carried like `run_in_background`:
-   * the client adds the language it shows to a document it saves and applies it from an
-   * import's reply when it offers it. A document of version 3 or older, from a build that held
-   * one language for the windows and the agents alike, carries that language here alone: its
-   * upgrade copies it into `agent_language`.
+   * The interface language tag (see `Settings.interface_language`): the daemon writes the one it
+   * holds. An import applies it only when this build offers it. Absent when the daemon held
+   * none.
    */
   interface_language?: string,
-  /**
-   * The agent language tag (see `Settings.agent_language`): the daemon writes the one it holds.
-   * An import applies it only when this build offers it. Absent when the daemon held none.
-   */
-  agent_language?: string,
   /**
    * Whether the daemon resumes the interrupted sessions when it starts (see
    * `Settings.resume_sessions_on_start`). Absent in a document from a build that had no such
@@ -2261,6 +2269,22 @@ export type Event = {
   path: string,
   source: ContentSource,
   file: FileContent,
+}
+| {
+  "type": "path_link_file",
+  id: string | null,
+  path: string,
+  version: string,
+  file: FileContent,
+}
+| {
+  "type": "file_range",
+  id: string | null,
+  offset: number,
+  size: number,
+  version: string,
+  data: string,
+  launchable?: boolean,
 }
 | {
   "type": "project_changes",
@@ -3176,14 +3200,13 @@ export type PathLink = {
   /**
    * Where the client reads the file with `read_project_file`, for a file inside the project or
    * one of its worktrees, or for a directory there, its README or index file when it has one;
-   * absent for anything else. Whether the viewer can show it is for the client to find out by
-   * reading it.
+   * absent for anything else, which a file reads with `read_path_link`. Whether the viewer can
+   * show it is for the client to find out by reading it.
    */
   view?: PathLinkView,
   /**
-   * Set for any file in a project, whatever its type, since the system's default application for
-   * a file may run it, and for what the system could launch: the viewer shows it and
-   * `open_path_link` refuses it.
+   * Set for a file the system could launch rather than show: the host never opens it, so
+   * `open_path_link` refuses it, and the viewer is the only place it opens from a link.
    */
   viewer_only?: boolean,
 };
@@ -3547,6 +3570,21 @@ export type QuotaWindowNaming = {
 };
 
 /**
+ * The live file a `read_file_range` reads.
+ */
+export type RangeFile = {
+  "kind": "project",
+  project: string,
+  worktree?: string,
+  path: string,
+}
+| {
+  "kind": "path_link",
+  project?: string,
+  path: string,
+};
+
+/**
  * Which content a `read_project_file` reads. Absent means `live`.
  */
 export type ReadFrom = {
@@ -3599,6 +3637,17 @@ export type RemoteAccess = {
    * fill in; set while `state` is `serving`, null otherwise.
    */
   forward_command: string | null,
+  /**
+   * What another computer can reach this one by, for the owner to put in the forward's
+   * `<server>`, in the order Settings offers them: this computer's name (on macOS the Bonjour
+   * `<name>.local`, elsewhere the host name as the system reports it), then its IPv4 and then
+   * its IPv6 addresses, each as text that `ssh` takes after `user@` as it is. Loopback, unspecified, multicast and link-local addresses and
+   * `localhost` names are left out, as are deprecated, tentative and failed addresses where the
+   * system says so (Linux, Windows) and temporary IPv6 addresses on Linux (they are kept on
+   * macOS and Windows). Read when the state is; set while `state` is `serving`, empty
+   * otherwise, and empty while the computer reports none.
+   */
+  server_addresses: Array<string>,
   /**
    * Why the daemon could not serve a browser though the setting is on; set while `state` is
    * `failed`, null otherwise.
@@ -4260,10 +4309,10 @@ export type Request = {
   ask_questions_as_choices?: boolean,
   keep_sessions_in_own_project?: boolean,
   /**
-   * The agent language: a tag the interface offers (`interface_language::display_name`
-   * knows it); any other is refused.
+   * A tag the interface offers (`interface_language::display_name` knows it); any other
+   * is refused.
    */
-  agent_language?: string,
+  interface_language?: string,
   keep_awake?: boolean,
   keep_awake_when?: KeepAwakeWhen,
   auto_select_account?: boolean,
@@ -5156,10 +5205,10 @@ export type RequestBody = {
   ask_questions_as_choices?: boolean,
   keep_sessions_in_own_project?: boolean,
   /**
-   * The agent language: a tag the interface offers (`interface_language::display_name`
-   * knows it); any other is refused.
+   * A tag the interface offers (`interface_language::display_name` knows it); any other
+   * is refused.
    */
-  agent_language?: string,
+  interface_language?: string,
   keep_awake?: boolean,
   keep_awake_when?: KeepAwakeWhen,
   auto_select_account?: boolean,
@@ -5905,13 +5954,12 @@ export type Settings = {
    */
   keep_sessions_in_own_project: boolean,
   /**
-   * The tag of the agent language, one of the tags the interface offers: the language sessions
-   * are told to talk to the user in. `null` until a client reports one; a client reports its own
-   * interface language when it connects to a daemon that holds none, and the user's pick in
-   * Settings otherwise. The interface language itself is the client's alone and never stored
-   * here. Carried by a configuration export in its General section.
+   * The tag of the interface language, one of the tags the interface offers; `null` until a
+   * client reports one. It is the one language every client of this daemon shows (each keeps a
+   * copy only to render in before it has connected) and the one sessions are told to reply in,
+   * so a change reaches every window connected to it. Carried by a configuration export in its General section.
    */
-  agent_language: string | null,
+  interface_language: string | null,
   /**
    * Prevent sleep: whether the daemon holds its host awake (see `crate::keep_awake`), when
    * `keep_awake_when` says it should. Off unless the user turned it on. It acts only where the

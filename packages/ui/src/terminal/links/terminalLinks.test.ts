@@ -44,6 +44,16 @@ it("ends a plain-text address at the first non-ASCII character", () => {
   expect(match("http://localhost:5301/a.html看深色")).toBe("http://localhost:5301/a.html");
 });
 
+it("takes an IPv6 literal host as part of a plain-text address, with or without a port or a path", () => {
+  const match = (text: string) => TERMINAL_URL_REGEX.exec(text)?.[0];
+  expect(match("open http://[::1]:59302/remote.txt now")).toBe("http://[::1]:59302/remote.txt");
+  expect(match("Local: http://[::1]:5173")).toBe("http://[::1]:5173");
+  expect(match("Local: http://[::1]")).toBe("http://[::1]");
+  expect(match("(http://[::]:4000/)")).toBe("http://[::]:4000/");
+  expect(match("http://[fe80::1].")).toBe("http://[fe80::1]");
+  expect(match("http://a.dev/x]")).toBe("http://a.dev/x");
+});
+
 // A terminal 24 columns wide; a double-width character takes two cells, the second one empty.
 const COLS = 24;
 function row(text: string, wrapped = false): TerminalRow {
@@ -110,6 +120,8 @@ it.each([
   ["a border follows it", [row("http://a.dev/sel-│"), row("  account&x=1")]],
   ["the next row is empty", [row("http://a.dev/xxxxxxxxxxx"), row("")]],
   ["the next row starts with a delimiter", [row("http://a.dev/xxxxxxxxxxx"), row("  (Hans)")]],
+  ["the next row is at the left edge, as a shell prompt is", [row("http://localhost:5/r"), row("me@mac-mini ~ %")]],
+  ["the next row is at the left edge and looks like a path", [row("http://a.dev/x"), row("docs/a-b&c=d")]],
   ["the next row is the terminal's own wrap", [row("http://a.dev/xxxxxxxxxxx"), row("Hans", true)]],
 ])("leaves an address alone when %s", (_rule, rows) => {
   expect(brokenAt(rows, 1)).toEqual([]);

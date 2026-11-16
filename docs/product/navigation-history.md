@@ -11,15 +11,18 @@ A place is what the window shows, taken together:
   is only previewing is not part of the place;
 - the selected session, or none;
 - the focus mode the sidebar is in, if any (see `docs/product/focus-mode.md`);
-- the archive view and what it is for, while it is open (see "The archive view" in `docs/product/archive-view.md`).
+- the archive view and what it is for, while it is open (see "The archive view" in `docs/product/archive-view.md`);
+- in the main window of the desktop application, the Remote devices page and the device it shows, while it shows (see
+  "Opening and leaving the page" in `docs/product/remote-devices-page.md`).
 
 What the right pane shows is not part of a place: Open panel in a project's action menu records no visit, and a move
 gives the right pane what selecting the session moved to would, or leaves it as it is when the selected session stays
 (see "What the right pane shows" in `docs/product/window-layout.md`).
 
 **Every change of any of these is a visit**, whatever made it: a sidebar row, a console avatar on the rail, entering or
-leaving focus mode, a chip in a focus mode, the archive view opening or closing, the waiting count, the menu bar icon's
-menu, a session this window opened being selected, a keyboard shortcut. A change that leaves the window where it already
+leaving focus mode, a chip in a focus mode, the archive view opening or closing, the Remote devices page opening or
+another device chosen on it, the waiting count, the menu bar icon's menu, a session this window opened being selected,
+a keyboard shortcut. A change that leaves the window where it already
 was is not recorded again.
 
 **Switching console is one visit**: the new current console together with the session it shows, the one last
@@ -32,9 +35,13 @@ press goes on to select there, or, when it selects none, with the console's reme
 ended. Back from it returns to where the window was before the press. A selection made after that press has ended is
 a visit of its own.
 
-The history starts once the daemon's state has first arrived. It is kept in memory for the window alone: it is not
-stored, so reloading the window or restarting the application starts it empty, and every client has its own. It holds
-the **100** most recent places; older ones are dropped.
+The history starts once the daemon's state has first arrived. In the main window of the desktop application it starts
+with the window: what the window shows while its daemon cannot be used — while it connects, while the daemon is not
+answering, and the screens for a daemon that could not start and for a daemon of another version — is a place of its
+own, whichever of those it is, and so is the Remote devices page shown meanwhile; both are passed over once the daemon
+can be used (see "Without the local daemon" in `docs/product/remote-devices-page.md`). The history is kept in memory
+for the window alone: it is not stored, so reloading the window or restarting the application starts it empty, and
+every client has its own. It holds the **100** most recent places; older ones are dropped.
 
 ## Moving back and forward
 
@@ -43,7 +50,8 @@ the **100** most recent places; older ones are dropped.
 - A **visit after going back** drops every place that was ahead, as a browser does: Forward then has nowhere to go.
 - **A place that cannot be shown any more is passed over**: one whose console, session, project or console session has
   since been deleted, whose focus mode no longer exists (a console session archived, a project removed), or whose focus
-  mode does not list its session. So is a place identical to the one on screen. Each button is **disabled** while every
+  mode does not list its session, and one whose Remote devices page shows a device no longer saved. So is a place
+  identical to the one on screen. Each button is **disabled** while every
   place in its direction is passed over or there is none.
 - **Moving shows the place as it was, without acting on it**: going back to an interrupted session shows it without
   resuming it, and going back to a place with the archive view open opens it again. Selecting a session, by contrast,

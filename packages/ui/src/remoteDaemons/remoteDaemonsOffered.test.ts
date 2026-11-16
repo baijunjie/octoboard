@@ -28,8 +28,8 @@ it("is not offered in the window of a remote daemon, which has the capability to
   expect(remoteDaemonsOffered(DESKTOP)).toBe(false);
 });
 
-it("is not offered on the connect page, which is no daemon's window", () => {
+it("is not offered in the tray flyout's window, which is no daemon's window", () => {
   vi.stubGlobal("__TAURI_INTERNALS__", {});
-  window.history.replaceState({}, "", "/?connect=1");
+  window.history.replaceState({}, "", "/?flyout=1");
   expect(remoteDaemonsOffered(DESKTOP)).toBe(false);
 });

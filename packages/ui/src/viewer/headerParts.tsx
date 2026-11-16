@@ -1,4 +1,4 @@
-import { FolderOpen, SquareArrowOutUpRight } from "lucide-react";
+import { Download, FolderOpen, SquareArrowOutUpRight } from "lucide-react";
 import React from "react";
 
 import { CopyButton } from "../components/controls/CopyButton";
@@ -11,18 +11,21 @@ import { type HostPath, useHostPathActions } from "../components/host/useHostPat
 import { useDaemon } from "../store";
 import { Message, useT } from "../i18n/react";
 import { displayWirePath } from "../format/wirePath";
+import { openPathInDefaultApplication } from "../components/host/openPathInDefaultApplication";
+import { revealPathTarget } from "../components/host/revealPathTarget";
 import { ChangeStatusBadge } from "./ChangeStatusBadge";
 import type { ViewerChange } from "./content";
+import type { FileDownload } from "./download/useFileDownload";
 import type { StatusKey } from "./statusMarks";
 import { Button } from "../primitives";
 
 /** Copy path leads the view controls at the detail row's end, an icon button that
- * takes no focus from a press, as the view controls do. */
-export function CopyPathButton({ path }: { path: string }): React.ReactElement {
+ * takes no focus from a press, as the view controls do. It copies `text`, the path as the header shows it. */
+export function CopyPathButton({ text }: { text: string }): React.ReactElement {
   const t = useT();
   return (
     <CopyButton
-      text={displayWirePath(path)}
+      text={text}
       beforeCopyText={t("common.copyPath")}
       afterCopyText={t("common.pathCopied")}
       failedText={t("common.copyFailed")}
@@ -34,30 +37,71 @@ export function CopyPathButton({ path }: { path: string }): React.ReactElement {
   );
 }
 
+/** What opening the live file in its default application does, on the daemon's host: for a file of a project the row's
+ * action, for one only a terminal's path link names the path link rules'. Shared by the header's Default application
+ * and the stand-in's Open in default application, whose press runs it. Both refuse what the system could launch. */
+export function useOpenInDefaultApplication({ host, linkHost }: { host?: HostPath; linkHost?: { project?: string; path: string } }): () => void {
+  const act = useHostPathActions();
+  const { request } = useDaemon();
+  return () => (linkHost ? void openPathInDefaultApplication({ path: linkHost.path, project: linkHost.project, request }) : host && act("open_project_path", host));
+}
+
 /** File manager and Default application, the last of the header's controls: the same two actions, with
  * the same icons and names, as the project pane's row menu has, on the subject's live file. Each is
- * an icon button that takes no focus from a press, like the others. */
-export function HostPathButtons({ host }: { host: HostPath }): React.ReactElement | null {
+ * an icon button that takes no focus from a press, like the others. A file of a project is acted on
+ * by `host`; one only a terminal's path link names, by `linkHost`, through the path link rules. Default application
+ * (`openDefault`, which the viewer holds for its stand-in as well) is left out for a `launchable` file, which the daemon
+ * would refuse to open. In a remote window, whose daemon's
+ * machine is not this computer's, they give way to Download and open (`download`), where the window can copy a file
+ * here, and there are none where it cannot. */
+export function HostPathButtons({ host, linkHost, launchable = false, download, openDefault }: { host?: HostPath; linkHost?: { project?: string; path: string }; launchable?: boolean; download?: FileDownload; openDefault: () => void }): React.ReactElement | null {
   const t = useT();
   const act = useHostPathActions();
   // Both are this machine's: not offered for a daemon elsewhere.
-  const { isLocal } = useDaemon();
+  const { request, isLocal } = useDaemon();
+  if (isLocal === false) return download ? <DownloadButton download={download} /> : null;
   // The tooltip is the short label the row menu has; the accessible name says what pressing does.
   const buttons = [
-    { type: "reveal_project_path", title: t("common.fileManager"), name: t("viewer.openInFileManager"), Icon: FolderOpen },
-    { type: "open_project_path", title: t("common.defaultApplication"), name: t("viewer.openInDefaultApplication"), Icon: SquareArrowOutUpRight },
-  ] as const;
-  if (isLocal === false) return null;
+    {
+      key: "reveal",
+      title: t("common.fileManager"),
+      name: t("viewer.openInFileManager"),
+      Icon: FolderOpen,
+      run: () => (linkHost ? void revealPathTarget({ path: linkHost.path, project: linkHost.project, request }) : host && act("reveal_project_path", host)),
+    },
+    ...(launchable
+      ? []
+      : [{
+        key: "open",
+        title: t("common.defaultApplication"),
+        name: t("viewer.openInDefaultApplication"),
+        Icon: SquareArrowOutUpRight,
+        run: openDefault,
+      }]),
+  ];
   return (
     <>
-      {buttons.map(({ type, title, name, Icon }) => (
-        <TitledControl key={type} title={title}>
-          <Button iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={name} onPress={() => act(type, host)} focusOnPress={false}>
+      {buttons.map(({ key, title, name, Icon, run }) => (
+        <TitledControl key={key} title={title}>
+          <Button iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={name} onPress={run} focusOnPress={false}>
             <Icon aria-hidden="true" className="size-4" />
           </Button>
         </TitledControl>
       ))}
     </>
+  );
+}
+
+/** Download and open in a remote window's header, where File manager and Default application stand locally: an icon
+ * button that takes no focus from a press and is busy while the copy is made, the stand-in showing how far it has come. */
+function DownloadButton({ download }: { download: FileDownload }): React.ReactElement {
+  const t = useT();
+  return (
+    <TitledControl title={t("viewer.downloadAndOpen")}>
+      <Button iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={t("viewer.downloadAndOpen")} pending={download.progress !== undefined} onPress={download.start} focusOnPress={false}>
+        <Download aria-hidden="true" className="size-4" />
+      </Button>
+    </TitledControl>
   );
 }
 

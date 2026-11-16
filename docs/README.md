@@ -194,8 +194,8 @@ Where to start, by question:
 - [Searching Settings](product/searching-settings.md) — the Settings search field: what a query matches, how sections,
   rows and groups are filtered, the empty state, and Find and Escape on the field.
 - [Appearance](product/appearance.md) — light, dark and follow-the-system, and what follows the choice.
-- [Language](product/language.md) — the offered languages, the interface language each client holds and the agent
-  language each daemon holds, how each is chosen and stored.
+- [Language](product/language.md) — the offered languages, the one language each daemon holds and every window of it
+  follows, how it is chosen and stored, and the windows that show no daemon.
 - [Right-to-left layout](product/right-to-left-layout.md) — what is mirrored under a right-to-left language.
 - [Dialogs](product/dialogs.md) — dialog titles, initial focus, what Enter and confirm buttons do, and where an unasked question stands among other dialogs.
 - [Error alerts](product/error-alerts.md) — where a failure, warning or note is shown, by how it arises.
@@ -219,7 +219,7 @@ Where to start, by question:
 - [The session terminal with no session selected](product/session-terminal-with-no-session-selected.md) — what the
   terminal's area shows with no session selected, where focus goes, and the creation action in an empty console.
 - [Copy, paste and selection in the session terminal](product/terminal-copy-paste-and-selection.md) — the terminal's
-  editing menu (Copy, Paste, Select all, Open in file manager), selecting with the mouse under mouse reporting, and
+  editing menu (Copy, Paste, Select all, Open in on a path link), selecting with the mouse under mouse reporting, and
   text a program copies with OSC 52.
 - [Terminal output, scrollback and size](product/terminal-output-scrollback-and-size.md) — attaching from a first
   paint, the scrollback, a client that falls behind the output, gutters and resizing, and colours.
@@ -249,7 +249,7 @@ Where to start, by question:
   changes.
 - [Project pane Git change viewer](product/project-pane-git-change-viewer.md) — the diff view of one change.
 - [File viewer](product/file-viewer.md) — the read-only dialog showing one file: header, stand-ins, wrapping,
-  finding and navigation.
+  finding, navigation, files opened from the terminal and Download and open.
 - [Markdown documents in the file viewer](product/markdown-documents.md) — how a Markdown file renders as a document.
 - [Finding in the file viewer](product/finding-in-the-file-viewer.md) — Find in file: opening the find bar, what is
   searched, its switches and count, how matches are highlighted and stepped through, and closing it.
@@ -290,8 +290,15 @@ Where to start, by question:
   the Windows browser port and owner pipe), other users of the machine and port takeover, and the origin and key
   checks.
 - [Remote daemons](product/remote-daemons.md) — the desktop app reaching daemons on other machines over SSH: the
-  Remote, Dock and Windows system menus and the jump list, the connect page and the saved-daemon form, connection
-  details, every connection outcome, device keys, the remote window, Disconnect and restoring remote windows at launch.
+  Remote, Dock and Windows system menus and the jump list, the saved-daemon fields, connection details, every
+  connection outcome, device keys, the remote window, Disconnect and restoring remote windows at launch.
+- [The Remote devices page](product/remote-devices-page.md) — the main window's page for listing, adding, editing,
+  removing and connecting saved remote daemons: opening and leaving it and its place in Back/Forward, the device list
+  in the sidebar, the settings form and its Paste button, questions and failures handed to it, and using it while the
+  local daemon cannot be used.
+- [Links and files in a remote window](product/links-and-files-in-a-remote-window.md) — how a remote window forwards
+  the remote machine's loopback addresses to this computer, the Forwarded ports button on its rail, and the copies
+  Download and open keeps of remote files.
 - [Remote access settings](product/remote-access-settings.md) — Settings' Remote access section: the switch and its
   confirmation, failures, the Windows browser port, the address and forward, the connection details with QR, Rotate
   key and the SSH server row.

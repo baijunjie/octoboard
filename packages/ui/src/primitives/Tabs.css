@@ -8,3 +8,15 @@
 .tabs__list-container[data-trailing-control] > .tabs__list-container__scroll-next {
   inset-inline-end: 1.75rem;
 }
+
+/* An underline strip's rule is its container's bottom border, below the scroller, and the selected tab's underline ends
+   at the scroller's bottom (the list's, which the indicator reaches with `-bottom-1` where the list is padded), so it
+   would sit just above the rule. The scroller's 1px of bottom padding and -2px bottom margin take the container's
+   content box 1px short of the list: the border's row is the list's last, and the underline ends where the rule does.
+   The scroller's clip, snapped to a whole device pixel, then lies 1px below that edge, so it does not cut the underline's
+   antialiased edge short of the rule's at a fractional scale (125%, 150%, 175%). Unlayered, so it wins over HeroUI's
+   rules in `@layer components`. */
+.tabs--secondary[data-orientation="horizontal"] > .tabs__list-container > .tabs__list-container__scroller {
+  margin-bottom: -2px;
+  padding-bottom: 1px;
+}

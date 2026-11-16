@@ -10,7 +10,7 @@ import type { State } from "../store";
 import type { NotifiedBroadcast } from "../store/notifications";
 import type { FixtureGit } from "./changeFixtures";
 import type { TerminalBehaviour } from "./fakeTerminal";
-import type { FixtureError, FixtureFiles } from "./sampleFiles";
+import type { FixtureError, FixtureFile, FixtureFiles } from "./sampleFiles";
 
 /** Feedback the scenario raises once the app is mounted, by the route the real feedback takes to the stack: a
  * broadcast of the daemon, a failure an action raised itself, or a notice the UI words itself. Errors enter the
@@ -164,30 +164,33 @@ export interface Fixture {
   /** The files and folders that exist for `probe_path_links`, by absolute path: a path the terminal shows, in
    * whatever form, is resolved against the home directory `/Users/dev` or the asking project's folder first. A file
    * in the project or a worktree carries its `view`, where `read_project_file` reads it (a worktree's files are
-   * `worktreeFiles`), and is answered `viewer_only`, as the daemon answers every such file: a click on it goes to the
-   * viewer and never to `open_path_link`, which refuses it with `path_link_refused` and cause `launchable`. A bare
-   * `"file"` is one outside the projects, in a temp root. A folder in the project is a bare `"directory"`, or
-   * `{ kind: "directory", view }` when it has a README or index file, which `view` names; every other path is
-   * answered as `none`. `{ kind, gone: true }` is a path the probe found but that is gone when `open_path_link` opens it,
-   * which the daemon refuses with `file_not_found`. `{ kind, refused: cause }` is one the probe found but
-   * `open_path_link` will not open, which the daemon refuses with `path_link_refused` and that `cause`.
-   * `{ kind, outside: true }` is one the probe found but that lies outside every root when `open_path_link` opens it (a link
-   * that was redirected since), which the daemon refuses with `outside_scope` and `action: "open"`. A click reaches
-   * `open_path_link` only for a path that is no file of a project (a folder with no entry file or one whose entry
-   * file cannot be read, a path in a temp root) or a folder opened on the host. Cause `unreadable` carries the
-   * system's text as `detail`, which the daemon sends only for it. `reveal_path_link` shows the same path in the file
-   * manager and answers an entry as `open_path_link` does, except that it accepts a file the viewer shows with an
-   * ack, including a `refused: "launchable"` one that has a `view`; a path that is gone, outside or refused for any
-   * other cause, a `launchable` one with no `view` (a path in a temp root, a folder in a project) included, is still
-   * refused. A package folder, which the daemon opens only by revealing it, has no entry. */
+   * `worktreeFiles`), and is opened in the viewer by a click; `open_path_link` opens it with the host's default
+   * application, as the daemon does for a file it does not take for one the system would launch. A bare `"file"` is
+   * one outside the projects, in a temp root, and `{ content }` is such a file that `read_path_link` and
+   * `read_file_range` can read, as the viewer's reads of it need (a bare `"file"` has none, and a read of it is
+   * refused as a gap in the scenario). A folder in the project is a bare `"directory"`, or `{ kind: "directory", view }`
+   * when it has a README or index file, which `view` names; every other path is answered as `none`.
+   * `{ kind, gone: true }` is a path the probe found but that is gone when `open_path_link` opens it or `read_path_link`
+   * reads it, which the daemon refuses with `file_not_found`. `{ kind, refused: cause }` is one the probe found but
+   * `open_path_link` and `read_path_link` will not take, which the daemon refuses with `path_link_refused` and that
+   * `cause`. `{ kind, outside: true }` is one the probe found but that lies outside every root when it is opened or read
+   * (a link that was redirected since), which the daemon refuses with `outside_scope` and `action: "open"`. Cause
+   * `launchable` on a file is the one that is not refused to be read, shown or revealed: it is the daemon's `viewer_only`
+   * (the system could launch the file), refused by `open_path_link` alone, and the file keeps its `view` or `content`.
+   * A click reaches `open_path_link` only for a folder with no entry file or one whose entry file cannot be read, or a
+   * folder opened on the host. Cause `unreadable` carries the system's text as `detail`, which the daemon sends only for
+   * it. `reveal_path_link` shows the same path in the file manager and answers an entry as `open_path_link` does,
+   * except that it accepts a launchable file with an ack; a path that is gone, outside or refused for any other cause is
+   * still refused. A launchable or package folder is not found by the daemon, which has no entry for one. */
   pathLinks?: Record<
     string,
     | Exclude<PathLinkKind, "none">
     | { view: PathLinkView }
+    | { content: FixtureFile }
     | { kind: "directory"; view: PathLinkView }
     | { kind: Exclude<PathLinkKind, "none">; gone: true }
     | { kind: Exclude<PathLinkKind, "none">; outside: true }
-    | { kind: Exclude<PathLinkKind, "none">; refused: Exclude<PathLinkRefusedCause, "unreadable">; view?: PathLinkView }
+    | { kind: Exclude<PathLinkKind, "none">; refused: Exclude<PathLinkRefusedCause, "unreadable">; view?: PathLinkView; content?: FixtureFile }
     | { kind: Exclude<PathLinkKind, "none">; refused: "unreadable"; detail: string; view?: PathLinkView }
   >;
   /** What `read_project_file` answers for a request that names a worktree, by the worktree's id and

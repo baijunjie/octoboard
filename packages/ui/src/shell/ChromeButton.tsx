@@ -31,6 +31,7 @@ export function ChromeButton({
   regionId,
   paneToggle,
   selected,
+  current,
   onBlur,
   buttonRef,
   noTooltip,
@@ -62,6 +63,9 @@ export function ChromeButton({
   /** The button shows something that is on, such as a panel that is open: it keeps the fills of a
    * pressed button. */
   selected?: boolean;
+  /** The button is the current item of a set (the rail's Remote devices while its page shows, as the current console's
+   * tile is): `aria-current`, drawn on the current tile's fills. */
+  current?: boolean;
   onBlur?: () => void;
   buttonRef?: React.Ref<HTMLButtonElement>;
   /** The button has no tooltip, for one that shows what it says some other way (hovering it floats its
@@ -85,10 +89,11 @@ export function ChromeButton({
         label={label}
         expanded={expanded}
         controls={controls ?? regionId ?? popupId}
+        current={current}
         data-pane-toggle={paneToggle ?? controls}
         focusOnPress={false}
         onBlur={onBlur}
-        className={`${selected ? CHROME_CURRENT_FILLS : CHROME_BUTTON_FILLS} ${className}`}
+        className={`shrink-0 ${selected || current ? CHROME_CURRENT_FILLS : CHROME_BUTTON_FILLS} ${className}`}
         onPress={onPress}
         onMouseHoverChange={onMouseHoverChange}
       >

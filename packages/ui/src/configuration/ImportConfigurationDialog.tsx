@@ -18,7 +18,7 @@ import { usePlatform } from "../platform/react";
 import { replaceOverrides, shortcutOverrides, type Overrides } from "../shortcuts/store";
 import { writeConflict } from "../errors/writeConflict";
 import { useDaemon, useDaemonStore, useProviders } from "../store";
-import { agentLanguageSettingValues } from "./agentLanguageSettingValues";
+import { languageSettingValues } from "./languageSettingValues";
 import { applyClientSettings, clientSettingsOf, clientSettingValues, type ClientSettings } from "./clientSettings";
 import { sessionOrderValues } from "./importValues";
 import { useClientSettingsReview } from "./useClientSettingsReview";
@@ -104,20 +104,20 @@ async function whileListening<T>(subscribe: () => () => void, work: () => Promis
  * unchecked) there is nothing to import. A directory typed for a project or an account that the daemon would refuse
  * stops the import at the row, bringing its tab forward. A document the daemon refuses leaves the dialog on the first
  * step, with the reason, for another file to be tried. The settings only this client holds (appearance, Markdown style,
- * terminal font size, the interface language, running in the background, the menu bar icon, session order) and the
- * keyboard shortcuts travel in the settings of their sections: the review says what each would change here, and they
- * are applied here from the daemon's reply, for what it says it applied. The agent language is the daemon's own: the
- * review lists it with the General settings and the daemon applies it, taking it from the file's interface language
- * when the file is from a build that held one language for both. The file's default clone directory is applied with the
- * Git settings unless the user keeps this machine's own. The import carries the settings versions the preview read, and
- * a setting another client changed since has the preview read again while the review is shown, keeping the choices
- * made; one that moves between the last refresh and the import refuses it as a conflict, and the dialog is then back to
- * the first step, for the file to be previewed again. The refresh holds the Import button pending, not the dialog busy;
- * one that fails is shown at the top of the review, with its own Try again or, where no retry can help, a button to
- * choose the file again, and Import is unavailable until the review is current, a press of it taking focus to that
- * button. The daemon's reply to an import comes only after its last clone, so the dialog cannot be dismissed while one
- * is out. Waiting for the file is not such a time: a browser without the file input's `cancel` event never answers for
- * a dismissed picker, so the dialog is held busy only from the file onwards. The button shows it is waiting and ignores
+ * terminal font size, running in the background, the menu bar icon, session order) and the keyboard shortcuts travel
+ * in the settings of their sections: the review says what each would change here, and they are applied here from the
+ * daemon's reply, for what it says it applied. The language is the daemon's own: the review lists it with the
+ * General settings and the daemon applies it, after which every window follows it. The file's default clone directory
+ * is applied with the Git settings unless the user keeps this machine's own. The import carries the settings versions
+ * the preview read, and a setting another client changed since has the preview read again while the review is shown,
+ * keeping the choices made; one that moves between the last refresh and the import refuses it as a conflict, and the
+ * dialog is then back to the first step, for the file to be previewed again.
+ * The refresh holds the Import button pending, not the dialog busy; one that fails is shown at the top of the review, with
+ * its own Try again or, where no retry can help, a button to choose the file again, and Import is unavailable until the
+ * review is current, a press of it taking focus to that button.
+ * The daemon's reply to an import comes only after its last clone, so the dialog cannot be dismissed while one is out.
+ * Waiting for the file is not such a time: a browser without the file input's `cancel` event never answers for a
+ * dismissed picker, so the dialog is held busy only from the file onwards. The button shows it is waiting and ignores
  * another press meanwhile, but Escape and the close button still work. Where the picker is never reported dismissed,
  * the window regaining focus with no file chosen frees the step to be tried again; a file that arrives from that picker
  * after all is still honoured, until a newer press opens another one.
@@ -400,9 +400,9 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
             </Button>
           ),
         };
-  // The result's lines of the settings only the client holds, and the agent language the daemon applied.
+  // The result's lines of the settings only the client holds, and the language the daemon applied.
   const resultLines = stage.kind === "result"
-    ? [...clientSettingValues(t, stage.clientSettings), ...agentLanguageSettingValues(stage.result.settings_applied?.agent_language)]
+    ? [...clientSettingValues(t, stage.clientSettings), ...languageSettingValues(stage.result.settings_applied?.interface_language)]
     : [];
 
   return (

@@ -21,6 +21,10 @@ offering the one thing there is to do, and the top bar carries no sidebar toggle
 `docs/product/welcome-screen.md`). Everything this doc says of the three panes is what the window looks like once a
 console exists.
 
+**In the main window of the desktop application, the Remote devices page** takes the place of a console's sessions
+while it shows: the sidebar lists the saved remote daemons, the selected one's settings stand in the terminal's place,
+and there is no right pane (see `docs/product/remote-devices-page.md`).
+
 Above **768 px**, each side docks only when the panes actually shown leave the terminal its **400 px** minimum. The
 sidebar has priority; a right pane that cannot fit floats as a group. Each side keeps its own docking preference through
 these changes. Widths, capacity thresholds and resizing are in "Docking capacity" and "Pane widths" in
@@ -31,7 +35,7 @@ with the rail or one right-pane panel. Touch swipes open, close and switch them 
 The fixed viewport boundaries are **1024 px**, **768 px** and **390 px**. At 1024 px and wider the desktop presentation
 stays the same; at 768 px and below the single-panel interaction applies; below 390 px compact spacing makes more room
 for content. Pane docking above 768 px still depends on the open panes' space needs, rather than another fixed viewport
-category. The desktop window's separate minimum remains **1168×600**.
+category. A daemon's window in the desktop application keeps its separate minimum of **1168×600**.
 
 The right pane's cards and floating behavior are the same whoever owns it.
 
@@ -108,7 +112,12 @@ for the file viewer's header, and a report page's content starts at it too.
 
 On the screens shown before there is anything to show — while connecting to the daemon, and the screens for a daemon
 that could not start, for a daemon of another version, for an address that does not open the daemon, for no daemon
-address or key being known, or for a UI that failed — there is no rail: under the top bar, the content panel spans the window.
+address or key being known, or for a UI that failed — there is no rail: under the top bar, the content panel spans the
+window. The main window of the desktop application is the exception while it is connecting to its daemon, while the
+daemon is not answering, and on the screens for a daemon that could not start and for a daemon of another version: it
+keeps its rail, holding only the Remote devices button, and its top bar's Back and Forward, and the screen's content
+fills the content panel where the panes would be (see "Without the local daemon" in
+`docs/product/remote-devices-page.md`).
 
 The screens for a daemon that could not start, for a daemon of another version, for an address that does not open the
 daemon and for a UI that failed are each an empty-state failure of the whole page (see "Failures shown on the screen" in `docs/product/error-alerts.md`), centred
@@ -222,14 +231,16 @@ F6" in `docs/product/moving-focus-between-regions.md`.
 ## The top bar
 
 The top bar is on every screen, the same height everywhere. On the screens shown before there is anything to
-show it is there but empty, but for the remote daemon's name in a remote window (below).
+show it is there but empty, but for the remote daemon's name in a remote window (below) and for Back and Forward in the
+main window of the desktop application (see "The window chrome and the content panel" above).
 
 It runs, left to right:
 
 - **Back** and **Forward**, which move through the places the window has shown (see
   `docs/product/navigation-history.md`); each is disabled while there is nowhere to go in its direction.
-- The sidebar toggle ("Show sessions" / "Hide sessions"), there only while there is a sidebar — so not while the
-  window shows the welcome screen (see `docs/product/welcome-screen.md`).
+- The sidebar toggle ("Show sessions" / "Hide sessions", or on the Remote devices page "Show remote devices" / "Hide
+  remote devices"), there only while there is a sidebar — so not while the window shows the welcome screen (see
+  `docs/product/welcome-screen.md`).
 - **In a remote window** (see `docs/product/remote-daemons.md`), the **remote daemon's name**, in a chip with a server
   glyph, filled as the bar's controls are, and set apart from the breadcrumb, since it names the machine rather than a
   level of the path. Assistive technology reads it as the daemon on that name. It keeps its width while the breadcrumb
@@ -254,11 +265,13 @@ It runs, left to right:
   With no session selected there is no breadcrumb. While the archive view is open (see "The archive view" in
   `docs/product/archive-view.md`) the breadcrumb shows where that is instead, with no status icon: *console › project ›
   Archived sessions*, *console › console session › Archived bound sessions*, or *console › Archived console sessions*.
+  On the Remote devices page it is *Remote devices › device name*, or *Remote devices* alone (see "What the page
+  shows" in `docs/product/remote-devices-page.md`).
 - At the **end of the bar**, the **panel toggles**: one per kind of panel the right pane's owner has, there only while
-  the right pane has an owner (see "What the right pane shows" below), each showing or hiding its panel and so the right
-  pane (see "The panel toggles in the top bar" in `docs/product/right-pane-panels.md`). The end is the reading
-  direction's, so under a right-to-left language it is at the window's left (see
-  `docs/product/right-to-left-layout.md`).
+  the right pane has an owner (see "What the right pane shows" below) and not on the Remote devices page, each showing
+  or hiding its panel and so the right pane (see "The panel toggles in the top bar" in
+  `docs/product/right-pane-panels.md`). The end is the reading direction's, so under a right-to-left language it is at
+  the window's left (see `docs/product/right-to-left-layout.md`).
 
 Nothing else is in the bar: the rest of its end is the window's drag area, and the window's other controls are on the
 rail (see "The rail" below).
@@ -285,9 +298,10 @@ included, opens from the rail's Settings button and from its shortcut (see "Open
 ### The sidebar toggle and the panel toggles
 
 **Each toggle is there only while what it controls exists**: the sidebar toggle while there is a console for the
-sidebar to show (see `docs/product/welcome-screen.md`), the panel toggles while the right pane has an owner (see "What
-the right pane shows" below). A toggle with nothing to control is left out rather than shown disabled. The right pane
-has its own docking toggle beside its panel toggles (see `docs/product/right-pane-panels.md`).
+sidebar to show (see `docs/product/welcome-screen.md`) or the Remote devices page's list of devices, the panel toggles
+while the right pane has an owner (see "What the right pane shows" below). A toggle with nothing to control is left out
+rather than shown disabled. The right pane has its own docking toggle beside its panel toggles (see
+`docs/product/right-pane-panels.md`).
 
 The sidebar toggle is at the top bar's start. What it does depends on whether the sidebar can dock: see "Hiding the
 sidebar" in `docs/product/pane-docking.md` and "When the sidebar cannot dock" in `docs/product/sidebar-drawer.md`. Its
@@ -306,7 +320,10 @@ in `docs/product/right-pane-panels.md`.
 
 ## The rail
 
-The rail runs from under the top bar to the window's bottom (or the connection banner). Its two ends hold:
+The rail runs from under the top bar to the window's bottom (or the connection banner). It is one column of items, each
+tile and button **32 px** square and every two neighbours **8 px** apart; a separator between two groups is an item of
+its own, as wide as the tiles, with that same gap above and below it, and a count badge floats over its item's corner
+without taking room. Its two ends hold:
 
 - **At the top, the consoles**: one avatar per console, in the order the consoles were created, the current console
   marked by a tile behind its avatar, then **New console**, which opens the new-console dialog (see
@@ -316,17 +333,16 @@ The rail runs from under the top bar to the window's bottom (or the connection b
   in `docs/product/pane-docking.md`). When there are more consoles than fit, the avatars scroll, with no scrollbar
   drawn — so the fade at the column's edge is the only sign there are more (see "The edge that hides content fades"
   in `docs/product/scrolling-surfaces.md`); New console stays below them.
-- **Under the consoles, in the main window of the desktop application, the connected remote daemons**, set off by a
-  groove: one tile for each remote daemon whose connection is held, in a remote window or for the browser (see
-  `docs/product/remote-daemons.md`), in the order they were saved. A tile is a round avatar with a server glyph, on a
-  fill picked from the daemon's name, with a badge at its corner: a check while connected, a turning arrow while
-  reconnecting. Its tooltip gives the name, `user@host:port` and the state. Pressing it brings the daemon's window
-  forward, or opens the browser at it again. A right-click, or the Menu key or `Shift+F10` on it, opens a menu with
-  **Open**, the same, and **Disconnect** (see "Disconnecting and closing" in `docs/product/remote-daemons.md`); the
-  menu has no visible trigger beside the tile. Remote daemons that are not connected have no tile, and with none
-  connected the group and its groove are absent. Nothing here adds, edits or removes one: that is the connect page's.
-  A remote window, and a browser, have no such group. In a window too short for the whole rail this group gives way
-  first, down to one tile, scrolling on its own without a scrollbar, before the consoles lose any height.
+- **Under the consoles, in the main window of the desktop application, the Remote devices button**, after a
+  separator: a server glyph with the number of remote connections held — in a remote window or for the browser — in a
+  badge placed as the waiting count's, shown only while at least one is (99+ beyond 99). Pressing it opens the Remote
+  devices page; while the page shows, the button is marked as the current item and no console's avatar is (see
+  "Opening and leaving the page" in `docs/product/remote-devices-page.md`). Nothing here disconnects one. A remote
+  window, and a browser, have no such button. While the local daemon cannot be used, it is the only item on the main
+  window's rail (see "Without the local daemon" in `docs/product/remote-devices-page.md`). The free space of the rail
+  lies between this button and the bottom group; in a window too short to leave any, a separator is drawn under the
+  button too, so that it does not run into the bottom group, and the consoles give way while the button and the bottom
+  group stay.
 - **At the bottom**, top to bottom: - the **waiting count**, a raised hand with the number of sessions waiting for
   the user in a badge at the button's top right, its top left under a right-to-left language (see
   `docs/product/right-to-left-layout.md`), shown only while at least one is (99+ beyond 99); pressing it goes to the
@@ -334,6 +350,10 @@ The rail runs from under the top bar to the window's bottom (or the connection b
   panel's glyph with the number of background process trees running across every project and console session in a
   badge placed as the waiting count's, shown only while at least one is (99+ beyond 99); its popover lists where
   they run, each row leading to the Processes panel that lists them (see `docs/product/processes-on-the-rail.md`); -
+  **Forwarded ports**, in a remote window of the desktop application only, a cable glyph with the number of the remote
+  machine's loopback ports forwarded to this computer in a badge placed as the waiting count's, shown only while at
+  least one is (99+ beyond 99); its popover lists them, each with Stop (see "Forwarded ports on the rail" in
+  `docs/product/links-and-files-in-a-remote-window.md`); -
   **Turn on notifications**, a bell with a small circular badge at the button's top right, shown only in a browser
   whose answer to notifications is still undecided; pressing it asks the browser (see "Asking a browser" in
   `docs/product/notification-settings.md`); - **Account usage**, a gauge with a small quota indicator for the selected session's
@@ -347,18 +367,23 @@ Above 768 px the rail is the same at every width; while the sidebar floats it st
 it, does not dim it, and leaves it usable while it is open. **At 768 px and below, while there is a console, the rail is
 not in the row**: it comes in only as part of the open sidebar overlay's card, and is out of reach while the sidebar
 overlay is closed (see "At 768 px and below: the rail comes in with the sidebar" in `docs/product/sidebar-drawer.md`).
-With no console it stays in the row at every width.
+The same holds while the Remote devices page shows, whose sidebar the rail comes in with. With no console, and the page
+not shown, it stays in the row at every width.
 
 ### Pressing the chrome's controls
 
-Every control in the top bar and on the rail has a tooltip, except the rail's Account usage and Processes buttons (see
-"Tooltips on icon-only controls" in `docs/product/labels-and-tooltips.md`); the rail's open toward the content panel.
+Every control in the top bar and on the rail has a tooltip, except the rail's Account usage, Processes and Forwarded
+ports buttons (see "Tooltips on icon-only controls" in `docs/product/labels-and-tooltips.md`); the rail's open toward
+the content panel.
 Pressing any of them leaves keyboard focus where it was, so after a mouse press the terminal keeps receiving
-keystrokes. Account usage and Processes pressed from the keyboard are the exception: each moves focus into the panel or
-popover it opens (see "Opening the panel" in `docs/product/account-quota-panel.md` and "Opening and closing the
-popover" in `docs/product/processes-on-the-rail.md`). Turn on notifications pressed from the keyboard keeps focus on
-itself while the browser's prompt is up, so no keystrokes reach the session meanwhile; once the browser answers and the bell goes away,
-focus moves to the terminal, or to the top bar's first enabled control when the terminal cannot take it.
+keystrokes. Account usage, Processes and Forwarded ports pressed from the keyboard are the exception: each moves focus
+into the panel or popover it opens (see "Opening the panel" in `docs/product/account-quota-panel.md`, "Opening and
+closing the popover" in `docs/product/processes-on-the-rail.md` and "Forwarded ports on the rail" in
+`docs/product/links-and-files-in-a-remote-window.md`). So does Remote devices, which moves focus into the page it opens,
+from the mouse too (see "Keyboard and assistive technology" in `docs/product/remote-devices-page.md`). Turn on
+notifications pressed from the keyboard keeps focus on itself while the browser's prompt is up, so no keystrokes reach
+the session meanwhile; once the browser answers and the bell goes away, focus moves to the terminal, or to the top bar's
+first enabled control when the terminal cannot take it.
 
 ## What the right pane shows
 

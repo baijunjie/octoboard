@@ -162,6 +162,16 @@
   --default-soft-hover: var(--control-fill-hover);
 }
 
+/* The fills of a card on the content panel (`FormCard`), in dark only: HeroUI's own secondary field and radio there are
+   darker than the card, hardly a step off it, where the control fill is lighter than the card, as a field in a dialog
+   is. Light keeps HeroUI's own fills, which the card's white already sets off. */
+:is(.dark, [data-theme="dark"]) .card-fills {
+  --default: var(--control-fill);
+  --default-hover: var(--control-fill-hover);
+  --default-soft: var(--control-fill);
+  --default-soft-hover: var(--control-fill-hover);
+}
+
 /* The fills on a ground a step darker than its dialog (the Settings section menu). `--menu-raised` is what stands
    raised on it, the search field: the dialog's own surface in light (white), and in dark the dialog's control fill, a
    step lighter than its floating surface, since a raised dark surface reads lighter rather than whiter.

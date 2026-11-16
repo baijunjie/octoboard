@@ -708,6 +708,24 @@ it.each([
   }
 });
 
+it.each(["accountSharing", "accountChanging"] as const)("names the sharing switch as a reference and the Settings page as a path in %s recovery, in the plain companion as text", (recovery) => {
+  const container = mount(<RecoveryGuidance recovery={recovery} />);
+  const names = { en: ["Share default configuration", "Settings", "Agent accounts"], "zh-Hans": ["共享默认配置", "设置", "智能体账户"] } as const;
+  for (const language of ["en", "zh-Hans"] as const) {
+    act(() => setLanguage(language));
+    const [sharing, ...steps] = names[language];
+    const path = container.querySelector("[data-inline-path]")!;
+    expect([...path.querySelectorAll("[data-inline-reference]")].map((chip) => chip.textContent)).toEqual(steps);
+    // Where the switch's name stands among them is the language's own order.
+    expect([...container.querySelectorAll("[data-inline-reference]")].map((chip) => chip.textContent)).toHaveLength(3);
+    expect([...container.querySelectorAll("[data-inline-reference]")].map((chip) => chip.textContent)).toEqual(expect.arrayContaining([sharing, ...steps]));
+    const plain = format(language, `error.recovery.${recovery}`, recoveryParams(translatorFor(language)));
+    expect(plain).toContain(steps.join(" > "));
+    expect(plain).not.toMatch(/\{\w+\}/);
+    expect(container.textContent).toBe(plain);
+  }
+});
+
 it("keeps generic terminal nouns as prose rather than treating them as named controls", () => {
   const container = mount(<RecoveryGuidance recovery="stopProcess" />);
   expect(container.textContent).toBe("Open the affected session’s terminal and exit the agent using its quit command, then retry.");

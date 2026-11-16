@@ -1,7 +1,7 @@
 //! Making a connection to a remote daemon: the SSH connection, `octoboardd` found on the host, the
 //! requested action run, the owner key read and the generation checked, a device key installed, and
-//! the loopback port and its tunnel set up, then the daemon shown in its window, a connect page
-//! turned into it, or the browser. One window at most shows a daemon, however many entries name it,
+//! the loopback port and its tunnel set up, then the daemon shown in a window of its own, or the
+//! browser. One window at most shows a daemon, however many entries name it,
 //! and a second request for a daemon a connection is being made to waits for that one.
 
 use std::collections::HashMap;
@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use russh::keys::PrivateKey;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::watch;
 
 use super::credentials::{self, Store};
@@ -18,8 +18,9 @@ use super::octoboardd::{self, Address, Remote, Shell};
 use super::outcome::{Action, ConnectOutcome, ConnectRequest, SecretKindName};
 use super::ssh::{self, ConnectError, RunError, Secret, Session, Target};
 use super::{
-    browser, connections_changed, device_key, key_service, next_order, pin, tunnel, use_device_key,
-    window_closed, Live, RemoteState, Via, BROWSER_LABEL_PREFIX,
+    browser, connections_changed, device_key, forward, key_service, next_order, pin, tunnel,
+    use_device_key, window_closed, Live, RemoteState, Via, BROWSER_LABEL_PREFIX,
+    FORWARDS_CHANGED_EVENT,
 };
 use crate::daemon_window::{self, RemoteDaemon};
 use crate::diagnostics::diagnostic;
@@ -410,16 +411,6 @@ fn show_existing(app: &AppHandle, identity: &str) -> Option<ConnectOutcome> {
     }
 }
 
-/// `show_existing` for the daemon the saved entry `id` names; `None` also when there is no such
-/// entry.
-pub(super) fn show_existing_entry(app: &AppHandle, id: &str) -> Option<ConnectOutcome> {
-    let entry = super::remote_daemons_list(app.clone())
-        .ok()?
-        .into_iter()
-        .find(|entry| entry.id == id)?;
-    show_existing(app, &entry.identity())
-}
-
 /// Opens `url` in the system's browser: `OpenedInBrowser`, or why it could not.
 fn opened_in_browser(url: &str) -> ConnectOutcome {
     match browser::open(url) {
@@ -428,24 +419,12 @@ fn opened_in_browser(url: &str) -> ConnectOutcome {
     }
 }
 
-/// Closes the connect page labelled `page` once what it asked for is shown elsewhere: in the
-/// daemon's own window, or in the browser.
-fn close_page(app: &AppHandle, page: &str) {
-    let closing = app.clone();
-    let page = page.to_owned();
-    let _ = app.run_on_main_thread(move || {
-        crate::background::disconnect_window(&closing, &page);
-    });
-}
-
-/// Connects to the remote daemon `request` names, showing it in `page` (a window on the connect
-/// page) or a new window, or in the browser; see `remote_daemon_connect`. `order` is the rank its
-/// connection takes among the others (`Live::order`), where it was reserved before; otherwise it
-/// is ranked as it is made.
+/// Connects to the remote daemon `request` names, showing it in a new window, or in the browser;
+/// see `remote_daemon_connect`. `order` is the rank its connection takes among the others
+/// (`Live::order`), where it was reserved before; otherwise it is ranked as it is made.
 pub(super) async fn connect(
     app: &AppHandle,
     request: ConnectRequest,
-    page: Option<String>,
     order: Option<u64>,
 ) -> Result<ConnectOutcome, String> {
     let entry = super::remote_daemons_list(app.clone())?
@@ -457,16 +436,10 @@ pub(super) async fn connect(
     // A request for a daemon a connection is being made to waits for it, and then shows its window.
     let _making = state.connecting.wait_and_begin(&identity).await;
     if let Some(shown) = show_existing(app, &identity) {
-        // The daemon is shown elsewhere now; the connect page that asked for it goes.
-        if let (ConnectOutcome::Opened | ConnectOutcome::OpenedInBrowser, Some(page)) =
-            (&shown, &page)
-        {
-            close_page(app, page);
-        }
         return Ok(shown);
     }
-    match hold(app, &entry, &request, page.as_deref(), order).await {
-        Ok(held) => Ok(show(app, held, page)),
+    match hold(app, &entry, &request, order).await {
+        Ok(held) => Ok(show(app, held)),
         Err(outcome) => Ok(outcome),
     }
 }
@@ -481,13 +454,12 @@ struct Held {
 }
 
 /// Holds a connection to the daemon `entry` names: reaches it, installs this device's key where it
-/// can, and serves its tunnel on a loopback port, kept in `RemoteState` under the label of `page`,
-/// of a window registered for it, or of the browser.
+/// can, and serves its tunnel on a loopback port, kept in `RemoteState` under the label of a window
+/// registered for it, or of the browser.
 async fn hold(
     app: &AppHandle,
     entry: &Entry,
     request: &ConnectRequest,
-    page: Option<&str>,
     order: Option<u64>,
 ) -> Result<Held, ConnectOutcome> {
     let identity = entry.identity();
@@ -534,13 +506,8 @@ async fn hold(
             Via::Browser { url },
         )
     } else {
-        // The label is taken before the window exists, so the link can point it at a new key. A
-        // connect page's own window becomes the daemon's.
-        let label = match page {
-            Some(page) => page.to_owned(),
-            None => daemon_window::register(app, Some(identity.clone())),
-        };
-        (label, Via::Window)
+        // The label is taken before the window exists, so the link can point it at a new key.
+        (daemon_window::register(app), Via::Window)
     };
     let following = app.clone();
     let followed = label.clone();
@@ -564,6 +531,17 @@ async fn hold(
     ));
     let (stop, stopped) = watch::channel(false);
     let mut connected = link.live();
+    let forwards = (!request.browser).then(|| {
+        let changing = app.clone();
+        let window = label.clone();
+        Arc::new(forward::Forwards::new(
+            link.clone(),
+            stopped.clone(),
+            move || {
+                let _ = changing.emit_to(&window, FORWARDS_CHANGED_EVENT, ());
+            },
+        ))
+    });
     app.state::<RemoteState>().windows().insert(
         label.clone(),
         Live {
@@ -574,6 +552,7 @@ async fn hold(
             stop,
             connected: connected.clone(),
             via: via.clone(),
+            forwards,
         },
     );
     tauri::async_runtime::spawn(tunnel::serve(listener, link, stopped));
@@ -588,26 +567,21 @@ async fn hold(
     Ok(Held { label, via, remote })
 }
 
-/// Shows the connection `held` holds: opens the browser at its address, or its window, a new one
-/// or `page` turned into it. A connection whose browser or window cannot be opened is let go.
-fn show(app: &AppHandle, held: Held, page: Option<String>) -> ConnectOutcome {
+/// Shows the connection `held` holds: opens the browser at its address, or a new window on its
+/// daemon. A connection whose browser or window cannot be opened is let go.
+fn show(app: &AppHandle, held: Held) -> ConnectOutcome {
     let Held { label, via, remote } = held;
     if let Via::Browser { url } = via {
         let opened = opened_in_browser(&url);
-        if opened == ConnectOutcome::OpenedInBrowser {
-            if let Some(page) = &page {
-                close_page(app, page);
-            }
-        } else {
+        if opened != ConnectOutcome::OpenedInBrowser {
             window_closed(app, &label);
         }
         return opened;
     }
     let opening = app.clone();
     let shown = label.clone();
-    let queued = app.run_on_main_thread(move || match page {
-        Some(_) => crate::window_factory::show_remote_in(&opening, &shown, remote),
-        None => crate::window_factory::open_remote_window(&opening, shown, remote),
+    let queued = app.run_on_main_thread(move || {
+        crate::window_factory::open_remote_window(&opening, shown, remote)
     });
     if let Err(err) = queued {
         crate::window_factory::window_lost(app, &label);

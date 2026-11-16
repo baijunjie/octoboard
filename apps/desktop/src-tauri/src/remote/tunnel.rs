@@ -45,6 +45,9 @@ pub struct Link {
     /// reconnections keep (they are made to the same host).
     remote: Remote,
     slot: tokio::sync::Mutex<Slot>,
+    /// A copy of the slot's session for `current`, which must not wait on the slot: updated wherever the slot's
+    /// session changes.
+    up: Mutex<Option<Arc<Session>>>,
     key: Mutex<String>,
     /// How many of the window's connections are being carried.
     open: watch::Sender<usize>,
@@ -66,11 +69,13 @@ impl Link {
         key: String,
         on_key_changed: impl Fn(String) + Send + Sync + 'static,
     ) -> Self {
+        let session = Arc::new(session);
         Self {
             target,
             remote,
+            up: Mutex::new(Some(session.clone())),
             slot: tokio::sync::Mutex::new(Slot {
-                session: Some(Arc::new(session)),
+                session: Some(session),
                 ..Slot::default()
             }),
             key: Mutex::new(key),
@@ -80,6 +85,12 @@ impl Link {
             live: watch::Sender::new(true),
             closed: AtomicBool::new(false),
         }
+    }
+
+    /// Whether the host runs Windows, whose SSH server (Win32-OpenSSH) confirms a `direct-tcpip` channel to a port
+    /// nothing listens on and then closes it (`ssh::WINDOWS_EARLY_CLOSE`).
+    pub(super) fn host_is_windows(&self) -> bool {
+        self.remote.shell.is_windows()
     }
 
     /// Follows whether the SSH connection is up: it is while the window's connections can be
@@ -104,7 +115,7 @@ impl Link {
     /// The SSH connection, made again when it has dropped and no pause after a failed attempt is
     /// running; `None` when there is none to carry a connection on now, and always once the link
     /// is closed.
-    async fn session(&self) -> Option<Arc<Session>> {
+    pub(super) async fn session(&self) -> Option<Arc<Session>> {
         let mut slot = self.slot.lock().await;
         if self.closed.load(Ordering::SeqCst) {
             return None;
@@ -114,6 +125,7 @@ impl Link {
                 return Some(session.clone());
             }
             slot.session = None;
+            self.set_up(None);
             self.live
                 .send_if_modified(|was| std::mem::replace(was, false));
         }
@@ -124,6 +136,7 @@ impl Link {
             Ok(session) => {
                 let session = Arc::new(session);
                 slot.session = Some(session.clone());
+                self.set_up(Some(session.clone()));
                 slot.failures = 0;
                 slot.retry_at = None;
                 self.reread.store(true, Ordering::SeqCst);
@@ -143,6 +156,20 @@ impl Link {
                 None
             }
         }
+    }
+
+    fn set_up(&self, session: Option<Arc<Session>>) {
+        *self.up.lock().unwrap_or_else(|e| e.into_inner()) = session;
+    }
+
+    /// The SSH connection while it is up, without making it again and without waiting on a reconnection that
+    /// holds the slot: `None` when it has dropped, while it is being made again and once the link is closed.
+    pub(super) fn current(&self) -> Option<Arc<Session>> {
+        self.up
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+            .filter(|session| !session.is_closed())
     }
 
     /// Reads the owner key again, and points the window at it where it changed.
@@ -201,6 +228,7 @@ impl Link {
         let session = {
             let mut slot = self.slot.lock().await;
             self.closed.store(true, Ordering::SeqCst);
+            self.set_up(None);
             slot.session.take()
         };
         if let Some(session) = session {
@@ -434,6 +462,18 @@ mod tests {
             .commands()
             .iter()
             .all(|command| command.ends_with(" proxy") || command.ends_with(" address --json")));
+    }
+
+    #[tokio::test]
+    async fn the_current_connection_is_told_while_the_slot_is_busy_and_not_once_it_is_gone() {
+        let server = TestServer::start(Behaviour::default()).await;
+        let running = run(&server).await;
+        // A reconnection or a carry holding the slot does not make a live connection look down.
+        let _busy = running.link.slot.lock().await;
+        assert!(running.link.current().is_some());
+        drop(_busy);
+        running.link.close().await;
+        assert!(running.link.current().is_none());
     }
 
     #[tokio::test]

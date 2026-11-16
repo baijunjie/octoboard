@@ -568,8 +568,8 @@ mod tests {
 
     #[test]
     fn the_application_s_lines_and_every_tab_s_labels_are_the_local_windows_language() {
-        // The interface language is the client's, shared by every window: the shared lines and the
-        // remote tabs' Disconnect read in the language the local window's UI sent.
+        // The shared lines and the remote tabs' Disconnect read in the language the local window's
+        // UI sent; every window words its own lines in that same local language.
         let local = parsed(
             r#"{"sections": [], "open": "打开", "quit": "完全退出", "updates": "检查更新",
                 "disconnect": "断开连接",

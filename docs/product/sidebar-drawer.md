@@ -43,15 +43,16 @@ stays reachable, and above 768 px the rail stays in the row beside the floating 
 
 ## At 768 px and below: the rail comes in with the sidebar
 
-While there is a console, the rail leaves the row at 768 px and below. The content panel spans the window and its top
-start corner is square. The floating sidebar is one card: the rail along its start side, then the sidebar, with a groove
-between them. Both use the sidebar's surface. The rail retains its controls and contents (see "The rail" in
-`docs/product/window-layout.md`).
+While there is a console, or the Remote devices page shows (see `docs/product/remote-devices-page.md`), the rail leaves
+the row at 768 px and below. The content panel spans the window and its top start corner is square. The floating
+sidebar is one card: the rail along its start side, then the sidebar, with a groove between them. Both use the
+sidebar's surface. The rail retains its controls and contents (see "The rail" in `docs/product/window-layout.md`).
 
 The rail appears and disappears with the card over the same 240 ms. While closed, its exit included, none of the rail
 takes presses, keyboard focus or assistive-technology attention. `F6` skips it. Focus left on the rail when it goes
 away, including when narrowing to 768 px or less with the sidebar closed, is handed to the terminal.
 
-With no console there is no sidebar, so the rail stays in the row at every width as the way to New console and
-Settings; the content panel keeps its rounded corner (see `docs/product/welcome-screen.md`). Under a right-to-left
-language the card and rail are at the window's right side (see `docs/product/right-to-left-layout.md`).
+With no console, and the Remote devices page not shown, there is no sidebar, so the rail stays in the row at every width
+as the way to New console and Settings; the content panel keeps its rounded corner (see
+`docs/product/welcome-screen.md`). Under a right-to-left language the card and rail are at the window's right side (see
+`docs/product/right-to-left-layout.md`).

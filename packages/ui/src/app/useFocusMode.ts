@@ -24,6 +24,7 @@ export function useFocusMode({
   sidebarShown,
   selectSession,
   focusTerminal,
+  suspended = false,
 }: {
   /** The sidebar's focus mode. */
   focus: FocusTarget | undefined;
@@ -34,11 +35,13 @@ export function useFocusMode({
   sidebarShown: boolean;
   selectSession: (session: Session, options?: { enterFocus?: boolean; resume?: boolean }) => void;
   focusTerminal: () => void;
+  /** The Remote devices page shows in place of the sessions, so there is no session context to enter focus mode on. */
+  suspended?: boolean;
 }) {
   const selectedTarget = useDaemonStore(useShallow((s) => selectedSessionFocusTarget(selectedSession, s.projects, s.sessions)));
   // ⇧⌘F: into the focus mode of the selected session's context, or back out of focus mode.
   useFocusShortcut(() => {
-    if (!focus && !selectedTarget) return;
+    if (suspended || (!focus && !selectedTarget)) return;
     if (!focus && selectedSession) selectConsole(selectedSession.console_id);
     setFocus(focus ? undefined : selectedTarget);
   });

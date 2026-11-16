@@ -4,32 +4,37 @@
 //! where agents keep scratch files. Symbolic links are resolved before the roots are checked, so a
 //! link cannot lead out of one.
 //!
-//! What could be launched rather than viewed is never opened by a link click: an application or
-//! other bundle, a script or installer, a file with an executable bit. A bundle extension counts on
-//! any component of a path, an interpreter or installer extension (`.py`, `.exe`, `.deb`) only on a
-//! regular file's own name, so a folder named `github.com` is still a folder. Inside a temp root
-//! what could be launched is not reachable at all; in a project a folder of that kind is not
-//! either. The system decides what a file's default application does with it, which no list of
-//! extensions can know, so no file in a project is handed to the host's opener at all: each is
-//! `viewer_only`, to be shown by the file viewer, and `open` refuses it. On macOS `open` also
-//! refuses a folder the system types as a package (`.xcodeproj`, `.playground`), which no list
-//! names. Only a file in a temp root, a folder in a project or a folder in a temp root is opened.
-//! Showing a path in the file manager (`reveal`) launches nothing, so it also takes a project file
-//! and a package folder, and refuses what is not reachable at all.
+//! A click on a file never hands it to the host's opener: the system's default application for a
+//! file may run it, so the client reads the file ([`read`]) and shows it in the file viewer, in a
+//! project or in a temp root alike. Only a folder is opened by a click, in the file manager.
+//!
+//! What could be launched rather than viewed is never opened at all: an application or other
+//! bundle, a script or installer, a file with an executable bit. A bundle extension counts on any
+//! component of a path, an interpreter or installer extension (`.py`, `.exe`, `.deb`) only on a
+//! regular file's own name, so a folder named `github.com` is still a folder. A folder of that kind
+//! is not reachable at all; a file of that kind is, as `viewer_only`, to be shown by the file
+//! viewer, and `open` refuses it. The system decides what a file's default application does with
+//! it, which no list of extensions can know, so that is the user's own choice, made with `open`,
+//! on a file that is not launchable. On macOS `open` also refuses a folder the system types as a
+//! package (`.xcodeproj`, `.playground`), which no list names.
+//! Showing a path in the file manager (`reveal`) launches nothing, so it also takes a launchable
+//! file and a package folder, and refuses what is not reachable at all.
 //! A path under a temp root that lies in a project (or a worktree of it) is the project's, however
 //! it is spelled.
 //! Inside a temp root, which other users can write to, the file and every directory down to it must
-//! also belong to the daemon's user and be closed to writes by anyone else. A relative path is
-//! tried against the project's directory and each worktree's place and is reachable only when
-//! exactly one of them has it.
+//! also belong to the daemon's user and be closed to writes by anyone else. A file of a project
+//! kept under a temp root is exempt where it is only shown, but not where `open` hands it to the
+//! host. A relative path is tried against the project's directory and each worktree's place and is
+//! reachable only when exactly one of them has it.
 //!
-//! A path found in a project root also says where the file viewer reads it from (`view`); whether
-//! the viewer can show it is for the client to find out by reading it, so no file is read here. For
-//! a directory the view is its entry file, if it has one (found by listing it): a README, else an
-//! `index.*`.
+//! A path found in a project root also says where the file viewer reads it from (`view`); a file
+//! elsewhere (in a temp root) is read by [`read`]. Whether the viewer can show it is for the
+//! client to find out by reading it. For a directory the view is its entry file, if it has one
+//! (found by listing it): a README, else an `index.*`.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::AtomicBool;
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -39,7 +44,7 @@ use tokio::sync::Semaphore;
 use crate::protocol::{error_code, CodedError, PathLink, PathLinkKind, PathLinkView};
 
 mod resolve;
-use resolve::{own_entry, reach, resolve, Refusal, Resolved, Unreached};
+use resolve::{own_entry, private_in_temp, reach, resolve, Refusal, Resolved, Unreached};
 
 /// The most paths one `probe_path_links` request may ask about.
 pub const MAX_PROBED_PATHS: usize = 64;
@@ -209,15 +214,7 @@ pub fn probe(
     let home = crate::paths::known_home_dir();
     // Found at most once, however many paths ask for them.
     let roots = OnceLock::new();
-    let lookup = || {
-        roots
-            .get_or_init(|| {
-                project.map_or_else(ProjectRoots::default, |project| {
-                    project_roots(state, project, false)
-                })
-            })
-            .clone()
-    };
+    let lookup = || cached_roots(state, project, &roots, false);
     Ok(paths
         .into_iter()
         .map(|path| {
@@ -294,24 +291,42 @@ fn entry_file(directory: &Path) -> Option<PathBuf> {
     best.map(|(_, _, name)| directory.join(name))
 }
 
-/// The roots of `project` looked up afresh, once into `cache` however often they are asked for.
-fn fresh_roots(
+/// The roots of `project`, looked up once into `cache` however often they are asked for: afresh when
+/// `fresh`, else as found within the last few seconds.
+fn cached_roots(
     state: &crate::state::AppState,
     project: Option<&str>,
     cache: &OnceLock<ProjectRoots>,
+    fresh: bool,
 ) -> ProjectRoots {
     cache
         .get_or_init(|| {
             project.map_or_else(ProjectRoots::default, |project| {
-                project_roots(state, project, true)
+                project_roots(state, project, fresh)
             })
         })
         .clone()
 }
 
+/// The directory a project's place in `worktree` is, from the roots as found within the last few
+/// seconds, for a read that runs again for every part of a file and must not run `git` for each;
+/// none for a worktree not among them.
+pub fn worktree_scope(
+    state: &crate::state::AppState,
+    project: &str,
+    worktree: &str,
+) -> Option<PathBuf> {
+    let roots = project_roots(state, project, false);
+    let index = roots
+        .worktrees
+        .iter()
+        .position(|id| id.as_deref() == Some(worktree))?;
+    roots.canonical.into_iter().nth(index)
+}
+
 /// What `path` names now, resolved as `probe` does but with the project's roots as `lookup` finds
-/// them, or why it is not reachable. A file only the viewer shows is reachable here; it is for the
-/// caller to refuse.
+/// them, or why it is not reachable. A launchable file is reachable here; it is for the caller to
+/// refuse.
 fn reached(
     state: &crate::state::AppState,
     project: Option<&str>,
@@ -335,10 +350,55 @@ fn reached(
     }
 }
 
+/// Reads the file `path` names, resolved as `open` does, from the project's roots as they are now:
+/// what a click on a file shows in the viewer. Anything but a file is refused, and a launchable file
+/// is read like any other, since reading launches nothing.
+pub fn read(
+    state: &crate::state::AppState,
+    project: Option<&str>,
+    path: &str,
+    limit: usize,
+    cancel: &AtomicBool,
+) -> Result<crate::browse::live::LiveFile> {
+    let resolved = locate_file(state, project, path, true)?;
+    // The resolved path has no link in it; opening it refuses one swapped in since.
+    crate::browse::live::read_resolved(&resolved.path, path, limit, cancel)
+}
+
+/// What `path` names now, which must be a file: resolved with the project's roots looked up afresh,
+/// or, with `fresh` off, as found within the last few seconds.
+fn locate_file(
+    state: &crate::state::AppState,
+    project: Option<&str>,
+    path: &str,
+    fresh: bool,
+) -> Result<Resolved> {
+    let cache = OnceLock::new();
+    let resolved = reached(state, project, path, &temp_roots(), &|| {
+        cached_roots(state, project, &cache, fresh)
+    })?;
+    if resolved.kind != PathLinkKind::File {
+        return Err(crate::browse::live::unsupported(path, "directory"));
+    }
+    Ok(resolved)
+}
+
+/// What `path` names now, as [`read`] resolves it but from the project's roots as probes see them
+/// (found within the last few seconds), for the parts of one file's copy: each part resolves the
+/// path again, and a copy of hundreds of parts must not run `git` for each. Anything but a file is
+/// refused.
+pub fn locate(
+    state: &crate::state::AppState,
+    project: Option<&str>,
+    path: &str,
+) -> Result<Resolved> {
+    locate_file(state, project, path, false)
+}
+
 /// Opens `path` with the host's default application (a directory in its file manager), after
-/// resolving it again as `probe` does, from the project's roots as they are now. On macOS a folder
-/// the system types as a package is refused like a launchable one; the type is asked only here,
-/// where a path is about to be opened.
+/// resolving it again as `probe` does, from the project's roots as they are now. A launchable
+/// file is refused, and on macOS so is a folder the system types as a package; the type is asked
+/// only here, where a path is about to be opened.
 pub fn open(state: &crate::state::AppState, project: Option<&str>, path: &str) -> Result<()> {
     open_with(
         state,
@@ -359,8 +419,9 @@ fn open_with(
     opener: impl FnOnce(&Path) -> Result<()>,
 ) -> Result<()> {
     let cache = OnceLock::new();
-    let resolved = reached(state, project, path, &temp_roots(), &|| {
-        fresh_roots(state, project, &cache)
+    let temp = temp_roots();
+    let resolved = reached(state, project, path, &temp, &|| {
+        cached_roots(state, project, &cache, true)
     })?;
     if resolved.viewer_only() {
         return Err(Refusal::Launchable.into_error(path));
@@ -368,7 +429,33 @@ fn open_with(
     if resolved.kind == PathLinkKind::Directory && is_package(&resolved.path) {
         return Err(Refusal::Launchable.into_error(path));
     }
+    // A file of a project kept under a temp root was exempt where it is only shown.
+    if resolved.kind == PathLinkKind::File
+        && temp.check_owner
+        && !private_in_temp(&resolved.path, &temp)
+    {
+        return Err(Refusal::NotPrivate.into_error(path));
+    }
     opener(&resolved.path)
+}
+
+/// Refuses `canonical`, a path found below the project directory `root`, with `path_link_refused`
+/// and the cause `launchable` when the system could launch it rather than show it; `shown` is the
+/// path as the client asked for it.
+pub fn refuse_launchable(root: &Path, canonical: &Path, shown: &str) -> Result<()> {
+    let metadata = crate::platform::fs::stat(canonical, crate::platform::fs::Links::Follow)
+        .map_err(|err| crate::browse::live::io_failure(shown, &err))?
+        .metadata;
+    if is_launchable(root, canonical, &metadata) {
+        return Err(Refusal::Launchable.into_error(shown));
+    }
+    Ok(())
+}
+
+/// Whether the system could launch `canonical`, a path found below the project directory `root`
+/// with `metadata` as it was opened, rather than show it.
+pub fn is_launchable(root: &Path, canonical: &Path, metadata: &std::fs::Metadata) -> bool {
+    resolve::launchable(canonical, root, metadata)
 }
 
 /// Shows `path` in the host's file manager, resolving it as `open` does: a file is selected in its
@@ -394,7 +481,7 @@ fn reveal_with(
 ) -> Result<()> {
     let temp = temp_roots();
     let cache = OnceLock::new();
-    let lookup = || fresh_roots(state, project, &cache);
+    let lookup = || cached_roots(state, project, &cache, true);
     let resolved = reached(state, project, path, &temp, &lookup)?;
     shower(&own_entry(&resolved, &temp, &lookup).unwrap_or(resolved.path))
 }

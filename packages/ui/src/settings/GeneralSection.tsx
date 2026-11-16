@@ -5,18 +5,17 @@ import { useDaemonStore } from "../store";
 import { BackgroundRunSetting } from "./BackgroundRunSetting";
 import { DaemonSwitchSetting } from "./DaemonSwitchSetting";
 import { KeepAwakeSetting } from "./KeepAwakeSetting";
-import { AgentLanguageSetting, InterfaceLanguageSetting } from "./LanguageSetting";
+import { LanguageSetting } from "./LanguageSetting";
 import { LaunchAtLoginSetting } from "./LaunchAtLoginSetting";
 import { MenuBarIconSetting } from "./MenuBarIconSetting";
 import { SessionOrderSettings } from "./SessionOrderSettings";
 import { SettingsGroup } from "./SettingsGroup";
 
-/** The app-wide settings: the interface language and the agent language, then groups: startup (whether the app opens at
- * login, where the platform offers it, and whether the interrupted sessions are resumed), the window (where the
- * platform offers it: whether closing it keeps the app running, whether the menu bar icon shows), power (where the
- * daemon's host offers it: whether the computer is kept awake, and when), the terminals (whether closing a panel closes
- * idle terminals) and Sorting, in which sessions and projects are ordered. A group the platform has nothing for is left
- * out. */
+/** The app-wide settings: the language, then groups: startup (whether the app opens at login, where the platform
+ * offers it, and whether the interrupted sessions are resumed), the window (where the platform offers it: whether
+ * closing it keeps the app running, whether the menu bar icon shows), power (where the daemon's host offers it: whether
+ * the computer is kept awake, and when), the terminals (whether closing a panel closes idle terminals) and Sorting, in
+ * which sessions and projects are ordered. A group the platform has nothing for is left out. */
 export function GeneralSection(): React.ReactElement {
   const { backgroundRun, statusItem, launchAtLogin } = usePlatform();
   // The switch for the menu bar icons is the application's, which another daemon's window does not offer.
@@ -27,8 +26,7 @@ export function GeneralSection(): React.ReactElement {
     <>
       {/* Wrapped so the last ungrouped row ends with the gap above the group's heading, not a second line. */}
       <div>
-        <InterfaceLanguageSetting />
-        <AgentLanguageSetting />
+        <LanguageSetting />
       </div>
       <SettingsGroup title="settings.general.group.startup">
         {launchAtLogin && <LaunchAtLoginSetting />}

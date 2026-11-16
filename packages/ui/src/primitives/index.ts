@@ -21,7 +21,7 @@ export { Kbd, KbdAbbr, KbdContent, type KbdKey } from "./Kbd";
 export { type PrimitiveLabels, PrimitiveLabelsProvider } from "./labels";
 export { ListBox, ListBoxItem, ListBoxItemLabel } from "./ListBox";
 export { LocaleProvider } from "./locale";
-export { activateMenuItem, Menu, MenuChoices, MenuItem, MenuItemCheck, MenuList, menuOfTrigger, MenuPopover, MenuSection, MenuSeparator, MenuTrigger, Submenu, SubmenuIndicator, useSubmenuPanel } from "./Menu";
+export { activateMenuItem, Menu, MenuChoices, MenuItem, MenuItemCheck, MenuList, menuListClassName, menuOfTrigger, MenuPopover, MenuSection, MenuSeparator, MenuTrigger, Submenu, SubmenuIndicator, useSubmenuPanel } from "./Menu";
 export { containsText, MenuFilter, useMenuFiltered } from "./MenuFilter";
 export { Meter } from "./Meter";
 export { Modal, ModalBody, ModalCloseButton, ModalFooter, ModalHeader, ModalHeading, ModalStatusIcon } from "./Modal";

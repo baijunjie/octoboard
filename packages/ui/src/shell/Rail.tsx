@@ -10,10 +10,15 @@ import type { Console } from "../protocol";
 import { statusLabel } from "../sessions/sessionLabel";
 import { consoleMenu, type ConsoleMenuHandlers } from "../sidebar/menus";
 import type { OpenSettings } from "../settings/settingsLauncher";
-import { RailRemoteDaemons } from "./RailRemoteDaemons";
+import { remoteDaemonsOffered } from "../remoteDaemons/remoteDaemonsOffered";
+import { usePlatform } from "../platform/react";
+import { RailRemoteDevices, REMOTE_DEVICES_BUTTON_ID } from "./RailRemoteDevices";
+import { RailRemoteGap } from "./RailRemoteGap";
+import { RailSeparator, RailSpacer } from "./RailSeparator";
 import { RailQuotaEntry } from "./RailQuotaEntry";
 import { RailProcessesEntry } from "./RailProcessesEntry";
 import { RailUpdateEntry } from "./RailUpdateEntry";
+import { RailForwardsEntry } from "./RailForwardsEntry";
 import { RailCountBadge } from "./RailCountBadge";
 import type { ProcessJump } from "../process/processJump";
 import { useArchivedOwnerSessions, useConsoleStatus, useConsoleStatusCounts } from "../store";
@@ -46,9 +51,10 @@ const ON_DEMAND_FRAME =
 const ON_DEMAND_OPEN = "max-tablet:opacity-100";
 const ON_DEMAND_AWAY = `max-tablet:opacity-0 max-tablet:invisible ${PHONE_SLIDE_AWAY}`;
 
-/** Puts focus on the rail's New console button, by identity: the console tiles come before it. */
+/** Puts focus on the rail's New console button, by identity (the console tiles come before it), or, where the rail has
+ * none (the daemon is not usable), on its Remote devices button. */
 export function focusNewConsole(): void {
-  document.getElementById(NEW_CONSOLE_ID)?.focus();
+  (document.getElementById(NEW_CONSOLE_ID) ?? document.getElementById(REMOTE_DEVICES_BUTTON_ID))?.focus();
 }
 
 /** One console on the rail: its avatar, marked with what is going on in it, and the current one on a
@@ -101,8 +107,7 @@ const ConsoleTile = memo(function ConsoleTile({
     </HeadedTooltip>
   ) : thisConsole.name;
   return (
-    <div ref={tileRef} data-list-motion={thisConsole.id} className="flex px-1 pb-1">
-      {/* The tile's box includes the badge's 4px overhang, keeping it inside the scroll viewport. */}
+    <div ref={tileRef} data-list-motion={thisConsole.id} className="flex">
       <BadgeAnchor>
         <TitledControl title={tooltip} placement="end" focusOnly={hoverOpensSidebar}>
           <Button
@@ -120,7 +125,7 @@ const ConsoleTile = memo(function ConsoleTile({
             focusOnPress={false}
             onPress={onSelect}
             onMouseHoverChange={onHoverChange}
-            className={`size-9 min-w-0 rounded-lg p-0 ${current ? CHROME_CURRENT_FILLS : CHROME_BUTTON_FILLS}`}
+            className={`size-8 min-w-0 rounded-lg p-0 ${current ? CHROME_CURRENT_FILLS : CHROME_BUTTON_FILLS}`}
           >
             <ConsoleAvatar name={thisConsole.name} icon={thisConsole.icon} className="size-7" />
           </Button>
@@ -152,6 +157,10 @@ interface RailProps extends ConsoleMenuHandlers {
   onRailHoverChange?: (hovered: boolean) => void;
   /** Whether the hidden sidebar can float in on hovering an avatar right now. */
   hoverOpensSidebar: boolean;
+  /** The Remote devices page shows in place of the session UI, which the Remote devices button says and no console's
+   * tile does; `onOpenRemoteDevices` shows it. */
+  remoteDevicesShown: boolean;
+  onOpenRemoteDevices: () => void;
   waitingCount: number;
   onNextWaiting: () => void;
   /** Shows the Processes panel that owns a tree the global process list names; false when that project or session is gone. */
@@ -161,6 +170,9 @@ interface RailProps extends ConsoleMenuHandlers {
   onOpenSettingsAt: OpenSettings;
   /** Where focus goes when a control that held it goes away (the notifications bell). */
   focusTerminal: () => void;
+  /** The local daemon is not there (it is not answering, speaks another protocol generation, refused the page's key or
+   * failed to start): the rail holds only the Remote devices button, which does not need it. */
+  offline?: boolean;
   /** At the tablet boundary and below the rail is not in the row but comes in with the sidebar's
    * drawer. False where there is no drawer (no console): the rail is then the only way to New
    * console and Settings, so it stays in the row. */
@@ -174,11 +186,13 @@ interface RailProps extends ConsoleMenuHandlers {
 /**
  * The left rail, the window chrome's second half beside the top bar: at the top the console
  * switcher (one avatar per console, in their order, then New console), under it, in the application's own window, the
- * remote daemons (`RailRemoteDaemons`), at the bottom, pushed down,
+ * Remote devices button (`RailRemoteDevices`), at the bottom, pushed down,
  * the waiting count, the notifications bell (browser only, while the permission is undecided), the
  * account quota entry and Settings. It sits at the reading direction's start, like the sidebar, and
- * holds only glyphs and avatars. At the tablet boundary and below an `onDemand` rail leaves the row and
- * comes in with the sidebar's drawer (`ON_DEMAND_FRAME`).
+ * holds only glyphs and avatars. Everything in it is an item of one stack: every tile and button is a
+ * 32px box (`size-8`), a separator is an item of its own, and the nav's single `gap-2` is the only space
+ * between any two neighbours; a count badge floats over its item's corner and takes no room. At the tablet boundary
+ * and below an `onDemand` rail leaves the row and comes in with the sidebar's drawer (`ON_DEMAND_FRAME`).
  */
 export function Rail({
   consoles,
@@ -189,6 +203,8 @@ export function Rail({
   onConsoleLeave,
   onRailHoverChange,
   hoverOpensSidebar,
+  remoteDevicesShown,
+  onOpenRemoteDevices,
   onOpenDialog,
   onSelectSession,
   onOpenArchive,
@@ -200,8 +216,10 @@ export function Rail({
   focusTerminal,
   onDemand,
   away,
+  offline = false,
 }: RailProps): React.ReactElement {
   const t = useT();
+  const remoteDevices = remoteDaemonsOffered(usePlatform());
   const consolesRef = useListMotion<HTMLDivElement>({ descendants: true });
 
   return (
@@ -216,49 +234,60 @@ export function Rail({
       // `inert` rather than `aria-hidden` and `tabindex`: it takes the whole subtree out of the focus
       // order and the accessibility tree at once, which `invisible` does only once the exit is over.
       inert={away}
-      className={`flex w-(--rail-width) shrink-0 flex-col items-center gap-1 pt-1 pb-2 select-none ${onDemand ? `${ON_DEMAND_FRAME} ${away ? ON_DEMAND_AWAY : ON_DEMAND_OPEN}` : ""}`}
+      className={`flex w-(--rail-width) shrink-0 flex-col items-center gap-2 pt-1 pb-2 select-none ${onDemand ? `${ON_DEMAND_FRAME} ${away ? ON_DEMAND_AWAY : ON_DEMAND_OPEN}` : ""}`}
     >
-      {/* Gives way after the remote daemons below (`RailRemoteDaemons`), whose shrink factor is a thousand times its own.
-          Its own stays 1, not a fraction: once the remote daemons are at their minimum it is the only item left to
-          shrink, and flexbox takes away only that fraction of the overflow from items whose factors sum below 1. */}
-      <div ref={consolesRef} className="relative flex min-h-0 shrink flex-col items-center gap-1">
-        {/* More consoles than fit scroll here, the scrollbar left out: the rail is too narrow for
-            one, which leaves the fade as the only thing saying there are more. */}
-        <FadedScroller hideScrollBar className="relative flex min-h-0 flex-col items-center overscroll-contain py-0.5">
-          {consoles.map((c) => (
-            <ConsoleTile
-              key={c.id}
-              console={c}
-              current={c.id === currentConsoleId}
-              onSelect={() => onSelectConsole(c.id)}
-              hoverOpensSidebar={hoverOpensSidebar}
-              onHoverChange={(hovered) => (hovered ? onConsoleEnter(c.id) : onConsoleLeave())}
-              handlers={{ onOpenDialog, onSelectSession, onOpenArchive }}
-            />
-          ))}
-        </FadedScroller>
-        <div data-list-motion="new-console" className="flex shrink-0">
-          <ChromeButton id={NEW_CONSOLE_ID} label={t("rail.newConsole")} onPress={() => onOpenDialog({ kind: "new-console" })} tooltipPlacement="end" className="shrink-0">
-            <Plus aria-hidden="true" className="size-4" />
+      {offline ? (
+        // Only what needs no daemon: the daemon is not there to give consoles, sessions, accounts or settings.
+        <RailRemoteDevices shown={remoteDevicesShown} onPress={onOpenRemoteDevices} />
+      ) : (
+        <>
+          {/* Gives way in a window too short for everything: the Remote devices button below
+              (`RailRemoteDevices`) and the bottom group never leave the rail. */}
+          <div ref={consolesRef} className="relative flex min-h-0 shrink flex-col items-center gap-2">
+            {/* More consoles than fit scroll here, the scrollbar left out: the rail is too narrow for
+                one, which leaves the fade as the only thing saying there are more. Its padding keeps the
+                tiles' focus rings and badges (which overhang their box by 4px) inside the scroll viewport,
+                and the negative margin takes the room of that padding back out of the stack. */}
+            <FadedScroller hideScrollBar className="relative -my-1 flex min-h-0 flex-col items-center gap-2 overscroll-contain px-1 py-1">
+              {consoles.map((c) => (
+                <ConsoleTile
+                  key={c.id}
+                  console={c}
+                  current={c.id === currentConsoleId && !remoteDevicesShown}
+                  onSelect={() => onSelectConsole(c.id)}
+                  hoverOpensSidebar={hoverOpensSidebar}
+                  onHoverChange={(hovered) => (hovered ? onConsoleEnter(c.id) : onConsoleLeave())}
+                  handlers={{ onOpenDialog, onSelectSession, onOpenArchive }}
+                />
+              ))}
+            </FadedScroller>
+            <div data-list-motion="new-console" className="flex shrink-0">
+              <ChromeButton id={NEW_CONSOLE_ID} label={t("rail.newConsole")} onPress={() => onOpenDialog({ kind: "new-console" })} tooltipPlacement="end" className="shrink-0">
+                <Plus aria-hidden="true" className="size-4" />
+              </ChromeButton>
+            </div>
+          </div>
+          {/* Where the button is, a separator above it, and the gap pushes the bottom group down and draws a
+          separator once it is used up. */}
+          {remoteDevices && <RailSeparator />}
+          <RailRemoteDevices shown={remoteDevicesShown} onPress={onOpenRemoteDevices} />
+          {remoteDevices ? <RailRemoteGap /> : <RailSpacer />}
+          {waitingCount > 0 && (
+            <ChromeButton label={t("rail.waiting", { count: waitingCount })} onPress={onNextWaiting} tooltipPlacement="end"
+              badge={<RailCountBadge count={waitingCount} overflowLabel={t("rail.waitingBadgeOverflow")} color="warning" />}>
+              <Hand aria-hidden="true" className="size-4 text-warning-soft-foreground" />
+            </ChromeButton>
+          )}
+          <RailProcessesEntry onOpen={onOpenProcesses} />
+          <RailForwardsEntry />
+          <NotificationsBell focusTerminal={focusTerminal} />
+          <RailQuotaEntry selectedSessionId={selectedSessionId} onOpenSettingsAt={onOpenSettingsAt} />
+          <RailUpdateEntry focusTerminal={focusTerminal} onOpenSettingsAt={onOpenSettingsAt} />
+          <ChromeButton label={t("rail.settings")} onPress={onOpenSettings} tooltipPlacement="end">
+            <Settings aria-hidden="true" className="size-4" />
           </ChromeButton>
-        </div>
-      </div>
-      <RailRemoteDaemons />
-      <div className="mt-auto flex shrink-0 flex-col items-center gap-1">
-        {waitingCount > 0 && (
-          <ChromeButton label={t("rail.waiting", { count: waitingCount })} onPress={onNextWaiting} tooltipPlacement="end"
-            badge={<RailCountBadge count={waitingCount} overflowLabel={t("rail.waitingBadgeOverflow")} color="warning" />}>
-            <Hand aria-hidden="true" className="size-4 text-warning-soft-foreground" />
-          </ChromeButton>
-        )}
-        <RailProcessesEntry onOpen={onOpenProcesses} />
-        <NotificationsBell focusTerminal={focusTerminal} />
-        <RailQuotaEntry selectedSessionId={selectedSessionId} onOpenSettingsAt={onOpenSettingsAt} />
-        <RailUpdateEntry focusTerminal={focusTerminal} onOpenSettingsAt={onOpenSettingsAt} />
-        <ChromeButton label={t("rail.settings")} onPress={onOpenSettings} tooltipPlacement="end">
-          <Settings aria-hidden="true" className="size-4" />
-        </ChromeButton>
-      </div>
+        </>
+      )}
     </nav>
   );
 }

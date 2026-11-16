@@ -1,9 +1,11 @@
 import type { HostFacts } from "../../platform";
 import type { HostInfo } from "../../protocol";
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
-import { daemonUpdateOf, minutesAgo, SAMPLE, snapshotState } from "../../fixtures/builders";
+import { daemonUpdateOf, minutesAgo, processTreeOf, SAMPLE, snapshotState } from "../../fixtures/builders";
+import type { Step } from "../../fixtures/interact";
 import { MAC_HOST, WINDOWS_HOST } from "../../test/hosts";
 import type { Scenario } from "../scenario";
+import { PATH_LINK_FIXTURE, PATH_LINKS, TEMP_IMAGE_PATH } from "./pathLinkFiles";
 import { buildServer, relay, staging } from "./remoteDaemons";
 
 const { console: console_, web, api, sessions } = SAMPLE;
@@ -30,17 +32,48 @@ const LINUX_MACHINE = {
 /** The remote daemons the window's shell keeps, with the one the window is open on connected. */
 const REMOTE_DAEMONS: NonNullable<Scenario["remoteDaemons"]> = { entries: [staging, buildServer], status: [{ id: staging.id, state: "connected", via: "window" }] };
 
-/** Staging's daemon: a Linux server whose agent language is German, while the window shows the interface language. */
+/** Staging's daemon: a Linux server. It holds no language, so it is given the one the window shows, as the app asks
+ * it to: a window follows its daemon's language, so one that held another would turn the window into it whatever
+ * language the gallery was opened in. */
 const remoteState = snapshotState({
   consoles: [console_],
   projects: [web, api],
   sessions,
   ...LINUX_MACHINE,
-  settings: { ...DEFAULT_SETTINGS, agent_language: "de", default_clone_dir: "/home/deploy/projects" },
+  settings: { ...DEFAULT_SETTINGS, default_clone_dir: "/home/deploy/projects" },
 });
 
 /** What the title bar shows in a remote window, which has no state of its own to set up. */
 const titleBarState = snapshotState({ consoles: [console_], projects: [web, api], sessions, ...LINUX_MACHINE });
+
+/** What every scenario of a remote daemon's window says of the window: the shell's facts of such a window, the desktop
+ * platform kind, and the daemon it is open on. */
+const REMOTE_WINDOW = {
+  host: REMOTE_WINDOW_HOST,
+  desktopApp: true,
+  remoteWindow: { name: staging.name },
+  remoteDaemons: REMOTE_DAEMONS,
+} as const satisfies Partial<Scenario>;
+
+/** The sample terminal output naming files, in a remote window: the same paths as the local path link scenarios, found
+ * on the daemon's machine, and the folder `docs/plans/summary-layout` with no README or index file, which a remote window
+ * has no file manager for and so leaves as text. */
+const REMOTE_PATH_LINKS = {
+  ...PATH_LINK_FIXTURE,
+  pathLinks: { ...PATH_LINKS, "/Users/dev/code/website/docs/plans/summary-layout": "directory" },
+  state: titleBarState,
+  ...REMOTE_WINDOW,
+} satisfies Partial<Scenario>;
+
+/** Selects the session whose terminal the scenarios look at, then closes the drawer a pick leaves up when the sidebar
+ * floats, where it would cover the terminal's left side. */
+const pickSession: Step = async (ui) => {
+  await ui.press(ui.session("Fix the summary layout"));
+  await ui.closeDrawer();
+};
+
+/** A dev server on the daemon's machine, whose port the window forwards. */
+const devServer = processTreeOf("700:1", SAMPLE.sessions[1], "node server.js --port 3000", 8, { ports: [3000], memory_bytes: 96_000_000 });
 
 /** The windows of the daemons of another computer, which the desktop shell opens on a loopback address. */
 export const remoteWindowScenarios: Scenario[] = [
@@ -50,7 +83,7 @@ export const remoteWindowScenarios: Scenario[] = [
     category: "normal",
     title: "General settings in a remote daemon's window",
     description:
-      "Settings of the window opened on Staging, a Linux server. The section opens on two language rows: Interface language, the language this window and every other desktop window share, and Agent language, the remote daemon's own setting, which reads Deutsch here while the window is in the viewing language. Under them only what is the daemon's: Resume sessions on start, Terminals and Sorting. The application's own groups (Launch at login, Window, and Power, which a Linux server cannot offer) are absent, and so are the Permissions, Remote access and Updates sections in the list on the left.",
+      "Settings of the window opened on Staging, a Linux server. The section opens on the Language row, which is the remote daemon's own setting: a remote window shows the language its daemon holds and changes that daemon's. Under it only what is the daemon's: Resume sessions on start, Terminals and Sorting. The application's own groups (Launch at login, Window, and Power, which a Linux server cannot offer) are absent, and so are the Permissions, Remote access and Updates sections in the list on the left.",
     state: remoteState,
     host: REMOTE_WINDOW_HOST,
     desktopApp: true,
@@ -64,7 +97,7 @@ export const remoteWindowScenarios: Scenario[] = [
     category: "normal",
     title: "Remote daemon's window, title bar",
     description:
-      "The window opened on Staging on Windows. The title bar names the daemon in a small chip with the Server glyph, filled like a control and set apart before the breadcrumb (console, project, selected session), so windows of several daemons can be told apart; it has no Remote menu button, as the Remote items are in the window's system menu (the title bar icon's, or Alt+Space), which the shell draws. The rail has no group of remote daemons and none of the application's own settings are offered. Choose a narrow width to see the breadcrumb fade while the chip keeps its width.",
+      "The window opened on Staging on Windows. The title bar names the daemon in a small chip with the Server glyph, filled like a control and set apart before the breadcrumb (console, project, selected session), so windows of several daemons can be told apart; it has no Remote menu button, as the Remote items are in the window's system menu (the title bar icon's, or Alt+Space), which the shell draws. The rail has no Remote devices button, and none of the application's own settings are offered. Choose a narrow width to see the breadcrumb fade while the chip keeps its width.",
     state: titleBarState,
     host: WINDOWS_REMOTE_HOST,
     desktopApp: true,
@@ -106,5 +139,68 @@ export const remoteWindowScenarios: Scenario[] = [
     remoteWindow: { name: staging.name },
     remoteDaemons: REMOTE_DAEMONS,
     steps: [(ui) => ui.press(ui.t("rail.settings")), (ui) => ui.press(ui.t("settings.section.updates"))],
+  },
+  {
+    id: "remote-window-terminal-path-links",
+    group: "Terminal",
+    category: "normal",
+    title: "File paths in a remote daemon's terminal",
+    description:
+      "The terminal of the window opened on Staging names the same paths as on this computer, found on the daemon's machine: the project's files and the temp-folder image are in the accent text colour, and so is the address on the last line. docs/plans/summary-layout is plain text here, since it has no README or index file to show and the window has no file manager for the daemon's machine. " +
+      "The right-click was made on src/summary/Summary.tsx:42:7: the menu is only Copy, Paste and Select all, with no Open in, since the daemon's file manager and applications are not this computer's. A click on a path opens it in the viewer: see the next scenario.",
+    ...REMOTE_PATH_LINKS,
+    clipboard: { text: "echo hello" },
+    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.terminalContextMenu("src/summary/Summary.tsx:42:7")],
+  },
+  {
+    id: "remote-window-path-link-viewer",
+    group: "Terminal",
+    category: "normal",
+    title: "A file of the daemon's machine opened from its terminal",
+    description:
+      "Clicking /private/tmp/octoboard/scratchpad/icon/sheet3.png in the terminal of the window opened on Staging opened the viewer on it, read through the daemon: the screenshot is drawn as an image, and the header names the path on the daemon's machine. " +
+      "The header ends with Download and open alone, where this computer's window has File manager and Default application: they act on the daemon's machine, so they are not offered.",
+    ...REMOTE_PATH_LINKS,
+    remoteFiles: true,
+    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink(TEMP_IMAGE_PATH)],
+  },
+  {
+    id: "remote-window-forwarded-ports",
+    group: "Window layout",
+    category: "normal",
+    title: "Forwarded ports of a remote daemon's window",
+    description:
+      "The window opened on Staging holds two forwards, so its rail has a Forwarded ports button, a plug glyph with a green count of 2, directly below the Processes button with the same even gap to its neighbours. Its popover is open, with the Forwarded ports heading and a line saying what the ports are, then a row for each: localhost:3000 over Port 3000 on Staging, and localhost:52871 over Port 8080 on Staging, which another program of this computer held at 8080. Each row has a danger-toned Stop at its end, and the first row has focus, its tooltip naming the address as written on the daemon's machine. Pressing a row opens its address again; Stop lets the port go and takes the row out, and stopping the last one takes the button and the popover with it.",
+    state: titleBarState,
+    ...REMOTE_WINDOW,
+    processes: { trees: [devServer] },
+    remoteForwards: [
+      { remotePort: 3000, localPort: 3000, address: "http://localhost:3000/", localAddress: "http://localhost:3000/" },
+      { remotePort: 8080, localPort: 52871, address: "http://localhost:8080/docs", localAddress: "http://localhost:52871/docs" },
+    ],
+    steps: [(ui) => ui.press(ui.t("rail.forwards", { count: 2 }))],
+  },
+  {
+    id: "remote-window-forward-nothing-listening",
+    group: "Terminal",
+    category: "exceptional",
+    title: "An address in a remote daemon's terminal that nothing serves",
+    description:
+      "Clicking http://localhost:5176/gallery.html in the terminal of the window opened on Staging, where nothing listens on port 5176, opened the error alert titled \"Could not open the link\" and saying nothing is listening on that port on Staging. The browser stays shut, and there is no address to open by hand: as written it would lead to this computer. The sentence has no remedy line.",
+    ...REMOTE_PATH_LINKS,
+    forwardFailure: "nothing_listening",
+    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("http://localhost:5176/gallery.html")],
+  },
+  {
+    id: "remote-window-forward-refused",
+    group: "Terminal",
+    category: "exceptional",
+    title: "An address in a remote daemon's terminal whose server forbids forwarding",
+    description:
+      "Clicking http://localhost:5176/gallery.html in the terminal of the window opened on Staging, whose SSH server does not allow port forwarding, opened the error alert titled \"Could not open the link\" and saying so, with the remedy line under it: allow TCP forwarding in that server's settings or open the address on that computer. " +
+      "The alert for a connection that is down is laid out the same, with its own sentence (the connection to Staging is down) and the connection remedy.",
+    ...REMOTE_PATH_LINKS,
+    forwardFailure: "forwarding_refused",
+    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("http://localhost:5176/gallery.html")],
   },
 ];

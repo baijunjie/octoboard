@@ -27,6 +27,9 @@ How the repository is built, checked and released, outside the code of any one e
   checked against it (the UI's `appConfig.test.ts`, the build scripts). `author.name` is the only editable source of
   the author name. After changing it or `copyrightYear`, run `pnpm identity:sync` to regenerate the tracked `LICENSE`
   copyright line and `Cargo.toml` workspace authors; builds and installation do not rewrite these outputs.
+- `config/launchable-extensions.json` — the lists of file extensions the system launches or acts on rather than shows, the one
+  source of that security judgement: read by the daemon (`apps/daemon/src/platform/open/mod.rs`), the desktop shell
+  (`apps/desktop/src-tauri/src/remote/files.rs`) and the UI (`packages/ui/src/launchable.ts`).
 - `.env.local.example`, `.env.secret.example` — the templates of the gitignored machine-local and release-credential
   files. `scripts/lib/env.mjs` is the reader; it reads `.env.secret` and `.env.local`.
 - `assets/branding/` — brand source artwork that no app serves. `.claude/` holds the agent skills and subagent

@@ -139,7 +139,7 @@ for (const [kind, status, pane] of [
     expect(capability.openSystemSettings).toHaveBeenCalledWith(kind);
     const [raised] = errorAlerts.getSnapshot();
     expect(raised.title).toBe("Could not open System Settings");
-    expect(raised.message).toContain(`choose Privacy & Security, then choose ${pane}.`);
+    expect(raised.message).toContain(`go to Privacy & Security > ${pane}.`);
     expect(raised.error).toMatchObject({ recovery: "none", cause });
   });
 }
@@ -166,8 +166,9 @@ for (const [kind, status, label, pane] of [
     const root = createRoot(body);
     onTestFinished(() => act(() => root.unmount()));
     await act(async () => root.render(<>{raised.content}</>));
+    expect([...body.querySelectorAll("[data-inline-path] [data-inline-reference]")].map((chip) => chip.textContent)).toEqual(["Privacy & Security", pane]);
     expect(body.textContent).toBe(
-      `The request for ${label} did not go through. Grant it yourself in System Settings: choose Privacy & Security, then choose ${pane}. If Octoboard is not listed, add it with the + button.`,
+      `The request for ${label} did not go through. Grant it yourself in System Settings: go to Privacy & Security > ${pane}. If Octoboard is not listed, add it with the + button.`,
     );
   });
 }

@@ -33,8 +33,7 @@ export type HintProps =
  * hold neither focus nor a button: it is a dialog popover, opened by a mouse resting on its trigger
  * (non-modal, no focus moved) and by a tap, a pen, assistive technology or the keyboard (modal, focus
  * inside), never by a mouse click. All four are drawn with one surface (`TOOLTIP_SURFACE` in
- * `hintSurface.ts`). Each kind's props and rules are documented where it is implemented: `hintTooltips.tsx`
- * and `hintPopover.tsx`.
+ * `hintSurface.ts`). Each kind's props and rules are documented where it is implemented: `hintTooltips.tsx` and `hintPopover.tsx`.
  *
  * `TitledControl`, `IndicatorTooltip` and `AnchoredTooltip` are `Hint` of the first three kinds under
  * shorter names.

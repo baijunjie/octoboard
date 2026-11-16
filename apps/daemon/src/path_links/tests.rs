@@ -128,25 +128,26 @@ fn a_refusal_says_why_the_path_is_not_shown() {
             .unwrap();
         crate::test_support::mkfifo(&project.join("pipe"));
     }
+    std::fs::create_dir(project.join("Thing.app")).unwrap();
     let roots = project_roots(&[&project, &second]);
     let at = |raw: &str| refusal(raw, &no_temp(), &roots);
     assert_eq!(at("link.txt"), Refusal::Outside);
     assert_eq!(at("../elsewhere.ts"), Refusal::Outside);
     assert_eq!(at("/etc/hosts"), Refusal::Outside);
     assert_eq!(at("both.ts"), Refusal::Ambiguous);
-    // Launchable files are reachable in a project, so only a temp root refuses them.
+    // A launchable file is reachable anywhere, a launchable folder nowhere.
+    assert_eq!(at("Thing.app"), Refusal::Launchable);
+    assert_eq!(
+        refusal(
+            canonical(&project).join("Thing.app").to_str().unwrap(),
+            &temp_of(&project),
+            &ProjectRoots::default()
+        ),
+        Refusal::Launchable
+    );
     #[cfg(unix)]
     {
-        let temp = temp_of(&project);
         let absolute = canonical(&project);
-        assert_eq!(
-            refusal(
-                absolute.join("tool").to_str().unwrap(),
-                &temp,
-                &ProjectRoots::default()
-            ),
-            Refusal::Launchable
-        );
         assert_eq!(
             refusal(absolute.join("pipe").to_str().unwrap(), &no_temp(), &roots),
             Refusal::NotAFileOrFolder
@@ -228,7 +229,7 @@ fn a_file_in_a_worktree_below_the_project_is_found_in_the_innermost_root() {
 }
 
 #[test]
-fn what_could_be_launched_is_never_opened_and_only_a_project_file_is_kept_to_be_viewed() {
+fn what_could_be_launched_is_never_opened_and_only_a_file_is_kept_to_be_viewed() {
     let dir = ScratchDir::new("path-links-launchable");
     for name in [
         "sheet.png",
@@ -280,21 +281,38 @@ fn what_could_be_launched_is_never_opened_and_only_a_project_file_is_kept_to_be_
             "{scope}"
         );
         for name in launchable {
-            let resolved = at(name);
-            if scope == "project" {
-                // A file is kept for the viewer, marked so that nothing opens it.
-                assert_eq!(
-                    resolved.map(|r| (r.kind, r.launchable)),
-                    Some((PathLinkKind::File, true)),
-                    "{name}"
-                );
-            } else {
-                assert_eq!(resolved, None, "{scope}: {name}");
-            }
+            // A file is kept for the viewer, in a project or a temp root, marked so that nothing
+            // opens it.
+            assert_eq!(
+                at(name).map(|r| (r.kind, r.launchable)),
+                Some((PathLinkKind::File, true)),
+                "{scope}: {name}"
+            );
         }
         // A bundle is a folder to open, so it is never reachable.
         assert_eq!(at("Thing.app").map(|r| r.kind), None, "{scope}");
     }
+}
+
+/// The lists moved out of this crate's constants into `config/launchable-extensions.json`; the
+/// move must not have added or lost an entry.
+#[test]
+fn the_shared_lists_hold_what_the_constants_held() {
+    let lists = crate::platform::open::launchable_extensions();
+    let ends = |list: &[String]| (list.len(), list[0].clone(), list[list.len() - 1].clone());
+    assert_eq!(
+        ends(&lists.any_component),
+        (41, "app".into(), "shortcut".into())
+    );
+    assert_eq!(ends(&lists.final_file), (35, "py".into(), "pif".into()));
+    assert_eq!(
+        ends(&lists.windows_final_file),
+        (46, "lnk".into(), "vsmacros".into())
+    );
+    assert_eq!(
+        crate::platform::open::launched_file_extensions().len(),
+        if cfg!(windows) { 46 } else { 0 }
+    );
 }
 
 #[test]
@@ -306,6 +324,8 @@ fn an_interpreter_or_installer_extension_counts_only_on_a_regular_files_own_name
     }
     let files = [
         "a.jse", "a.WSH", "a.hta", "a.reg", "a.msp", "a.cpl", "a.pif",
+        // What follows the last dot counts even when the dot leads the name: the opener takes it for the type.
+        ".bat", ".EXE", ".cmd", ".hta",
     ];
     for name in files {
         std::fs::write(dir.join(name), "x").unwrap();
@@ -352,7 +372,7 @@ fn an_interpreter_or_installer_extension_counts_only_on_a_regular_files_own_name
 #[test]
 fn the_hosts_own_launched_types_are_refused_on_a_files_own_name() {
     let dir = ScratchDir::new("path-links-host-launched");
-    for extension in crate::platform::open::LAUNCHED_FILE_EXTENSIONS {
+    for extension in crate::platform::open::launched_file_extensions() {
         std::fs::write(
             dir.join(format!("a.{}", extension.to_ascii_uppercase())),
             "x",
@@ -361,7 +381,7 @@ fn the_hosts_own_launched_types_are_refused_on_a_files_own_name() {
         std::fs::create_dir_all(dir.join(format!("d.{extension}"))).unwrap();
     }
     let roots = project_roots(&[&dir]);
-    for extension in crate::platform::open::LAUNCHED_FILE_EXTENSIONS {
+    for extension in crate::platform::open::launched_file_extensions() {
         let file = canonical(&dir).join(format!("a.{}", extension.to_ascii_uppercase()));
         let folder = canonical(&dir).join(format!("d.{extension}"));
         let in_project =
@@ -586,7 +606,7 @@ fn a_project_file_spelled_under_a_temp_root_is_still_the_projects() {
         let path = canonical(&dir).join(name);
         let resolved = resolve(path.to_str().unwrap(), None, &temp, &|| roots.clone()).unwrap();
         assert_eq!(resolved.project_root, Some(index), "{name}");
-        assert!(resolved.viewer_only(), "{name}");
+        assert!(!resolved.viewer_only(), "{name}");
     }
     // A temp file outside every project root stays a temp file.
     let elsewhere = ScratchDir::new("path-links-project-in-temp-elsewhere");
@@ -876,9 +896,10 @@ mod with_state {
             .view
             .as_ref()
             .is_none_or(|view| view.worktree.is_none())));
-        // A file in a project is for the viewer alone, whatever it is; a folder and a temp file are not.
+        // Only what the system could launch is for the viewer alone; a folder, a plain file and a
+        // temp file are not.
         let viewer_only: Vec<_> = links.iter().map(|link| link.viewer_only).collect();
-        assert_eq!(viewer_only, [true, true, true, false, false]);
+        assert_eq!(viewer_only, [false, true, true, false, false]);
         assert_eq!(links[3].kind, PathLinkKind::Directory);
     }
 
@@ -938,7 +959,171 @@ mod with_state {
     }
 
     #[test]
-    fn a_plain_project_file_is_never_opened_on_the_host_but_a_folder_and_a_temp_file_are() {
+    fn a_launchable_file_in_a_temp_root_is_never_opened() {
+        let fixture = Fixture::new();
+        let scratch = ScratchDir::new("path-links-open-temp-launchable");
+        std::fs::write(scratch.join("run.sh"), "x").unwrap();
+        let path = canonical(&scratch).join("run.sh");
+        let opened = std::cell::Cell::new(false);
+        let error = open_with(
+            &fixture.state,
+            None,
+            path.to_str().unwrap(),
+            |_| false,
+            |_| {
+                opened.set(true);
+                Ok(())
+            },
+        )
+        .unwrap_err();
+        assert!(!opened.get());
+        let coded = error.downcast_ref::<CodedError>().unwrap();
+        assert_eq!(coded.params["cause"], "launchable");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_project_file_others_could_change_is_shown_but_not_opened_under_a_temp_root() {
+        let fixture = Fixture::new();
+        let directory = ScratchDir::new("path-links-open-project-others");
+        std::fs::create_dir(directory.join("open")).unwrap();
+        std::fs::write(directory.join("open/notes.txt"), "x").unwrap();
+        std::fs::set_permissions(
+            directory.join("open"),
+            std::fs::Permissions::from_mode(0o777),
+        )
+        .unwrap();
+        let project = fixture.project("open-others-project", &directory);
+        let links = probe(
+            &fixture.state,
+            Some(&project),
+            vec!["open/notes.txt".into()],
+        )
+        .unwrap();
+        assert_eq!(links[0].kind, PathLinkKind::File);
+        assert!(!links[0].viewer_only);
+        let opened = std::cell::Cell::new(false);
+        let error = open_with(
+            &fixture.state,
+            Some(&project),
+            "open/notes.txt",
+            |_| false,
+            |_| {
+                opened.set(true);
+                Ok(())
+            },
+        )
+        .unwrap_err();
+        assert!(!opened.get());
+        let coded = error.downcast_ref::<CodedError>().unwrap();
+        assert_eq!(coded.code, error_code::PATH_LINK_REFUSED);
+        assert_eq!(coded.params["cause"], "not_private");
+    }
+
+    fn read_text(
+        fixture: &Fixture,
+        project: Option<&str>,
+        path: &str,
+        limit: usize,
+    ) -> Result<(String, String)> {
+        let file = read(
+            &fixture.state,
+            project,
+            path,
+            limit,
+            &AtomicBool::new(false),
+        )?;
+        Ok((String::from_utf8(file.bytes).unwrap(), file.version))
+    }
+
+    #[test]
+    fn reading_a_link_returns_a_file_of_the_project_or_a_temp_root_whatever_its_type() {
+        let fixture = Fixture::new();
+        let directory = ScratchDir::new("path-links-read");
+        std::fs::write(directory.join("a.txt"), "project").unwrap();
+        std::fs::write(directory.join("run.command"), "launchable").unwrap();
+        let project = fixture.project("read-project", &directory);
+        let scratch = ScratchDir::new("path-links-read-temp");
+        std::fs::write(scratch.join("out.txt"), "scratch").unwrap();
+        let in_temp = canonical(&scratch).join("out.txt");
+        for (project, path, text) in [
+            (Some(project.as_str()), "a.txt", "project"),
+            (Some(project.as_str()), "run.command", "launchable"),
+            (Some(project.as_str()), in_temp.to_str().unwrap(), "scratch"),
+            (None, in_temp.to_str().unwrap(), "scratch"),
+        ] {
+            let (read, version) = read_text(&fixture, project, path, 1024).unwrap();
+            assert_eq!(read, text, "{path}");
+            assert!(!version.is_empty());
+        }
+    }
+
+    #[test]
+    fn reading_a_link_refuses_what_opening_one_would_and_what_is_not_a_file() {
+        let fixture = Fixture::new();
+        let directory = ScratchDir::new("path-links-read-refused");
+        std::fs::create_dir(directory.join("src")).unwrap();
+        std::fs::write(directory.join("big.txt"), "0123456789").unwrap();
+        let project = fixture.project("read-refused-project", &directory);
+        let outside = ScratchDir::new("path-links-read-refused-outside");
+        std::fs::write(outside.join("secret.txt"), "x").unwrap();
+        crate::test_support::symlink(outside.join("secret.txt"), directory.join("link.txt"))
+            .unwrap();
+        let gone = canonical(&ScratchDir::new("path-links-read-refused-gone")).join("missing.txt");
+        let read_code = |project: Option<&str>, path: &str, limit: usize| {
+            let error = read_text(&fixture, project, path, limit).unwrap_err();
+            let coded = error.downcast_ref::<CodedError>().unwrap();
+            (coded.code, coded.params.get("root").cloned())
+        };
+        let project = Some(project.as_str());
+        assert_eq!(
+            read_code(project, "src", 1024).0,
+            error_code::UNSUPPORTED_FILE_TYPE
+        );
+        assert_eq!(
+            read_code(project, "missing.txt", 1024),
+            (error_code::FILE_NOT_FOUND, Some("project".into()))
+        );
+        assert_eq!(
+            read_code(None, gone.to_str().unwrap(), 1024),
+            (error_code::FILE_NOT_FOUND, Some("temporary".into()))
+        );
+        assert_eq!(
+            read_code(project, "link.txt", 1024).0,
+            error_code::OUTSIDE_SCOPE
+        );
+        assert_eq!(
+            read_code(project, "/etc/hosts", 1024).0,
+            error_code::OUTSIDE_SCOPE
+        );
+        assert_eq!(
+            read_code(project, "big.txt", 4).0,
+            error_code::LIMIT_EXCEEDED
+        );
+        assert_eq!(
+            read_code(Some("unknown"), "big.txt", 1024).0,
+            error_code::UNKNOWN_PROJECT
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reading_a_link_refuses_a_temp_file_others_could_change() {
+        let fixture = Fixture::new();
+        let scratch = ScratchDir::new("path-links-read-others");
+        std::fs::create_dir(scratch.join("open")).unwrap();
+        std::fs::write(scratch.join("open/out.txt"), "x").unwrap();
+        std::fs::set_permissions(scratch.join("open"), std::fs::Permissions::from_mode(0o777))
+            .unwrap();
+        let path = canonical(&scratch).join("open/out.txt");
+        let error = read_text(&fixture, None, path.to_str().unwrap(), 1024).unwrap_err();
+        let coded = error.downcast_ref::<CodedError>().unwrap();
+        assert_eq!(coded.code, error_code::PATH_LINK_REFUSED);
+        assert_eq!(coded.params["cause"], "not_private");
+    }
+
+    #[test]
+    fn a_plain_file_a_folder_and_a_temp_file_are_opened_but_never_a_launchable_one() {
         let fixture = Fixture::new();
         let directory = ScratchDir::new("path-links-open-project-file");
         std::fs::write(directory.join("notes.txt"), "x").unwrap();
@@ -959,11 +1144,8 @@ mod with_state {
             (result, opened.into_inner())
         };
         let (result, opened) = attempt("notes.txt");
-        assert!(opened.is_none());
-        let error = result.unwrap_err();
-        let coded = error.downcast_ref::<CodedError>().unwrap();
-        assert_eq!(coded.code, error_code::PATH_LINK_REFUSED);
-        assert_eq!(coded.params["cause"], "launchable");
+        assert!(result.is_ok());
+        assert_eq!(opened, Some(canonical(&directory.join("notes.txt"))));
         let (result, opened) = attempt("src");
         assert!(result.is_ok());
         assert_eq!(opened, Some(canonical(&directory.join("src"))));

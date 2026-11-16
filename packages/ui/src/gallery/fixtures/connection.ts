@@ -2,8 +2,9 @@ import type { Step } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";
 import { consoleOf, projectOf, sessionOf, snapshotState, switchingAccount } from "../../fixtures/builders";
 import { PROTOCOL_GENERATION } from "../../protocol";
+import { staging, homeLab } from "./remoteDaemons";
 import { sessionHolderLink } from "./liveChanges";
-import { PATH_LINK_FILES, PATH_LINK_WORKTREE_FILES } from "./pathLinkFiles";
+import { PATH_LINK_FIXTURE, TEMP_IMAGE_PATH } from "./pathLinkFiles";
 
 const console_ = consoleOf("c-1", "Main");
 const project = projectOf("p-1", console_.id, "Website");
@@ -39,18 +40,7 @@ const starting = sessionOf("s-starting", console_.id, project.id, "Just created,
 /** What the path link scenarios share: the sample output naming files, and which of them the fixture
  * daemon finds (and, for a file the viewer shows, where it reads it from). */
 const PATH_LINK_SCENARIO = {
-  terminal: "paths",
-  files: PATH_LINK_FILES,
-  worktreeFiles: { "wt-side": PATH_LINK_WORKTREE_FILES },
-  pathLinks: {
-    "/Users/dev/code/website/src/summary/Summary.css": { view: { path: "src/summary/Summary.css" } },
-    "/Users/dev/code/website/src/summary/Summary.tsx": { view: { path: "src/summary/Summary.tsx" } },
-    "/Users/dev/code/website/docs/summary-notes.md": { view: { path: "docs/summary-notes.md" } },
-    "/Users/dev/code/website/bin/helper": { view: { path: "bin/helper" } },
-    "/Users/dev/code/website/docs/plans/summary-layout": { kind: "directory", view: { path: "docs/plans/summary-layout/README.md" } },
-    "/Users/dev/code/search-api-experiments/src/ui.ts": { view: { worktree: "wt-side", path: "src/ui.ts" } },
-    "/private/tmp/octoboard/scratchpad/icon/sheet3.png": "file",
-  },
+  ...PATH_LINK_FIXTURE,
   state: connected("open"),
 } satisfies Partial<Scenario>;
 
@@ -78,8 +68,10 @@ export const connectionScenarios: Scenario[] = [
     group: STARTUP_AND_CONNECTION,
     category: "exceptional",
     title: "Daemon of another protocol generation",
-    description: "The whole window is the danger-toned screen, whatever the connection had loaded before, with no connection banner: the title, the line saying the window cannot read the daemon, the remedy for the desktop app (restart the app), then the report guidance sentence and under it the versions of the window (0.1.0) and the daemon (0.2.0). The primary action is Restart, as in the desktop app, with Report issue beside it. A browser offers Reload instead: see the next scenario.",
+    description: "The desktop app's main window keeps its frame while the local daemon cannot be used, whatever the connection had loaded before: the top bar, and a rail holding only the Remote devices button (the remote connections need no daemon), with the danger-toned screen in the content area and no sidebar or connection banner: the title, the line saying the window cannot read the daemon, the remedy for the desktop app (restart the app), then the report guidance sentence and under it the versions of the window (0.1.0) and the daemon (0.2.0). The primary action is Restart, as in the desktop app, with Report issue beside it. The Remote devices page opened from the rail is `remote-devices-offline`; a browser has no such frame: see the scenario after this one. The key-refused and failed-to-start screens stand in the same frame; the failed-to-start one has Restart too, and the key-refused one only Report issue.",
     updater: { currentVersion: "0.1.0" },
+    desktopApp: true,
+    remoteDaemons: { entries: [staging, homeLab] },
     state: snapshotState({ consoles: [console_], projects: [project], sessions, connectionState: "incompatible", daemon: { version: "0.2.0", generation: PROTOCOL_GENERATION + 1 } }),
   },
   {
@@ -103,7 +95,17 @@ export const connectionScenarios: Scenario[] = [
     group: STARTUP_AND_CONNECTION,
     category: "exceptional",
     title: "Never connected, attempts spent",
-    description: "The banner with Try again over a window with nothing to show.",
+    description: "The banner with Try again over a window with nothing to show. A browser has no rail; the desktop app's window is the next scenario.",
+    state: { connectionState: "closed" },
+  },
+  {
+    id: "daemon-closed-before-snapshot-desktop",
+    group: STARTUP_AND_CONNECTION,
+    category: "exceptional",
+    title: "Never connected, attempts spent, in the desktop app",
+    description: "The main window's frame with the rail holding only the Remote devices button, a line in the content area saying the daemon is not answering, and the banner with Try again along the bottom. The other waiting state, still connecting, differs only in its line and has no banner.",
+    desktopApp: true,
+    remoteDaemons: { entries: [staging, homeLab] },
     state: { connectionState: "closed" },
   },
   {
@@ -209,10 +211,30 @@ export const connectionScenarios: Scenario[] = [
     group: TERMINAL,
     category: "normal",
     title: "Terminal edit menu over a file path",
-    description: "The right-click was made on src/summary/Summary.tsx:42:7, so the menu has \"Open in file manager\", with a folder icon, set apart by a separator from the plain menu below it: Copy, Paste and Select all. Right-click anywhere else in the output and the item is not there. Choosing it shows the path in the host's file manager, which the gallery cannot show.",
+    description: "The right-click was made on src/summary/Summary.tsx:42:7, so the menu starts with Open in, set apart by a separator from the plain menu below it: Copy, Paste and Select all. Its submenu is open, with File manager (folder icon) and Default application (external-link icon). Right-click anywhere else in the output and Open in is not there. Choosing either acts on the host, which the gallery cannot show.",
     ...PATH_LINK_SCENARIO,
     clipboard: { text: "echo hello" },
-    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.terminalContextMenu("src/summary/Summary.tsx:42:7")],
+    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.terminalContextMenu("src/summary/Summary.tsx:42:7"), (ui) => ui.press(ui.t("common.openIn"))],
+  },
+  {
+    id: "terminal-edit-menu-path-link-folder",
+    group: TERMINAL,
+    category: "normal",
+    title: "Terminal edit menu over a folder path",
+    description: "The right-click was made on docs/plans/summary-layout, a folder, so Open in holds File manager alone: there is no Default application for a folder. The rest of the menu is as over a file.",
+    ...PATH_LINK_SCENARIO,
+    clipboard: { text: "echo hello" },
+    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.terminalContextMenu("docs/plans/summary-layout"), (ui) => ui.press(ui.t("common.openIn"))],
+  },
+  {
+    id: "terminal-edit-menu-path-link-launchable",
+    group: TERMINAL,
+    category: "normal",
+    title: "Terminal edit menu over a program the system could launch",
+    description: "The right-click was made on bin/helper, a built program, so Open in holds File manager alone: Default application is left out for a file the system could run rather than show, not shown disabled.",
+    ...PATH_LINK_SCENARIO,
+    clipboard: { text: "echo hello" },
+    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.terminalContextMenu("bin/helper"), (ui) => ui.press(ui.t("common.openIn"))],
   },
   {
     id: "terminal-cursor-selection",
@@ -324,9 +346,21 @@ export const connectionScenarios: Scenario[] = [
     title: "A program a click could launch opens in the viewer, not on the host",
     description:
       "Clicking bin/helper, a built program of no type the viewer can show, opened the viewer on it all the same, with a \"This file cannot be displayed\" panel and its size in place of any content. " +
+      "The panel has no Open in default application button, and the header ends with File manager alone, with no Default application: a file the system could run is never offered to the default application. " +
       "Nothing is launched on the host and no other window opens.",
     ...PATH_LINK_SCENARIO,
     steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("bin/helper")],
+  },
+  {
+    id: "terminal-path-link-temp-file",
+    group: TERMINAL,
+    category: "normal",
+    title: "A file in a temporary folder opens in the viewer",
+    description:
+      "Clicking /private/tmp/octoboard/scratchpad/icon/sheet3.png, a screenshot the agent wrote outside the project, opened it in the file viewer over the window, drawn as an image, rather than launching it in an application. " +
+      "The header shows the path on the host, in full, with the file's size, and ends with File manager and Default application, which act on that path.",
+    ...PATH_LINK_SCENARIO,
+    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink(TEMP_IMAGE_PATH)],
   },
   {
     id: "terminal-starting",
@@ -369,25 +403,24 @@ export const connectionScenarios: Scenario[] = [
     id: "terminal-path-link-removed-outside",
     group: TERMINAL,
     category: "exceptional",
-    title: "A path outside the project removed since the link was drawn",
+    title: "A temporary file removed since the link was drawn",
     description:
-      "Clicking /private/tmp/octoboard/scratchpad/icon/sheet3.png, a temporary file the daemon found when the output was drawn but which is gone now, opened the error alert instead of launching anything, titled \"Could not open the path\" and saying the path does not exist any more. " +
-      "It has no remedy line: unlike a project path, there are no project files to find it in. A path that is neither a file nor a folder, or that leads outside the project and the temporary folders, reads alike.",
+      "Clicking /private/tmp/octoboard/scratchpad/icon/sheet3.png, a temporary file the daemon found when the output was drawn but which is gone now, opened the file viewer with the empty-state failure in place of the file: a danger glyph, the heading and the sentence that the path does not exist any more, without repeating the path the header names. No alert is raised. " +
+      "There is no remedy line: unlike a project path, there are no project files to find it in. A path that is neither a file nor a folder, or that leads outside the project and the temporary folders, reads alike.",
     ...PATH_LINK_SCENARIO,
-    pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, "/private/tmp/octoboard/scratchpad/icon/sheet3.png": { kind: "file", gone: true } },
-    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("/private/tmp/octoboard/scratchpad/icon/sheet3.png")],
+    pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, [TEMP_IMAGE_PATH]: { kind: "file", gone: true } },
+    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink(TEMP_IMAGE_PATH)],
   },
   {
     id: "terminal-path-link-refused-unreadable",
     group: TERMINAL,
     category: "exceptional",
-    title: "A temporary path that could not be read",
+    title: "A temporary file that could not be read",
     description:
-      "Clicking /private/tmp/octoboard/scratchpad/icon/sheet3.png, which was a file when the output was drawn but which the system fails to look at now, opened the error alert instead of opening anything, titled \"Could not open the path\" and saying it could not be read, so it is not opened. " +
-      "It has no remedy line. The system's own text, Input/output error (os error 5), is only in the Error details disclosure, closed here.",
+      "Clicking /private/tmp/octoboard/scratchpad/icon/sheet3.png, which was a file when the output was drawn but which the system fails to look at now, opened the file viewer with the empty-state failure in place of the file, saying it could not be read, so it is not opened, with the system's own text, Input/output error (os error 5), on a surface of its own under the sentence. No alert is raised, and there is no remedy line.",
     ...PATH_LINK_SCENARIO,
-    pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, "/private/tmp/octoboard/scratchpad/icon/sheet3.png": { kind: "file", refused: "unreadable", detail: "Input/output error (os error 5)" } },
-    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("/private/tmp/octoboard/scratchpad/icon/sheet3.png")],
+    pathLinks: { ...PATH_LINK_SCENARIO.pathLinks, [TEMP_IMAGE_PATH]: { kind: "file", refused: "unreadable", detail: "Input/output error (os error 5)" } },
+    steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink(TEMP_IMAGE_PATH)],
   },
   {
     id: "terminal-reconnecting",

@@ -25,13 +25,38 @@ stand-ins fail whatever the change. Tests that read repository files through `en
 captured screens, the protocol files) look for them at the Mac checkout's path and fail there unless the files are
 copied to that path; neither failure says anything about the change.
 
-The desktop crate is compile-checked only: nothing on the Mac links its executable, so a change that can affect its
-link — linker arguments or `cargo:rustc-link-*` lines in its `build.rs`, linker flags, embedded resources, a new native
-library — passes `pnpm check:windows` and the release check unverified; report it as such until it was built on
-Windows (the `windows-bundle` job of `.github/workflows/quality.yml` builds the installer). For such a change to the
+The desktop crate is compile-checked only by `pnpm check:windows` and the release check: neither links its
+executable, so a change that can affect its link — linker arguments or `cargo:rustc-link-*` lines in its `build.rs`,
+linker flags, embedded resources, a new native library — passes them unverified. It does link on the Mac by hand (the
+build in the next section), which shows the link works with `lld-link`; report such a change as unverified on
+`link.exe` until it was built on Windows (the `windows-bundle` job of `.github/workflows/quality.yml` builds the
+installer). For such a change to the
 daemon, the link `pnpm check:windows` runs leaves `octoboardd.exe` under `target/x86_64-pc-windows-msvc/debug/`; check
 what landed in it with `llvm-readobj --coff-resources`. `cargo xwin` links with an `lld-link` that has neither libxml2
 nor `mt.exe`, so anything that asks the linker to merge manifests fails there while `link.exe` on Windows accepts it.
+
+## Run the app on a Windows machine from a build made on the Mac, laid out as the per-user install
+
+Applies when the app has to run on a Windows machine or VM that cannot build it (a small VM disk is enough to rule
+that out). Build `packages/ui/dist` first (both executables embed it), then cross-build on the Mac with
+`cargo xwin build --release --target x86_64-pc-windows-msvc`, once with `-p octoboardd --bin octoboardd --features
+embedded-ui` and once with `-p octoboard --features tauri/custom-protocol`, in the environment `windowsCheckEnv()`
+(`scripts/lib/windows-toolchain.mjs`) returns plus `TAURI_CONFIG={"bundle":{"externalBin":[],"resources":[]}}`, as
+`scripts/cargo.mjs` sets for the cross-check; run each under `node scripts/verify/heavy.mjs` so it waits for the
+machine's heavy-step slot. Copy `Octoboard.exe`, `octoboardd.exe` and the x64 `conpty.dll` and `OpenConsole.exe`
+(`scripts/fetch-conpty.mjs`) into `%LOCALAPPDATA%\Octoboard`, the per-user install's directory, not a folder of your
+own: what looks for the installed daemon there, a remote host lookup included, finds it only at that path. The jump
+list, the system menu, the flyout and the pipe all ran from that layout.
+
+## Script a Windows GUI step as one task, and change appearance the way Settings does
+
+Applies when a GUI step on Windows is driven from a script (a scheduled task on the user's desktop) and read off a
+screen dump. The flyout closes as soon as it loses focus, so one script opens it and acts on it, and the screen dump
+is taken while that script is still running (sleeping after the action), never from a later step.
+
+Light or dark app mode written to the registry does not reach running apps until `WM_SETTINGCHANGE` with
+`"ImmersiveColorSet"` is broadcast, so without the broadcast the app reads as ignoring the change; High Contrast can
+be toggled from a script with `SystemParametersInfo(SPI_SETHIGHCONTRAST)`.
 
 ## Confirm Windows behaviour as a standard user on that user's own desktop, not over ssh or as an administrator
 

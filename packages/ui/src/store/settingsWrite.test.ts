@@ -24,10 +24,10 @@ describe("createSettingsWriter", () => {
   it("sends the changes based on the version the store holds of each path, leaving unversioned paths unchecked", async () => {
     const { write, sent } = setup();
     await write({ daemon_update_check: false }, ["daemon_update_check"]);
-    await write({ agent_language: "de" }, ["agent_language"]);
+    await write({ interface_language: "de" }, ["interface_language"]);
     expect(sent).toEqual([
       { type: "update_settings", daemon_update_check: false, base_versions: { daemon_update_check: 3 } },
-      { type: "update_settings", agent_language: "de", base_versions: undefined },
+      { type: "update_settings", interface_language: "de", base_versions: undefined },
     ]);
   });
 

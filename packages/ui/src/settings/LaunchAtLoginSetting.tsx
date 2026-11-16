@@ -3,7 +3,7 @@ import React, { useRef } from "react";
 import { raiseError } from "../components/alerts/raiseError";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { ActionableError } from "../errors/actionableError";
-import { InlineReference } from "../i18n/InlineReference";
+import { InlinePath, pathText } from "../i18n/InlinePath";
 import { Message, useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import { Button } from "../primitives";
@@ -34,10 +34,10 @@ export function LaunchAtLoginSetting(): React.ReactElement | null {
     try {
       await launchAtLogin.openSystemSettings();
     } catch (cause) {
-      const pane = t("settings.launchAtLogin.pane");
-      raiseError(new ActionableError(t("settings.launchAtLogin.openFailed", { pane }), "none", { cause }), {
+      const steps = [t("settings.launchAtLogin.step.general"), t("settings.launchAtLogin.step.loginItems")];
+      raiseError(new ActionableError(t("settings.launchAtLogin.openFailed", { path: pathText(steps) }), "none", { cause }), {
         title: t("settings.launchAtLogin.openFailedTitle"),
-        content: <Message id="settings.launchAtLogin.openFailed" params={{ pane: <InlineReference dir="auto" wrap>{pane}</InlineReference> }} />,
+        content: <Message id="settings.launchAtLogin.openFailed" params={{ path: <InlinePath steps={steps} /> }} />,
       });
     }
   };

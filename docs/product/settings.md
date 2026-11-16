@@ -29,8 +29,8 @@ the settings that match what is typed (see `docs/product/searching-settings.md`)
 
 A console session can read and change the default clone directory, the automatic pulling of repositories, the
 automatic deletion of archived sessions whose conversation is gone, resuming sessions on start, Prevent sleep and when
-it holds, closing idle shell terminals with their panel, the application-wide git workflow settings, the agent language
-(see "The agent language" in `docs/product/language.md`) and the daemon's own
+it holds, closing idle shell terminals with their panel, the application-wide git workflow settings, the language the
+daemon holds for the user (see "The language the daemon holds" in `docs/product/language.md`) and the daemon's own
 automatic update check and update channel. It can read, but not change, automatic account
 selection, Claude compatibility, Codex compatibility, the agent tags, the agent accounts (without their directories) and the trusted
 folders. The switches of Agent behavior, the approval modes, and the switches that switch accounts at the usage limit
@@ -199,7 +199,7 @@ client in the same way (see "Check for updates automatically" in `docs/product/u
 
 ## General
 
-App-wide settings: the **Interface language** and **Agent language** rows, then the groups **Startup**, **Window**,
+App-wide settings: the **Language** row, then the groups **Startup**, **Window**,
 **Power**, **Terminals** and **Sorting**, each under a heading (see "Group headings" above), some of them only in the desktop application. Which rows
 each group holds, where each is shown and what each does are in `docs/product/general-settings.md`.
 

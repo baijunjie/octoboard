@@ -10,7 +10,7 @@ record both succeed.
 
 Four kinds of record are edited through a form, and each keeps a version for every field a form edits:
 
-- **the application settings**: every setting Settings stores in the daemon — each switch, the agent language, when
+- **the application settings**: every setting Settings stores in the daemon — each switch, the language, when
   Prevent sleep holds, the default clone directory, each of the five git workflow settings, each agent's tags and each setting an agent's
   provider declares;
 - **a console**: its name, both default agents, its avatar, its console session instructions, and for each agent its
@@ -25,7 +25,7 @@ settings tool or an import.
 **Checked** — refused when a field they change has moved past the version they were based on:
 
 - the console dialog, the project dialog when editing a project, and the account dialog when editing an account;
-- the Settings switches whose value the daemon holds, the Agent language, When to prevent sleep, Where sessions develop
+- the Settings switches whose value the daemon holds, the Language, When to prevent sleep, Where sessions develop
   and Delivery choices, the default clone directory and each agent's tags;
 - a configuration import that applies settings (see "Applying the import" in
   `docs/product/configuration-export-and-import-dialogs.md`).

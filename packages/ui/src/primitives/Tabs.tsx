@@ -7,12 +7,14 @@ import { useTabScrollLabels } from "./tabScrollLabels";
 
 /** A tab strip and its panels: HeroUI's tabs. `filled` (the default) is HeroUI's filled strip; `underline` marks the
  * selected tab with a line under it. A key is a tab's and its panel's `id`; with `selectedKey` the selection is the
- * caller's, told of changes by `onSelectionChange`, and with `defaultSelectedKey` it is the strip's own. */
-export function Tabs({ variant = "filled", orientation, selectedKey, defaultSelectedKey, onSelectionChange, className, children }: {
+ * caller's, told of changes by `onSelectionChange`, and with `defaultSelectedKey` it is the strip's own. The tabs keyed
+ * in `disabledKeys` cannot be chosen. */
+export function Tabs({ variant = "filled", orientation, selectedKey, defaultSelectedKey, disabledKeys, onSelectionChange, className, children }: {
   variant?: "filled" | "underline";
   orientation?: "horizontal" | "vertical";
   selectedKey?: string;
   defaultSelectedKey?: string;
+  disabledKeys?: readonly string[];
   onSelectionChange?: (key: string) => void;
   className?: string;
   children: React.ReactNode;
@@ -24,6 +26,7 @@ export function Tabs({ variant = "filled", orientation, selectedKey, defaultSele
       isDisabled={useDisabled()}
       selectedKey={selectedKey}
       defaultSelectedKey={defaultSelectedKey}
+      disabledKeys={disabledKeys}
       onSelectionChange={onSelectionChange && ((key) => onSelectionChange(String(key)))}
       className={className}
     >

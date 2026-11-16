@@ -16,6 +16,16 @@
   -webkit-mask-position: center;
 }
 
+/* The waiting dot after a tab's name, a status dot on a surface: the soft warning's foreground, which reads 3:1 on the
+   flyout's surface in both themes where the solid warning fill (1.87:1 in light) does not. */
+.tray-flyout-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background-color: var(--warning-soft-foreground);
+}
+
 .tray-flyout-bar {
   --meter-fill: var(--tray-flyout-fill, currentColor);
 }
@@ -25,6 +35,11 @@
 }
 
 @media (forced-colors: active) {
+  .tray-flyout-dot {
+    forced-color-adjust: none;
+    background-color: Highlight;
+  }
+
   .tray-flyout-picture {
     forced-color-adjust: none;
     background-color: currentColor;

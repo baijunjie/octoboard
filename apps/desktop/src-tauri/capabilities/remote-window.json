@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "remote-window",
+  "description": "for the window of a daemon other than the local one alone, which holds the connection to it: forwarding the loopback ports of the daemon's machine for the addresses the window opens (with the list of the ports and Stop), and storing and opening a copy of a file of the daemon's machine on this computer",
+  "windows": [
+    "daemon-*"
+  ],
+  "permissions": [
+    "allow-remote-forward",
+    "allow-remote-files"
+  ]
+}

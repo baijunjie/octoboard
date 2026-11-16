@@ -1,11 +1,13 @@
-import { ClipboardPaste, Copy, FolderOpen, TextSelect } from "lucide-react";
+import { ClipboardPaste, Copy, FolderOpen, SquareArrowOutUpRight, TextSelect } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
 import { ActionMenu } from "../components/menus/ActionMenu";
+import type { ActionMenuEntry } from "../components/menus/menuEntries";
 import { copyText } from "../components/host/copyText";
-import { useLatest } from "../components/hooks/useLatest";
+import { useLatest, useStableHandler } from "../components/hooks/useLatest";
 import { ActionableError } from "../errors/actionableError";
 import { useT } from "../i18n/react";
+import { useDaemon } from "../store";
 import { usePlatform } from "../platform/react";
 import type { PathLinkTarget } from "./links/pathLinks";
 import { OPTION_FORCES_SELECTION, type TerminalController } from "./TerminalController";
@@ -19,6 +21,8 @@ export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId }:
 }): React.ReactElement {
   const t = useT();
   const { clipboard } = usePlatform();
+  // The host's file manager and applications are this machine's only where the daemon shares it.
+  const { isLocal } = useDaemon();
   const currentSession = useLatest(sessionId);
   const mounted = useRef(true);
   useEffect(() => {
@@ -27,7 +31,7 @@ export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId }:
   }, []);
   const [selection, setSelection] = useState("");
   const [mouseReporting, setMouseReporting] = useState(false);
-  // The path link under the pointer when the menu opened, which the menu offers to show in the file manager.
+  // The path link under the pointer when the menu opened, which the menu offers to open in the file manager or the default application.
   const [pathLink, setPathLink] = useState<PathLinkTarget>();
   const [inputSession, setInputSession] = useState<string>();
   const paste = () => {
@@ -46,6 +50,19 @@ export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId }:
       (cause: unknown) => raiseError(new ActionableError(t("terminal.pasteFailed"), "clipboardPaste", { cause }), { title: t("terminal.pasteFailedTitle") }),
     );
   };
+  const revealLink = useStableHandler((link: PathLinkTarget) => void controllerRef.current?.revealPathLink(link));
+  const openLinkInDefaultApplication = useStableHandler((link: PathLinkTarget) => void controllerRef.current?.openPathLinkInDefaultApplication(link));
+  // Open in, as a row of the project pane has it: File manager, then for a file Default application, which a file the
+  // system could launch rather than show is not offered.
+  const openIn: ActionMenuEntry[] =
+    pathLink && isLocal !== false
+      ? [
+        { label: t("common.fileManager"), icon: FolderOpen, onClick: () => revealLink(pathLink) },
+        ...(pathLink.kind === "file" && !pathLink.viewerOnly
+          ? [{ label: t("common.defaultApplication"), icon: SquareArrowOutUpRight, onClick: () => openLinkInDefaultApplication(pathLink) }]
+          : []),
+      ]
+      : [];
   return (
     <ActionMenu
       label={t("terminal.actions")}
@@ -65,9 +82,7 @@ export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId }:
         controller?.focus();
       }}
       items={[
-        ...(pathLink
-          ? [{ label: t("viewer.openInFileManager"), icon: FolderOpen, onClick: () => { void controllerRef.current?.revealPathLink(pathLink); } }, "separator" as const]
-          : []),
+        ...(openIn.length > 0 ? [{ label: t("common.openIn"), icon: SquareArrowOutUpRight, items: openIn }, "separator" as const] : []),
         {
           label: t("terminal.copy"), icon: Copy, disabled: !selection,
           reason: !selection && mouseReporting ? { state: t(OPTION_FORCES_SELECTION ? "terminal.copyHint.mac" : "terminal.copyHint") } : undefined,

@@ -1,19 +1,17 @@
 //! One window per daemon: the main window shows the local daemon, the sidecar, and each other
 //! daemon the application is connected to has a window of its own, labelled `daemon-<n>`, which is
 //! told the daemon's address, the name to show for it and the identity what it remembers of that
-//! daemon is kept under. This module keeps which window shows which daemon, and which window the
-//! user focused last, which the menu's Settings and About and a reopen of the application go to.
+//! daemon is kept under. This module hands out those labels and keeps which window the user
+//! focused last, which a reopen of the application and the menu's Settings and About go to.
 //!
-//! A remote window starts on the application's connect page (`remote::open_connect_page`) when it
-//! is opened before a daemon is chosen, and becomes that daemon's window once connected
-//! (`show_in`). The windows themselves are built in `window_factory`.
+//! A remote window is opened only for a connection that is already held. The windows themselves
+//! are built in `window_factory`.
 //!
 //! The application's own features stay with the main window: a remote window is given fewer host
 //! facts (`host_facts::for_remote_window`) and fewer shell commands (`capabilities/remote.json`),
 //! and the shell's events for the application (the exit flow, the menu bar icon's Check for
 //! updates, the local daemon ending) are sent to the main window alone.
 
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
@@ -39,38 +37,27 @@ pub struct RemoteDaemon {
 
 #[derive(Default)]
 pub struct DaemonWindows {
-    /// The remote windows that exist, by label: the identity of the daemon each shows, `None` while
-    /// it shows the connect page (`window_factory::open_connect_window`).
-    remotes: Mutex<HashMap<String, Option<String>>>,
     next: AtomicU64,
     /// The label of the window the user focused last, while it exists.
     last_focused: Mutex<Option<String>>,
 }
 
 impl DaemonWindows {
-    fn remotes(&self) -> std::sync::MutexGuard<'_, HashMap<String, Option<String>>> {
-        self.remotes.lock().unwrap_or_else(|e| e.into_inner())
-    }
-
-    /// Records a new remote window showing the daemon `identity`, or the connect page for `None`,
-    /// and returns its label.
-    pub fn register(&self, identity: Option<String>) -> String {
-        let label = format!(
+    /// A label for a new remote window.
+    pub fn register(&self) -> String {
+        format!(
             "{REMOTE_LABEL_PREFIX}{}",
             self.next.fetch_add(1, Ordering::SeqCst) + 1
-        );
-        self.remotes().insert(label.clone(), identity);
-        label
+        )
     }
 
-    /// Whether the window labelled `label` is a remote window on the connect page.
-    pub fn shows_connect_page(&self, label: &str) -> bool {
-        matches!(self.remotes().get(label), Some(None))
+    /// Records that the user focused the window labelled `label`.
+    fn note_focused(&self, label: &str) {
+        *self.last_focused.lock().unwrap_or_else(|e| e.into_inner()) = Some(label.to_owned());
     }
 
     /// Forgets the window labelled `label`, which has closed or never opened.
     pub fn forget(&self, label: &str) {
-        self.remotes().remove(label);
         let mut last = self.last_focused.lock().unwrap_or_else(|e| e.into_inner());
         if last.as_deref() == Some(label) {
             *last = None;
@@ -83,23 +70,9 @@ pub fn is_main(label: &str) -> bool {
     label == MAIN_WINDOW_LABEL
 }
 
-/// Records a new remote window showing the daemon `identity`, or the connect page for `None`, and
-/// returns its label.
-pub fn register(app: &AppHandle, identity: Option<String>) -> String {
-    app.state::<DaemonWindows>().register(identity)
-}
-
-/// Records that the window labelled `label`, which showed the connect page, now shows the daemon
-/// `identity`.
-pub fn show_in(app: &AppHandle, label: &str, identity: String) {
-    app.state::<DaemonWindows>()
-        .remotes()
-        .insert(label.to_owned(), Some(identity));
-}
-
-/// Whether the window labelled `label` is a remote window on the connect page.
-pub fn on_connect_page(app: &AppHandle, label: &str) -> bool {
-    app.state::<DaemonWindows>().shows_connect_page(label)
+/// Takes a label for a new remote window.
+pub fn register(app: &AppHandle) -> String {
+    app.state::<DaemonWindows>().register()
 }
 
 /// Forgets the window labelled `label`, which has closed.
@@ -109,10 +82,7 @@ pub fn forget(app: &AppHandle, label: &str) {
 
 /// Records that the user focused the window labelled `label`.
 pub fn note_focused(app: &AppHandle, label: &str) {
-    *app.state::<DaemonWindows>()
-        .last_focused
-        .lock()
-        .unwrap_or_else(|e| e.into_inner()) = Some(label.to_owned());
+    app.state::<DaemonWindows>().note_focused(label);
 }
 
 /// The window the user focused last, while it exists, else the main window.
@@ -127,8 +97,8 @@ pub fn last_focused_or_main(app: &AppHandle) -> Option<WebviewWindow> {
         .or_else(|| app.get_webview_window(MAIN_WINDOW_LABEL))
 }
 
-/// The window a menu item that asks the UI for something goes to: the one focused last, when it is
-/// on screen, else the main window.
+/// The window a menu item that asks the UI for something goes to: the window focused last, when
+/// it is on screen, else the main window.
 pub fn menu_target(app: &AppHandle) -> Option<WebviewWindow> {
     last_focused_or_main(app)
         .filter(|window| window.is_visible().unwrap_or(false))
@@ -159,6 +129,8 @@ pub fn remote_title(app_name: &str, remote: &RemoteDaemon) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use super::*;
 
     #[test]
@@ -241,15 +213,26 @@ mod tests {
     }
 
     #[test]
-    fn a_window_on_the_connect_page_becomes_a_daemon_s_and_is_forgotten_once_gone() {
+    fn labels_are_handed_out_once_each() {
         let windows = DaemonWindows::default();
-        let page = windows.register(None);
-        let shown = windows.register(Some("ssh:u@h:22".into()));
-        assert_ne!(page, shown);
-        assert!(windows.shows_connect_page(&page));
-        assert!(!windows.shows_connect_page(&shown));
-        windows.forget(&page);
-        assert!(!windows.shows_connect_page(&page));
+        let first = windows.register();
+        let second = windows.register();
+        assert_ne!(first, second);
+        assert!(first.starts_with(REMOTE_LABEL_PREFIX));
+    }
+
+    #[test]
+    fn the_window_focused_last_is_forgotten_once_it_is_gone() {
+        let windows = DaemonWindows::default();
+        windows.note_focused("daemon-1");
+        windows.note_focused("daemon-2");
+        let last = |windows: &DaemonWindows| windows.last_focused.lock().unwrap().clone();
+        assert_eq!(last(&windows).as_deref(), Some("daemon-2"));
+        // Another window's closing leaves it be.
+        windows.forget("daemon-1");
+        assert_eq!(last(&windows).as_deref(), Some("daemon-2"));
+        windows.forget("daemon-2");
+        assert_eq!(last(&windows), None);
     }
 
     /// Every command `lib.rs` registers with the invoke handler.
@@ -268,8 +251,7 @@ mod tests {
     fn the_capabilities_name_the_windows_the_shell_opens() {
         let (main, _) = capability("default.json");
         assert_eq!(main, [MAIN_WINDOW_LABEL]);
-        // A remote window, or a window on the connect page, is `daemon-<n>`; the main window and
-        // the flyout are not among them.
+        // A remote window is `daemon-<n>`; the main window and the flyout are not among them.
         let (remote, _) = capability("remote.json");
         assert_eq!(remote, [format!("{REMOTE_LABEL_PREFIX}*")]);
         assert!(!is_main("daemon-1"));
@@ -277,6 +259,34 @@ mod tests {
         assert!(!crate::tray::flyout::FLYOUT_LABEL.starts_with(REMOTE_LABEL_PREFIX));
         let (flyout, _) = capability("flyout.json");
         assert_eq!(flyout, [crate::tray::flyout::FLYOUT_LABEL]);
+    }
+
+    #[test]
+    fn what_acts_on_a_daemon_s_connection_is_for_the_daemon_windows_alone() {
+        let (windows, permissions) = capability("remote-window.json");
+        assert_eq!(windows, [format!("{REMOTE_LABEL_PREFIX}*")]);
+        let own = reachable("remote-window.json");
+        for command in [
+            "remote_link_address",
+            "remote_forwards_list",
+            "remote_forward_stop",
+            "remote_file_begin",
+            "remote_file_write",
+            "remote_file_open",
+            "remote_file_discard",
+        ] {
+            assert!(own.contains(command), "{command}");
+        }
+        for name in ["default.json", "remote.json", "flyout.json"] {
+            let (_, others) = capability(name);
+            assert!(
+                permissions
+                    .iter()
+                    .all(|permission| !others.contains(permission)),
+                "{name}"
+            );
+            assert!(reachable(name).is_disjoint(&own), "{name}");
+        }
     }
 
     #[test]
@@ -303,6 +313,16 @@ mod tests {
             "pick_directory",
             "remote_login_status",
             "open_remote_login_settings",
+            // The remote daemons, which the Remote devices page of the main window keeps.
+            "remote_daemons_list",
+            "remote_daemon_save",
+            "remote_daemon_remove",
+            "remote_daemon_connect",
+            "remote_daemons_status",
+            "remote_daemon_disconnect",
+            "remote_connect_pending_take",
+            "remote_page_requested_take",
+            "main_window_show",
             // The flyout's own.
             "tray_flyout_model",
             "tray_flyout_size",
@@ -317,15 +337,6 @@ mod tests {
     fn a_remote_window_is_allowed_what_it_needs_of_the_shell() {
         let remote = reachable("remote.json");
         for command in [
-            "remote_daemons_list",
-            "remote_daemon_save",
-            "remote_daemon_remove",
-            "remote_daemon_connect",
-            "remote_daemons_status",
-            "remote_daemon_disconnect",
-            "remote_window_new",
-            "remote_window_open",
-            "main_window_show",
             "set_tray_menu",
             "set_keep_awake_shown",
             "bring_to_front",
@@ -359,10 +370,20 @@ mod tests {
     }
 
     #[test]
-    fn the_local_window_may_call_every_command_but_the_flyout_s() {
+    fn the_local_window_may_call_every_command_but_the_flyout_s_and_the_remote_window_s_own() {
         let main = reachable("default.json");
+        // The forwarding and file commands act on a remote window's own connection, which the local window has none of.
+        let remote_only = [
+            "remote_link_address",
+            "remote_forwards_list",
+            "remote_forward_stop",
+            "remote_file_begin",
+            "remote_file_write",
+            "remote_file_open",
+            "remote_file_discard",
+        ];
         for command in registered_commands() {
-            if command.starts_with("tray_flyout_") {
+            if command.starts_with("tray_flyout_") || remote_only.contains(&command.as_str()) {
                 assert!(!main.contains(&command), "{command}");
             } else {
                 assert!(
@@ -375,11 +396,15 @@ mod tests {
 
     #[test]
     fn every_command_the_shell_registers_is_allowed_to_some_window() {
-        let allowed: std::collections::BTreeSet<String> =
-            ["default.json", "remote.json", "flyout.json"]
-                .into_iter()
-                .flat_map(reachable)
-                .collect();
+        let allowed: std::collections::BTreeSet<String> = [
+            "default.json",
+            "remote.json",
+            "remote-window.json",
+            "flyout.json",
+        ]
+        .into_iter()
+        .flat_map(reachable)
+        .collect();
         let registered = registered_commands();
         assert!(registered.len() > 30, "{registered:?}");
         for command in &registered {

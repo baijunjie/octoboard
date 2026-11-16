@@ -5,11 +5,11 @@ import { FieldErrorMessage } from "./FieldErrorMessage";
 import { TextFieldDescription, TextLengthHint } from "./TextFieldDescription";
 import { Input, Label, TextField } from "../../primitives";
 
-/** A labelled single-line text field, in HeroUI's variant for a field on a surface, since it is
- * always in a dialog. `ltr` lays out a value that always reads left to right (a
- * path, a URL) whatever the UI's direction. The placeholder is a required example or optional default; `description` carries
- * anything else the field has to say, and `errorMessage` marks the field invalid and says what is
- * wrong with it, right under the field — HeroUI hides the description for as long as that lasts.
+/** A labelled single-line text field, in HeroUI's variant for a field on a surface, since it is always on one (a
+ * dialog, or a card). `ltr` lays out a value that always reads left to right (a path, a URL) whatever the UI's
+ * direction. The placeholder is a required example or optional default; `description` carries anything else the field
+ * has to say, and `errorMessage` marks the field invalid and says what is wrong with it, right under the field —
+ * HeroUI hides the description for as long as that lasts.
  * `trailing` is a control that belongs to the field, such as a browse button, and sits beside the
  * input. `endAdornment` is a decoration inside the field's frame at its end (a spinner), seated by
  * HeroUI's input group; it is not interactive. The field keeps one structure for as long as
@@ -31,6 +31,7 @@ export function TextInput({
   isDisabled,
   characterLimit,
   type,
+  onBlur,
 }: {
   label: string;
   /** A visible label that shows less than the field's name ("Directory" for "Directory for Notes"): the
@@ -53,8 +54,11 @@ export function TextInput({
   characterLimit?: number;
   /** `password` for a secret: its characters are hidden and the browser is told not to remember it. */
   type?: "password";
+  /** Called as the field loses focus, after it has shown its trimmed value. */
+  onBlur?: () => void;
 }): React.ReactElement {
-  const field = useTrimmedField(value, onChange);
+  const trimmed = useTrimmedField(value, onChange);
+  const field = { ...trimmed, onBlur: () => { trimmed.onBlur(); onBlur?.(); } };
   const invalid = errorMessage !== undefined && errorMessage !== null && errorMessage !== false && errorMessage !== "";
   // Dialog fields hold application metadata, so 1Password must not offer identity or login fills.
   // With an adornment the direction is the input group's, so the affix stays on the input's side whatever the UI's

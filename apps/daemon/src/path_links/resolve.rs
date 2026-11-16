@@ -10,97 +10,6 @@ use super::{ProjectRoots, TempRoots};
 use crate::hostfs::{is_not_found, lexically_normalise, lexically_within};
 use crate::protocol::{error_code, CodedError, PathLinkKind};
 
-/// Extensions of things the system launches instead of showing, matched without case on every
-/// component of a path below its root (a bundle is a directory carrying one). Besides bundles, these
-/// are file types macOS acts on when opened, shell scripts and desktop entries; a folder with such a
-/// name is refused as well.
-const ANY_COMPONENT_EXTENSIONS: &[&str] = &[
-    "app",
-    "appex",
-    "bundle",
-    "framework",
-    "plugin",
-    "kext",
-    "xpc",
-    "prefpane",
-    "saver",
-    "workflow",
-    "action",
-    "command",
-    "tool",
-    "terminal",
-    "scpt",
-    "scptd",
-    "pkg",
-    "mpkg",
-    "dmg",
-    "sh",
-    "bash",
-    "zsh",
-    "desktop",
-    "webloc",
-    "inetloc",
-    "jar",
-    "term",
-    "fileloc",
-    "afploc",
-    "ftploc",
-    "mailloc",
-    "newsloc",
-    "atloc",
-    "nslloc",
-    "url",
-    "csh",
-    "tcsh",
-    "ksh",
-    "fish",
-    "mobileconfig",
-    "shortcut",
-];
-
-/// Extensions of files that an interpreter or installer handles by default on macOS or Linux (Python
-/// launcher, Java Web Start, Wine for Windows programs, package and AppImage installers), matched
-/// without case on the final component only and only when it is a regular file: as a folder name
-/// (`vendor/github.com/`) the same text launches nothing. The host's own such types
-/// ([`crate::platform::open::LAUNCHED_FILE_EXTENSIONS`]) are matched the same way.
-const FINAL_FILE_EXTENSIONS: &[&str] = &[
-    "py",
-    "pyw",
-    "pyc",
-    "pyo",
-    "pyz",
-    "pl",
-    "rb",
-    "php",
-    "ps1",
-    "vbs",
-    "vbe",
-    "wsf",
-    "jnlp",
-    "exe",
-    "msi",
-    "bat",
-    "cmd",
-    "com",
-    "scr",
-    "appimage",
-    "run",
-    "bin",
-    "deb",
-    "rpm",
-    "flatpak",
-    "flatpakref",
-    "flatpakrepo",
-    "snap",
-    "jse",
-    "wsh",
-    "hta",
-    "reg",
-    "msp",
-    "cpl",
-    "pif",
-];
-
 /// A path the terminal's text names, as it resolves.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Resolved {
@@ -109,8 +18,8 @@ pub struct Resolved {
     /// ends in; none when the spelling names a folder (it ends in `/`, `/.` or `..`).
     pub spelled: Option<PathBuf>,
     pub kind: PathLinkKind,
-    /// What is found could be launched by the system: for a file in a project root, kept to be
-    /// viewed rather than refused outright.
+    /// What is found could be launched by the system. A file of that kind is kept to be viewed
+    /// rather than refused outright; a folder of that kind is not reachable at all.
     pub launchable: bool,
     /// The project root it was found in (an index of `ProjectRoots::canonical`); none in a temp root
     /// that is not also inside a project.
@@ -118,11 +27,10 @@ pub struct Resolved {
 }
 
 impl Resolved {
-    /// Whether a link shows this only in the file viewer and never opens it on the host: any file
-    /// in a project root, whatever its type, since the system's default application for a file may
-    /// run it.
+    /// Whether the host never opens this: what the system could launch rather than show, which a
+    /// link shows only in the file viewer.
     pub fn viewer_only(&self) -> bool {
-        self.launchable || (self.project_root.is_some() && self.kind == PathLinkKind::File)
+        self.launchable
     }
 }
 
@@ -321,14 +229,8 @@ pub fn reach(
         if let Some(index) = roots.innermost(&canonical) {
             return in_project(canonical, spelled_as(absolute), &roots, index, temp);
         }
-        return reachable(
-            canonical,
-            spelled_as(absolute),
-            root,
-            temp.check_owner,
-            false,
-        )
-        .map_err(Unreached::Refused);
+        return reachable(canonical, spelled_as(absolute), root, temp.check_owner)
+            .map_err(Unreached::Refused);
     }
     let roots = project();
     if !roots
@@ -347,7 +249,9 @@ pub fn reach(
 
 /// `canonical`, found in the project root `index` of `roots`, as [`reachable`] judges it there. A
 /// folder of a project kept under a temp root is still handed to the host opener, so the temp
-/// root's rule that nobody else could have placed it holds for it however it was spelled.
+/// root's rule that nobody else could have placed it holds for it however it was spelled; a file
+/// of one is only shown, and `open` checks it when it is to be opened (see
+/// [`super::open_with`]).
 fn in_project(
     canonical: PathBuf,
     spelled: Option<PathBuf>,
@@ -355,7 +259,7 @@ fn in_project(
     index: usize,
     temp: &TempRoots,
 ) -> Result<Resolved, Unreached> {
-    let mut resolved = reachable(canonical, spelled, &roots.canonical[index], false, true)
+    let mut resolved = reachable(canonical, spelled, &roots.canonical[index], false)
         .map_err(Unreached::Refused)?;
     if resolved.kind == PathLinkKind::Directory
         && temp.check_owner
@@ -383,14 +287,13 @@ fn canonical_or_gone(path: &Path, in_project: impl FnOnce() -> bool) -> Result<P
 
 /// `canonical`, spelled `spelled` (none when the spelling names the directory) and found inside
 /// `root`, with what it is, unless it is not something to show: not a file or folder, or (with
-/// `check_owner`) not solely the daemon's user's from `root` down. What could be launched is refused
-/// too, except a file in a project (`in_project`), which is kept for the viewer.
+/// `check_owner`) not solely the daemon's user's from `root` down. A folder that could be launched
+/// is refused too; a file that could is kept for the viewer, wherever it lies.
 fn reachable(
     canonical: PathBuf,
     spelled: Option<PathBuf>,
     root: &Path,
     check_owner: bool,
-    in_project: bool,
 ) -> Result<Resolved, Refusal> {
     let metadata = std::fs::metadata(&canonical).map_err(|err| Refusal::of_io(&err))?;
     let kind = if metadata.is_dir() {
@@ -401,7 +304,7 @@ fn reachable(
         return Err(Refusal::NotAFileOrFolder);
     };
     let launchable = launchable(&canonical, root, &metadata);
-    if launchable && !(in_project && kind == PathLinkKind::File) {
+    if launchable && kind != PathLinkKind::File {
         return Err(Refusal::Launchable);
     }
     if check_owner && !closed_to_others(&canonical, root) {
@@ -454,7 +357,7 @@ pub fn own_entry(
 /// Whether `path`, a resolved path or a link in a resolved folder, is private if it lies in a temp
 /// root: every entry from the one below that root down is the daemon user's and closed to others.
 /// Always so outside a temp root.
-fn private_in_temp(path: &Path, temp: &TempRoots) -> bool {
+pub(super) fn private_in_temp(path: &Path, temp: &TempRoots) -> bool {
     temp.canonical
         .iter()
         .find(|root| path.starts_with(root))
@@ -476,23 +379,34 @@ fn closed_to_others(canonical: &Path, root: &Path) -> bool {
 }
 
 /// Whether the system could run what `canonical` names, or a bundle it sits in, rather than show it.
-fn launchable(canonical: &Path, root: &Path, metadata: &std::fs::Metadata) -> bool {
+pub(super) fn launchable(canonical: &Path, root: &Path, metadata: &std::fs::Metadata) -> bool {
     if crate::platform::fs::is_executable(canonical) {
         return true;
     }
     let below = canonical.strip_prefix(root).unwrap_or(canonical);
-    let has_extension = |name: &std::ffi::OsStr, list: &[&str]| {
+    let lists = crate::platform::open::launchable_extensions();
+    let has_extension = |name: &std::ffi::OsStr, list: &[String]| {
         Path::new(name).extension().is_some_and(|extension| {
-            list.contains(&extension.to_string_lossy().to_ascii_lowercase().as_str())
+            let extension = extension.to_string_lossy().to_ascii_lowercase();
+            list.contains(&extension)
         })
     };
+    // What follows the last dot of a file's own name, even a leading one: the system's opener takes `.bat` for a
+    // batch file, though `Path::extension` says it has none.
+    let ends_in = |name: &std::ffi::OsStr, list: &[String]| {
+        let name = name.to_string_lossy();
+        name.trim_end_matches(['.', ' '])
+            .rsplit_once('.')
+            .is_some_and(|(_, extension)| list.contains(&extension.to_ascii_lowercase()))
+    };
     let in_bundle = below.components().any(|component| {
-        matches!(component, Component::Normal(name) if has_extension(name, ANY_COMPONENT_EXTENSIONS))
+        matches!(component, Component::Normal(name) if has_extension(name, &lists.any_component))
     });
     in_bundle
         || (metadata.is_file()
             && below.file_name().is_some_and(|name| {
-                has_extension(name, FINAL_FILE_EXTENSIONS)
-                    || has_extension(name, crate::platform::open::LAUNCHED_FILE_EXTENSIONS)
+                ends_in(name, &lists.final_file)
+                    || ends_in(name, &lists.any_component)
+                    || ends_in(name, crate::platform::open::launched_file_extensions())
             }))
 }

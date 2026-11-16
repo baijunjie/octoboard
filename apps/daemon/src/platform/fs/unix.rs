@@ -308,6 +308,12 @@ pub fn is_executable(path: &Path) -> bool {
         .is_ok_and(|meta| meta.is_file() && meta.permissions().mode() & 0o111 != 0)
 }
 
+/// Whether the file carries an executable bit, which is all a part says of whether the system would run it: what a
+/// name says is for the client to judge by the system that opens the copy. Here, the same as `is_executable`.
+pub fn has_executable_bit(path: &Path) -> bool {
+    is_executable(path)
+}
+
 /// Whether this process may create files in the directory `dir` and rename them there: the
 /// system's own answer (`access(2)`), which counts a read-only mount, a mode and an ACL alike.
 pub fn directory_writable(dir: &Path) -> bool {

@@ -14,7 +14,7 @@ Paths in this doc that do not start with `packages/` or `apps/` are relative to 
 
 | Path | Role |
 |---|---|
-| `index.html`, `src/main.tsx` | The window's entry: startup (platform, daemon location, connection, native window reveal, global error handlers), mounting `App` under `AppRoot`, or, for the window kinds that have no daemon behind them (`windowKind`), `ConnectPage` or `TrayFlyout` |
+| `index.html`, `src/main.tsx` | The window's entry: startup (platform, daemon location, connection, native window reveal, global error handlers), mounting `App` under `AppRoot`, or, for the flyout window kind, which has no daemon behind it (`windowKind`), `TrayFlyout`; the application's own window that failed to start gets an inert daemon (`createInertDaemon`) and shows the failure inside `App`'s frame |
 | `package.json` `exports` | The files `apps/web/` imports by package name: `./agent-marks`, `./languages`, `./match-language`, `./preview-messages`; nothing else of the package is importable from outside |
 | `eslint.layers.mjs` | The import-layering blocks and the rule that confines the third-party UI libraries to `src/primitives/` (see "Dependency direction"), spread into the root `eslint.config.mjs` |
 | `vite.config.ts`, `typography.mjs`, `tsconfig.json`, `tsconfig.app.json` | Vite and Vitest configuration (it also defines `__OCTOBOARD_VERSION__`, the build's release version, read from `apps/desktop/package.json`); `tsconfig.app.json` is the production type check, which leaves out tests, `src/gallery/`, `src/fixtures/` and `src/website-preview/` |
@@ -32,7 +32,7 @@ Paths in this doc that do not start with `packages/` or `apps/` are relative to 
 
 `App.tsx` (the screen: window chrome, content panel, toasts, connection banner and dialog layer composed from the hooks
 in `app/`), `AppRoot.tsx` (the provider tree around `App` — platform, language, error boundary, theme, daemon, native
-sync hooks, updates — shared by `main.tsx`, the gallery frame and the website preview), `StartupScreen.tsx`,
+sync hooks, updates — shared by `main.tsx`, the gallery frame and the website preview), `StartupScreen.tsx` (the window with no daemon connection: its message, drawn alone where `StartupFramed` says `App`'s own frame is there already),
 `ErrorBoundary.tsx`, `WelcomeScreen.tsx`; `preferenceIdentity.ts` (imported first by `main.tsx`: hands the window's
 daemon identity to `preferences/`, which imports nothing of the platform layer); `daemon.ts` (locating the daemon from
 the page's address, whether an address is a loopback one, `isLocalDaemon`, marking a page the daemon itself served, `servedByDaemon`, recognising the production browser build opened with no key,
@@ -41,7 +41,8 @@ the page's address, whether an address is a loopback one, `isLocalDaemon`, marki
 and `RequestSender` type a request's result from it, and `looseRequestSender` adapts a stand-in for the daemon);
 `protocol.ts` (the one door to the wire types: it re-exports `protocol.generated.ts`, which the daemon's
 `protocol::bindings` test writes from the Rust types, and adds the unions `ClientRequest` and `ClientRequestBody` a
-client sends with; no UI rule lives in it); `appConfig.ts` (facts from `config/app.json`);
+client sends with; no UI rule lives in it); `appConfig.ts` (facts from `config/app.json`); `launchable.ts` (`isLaunchableName`, whether a name is one the system
+launches rather than shows, from `config/launchable-extensions.json`);
 `style.css` (the shared stylesheet entry: Tailwind configuration, shared utilities and ordered stylesheet imports).
 
 ### Stylesheets
@@ -71,24 +72,30 @@ their cascade order does not depend on which screen opened first.
   `useAppVersion.ts` the hook that asks the shell for the running application's version; `reloadPage.ts` the one way the
   page reloads itself (`reloadPage`, and `isReloading` for what must not run on a page already unloading);
   `windowKind.ts` which window of the desktop application the page is, as the shell puts it on the URL (`windowKind`:
-  the local daemon's, a remote daemon's, the connect page or the Windows tray flyout; every page outside the shell is a
-  local one), with a remote window's daemon name and identity and the connect page's entry, read by everything that
-  differs by window instead of the URL.
+  the local daemon's, a remote daemon's or the Windows tray flyout; every page
+  outside the shell is a local one), with a remote window's daemon name and identity, read by everything that
+  differs by window instead of the URL; `shellFailure.ts`, `linkForwardError.ts` and `remoteFileError.ts` the typed
+  failures of the shell's commands for forwarding a remote port and copying a remote file (`LinkForwardError`,
+  `RemoteFileError`), which callers word in their own language.
 - `src/preferences/` — the `localStorage` key of every persisted preference, the guarded store behind them, the theme.
   A daemon-scoped preference is kept under the identity the entry hands in (`setPreferenceDaemonIdentity`).
 - `src/input/` — shortcut modifier and key predicates, touch, IME and focus workarounds.
-- `src/i18n/` — languages, the typed English catalog and translated ones (`messages/`), lookup, the React side; every
-  user-facing string goes through it, and `languages.ts` is also the language list the website derives from. The
-  system's own words in a message (`{trash}`, `{systemSettings}`, `{hostSettings}`, `{settingsApp}`, `{menuBarIcon}`,
-  `{developerMode}`, and the vocabulary words a translation alone may ask for, such as Korean's `{appWindow}`) and
-  `{osName}` are global params filled where messages are formatted, from the host `AppRoot` announces (`announceHost`;
-  macOS's until one is), except the words for what happens on the daemon's machine: `{trash}` and `{hostSettings}` (the
-  settings app a setting there is changed in), and a daemon error's `{osName}`, come from
-  the daemon's host (`snapshot.host`), which `DaemonHostAnnouncement` (`store/`) announces (`announceDaemonHost`; the
-  client's own until a snapshot names it) and `useT` and `Message` re-render on: `platformTerms.ts`
-  holds the per-language `PLATFORM_TERMS` table selected by `host.terms`, with forms (`{trashTo}`, `{trashFrom}`,
-  `{systemSettingsAcc}`) where a language inflects the word and a capitalised name (`{MenuBarIcon}`) where a message starts
-  with it. A caller never passes them; `catalog.test.ts` checks every one is filled in every language for every host.
+- `src/i18n/` — languages, the typed English catalog and translated ones (`messages/`), lookup, the React side
+  (`InlineReference.tsx` for a reference in copy, `InlinePath.tsx` for a navigation path with `pathText`, its plain
+  form); every user-facing string goes through it, and `languages.ts` is also the language list the website derives
+  from. `language.ts` holds the window's language, a cache of the one language the daemon holds (kept in step by
+  `lifecycle/useInterfaceLanguage.ts`); a window with no daemon (the tray flyout) follows the local daemon's windows
+  through `followLocalLanguage`, and the tray menu reads it with `useLocalLanguage`. The system's own words in a message
+  (`{trash}`, `{systemSettings}`, `{hostSettings}`, `{settingsApp}`, `{menuBarIcon}`, `{developerMode}`, and the
+  vocabulary words a translation alone may ask for, such as Korean's `{appWindow}`) and `{osName}` are global params
+  filled where messages are formatted, from the host `AppRoot` announces (`announceHost`; macOS's until one is), except
+  the words for what happens on the daemon's machine: `{trash}` and `{hostSettings}` (the settings app a setting there
+  is changed in), and a daemon error's `{osName}`, come from the daemon's host (`snapshot.host`), which
+  `DaemonHostAnnouncement` (`store/`) announces (`announceDaemonHost`; the client's own until a snapshot names it) and
+  `useT` and `Message` re-render on: `platformTerms.ts` holds the per-language `PLATFORM_TERMS` table selected by
+  `host.terms`, with forms (`{trashTo}`, `{trashFrom}`, `{systemSettingsAcc}`) where a language inflects the word and a
+  capitalised name (`{MenuBarIcon}`) where a message starts with it. A caller never passes them; `catalog.test.ts`
+  checks every one is filled in every language for every host.
 - `src/format/` — small pure formatting helpers (relative time, sizes, `Reason`, wire-path display) and `hostPath`, the one module that reads and shows the daemon host's absolute paths by its `path_style` (`isAbsolute`, `split`, `basename`, `parent`, `display` with the `~` rule that applies on Unix hosts only, `isPathLike` for terminal links, home expansion); every such rule takes the style as an argument, taken from `snapshot.host` by `useHostPaths()` (`components/hooks/`), and defaults to `unix` before the first snapshot. Project-relative wire paths stay `/`-separated and never go through it.
 - `src/providers/` — one presentation module per provider (`claude.ts`, `codex.ts`, `grok.ts`: mark, quota colour and the `provider.<id>.*` catalog messages, among them the trust, sharing and directory-hint wording that `types.ts`'s `ProviderMessageName` names; each also owns the copy of every setting its descriptor declares (`provider.<id>.setting.<setting>.*`) and the record and wording of every code the descriptor declares (`codes`, `provider.<id>.<code>`, whose recovery may be the module's own `provider.<id>.<code>.remedy` copy); `planNames` for plan ids whose generic wording reads badly and `params`, the product-name placeholders its messages use, which `i18n/catalog.ts` merges into the catalogs' global params as `PROVIDER_PARAMS`), `registry.ts` listing them (the built-in three plus a test-only `testAgent` module registered under the test runner, one line each) and looking them up by provider id (`genericMark.ts` is the mark of a provider with no module), and `agentMarks.ts`, the `@octoboard/ui/agent-marks` entry. Imports nothing; the catalogs and the website import it.
 - `src/agents/` — agent rules (`agents.ts`: the pickable, listed and served agents, always taken from the providers the daemon serves in `snapshot`, in its registry order), provider names and facts read from the module or from the providers the daemon serves in `snapshot` (`providers.ts`, which also reads the served model display rule and capabilities; the store holds them as `State.providers`, read with `useProviders()`; `ProviderMessage.tsx` shows a provider's message with a generic fallback), model and effort picker rules, per-agent launch settings (`launchCompatibility.ts`: the compatibility switches an agent's served settings declare, and the helpers that set, diff and apply their held values); `providers.ts` also holds `settingMessageKey` (the copy key of a provider setting), `switchValue` (a switch's value in effect, with its declared default before settings arrive), `idWords` (an id read as words, for a setting or choice a module has no copy for) and re-exports the providers' code records as `PROVIDER_CODES`.
@@ -114,10 +121,10 @@ their cascade order does not depend on which screen opened first.
 
 ### Leaf layer and window shell
 
-- `src/components/` — shared building blocks by kind: `alerts/` (error alerts and the error queue), `card/` (`FlatCard`, the flat card of a dialog: header, band, and rows or blocks set apart by inset hairlines), `dialog/` (the
-  `Dialog` frame and toolkit), `form/`, `controls/` (including `CopyBox`, a block's box with its copy button, and `CopyCommand`, a command line with its copy button), `menus/`, `hint/` (the one component behind tooltips and floating
+- `src/components/` — shared building blocks by kind: `alerts/` (error alerts and the error queue, with the failure of opening a file in the default application, `defaultApplicationFailure.tsx`), `card/` (`FlatCard`, the flat card of a dialog: header, band, and rows or blocks set apart by inset hairlines), `dialog/` (the
+  `Dialog` frame and toolkit), `form/`, `controls/` (including `CopyBox`, a block's box with its copy button, `CopyCommand`, a command line with its copy button, and `FeedbackButton`, the done-state icon button that `CopyButton` and `PasteButton` are built on), `menus/`, `hint/` (the one component behind tooltips and floating
   popovers, with `HeadedTooltip`, the heading, divider and body content shared by the rail and the archive view), `text/`, `status/`, `icons/`, `tabs/`, `qr/` (`QrCode`, a QR code drawn from the modules the daemon encodes), `motion/`, `scroll/` (the faded scroller, `ScrollBox`, a box that scrolls sideways, and the sticky section
-  heading), `focus/`, `announce/`, `panel/`, `host/` (the host's copy and open actions, including `useOpenSessionInApp`), `rows/` (the tree row, its icon and mark buttons, the
+  heading), `focus/`, `announce/`, `panel/` (including `ContentMain`, the content area's one `<main>`), `host/` (the host actions on a path: copying it, opening it in the default application, `openPathInDefaultApplication`, and revealing it in the file manager, `revealPathTarget`, and opening a session in its agent's desktop application, `useOpenSessionInApp`), `rows/` (the tree row, its icon and mark buttons, the
   hover-actions class), `hooks/` (breakpoints, `createLauncher`, `retryableLazy`, lazy readiness for capture hosts,
   polling, window focus (`windowFocus.ts`), the latest-request hook,
   `useLatest` and `useRenderLatest`, `useSerialPush` over `createSerialQueue` (`serialQueue.ts`), `useCheckedEdit` (the
@@ -129,19 +136,21 @@ their cascade order does not depend on which screen opened first.
   `NotificationsBell`, `ContentPanel`, `Toasts`, `ConnectionBanner`, `Scrim`, `ErrorAlerts` (the error acknowledgement
   host), `IncompatibleDaemonScreen` (the whole window while the connection state is `incompatible`), `KeyRefusedScreen` (the whole
   window while it is `keyRefused`, and, as its keyless variant, `main.tsx`'s screen for a browser page opened with no key),
-  `RailRemoteDaemons` (the rail's group of the remote daemons that are connected, under the consoles, in the desktop
-  application's own window only), and the two pages of the windows that have no daemon: `ConnectPage` (a remote window's
-  start, listing the saved remote daemons and connecting through `remoteDaemons/`) and `TrayFlyout` with
+  `RailRemoteDevices` (the rail's Remote devices button, which opens the Remote devices page, under the
+  consoles, in the desktop application's own window only; `Rail` offers it alone, with no consoles, while the local daemon cannot be used), `RailForwardsEntry` (a remote window's rail button for the
+  ports forwarded to its daemon's machine, built on `RailPanelEntry`), `RailRemoteGap` and `RailSeparator` (the free space and
+  the separator between the remote button and the rail's bottom group, and the separator and spacer items they are made of), and the page of the window that has no daemon: `TrayFlyout` with
   `TrayFlyoutLines.tsx` and `TrayFlyout.css` (the Windows notification-area flyout, drawing the model the shell sends).
 - `src/app/` — the hooks `App.tsx` is composed of, one concern each (dialog routing, console switching, session
   selection and actions, focus mode, archive view, pane layout and widths, project panels, jumps from the global process
-  list to a Processes panel, announcements).
+  list to a Processes panel, announcements, and `useRemoteDevicesPage.ts`: whether the Remote devices page shows, which
+  device it shows, and what leaves it).
 
 ### Feature directories
 
 - `src/layout/` — pane layout: panel kinds and widths, the resize handle, the sidebar drawer, swipes below `phone`.
 - `src/shortcuts/` — the central registry of keyboard shortcuts and its persisted overrides.
-- `src/navigation/` — Back and Forward through the locations the content area has shown.
+- `src/navigation/` — Back and Forward through the locations the content area has shown, the Remote devices page (`devices`) and the offline window's status (`offline`) among them.
 - `src/lifecycle/` — hooks and parts tying the UI to the platform: exit flow (`useAppExit.ts`, which also
   restarts a daemon that updated itself where there is no shell to relaunch, `exitFailure.tsx` the alerts of a failed
   exit or restart, the refusal of a daemon restart coming from `src/updates/restartFailure.tsx`, its confirmation `ExitConfirmDialog.tsx`), notifications, native menu, native window theme, the two settings the desktop
@@ -149,11 +158,20 @@ their cascade order does not depend on which screen opened first.
   preferences, started from the window's `settings` query, pushing changes through the platform capabilities,
   `connectShellSettings` called in `main.tsx`), keep awake (the daemon holds the computer awake itself;
   `useKeepAwakeSync.ts` hands the shell the daemon's `keep_awake_held` for its menu bar icon), git status schedule,
-  seeding a daemon's first agent language (`useAgentLanguageSeed.ts`), the probe of which agents' desktop applications the host has (`useNativeAppsSync.ts`).
-- `src/remoteDaemons/` — a client's remote daemons, reached over SSH by the desktop shell: `useRemoteDaemons.ts` (the shell's
+  keeping the window in the daemon's interface language (`useInterfaceLanguage.ts`), the probe of which agents' desktop applications the host has (`useNativeAppsSync.ts`).
+- `src/remoteDaemons/` — a client's remote daemons, reached over SSH by the desktop shell, and the Remote devices page of
+  the application's own window that manages them: `RemoteDevices.tsx` (`RemoteDevicesProvider` and `useRemoteDevices`,
+  mounted around the whole `App` so the rail button, the sidebar and the page share it: the connect hook, the shell's
+  hand-over queue and page request, the add state and the Remove confirmation), `RemoteDevicesSidebar.tsx` (the
+  device list in the docked sidebar's place), `RemoteDevicePage.tsx` (the selected device's header and form, or the Add
+  form, or the empty state, in `ContentMain`), `RemoteDaemonForm.tsx` and `FormCard.tsx` (the editable entry form and its
+  raised cards), `remoteDevicePreference.ts` (the device last viewed, per daemon) and `remoteDevicesTestSupport.tsx`
+  (test host for what reads `useRemoteDevices`); and `useRemoteDaemons.ts` (the shell's
   saved entries and which are connected, read again as the shell says they changed), `useRemoteDaemonConnect.tsx` (one
   connection in progress and every question or failure of it: password, host key, version mismatch, in the window that asked),
-  `RemoteDaemonDialog.tsx` and `RemoteDaemonPrompts.tsx` (the entry form and the prompts), `connectionDetails.ts` (reading the
+  `RemoteDaemonPrompts.tsx` (the prompts), `useRemoteForwards.ts` and
+  `ForwardedPorts.tsx` (a remote window's forwarded ports, read from the shell, and the list drawn with Stop),
+  `connectionDetails.ts` (reading the
   `octoboard+ssh://` line that fills the form), `connectionState.ts`, `port.ts`, and `remoteDaemonsOffered.ts` (the rail has
   the group only in the application's own window). No secret is held here: the shell never returns one to a page.
 - `src/statusItem/` — the menu-bar menu: its builder, quota submenus, icons and the hook that pushes it to the platform.
@@ -180,13 +198,16 @@ their cascade order does not depend on which screen opened first.
   field's `pattern` in a Web Worker under a time limit, never on the window's own thread.
 - `src/panels/` — the right pane, a stack of inset panel cards, and the registry of panel kinds.
 - `src/project-browser/` — the Files panel's content: `files/` (tree, listings, search, and the linked-file viewer
-  `App` opens for a path a terminal names) and `git/` (changes, branch comparison, commits, following a session's
+  `App` opens for a path a terminal names, which `usePathLinkReader.ts` reads from the daemon's host) and `git/` (changes, branch comparison, commits, following a session's
   branch); at its root, the browser's per-project state (`browserState.ts` over saved preferences and window-lifetime
   selections) and the list helpers the two modes share; `useServedByDaemon.ts` tells whether this page is the browser build the daemon serves itself, which its lazy-load failures use to offer a reload.
 - `src/viewer/` — the read-only file viewer modal (the shell at its root), and the app's Markdown and code rendering
   library, which `terminal/history/` uses too: `markdown/` (documents, sanitized HTML, images, Mermaid, formulas, fenced code), `code/` (the
   code and diff renderer and its budgets), `find/` (the find bar) and `image/` (the zoomable image of an image file or an image change:
-  `ZoomableImage`, `ZoomBar`, the zoom arithmetic in `zoom.ts`, and `ZoomGroup` in `zoomGroup.ts`, which makes the two sides of an image change zoom and scroll as one); `@pierre/diffs` is imported only inside it.
+  `ZoomableImage`, `ZoomBar`, the zoom arithmetic in `zoom.ts`, and `ZoomGroup` in `zoomGroup.ts`, which makes the two sides of an image change zoom and scroll as one); `download/` (Download and open, in a remote window of the desktop shell: a live file the viewer
+  cannot show is read from its daemon in parts and copied to this computer, `useFileDownload.ts`, `downloadFile.ts`, and its
+  failures, `downloadFailure.tsx`) with `standInAction.ts` (what the stand-in of such a file offers: the default
+  application, or the download); `@pierre/diffs` is imported only inside it.
 - `src/quota/` — plan quota wording, meters, reset credits, and the rail's quota panels (`RailQuotaBars`, `QuotaPanel`,
   `AgentPanel`, `QuotaAccount`).
 - `src/settings/` — the settings modal and its sections (`sections.ts` holds the section ids and `SettingsNavigation`).
@@ -197,7 +218,7 @@ their cascade order does not depend on which screen opened first.
   wraps a section's own block that has an index entry), and `useFocusRescue.ts` hands focus on when a re-match hides
   the element that held it;
   the reads of the system that rows wait on are made once per dialog, not in the rows: `SettingsReadsProvider.tsx` (wrapped
-  around its content by `SettingsDialog.tsx`) holds `useLaunchAtLogin.ts` (the launch-at-login state machine) and
+  around its content by `SettingsDialog.tsx`) holds `useLaunchAtLogin.tsx` (the launch-at-login state machine) and
   `useMacosPermissionsRead` (`useMacosPermissions.ts`, with the read's `shown` and `unreadable` answers and the `follow()`
   count that decides when a focus return re-reads), `settingsReads.ts` is their context (`useSettingsReads`) and `searchReads`,
   what the search is told of them, so the search counts those rows only once their read has answered, while `useMacosPermissions`
@@ -206,9 +227,12 @@ their cascade order does not depend on which screen opened first.
   shown only where the platform has the capability, the power one where the daemon's host can be held awake (`host.keep_awake`));
   `LaunchAtLoginSetting.tsx`, `MenuBarIconSetting.tsx` and `BackgroundRunSetting.tsx` are its native-backed rows,
   `KeepAwakeSetting.tsx` its daemon-backed Prevent sleep row, with its choices of when, and what each says, in `configuration/keepAwakeWhen.ts`;
-  `RemoteAccessSection.tsx` the Remote access section (this computer's daemon reached from another device over SSH: the switch and,
-  on Windows, the browser port, the connection details with copy and QR, and whether the SSH server is on, `useRemoteLogin.ts` and
-  `sshServerWords.ts`), offered only in the application's own window for a daemon that offers it (`remoteAccessOffered.ts`);
+  `RemoteAccessSection.tsx` the Remote access section (this computer's daemon reached from another device over SSH: first whether the
+  SSH server is on (`useRemoteLogin.ts`, `sshServerWords.ts`), then the switch and, on Windows while nothing is served, the browser
+  port; while served, two underline tabs, the application's connection details with copy and QR, and the browser's numbered steps,
+  `ForwardCommand.tsx` (the SSH forward with its address as a token that opens a menu of this computer's names and addresses) and the
+  address, the port and Rotate key, each tab's rows in a `SettingsTabPanel.tsx`, which keeps a tab switch from taking part in the
+  section's list motion), offered only in the application's own window for a daemon that offers it (`remoteAccessOffered.ts`);
   `AppearanceSection.tsx` the Appearance section (`ThemeSetting.tsx`, `MarkdownStyleSetting.tsx` and `TerminalFontSizeSetting.tsx`,
   the terminals' font size, a `NumberField` from `src/primitives/`), `CleanupSection.tsx` the Cleanup section;
   `accounts/` the Agent accounts section, where `AgentProviderSettings.tsx` renders every setting the daemon serves for an agent
@@ -264,7 +288,7 @@ the shape is:
 - `viewer/`, `about/`, `updates/`, `layout/`, `quota/` and `statusItem/` import the leaf layer and the pure layers (`quota/` also
   `accounts/`; `statusItem/` also `accounts/` and `quota/`; `updates/` also `protocol`, `requests`, `appConfig` and the `store/` barrel) and no other feature directory; `project-browser/` additionally imports `viewer/`. The remaining feature
   directories import one another freely.
-- From below `src/`, the root files that may be imported are `protocol`, `requests`, `daemon`, `daemon-client`, `appConfig` and the
+- From below `src/`, the root files that may be imported are `protocol`, `requests`, `daemon`, `daemon-client`, `appConfig`, `launchable` and the
   `store/`, `platform/` and `primitives/` barrels. The entry, `App` and the screens are imported by nothing below them.
 - `shell/` is imported only by root files, `app/`, the gallery and the website preview; `app/` only by `App.tsx`.
 - Production code imports neither `fixtures/` nor `gallery/`; `fixtures/` and `website-preview/` never import
@@ -356,8 +380,11 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Test a report page's `pattern` against a value | `checkPattern` (`src/report/page/patternCheck.ts`), the only route: it runs in a Web Worker with a time limit and never on the main thread |
 | A strip of text tabs | the tab wrappers in `src/primitives/Tabs.tsx`, with `fit="content"` on `TabListContainer` and `TabList`, shared by every such strip (`TextTabStrip`, `RegionTabs`, `AgentTabList`, the console launch fields, the project browser); `Tab size="content"` is the tab for every strip, `size="compact"` only for a strip in a pane header beside the pane's title, as the project browser's Files / Changes tabs |
 | The frame of the sidebar's console and focus headers and the archive header | `PANE_HEADER_FRAME_CLASS` (`src/components/panel/paneHeaderFrame.ts`) |
+| The content area's `<main>` (the sessions' and every page that takes the area beside the sidebar) | `ContentMain` (`src/components/panel/ContentMain.tsx`), which owns its positioning and the docked sidebar's edge shadow; a page adds layout through `className` |
 | A previous / next pager button | `PagerButton` (`src/components/controls/PagerButton.tsx`) |
 | A block with a copy button over its top end corner (a report page's code, diff and copyable blocks, a command in Settings) | `CopyBox`, and `CopyCommand` for a command line (`src/components/controls/CopyBox.tsx`), over `ScrollBox` (`src/components/scroll/ScrollBox.tsx`), a box that scrolls sideways instead of wrapping |
+| A button that confirms its action by turning to a done state (a tooltip text and glyph change, announced) | `FeedbackButton` with `useDoneFeedback` (`src/components/controls/FeedbackButton.tsx`), as `CopyButton` and `PasteButton` use it |
+| Read the clipboard's text on a user's press | `PasteButton` (`src/components/controls/PasteButton.tsx`) over the platform's `clipboard.readText`, never the page's own clipboard API |
 | A block of code shown as text | `CodeBlock`, or `SurfaceCodeBlock` for a wrapping block on its own surface (`src/components/text/CodeBlock.tsx`); a flush `CodeBlock` built on a surface of its own, such as inside a scroller as `DiagnosticBlock` does, puts `CODE_SURFACE_CLASS` (the classes of the secondary `Surface` it sits on) on that surface |
 | Open an external address with the platform adapter and shared failure handling | `ExternalLink` (`src/components/text/ExternalLink.tsx`) for application links; `useExternalLinkAction` from the same module for document-owned link markup |
 | A settings section's lead paragraph and the rows under it | `SettingsLead` and `LeadRows` (`src/settings/SettingsLead.tsx`) |

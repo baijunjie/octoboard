@@ -18,7 +18,7 @@
 //! opened without blocking and refused before anything is read from it.
 
 use std::fs::{self, Metadata};
-use std::io;
+use std::io::{self, Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -45,6 +45,23 @@ pub fn resolve(scope: &Path, path: &RelPath) -> Result<PathBuf> {
     Ok(canonical)
 }
 
+/// A path as a failure words it: a wire path, or the text of a path link as the client wrote it.
+pub trait Shown {
+    fn shown(&self) -> String;
+}
+
+impl Shown for RelPath {
+    fn shown(&self) -> String {
+        self.to_wire()
+    }
+}
+
+impl Shown for str {
+    fn shown(&self) -> String {
+        self.to_owned()
+    }
+}
+
 /// A file read whole off the disk, with the version it was read at.
 #[derive(Debug)]
 pub struct LiveFile {
@@ -65,30 +82,16 @@ pub fn read_file(
     read_resolved(&canonical, path, limit, cancel)
 }
 
-/// [`read_file`] from the point `path` has been resolved to `canonical`, a path with no link in
-/// it.
-pub(super) fn read_resolved(
+/// [`read_file`] from the point the file has been resolved to `canonical`, a path with no link in
+/// it. `path` is how a failure names it: the wire path a client asked for, or the text of a path
+/// link as written.
+pub(crate) fn read_resolved(
     canonical: &Path,
-    path: &RelPath,
+    path: &(impl Shown + ?Sized),
     limit: usize,
     cancel: &AtomicBool,
 ) -> Result<LiveFile> {
-    let before = platform::stat(canonical, Links::Keep).map_err(|err| io_failure(path, &err))?;
-    if before.metadata.file_type().is_symlink() {
-        return Err(changed(path));
-    }
-    if !before.metadata.is_file() {
-        return Err(unsupported(path, file_type_name(&before.metadata)));
-    }
-    if before.metadata.len() > limit as u64 {
-        return Err(too_large(limit, Some(before.metadata.len())));
-    }
-    let file = platform::open_without_links(canonical, Path::new(""), Opens::File)
-        .map_err(|err| open_failure(path, &err))?;
-    let opened = platform::stat_of(&file).map_err(|err| io_failure(path, &err))?;
-    if !opened.metadata.is_file() || file_id(&opened) != file_id(&before) {
-        return Err(changed(path));
-    }
+    let (file, opened) = open_regular(canonical, path, Some(limit))?;
     let bytes =
         read_bounded(&file, limit, opened.metadata.len(), Some(cancel)).map_err(
             |err| match err {
@@ -103,6 +106,88 @@ pub(super) fn read_resolved(
     }
     Ok(LiveFile {
         bytes,
+        version: version(&after),
+    })
+}
+
+/// Opens the regular file resolved to `canonical`, a path with no link in it, and says what was
+/// opened: refusing a link at the path, anything that is not a regular file, one larger than
+/// `limit` (when given), and a file other than the one looked at, which a swap in between makes.
+fn open_regular(
+    canonical: &Path,
+    path: &(impl Shown + ?Sized),
+    limit: Option<usize>,
+) -> Result<(fs::File, Stat)> {
+    let before = platform::stat(canonical, Links::Keep).map_err(|err| io_failure(path, &err))?;
+    if before.metadata.file_type().is_symlink() {
+        return Err(changed(path));
+    }
+    if !before.metadata.is_file() {
+        return Err(unsupported(path, file_type_name(&before.metadata)));
+    }
+    if let Some(limit) = limit.filter(|limit| before.metadata.len() > *limit as u64) {
+        return Err(too_large(limit, Some(before.metadata.len())));
+    }
+    let file = platform::open_without_links(canonical, Path::new(""), Opens::File)
+        .map_err(|err| open_failure(path, &err))?;
+    let opened = platform::stat_of(&file).map_err(|err| io_failure(path, &err))?;
+    if !opened.metadata.is_file() || file_id(&opened) != file_id(&before) {
+        return Err(changed(path));
+    }
+    Ok((file, opened))
+}
+
+/// A part of a regular file, with the file's size and version at the read.
+#[derive(Debug)]
+pub struct FileRange {
+    pub bytes: Vec<u8>,
+    pub size: u64,
+    pub version: String,
+}
+
+/// Reads up to `length` bytes from `offset` of the file resolved to `canonical`, a path with no
+/// link in it, checked as [`read_resolved`] checks it: a regular file, opened refusing a link, the
+/// same file as was looked at. A file whose version is not `expected_version` (the one an earlier
+/// part reported), or that changed while the part was read, is `source_changed`. At or past the end
+/// the part is empty.
+pub(crate) fn read_range(
+    canonical: &Path,
+    shown: &(impl Shown + ?Sized),
+    offset: u64,
+    length: usize,
+    expected_version: Option<&str>,
+    cancel: &AtomicBool,
+) -> Result<FileRange> {
+    let (mut file, opened) = open_regular(canonical, shown, None)?;
+    if expected_version.is_some_and(|expected| version(&opened) != expected) {
+        return Err(changed(shown));
+    }
+    let length = length.min(budget::MAX_RANGE_BYTES);
+    let bytes = if offset >= opened.metadata.len() {
+        Vec::new()
+    } else {
+        file.seek(SeekFrom::Start(offset))
+            .map_err(|err| io_failure(shown, &err))?;
+        let wanted = (length as u64).min(opened.metadata.len() - offset) as usize;
+        read_bounded(
+            (&file).take(wanted as u64),
+            wanted,
+            wanted as u64,
+            Some(cancel),
+        )
+        .map_err(|err| match err {
+            ReadFailure::Exceeded => too_large(wanted, None),
+            ReadFailure::Cancelled => anyhow::Error::new(Cancelled),
+            ReadFailure::Io(err) => io_failure(shown, &err),
+        })?
+    };
+    let after = platform::stat_of(&file).map_err(|err| io_failure(shown, &err))?;
+    if version(&opened) != version(&after) {
+        return Err(changed(shown));
+    }
+    Ok(FileRange {
+        bytes,
+        size: after.metadata.len(),
         version: version(&after),
     })
 }
@@ -440,8 +525,8 @@ fn file_type_name(metadata: &Metadata) -> &'static str {
     }
 }
 
-pub fn unsupported(path: &RelPath, file_type: &str) -> anyhow::Error {
-    let shown = path.to_wire();
+pub fn unsupported(path: &(impl Shown + ?Sized), file_type: &str) -> anyhow::Error {
+    let shown = path.shown();
     CodedError::raised(
         error_code::UNSUPPORTED_FILE_TYPE,
         format!("{shown} is a {file_type}, which cannot be read here"),
@@ -467,8 +552,8 @@ fn outside(path: &RelPath) -> anyhow::Error {
     )
 }
 
-pub(super) fn changed(path: &RelPath) -> anyhow::Error {
-    let shown = path.to_wire();
+pub(super) fn changed(path: &(impl Shown + ?Sized)) -> anyhow::Error {
+    let shown = path.shown();
     CodedError::raised(
         error_code::SOURCE_CHANGED,
         format!("{shown} changed while it was being read"),
@@ -492,7 +577,7 @@ pub fn too_large(limit: usize, size: Option<u64>) -> anyhow::Error {
 
 /// A failure to open a path that was just resolved with no link in it: a link found there now
 /// means one was swapped in since.
-fn open_failure(path: &RelPath, err: &io::Error) -> anyhow::Error {
+fn open_failure(path: &(impl Shown + ?Sized), err: &io::Error) -> anyhow::Error {
     if platform::is_symlink_loop(err) {
         changed(path)
     } else {
@@ -503,8 +588,8 @@ fn open_failure(path: &RelPath, err: &io::Error) -> anyhow::Error {
 /// An I/O failure on a path inside the scope, as the code a client words it by. Nothing at the
 /// path — including a link that leads nowhere or round in a loop — is `file_not_found`; a failure
 /// with no meaning of its own here is an internal error with the system's message.
-fn io_failure(path: &RelPath, err: &io::Error) -> anyhow::Error {
-    let shown = path.to_wire();
+pub(crate) fn io_failure(path: &(impl Shown + ?Sized), err: &io::Error) -> anyhow::Error {
+    let shown = path.shown();
     if crate::hostfs::is_not_found(err) {
         return CodedError::raised(
             error_code::FILE_NOT_FOUND,

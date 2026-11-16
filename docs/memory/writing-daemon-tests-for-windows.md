@@ -51,9 +51,14 @@ before the program has set its console raw is taken as typed keys and loses the 
   half drawn. Where a test depends on a screen arriving whole, draw it with `test_support::console_writer` (one console
   write), started before the window the production code times, not inside it.
 
-## A committed file a test compares byte for byte is checked out with `text eol=lf`
+## A committed file a test reads arrives with CRLF line ends on Windows
 
-Applies when adding a committed file that a test compares byte for byte with what code renders, as `protocol::bindings`
-and `protocol::schema` do with the generated protocol files. GitHub's `windows-latest` runners, like Git for Windows'
-default install, check out with `core.autocrlf` on, so the file arrives with CRLF line ends and the comparison fails
-there although every line matches. Name the file in `.gitattributes` with `text eol=lf`; do not loosen the comparison.
+Applies to daemon and desktop shell tests (the same job tests `-p octoboard`) that read a committed text file, by
+`include_str!` or from disk. GitHub's `windows-latest` runners, like Git for Windows' default install, check out with
+`core.autocrlf` on, so the file arrives with CRLF line ends, and a match across a line end fails there although every
+line matches; the Mac never shows it.
+
+- A file a test compares byte for byte with what code renders, as `protocol::bindings` and `protocol::schema` do with
+  the generated protocol files: name it in `.gitattributes` with `text eol=lf`; do not loosen the comparison.
+- A source file a test searches for text spanning a line end (`"#[cfg(test)]\nmod tests"`, `"\n}\n"`): turn `\r\n`
+  into `\n` once it is read, or match line by line.

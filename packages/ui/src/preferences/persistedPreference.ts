@@ -12,6 +12,12 @@ export interface PersistedPreference<T> {
   subscribe(listener: () => void): () => void;
   /** The current value, shared module-wide, and re-rendering the caller whenever it changes. */
   useValue(): T;
+  /**
+   * Has this preference take up the value another window of the application stores under its key, as an application
+   * preference does from the start. For a daemon-scoped one, which does not, in a window that has no daemon of its
+   * own and so shows the local daemon's value. Idempotent.
+   */
+  followStorage?(): void;
 }
 
 /**
@@ -92,7 +98,10 @@ export function createPersistedPreference<T>(
     }
   };
 
-  if (options.scope !== "daemon" && typeof window !== "undefined") {
+  let following = false;
+  const followStorage = () => {
+    if (following || typeof window === "undefined") return;
+    following = true;
     window.addEventListener("storage", (event) => {
       if (event.key !== storageKey) return;
       try {
@@ -103,7 +112,8 @@ export function createPersistedPreference<T>(
       value = parse(event.newValue);
       for (const listener of listeners) listener();
     });
-  }
+  };
+  if (options.scope !== "daemon") followStorage();
 
   return {
     set(next, { persist: write = true } = {}) {
@@ -115,5 +125,6 @@ export function createPersistedPreference<T>(
     get: getValue,
     subscribe,
     useValue: () => useSyncExternalStore(subscribe, getValue),
+    followStorage,
   };
 }

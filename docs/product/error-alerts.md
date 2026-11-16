@@ -547,14 +547,14 @@ For example:
   folder that File manager or Default application no longer finds, a folder a folder row's Terminal would start a
   shell in that is no longer there or is no longer a folder, a folder a terminal's path link names in the project
   that is gone when the click opens it on the host, or a file or folder one names there that is gone when the
-  terminal's Open in file manager shows it, instead says it may have been moved, renamed or
+  terminal's File manager shows it or its Default application opens it, instead says it may have been moved, renamed or
   deleted, and that one moved or renamed can be found in the project's files and tried again from there (see
   "A row's actions" in `docs/product/project-pane.md`, "Opened from the terminal" in `docs/product/file-viewer.md` and
   "File paths" in `docs/product/terminal-links.md`). A path link's file or folder gone from a temporary directory
   outside the project gets no remedy: the alert's sentence already says it does not exist any more.
-- A terminal's path link that a click refuses to open on the host, or that the terminal's Open in file manager
-  refuses to show, for a reason other than its being gone (see "File paths" in `docs/product/terminal-links.md`), gets
-  a remedy by that reason:
+- A terminal's path link that a click refuses to open on the host, that the terminal's File manager refuses to show or
+  that its Default application refuses to open, for a reason other than its being gone (see "File paths" in
+  `docs/product/terminal-links.md`), gets a remedy by that reason:
   - **a relative path found in more than one of the places it is looked for**: find the one meant in the project's
     files and open it from there;
   - **something the system would run**: if it is meant to run, open it oneself from the file manager;
@@ -564,6 +564,26 @@ For example:
   - **leading outside the project and the temporary directories, not a file or folder, could not be read for another
     reason, or any other reason or one the window does not know**: no remedy; the alert's sentence says it all, with
     the system's own text of a read that failed under Error details.
+- A loopback address a remote window could not forward (see "Loopback addresses of the remote machine" in
+  `docs/product/links-and-files-in-a-remote-window.md`), whether opened from a link or from a row of the Forwarded ports
+  popover, is a known failure, titled as any link that could not be opened, whose sentence names the port and the
+  daemon. Nothing listening on the port gets no remedy: the sentence says it all. An SSH server that does not allow
+  forwarding gets one of its own, asking to allow TCP forwarding in that server's settings or to open the address on
+  that computer. A connection that is down gets the connection remedy. Anything else — a port of this computer that
+  could not be listened on, a remote port that did not answer in time — is unexpected and offers Report issue. None
+  gives the address to open by hand: as written it leads to this computer. A forwarded address the browser then fails
+  to open is reported as any link that does not open, the address it shows to open by hand being the forwarded one on
+  this computer. Stopping a forward that fails is titled that the port could not be stopped.
+- A file a remote window could not download and open (see "Files opened on this computer" in
+  `docs/product/links-and-files-in-a-remote-window.md`) is titled that the file could not be downloaded, or, where all
+  of it had arrived and no application opened it, that the downloaded file could not be opened. A file that is gone,
+  that the daemon may not read or that leads outside what a link may open gets the sentence and remedy a click on its
+  path link gets (above). A file that changed while it was copied, or whose copy came out short, says the file changed
+  while it was read and asks to try again once whatever is writing to it has finished. A connection lost on the way
+  gets the connection remedy. A copy this computer could not write gets the disk-space or the access remedy by the
+  system's cause. A file this computer would run says so, naming it, and gets no remedy. A copy that arrived but that
+  no application opened gets the default application's remedy. Each is a known failure; anything else is unexpected
+  and offers Report issue.
 - A read of the project's files that the operating system denies — Octoboard is not allowed to read the path, as when a
   shell terminal starts in a folder it may not read, when File manager or Default application is used on such a path, or
   when a terminal's path link is opened on the host or shown in the file manager — asks the user to check the path's

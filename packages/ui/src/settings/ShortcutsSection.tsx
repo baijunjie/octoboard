@@ -5,7 +5,10 @@ import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announ
 import { IndicatorTooltip } from "../components/hint/IndicatorTooltip";
 import { TitledControl } from "../components/hint/TitledControl";
 import { useShortcutScopeDescription } from "../components/hooks/useShortcutScopeDescription";
-import { useT } from "../i18n/react";
+import type { PlainMessageKey } from "../i18n/catalog";
+import { CodeToneContext } from "../i18n/codeTone";
+import { InlineReference } from "../i18n/InlineReference";
+import { Message, useT } from "../i18n/react";
 import { usePlatform } from "../platform/react";
 import { bindingOf, describeBinding, isModifierCode, sameKeys, type Binding } from "../shortcuts/binding";
 import { ALL_COMMANDS, clientCapabilities, defaultBinding, isAvailable, SHORTCUT_GROUPS, type CommandId, type ShortcutCommand, type ShortcutCommandId } from "../shortcuts/commands";
@@ -34,7 +37,7 @@ export function ShortcutsSection(): React.ReactElement {
   const bindings = useBindings();
   const customised = Object.keys(shortcutOverrides.useValue()).length > 0;
   const [recording, setRecording] = useState<CommandId>();
-  const [problem, setProblem] = useState<{ id: CommandId; text: string }>();
+  const [problem, setProblem] = useState<{ id: CommandId; node: React.ReactNode }>();
   const [announcement, setAnnouncement] = useState<{ text: string; count: number }>();
   const root = useRef<HTMLDivElement>(null);
   const sectionTab = useContext(SettingsFocusContext);
@@ -52,21 +55,30 @@ export function ShortcutsSection(): React.ReactElement {
     else write();
   };
   const name = (id: string) => t(ALL_COMMANDS.find((command) => command.id === id)!.label);
-  const problemText = (found: ShortcutProblem) => {
+  // What a refused binding says, as text for the status region and with the command named as a reference for the row.
+  const problemText = (found: ShortcutProblem): { text: string; node: React.ReactNode } => {
     const modifier = host.modifier === "meta" ? "⌘" : "Ctrl";
+    const reference = (command: string) => <InlineReference dir="auto" wrap>{command}</InlineReference>;
+    const plain = (key: PlainMessageKey) => ({ text: t(key), node: <Message id={key} /> });
     switch (found.reason) {
       case "conflict": {
         const holder = ALL_COMMANDS.find((command) => command.id === found.with)!;
-        return t(isAvailable(holder.availability, client) ? "settings.shortcuts.problem.conflict" : "settings.shortcuts.problem.conflictDesktop", { command: name(found.with) });
+        const command = name(found.with);
+        return isAvailable(holder.availability, client)
+          ? { text: t("settings.shortcuts.problem.conflict", { command }), node: <Message id="settings.shortcuts.problem.conflict" params={{ command: reference(command) }} /> }
+          : { text: t("settings.shortcuts.problem.conflictDesktop", { command }), node: <Message id="settings.shortcuts.problem.conflictDesktop" params={{ command: reference(command) }} /> };
       }
-      case "needsModifier": return t("settings.shortcuts.problem.needsModifier", { modifier });
-      case "terminalControl": return t("settings.shortcuts.problem.terminalControl", { modifier });
-      case "unsupportedKey": return t("settings.shortcuts.problem.unsupportedKey");
-      case "shiftedKey": return t("settings.shortcuts.problem.shiftedKey");
-      case "editingKey": return t("settings.shortcuts.problem.editingKey", { modifier });
-      case "reservedKey": return t("settings.shortcuts.problem.reservedKey");
-      case "osReserved": return t("settings.shortcuts.problem.osReserved");
-      case "interrupt": return t("settings.shortcuts.problem.interrupt");
+      case "needsModifier": return { text: t("settings.shortcuts.problem.needsModifier", { modifier }), node: <Message id="settings.shortcuts.problem.needsModifier" params={{ modifier }} /> };
+      case "terminalControl": return { text: t("settings.shortcuts.problem.terminalControl", { modifier }), node: <Message id="settings.shortcuts.problem.terminalControl" params={{ modifier }} /> };
+      case "shiftedKey": {
+        const command = name("openSettings");
+        return { text: t("settings.shortcuts.problem.shiftedKey", { command }), node: <Message id="settings.shortcuts.problem.shiftedKey" params={{ command: reference(command) }} /> };
+      }
+      case "editingKey": return { text: t("settings.shortcuts.problem.editingKey", { modifier }), node: <Message id="settings.shortcuts.problem.editingKey" params={{ modifier }} /> };
+      case "unsupportedKey": return plain("settings.shortcuts.problem.unsupportedKey");
+      case "reservedKey": return plain("settings.shortcuts.problem.reservedKey");
+      case "osReserved": return plain("settings.shortcuts.problem.osReserved");
+      case "interrupt": return plain("settings.shortcuts.problem.interrupt");
     }
   };
 
@@ -95,8 +107,8 @@ export function ShortcutsSection(): React.ReactElement {
       const binding = bindingOf(event, host);
       const found = setBinding(recording, binding, host);
       if (found) {
-        const text = problemText(found);
-        setProblem({ id: recording, text });
+        const { text, node } = problemText(found);
+        setProblem({ id: recording, node });
         speak(text);
       } else {
         setRecording(undefined);
@@ -117,8 +129,8 @@ export function ShortcutsSection(): React.ReactElement {
   const reset = (id: CommandId): boolean => {
     const found = restoreBinding(id, host);
     if (found) {
-      const text = problemText(found);
-      setProblem({ id, text });
+      const { text, node } = problemText(found);
+      setProblem({ id, node });
       speak(text);
       return false;
     }
@@ -165,7 +177,7 @@ export function ShortcutsSection(): React.ReactElement {
               command={command}
               binding={command.rebindable ? bindings[command.id as CommandId] : command.binding}
               recording={recording === command.id}
-              problem={problem?.id === command.id ? problem.text : undefined}
+              problem={problem?.id === command.id ? problem.node : undefined}
               onRecord={startRecording}
               onCancel={() => {
                 setRecording(undefined);
@@ -193,7 +205,7 @@ function ShortcutRow({
   command: ShortcutCommand & { id: ShortcutCommandId };
   binding: Binding;
   recording: boolean;
-  problem?: string;
+  problem?: React.ReactNode;
   onRecord: (id: CommandId) => void;
   onCancel: () => void;
   /** Puts the command's default back, and returns whether it could. */
@@ -225,7 +237,7 @@ function ShortcutRow({
       label={<span className="font-normal text-app-muted">{label}</span>}
       description={problem && (
         // Drawn as a field's `FieldError` is, and spoken by the section's status region instead of an alert of its own.
-        <span id={problemId} className="block px-1 text-xs wrap-break-word text-danger">{problem}</span>
+        <span id={problemId} className="block px-1 text-xs wrap-break-word text-danger"><CodeToneContext.Provider value="danger">{problem}</CodeToneContext.Provider></span>
       )}
     >
       <div className="grid grid-cols-[minmax(0,1fr)_1.5rem] items-center gap-2">

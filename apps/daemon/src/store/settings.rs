@@ -50,7 +50,7 @@ impl Store {
             auto_approve_handoffs: read_setting(&conn, "auto_approve_handoffs")?,
             ask_questions_as_choices: read_setting(&conn, "ask_questions_as_choices")?,
             keep_sessions_in_own_project: read_setting(&conn, "keep_sessions_in_own_project")?,
-            agent_language: read_setting(&conn, "agent_language")?,
+            interface_language: read_setting(&conn, "interface_language")?,
             keep_awake: read_setting(&conn, "keep_awake")?,
             keep_awake_when: read_keep_awake_when(&conn)?,
             auto_select_account: read_setting(&conn, "auto_select_account")?,
@@ -224,18 +224,17 @@ impl Store {
         Ok(())
     }
 
-    /// The tag of the agent language, the language sessions are told to talk to the user in: the
-    /// one the user last picked, or the interface language the first client to connect reported;
-    /// `None` until either.
-    pub fn agent_language(&self) -> Result<Option<String>> {
-        read_setting(&self.lock(), "agent_language")
+    /// The tag of the language the user last picked for the interface, as a client reported it;
+    /// `None` until one has.
+    pub fn interface_language(&self) -> Result<Option<String>> {
+        read_setting(&self.lock(), "interface_language")
     }
 
     /// Stores an already-validated tag. Whether the setting actually changed.
-    pub fn set_agent_language(&self, tag: &str) -> Result<bool> {
+    pub fn set_interface_language(&self, tag: &str) -> Result<bool> {
         let changed = self.lock().execute(
-            "UPDATE settings SET agent_language = ?2 \
-             WHERE id = ?1 AND agent_language IS NOT ?2",
+            "UPDATE settings SET interface_language = ?2 \
+             WHERE id = ?1 AND interface_language IS NOT ?2",
             params![SETTINGS_ID, tag],
         )?;
         Ok(changed > 0)
@@ -974,22 +973,22 @@ mod tests {
         assert_eq!(store.default_clone_dir().unwrap(), built_in);
     }
 
-    /// The agent language is unset until a client reports one, a repeat of the same tag changes
-    /// nothing, and a later one replaces it.
+    /// The interface language is unset until a client reports one, a repeat of the same tag
+    /// changes nothing, and a later one replaces it.
     #[test]
-    fn the_agent_language_is_unset_until_reported() {
-        let path = temp_db("agent-language");
+    fn the_interface_language_is_unset_until_reported() {
+        let path = temp_db("interface-language");
         let store = Store::open(&path).expect("store");
-        assert_eq!(store.agent_language().unwrap(), None);
+        assert_eq!(store.interface_language().unwrap(), None);
 
-        assert!(store.set_agent_language("ja").unwrap());
-        assert!(!store.set_agent_language("ja").unwrap());
+        assert!(store.set_interface_language("ja").unwrap());
+        assert!(!store.set_interface_language("ja").unwrap());
         assert_eq!(
-            store.get_settings().unwrap().agent_language.as_deref(),
+            store.get_settings().unwrap().interface_language.as_deref(),
             Some("ja")
         );
-        assert!(store.set_agent_language("de").unwrap());
-        assert_eq!(store.agent_language().unwrap().as_deref(), Some("de"));
+        assert!(store.set_interface_language("de").unwrap());
+        assert_eq!(store.interface_language().unwrap().as_deref(), Some("de"));
     }
 
     /// The JSON settings that name providers load only the registered ones, and a write keeps the
@@ -1117,7 +1116,5 @@ mod tests {
             .filter(|key| key.contains("remote_access"))
             .collect();
         assert!(keys.is_empty(), "{keys:?}");
-        assert!(settings.get("interface_language").is_none());
-        assert!(settings.get("agent_language").is_some());
     }
 }

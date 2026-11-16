@@ -10,6 +10,7 @@ import { PlatformProvider } from "../platform/react";
 import type { Session, SessionStatus } from "../protocol";
 import { DaemonProvider } from "../store";
 import { testDaemon } from "../test/testDaemon";
+import { RemoteDevicesTestHost } from "../remoteDaemons/remoteDevicesTestSupport";
 import { Rail } from "./Rail";
 import { enter, leave, mountForTooltip, openTooltip } from "../components/hint/tooltipTestSupport";
 import { BROWSER_HOST, MAC_HOST } from "../test/hosts";
@@ -50,6 +51,8 @@ function avatarOf(statuses: Case[], hoverOpensSidebar = false, otherSessions: Se
           onConsoleEnter={() => {}}
           onConsoleLeave={() => {}}
           hoverOpensSidebar={hoverOpensSidebar}
+          remoteDevicesShown={false}
+          onOpenRemoteDevices={() => {}}
           onOpenDialog={() => {}}
           onSelectSession={() => {}}
           onOpenArchive={() => {}}
@@ -201,8 +204,8 @@ async function railWithRemoteDaemons(connected: RemoteDaemonStatus[]): Promise<H
       remove: async () => {},
       connect: async () => ({ outcome: "opened" }),
       disconnect: async () => {},
-      newWindow: async () => {},
-      openWindow: async () => {},
+      onPageRequested: () => () => {},
+      onHandedOver: () => () => {},
       showMainWindow: async () => {},
       showUpdates: async () => {},
     },
@@ -212,6 +215,114 @@ async function railWithRemoteDaemons(connected: RemoteDaemonStatus[]): Promise<H
     container = mountForTooltip(
       <PlatformProvider value={platform}>
         <DaemonProvider value={testDaemon()}>
+          <RemoteDevicesTestHost capability={platform.remoteDaemons}>
+            <Rail
+              consoles={[main]}
+              currentConsoleId={main.id}
+              onSelectConsole={() => {}}
+              onConsoleEnter={() => {}}
+              onConsoleLeave={() => {}}
+              hoverOpensSidebar={false}
+              remoteDevicesShown={false}
+              onOpenRemoteDevices={() => {}}
+              onOpenDialog={() => {}}
+              onSelectSession={() => {}}
+              onOpenArchive={() => {}}
+              waitingCount={0}
+              onNextWaiting={() => {}}
+              onOpenProcesses={() => true}
+              onOpenSettings={() => {}}
+              onOpenSettingsAt={() => {}}
+              focusTerminal={() => {}}
+              onDemand={false}
+              away={false}
+            />
+          </RemoteDevicesTestHost>
+        </DaemonProvider>
+      </PlatformProvider>,
+    );
+  });
+  return container;
+}
+
+const FOLLOWING = Node.DOCUMENT_POSITION_FOLLOWING;
+
+it("puts the Remote devices button below the consoles and above the settings, behind a groove", async () => {
+  fakeTimers();
+  const container = await railWithRemoteDaemons([{ id: "staging", state: "connected", via: "window" }]);
+  const remote = container.querySelector<HTMLElement>("button[aria-label^='Remote devices']")!;
+  expect(remote).not.toBeNull();
+  const consoleAvatar = container.querySelector("[data-sidebar-peek-keep]")!;
+  const newConsole = container.querySelector("button[aria-label='New console']")!;
+  const settings = container.querySelector("button[aria-label='Settings']")!;
+  expect(consoleAvatar.compareDocumentPosition(remote) & FOLLOWING).toBeTruthy();
+  expect(newConsole.compareDocumentPosition(remote) & FOLLOWING).toBeTruthy();
+  expect(remote.compareDocumentPosition(settings) & FOLLOWING).toBeTruthy();
+  // The groove above the button is an item of the rail's stack of its own, not its group's padding.
+  const nav = remote.closest("nav")!;
+  const items = [...nav.children];
+  const above = items[items.findIndex((item) => item.contains(remote)) - 1];
+  expect(above.classList.contains("groove-t")).toBe(true);
+  expect(above.textContent).toBe("");
+  // One button for every connection held, which its name counts.
+  expect(remote.getAttribute("aria-label")).toBe("Remote devices, connected: 1");
+  expect(container.querySelectorAll("button[aria-label*='Staging']").length).toBe(0);
+});
+
+it("puts the gap that draws a groove above the bottom group between it and the button, only where the button is", async () => {
+  fakeTimers();
+  const container = await railWithRemoteDaemons([]);
+  const gap = container.querySelector("[data-rail-gap]");
+  const remote = container.querySelector("button[aria-label^='Remote devices']")!;
+  const settings = container.querySelector("button[aria-label='Settings']")!;
+  expect(gap).not.toBeNull();
+  expect(remote.compareDocumentPosition(gap!) & FOLLOWING).toBeTruthy();
+  expect(gap!.compareDocumentPosition(settings) & FOLLOWING).toBeTruthy();
+  // The separator under the space is an item of the rail's stack, directly followed by the bottom group.
+  const groove = container.querySelector("[data-rail-groove]")!;
+  expect(gap!.nextElementSibling).toBe(groove);
+  expect(groove.parentElement).toBe(gap!.parentElement);
+  const browser = avatarOf(["idle"]).closest("nav")!;
+  expect(browser.querySelector("[data-rail-gap]")).toBeNull();
+  expect(browser.querySelector("[data-rail-groove]")).toBeNull();
+});
+
+it("keeps every item of the rail directly in its one stack, with no group wrapper adding space of its own", async () => {
+  fakeTimers();
+  const container = await railWithRemoteDaemons([]);
+  const nav = container.querySelector("nav")!;
+  for (const name of ["Remote devices", "Settings"]) {
+    const button = nav.querySelector(`button[aria-label^='${name}']`)!;
+    // Whatever wraps a button between it and the nav adds no padding or margin.
+    for (let wrapper: Element | null = button; wrapper && wrapper !== nav; wrapper = wrapper.parentElement) {
+      expect(wrapper.className).not.toMatch(/(^|\s)(p[xytblr]?|m[xytblr]?)-\d/);
+    }
+  }
+});
+
+it("keeps the button while no remote daemon is connected, named without a count", async () => {
+  fakeTimers();
+  const container = await railWithRemoteDaemons([]);
+  expect(container.querySelector("button[aria-label='Remote devices']")).not.toBeNull();
+  expect(container.querySelector("button[aria-label='Settings']")).not.toBeNull();
+});
+
+it("has no remote daemons in a browser", async () => {
+  fakeTimers();
+  const rail = avatarOf(["idle"]).closest("nav")!;
+  expect(rail.querySelector("button[aria-label^='Remote devices']")).toBeNull();
+});
+
+it("puts the Forwarded ports button of a remote window above the settings, only while a port is forwarded, and none in a browser", async () => {
+  fakeTimers();
+  vi.stubGlobal("__TAURI_INTERNALS__", {});
+  window.history.replaceState(null, "", "/?remote=build-server&daemon=me%40build-server");
+  const forwards = { list: async () => [{ remotePort: 3000, localPort: 3000, address: "http://localhost:3000/", localAddress: "http://localhost:3000/" }], stop: async () => {}, onChange: () => () => {} };
+  let container!: HTMLElement;
+  await act(async () => {
+    container = mountForTooltip(
+      <PlatformProvider value={{ kind: "tauri", host: BROWSER_HOST, remoteForwards: forwards }}>
+        <DaemonProvider value={testDaemon()}>
           <Rail
             consoles={[main]}
             currentConsoleId={main.id}
@@ -219,6 +330,8 @@ async function railWithRemoteDaemons(connected: RemoteDaemonStatus[]): Promise<H
             onConsoleEnter={() => {}}
             onConsoleLeave={() => {}}
             hoverOpensSidebar={false}
+            remoteDevicesShown={false}
+            onOpenRemoteDevices={() => {}}
             onOpenDialog={() => {}}
             onSelectSession={() => {}}
             onOpenArchive={() => {}}
@@ -235,38 +348,12 @@ async function railWithRemoteDaemons(connected: RemoteDaemonStatus[]): Promise<H
       </PlatformProvider>,
     );
   });
-  return container;
-}
-
-const FOLLOWING = Node.DOCUMENT_POSITION_FOLLOWING;
-
-it("puts the connected remote daemons below the consoles and above the settings, behind a groove", async () => {
-  fakeTimers();
-  const container = await railWithRemoteDaemons([{ id: "staging", state: "connected", via: "window" }]);
-  const group = container.querySelector<HTMLElement>("[role=group][aria-label='Remote daemons']")!;
-  expect(group).not.toBeNull();
-  const consoleAvatar = container.querySelector("[data-sidebar-peek-keep]")!;
-  const newConsole = container.querySelector("button[aria-label='New console']")!;
-  const settings = container.querySelector("button[aria-label='Settings']")!;
-  expect(consoleAvatar.compareDocumentPosition(group) & FOLLOWING).toBeTruthy();
-  expect(newConsole.compareDocumentPosition(group) & FOLLOWING).toBeTruthy();
-  expect(group.compareDocumentPosition(settings) & FOLLOWING).toBeTruthy();
-  expect(group.querySelector(".groove-t")).not.toBeNull();
-  // The tile, and no Add or edit button: each tile's menu opens from a right-click, its trigger not drawn.
-  const shown = [...group.querySelectorAll("button")].filter((button) => !button.closest(".hidden"));
-  expect(shown.map((button) => button.getAttribute("aria-label")?.replace(/[\u2068\u2069]/g, "").split(",")[0])).toEqual(["Staging"]);
-});
-
-it("has neither the group nor its groove while no remote daemon is connected, though some are saved", async () => {
-  fakeTimers();
-  const container = await railWithRemoteDaemons([]);
-  expect(container.querySelector("[role=group][aria-label='Remote daemons']")).toBeNull();
-  expect(container.querySelector(".groove-t")).toBeNull();
-  expect(container.querySelector("button[aria-label='Settings']")).not.toBeNull();
-});
-
-it("has no remote daemons in a browser", async () => {
-  fakeTimers();
-  const rail = avatarOf(["idle"]).closest("nav")!;
-  expect(rail.querySelector("[role=group][aria-label='Remote daemons']")).toBeNull();
+  const button = container.querySelector<HTMLElement>("#rail-forwards")!;
+  expect(button.getAttribute("aria-label")).toBe("1 port is forwarded. Show it.");
+  const nav = button.closest("nav")!;
+  expect(nav.querySelector("button[aria-label='Settings']")!.compareDocumentPosition(button) & FOLLOWING).toBeFalsy();
+  expect(nav.querySelector("[data-sidebar-peek-keep]")!.compareDocumentPosition(button) & FOLLOWING).toBeTruthy();
+  vi.unstubAllGlobals();
+  window.history.replaceState(null, "", "/");
+  expect(avatarOf(["idle"]).closest("nav")!.querySelector("#rail-forwards")).toBeNull();
 });

@@ -1,6 +1,7 @@
 import { hostPathRecovery } from "../../errors/errorRecovery";
 import { useT } from "../../i18n/react";
 import { useDaemon } from "../../store";
+import { raiseDefaultApplicationFailure } from "../alerts/defaultApplicationFailure";
 import { raiseError } from "../alerts/raiseError";
 
 /** Where a file or folder lives on the daemon's host: in a project's directory, or in one of its
@@ -20,7 +21,8 @@ export function useHostPathActions(): (type: "open_project_path" | "reveal_proje
   const { request } = useDaemon();
   return (type, { project, worktree, path }) => {
     void request({ type, project, ...(worktree !== undefined && { worktree }), path }).catch((error: Error) => {
-      raiseError(error, { title: t(type === "open_project_path" ? "common.openDefaultApplicationFailedTitle" : "common.revealFailedTitle"), recovery: hostPathRecovery(error) });
+      if (type === "open_project_path") raiseDefaultApplicationFailure(t, error, hostPathRecovery(error));
+      else raiseError(error, { title: t("common.revealFailedTitle"), recovery: hostPathRecovery(error) });
     });
   };
 }

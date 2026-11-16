@@ -1,7 +1,7 @@
 import type { ThirdPartyLicenses } from "../about/thirdPartyLicenses";
 import type { StartupCause } from "../daemon";
 import type { Language } from "../i18n/languages";
-import type { AvailableUpdate, HostFacts, LaunchAtLoginStatus, MacosPermissionsStatus, RemoteDaemonConnectOutcome, RemoteDaemonEntry, RemoteDaemonStatus, UpdateProgress } from "../platform";
+import type { AvailableUpdate, HostFacts, LaunchAtLoginStatus, LinkForwardError, MacosPermissionsStatus, RemoteDaemonConnectOutcome, RemoteDaemonEntry, RemoteDaemonStatus, RemoteForward, UpdateProgress } from "../platform";
 import type { Fixture } from "../fixtures/fixture";
 import type { Step } from "../fixtures/interact";
 import type { Preferences } from "../fixtures/preferences";
@@ -44,11 +44,11 @@ export const MIN_HEIGHT = 400;
  * updater's own failure text. */
 export type UpdaterCheck = AvailableUpdate | "upToDate" | "pending" | { error: string };
 
-/** The remote daemons the desktop shell keeps, for a window that offers them: the rail's group of them exists only with
- * this. A connection never ends unless `outcomes` says how, so pressing a tile that has no password to ask for leaves
- * it connecting. */
+/** The remote daemons the desktop shell keeps, for a window that offers them: the rail's Remote devices button and
+ * the page it shows exist only with this. A connection never ends unless `outcomes` says how, so pressing a Connect that has no
+ * password to ask for leaves it connecting. */
 export interface RemoteDaemonsFixture {
-  /** The saved entries, in the order the rail lists them. */
+  /** The saved entries, in the order the page lists them. */
   entries: RemoteDaemonEntry[];
   /** The entries whose window is open; any other entry is not connected. */
   status?: RemoteDaemonStatus[];
@@ -195,19 +195,24 @@ export interface Scenario extends Fixture {
   /** With `launchAtLogin`, the reason the system gives for not opening its list of login items, which the Open System
    * Settings button of a login entry that `requiresApproval` goes to; without it the list opens (nothing is shown). */
   launchAtLoginOpenError?: string;
-  /** The platform offers the desktop shell's remote daemons, listing these, so the rail has its group of them under the
-   * consoles (alone, and in a `desktopApp`, which is the window that has it). Saving and removing change the list. */
+  /** The platform offers the desktop shell's remote daemons, listing these, so the rail has its Remote devices
+   * button under the consoles (alone, and in a `desktopApp`, which is the window that has it). Saving and removing
+   * change the list. */
   remoteDaemons?: RemoteDaemonsFixture;
-  /** The window is the connect page a new remote window opens on (`ConnectPage`), which has no daemon behind it: the
-   * saved remote daemons of `remoteDaemons`, with their connect flow. */
-  connectPage?: boolean;
   /** The window is a remote daemon's, as the shell opens one (`?remote=<name>`): the title bar names the daemon, and
-   * what is the application's own rather than a daemon's is absent (the rail's remote daemons, the Remote access,
+   * what is the application's own rather than a daemon's is absent (the rail's Remote devices button, the Remote access,
    * Permissions and Updates sections), as in the shell's window of that kind. Give the `host` the shell gives such a
    * window (`REMOTE_WINDOW_HOST` of `fixtures/remoteWindow.ts`) and leave out the capabilities a remote window is not
    * given (`backgroundRun`, `menuBarIcon`, `launchAtLogin`, `updater`). The daemon's host is its own, as `state.host`
    * says. */
   remoteWindow?: { name: string };
+  /** The ports of this computer the remote window's shell forwards to its daemon's machine, in the order they were made:
+   * the rail has its Forwarded ports entry while there is one, and Stop lets a port go. Only for a `remoteWindow`. */
+  remoteForwards?: RemoteForward[];
+  /** The remote window's shell can copy a file of its daemon's machine to this computer and open the copy (Download and
+   * open); the shell takes every part and shows nothing, and how many parts the daemon answers is the file's own
+   * (`answeredParts`). Only for a `remoteWindow`. */
+  remoteFiles?: boolean;
   /** Whether macOS Remote Login (Windows: OpenSSH Server) is on, as the shell reports it for the Remote access section:
    * `"unknown"` is a shell that cannot tell. Opening the system's settings succeeds and shows nothing. Only a window
    * that has it offers the section (with `state.remoteAccess` set). */
@@ -221,6 +226,10 @@ export interface Scenario extends Fixture {
   /** Opening an external link fails with this text, as a refused desktop opener does. Without it the browser
    * platform's own opener stands and opens the address in a new tab. */
   externalLinkError?: string;
+  /** Opening an address in a remote window fails as the shell's forwarding does, by this kind, naming the port of the
+   * address: nothing listens on it, the SSH server refuses forwarding, or the connection is down. Only for a
+   * `remoteWindow`. */
+  forwardFailure?: Exclude<LinkForwardError["kind"], "failed">;
   /** The platform can update the application, as the desktop app does: the Settings rows for the version and
    * channel, and the update notice once a check finds a version. It also has the exit capability that a restart
    * goes through, whose confirmation ends nothing. */

@@ -38,8 +38,8 @@ const CAPABILITY: RemoteDaemonsCapability = {
   remove: async () => {},
   connect: async () => ({ outcome: "opened" }),
   disconnect: async () => {},
-  newWindow: async () => {},
-  openWindow: async () => {},
+  onPageRequested: () => () => {},
+  onHandedOver: () => () => {},
   showMainWindow: async () => {},
   showUpdates: async () => {},
 };
@@ -109,4 +109,29 @@ it("has no entries and reads nothing where the platform has no remote daemons", 
   await mount(null);
   expect(latest).toMatchObject({ entries: [], statuses: [] });
   expect(list).not.toHaveBeenCalled();
+});
+
+it("answers a reload once both reads have ended, whether or not they succeeded", async () => {
+  await mount();
+  let answerList!: (entries: RemoteDaemonEntry[]) => void;
+  let answerStatus!: (statuses: RemoteDaemonStatus[]) => void;
+  list.mockImplementationOnce(() => new Promise((resolve) => (answerList = resolve)));
+  status.mockImplementationOnce(() => new Promise((resolve) => (answerStatus = resolve)));
+  let ended = false;
+  let reloading!: Promise<void>;
+  await act(async () => {
+    reloading = latest.reload().then(() => void (ended = true));
+  });
+  await act(async () => answerList([LAB]));
+  expect(ended).toBe(false);
+  await act(async () => answerStatus([]));
+  await reloading;
+  expect(ended).toBe(true);
+  expect(latest.entries).toEqual([LAB]);
+
+  // A read that fails ends the reload as well, which does not throw.
+  list.mockRejectedValueOnce(new Error("store unreadable"));
+  status.mockRejectedValueOnce(new Error("busy"));
+  await act(async () => latest.reload());
+  expect(latest.entries).toEqual([LAB]);
 });

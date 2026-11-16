@@ -305,7 +305,7 @@ pub enum RequestBody {
     /// `settings_sections` is every section exactly when every console is exported (none
     /// otherwise; an empty list writes no `settings` region), and `include_accounts` is false.
     /// A section is written with the keys the daemon holds, so General carries only
-    /// `agent_language`, and only when the daemon holds one. A request that would export
+    /// `interface_language`, and only when the daemon holds one. A request that would export
     /// nothing is refused with `export_empty`, `consoles: "one"` without a `console` with
     /// `field_required`, and a console that does not exist with `unknown_console`. `console` is
     /// read only for `one`. Reads what is stored; touches no session, runs no `git`.
@@ -816,11 +816,11 @@ pub enum RequestBody {
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]
         keep_sessions_in_own_project: Option<bool>,
-        /// The agent language: a tag the interface offers (`interface_language::display_name`
-        /// knows it); any other is refused.
+        /// A tag the interface offers (`interface_language::display_name` knows it); any other
+        /// is refused.
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]
-        agent_language: Option<String>,
+        interface_language: Option<String>,
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]
         keep_awake: Option<bool>,

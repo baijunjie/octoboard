@@ -202,6 +202,8 @@ the earlier steps do not run them separately (the related tests a step runs to c
   the copy conventions this round changes), the gallery scenarios that show the changed states, and the address of
   any gallery this checkout is serving; work through its findings as `agent-change-check` does with
   `change-checker`'s, and re-dispatch it until it passes.
+- UI copy: where `docs/ui-standard.md` and the `knowledge-i18n-copy` skill disagree, the UI standard wins (a name
+  referenced within copy is an `InlineReference`, not quoted). Whoever writes or translates UI copy reads both.
 - Within "Documentation update": `docs/ui-standard.md`, the UI standard, has no writer subagent of its own — you
   maintain it yourself, from what the change turned up and from what a writer subagent hands back as belonging to it.
   Skip it when this round's changes touch nothing it states.

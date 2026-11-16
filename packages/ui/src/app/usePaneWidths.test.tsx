@@ -19,7 +19,7 @@ function mount(overlay = true, share = 0.5, initialKinds = ["files", "processes"
   const peek = { active: false, reveal: () => {}, keep: () => {}, leave: () => {}, hide: () => {} };
   function Probe({ kinds, maximized, owner }: { kinds: string[]; maximized: boolean; owner: string }) {
     widths = usePaneWidths({
-      noConsoles: false,
+      noSidebar: false,
       isNarrow: overlay,
       sidebarDocked: true,
       stackedPanelCount: kinds.length,

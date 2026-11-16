@@ -7,14 +7,15 @@ import { App } from "./App";
 import { AppRoot } from "./AppRoot";
 import { suppressNativeContextMenu } from "./input/contextMenuGuard";
 import { isKeylessDaemonPage, resolveDaemonAddress, resolveRecovered, resolveStartupCause, resolveStartupError } from "./daemon";
+import { followLocalLanguage } from "./i18n/language";
 import { runtimeError } from "./errors/runtimeError";
-import { ConnectPage } from "./shell/ConnectPage";
 import { TrayFlyout } from "./shell/TrayFlyout";
 import { connectShellSettings } from "./lifecycle/shellSettings";
-import { connectPageEntry, selectPlatform, windowKind } from "./platform";
+import { selectPlatform, windowKind } from "./platform";
 import { KeyRefusedScreen } from "./shell/KeyRefusedScreen";
 import { DaemonFailedScreen, NoAddressMessage, StartupScreen } from "./StartupScreen";
-import { createDaemon } from "./store";
+import { remoteDaemonsOffered } from "./remoteDaemons/remoteDaemonsOffered";
+import { createDaemon, createInertDaemon } from "./store";
 import "./input/focusGuard";
 import "./style.css";
 import { raiseError } from "./components/alerts/raiseError";
@@ -35,6 +36,8 @@ suppressNativeContextMenu(platform);
 // The notification-area flyout has no daemon, and the shell shows and themes its window itself.
 const kind = windowKind();
 const trayFlyout = kind === "flyout";
+// A window with no daemon shows the local language, and follows it when a window of the local daemon changes it.
+if (trayFlyout) followLocalLanguage();
 // The shell holds the run-in-background and menu bar icon choices and starts from its own file; from here a change of
 // either reaches it, and what the page kept before the file existed is handed over once. The flyout leaves that to the
 // windows that show the settings.
@@ -78,18 +81,21 @@ const startupCause = resolveStartupCause(platform);
 const daemonAddress = resolveDaemonAddress(platform);
 // Created here rather than by a component: the connection lives as long as the window, and a
 // component that owned it would drop it, for good, on its first unmount (StrictMode's included).
-// The connect page has no daemon behind it at all: it is where one is chosen.
-const connectPage = kind === "connect";
-const daemon = !connectPage && !trayFlyout && !startupError && daemonAddress ? createDaemon(daemonAddress, { remote: kind === "remote" }) : undefined;
+// The application's own window has no daemon to connect to when it failed to start, but still has what remote connections
+// need none for (the Remote devices page): it gets an inert one, which the window then shows the failure over.
+const pageWithoutDaemon = !trayFlyout && !!startupError && remoteDaemonsOffered(platform);
+const daemon = pageWithoutDaemon
+  ? createInertDaemon()
+  : !trayFlyout && !startupError && daemonAddress ? createDaemon(daemonAddress, { remote: kind === "remote" }) : undefined;
 
 function screen(): React.ReactElement {
   if (trayFlyout) return <TrayFlyout />;
-  if (connectPage) return <ConnectPage entryId={connectPageEntry()} />;
   if (startupError) {
     // The daemon failed to start before the window even opened, and the shell passed the message
     // along via `?error=` instead of `?port=` — there is nothing to connect to, same as the
     // missing-address case below, just with a specific reason instead of a generic one.
-    return <DaemonFailedScreen error={startupError} cause={startupCause} />;
+    const failed = <DaemonFailedScreen error={startupError} cause={startupCause} />;
+    return pageWithoutDaemon ? <App startupScreen={failed} /> : failed;
   }
   if (!daemon) {
     if (isKeylessDaemonPage(platform)) {
@@ -109,7 +115,7 @@ function screen(): React.ReactElement {
 
 root.render(
   <React.StrictMode>
-    <AppRoot platform={platform} daemon={daemon} nativeSync={!trayFlyout} firstCheckDelayMs={connectPage || trayFlyout ? null : undefined}>
+    <AppRoot platform={platform} daemon={daemon} nativeSync={!trayFlyout} firstCheckDelayMs={trayFlyout ? null : undefined}>
       {screen()}
     </AppRoot>
   </React.StrictMode>,

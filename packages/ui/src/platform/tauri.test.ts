@@ -6,6 +6,8 @@ import { MAC_HOST, WINDOWS_HOST } from "../test/hosts";
 import { ConfigurationFileError } from "./configurationFileError";
 import { browserHost } from "./host";
 import { tauriPlatform } from "./tauri";
+import { ForwardedLinkOpenError, LinkForwardError } from "./linkForwardError";
+import { RemoteFileError } from "./remoteFileError";
 import { UpdaterError } from "./updaterError";
 
 const invoke = vi.fn();
@@ -30,6 +32,9 @@ vi.mock("@tauri-apps/api/webviewWindow", () => ({
   },
 }));
 
+const shellOpen = vi.fn(async (_address: string) => {});
+vi.mock("@tauri-apps/plugin-shell", () => ({ open: (address: string) => shellOpen(address) }));
+
 const readText = vi.fn();
 const readImage = vi.fn();
 vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ readText: () => readText(), readImage: () => readImage() }));
@@ -46,6 +51,8 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   invoke.mockReset();
+  shellOpen.mockReset();
+  shellOpen.mockResolvedValue(undefined);
   listeners.clear();
   vi.unstubAllGlobals();
   window.history.replaceState(null, "", "/");
@@ -391,25 +398,13 @@ describe("what each kind of window of the application has", () => {
     window.history.replaceState(null, "", `/?host=${encodeURIComponent(JSON.stringify(MAC_HOST))}${query}`);
   }
 
-  it("gives every window the remote daemons, and only the local daemon's the computer's own Remote Login", () => {
+  it("gives only the local daemon's window the remote daemons and the computer's own Remote Login", () => {
     openAs("");
     expect(tauriPlatform().remoteDaemons).toBeDefined();
     expect(tauriPlatform().remoteLogin).toBeDefined();
     openAs("&daemon=me%40host&remote=host");
-    expect(tauriPlatform().remoteDaemons).toBeDefined();
+    expect(tauriPlatform().remoteDaemons).toBeUndefined();
     expect(tauriPlatform().remoteLogin).toBeUndefined();
-    openAs("&connect=1");
-    expect(tauriPlatform().remoteDaemons).toBeDefined();
-    expect(tauriPlatform().remoteLogin).toBeUndefined();
-  });
-
-  it("gives the connect page none of what acts on a daemon of this computer", () => {
-    openAs("&connect=1");
-    const platform = tauriPlatform();
-    expect(platform.exit).toBeUndefined();
-    expect(platform.directoryPicker).toBeUndefined();
-    expect(platform.macosPermissions).toBeUndefined();
-    expect(platform.statusItem?.setVisible).toBeUndefined();
   });
 
   it("gives the notification-area flyout's page its own capability, and no other window has it", () => {
@@ -427,7 +422,7 @@ describe("what each kind of window of the application has", () => {
   });
 
   it("reads none of it outside the shell, where the query is anyone's", () => {
-    window.history.replaceState(null, "", `/?host=${encodeURIComponent(JSON.stringify(MAC_HOST))}&flyout=1&connect=1`);
+    window.history.replaceState(null, "", `/?host=${encodeURIComponent(JSON.stringify(MAC_HOST))}&flyout=1`);
     const platform = tauriPlatform();
     expect(platform.trayFlyout).toBeUndefined();
     expect(platform.exit).toBeDefined();
@@ -493,6 +488,161 @@ describe("Remote Login", () => {
   });
 });
 
+describe("opening an address", () => {
+  function openAs(query: string): void {
+    vi.stubGlobal("__TAURI_INTERNALS__", {});
+    window.history.replaceState(null, "", `/?host=${encodeURIComponent(JSON.stringify(MAC_HOST))}${query}`);
+  }
+
+  it("hands the shell plugin the address as it is in the main window, which asks the shell for nothing", async () => {
+    openAs("");
+    await tauriPlatform().links!.open("http://localhost:3000/");
+    expect(shellOpen).toHaveBeenCalledExactlyOnceWith("http://localhost:3000/");
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it("opens in a remote window what the shell answers for the address, the forwarded one for a loopback address", async () => {
+    openAs("&daemon=me%40host&remote=host");
+    invoke.mockResolvedValueOnce("http://localhost:4000/app");
+    await tauriPlatform().links!.open("http://localhost:3000/app");
+    expect(invoke).toHaveBeenLastCalledWith("remote_link_address", { url: "http://localhost:3000/app" });
+    expect(shellOpen).toHaveBeenLastCalledWith("http://localhost:4000/app");
+  });
+
+  it("treats an IPv6 literal address like any other: as it is in the main window, through the shell in a remote one", async () => {
+    openAs("");
+    await tauriPlatform().links!.open("http://[::1]:59302/remote.txt");
+    expect(shellOpen).toHaveBeenLastCalledWith("http://[::1]:59302/remote.txt");
+    expect(invoke).not.toHaveBeenCalled();
+    openAs("&daemon=me%40host&remote=host");
+    invoke.mockResolvedValueOnce("http://localhost:4000/remote.txt");
+    await tauriPlatform().links!.open("http://[::1]:59302/remote.txt");
+    expect(invoke).toHaveBeenLastCalledWith("remote_link_address", { url: "http://[::1]:59302/remote.txt" });
+    expect(shellOpen).toHaveBeenLastCalledWith("http://localhost:4000/remote.txt");
+  });
+
+  it("rejects with the kind and the port where the shell could not forward, and opens nothing", async () => {
+    openAs("&daemon=me%40host&remote=host");
+    for (const kind of ["nothing_listening", "forwarding_refused", "disconnected"] as const) {
+      invoke.mockRejectedValueOnce({ kind, port: 3000 });
+      const error = await tauriPlatform().links!.open("http://localhost:3000/").catch((cause: unknown) => cause);
+      expect(error).toBeInstanceOf(LinkForwardError);
+      expect(error).toMatchObject({ kind, port: 3000 });
+    }
+    invoke.mockRejectedValueOnce({ kind: "failed", port: 3000, detail: "cannot listen" });
+    expect(await tauriPlatform().links!.open("http://localhost:3000/").catch((cause: unknown) => cause)).toMatchObject({ kind: "failed", message: "cannot listen" });
+    expect(shellOpen).not.toHaveBeenCalled();
+  });
+
+  it("lets a failure that is not one of those through, and says which address a browser failed to open", async () => {
+    openAs("&daemon=me%40host&remote=host");
+    invoke.mockRejectedValueOnce(new Error("no such command"));
+    await expect(tauriPlatform().links!.open("http://localhost:3000/")).rejects.toThrow("no such command");
+    invoke.mockResolvedValueOnce("http://localhost:4000/");
+    shellOpen.mockRejectedValueOnce(new Error("no browser"));
+    const error = await tauriPlatform().links!.open("http://localhost:3000/").catch((cause: unknown) => cause);
+    expect(error).toBeInstanceOf(ForwardedLinkOpenError);
+    expect(error).toMatchObject({ address: "http://localhost:4000/" });
+    // An address that was not rewritten fails as it is.
+    invoke.mockResolvedValueOnce("https://example.com/");
+    shellOpen.mockRejectedValueOnce(new Error("no browser"));
+    await expect(tauriPlatform().links!.open("https://example.com/")).rejects.toThrow("no browser");
+  });
+});
+
+describe("the forwarded ports", () => {
+  function openAs(query: string): void {
+    vi.stubGlobal("__TAURI_INTERNALS__", {});
+    window.history.replaceState(null, "", `/?host=${encodeURIComponent(JSON.stringify(MAC_HOST))}${query}`);
+  }
+
+  it("are a remote window's alone", () => {
+    openAs("&daemon=me%40host&remote=host");
+    expect(tauriPlatform().remoteForwards).toBeDefined();
+    openAs("");
+    expect(tauriPlatform().remoteForwards).toBeUndefined();
+  });
+
+  it("are listed and stopped by the shell's commands, and the shell's event is heard in this window", async () => {
+    openAs("&daemon=me%40host&remote=host");
+    const forward = { remotePort: 3000, localPort: 3000, address: "http://localhost:3000/", localAddress: "http://localhost:3000/" };
+    const { remoteForwards } = tauriPlatform();
+    invoke.mockResolvedValueOnce([forward]);
+    expect(await remoteForwards!.list()).toEqual([forward]);
+    expect(invoke).toHaveBeenLastCalledWith("remote_forwards_list");
+    invoke.mockResolvedValueOnce(undefined);
+    await remoteForwards!.stop(3000);
+    expect(invoke).toHaveBeenLastCalledWith("remote_forward_stop", { remotePort: 3000 });
+    const listener = vi.fn();
+    const undo = remoteForwards!.onChange(listener);
+    await afterQueuedWork();
+    listeners.get("remote-forwards-changed")!({ payload: null });
+    expect(listener).toHaveBeenCalledTimes(1);
+    undo();
+    expect(listeners.has("remote-forwards-changed")).toBe(false);
+  });
+});
+
+describe("the files copied from a remote daemon", () => {
+  function openAs(query: string): void {
+    vi.stubGlobal("__TAURI_INTERNALS__", {});
+    window.history.replaceState(null, "", `/?host=${encodeURIComponent(JSON.stringify(MAC_HOST))}${query}`);
+  }
+
+  it("are a remote window's alone", () => {
+    openAs("&daemon=me%40host&remote=host");
+    expect(tauriPlatform().remoteFiles).toBeDefined();
+    openAs("");
+    expect(tauriPlatform().remoteFiles).toBeUndefined();
+  });
+
+  it("are begun, written as the raw body of the call behind the copy's id, opened and discarded by the shell's commands", async () => {
+    openAs("&daemon=me%40host&remote=host");
+    const { remoteFiles } = tauriPlatform();
+    invoke.mockResolvedValueOnce("copy-1");
+    expect(await remoteFiles!.begin({ name: "a.pdf", size: 12, launchable: false })).toBe("copy-1");
+    expect(invoke).toHaveBeenLastCalledWith("remote_file_begin", { name: "a.pdf", size: 12, launchable: false });
+    invoke.mockResolvedValueOnce(undefined);
+    await remoteFiles!.write("copy-1", Uint8Array.from([1, 2, 3]));
+    // No header: the id's length, the id, the part, whichever channel carries the bytes.
+    const [command, body, ...rest] = invoke.mock.lastCall!;
+    expect(command).toBe("remote_file_write");
+    expect(body).toBeInstanceOf(Uint8Array);
+    expect(Array.from(body as Uint8Array)).toEqual([6, ...new TextEncoder().encode("copy-1"), 1, 2, 3]);
+    expect(rest).toEqual([]);
+    invoke.mockResolvedValueOnce(undefined);
+    await remoteFiles!.write("copy-1", new Uint8Array());
+    expect(Array.from(invoke.mock.lastCall![1] as Uint8Array)).toEqual([6, ...new TextEncoder().encode("copy-1")]);
+    invoke.mockResolvedValueOnce(undefined);
+    await remoteFiles!.open("copy-1");
+    expect(invoke).toHaveBeenLastCalledWith("remote_file_open", { id: "copy-1" });
+    invoke.mockResolvedValueOnce(undefined);
+    await remoteFiles!.discard("copy-1");
+    expect(invoke).toHaveBeenLastCalledWith("remote_file_discard", { id: "copy-1" });
+  });
+
+  it("reject with the kind the shell gave, and with anything else as it came", async () => {
+    openAs("&daemon=me%40host&remote=host");
+    const { remoteFiles } = tauriPlatform();
+    for (const kind of ["launchable", "storage", "incomplete", "open"] as const) {
+      invoke.mockRejectedValueOnce({ kind, detail: "text" });
+      const error = await remoteFiles!.open("copy-1").catch((cause: unknown) => cause);
+      expect(error).toBeInstanceOf(RemoteFileError);
+      expect(error).toMatchObject({ kind, message: "text" });
+    }
+    invoke.mockRejectedValueOnce({ kind: "launchable" });
+    expect(await remoteFiles!.begin({ name: "a.exe", size: 1, launchable: false }).catch((cause: unknown) => cause)).toMatchObject({ kind: "launchable", message: "" });
+    invoke.mockRejectedValueOnce(new Error("no such command"));
+    await expect(remoteFiles!.write("copy-1", new Uint8Array())).rejects.toThrow("no such command");
+  });
+
+  it("let a discard that fails pass in silence: the copy is already given up on", async () => {
+    openAs("&daemon=me%40host&remote=host");
+    invoke.mockRejectedValueOnce({ kind: "storage", detail: "gone" });
+    await expect(tauriPlatform().remoteFiles!.discard("copy-1")).resolves.toBeUndefined();
+  });
+});
+
 describe("the remote daemons", () => {
   const ENTRY = { id: "a", name: "Staging", host: "h", port: 22, user: "u", auth: "password", keyPath: null, fingerprint: null, octoboarddPath: null } as const;
 
@@ -529,17 +679,105 @@ describe("the remote daemons", () => {
     await expect(tauriPlatform().remoteDaemons!.connect({ id: "a", secret: null, confirmFingerprint: null, action: null, browser: false })).rejects.toThrow("no such command");
   });
 
-  it("disconnects, opens windows and shows this computer's by the shell's commands", async () => {
+  it("disconnects and shows this computer's window by the shell's commands", async () => {
     const { remoteDaemons } = tauriPlatform();
     invoke.mockResolvedValue(undefined);
     await remoteDaemons!.disconnect("a");
     expect(invoke).toHaveBeenLastCalledWith("remote_daemon_disconnect", { id: "a" });
-    await remoteDaemons!.newWindow();
-    expect(invoke).toHaveBeenLastCalledWith("remote_window_new");
-    await remoteDaemons!.openWindow("a");
-    expect(invoke).toHaveBeenLastCalledWith("remote_window_open", { id: "a" });
     await remoteDaemons!.showMainWindow();
     expect(invoke).toHaveBeenLastCalledWith("main_window_show");
+  });
+
+  it("takes what was handed over once it listens, and again whenever the shell says there is more", async () => {
+    const taken = [{ id: "a", outcome: { outcome: "no_daemon" } }];
+    invoke.mockImplementation(async (command: string) => (command === "remote_connect_pending_take" ? taken : undefined));
+    const listener = vi.fn();
+    const undo = tauriPlatform().remoteDaemons!.onHandedOver(listener);
+    await afterQueuedWork();
+    expect(listeners.has("remote-connect-pending")).toBe(true);
+    expect(invoke).toHaveBeenCalledWith("remote_connect_pending_take");
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenLastCalledWith(taken);
+    listeners.get("remote-connect-pending")!({ payload: undefined });
+    await afterQueuedWork();
+    expect(listener).toHaveBeenCalledTimes(2);
+    // An empty answer is not passed on.
+    invoke.mockImplementation(async () => []);
+    listeners.get("remote-connect-pending")!({ payload: undefined });
+    await afterQueuedWork();
+    expect(listener).toHaveBeenCalledTimes(2);
+    undo();
+  });
+
+  it("stops hearing what was handed over once undone, even where undone before the shell was listened to", async () => {
+    invoke.mockImplementation(async () => [{ id: "a", outcome: { outcome: "no_daemon" } }]);
+    const listener = vi.fn();
+    tauriPlatform().remoteDaemons!.onHandedOver(listener)();
+    await afterQueuedWork();
+    expect(listeners.has("remote-connect-pending")).toBe(false);
+    const heard = vi.fn();
+    const undo = tauriPlatform().remoteDaemons!.onHandedOver(heard);
+    await afterQueuedWork();
+    expect(listeners.has("remote-connect-pending")).toBe(true);
+    undo();
+    expect(listeners.has("remote-connect-pending")).toBe(false);
+  });
+
+  it("makes no take once undone, and drops what a take under way brings back", async () => {
+    const takes = () => invoke.mock.calls.filter(([command]) => command === "remote_connect_pending_take" || command === "remote_page_requested_take").length;
+    invoke.mockImplementation(async () => []);
+    // Undone before the shell was listened to: nothing is taken at all.
+    tauriPlatform().remoteDaemons!.onHandedOver(vi.fn())();
+    tauriPlatform().remoteDaemons!.onPageRequested(vi.fn())();
+    await afterQueuedWork();
+    expect(takes()).toBe(0);
+    // Undone while a take is under way: its answer reaches no one.
+    let answer!: (items: unknown[]) => void;
+    invoke.mockImplementation(() => new Promise((resolve) => { answer = resolve; }));
+    const listener = vi.fn();
+    const undo = tauriPlatform().remoteDaemons!.onHandedOver(listener);
+    await afterQueuedWork();
+    expect(takes()).toBe(1);
+    undo();
+    answer([{ id: "a", outcome: { outcome: "no_daemon" } }]);
+    await afterQueuedWork();
+    expect(listener).not.toHaveBeenCalled();
+    const asked = vi.fn();
+    invoke.mockImplementation(() => new Promise((resolve) => { answer = resolve as typeof answer; }));
+    const undoAdd = tauriPlatform().remoteDaemons!.onPageRequested(asked);
+    await afterQueuedWork();
+    undoAdd();
+    (answer as unknown as (asked: boolean) => void)(true);
+    await afterQueuedWork();
+    expect(asked).not.toHaveBeenCalled();
+  });
+
+  it("is not stopped by the shell failing to give what was handed over", async () => {
+    invoke.mockRejectedValue(new Error("no such command"));
+    const listener = vi.fn();
+    const undo = tauriPlatform().remoteDaemons!.onHandedOver(listener);
+    await afterQueuedWork();
+    expect(listener).not.toHaveBeenCalled();
+    invoke.mockResolvedValue([{ id: "a", outcome: { outcome: "no_daemon" } }]);
+    listeners.get("remote-connect-pending")!({ payload: undefined });
+    await afterQueuedWork();
+    expect(listener).toHaveBeenCalledOnce();
+    undo();
+  });
+
+  it("takes a request for the Remote devices page once it listens, and again whenever the shell says so", async () => {
+    invoke.mockImplementation(async (command: string) => (command === "remote_page_requested_take" ? true : undefined));
+    const listener = vi.fn();
+    const undo = tauriPlatform().remoteDaemons!.onPageRequested(listener);
+    await afterQueuedWork();
+    expect(listeners.has("remote-page-requested")).toBe(true);
+    expect(listener).toHaveBeenCalledTimes(1);
+    // Nothing asked for is not passed on.
+    invoke.mockImplementation(async () => false);
+    listeners.get("remote-page-requested")!({ payload: undefined });
+    await afterQueuedWork();
+    expect(listener).toHaveBeenCalledTimes(1);
+    undo();
   });
 
   it("hears of a change on its own window, and stops hearing once undone", async () => {

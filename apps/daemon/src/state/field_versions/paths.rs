@@ -29,7 +29,7 @@ pub(crate) const SETTINGS_FIELDS: [&str; 19] = [
     "auto_approve_handoffs",
     "ask_questions_as_choices",
     "keep_sessions_in_own_project",
-    "agent_language",
+    "interface_language",
     "keep_awake",
     "keep_awake_when",
     "auto_select_account",

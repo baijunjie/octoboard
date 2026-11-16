@@ -56,11 +56,11 @@ const PRIMITIVES_NOTE = "Every layer may also import primitives, the wrapper lay
 const PRIMITIVES_FILE_MESSAGE = "Import the wrapper layer from its barrel, primitives, never a file inside it.";
 const primitivesFile = (depth) => ({ regex: `^(?:\\.\\./){${depth}}${PRIMITIVES}/.`, message: PRIMITIVES_FILE_MESSAGE });
 const ROOT_PRIMITIVES_FILE = { regex: `^\\./${PRIMITIVES}/.`, message: PRIMITIVES_FILE_MESSAGE };
-// What code below src/ may import from src/'s root: the daemon contract, the app's configuration mirror, and the
-// barrels of store/, platform/ and primitives/. The rest of the root (the entry, App, the screens, style.css) is
-// imported by nothing below src/.
-const ROOT_SHARED = ["protocol", "requests", "daemon", "daemon-client", "appConfig", "store", "platform", PRIMITIVES];
-const ROOT_MESSAGE = "Below src/, only protocol, requests, daemon, daemon-client, appConfig and the store, platform and primitives barrels are imported from src/'s root.";
+// What code below src/ may import from src/'s root: the daemon contract, the app's configuration mirror, `launchable`
+// (which files the system would run rather than show), and the barrels of store/, platform/ and primitives/. The rest
+// of the root (the entry, App, the screens, style.css) is imported by nothing below src/.
+const ROOT_SHARED = ["protocol", "requests", "daemon", "daemon-client", "appConfig", "launchable", "store", "platform", PRIMITIVES];
+const ROOT_MESSAGE = "Below src/, only protocol, requests, daemon, daemon-client, appConfig, launchable and the store, platform and primitives barrels are imported from src/'s root.";
 const onlyRoot = (depth, message, roots = ROOT_SHARED) =>
   ({ regex: `^(?:\\.\\./){${depth}}(?!(?:${roots.join("|")})$)[^/]+$`, message });
 /** Outside itself, `dir` imports only the `allowed` top-level directories, the `roots` files at src/'s root, and the

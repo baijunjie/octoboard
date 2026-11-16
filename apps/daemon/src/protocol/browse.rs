@@ -125,6 +125,28 @@ pub enum ReadFrom {
     },
 }
 
+/// The live file a `read_file_range` reads.
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum RangeFile {
+    /// A file of the project or of one of its worktrees, as `read_project_file` reads it live.
+    Project {
+        project: String,
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        worktree: Option<String>,
+        path: String,
+    },
+    /// The file a path link names, as `read_path_link` reads it.
+    PathLink {
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        project: Option<String>,
+        path: String,
+    },
+}
+
 /// What a file body was actually read from, so a reply identifies the content it carries.
 #[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -447,6 +469,8 @@ pub const BROWSE_REQUEST_TYPES: &[&str] = &[
     "list_project_dir",
     "search_project_files",
     "read_project_file",
+    "read_path_link",
+    "read_file_range",
     "list_project_changes",
     "read_project_change",
     "list_project_branches",
@@ -490,6 +514,28 @@ pub enum BrowseBody {
         #[serde(default)]
         #[cfg_attr(test, ts(optional = nullable))]
         from: ReadFrom,
+    },
+    /// Reads the file a path link names, as `probe_path_links` resolved it: a file of the project
+    /// or of a temp root, whatever its type. Resolved again by the rules of `open_path_link`, but
+    /// never a directory a client named, and nothing is opened on the host.
+    ReadPathLink {
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        project: Option<String>,
+        path: String,
+    },
+    /// Reads up to `budget::MAX_RANGE_BYTES` of a live file from `offset`, for a client that copies
+    /// a file in parts. Every part resolves the file again by the rules of the read `file` mirrors;
+    /// `version`, the one an earlier part reported, makes a file that has changed since
+    /// `source_changed`.
+    ReadFileRange {
+        file: RangeFile,
+        offset: u64,
+        /// The bytes wanted; more than the cap is answered with the cap.
+        length: u64,
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        version: Option<String>,
     },
     ListProjectChanges {
         project: String,

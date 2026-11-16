@@ -34,6 +34,19 @@ function labelPointerClass(disabled: boolean): string {
  * opacity too (see `renderItem`). */
 const DISABLED_ROW_CLASS = "ui-disabled:opacity-100 ui-disabled:hover:bg-transparent ui-disabled:active:transform-none";
 
+/** A line of a menu that only says something: disabled so that it cannot be chosen, yet drawn at full opacity as the
+ * quiet text it is, not as a branch that is off (HeroUI's fade of the row and of its `Label` cancelled, by the user's
+ * decision); the spacer holds the place of the glyph the items have, and `indented` that of the check indicator a menu
+ * with choices reserves at the start of each of its items (HeroUI's `ps-7` for them). */
+export function MenuNote({ id, label, indented = false }: { id: string; label: string; indented?: boolean }): React.ReactElement {
+  return (
+    <MenuItem id={id} textValue={label} disabled className={`cursor-default ui-disabled:opacity-100 ${indented ? "ps-7" : ""}`}>
+      <span aria-hidden="true" className="size-4 shrink-0" />
+      <Label className="min-w-0 flex-1 text-sm whitespace-normal text-app-muted opacity-100" dir="auto">{label}</Label>
+    </MenuItem>
+  );
+}
+
 /** Whether an item cannot be chosen: it is disabled, or it gives a reason it cannot be. */
 function isDisabledItem(entry: ActionMenuItem): boolean {
   return Boolean(entry.disabled || entry.reason);
@@ -208,16 +221,7 @@ export function MenuItems({ entries: source, autoFocus, noMatch }: { entries: Ac
         </MenuSection>,
       );
     } else if ("note" in entry) {
-      nodes.push(
-        // Disabled so that it cannot be chosen, yet drawn at full opacity as the quiet text it is, not as a
-        // branch that is off (HeroUI's fade of the row and of its `Label` cancelled, by the user's decision); the
-        // spacer holds the place of the glyph the items have, and `ps-7` that of the check indicator a menu with
-        // choices reserves at the start of each of its items (HeroUI's `ps-7` for them).
-        <MenuItem key={index} id={itemId(index)} textValue={entry.label} disabled className={`cursor-default ui-disabled:opacity-100 ${entries.some(isChoice) ? "ps-7" : ""}`}>
-          <span aria-hidden="true" className="size-4 shrink-0" />
-          <Label className="min-w-0 flex-1 text-sm whitespace-normal text-app-muted opacity-100" dir="auto">{entry.label}</Label>
-        </MenuItem>,
-      );
+      nodes.push(<MenuNote key={index} id={itemId(index)} label={entry.label} indented={entries.some(isChoice)} />);
     } else if ("items" in entry || "panel" in entry) {
       nodes.push(
         <Submenu key={index}>

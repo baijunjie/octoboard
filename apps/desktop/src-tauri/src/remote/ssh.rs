@@ -2,7 +2,7 @@
 //! key against the pinned fingerprint, authenticates with a password (answering a
 //! keyboard-interactive login with it where the host asks for one, as hosts that sign in through
 //! PAM do), a key file or this device's own key (`device_key`), runs commands and opens the
-//! channels the remote window's connections are carried on, each within a time limit, so a host
+//! channels the remote window's connections (and the forwarded loopback ports') are carried on, each within a time limit, so a host
 //! that stops answering fails the connection rather than holding it forever. A failure comes back
 //! by kind, for the UI to say what went wrong and what to do about it.
 
@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use russh::client::{self, AuthResult, Handle, KeyboardInteractiveAuthResponse, Msg};
 use russh::keys::{HashAlg, PrivateKey, PrivateKeyWithHashAlg, PublicKeyOrCertificate};
-use russh::{Channel, ChannelMsg, Disconnect, MethodKind, MethodSet};
+use russh::{Channel, ChannelMsg, ChannelOpenFailure, Disconnect, MethodKind, MethodSet};
 
 /// How long reaching the host and agreeing on keys may take, and then signing in.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(20);
@@ -24,6 +24,11 @@ pub const COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
 /// Short in the tests, which see a host that stops answering run into it.
 #[cfg(test)]
 pub const COMMAND_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// How long a `direct-tcpip` channel to a Windows host is watched, once confirmed, for the host closing it
+/// unasked: Win32-OpenSSH confirms a channel to a port nothing listens on and then closes it, where OpenSSH on
+/// Unix refuses it (`ForwardError::NothingListening`). A channel still open after this long is taken as connected.
+pub const WINDOWS_EARLY_CLOSE: Duration = Duration::from_millis(500);
 
 /// How many rounds of questions a keyboard-interactive login is answered for before it is taken as
 /// refused: a PAM password login asks one.
@@ -184,6 +189,18 @@ impl std::fmt::Display for RunError {
             ),
         }
     }
+}
+
+/// Why a connection to a port on the host's own loopback could not be forwarded.
+#[derive(Debug)]
+pub enum ForwardError {
+    /// The host's SSH server opened no channel because nothing accepted its connection to the port.
+    NothingListening,
+    /// The host's SSH server does not allow forwarding (or this kind of channel).
+    Refused,
+    /// The host did not answer within this long.
+    TimedOut(Duration),
+    Ssh(russh::Error),
 }
 
 /// `future`, or `RunError::TimedOut` once `limit` has passed.
@@ -426,6 +443,74 @@ impl Session {
             Ok(channel)
         })
         .await
+    }
+
+    /// Opens a channel to `port` of `loopback` (a loopback address) on the host, within `limit`: the data of the
+    /// channel is the connection's. OpenSSH on Unix confirms the channel once it has connected, so a port nothing
+    /// listens on fails here, as `ForwardError::NothingListening`; Win32-OpenSSH confirms it all the same and then
+    /// closes it (`WINDOWS_EARLY_CLOSE`).
+    pub async fn forward(
+        &self,
+        loopback: &str,
+        port: u16,
+        limit: Duration,
+    ) -> Result<Channel<Msg>, ForwardError> {
+        let opened = tokio::time::timeout(
+            limit,
+            self.handle
+                .channel_open_direct_tcpip(loopback, u32::from(port), "127.0.0.1", 0),
+        )
+        .await
+        .map_err(|_| ForwardError::TimedOut(limit))?;
+        opened.map_err(|err| match err {
+            russh::Error::ChannelOpenFailure(ChannelOpenFailure::ConnectFailed) => {
+                ForwardError::NothingListening
+            }
+            russh::Error::ChannelOpenFailure(
+                ChannelOpenFailure::AdministrativelyProhibited
+                | ChannelOpenFailure::UnknownChannelType,
+            ) => ForwardError::Refused,
+            other => ForwardError::Ssh(other),
+        })
+    }
+
+    /// Whether something listens on `port` of `loopback` on the host, found by opening a channel to it (`forward`)
+    /// and closing it again. On a Windows host (`windows`), a channel the host closes within `WINDOWS_EARLY_CLOSE`
+    /// without having sent anything counts as nothing listening too; a server that waits to be spoken to keeps
+    /// the channel open, so a probe there that succeeds takes that long.
+    pub async fn probe(
+        &self,
+        loopback: &str,
+        port: u16,
+        limit: Duration,
+        windows: bool,
+    ) -> Result<(), ForwardError> {
+        let mut channel = self.forward(loopback, port, limit).await?;
+        if !windows {
+            let _ = channel.close().await;
+            return Ok(());
+        }
+        let closed = tokio::time::timeout(WINDOWS_EARLY_CLOSE, async {
+            loop {
+                match channel.wait().await {
+                    None | Some(ChannelMsg::Eof | ChannelMsg::Close) => return true,
+                    Some(ChannelMsg::Data { .. } | ChannelMsg::ExtendedData { .. }) => {
+                        return false
+                    }
+                    Some(_) => {}
+                }
+            }
+        })
+        .await
+        .unwrap_or(false);
+        let _ = channel.close().await;
+        if !closed {
+            Ok(())
+        } else if self.is_closed() {
+            Err(ForwardError::Ssh(russh::Error::Disconnect))
+        } else {
+            Err(ForwardError::NothingListening)
+        }
     }
 
     /// Ends the connection, which ends every command still running over it.

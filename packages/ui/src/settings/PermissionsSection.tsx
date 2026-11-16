@@ -3,6 +3,7 @@ import { CircleCheck } from "lucide-react";
 
 import { AttendedStatusAnnouncer } from "../components/announce/AttendedStatusAnnouncer";
 import { ErrorAlert } from "../components/alerts/ErrorAlert";
+import { InlinePath, pathText } from "../i18n/InlinePath";
 import { InlineReference } from "../i18n/InlineReference";
 import { StatusBadge } from "../components/status/StatusBadge";
 import { ActionableError } from "../errors/actionableError";
@@ -90,16 +91,13 @@ export function PermissionsSection(): React.ReactElement {
       await openSystemSettings(kind);
     } catch (cause) {
       const privacy = t("settings.permissions.privacyPane");
-      const pane = t(systemPane);
-      raiseError(new ActionableError(t("settings.permissions.openFailed", { privacy, pane }), "none", { cause }), {
+      const steps = [privacy, t(systemPane)];
+      raiseError(new ActionableError(t("settings.permissions.openFailed", { path: pathText(steps) }), "none", { cause }), {
         title: t("settings.permissions.openFailedTitle"),
         content: (
           <Message
             id="settings.permissions.openFailed"
-            params={{
-              privacy: <InlineReference dir="auto" wrap>{privacy}</InlineReference>,
-              pane: <InlineReference dir="auto" wrap>{pane}</InlineReference>,
-            }}
+            params={{ path: <InlinePath steps={steps} /> }}
           />
         ),
       });
@@ -111,7 +109,7 @@ export function PermissionsSection(): React.ReactElement {
       await request(kind);
     } catch (cause) {
       const privacy = t("settings.permissions.privacyPane");
-      const pane = t(systemPane);
+      const steps = [privacy, t(systemPane)];
       // The call itself rejecting is no answer from macOS but a defect in the app, so this is raised as an
       // unexpected failure (a plain `Error`, not an `ActionableError`): the alert keeps what the call said behind
       // Error details and offers Report issue, while the body still gives the manual workaround.
@@ -122,8 +120,7 @@ export function PermissionsSection(): React.ReactElement {
             id="settings.permissions.requestFailed"
             params={{
               permission: <InlineReference dir="auto" wrap>{t(label)}</InlineReference>,
-              privacy: <InlineReference dir="auto" wrap>{privacy}</InlineReference>,
-              pane: <InlineReference dir="auto" wrap>{pane}</InlineReference>,
+              path: <InlinePath steps={steps} />,
               add: <InlineReference dir="auto">+</InlineReference>,
             }}
           />

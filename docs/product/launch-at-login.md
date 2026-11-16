@@ -1,17 +1,17 @@
 # Launch at login
 
 The desktop application can have the system open it when the user logs in, through the **Launch at login** switch in
-Settings' General section (the row itself is described in "Launch at login" in `docs/product/general-settings.md`). It is
-offered on Windows and on macOS 13 and later. macOS 11 and 12 have no row for it, and neither does a browser, which has
-nothing to open.
+Settings' General section (the row itself is described in "Launch at login" in `docs/product/general-settings.md`). It
+is offered on Windows and on macOS 13 and later. macOS 11 and 12 have no row for it, and neither does a browser, which
+has nothing to open.
 
 ## The switch shows the system's state
 
 Octoboard keeps no choice of its own for this: the system's login entry is the setting, and the switch shows where it
 stands. It is read once when Settings opens, whichever section it opens on, and the row appears only once that read has
 answered; it is read again every time the window regains focus while Settings is open, so a change the user made in the
-system's own list (below) shows on returning to Octoboard. A read that fails shows the switch off. A read that was under way when the user turned the switch is dropped, so it cannot put back
-the state from before the change.
+system's own list (below) shows on returning to Octoboard. A read that fails shows the switch off. A read that was under
+way when the user turned the switch is dropped, so it cannot put back the state from before the change.
 
 The entry is in one of three states:
 
@@ -43,17 +43,18 @@ row's description says that Octoboard is waiting for the user's approval and to 
 allowed it, the next read shows the entry on and the button goes; keyboard focus on the button moves to the switch.
 Turning the switch on while the user has left the entry unapproved is not a failure: it shows as waiting for approval.
 
-When System Settings does not open, an error alert titled "Could not open System Settings" says that it did not open
-and to open it by hand and choose General > Login Items. It has only its acknowledgement button, with no remedy button
-and no request to report an issue, like the Notifications section's (see "Opening the system's notification settings" in
-`docs/product/notification-settings.md`).
+When System Settings does not open, an error alert titled "Could not open System Settings" says that it did not open and
+to open it by hand and go to General > Login Items, the path shown as a breadcrumb of reference chips. It has only its
+acknowledgement button, with no remedy button and no request to report an issue, like the Notifications section's (see
+"Opening the system's notification settings" in `docs/product/notification-settings.md`).
 
 ## When a change fails
 
-A change the system refuses is shown in an error alert titled "Could not change Launch at login", saying that the system
-did not accept the change. It is an unexpected failure, offering **Report issue**, with what the system said behind
-**Error details** (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`). The switch then shows the
-state the system reports, which the refused change may still have altered.
+A change the system refuses is shown in an error alert titled "Could not change the login setting", saying that the
+system did not accept the change to Launch at login, which the body names as a reference chip. It is an unexpected
+failure, offering **Report issue**, with what the system said behind **Error details** (see "Recovery and unexpected
+errors" in `docs/product/error-alerts.md`). The switch then shows the state the system reports, which the refused change
+may still have altered.
 
 ## A launch at login
 

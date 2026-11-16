@@ -217,6 +217,16 @@ it("leaves Terminal out of a file's Open in", () => {
   expect(openInItems()).toEqual(["Copy relative path", "Copy absolute path", "Open in", "File manager", "Default application"]);
 });
 
+it.each([["notes.txt", true], ["run.sh", false], ["Setup.EXE", false], ["tool.py", false], ["Thing.app", false]] as const)("offers %s a Default application in Open in only if the system would not launch it (%s)", (name, offered) => {
+  const container = mountRows(
+    <RowPathScope.Provider value={{ project: "p" }}><RowActions path={name} name={name} /></RowPathScope.Provider>,
+    { notifications },
+  );
+  act(() => actionsOf(container).click());
+  act(() => openIn().click());
+  expect(openInItems()).toEqual(["Copy relative path", "Copy absolute path", "Open in", "File manager", ...(offered ? ["Default application"] : [])]);
+});
+
 it("gives the tree layout's folder row the actions button, reserved and reached by the arrow keys, with a menu for the folder's path", async () => {
   const openTerminal = vi.fn();
   const writeText = vi.fn(async () => {});

@@ -135,12 +135,12 @@ pub fn text_of(value: OsString) -> Option<String> {
     value.into_string().ok().filter(|value| !value.is_empty())
 }
 
-/// The details of this machine as the desktop application's daemon gives them: the machine's own
-/// name as the host (which other devices may know by another name; the owner corrects it there) at
-/// the default SSH port, as [`of_this_machine_at`] gives them otherwise. `None` when the user's or
-/// the machine's name cannot be read.
+/// The details of this machine as the desktop application's daemon gives them: the name the machine announces on its
+/// network (`platform::net::host_name`, the one the SSH forward's default address is too) as the host, which other
+/// devices may know by another name and the owner corrects there, at the default SSH port, as
+/// [`of_this_machine_at`] gives them otherwise. `None` when the user's or the machine's name cannot be read.
 pub fn of_this_machine(octoboardd: Option<&Path>) -> Option<Details> {
-    let host = fs::host_name().and_then(text_of)?;
+    let host = crate::platform::net::host_name()?;
     of_this_machine_at(host, DEFAULT_SSH_PORT, None, octoboardd)
 }
 

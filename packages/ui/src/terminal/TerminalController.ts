@@ -104,12 +104,16 @@ export interface TerminalControllerHandlers {
   pathLinks?: {
     /** What each of `paths` names, in order. */
     probe: (paths: string[]) => Promise<PathAnswer[]>;
-    /** Opens a path that was found: in the file viewer when it has a view (a folder's is its README
-     * or index file), otherwise a file with its default application and a folder in the file
-     * manager. `onHost` asks for a folder to go to the file manager even when it has a view. */
+    /** Opens a path that was found: a file in the file viewer, a folder in the file manager, or in the viewer when it
+     * has a view (its README or index file). `onHost` asks for a folder to go to the file manager even when it has
+     * a view. */
     open: (target: PathLinkTarget, onHost: boolean) => Promise<void>;
-    /** Shows a path that was found in the host's file manager, a file selected in its folder. */
-    reveal: (target: PathLinkTarget) => Promise<void>;
+    /** Shows a path that was found in the host's file manager, a file selected in its folder. Absent where the
+     * host's file manager is not the user's (a remote window). */
+    reveal?: (target: PathLinkTarget) => Promise<void>;
+    /** Opens a file that was found with the host's default application. Absent where the host's applications are not
+     * the user's (a remote window). */
+    openDefault?: (target: PathLinkTarget) => Promise<void>;
     /** How the daemon host writes a path (`snapshot.host.path_style`), read once: `unix` where unsaid. */
     pathStyle?: PathStyle;
   };
@@ -531,7 +535,12 @@ export class TerminalController {
 
   /** Shows a path link in the host's file manager. */
   revealPathLink(target: PathLinkTarget): Promise<void> {
-    return this.handlers.pathLinks?.reveal(target) ?? Promise.resolve();
+    return this.handlers.pathLinks?.reveal?.(target) ?? Promise.resolve();
+  }
+
+  /** Opens a path link's file with the host's default application. */
+  openPathLinkInDefaultApplication(target: PathLinkTarget): Promise<void> {
+    return this.handlers.pathLinks?.openDefault?.(target) ?? Promise.resolve();
   }
 
   selectAll(): void {
@@ -856,6 +865,9 @@ export class TerminalController {
   syncSize(): void {
     clearTimeout(this.resizeTimer);
     this.resizeTimer = setTimeout(() => {
+      // Hidden, or not laid out (the Remote devices page takes the terminal's place): no size was fitted to, and
+      // nothing is on screen to tell the daemon of.
+      if (this.container && (this.container.offsetWidth === 0 || this.container.offsetHeight === 0)) return;
       // A cell's size changes with the page's zoom, which also fits the terminal anew.
       this.sendDisplay();
       if (!this.fitted && this.options.fittedSizesOnly) return;

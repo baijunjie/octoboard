@@ -181,8 +181,7 @@ pub fn begin(app: &AppHandle, background_login: bool) {
             let order = super::next_order();
             let told = told.clone();
             tauri::async_runtime::spawn(async move {
-                let outcome =
-                    super::connect::connect(&app, quiet_request(&id), None, Some(order)).await;
+                let outcome = super::connect::connect(&app, quiet_request(&id), Some(order)).await;
                 let opened = matches!(outcome, Ok(ConnectOutcome::Opened));
                 match outcome {
                     Ok(ConnectOutcome::Opened) => {}

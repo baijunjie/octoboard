@@ -70,7 +70,7 @@ pub struct SettingsChanges {
     pub ask_questions_as_choices: Option<bool>,
     pub keep_sessions_in_own_project: Option<bool>,
     /// Refused unless it is a tag the interface offers.
-    pub agent_language: Option<String>,
+    pub interface_language: Option<String>,
     pub keep_awake: Option<bool>,
     pub keep_awake_when: Option<KeepAwakeWhen>,
     pub auto_select_account: Option<bool>,
@@ -107,7 +107,7 @@ impl SettingsChanges {
             self.auto_approve_handoffs.is_some(),
             self.ask_questions_as_choices.is_some(),
             self.keep_sessions_in_own_project.is_some(),
-            self.agent_language.is_some(),
+            self.interface_language.is_some(),
             self.keep_awake.is_some(),
             self.keep_awake_when.is_some(),
             self.auto_select_account.is_some(),
@@ -190,7 +190,7 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
         auto_approve_handoffs,
         ask_questions_as_choices,
         keep_sessions_in_own_project,
-        agent_language,
+        interface_language,
         keep_awake,
         keep_awake_when,
         auto_select_account,
@@ -204,7 +204,7 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
         provider_settings,
         agent_tags,
     } = changes;
-    if let Some(tag) = &agent_language {
+    if let Some(tag) = &interface_language {
         if !crate::interface_language::is_offered(tag) {
             anyhow::bail!("`{tag}` is not a language the interface is offered in");
         }
@@ -265,8 +265,8 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
     if let Some(value) = keep_sessions_in_own_project {
         changed |= state.store.set_keep_sessions_in_own_project(value)?;
     }
-    if let Some(tag) = agent_language {
-        changed |= state.store.set_agent_language(&tag)?;
+    if let Some(tag) = interface_language {
+        changed |= state.store.set_interface_language(&tag)?;
     }
     if let Some(value) = keep_awake {
         changed |= state.store.set_keep_awake(value)?;

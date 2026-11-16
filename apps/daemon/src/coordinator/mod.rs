@@ -1014,7 +1014,7 @@ async fn handle_inner(
             auto_approve_handoffs,
             ask_questions_as_choices,
             keep_sessions_in_own_project,
-            agent_language,
+            interface_language,
             keep_awake,
             keep_awake_when,
             auto_select_account,
@@ -1040,7 +1040,7 @@ async fn handle_inner(
                     auto_approve_handoffs,
                     ask_questions_as_choices,
                     keep_sessions_in_own_project,
-                    agent_language,
+                    interface_language,
                     keep_awake,
                     keep_awake_when,
                     auto_select_account,
@@ -1170,13 +1170,14 @@ async fn handle_inner(
         } => {
             let state = Arc::clone(state);
             tokio::task::spawn_blocking(move || {
-                let path = crate::browse::scope::resolve_project_path(
-                    &state,
-                    &project,
-                    worktree.as_deref(),
-                    &path,
-                    &|| state.host_tools.isolated_git(),
-                )?;
+                let resolve = if reveal {
+                    crate::browse::scope::resolve_project_path
+                } else {
+                    crate::browse::scope::resolve_project_path_to_open
+                };
+                let path = resolve(&state, &project, worktree.as_deref(), &path, &|| {
+                    state.host_tools.isolated_git()
+                })?;
                 host_open::paths::open_path(&path, reveal)
             })
             .await??;

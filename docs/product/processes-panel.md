@@ -93,8 +93,10 @@ Each tree is a card:
   `docs/product/terminal-links.md`); its description for assistive technology says it opens in the browser, and an
   address that cannot be opened raises the "Could not open the link" alert (see "Recovery and unexpected errors" in
   `docs/product/error-alerts.md`). The address names `localhost`, so it reaches the server only from a browser on the
-  daemon's host: in a remote window, or in the UI opened in a browser on another computer, it opens on the viewer's
-  computer. The links run in the interface's reading direction from the glyph, each address itself reading left to
+  daemon's host. A remote window opens it through a port forwarded over its SSH connection to the daemon's machine, as it
+  does any loopback address (see "Loopback addresses of the remote machine" in
+  `docs/product/links-and-files-in-a-remote-window.md`), its failures raising that document's alerts; in the UI opened
+  in a browser on another computer, it opens on the viewer's computer. The links run in the interface's reading direction from the glyph, each address itself reading left to
   right, and wrap onto further lines when they do not fit; links that appear or go as ports start or stop serving pages
   move the others as a collection's items do (see "Items moving within a collection" in
   `docs/product/collection-motion.md`). A tree with no such port has no line;

@@ -70,8 +70,9 @@ pub fn answer_permission_probe() -> bool {
 pub fn run() {
     let app = lifecycle::register_first(tauri::Builder::default())
         .plugin(tauri_plugin_shell::init())
-        // Carries no daemon traffic either: the frontend asks for a notification, the plugin
-        // shows it.
+        // Carries no daemon traffic either: the frontend asks for a notification, which the
+        // plugin shows off macOS (on macOS the shell shows it itself, `notifications/`), and the
+        // plugin answers the frontend's permission query everywhere.
         .plugin(tauri_plugin_notification::init())
         // The frontend writes text to the clipboard through it (the webview's own clipboard API is
         // refused outside a secure context, which the custom scheme may not count as).
@@ -124,8 +125,15 @@ pub fn run() {
             remote::remote_daemon_connect,
             remote::remote_daemons_status,
             remote::remote_daemon_disconnect,
-            remote::remote_window_new,
-            remote::remote_window_open,
+            remote::page::remote_connect_pending_take,
+            remote::page::remote_page_requested_take,
+            remote::remote_link_address,
+            remote::remote_forwards_list,
+            remote::remote_forward_stop,
+            remote::files::remote_file_begin,
+            remote::files::remote_file_write,
+            remote::files::remote_file_open,
+            remote::files::remote_file_discard,
             remote::main_window_show,
             tray::flyout::tray_flyout_model,
             tray::flyout::tray_flyout_size,
@@ -139,6 +147,10 @@ pub fn run() {
                 // now is a good time. To the focused window alone, which is the one whose menu the
                 // user sees.
                 if let Some(window) = daemon_window::menu_target(app) {
+                    // With another window in front, the window the item goes to is brought forward.
+                    if !window.is_focused().unwrap_or(false) {
+                        background::show_window(app, &window);
+                    }
                     let _ = window.emit_to(window.label(), event, ());
                 }
             } else if id == "quit" {
@@ -175,7 +187,7 @@ pub fn run() {
                     tray::focus_changed(window.app_handle());
                 }
                 // Only a remote window is ever destroyed while the application runs on: the main
-                // one is hidden instead. Its connection ends with it.
+                // one is hidden instead. A remote window's connection ends with it.
                 WindowEvent::Destroyed => {
                     daemon_window::forget(window.app_handle(), window.label());
                     tray::window_closed(window.app_handle(), window.label());
@@ -186,6 +198,8 @@ pub fn run() {
             }
         })
         .setup(|app| {
+            // Before any window opens: the copies of remote files an earlier run opened are of no use now.
+            remote::files::clear(app.handle());
             // On the main thread, inside AppKit's launch, where the event that opened the app is
             // still the current one.
             launch_at_login::capture_launch();
@@ -281,17 +295,67 @@ fn open_window_for(app: &tauri::AppHandle) {
             handle.exit(1);
             return;
         }
-        // A first launch from a taskbar jump list's task asks for a remote window, or the local
-        // one; a later one reaches the running application through the single-instance plugin.
+        // A first launch from a taskbar jump list's task asks for the Remote devices page, or the
+        // local window; a later one reaches the running application through the single-instance
+        // plugin.
         if let Some(action) = remote::launch_action(std::env::args()) {
             remote::run_menu_action(&handle, action);
         }
     });
 }
 
+/// Held by a test while it starts a process, and by the test that takes the instance lock: a process started while the
+/// lock's file is open can hold what it inherited (the lock is on the open file, and outlives the test's own handle)
+/// from the fork to the exec, or until it is gone, which would make the lock look held after it was let go. Every test
+/// that starts a process, and the code under test that does, takes it for the spawn, so none runs alongside that test.
+#[cfg(test)]
+pub(crate) fn spawning() -> std::sync::MutexGuard<'static, ()> {
+    static SPAWNING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    SPAWNING.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The shell plugin's `open` refuses an address its validation does not match. Its default
+    /// (`^((mailto:\w+)|(tel:\w+)|(https?://\w+)).+`) refuses a host written as an IPv6 literal, which the
+    /// terminal and the documents link and a remote window's forward of `[::1]` opens at, so
+    /// `tauri.conf.json` sets its own.
+    #[test]
+    fn the_shell_opens_web_addresses_with_an_ipv6_literal_host_and_still_nothing_but_its_four_schemes(
+    ) {
+        let conf: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        let validation = conf["plugins"]["shell"]["open"].as_str().unwrap();
+        // As the plugin compiles it.
+        let open = regex::Regex::new(&format!("^{validation}$")).unwrap();
+        for address in [
+            "http://[::1]:54586/r2",
+            "https://[2001:db8::1]/",
+            "http://[::ffff:127.0.0.1]:3000",
+            "http://localhost:3000/a?b#c",
+            "https://example.com",
+            "http://user:pw@localhost:9/",
+            "mailto:someone@example.com",
+            "tel:123",
+        ] {
+            assert!(open.is_match(address), "{address}");
+        }
+        for address in [
+            "file:///etc/passwd",
+            "javascript:alert(1)",
+            "ftp://example.com/",
+            "-flag",
+            "/R",
+            "C:\\Windows\\notepad.exe",
+            "http://",
+            "http://[evil",
+            "http://[::1]/\nsecond line",
+        ] {
+            assert!(!open.is_match(address), "{address}");
+        }
+    }
 
     #[test]
     fn a_query_value_keeps_its_plain_characters_and_escapes_the_rest_byte_by_byte() {

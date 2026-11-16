@@ -33,7 +33,7 @@ use crate::tray::model::{HeaderStatus, MeterLayer, SubmenuItem};
 
 /// The narrowest a row is, in points; a row whose text needs more is as wide as it needs, and the
 /// menu is as wide as its widest row.
-const MIN_WIDTH: f64 = 280.0;
+pub(super) const MIN_WIDTH: f64 = 280.0;
 /// The space left of and right of a row's content, as far in as a standard menu item's text.
 pub(super) const INSET: f64 = 14.0;
 /// The space between a window's name and its detail where they come close.

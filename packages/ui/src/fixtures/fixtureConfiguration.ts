@@ -131,7 +131,7 @@ function exportedSettings(state: State, sections: readonly SettingsSection[]): D
   const has = (section: SettingsSection) => sections.includes(section);
   return {
     ...(has("general") && {
-      ...(settings.agent_language !== null && { agent_language: settings.agent_language }),
+      ...(settings.interface_language !== null && { interface_language: settings.interface_language }),
       resume_sessions_on_start: settings.resume_sessions_on_start,
       keep_awake: settings.keep_awake,
       keep_awake_when: settings.keep_awake_when,
@@ -155,15 +155,15 @@ function exportedSettings(state: State, sections: readonly SettingsSection[]): D
 }
 
 /** The document `export_configuration` answers: the regions the request chooses (see `exportedRegions`): the console
- * named or every console or none, the settings of the sections chosen, the accounts; consoles by creation time and a
- * console's projects by name, with no id and no console working directory in it, and an account carried by its name
- * alone. Without `include_paths` a project's path is only its last segment and a project's remote is kept only where it
- * can be cloned from; an account directory is written whatever it says. Without the accounts region no account is
- * named: every console's reference is `null` and a project's reference to an account is `inherit`. A document with the
- * accounts carries the user's explicit provider setting `choices` of the settings that are exported (not the values in
- * effect, which `state.settings` holds), `{}` when the user chose for none. The settings region holds the keys the
- * daemon holds of the sections chosen: for General the agent language it holds when a window has reported one, for Git
- * the default clone directory, written like an account directory; the client adds the keys only it holds. */
+ * named or every console or none, the settings of the sections chosen, the accounts; consoles by creation time and a console's
+ * projects by name, with no id and no console working directory in it, and an account carried by its name alone.
+ * Without `include_paths` a project's path is only its last segment and a project's remote is kept only where it can
+ * be cloned from; an account directory is written whatever it says. Without the accounts region no account is named:
+ * every console's reference is `null` and a project's reference to an account is `inherit`. A document with the
+ * accounts carries the user's explicit provider setting `choices` of the settings that are exported (not the values
+ * in effect, which `state.settings` holds), `{}` when the user chose for none. The settings region holds the keys the
+ * daemon holds of the sections chosen: for General the language it holds when a window has reported one, for Git the
+ * default clone directory, written like an account directory; the client adds the keys only it holds. */
 export function exportedDocument(
   state: State,
   request: Omit<ExportRequest, "type"> = {},
@@ -401,7 +401,6 @@ const PASSED_THROUGH = {
   appearance: "appearance",
   markdown_style: "appearance",
   terminal_font_size: "appearance",
-  interface_language: "general",
   session_order: "general",
   run_in_background: "general",
   show_menu_bar_icon: "general",
@@ -433,7 +432,7 @@ export function createConfigurationReplies(
   fail: (error: FixtureError) => never,
   providerSettingChoices: () => Settings["provider_settings"],
   reportProgress: (event: ImportProgressEvent) => void,
-  holdAgentLanguage: (tag: string) => void,
+  holdLanguage: (tag: string) => void,
 ): (body: ClientRequestBody) => Event | Promise<Event> | undefined {
   let inspectedOnce = false;
   return (body) => {
@@ -479,9 +478,9 @@ export function createConfigurationReplies(
         const result = body.apply_accounts === true && body.apply_agents ? resultOfAgents(imported, body.apply_agents) : imported;
         const disagreement = importDisagreement(body, result);
         if (disagreement !== undefined) return refuseUnfillable(`the scenario's import result does not follow from its steps: ${disagreement}`);
-        // The daemon holds the agent language the result says it applied.
-        const language = result.settings_applied?.agent_language;
-        if (language) holdAgentLanguage(language);
+        // The daemon applies the language the result says it applied, which every window then follows.
+        const language = result.settings_applied?.interface_language;
+        if (language) holdLanguage(language);
         return { type: "configuration_imported", ...withClientValuesEcho(body, result) };
       }
       default:

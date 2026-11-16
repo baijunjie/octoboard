@@ -1,9 +1,10 @@
 import { windowKind, type PlatformAdapter } from "../platform";
 
-/** Whether the rail has the group of connected remote daemons: only in the desktop application's own window. The
- * capability is in every window of the application, but the group is the application's, not a daemon's, so a browser
- * (whose adapter has none of the shell's capabilities) and the window of a remote daemon never have it. */
+/** Whether the window has the Remote devices button in its rail, and the page it shows: only the desktop
+ * application's own window, whose shell gives it the capability. A browser (whose adapter has none of the shell's
+ * capabilities) and the window of a remote daemon (which the shell gives none either) never have it. */
 export function remoteDaemonsOffered(platform: PlatformAdapter): boolean {
-  // A remote daemon's window has the capability too, which is why the window's kind is checked.
+  // Also by the window's kind, for a platform that has the capability whatever window it is in (a test's, the
+  // gallery's).
   return platform.remoteDaemons !== undefined && windowKind() === "local";
 }

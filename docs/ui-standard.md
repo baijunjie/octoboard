@@ -4,7 +4,9 @@ The bar `packages/ui` is held to: its accessibility conformance level, the visua
 has confirmed (semantic colours, where an error is shown, tooltips, empty states, links and references in copy), and the
 rules and measured facts that follow from them. It is a standard to check a control or a view against: a code comment
 may cite a rule here by this file's path and the heading it sits under. UI copy has its own conventions, in the
-`knowledge-i18n-copy` skill.
+`knowledge-i18n-copy` skill. Where the two disagree, this standard wins: the skill is written for any project and
+cannot know this one's components. For example, a name referenced within copy takes an `InlineReference`, never the
+quotation marks the skill prescribes (see "References in copy use `InlineReference`"). (Source: user decision.)
 
 ## Conformance level and exceptions
 
@@ -250,7 +252,13 @@ item's description under the pointer) only up to that resting fill. The user acc
 leaves in HeroUI's own colours: `--muted` on the hovered fill is 4.05:1; `--danger` is 3.33:1 for a destructive menu
 item's label and icon at rest and for a field's error text, and 2.69:1 for the menu item under the pointer, where its
 label still says what it does; a secondary button's label is 4.32:1 on its hovered fill and a soft danger button's
-4.41:1 on its hover.
+4.41:1 on its hover. A field's `--danger` error text on the Remote devices page's form cards is 3.16:1 in dark and
+3.57:1 in light, HeroUI's own colour on the card surface, accepted alike.
+
+The Remote devices page's form cards (`FormCard`, see "Hand-built rows and cards") carry `card-fills`, a remap of the
+`--default` family to the control fill in dark only: on the dark card (`--panel-row`) HeroUI's secondary fill sat almost
+on the card, leaving fields and unselected radios barely visible. In light the card keeps HeroUI's own fills. The step
+between field and card is decorative and held to no figure.
 
 A tooltip or popover is portalled to the end of `<body>`, so it never inherits the `.control-fills` that the pane or
 dialog around its trigger carries, and a control drawn from `--default` inside it, a secondary button or a ghost
@@ -525,7 +533,9 @@ list reaches its content; one holding a tabbable control or scroll region is not
 Copy explains; a button acts. Replace an instruction pointing the user elsewhere ("go to Settings → Agent accounts
 and …") with a button that takes them there, opening the target dialog when there is one. One view offers one entry
 for an action: remove a second entry that does the same thing, such as "Add agent" beside "Manage accounts" when
-both lead to the same account management view.
+both lead to the same account management view. The file viewer's stand-in for a file it does not draw is the exception
+(by the user's decision): its Open in default application, or Download and open in a remote window, repeats the
+header's button, since the stand-in is where the eye lands when the viewer shows nothing.
 
 **Button order follows the group's alignment.** A trailing-aligned group — a dialog's or a popover's footer, an Alert's
 buttons — puts the secondary buttons first and the primary at the trailing edge (Cancel, then Confirm). A start-aligned
@@ -692,6 +702,11 @@ drawer is closed the rail is `inert` and not a stop, and focus inside it when th
 browser can drop it to `<body>` (a layout effect, since a swipe closes the drawer from a touch listener React does not
 flush before paint).
 
+The Remote devices page is the region `devices`, after the sidebar; while it shows, the session UI under it (the
+terminal, the archive view, the panels) is not a stop. While the local daemon cannot be used, the framed status screen
+in the content panel is the `welcome` stop, so F6 reaches its buttons (Restart, Report issue) as it reaches the welcome
+screen's.
+
 A shell terminal in the Terminal panel keeps Tab the same way, so the same holds for it: the Terminal panel is its own
 region, and F6 lands on the shown terminal's input, on its cover's Reconnect while that is offered, on its connection cover
 while its shell's process cannot be reached, or on New terminal when the panel has no tab. Unlike the agent terminal, a shell terminal also keeps Escape, in a floating pane too
@@ -756,6 +771,21 @@ every window it draws included; how many processes run). A modal opened by somet
 either form, rather than leaving it up under the modal. Closing a processes panel with focus inside it hands focus to
 its button after React's commit, so react-aria sees the move and the ring follows the last input; a row's press instead
 lands focus in the Processes panel it opens.
+
+The rail's Remote devices button is an ordinary rail button: any press opens the Remote devices page, and pressing it
+while the page shows does nothing (it opens, it does not toggle). Its tooltip carries its counted name, as the waiting
+count's does. While the page shows it is drawn with the current console's tile fills and carries `aria-current`, and no
+console avatar does.
+
+### The rail is one stack of equal items
+
+The rail lays out one column of 32 px items — a console avatar's tile, New console, the Remote devices button, the
+bottom group's buttons — with a single 8 px gap between every pair of neighbours and no padding of a group adding to it.
+A separator is an item of its own in that stack, so the space above and below its line is that same gap, never a
+group's padding. A count badge floats over its item's corner and takes no room. A separator that only applies while two
+groups meet (the one under the Remote devices button, drawn once the free space between it and the bottom group is
+used up) keeps its slot whether drawn or not, so drawing it never changes the space it is measured against. While the
+local daemon cannot be used the rail holds the Remote devices button alone.
 
 ### A touch gesture is never the only way
 
@@ -1178,6 +1208,15 @@ on `TitledControl`), and the icon changes, both ways, are played with `motion-sa
 icon simply appears. It is drawn where the platform has no clipboard too, copying through a hidden text it selects
 (`copyText`), which never moves focus: a focus change would blur the button and close its tooltip.
 
+A paste button (`PasteButton`) is its counterpart, and both are built on `FeedbackButton` and `useDoneFeedback`
+(`packages/ui/src/components/controls/FeedbackButton.tsx`), which hold the done state, its timing, the tooltip that
+stays open through the press, the icon change and the status announcement, so the two cannot drift apart. Its tooltip
+and name are "Paste", turning into "Pasted". It reads the clipboard only through the platform's `clipboard.readText`
+and is not drawn where the platform has none (in the desktop application that is the clipboard plugin, never the
+webview's own `navigator.clipboard.readText`, which shows a system Paste bubble). An empty or non-text clipboard does
+nothing; a read that fails is an error the user's own press caused and opens the error alert (rule 1 of "Where an error
+is shown"). It sits as a field's trailing control, not inside the field as an adornment.
+
 The exception is a control inside a react-aria collection row, such as a tag's remove button. react-aria already
 composes its accessible name from the button and the row through `aria-labelledby`, so there the `aria-label` is the
 bare verb with no placeholder, or the row's own text is announced twice.
@@ -1474,6 +1513,14 @@ The strip is bounded by its available width and scrolls when its content does no
 and its end actions, or the divider drawn under the strip (the agent tabs of the rail's quota panel), may span the
 section while the transparent tab list keeps its content width. Keep the scrolling and focus-ring clearance specified
 under "Visible focus".
+
+Within a Settings page, tabs take the underline strip, the look of Agent accounts: `AgentTabList` for agent tabs and
+`TextTabStrip` with `underline` for text tabs (Remote access), content-width tabs from the start, the selected one
+underlined over a divider across the row, and the panels under it bare, with no rule of their own on top. The filled
+strip is the Settings dialog's own sections at narrow widths and tabs inside a dialog's frame, so a page's tabs never
+look like the dialog's sections. Switching tabs shows the chosen panel at once, with no motion of its content (only the
+indicator slides): a panel of setting rows is `SettingsTabPanel`, whose rows the section's list motion leaves alone,
+so a swap does not read as rows removed and added. (Source: user decision.)
 
 ### Loading text with a trailing indicator
 
@@ -1791,10 +1838,14 @@ shape above, its heading the page's `h1`, the line under it in the application's
 and no error alert dialog opens over it: the page carries everything such a dialog would. It is the failure's only
 presentation, so it announces itself as it opens, the heading and the first line as `role="alert"` (the empty state's
 `announce`), inserted after the first paint by a delay of zero so that it is a change to the page rather than part of
-its first render. Nothing takes focus by itself, there being no dialog to. Tab reaches any region that scrolls, then the
-row's buttons; on the crash screen, and on the incompatible-daemon and key-refused screens where they replace a window
-in use, focus has
-fallen to the document, as what held it went with the view it replaced and there is nothing to restore it to.
+its first render. Nothing takes focus by itself, there being no dialog to. In a browser, and in a remote daemon's
+window, the screen is the whole window: Tab reaches any region that scrolls, then the row's buttons; on the crash
+screen, and on the incompatible-daemon and key-refused screens where they replace a window in use, focus has fallen to
+the document, as what held it went with the view it replaced and there is nothing to restore it to. In the desktop
+application's own window the daemon's failed-to-start, incompatible and key-refused screens, and the connecting and
+not-answering lines, stand inside the window's frame instead — the top bar, a rail holding only the Remote devices
+button, the content panel — since remote daemons do not need the local one: the screen is the content panel's `main`
+and the F6 `welcome` stop, and Tab reaches the rail's button before the row's.
 
 Every error screen — the daemon that failed to start, the crash screen, the screen with no daemon address, the screen
 for a daemon of another protocol generation and the key-refused screen — offers Report issue, and none has a Quit button;
@@ -2056,6 +2107,13 @@ its own is plain text.
   monospace font, without a chip). So is a run of names joined only by a connector such as `・` or `｜`, with no
   words around them. When such a joined run is itself referenced within a sentence, it is one reference and takes
   one chip around the whole run, never one chip per name.
+- **A navigation path takes `InlinePath`.** Steps to follow through a settings app or menus ("choose General, then
+  Sharing, then Remote Login") are one reference: `InlinePath` (`packages/ui/src/i18n/InlinePath.tsx`) renders each step
+  as a name chip joined by a chevron that mirrors right to left, moving to the next line whole and breaking inside a
+  step only when it is longer than the line, and the sentence takes the whole path as one parameter, never as separate
+  chips joined by words nor as one chip holding the whole path. Each step's name is the system's or the application's
+  own localized name, kept in the catalogs. Its plain form, for plain-text surfaces, is the steps joined by " > "
+  (`pathText`). (Source: user decision.)
 - Whole entity and control labels, structured entity/path rows, and foreign source, terminal and report layouts keep
   their established presentation. A focus card's model line — the account, then the model and reasoning effort, beside
   the agent mark — is such a whole metadata label: plain text without chips. Its model and effort are the same isolated
@@ -2142,6 +2200,16 @@ takes precedence over an explicit colour, including field errors and toast title
 literals within a status message. HeroUI's Alert parts remain the indicator, content, title and description primitives.
 Syntax-highlighted source and foreign renderer markup retain their own palettes.
 
+### A file path never opens an application by a click
+
+A click on a file path link — in a session terminal, a Markdown document or anywhere else a path is a link — opens the
+file in the built-in file viewer and never starts an application, on this computer or on the daemon's, whatever the
+file's type and wherever it lies. Opening a file in its default application is always a separate, named choice: the
+terminal editing menu's Open in submenu (File manager, then Default application, the latter only for a file the system
+would not run), the viewer header's and a project row's Default application, or the viewer stand-in's button. None of
+them is offered for a file the system could run, and in a remote window none that would open on the remote machine's
+screen is offered at all; there, Download and open copies the file to this computer instead.
+
 ### External links
 
 Application-authored links that leave the app use `ExternalLink` with a real destination and a visible trailing
@@ -2150,7 +2218,10 @@ dialog is busy (see the busy dialog paragraph under "Buttons"), when the link ha
 appearance takes the secondary text colour without its underline, and one in the button appearance takes the button's
 disabled look. The icon is decorative; the localized accessible description explains that the link opens in the browser.
 Browser links open a new tab with `noopener noreferrer`; the desktop app uses its platform link adapter. An unavailable
-or failed opener produces the dedicated actionable error alert rather than navigating the desktop window.
+or failed opener produces the dedicated actionable error alert rather than navigating the desktop window. An anchor the
+app opens itself carries no `target`: the desktop shell's shell plugin opens every `target="_blank"` web or mail anchor
+on a click even when its default is prevented, which would open the address a second time (and, in a remote window,
+unforwarded).
 
 The appearance follows the context the link stands in, not a fixed list of places. A link inside prose, or one standing
 on its own where nothing beside it is a button (a settings row's View license, the About section's Website, GitHub
@@ -2238,8 +2309,14 @@ element inside an `aria-hidden` subtree keeps its tab stop and loses its name.
 
 ### Landmarks
 
-The content panel always holds exactly one `main`, whichever of its views is on screen — the terminal pane, or the
-welcome screen that replaces the three panes while there is no console. A view that is a region rather than the
+The content panel always holds exactly one `main`, whichever of its views is on screen — the terminal pane, the
+welcome screen that replaces the three panes while there is no console, the Remote devices page, or, while the local
+daemon cannot be used, its status screen. The terminal pane and the Remote devices page render the one shared element,
+`ContentMain` (`packages/ui/src/components/panel/ContentMain.tsx`), which owns the docked sidebar's edge shadow and the
+positioning both rely on, so the two cannot drift apart. While the Remote devices page shows, the session UI stays
+mounted under `display: none` so its terminals keep their state, and its own `main` stays in the document though hidden
+from assistive technology (by the user's decision); while the local daemon cannot be used the session UI is not mounted
+at all. A view that is a region rather than the
 window's main content carries `role="region"` with a name (`<section aria-label>`), per the naming rule above.
 
 ### A context menu has a visible trigger too
@@ -2257,12 +2334,11 @@ focus anew, as on its first opening.
 A text-editing menu is the exception: on a surface that holds text, a menu whose items mirror the platform's editing
 keys (Copy, Paste, Select all) opens from right-click and the Menu key or Shift+F10 alone, with no visible trigger,
 since the editing keys themselves already do what those items do. It may also hold an item about what lies under the
-pointer, which only a right-click there can offer and a key-opened menu leaves out (the terminal's Open in file manager
+pointer, which only a right-click there can offer and a key-opened menu leaves out (the terminal's Open in submenu
 on a path link). The terminal's editing menu and the file viewer's text menu are the instances.
 
-The rail's tiles are the other exception (by the user's decision): a console's avatar and a connected remote daemon's
-tile open their menu from right-click and the Menu key or Shift+F10 alone, with no visible trigger beside a tile that
-has no room for one; every item in a remote daemon's tile menu is also offered elsewhere (the menu bar icon's tab).
+The rail's console avatars are the other exception (by the user's decision): an avatar opens its menu from right-click
+and the Menu key or Shift+F10 alone, with no visible trigger beside a tile that has no room for one.
 
 ### Copy actions in menus
 
@@ -2445,7 +2521,9 @@ A form control on a surface — in a dialog, a popover, a menu, a card — takes
 blending into the surface in both appearances. A control on a pane's own background instead — the sidebar, a
 right-pane panel, the file viewer, a report page — takes the default variant, the white field in light, as the grey
 secondary fill reads muddy on a pane. The one exception among dialog fields is the wide Settings search field, which
-stands raised on its column's darker ground (see "The Settings section menu").
+stands raised on its column's darker ground (see "The Settings section menu"). A form laid out on a pane's background
+in raised cards, as the Remote devices page's is, follows the surface rule: its fields sit on the cards and take the
+secondary variant.
 
 ### Locked report page controls
 
@@ -2492,6 +2570,9 @@ place a selected state's border takes. That edge is decorative and is not held t
 (`panel-edge`), a groove divider (`groove-b` and its other sides) and a flat divider (`hairline-b`) are decorative in
 the same way. Its selected state
 takes the accent icon colour (`--accent-soft-foreground`, see "One definition per semantic colour"), which reaches 3:1.
+The Remote devices page's form cards (`FormCard`) are such cards: the row surface (`--panel-row`) with the panel shadow
+and a transparent border, each under a small muted `h2`, with secondary fields on them (see "Form controls on a
+surface") and `card-fills` in dark (see the floating-surface colours above).
 
 A card that sits on a dialog's own surface has no other surface to stand off from, and the panel shadow alone is
 invisible on white (and on the dark dialog, whose shadow is black on near-black). Such a flat card is framed as a table

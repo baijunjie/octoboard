@@ -58,9 +58,11 @@ const SECONDARY = { style: { backgroundColor: "var(--surface-secondary)" }, surf
  * transparent so that its first line sits where the report's blocks have theirs) and holding the first line's place when
  * the text wraps below it. The text never runs under the button. It wraps at any width by default, so a long command is
  * read in full; with `wrap: false` it scrolls sideways instead, in a region named `scrollLabel`. `dir` is the text's
- * (`ltr` for a command). */
-export function CopyCommand({ text, variant = "secondary", dir = "ltr", copyText, failedText, ...wrapping }: {
+ * (`ltr` for a command). `content` is what the box shows in place of `text` where part of the text is a control of its own;
+ * `text` is still what the button copies. */
+export function CopyCommand({ text, content, variant = "secondary", dir = "ltr", copyText, failedText, ...wrapping }: {
   text: string;
+  content?: React.ReactNode;
   variant?: CopyCommandVariant;
   dir?: "auto" | "ltr";
   copyText: string;
@@ -71,12 +73,12 @@ export function CopyCommand({ text, variant = "secondary", dir = "ltr", copyText
   const box = wrapping.wrap === false
     ? (
       <ScrollBox label={wrapping.scrollLabel} className={boxClass} style={style}>
-        <pre dir={dir} className={`w-max min-w-full ${textClass}`}>{text}</pre>
+        <pre dir={dir} className={`w-max min-w-full ${textClass}`}>{content ?? text}</pre>
       </ScrollBox>
     )
     : (
       <div style={style} className={boxClass}>
-        <pre dir={dir} className={`whitespace-pre-wrap [overflow-wrap:anywhere] ${textClass}`}>{text}</pre>
+        <pre dir={dir} className={`whitespace-pre-wrap [overflow-wrap:anywhere] ${textClass}`}>{content ?? text}</pre>
       </div>
     );
   return <CopyBox text={text} copyText={copyText} failedText={failedText} dir={dir} surface={surface}>{box}</CopyBox>;

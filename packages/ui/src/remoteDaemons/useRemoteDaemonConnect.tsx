@@ -4,6 +4,7 @@ import { DiagnosticBlock } from "../components/alerts/DiagnosticBlock";
 import { DetailsDisclosure } from "../components/alerts/ErrorDetailsDisclosure";
 import { alertFailure, raiseError } from "../components/alerts/raiseError";
 import { ConfirmDialog } from "../components/dialog/ConfirmDialog";
+import { settle as settleAction } from "../components/hooks/settle";
 import { ActionableError } from "../errors/actionableError";
 import { InlineReference } from "../i18n/InlineReference";
 import { isolate } from "../i18n/isolate";
@@ -35,8 +36,8 @@ interface Flow {
 const FINGERPRINT_COMMAND = "ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub";
 
 /**
- * Connecting to a remote daemon, from the press on Connect to the window opening: asks for the password first (a key's
- * passphrase only when the shell asks, and nothing for this device's own key unless the server refuses it, when the
+ * Connecting to a remote daemon, from the press on Connect to the daemon's window opening: asks for the password first
+ * (a key's passphrase only when the shell asks, and nothing for this device's own key unless the server refuses it, when the
  * password signs in again and the shell reinstalls the key), and each outcome that is not the window opening is an
  * alert or a question to answer before a retry (see `RemoteDaemonConnectOutcome`). The password, the passphrase and the
  * fingerprint just confirmed live in the flow's state alone, for the retries of this one connection. A version mismatch
@@ -44,13 +45,21 @@ const FINGERPRINT_COMMAND = "ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub";
  * the browser itself, `opened_in_browser`); it never updates either side, which is done on each machine itself. One
  * entry is connected at a time. `connecting` is the id of the entry being connected, to show its row pending and the
  * others' Connect disabled, and `dialogs` is what the flow has in front, to render beside the list; `onChanged` runs
- * when the shell may have changed the list (it pins the host key itself).
+ * when the shell may have changed the list (it pins the host key itself), and `onAttention` when a connection ended in
+ * something to tell or ask the owner, so that the page showing it can be brought up. A connection asked for elsewhere
+ * (a menu's saved daemon) is made by the shell, which hands what has to be shown to the Remote devices page as an
+ * outcome, which `resume` takes up where `attempt` would have.
  */
-export function useRemoteDaemonConnect(capability: RemoteDaemonsCapability, onChanged: () => void): {
+export function useRemoteDaemonConnect(capability: RemoteDaemonsCapability, onChanged: () => void, onAttention?: () => void): {
   connecting: string | undefined;
   /** Starts a connection; `held` for an entry the shell already holds a connection to, by a window it brings forward or
    * for the browser it opens again, which so asks for no password. */
   connect: (entry: RemoteDaemonEntry, held?: boolean) => void;
+  /** Continues a connection the shell made away from the page, which ended with a question or a failure `outcome`
+   * (`onHandedOver`), as if it had been started here; refused while a connection of this page is under way. */
+  resume: (entry: RemoteDaemonEntry, outcome: RemoteDaemonConnectOutcome) => void;
+  /** Whether no connection is under way and no question is open, so a handed-over outcome can be taken. */
+  idle: boolean;
   dialogs: React.ReactElement | null;
 } {
   const t = useT();
@@ -64,92 +73,101 @@ export function useRemoteDaemonConnect(capability: RemoteDaemonsCapability, onCh
     raiseError(new ActionableError(message, "none", { detail }), { title, keepTitle: true, content });
   };
 
+  /** What the owner is told or asked once a connection has ended with `outcome`, whoever asked for it. */
+  const settle = (entry: RemoteDaemonEntry, secret: string | null, confirmFingerprint: string | null, outcome: RemoteDaemonConnectOutcome) => {
+    const address = `${entry.host}:${entry.port}`;
+    if (outcome.outcome !== "opened" && outcome.outcome !== "opened_in_browser") onAttention?.();
+    const ask = (step: Step) => setFlow({ entry, secret, confirmFingerprint, step });
+    switch (outcome.outcome) {
+      // The daemon's window is open or focused, or the shell has opened the browser: nothing more to do.
+      case "opened":
+      case "opened_in_browser":
+        break;
+      case "secret_needed":
+        ask({ kind: "secret", secretKind: outcome.kind });
+        break;
+      case "host_key_unknown":
+        ask({ kind: "host_key", fingerprint: outcome.fingerprint });
+        break;
+      case "host_key_mismatch":
+        fail(
+          t("remoteDaemons.error.hostKeyMismatch.title"),
+          `${t("remoteDaemons.error.hostKeyMismatch.body")}${t("common.sentenceSeparator")}${t("remoteDaemons.error.hostKeyMismatch.remedy")}`,
+          t("remoteDaemons.error.hostKeyMismatch.details", { expected: outcome.expected, actual: outcome.actual }),
+        );
+        break;
+      case "unreachable":
+        // The address is a chip in the alert's body; the message keeps it as text for the report.
+        fail(
+          t("remoteDaemons.error.unreachable.title"),
+          t("remoteDaemons.error.unreachable.body", { address: isolate(address) }),
+          outcome.detail,
+          <Message id="remoteDaemons.error.unreachable.body" params={{ address: <InlineReference monospace dir="ltr" wrap>{address}</InlineReference> }} />,
+        );
+        break;
+      case "device_key_refused":
+        ask({ kind: "secret", secretKind: "password", deviceKeyRefused: true });
+        break;
+      case "auth_failed":
+        fail(t("remoteDaemons.error.authFailed.title"), t("remoteDaemons.error.authFailed.body"), outcome.detail);
+        break;
+      case "key_unreadable":
+        fail(t("remoteDaemons.error.keyUnreadable.title"), t("remoteDaemons.error.keyUnreadable.body"), outcome.detail);
+        break;
+      case "octoboardd_not_found":
+        ask({ kind: "path", tried: outcome.tried });
+        break;
+      case "no_daemon":
+        ask({ kind: "no_daemon" });
+        break;
+      case "application_not_running":
+        ask({ kind: "application_not_running", detail: outcome.detail });
+        break;
+      case "no_owner_endpoint":
+        fail(t("remoteDaemons.error.noOwnerEndpoint.title"), t("remoteDaemons.error.noOwnerEndpoint.body"), outcome.detail);
+        break;
+      case "endpoint_unreachable":
+        fail(t("remoteDaemons.error.endpointUnreachable.title"), t("remoteDaemons.error.endpointUnreachable.body"), outcome.detail);
+        break;
+      case "generation_mismatch":
+        ask({ kind: "mismatch", mismatch: outcome });
+        break;
+      case "action_failed":
+        fail(t(`remoteDaemons.error.${outcome.action}Failed.title`), t(`remoteDaemons.error.${outcome.action}Failed.body`), outcome.detail);
+        break;
+      // A failure the app does not recognise is unexpected: the alert says so and offers to report it, with what the
+      // shell said behind Error details.
+      case "failed":
+        raiseError(new Error(outcome.detail || "connection failed"), { title: t("remoteDaemons.error.failed.title") });
+        break;
+    }
+  };
+
   const attempt = async (entry: RemoteDaemonEntry, secret: string | null, confirmFingerprint: string | null, action: "start" | null, browser = false) => {
     if (running.current) return;
     running.current = true;
     setFlow(undefined);
     setConnecting(entry.id);
-    const address = `${entry.host}:${entry.port}`;
-    const ask = (step: Step) => setFlow({ entry, secret, confirmFingerprint, step });
-    try {
-      const outcome = await capability.connect({ id: entry.id, secret, confirmFingerprint, action, browser });
-      switch (outcome.outcome) {
-        // The window is open or focused, or the shell has opened the browser: from a connect window the window is being
-        // turned into the daemon's, or closed, and there is nothing more to do.
-        case "opened":
-        case "opened_in_browser":
-          break;
-        case "secret_needed":
-          ask({ kind: "secret", secretKind: outcome.kind });
-          break;
-        case "host_key_unknown":
-          ask({ kind: "host_key", fingerprint: outcome.fingerprint });
-          break;
-        case "host_key_mismatch":
-          fail(
-            t("remoteDaemons.error.hostKeyMismatch.title"),
-            `${t("remoteDaemons.error.hostKeyMismatch.body")}${t("common.sentenceSeparator")}${t("remoteDaemons.error.hostKeyMismatch.remedy")}`,
-            t("remoteDaemons.error.hostKeyMismatch.details", { expected: outcome.expected, actual: outcome.actual }),
-          );
-          break;
-        case "unreachable":
-          // The address is a chip in the alert's body; the message keeps it as text for the report.
-          fail(
-            t("remoteDaemons.error.unreachable.title"),
-            t("remoteDaemons.error.unreachable.body", { address: isolate(address) }),
-            outcome.detail,
-            <Message id="remoteDaemons.error.unreachable.body" params={{ address: <InlineReference monospace dir="ltr" wrap>{address}</InlineReference> }} />,
-          );
-          break;
-        case "device_key_refused":
-          ask({ kind: "secret", secretKind: "password", deviceKeyRefused: true });
-          break;
-        case "auth_failed":
-          fail(t("remoteDaemons.error.authFailed.title"), t("remoteDaemons.error.authFailed.body"), outcome.detail);
-          break;
-        case "key_unreadable":
-          fail(t("remoteDaemons.error.keyUnreadable.title"), t("remoteDaemons.error.keyUnreadable.body"), outcome.detail);
-          break;
-        case "octoboardd_not_found":
-          ask({ kind: "path", tried: outcome.tried });
-          break;
-        case "no_daemon":
-          ask({ kind: "no_daemon" });
-          break;
-        case "application_not_running":
-          ask({ kind: "application_not_running", detail: outcome.detail });
-          break;
-        case "no_owner_endpoint":
-          fail(t("remoteDaemons.error.noOwnerEndpoint.title"), t("remoteDaemons.error.noOwnerEndpoint.body"), outcome.detail);
-          break;
-        case "endpoint_unreachable":
-          fail(t("remoteDaemons.error.endpointUnreachable.title"), t("remoteDaemons.error.endpointUnreachable.body"), outcome.detail);
-          break;
-        case "generation_mismatch":
-          ask({ kind: "mismatch", mismatch: outcome });
-          break;
-        case "action_failed":
-          fail(t(`remoteDaemons.error.${outcome.action}Failed.title`), t(`remoteDaemons.error.${outcome.action}Failed.body`), outcome.detail);
-          break;
-        // A failure the app does not recognise is unexpected: the alert says so and offers to report it, with what the
-        // shell said behind Error details.
-        case "failed":
-          raiseError(new Error(outcome.detail || "connection failed"), { title: t("remoteDaemons.error.failed.title") });
-          break;
-      }
-    } catch (error) {
-      raiseError(error, { title: t("remoteDaemons.error.failed.title") });
-    } finally {
-      running.current = false;
-      setConnecting(undefined);
-      onChanged();
-    }
+    await settleAction(
+      async () => settle(entry, secret, confirmFingerprint, await capability.connect({ id: entry.id, secret, confirmFingerprint, action, browser })),
+      (error) => raiseError(error, { title: t("remoteDaemons.error.failed.title") }),
+      () => {
+        running.current = false;
+        setConnecting(undefined);
+        onChanged();
+      },
+    );
   };
 
   const connect = (entry: RemoteDaemonEntry, held = false) => {
     if (running.current) return;
     if (entry.auth === "password" && !held) setFlow({ entry, secret: null, confirmFingerprint: null, step: { kind: "secret", secretKind: "password" } });
     else void attempt(entry, null, null, null);
+  };
+
+  const resume = (entry: RemoteDaemonEntry, outcome: RemoteDaemonConnectOutcome) => {
+    if (running.current) return;
+    settle(entry, null, null, outcome);
   };
 
   const end = () => setFlow(undefined);
@@ -250,5 +268,5 @@ export function useRemoteDaemonConnect(capability: RemoteDaemonsCapability, onCh
       }
     }
   }
-  return { connecting, connect, dialogs };
+  return { connecting, connect, resume, idle: connecting === undefined && flow === undefined, dialogs };
 }

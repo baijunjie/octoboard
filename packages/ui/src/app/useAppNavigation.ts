@@ -11,9 +11,10 @@ import { useDaemon } from "../store";
 
 /**
  * Back and Forward through what the content area has shown: the current console, the selected session, the focus
- * mode and the archive view. Going back or forward sets that state straight. A press in the previewing sidebar that
- * makes its console current is one visit with what the press goes on to select (`stableCommitPreview`). `ready` is
- * whether the first snapshot has arrived, before which nothing is recorded.
+ * mode, the archive view and the Remote devices page with the device it shows. Going back or forward sets that state
+ * straight. A press in the previewing sidebar that makes its console current is one visit with what the press goes
+ * on to select (`stableCommitPreview`). `ready` is whether there is something to record from: the first snapshot has
+ * arrived, or the window is showing why it will not, and the Remote devices page, if it shows, has its list.
  */
 export function useAppNavigation({
   ready,
@@ -39,6 +40,10 @@ export function useAppNavigation({
   previewing,
   shownConsole,
   focusTerminal,
+  devices,
+  deviceIds,
+  setDevices,
+  offline,
 }: {
   ready: boolean;
   /** The sidebar's focus mode. */
@@ -68,6 +73,15 @@ export function useAppNavigation({
   previewing: boolean;
   shownConsole: Console | undefined;
   focusTerminal: () => void;
+  /** The device the Remote devices page shows (empty while none is saved), or `undefined` while the page does not show. */
+  devices: string | undefined;
+  /** The ids of the saved devices, which a location naming one is live by. */
+  deviceIds: ReadonlySet<string>;
+  /** Sets whether the Remote devices page shows, and the device it shows, to what `target` says (`devices`, with the
+   * console and the session it is shown over). */
+  setDevices: (target: Location) => void;
+  /** The local daemon cannot be used: what the window shows then is a place Back can return to, until the daemon can. */
+  offline: boolean;
 }) {
   const { store } = useDaemon();
   // What the content area shows, for Back and Forward. A session that is gone counts as none selected.
@@ -76,11 +90,13 @@ export function useAppNavigation({
     session: selectedSession?.id,
     focus: focus && focusKey(focus),
     archive: archiveOpen ? archiveScope : undefined,
+    devices,
+    offline: offline || undefined,
   };
   const navigation = useNavigationHistory({
     location,
     ready,
-    isLive: (target, sessions) => isLive(target, { consoles, projects, sessions }),
+    isLive: (target, sessions) => isLive(target, { consoles, projects, sessions, devices: deviceIds, offline }),
     // Sets the state straight, not through `selectSession`: going back to an interrupted session
     // must not resume it. A focus mode outside the session's context is left, as selecting does.
     apply: (target) => {
@@ -97,6 +113,7 @@ export function useAppNavigation({
       setArchiveRestore(target.archive && archiveViewStates.current.get(archiveKey(target.archive)));
       setArchiveScopeByUser(target.archive);
       if (target.archive) revealArchive();
+      setDevices(target);
     },
     // Focus a move leaves nowhere goes to the terminal, or, where that takes none (no session, or
     // a touch screen, `focusTerminal`), to the top bar's first control.

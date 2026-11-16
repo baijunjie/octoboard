@@ -235,6 +235,8 @@ use windows as platform;
 
 /// The first line `program` prints, when it succeeds and prints one.
 fn command_line(program: &str, args: &[&str]) -> Option<String> {
+    #[cfg(test)]
+    let _spawning = crate::spawning();
     let output = std::process::Command::new(program)
         .args(args)
         .stdin(std::process::Stdio::null())
@@ -304,6 +306,7 @@ mod tests {
     /// Runs the install command as a login would, with `home` as the home directory.
     #[cfg(unix)]
     fn install(home: &std::path::Path, line: &str, body: &str) -> std::process::Output {
+        let _spawning = crate::spawning();
         std::process::Command::new("sh")
             .arg("-c")
             .arg(install_command(Shell::Posix, line, body))

@@ -70,7 +70,7 @@ function ViewerContentBody({
     case "disconnected":
       return <Disconnected what={content.what} />;
     case "file":
-      return <BodyView resetKey={key} name={name} body={content.body} theme={theme} asDocument line={line} />;
+      return <BodyView resetKey={key} name={name} body={content.body} theme={theme} asDocument liveFile={subject.host !== undefined || subject.linkHost !== undefined} line={line} />;
     case "conflict":
       // The conflict and its kind are the title's status badge; a conflicted file that could not be read
       // is that failure alone.

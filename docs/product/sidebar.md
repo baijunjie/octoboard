@@ -14,6 +14,10 @@ What consoles, projects and sessions are is in `docs/product/consoles.md`, `docs
 **With no console at all there is no sidebar**: the content panel shows the welcome screen instead, which is where the
 first console is made (see `docs/product/welcome-screen.md`).
 
+**While the main window's Remote devices page shows**, in the desktop application, the sidebar lists the saved remote
+daemons in place of a console, whether or not there is one, and keeps what it holds of the console for when the page is
+left (see "The list of devices" in `docs/product/remote-devices-page.md`).
+
 Archived sessions are never listed among a project's or a console's sessions. A project's are reached through its
 "View archive" submenu, through its focus mode, and through the archive view; the archived sessions bound to a console
 session through its focus mode and the archive view; a console's archived console sessions through the console's

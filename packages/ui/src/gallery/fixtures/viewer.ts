@@ -13,9 +13,12 @@ import type { FileContent, LineStats } from "../../protocol";
 import { RENDER_BUDGETS } from "../../viewer/code/budgets";
 import { bodyFromFileContent, type ChangeBodies, ChangeBodiesError, type ViewerBody, type ViewerChangeSide, type ViewerSubject } from "../../viewer/content";
 import { describing, type Step, type Ui } from "../../fixtures/interact";
+import { consoleOf, projectOf, snapshotState } from "../../fixtures/builders";
 import type { Scenario } from "../scenario";
 import { IMAGES } from "../../fixtures/viewerImages";
 import { screenshotImage } from "./screenshotImage";
+import { staging } from "./remoteDaemons";
+import { REMOTE_WINDOW_HOST } from "./remoteWindow";
 
 const GROUP = "File viewer";
 
@@ -569,6 +572,10 @@ function binary(path: string, image: { mediaType: string | null; data: string })
   return bodyFromFileContent(path, { size, kind: "binary", media_type: image.mediaType, text: null, data: image.data });
 }
 
+/** A recording past the 4 MiB a read delivers, which the viewer never reads: a stand-in with its size. */
+const RECORDING_PATH = "video/screen-recording.mov";
+const RECORDING_BYTES = 48_000_000;
+
 // A file from the tree has no source: only a committed change opened from the Changes view says where it is from.
 // A live file is the project's, so the header offers File manager and Default application on it.
 function file(path: string, body: ViewerBody): ViewerSubject {
@@ -576,6 +583,9 @@ function file(path: string, body: ViewerBody): ViewerSubject {
 }
 
 const hostOf = (path: string) => ({ project: "gallery", path });
+
+/** The project every live file of a viewer scenario belongs to (`hostOf`), for a header action that names it. */
+const GALLERY_PROJECT = snapshotState({ consoles: [consoleOf("c-gallery", "Main")], projects: [projectOf("gallery", "c-gallery", "Gallery")] });
 
 function present(path: string, body?: ViewerBody, kind: "file" | "symlink" | "submodule" = "file"): ViewerChangeSide {
   return { state: "present", path, kind, body };
@@ -671,6 +681,7 @@ async function allFiles(): Promise<ViewerSubject[]> {
     file("assets/favicon.ico", binary("assets/favicon.ico", IMAGES.icon_ico)),
     file("assets/image.avif", binary("assets/image.avif", IMAGES.image_avif)),
     file("bin/tool.wasm", binary("bin/tool.wasm", { mediaType: null, data: "AGFzbQEAAAABBAFgAAADAgEABwkBBW1haW4AAAoEAQIACw==" })),
+    file(RECORDING_PATH, { kind: "tooLarge", size: RECORDING_BYTES }),
     file("src/i18n/greeting.ts", text("src/i18n/greeting.ts", MIXED_DIRECTION)),
     // A name that is not valid UTF-8 and contains a percent sign, in its wire form.
     file("docs/%FFreport%2520final.md", text("docs/report.md", MARKDOWN)),
@@ -1278,7 +1289,57 @@ async function findChangeSubjects(language: Language): Promise<ViewerSubject[]> 
   return (await changes(language)).filter(({ key }) => key === "unstaged:src/session.ts");
 }
 
+/** A script with no extension, which the system could run: the viewer shows its text, and the header's Default application
+ * is offered, as nothing in the name says it is launchable. */
+const DEPLOY_SCRIPT = `#!/bin/sh
+set -eu
+
+# Builds the site and pushes it to the preview host.
+pnpm build
+rsync -a dist/ preview:/srv/site/
+`;
+
+/** What a remote daemon's window says of the window, for a viewer over a file of the daemon's machine: the shell's facts of
+ * such a window, the desktop platform kind, and a shell that can copy the file here. */
+const REMOTE_VIEWER = {
+  host: REMOTE_WINDOW_HOST,
+  desktopApp: true,
+  remoteWindow: { name: staging.name },
+  remoteFiles: true,
+} as const satisfies Partial<Scenario>;
+
 export const viewerScenarios: Scenario[] = [
+  {
+    id: "viewer-default-application-refused",
+    group: GROUP,
+    category: "exceptional",
+    title: "Default application refused for a file the system would run",
+    description: "Default application was pressed in the header of scripts/deploy, a script with no extension that carries an executable bit, which no name says: the daemon refuses it, and the error alert is titled \"Could not open in the default application\" and says the path is something the system would run, so it is not opened in the default application, with the remedy line to open it yourself from the file manager. Its wording is for a button, not for a link. A script whose name says it runs (deploy.sh) has no Default application in its header at all.",
+    state: GALLERY_PROJECT,
+    projectPathActionError: { code: "path_link_refused", params: { path: "scripts/deploy", cause: "launchable" }, message: "scripts/deploy is not opened from a link: launchable" },
+    viewer: { subjects: async () => [file("scripts/deploy", text("scripts/deploy", DEPLOY_SCRIPT))] },
+    steps: [(ui) => ui.press(ui.t("viewer.openInDefaultApplication"))],
+  },
+  {
+    id: "viewer-remote-too-large",
+    group: GROUP,
+    category: "normal",
+    title: "A file too large to display, in a remote daemon's window",
+    description: "The 48 MB screen recording on Staging stands in as a panel saying it is too large to display, with its size and a Download and open button, where this computer's window has Open in default application. The header ends with the same Download and open as an icon button, in place of File manager and Default application, which act on the daemon's machine. Pressing either copies the file to this computer and opens the copy: see the next scenario for the copy part-way.",
+    ...REMOTE_VIEWER,
+    viewer: { subjects: async () => [file(RECORDING_PATH, { kind: "tooLarge", size: RECORDING_BYTES })] },
+  },
+  {
+    id: "viewer-remote-download-progress",
+    group: GROUP,
+    category: "normal",
+    title: "A remote file being downloaded to open",
+    description: "Download and open was pressed on the 48 MB screen recording: the stand-in's button has given way to a progress bar named for the file, with how much has arrived of the whole (1 MiB of 48 MB) beside it, and a Cancel under it that has focus. The header's Download and open is busy. Cancel, closing the viewer or moving to another file ends the copy and removes what had arrived.",
+    ...REMOTE_VIEWER,
+    files: { "": { dir: true }, video: { dir: true }, [RECORDING_PATH]: { binary: { size: RECORDING_BYTES, answeredParts: 1 } } },
+    viewer: { subjects: async () => [file(RECORDING_PATH, { kind: "tooLarge", size: RECORDING_BYTES })] },
+    steps: [(ui) => ui.press(ui.t("viewer.downloadAndOpen")), (ui) => ui.wait(600)],
+  },
   {
     id: "viewer-files-errors", group: GROUP, category: "exceptional",
     title: "Failed reads, disconnected files and renderer fallbacks",
@@ -1329,7 +1390,7 @@ export const viewerScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Files",
-    description: "Successful code, Markdown, images (96 x 64, so each opens at 100% with the Actual size button disabled: zoom in with the bar or ⌘/Ctrl + plus to see crisp blocks of pixels, and ⌘/Ctrl + 0 or double-click to return), inert repository markup, unsupported binary formats, large-file fallbacks (a note mark after the path) and loading views. Dedicated internationalization subjects cover Arabic document direction and mixed-script source. Previous / Next stays within normal subjects. The five-line src/describe.ts has long lines: its code surface fills the available height with the rows at the top and its horizontal scrollbar at the bottom of the window. Toggle word wrap and compare src/generated/table.ts or logs/server.log for vertical scrolling. Compare long paths, source/document controls and scroll fades using the width and language controls. The current path and file size stay on one row; long paths stay on one line with a fade at the start. Header icon controls end the details' last row, bottom-aligned; narrow the window to see them wrap to a row of their own directly above the file content, only once the path and size no longer fit beside them. Below phone width, the viewer fills the window with square corners; wider windows retain the inset dialog. File manager and Default application are the last two buttons of every file's header row, after the copy, view and wrap buttons.",
+    description: "Successful code, Markdown, images (96 x 64, so each opens at 100% with the Actual size button disabled: zoom in with the bar or ⌘/Ctrl + plus to see crisp blocks of pixels, and ⌘/Ctrl + 0 or double-click to return), inert repository markup, unsupported binary formats, large-file fallbacks (a note mark after the path) and loading views. Dedicated internationalization subjects cover Arabic document direction and mixed-script source. Previous / Next stays within normal subjects. The five-line src/describe.ts has long lines: its code surface fills the available height with the rows at the top and its horizontal scrollbar at the bottom of the window. Toggle word wrap and compare src/generated/table.ts or logs/server.log for vertical scrolling. Compare long paths, source/document controls and scroll fades using the width and language controls. The current path and file size stay on one row; long paths stay on one line with a fade at the start. Header icon controls end the details' last row, bottom-aligned; narrow the window to see them wrap to a row of their own directly above the file content, only once the path and size no longer fit beside them. Below phone width, the viewer fills the window with square corners; wider windows retain the inset dialog. File manager and Default application are the last two buttons of every file's header row, after the copy, view and wrap buttons. A file the viewer cannot display (bin/tool.wasm) and one too large to read (the 48 MB screen recording) each stand in as a panel saying so, with the size and an Open in default application button.",
     viewer: { subjects: files },
   },
   {

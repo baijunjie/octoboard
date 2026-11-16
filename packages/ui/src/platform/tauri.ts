@@ -19,7 +19,11 @@ import type {
   OpenedConfigurationFile,
   PlatformAdapter,
   RemoteDaemonEntry,
+  RemoteDaemonHandedOutcome,
   RemoteDaemonsCapability,
+  RemoteForward,
+  RemoteFilesCapability,
+  RemoteForwardsCapability,
   RemoteDaemonStatus,
   RemoteLoginCapability,
   StatusItemCapability,
@@ -30,6 +34,9 @@ import type {
   WindowChromeCapability,
 } from "./index";
 import { tauriHost, type HostFacts } from "./host";
+import { ForwardedLinkOpenError, linkForwardError } from "./linkForwardError";
+import { remoteFileError } from "./remoteFileError";
+import { shellFailure } from "./shellFailure";
 import { UpdaterError } from "./updaterError";
 import { windowKind } from "./windowKind";
 
@@ -59,13 +66,17 @@ export function tauriPlatform(): PlatformAdapter {
     clipboard: tauriClipboard(),
     configurationFile: tauriConfigurationFile(),
     directoryPicker: local ? tauriDirectoryPicker() : undefined,
-    links: tauriLinks(),
+    links: tauriLinks(kind === "remote"),
     macosPermissions: local ? tauriMacosPermissions() : undefined,
     // This computer's own SSH server, which only the local daemon's window is about.
     remoteLogin: local ? tauriRemoteLogin() : undefined,
-    // Every window of the application reaches daemons elsewhere: the connect page is where one is chosen, and a remote
-    // daemon's window lists and opens its siblings from its menu.
-    remoteDaemons: tauriRemoteDaemons(),
+    // The Remote devices page, where a daemon elsewhere is chosen and connected to, is the local window's alone, and
+    // so are the shell's commands for it.
+    remoteDaemons: local ? tauriRemoteDaemons() : undefined,
+    // Only a remote window has a connection of its own to forward over.
+    remoteForwards: kind === "remote" ? tauriRemoteForwards() : undefined,
+    // Only a remote window has files of a daemon elsewhere to copy.
+    remoteFiles: kind === "remote" ? tauriRemoteFiles() : undefined,
     backgroundRun: host.runInBackground ? tauriBackgroundRun() : undefined,
     keepAwake: host.keepAwake ? tauriKeepAwake() : undefined,
     launchAtLogin: host.launchAtLogin ? tauriLaunchAtLogin() : undefined,
@@ -101,16 +112,37 @@ function listenTo<T = undefined>(event: string, handler: (payload: T) => void): 
   return undo;
 }
 
+/** Listens to the shell's `event`, and takes what the shell queued with `command` now and at every event, handing it to
+ * `deliver`. The take empties the shell's queue, so none is made once the returned function was called, and what a take
+ * already under way brings back is dropped then: an unmounted listener must not consume it. */
+function listenThenTake<T>(event: string, command: string, deliver: (taken: T) => void): () => void {
+  const { track, undo } = unlistenTracker();
+  let cancelled = false;
+  (async () => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    const pull = () => {
+      if (cancelled) return;
+      void invoke<T>(command).then(
+        (taken) => {
+          if (!cancelled) deliver(taken);
+        },
+        () => {},
+      );
+    };
+    track(await listenHere(event, pull));
+    pull();
+  })();
+  return () => {
+    cancelled = true;
+    undo();
+  };
+}
+
 /** Listens to the shell's `event` as sent to this window, or to every window. The shell sends what is one window's to
  * that window alone (`emit_to`), and a listener that names no window would hear what is sent to any other too. */
 async function listenHere<T>(event: string, handler: (payload: T) => void): Promise<() => void> {
   const { getCurrentWebviewWindow } = await import("@tauri-apps/api/webviewWindow");
   return getCurrentWebviewWindow().listen<T>(event, (e) => handler(e.payload));
-}
-
-/** The `{ kind, detail? }` a shell command rejects with, when it did. */
-function shellFailure(err: unknown): { kind?: string; detail?: string } {
-  return (typeof err === "object" && err !== null ? err : {}) as { kind?: string; detail?: string };
 }
 
 /** Present only where the shell hides the native titlebar and floats the window controls over the page
@@ -410,14 +442,78 @@ function tauriDirectoryPicker(): DirectoryPickerCapability {
 
 /** Through the shell plugin's `open`, which hands the address to the system's default handler and
  * only accepts `http:`, `https:`, `mailto:` and `tel:` ones (`plugins.shell.open` in
- * `tauri.conf.json`). */
-function tauriLinks(): LinkCapability {
+ * `tauri.conf.json`, which also admits a host written as an IPv6 literal, such as a forward of `[::1]`). In a remote window every address first goes to the shell, which answers it as it is, or, for one
+ * on the remote machine's own loopback, with the address of the forwarded port of this computer to open instead
+ * (`remote_link_address`); where it cannot forward, it rejects by kind (`LinkForwardError`). */
+function tauriLinks(remote: boolean): LinkCapability {
   return {
     async open(url) {
       const { open } = await import("@tauri-apps/plugin-shell");
-      await open(url);
+      let address = url;
+      if (remote) {
+        const { invoke } = await import("@tauri-apps/api/core");
+        try {
+          address = await invoke<string>("remote_link_address", { url });
+        } catch (failure) {
+          throw linkForwardError(failure) ?? failure;
+        }
+      }
+      try {
+        await open(address);
+      } catch (failure) {
+        throw address === url ? failure : new ForwardedLinkOpenError(address, failure);
+      }
     },
   };
+}
+
+/** The ports of this computer forwarded to the daemon machine's loopback for this remote window; the shell announces a
+ * change with an event to this window alone. */
+function tauriRemoteForwards(): RemoteForwardsCapability {
+  return {
+    async list() {
+      const { invoke } = await import("@tauri-apps/api/core");
+      return invoke<RemoteForward[]>("remote_forwards_list");
+    },
+    async stop(remotePort) {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("remote_forward_stop", { remotePort });
+    },
+    onChange: (listener) => listenTo("remote-forwards-changed", listener),
+  };
+}
+
+/** The copies of the daemon's files kept on this computer, for Download and open. The shell's commands reject with
+ * `{ kind, detail? }` (`RemoteFileError`). A part is the raw body of its call, behind the id of the copy it belongs to
+ * (`framedPart`): a base64 string in a JSON argument would be a third larger, and a header naming the copy is not
+ * something every channel the webview may deliver the call by is sure to carry. */
+function tauriRemoteFiles(): RemoteFilesCapability {
+  const call = async <T>(command: string, args?: Record<string, unknown> | Uint8Array): Promise<T> => {
+    const { invoke } = await import("@tauri-apps/api/core");
+    try {
+      return await invoke<T>(command, args);
+    } catch (failure) {
+      throw remoteFileError(failure) ?? failure;
+    }
+  };
+  return {
+    begin: ({ name, size, launchable }) => call<string>("remote_file_begin", { name, size, launchable }),
+    write: (id, part) => call<void>("remote_file_write", framedPart(id, part)),
+    open: (id) => call<void>("remote_file_open", { id }),
+    discard: (id) => call<void>("remote_file_discard", { id }).catch(() => undefined),
+  };
+}
+
+/** The body of `remote_file_write`: one byte with the length of the copy's id, the id (ASCII, as the shell makes it),
+ * then the part. */
+function framedPart(id: string, part: Uint8Array): Uint8Array {
+  const name = new TextEncoder().encode(id);
+  if (name.length > 255) throw new Error("the copy's id is too long to frame");
+  const body = new Uint8Array(1 + name.length + part.length);
+  body[0] = name.length;
+  body.set(name, 1);
+  body.set(part, 1 + name.length);
+  return body;
 }
 
 /** Present whatever the OS: the shell's `status` answers `undefined` off macOS, which is how that
@@ -481,14 +577,12 @@ function tauriRemoteDaemons(): RemoteDaemonsCapability {
       const { invoke } = await import("@tauri-apps/api/core");
       await invoke("remote_daemon_disconnect", { id });
     },
-    async newWindow() {
-      const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("remote_window_new");
-    },
-    async openWindow(id) {
-      const { invoke } = await import("@tauri-apps/api/core");
-      await invoke("remote_window_open", { id });
-    },
+    // Listened to first, then asked: the shell queues what it hands over, since the window is usually being built, or its
+    // page loading, when it does (an event reaches only a page already listening).
+    onHandedOver: (listener) =>
+      listenThenTake<RemoteDaemonHandedOutcome[]>("remote-connect-pending", "remote_connect_pending_take", (items) => items.length > 0 && listener(items)),
+    // Listened to first, then asked, as `onHandedOver` is.
+    onPageRequested: (listener) => listenThenTake<boolean>("remote-page-requested", "remote_page_requested_take", (asked) => asked && listener()),
     async showMainWindow() {
       const { invoke } = await import("@tauri-apps/api/core");
       await invoke("main_window_show");

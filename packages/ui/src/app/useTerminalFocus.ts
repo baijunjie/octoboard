@@ -29,6 +29,9 @@ export function useTerminalFocus() {
   // so focus still never falls to `<body>` from what is going away.
   const focusTerminal = () => {
     const touch = interactionIsTouch();
+    // The Remote devices page, while it shows, takes the place of the terminal and of what focus meant for it goes to.
+    const devicesPage = document.querySelector<HTMLElement>("[data-region=devices]");
+    if (devicesPage && (touch ? focusLandingWithoutText : focusLanding)(devicesPage)) return;
     const areaInert = agentAreaRef.current?.hasAttribute("inert");
     const covering = areaInert ? document.querySelector("[data-panel-maximized], [data-floating-panel] [data-panel-card]") : null;
     if (covering && (touch ? focusLandingWithoutText : focusLanding)(covering)) return;

@@ -13,15 +13,19 @@ order:
 1. the top bar;
 2. the rail;
 3. the welcome screen, only while there is no console, when it is the only region of the content panel (see
-   `docs/product/welcome-screen.md`);
+   `docs/product/welcome-screen.md`); in its place, in the main window of the desktop application while its daemon
+   cannot be used, the daemon's state shown in the content panel (see "Without the local daemon" in
+   `docs/product/remote-devices-page.md`);
 4. the sidebar;
-5. the archive view, only while it is open (see "The archive view" in `docs/product/archive-view.md`);
-6. the terminal;
-7. the right pane's panels, each a region of its own, in stacking order, except that a maximized panel comes first among
+5. the Remote devices page's content area, only while the page shows, when the archive view, the terminal and the right
+   pane's panels are not stops (see `docs/product/remote-devices-page.md`);
+6. the archive view, only while it is open (see "The archive view" in `docs/product/archive-view.md`);
+7. the terminal;
+8. the right pane's panels, each a region of its own, in stacking order, except that a maximized panel comes first among
    them (see "Panels and keyboard focus" in `docs/product/right-pane-panels.md`);
-8. the update notice, only while it is shown (see "The update notice" in `docs/product/in-app-updates.md`);
-9. the connection banner, only while it is shown;
-10. the toasts, only while at least one toast is shown.
+9. the update notice, only while it is shown (see "The update notice" in `docs/product/in-app-updates.md`);
+10. the connection banner, only while it is shown;
+11. the toasts, only while at least one toast is shown.
 
 It works wherever focus is, the terminal included: there `Tab` and `Shift+Tab` still go to the agent, and `F6` and
 `Shift+F6` never do. The same holds in a shell terminal of the Terminal panel, for the shell. With focus in none of the
@@ -57,7 +61,8 @@ Where focus lands in each region:
 |---|---|
 | Top bar | its first enabled control |
 | Rail | the current console's avatar, or the rail's first control when there is no console |
-| Welcome screen | its New console button |
+| Welcome screen | its New console button; the daemon's state shown in its place, its first control, such as Restart or Report issue |
+| Remote devices page | its first control |
 | Sidebar | the selected session's row, or the sidebar's first control when that row is not on screen |
 | Archive view | its first control |
 | Terminal | the terminal, so typing reaches the agent; instead its cover while the session's process cannot be reached (see "While the session's process cannot be reached" in `docs/product/session-terminal-reconnecting-and-loading.md`), or the button its area offers in the terminal's place while there is one — its cover's Reconnect, or its empty state's Add project, New session or New console session (see "Reconnecting" in `docs/product/session-terminal-reconnecting-and-loading.md` and "A console with nothing in it" in `docs/product/session-terminal-with-no-session-selected.md`); for an archived session, its history in the terminal's place (see "Keyboard focus" in `docs/product/session-history.md`) |

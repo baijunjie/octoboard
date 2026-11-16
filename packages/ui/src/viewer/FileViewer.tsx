@@ -9,8 +9,13 @@ import { RowIconGroup } from "../components/controls/RowControls";
 import { StatusBadge } from "../components/status/StatusBadge";
 import { Dialog } from "../components/dialog/Dialog";
 import { useCurrentLanguage, useT } from "../i18n/react";
+import { useHost } from "../platform/react";
+import type { RangeFile } from "../protocol";
+import { useDaemon } from "../store";
 import { useIsNarrow } from "../components/hooks/breakpoint";
+import { basename, display } from "../format/hostPath";
 import { displayWirePath, wireBaseName } from "../format/wirePath";
+import { useHostPathsOrEmpty } from "../components/hooks/useHostPaths";
 import { useRendererScope } from "./code/codeRenderer";
 import { changeStatus, type ViewerSubject } from "./content";
 import { ControlsSlot } from "./controlsSlot";
@@ -21,10 +26,14 @@ import {
   DetailItem,
   HostPathButtons,
   renamedFromPath,
+  useOpenInDefaultApplication,
   RenamedFrom,
   TitleStatusBadge,
 } from "./headerParts";
 import { formatFileSize } from "../format/fileSize";
+import { isLaunchableName } from "../launchable";
+import { useFileDownload } from "./download/useFileDownload";
+import { StandInActionContext, type StandInAction } from "./standInAction";
 import { MarkdownLocationProvider, type MarkdownLocation } from "./markdown/markdownLocation";
 import { NoticeSlotBoxes, NoticeSlotsProvider } from "./notices";
 import { STATUS_LABELS, type StatusKey } from "./statusMarks";
@@ -70,9 +79,36 @@ export function FileViewer({
     () => ({ markdownView: markdownViewSlot, layout: layoutSlot, claimWrap }),
     [markdownViewSlot, layoutSlot, claimWrap],
   );
-  const name = wireBaseName(subject.path);
+  // A file a path link names is shown by the path as the daemon's host spells it, not a project-relative wire path.
+  const hostPaths = useHostPathsOrEmpty();
+  const shownPath = subject.linkHost ? display(subject.path, hostPaths) : displayWirePath(subject.path);
+  const name = subject.linkHost ? basename(subject.path, hostPaths.style) : wireBaseName(subject.path);
   const { content } = subject;
   useRendererScope();
+  // What the stand-in and the header offer for a live file, outside the viewer. One copy at a time, shared by both.
+  const { isLocal } = useDaemon();
+  const file: RangeFile | undefined = subject.host
+    ? { kind: "project", project: subject.host.project, ...(subject.host.worktree !== undefined && { worktree: subject.host.worktree }), path: subject.host.path }
+    : subject.linkHost
+      ? { kind: "path_link", ...(subject.linkHost.project !== undefined && { project: subject.linkHost.project }), path: subject.linkHost.path }
+      : undefined;
+  // Where the file is opened decides what launches it. Default application opens it on the daemon's host, whose own word
+  // (`subject.launchable`) covers its executable bit and its lists. The copy Download and open makes opens on this
+  // computer, whose system judges the name; the daemon's word counts there only where it is not just the name's (an
+  // executable bit, a bundle), and the first request of the copy asks the daemon for the bit again (`downloadFile`).
+  const desktop = useHost();
+  const hostWindows = hostPaths.style === "windows";
+  const launchable = subject.launchable === true || isLaunchableName(name, hostWindows);
+  const copyLaunchable = isLaunchableName(name, desktop.os === "windows") || (subject.launchable === true && !isLaunchableName(name, hostWindows));
+  const download = useFileDownload({ key: subject.key, file, name, launchable: copyLaunchable });
+  const openDefault = useOpenInDefaultApplication({ host: subject.host, linkHost: subject.linkHost });
+  const standInAction: StandInAction | undefined = !file
+    ? undefined
+    : isLocal === false
+      ? download && { kind: "download", download }
+      : launchable
+        ? undefined
+        : { kind: "open", run: openDefault };
 
   // Focus handling for the dialog (`useNavigationFocus`): a navigation button that turns disabled
   // under focus, the content replaced under the focused code region, and Left and Right.
@@ -122,7 +158,7 @@ export function FileViewer({
   const fileSummary = (
     <div data-viewer-file-summary="" className="flex min-w-0 items-center gap-4">
       <DetailItem className="min-w-0">
-        <PlainMarkedPath path={displayWirePath(subject.path)} icon={<FileTypeIcon path={subject.path} className="size-3.5 shrink-0 text-app-muted" />} />
+        <PlainMarkedPath path={shownPath} icon={<FileTypeIcon path={subject.linkHost ? name : subject.path} className="size-3.5 shrink-0 text-app-muted" />} />
         <NoticeSlotBoxes />
       </DetailItem>
       {subject.stats && subject.stats.added + subject.stats.removed > 0 && (
@@ -130,7 +166,7 @@ export function FileViewer({
           <ChangeLineCounts stats={subject.stats} />
         </DetailItem>
       )}
-      {content.state === "file" && (
+      {content.state === "file" && content.body.size !== null && (
         <DetailItem className="shrink-0">
           <StatusBadge separated={false}>
             {formatFileSize(language, content.body.size)}
@@ -217,11 +253,11 @@ export function FileViewer({
             {/* Slots preserve their order as the Markdown, diff layout and wrapping choices mount. */}
             <RowIconGroup className="ms-auto -mt-0.5 h-8">
               {find.toggle && <FindToggle {...find.toggle} />}
-              <CopyPathButton path={subject.path} />
+              <CopyPathButton text={shownPath} />
               <div ref={setMarkdownViewSlot} className="contents" />
               <div ref={setLayoutSlot} className="contents" />
               {wrapClaimed && <WrapToggleHost />}
-              {subject.host && <HostPathButtons host={subject.host} />}
+              {(subject.host || subject.linkHost) && <HostPathButtons host={subject.host} linkHost={subject.linkHost} launchable={launchable} download={download} openDefault={openDefault} />}
             </RowIconGroup>
           </div>
         </div>
@@ -233,7 +269,9 @@ export function FileViewer({
           <div ref={contentRef} data-find-content="" className="flex min-h-0 flex-1 flex-col gap-3">
             <ControlsSlot value={controls}>
               <MarkdownLocationProvider value={{ path: subject.path, ...location }}>
-                <ViewerContentView subject={subject} name={name} layout={layout} onLayoutChange={diffLayout.set} line={line} />
+                <StandInActionContext value={standInAction}>
+                  <ViewerContentView subject={subject} name={name} layout={layout} onLayoutChange={diffLayout.set} line={line} />
+                </StandInActionContext>
               </MarkdownLocationProvider>
             </ControlsSlot>
           </div>

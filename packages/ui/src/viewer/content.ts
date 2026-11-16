@@ -19,7 +19,8 @@ export function isMarkdownName(name: string): boolean {
 /**
  * A file body classified for display. `text` is shown as code; `image` through an image element,
  * from a `data:` URL (the window's Content Security Policy admits images from `data:` only);
- * `binary` is anything else, shown as an explicit "cannot be displayed" presentation.
+ * `binary` is anything else, shown as an explicit "cannot be displayed" presentation, and `tooLarge` is a file the
+ * daemon would not read for its size, shown as an explicit "too large to display" one.
  */
 export type ViewerBody =
   | { kind: "text"; text: string; size: number }
@@ -31,7 +32,10 @@ export type ViewerBody =
     /** An SVG's own text, shown as code when the image cannot be decoded. */
     text?: string;
   }
-  | { kind: "binary"; size: number };
+  | { kind: "binary"; size: number }
+  /** A live file past what a read delivers, never read: `size` is what the daemon said of it, `null` when it did not
+   * say. */
+  | { kind: "tooLarge"; size: number | null };
 
 /** One side of a change, mirroring the daemon's `ChangeSide` (see "Changes and comparisons" in
  * `apps/daemon/PROTOCOL.md`). `path` is a wire path relative to the project; `body` is present
@@ -141,6 +145,14 @@ export interface ViewerSubject {
   /** Present when the subject is a live file of a project or one of its worktrees; the header then
    * offers File manager and Default application on it. A committed file has none. */
   host?: HostPath;
+  /** Present when the subject is a file a terminal's path link names outside every project directory: `path` is then
+   * the path as the terminal wrote it, in the daemon host's own spelling and not a project-relative wire path, and
+   * the header offers File manager and Default application on it by the path link rules, with `project` the session's
+   * for the daemon to resolve it by. */
+  linkHost?: { project?: string; path: string };
+  /** The daemon's word that the system could launch the file rather than show it, for which the header offers no
+   * Default application. */
+  launchable?: boolean;
   source?: ReactNode;
   sourceText?: string;
   stage?: string;
@@ -165,6 +177,11 @@ const IMAGE_MEDIA_TYPES = new Set([
   "image/x-icon",
   "image/avif",
 ]);
+
+/** The body of a live file the daemon refused to read for its size (`browseFailure`'s `tooLarge`). */
+export function tooLargeBody(size: number | undefined): ViewerBody {
+  return { kind: "tooLarge", size: size ?? null };
+}
 
 /** Classifies a body the daemon read for `path` (a wire path). */
 export function bodyFromFileContent(path: string, file: FileContent): ViewerBody {

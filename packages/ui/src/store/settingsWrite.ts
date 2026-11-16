@@ -8,6 +8,12 @@ import type { State } from "./state";
 /** What a write of settings changes: the fields it sets, without the envelope and the versions it is based on. */
 export type SettingsChanges = Omit<Extract<ClientRequestBody, { type: "update_settings" }>, "type" | "base_versions">;
 
+/** The checked write of `createSettingsWriter`; `wouldDrop(paths)` says whether a write of `paths` made now would be
+ * dropped, for a control that holds its own value and must not show one the daemon will not be sent. */
+export type SettingsWriter = ((changes: SettingsChanges, paths: readonly string[]) => Promise<void>) & {
+  wouldDrop(paths: readonly string[]): boolean;
+};
+
 /**
  * The checked write of the settings controls (see "Checked writes" in `apps/daemon/PROTOCOL.md`): `write(changes, paths)`
  * sends `update_settings` for the fields that change `paths`, based on the version the store holds of each, and settles
@@ -22,16 +28,20 @@ export function createSettingsWriter({ store, request, onFailure }: {
   store: StoreApi<State>;
   request: RequestSender;
   onFailure: (error: unknown) => void;
-}): (changes: SettingsChanges, paths: readonly string[]) => Promise<void> {
+}): SettingsWriter {
   // The version of each path when this window last wrote it, until the store has moved past it. A path the store holds
   // no version of is not checked, so it has none to wait for.
   const written = new Map<string, number>();
-  return async (changes, paths) => {
+  const dropping = (paths: readonly string[]) => {
     const versions = store.getState().settings.versions;
     for (const [path, version] of written) {
       if (versions[path] !== version) written.delete(path);
     }
-    if (paths.some((path) => written.has(path))) return;
+    return paths.some((path) => written.has(path));
+  };
+  const write = async (changes: SettingsChanges, paths: readonly string[]) => {
+    if (dropping(paths)) return;
+    const versions = store.getState().settings.versions;
     for (const path of paths) {
       const version = versions[path];
       if (version !== undefined) written.set(path, version);
@@ -43,4 +53,5 @@ export function createSettingsWriter({ store, request, onFailure }: {
       onFailure(error);
     }
   };
+  return Object.assign(write, { wouldDrop: dropping });
 }

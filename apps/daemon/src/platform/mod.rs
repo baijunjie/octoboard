@@ -17,6 +17,7 @@ pub(crate) mod ipc;
 pub(crate) mod listener_handover;
 pub(crate) mod local_socket;
 pub(crate) mod names;
+pub(crate) mod net;
 pub(crate) mod open;
 pub(crate) mod owner_pipe;
 pub(crate) mod policy;

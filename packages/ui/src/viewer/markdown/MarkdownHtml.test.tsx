@@ -46,6 +46,37 @@ it("renders centered HTML badges with dimensions and routes their links through 
   expect(openFile).toHaveBeenCalledExactlyOnceWith("LICENSE", undefined);
 });
 
+it("gives a web link no target, so the desktop shell's anchor handler cannot open it a second time, as written", async () => {
+  const { container } = await render("[Site](https://example.com/a)");
+  const link = container.querySelector("a")!;
+  expect(link.hasAttribute("target")).toBe(false);
+  const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+  await act(async () => link.dispatchEvent(click));
+  expect(click.defaultPrevented).toBe(true);
+});
+
+it("never meets the shell plugin's body click handler for a web link", async () => {
+  const opened: string[] = [];
+  const listener = (event: MouseEvent) => {
+    const link = (event.target as Element).closest("a");
+    if (link && /^(https?:\/\/|mailto:|tel:)/.test(link.href) && link.target === "_blank") opened.push(link.href);
+  };
+  document.body.addEventListener("click", listener);
+  onTestFinished(() => document.body.removeEventListener("click", listener));
+  const { container, openLink } = await render("[Site](https://example.com/a)\n\n[Mail](mailto:a@example.com)");
+  for (const link of container.querySelectorAll("a")) await act(async () => link.click());
+  expect(openLink).toHaveBeenCalledTimes(2);
+  expect(opened).toEqual([]);
+});
+
+it("links an address with an IPv6 literal host, written as a link or as an autolink, and hands it to the viewer bracketed", async () => {
+  const { container, openLink } = await render("[IPv6 literal](http://[::1]:59302/remote.txt)\n\n<http://[::]:4000/>\n\n[x](http://localhost:59302/remote.txt)");
+  const links = [...container.querySelectorAll("a")];
+  expect(links.map((link) => link.textContent)).toEqual(["IPv6 literal", "http://[::]:4000/", "x"]);
+  for (const link of links) await act(async () => link.click());
+  expect(openLink.mock.calls.map(([address]) => address)).toEqual(["http://[::1]:59302/remote.txt", "http://[::]:4000/", "http://localhost:59302/remote.txt"]);
+});
+
 it.each(["https://example.com/releases", "../LICENSE", "#note"])("keeps document links plain, including image links to %s with whitespace", async (href) => {
   const { container } = await render(`[Website](https://example.com)\n\n<a href="${href}">\n<img src="https://example.com/badge.svg" alt="Version">\n</a>\n\n<p id="note">Note</p>`);
   const links = container.querySelectorAll("a");

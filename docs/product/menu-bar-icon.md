@@ -247,14 +247,14 @@ name; the quit entry makes clear that it ends the whole application, including b
 no way to connect to a remote daemon.
 
 The menu follows the sessions and update entry as they change, including while every window is closed into the
-background. It is never replaced while open, though: while any of Octoboard's menus is open — this one or the application menu — changes
-wait, and once no menu is open the icon's menu takes on the latest of them, so an open menu stays open and unchanged
-until it is dismissed or an item is chosen. The icon's look waits with them (see "The icon's look" above). It is
-worded in the interface language (see "What follows the language" in `docs/product/language.md`), its application
-lines and its tabs' names as the main window words them. A tab's sessions and quota submenus are what that daemon's
-window last sent; a daemon held for the browser has no window, so its tab lists neither. Until the main window's UI
-has loaded and received the daemon's state — and throughout on the screen shown when the daemon failed to start — the
-local daemon's tab holds no sessions and no quota submenus, and the application's lines are in English.
+background. It is never replaced while open, though: while any of Octoboard's menus is open — this one or the
+application menu — changes wait, and once no menu is open the icon's menu takes on the latest of them, so an open menu
+stays open and unchanged until it is dismissed or an item is chosen. The icon's look waits with them (see "The icon's
+look" above). It is worded wholly in the main window's language, whichever window is in front and whichever tab is
+chosen (see "What follows the language" in `docs/product/language.md`). A tab's sessions and quota submenus are what
+that daemon's window last sent; a daemon held for the browser has no window, so its tab lists neither. Until the main
+window's UI has loaded and received the daemon's state — and throughout on the screen shown when the daemon failed to
+start — the local daemon's tab holds no sessions and no quota submenus, and the application's lines are in English.
 
 ### The tabs
 
@@ -262,12 +262,14 @@ The local daemon's tab comes first, labelled **This Mac** (**This PC** on Window
 remote daemon — shown in a remote window, or held for the browser — in the order they were connected in. A remote
 daemon's tab is labelled with its short name: the first label of a dotted host name (`build` for `build.example.com`),
 or the whole name for an address or any other name, cut to at most **12** characters, ending in "…" when cut. A tab
-whose daemon has a session waiting for the user or dormant carries an orange dot beside its name (which the Windows
-flyout's tab also says to assistive technology). A tab comes with its daemon's connection and goes with it.
+whose daemon has a session waiting for the user or dormant carries an orange dot after its name, centred on it and clear
+of it (which the Windows flyout's tab also says to assistive technology); a name too long for its tab is cut before the
+dot's room, never the dot. A tab comes with its daemon's connection and goes with it.
 
-On macOS the row of tabs is a segmented control at the top of the menu. **The tab chosen as the menu opens** is that of
-the daemon of the application's frontmost window, else the local daemon's. Choosing another tab shows that daemon's
-lines in place while the menu stays open; the change of tab is the one change the menu shows while open.
+On macOS the row of tabs is a segmented control at the top of the menu, its background starting where the lines' text
+does. **The tab chosen as the menu opens** is that of the daemon of the application's frontmost window, else the local
+daemon's. Choosing another tab shows that daemon's lines in place while the menu stays open; the change of tab is the
+one change the menu shows while open.
 
 ### Choosing a session
 
@@ -309,17 +311,19 @@ General section carries it (see "The settings a client holds" in
 ## The notification-area icon on Windows
 
 In the Windows application a click on the icon, left or right, opens a flyout the application draws itself instead of
-the system's plain menu, which can hold neither tabs nor bars. The flyout holds what the sections above describe for
-the macOS menu, drawn with the application's own components, in the same order and with the same separators: the tabs
-of the daemons, the chosen daemon's session lines with their pictures, its quota rows with their bars, headers, ages
-and notes, then Check for updates, Open board (or Open in browser), for a remote daemon Disconnect, and after a divider
-Quit completely. It opens beside the notification area, against the edge the taskbar sits on and inside the screen's
-work area, with the tab of the window focused last chosen, else This PC's; opening it asks for a fresh quota
-reading, and a change waits while it is open, as on macOS. It closes on a choice, on Esc, on a click outside it or on
-the icon, and when it loses the focus. From the keyboard the focus starts on the chosen tab (on the first line when
-there is only one daemon); Left and Right move between tabs, Up and Down between lines, Enter chooses, and Narrator
-reads each line by the name the macOS menu gives it. It follows Octoboard's appearance, which by default is Windows'
-light or dark app mode, and high contrast, including a change of either while it is open.
+the system's plain menu, which can hold neither tabs nor bars. The flyout holds what the sections above describe for the
+macOS menu, drawn with the application's own components, in the same order and with the same separators: the tabs of the
+daemons, the chosen daemon's session lines with their pictures, its quota rows with their bars, headers, ages and notes,
+then Check for updates, Open board (or Open in browser), for a remote daemon Disconnect, and after a divider Quit
+completely. The tabs stand on a rule that runs across the flyout, the chosen tab's underline lying on that rule, and a
+tab's waiting dot follows its name. It opens beside the notification area, against the edge the taskbar sits on and
+inside the screen's work area, with the tab of the window focused last chosen, else This PC's; opening it asks for a
+fresh quota reading, and a change waits while it is open, as on macOS. It closes on a choice, on Esc, on a click outside
+it or on the icon, and when it loses the focus. From the keyboard the focus starts on the chosen tab (on the first line
+when there is only one daemon); Left and Right move between tabs, Down or Tab from a tab to the first line that can be
+chosen, Up from the first line back to the chosen tab, Up and Down between lines, Enter chooses, and Narrator reads each
+line by the name the macOS menu gives it. It follows Octoboard's appearance, which by default is Windows' light or dark
+app mode, and high contrast, including a change of either while it is open.
 
 What differs from macOS, and why:
 

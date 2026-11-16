@@ -10,7 +10,7 @@ import type { PanelKind } from "../layout/panelKind";
  * enough to float the right pane's panels (`asideFloats`). */
 export function usePaneSwipe({
   asideFloats,
-  noConsoles,
+  noSidebar,
   sidebarOpen,
   toggleSidebar,
   closeSidebar,
@@ -23,7 +23,8 @@ export function usePaneSwipe({
   togglePanel,
 }: {
   asideFloats: boolean;
-  noConsoles: boolean;
+  /** There is no drawer to swipe open: no console, and no devices page standing in for its sessions. */
+  noSidebar: boolean;
   sidebarOpen: boolean;
   toggleSidebar: () => void;
   closeSidebar: () => void;
@@ -39,7 +40,7 @@ export function usePaneSwipe({
   const rtl = textDirection(useCurrentLanguage()) === "rtl";
   const swipePanes = useStableHandler((toward: SwipeToward) => {
     const action = resolveSwipe(toward, {
-      hasDrawer: !noConsoles,
+      hasDrawer: !noSidebar,
       drawerOpen: sidebarOpen,
       panelKinds: swipeKinds,
       panelOrder: ownerOrder,

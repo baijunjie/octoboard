@@ -596,6 +596,28 @@ pub enum Event {
         source: ContentSource,
         file: FileContent,
     },
+    /// The reply to `read_path_link`; `path` echoes the request and `version` is the live file's
+    /// version at the read.
+    PathLinkFile {
+        id: Option<String>,
+        path: String,
+        version: String,
+        file: FileContent,
+    },
+    /// The reply to `read_file_range`: `data` is the base64 of the bytes read from `offset`, empty
+    /// at or past the end of the file; `size` and `version` are the file's at this read.
+    /// `launchable` is set only when true: the file has an executable bit. What a name says the
+    /// system would run is for the client to judge by the system that opens the copy.
+    FileRange {
+        id: Option<String>,
+        offset: u64,
+        size: u64,
+        version: String,
+        data: String,
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        #[cfg_attr(test, ts(optional = nullable))]
+        launchable: bool,
+    },
     /// The reply to `list_project_changes`. `head` is the commit the staged changes are against,
     /// `null` before the first commit; `complete` is false when the list was cut at a budget.
     ProjectChanges {

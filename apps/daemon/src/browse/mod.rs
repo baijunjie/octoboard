@@ -47,11 +47,14 @@ use std::cell::OnceCell;
 use std::sync::atomic::AtomicBool;
 
 use anyhow::Result;
+use base64::Engine;
 
 use crate::git::isolated::IsolatedGit;
 use crate::git::run::GitError;
 use crate::processes::subprocess::BoundedFailure;
-use crate::protocol::{error_code, BrowseBody, CodedError, ContentSource, Event, ReadFrom};
+use crate::protocol::{
+    error_code, BrowseBody, CodedError, ContentSource, Event, RangeFile, ReadFrom,
+};
 use crate::state::AppState;
 use change_read::Expected;
 use content::file_content;
@@ -226,6 +229,79 @@ pub fn serve(
                 path,
                 source,
                 file: file_content(bytes),
+            })
+        }
+        BrowseBody::ReadPathLink { project, path } => {
+            let file = crate::path_links::read(
+                state,
+                project.as_deref(),
+                &path,
+                budget::MAX_FILE_BYTES,
+                cancel,
+            )?;
+            Ok(Event::PathLinkFile {
+                id,
+                path,
+                version: file.version,
+                file: file_content(file.bytes),
+            })
+        }
+        BrowseBody::ReadFileRange {
+            file,
+            offset,
+            length,
+            version,
+        } => {
+            let length = usize::try_from(length).unwrap_or(usize::MAX);
+            let (part, launchable) = match file {
+                RangeFile::Project {
+                    project,
+                    worktree,
+                    path,
+                } => {
+                    let rel = parse_path(&path)?;
+                    let record = stored_project(state, &project)?;
+                    // Every part resolves the path again, so the worktree's directory comes from the
+                    // roots found within the last few seconds, not from `git` for each part.
+                    let root = match worktree.as_deref().and_then(|worktree| {
+                        crate::path_links::worktree_scope(state, &project, worktree)
+                    }) {
+                        Some(root) => root,
+                        None => scope_for(&record, worktree.as_deref(), &git, cancel)?.canonical,
+                    };
+                    let canonical = live::resolve(&root, &rel)?;
+                    let part = live::read_range(
+                        &canonical,
+                        &rel,
+                        offset,
+                        length,
+                        version.as_deref(),
+                        cancel,
+                    )?;
+                    let launchable = crate::platform::fs::has_executable_bit(&canonical);
+                    (part, launchable)
+                }
+                RangeFile::PathLink { project, path } => {
+                    let resolved = crate::path_links::locate(state, project.as_deref(), &path)?;
+                    let part = live::read_range(
+                        &resolved.path,
+                        path.as_str(),
+                        offset,
+                        length,
+                        version.as_deref(),
+                        cancel,
+                    )?;
+                    let launchable = crate::platform::fs::has_executable_bit(&resolved.path);
+                    (part, launchable)
+                }
+            };
+            Ok(Event::FileRange {
+                id,
+                offset,
+                size: part.size,
+                version: part.version,
+                data: base64::engine::general_purpose::STANDARD.encode(&part.bytes),
+                launchable,
             })
         }
         BrowseBody::ListProjectChanges { project, worktree } => {

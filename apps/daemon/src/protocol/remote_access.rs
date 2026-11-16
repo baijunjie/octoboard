@@ -30,6 +30,15 @@ pub struct RemoteAccess {
     /// with, as `octoboardd address` prints it, the remote host left as `<server>` for the owner to
     /// fill in; set while `state` is `serving`, null otherwise.
     pub forward_command: Option<String>,
+    /// What another computer can reach this one by, for the owner to put in the forward's
+    /// `<server>`, in the order Settings offers them: this computer's name (on macOS the Bonjour
+    /// `<name>.local`, elsewhere the host name as the system reports it), then its IPv4 and then
+    /// its IPv6 addresses, each as text that `ssh` takes after `user@` as it is. Loopback, unspecified, multicast and link-local addresses and
+    /// `localhost` names are left out, as are deprecated, tentative and failed addresses where the
+    /// system says so (Linux, Windows) and temporary IPv6 addresses on Linux (they are kept on
+    /// macOS and Windows). Read when the state is; set while `state` is `serving`, empty
+    /// otherwise, and empty while the computer reports none.
+    pub server_addresses: Vec<String>,
     /// Why the daemon could not serve a browser though the setting is on; set while `state` is
     /// `failed`, null otherwise.
     pub failure: Option<RemoteAccessFailure>,
@@ -119,6 +128,7 @@ mod tests {
             browser_port: Some(3369),
             address: Some("http://127.0.0.1:3369/?key=k".to_owned()),
             forward_command: Some("ssh -N -L 3369:3369 me@<server>".to_owned()),
+            server_addresses: vec!["host.local".to_owned(), "192.168.1.20".to_owned()],
             failure: None,
             connection: Some(ConnectionDetails {
                 text: "octoboard+ssh://me@host:22".to_owned(),
@@ -139,6 +149,7 @@ mod tests {
                 "browser_port": 3369,
                 "address": "http://127.0.0.1:3369/?key=k",
                 "forward_command": "ssh -N -L 3369:3369 me@<server>",
+                "server_addresses": ["host.local", "192.168.1.20"],
                 "failure": null,
                 "connection": {"text": "octoboard+ssh://me@host:22", "qr": ["101", "010"]},
             })
@@ -149,6 +160,7 @@ mod tests {
             browser_port: None,
             address: None,
             forward_command: None,
+            server_addresses: Vec::new(),
             failure: None,
             connection: None,
         };
@@ -163,6 +175,7 @@ mod tests {
         ] {
             assert!(json[field].is_null(), "{field}");
         }
+        assert_eq!(json["server_addresses"], serde_json::json!([]));
     }
 
     /// Each reason a client words is spelled as the document spells it.

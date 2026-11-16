@@ -4,6 +4,7 @@ import { providerLabel } from "../../agents/providers";
 import { classifyError, type ErrorRecovery, type ProviderRemedy } from "../../errors/errorRecovery";
 import { globalParam, type MessageKey, type Translate } from "../../i18n/catalog";
 import { Message, useT } from "../../i18n/react";
+import { InlinePath, pathText } from "../../i18n/InlinePath";
 import { InlineReference } from "../../i18n/InlineReference";
 import { ExternalLink } from "../text/ExternalLink";
 
@@ -48,17 +49,30 @@ export function RecoveryLink({ action, size }: { action: RecoveryAction | undefi
   return <ExternalLink href={action.href} appearance="button" size={size} variant="secondary">{action.label}</ExternalLink>;
 }
 
+/** How the rich boundary marks a recovery parameter: a name or literal as one reference, a path as a path. */
+interface RecoveryMarks<V> {
+  reference: (value: string, monospace: boolean) => V;
+  path: (steps: string[]) => V;
+}
+
+const RICH_MARKS: RecoveryMarks<ReactElement> = {
+  reference: (value, monospace) => <InlineReference dir={monospace ? "ltr" : "auto"} monospace={monospace} wrap>{value}</InlineReference>,
+  path: (steps) => <InlinePath steps={steps} />,
+};
+
 /** Plain recovery parameters stay suitable for accessibility and system text. The same values are
  * marked at the rich boundary, keeping control labels and command literals distinct. */
-export function recoveryParams<V = never>(t: Translate, mark?: (value: string, monospace: boolean) => V): Record<string, string | V> {
+export function recoveryParams<V = never>(t: Translate, mark?: RecoveryMarks<V>): Record<string, string | V> {
+  const accountsSteps = [t("settings.title"), t("settings.section.accounts")];
   const values: Record<string, string> = {
     appName: globalParam("appName")!, git: "Git", pathVar: "PATH", enter: "Enter",
     terminal: t("common.terminal"), reopen: t("sidebar.session.reopen"), viewArchive: t("sidebar.archive.consoleSessions"), newSession: t("sidebar.focus.newSession"), retry: t("connection.retry"), browse: t("common.browse"), unlock: t("sidebar.session.unlock"), changeModel: t("sidebar.session.changeModel"),
+    shareDefaultConfig: t("settings.accounts.sharing.label"), accountsPath: pathText(accountsSteps),
     worktreeList: "git worktree list", branchList: "git branch",
     configToml: "config.toml", sqliteHome: "sqlite_home", codexSqliteHome: "CODEX_SQLITE_HOME", tilde: "~", home: "HOME",
   };
   if (!mark) return values;
-  return Object.fromEntries(Object.entries(values).map(([name, value]) => [name, mark(value, ["pathVar", "enter", "worktreeList", "branchList", "configToml", "sqliteHome", "codexSqliteHome", "tilde", "home"].includes(name))]));
+  return Object.fromEntries(Object.entries(values).map(([name, value]) => [name, name === "accountsPath" ? mark.path(accountsSteps) : mark.reference(value, ["pathVar", "enter", "worktreeList", "branchList", "configToml", "sqliteHome", "codexSqliteHome", "tilde", "home"].includes(name))]));
 }
 
 /** Whether `recovery` is worded by a provider's module (`provider.<id>.<code>.remedy`). */
@@ -70,7 +84,7 @@ function isProviderRemedy(recovery: ErrorRecovery): recovery is ProviderRemedy {
  * name is the module's, with no served label needed. */
 function ProviderRemedyGuidance({ remedy }: { remedy: ProviderRemedy }): ReactElement {
   const t = useT();
-  const params = { ...recoveryParams(t, (value, monospace) => <InlineReference dir={monospace ? "ltr" : "auto"} monospace={monospace} wrap>{value}</InlineReference>), agent: <InlineReference dir="auto" wrap>{providerLabel(t, [], remedy.split(".")[1])}</InlineReference> };
+  const params = { ...recoveryParams(t, RICH_MARKS), agent: <InlineReference dir="auto" wrap>{providerLabel(t, [], remedy.split(".")[1])}</InlineReference> };
   return <Message id={remedy as MessageKey} params={params as never} />;
 }
 
@@ -82,7 +96,7 @@ export function RecoveryGuidance({ recovery }: { recovery: ErrorRecovery }): Rea
   if (recovery === "none") return null;
   if (isProviderRemedy(recovery)) return <ProviderRemedyGuidance remedy={recovery} />;
   const id = `error.recovery.${recovery === "trash" ? "trashRetry" : recovery}` as const;
-  const params = recoveryParams(t, (value, monospace) => <InlineReference dir={monospace ? "ltr" : "auto"} monospace={monospace} wrap>{value}</InlineReference>);
+  const params = recoveryParams(t, RICH_MARKS);
   return <Message id={id} params={params as never} />;
 }
 

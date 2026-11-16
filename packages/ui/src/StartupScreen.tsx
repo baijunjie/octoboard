@@ -1,5 +1,5 @@
 import { CircleAlert } from "lucide-react";
-import React, { useState } from "react";
+import React, { createContext, useContext, useState } from "react";
 
 import { ContentPanel } from "./shell/ContentPanel";
 import { EmptyPanel } from "./components/panel/EmptyPanel";
@@ -13,6 +13,10 @@ import { useIssueReport } from "./components/alerts/useIssueReport";
 import type { StartupCause } from "./daemon";
 import { reportExitFailure } from "./lifecycle/exitFailure";
 import { usePlatform } from "./platform/react";
+
+/** Set where the screen is drawn inside the window's own frame (the application's window, whose top bar, rail and content panel
+ * are there already): `StartupScreen` then draws its message alone. */
+export const StartupFramed = createContext(false);
 
 /**
  * The window with no daemon connection behind it: no address known yet, the daemon failed to
@@ -28,23 +32,24 @@ export function StartupScreen({ message }: { message: React.ReactNode }): React.
   // of the content, so a long message has nothing between them and the top to take focus, and the
   // window itself never scrolls.
   const region = useFadeRegion({ label: t("startup.message") });
-
+  const framed = useContext(StartupFramed);
+  // The window never scrolls (`style.css`), so content taller than it scrolls here, under the title bar; `m-auto` centres
+  // it while it fits, where `justify-center` would clip its top. The ring is drawn on the wrapper around the scroller,
+  // inset because the scroller spans the window.
+  const content = (
+    <main className={`flex min-h-0 flex-1 flex-col ${region.insetRing}`}>
+      <FadedScroller region={region} className="flex min-h-0 flex-1 flex-col">
+        <div className="m-auto flex w-full min-w-0 flex-col items-center gap-4 p-8">
+          <div className="w-full min-w-0 max-w-xl">{message}</div>
+        </div>
+      </FadedScroller>
+    </main>
+  );
+  if (framed) return content;
   return (
     <div className="flex h-full flex-col">
       <BareTitleBar />
-      <ContentPanel bare>
-        {/* The window never scrolls (`style.css`), so content taller than it scrolls here, under the
-            title bar; `m-auto` centres it while it fits, where `justify-center` would clip its top.
-            The ring is drawn on the wrapper around the scroller, inset because the scroller spans the
-            window. */}
-        <main className={`flex min-h-0 flex-1 flex-col ${region.insetRing}`}>
-          <FadedScroller region={region} className="flex min-h-0 flex-1 flex-col">
-            <div className="m-auto flex w-full min-w-0 flex-col items-center gap-4 p-8">
-              <div className="w-full min-w-0 max-w-xl">{message}</div>
-            </div>
-          </FadedScroller>
-        </main>
-      </ContentPanel>
+      <ContentPanel bare>{content}</ContentPanel>
     </div>
   );
 }

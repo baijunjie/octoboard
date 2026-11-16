@@ -11,11 +11,15 @@ and a browser. On macOS, Control-click opens it too. With keyboard focus in the 
 closing it returns keyboard focus to the terminal. There is no separate menu button. Copy, Paste and Select all form
 one group, with no divider between them.
 
-- **Open in file manager** shows a file path link in the file manager on the machine the daemon runs on (see "File
-  paths" in `docs/product/terminal-links.md`). It is offered only when the menu was opened with the pointer — a
-  right-click, or a Mac's Control-click — on a file path the terminal shows as a link, and then comes first, set apart
-  from the items below by a separator. A menu opened from the keyboard, or with the pointer anywhere else, does not
-  have it.
+- **Open in** is a submenu for the file path link under the pointer: **File manager**, then, for a file, **Default
+  application**, named, drawn and ordered as in the Open in of a project pane row (see "A row's actions" in
+  `docs/product/project-pane.md`). What each does with a path link, on the machine the daemon runs on, is in "File
+  paths" in `docs/product/terminal-links.md`; a folder's holds File manager alone, and so does that of a file the
+  system could launch rather than show. It is offered only when the menu was opened with the pointer — a right-click,
+  or a Mac's Control-click — on a file path the terminal shows as a link, and then comes first, set apart from the items
+  below by a separator. A menu opened from the keyboard, or with the pointer anywhere else, does not have it, and
+  neither does any menu in a remote window of the desktop application (see "The remote window" in
+  `docs/product/remote-daemons.md`).
 - **Copy** copies the terminal text selected when the menu opened or, with nothing selected in the terminal, the text a
   program last copied, while that is still on offer (see "Text a program copies" below). It is disabled with neither.
   When it is disabled while the running program has mouse reporting on, it says under its name how to make a

@@ -120,8 +120,8 @@ pub enum Closing {
 /// The closing rule: closing the main window while another window is on screen only hides it; the
 /// last window on screen quits the application, unless the user keeps it running in the background
 /// (and there is a daemon to keep running), when the main window is hidden or, for a remote window,
-/// the application goes into the background. A remote window closed while another is on screen
-/// just goes.
+/// the application goes into the background. Either closed while another window is on screen just
+/// goes.
 pub fn closing_decision(
     is_main: bool,
     others_on_screen: bool,

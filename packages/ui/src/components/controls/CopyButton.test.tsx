@@ -6,7 +6,8 @@ import { errorAlerts } from "../alerts/errorAlerts";
 import { Dialog } from "../dialog/Dialog";
 import type { PlatformAdapter } from "../../platform";
 import { ViewerHost } from "../../viewer/viewerTestSupport";
-import { COPIED_HOLD_MS, CopyButton, RESET_AFTER_TOOLTIP_CLOSE_MS } from "./CopyButton";
+import { CopyButton } from "./CopyButton";
+import { DONE_HOLD_MS, RESET_AFTER_TOOLTIP_CLOSE_MS } from "./FeedbackButton";
 import { enter, leave, mountForTooltip, openTooltip } from "../hint/tooltipTestSupport";
 import { fakeTimers, runPendingTimers, runOutTimers } from "../../test/clock";
 
@@ -194,7 +195,7 @@ it("goes back to Copy once COPIED_HOLD_MS has passed when no tooltip was open at
   press(button!);
   await act(async () => {});
   expect(button!.getAttribute("aria-label")).toBe("Copied");
-  act(() => void vi.advanceTimersByTime(COPIED_HOLD_MS - 1));
+  act(() => void vi.advanceTimersByTime(DONE_HOLD_MS - 1));
   expect(button!.getAttribute("aria-label")).toBe("Copied");
   act(() => void vi.advanceTimersByTime(1));
   expect(button!.getAttribute("aria-label")).toBe("Copy");

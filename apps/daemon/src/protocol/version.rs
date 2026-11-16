@@ -5,8 +5,9 @@
 /// renamed request, event, field or value, a changed type, a newly required input, a changed
 /// meaning) of a released generation raises it, and a client of another generation stops at the
 /// `hello`. Version changes are written only between released versions: a break to what no
-/// release has carried yet is made in place, within the current generation.
-pub const GENERATION: u32 = 5;
+/// release has carried yet is made in place, within the current generation. A generation that builds
+/// of main have spoken counts as released, so it is raised rather than changed in place.
+pub const GENERATION: u32 = 6;
 
 /// The daemon's release version, the workspace version, for a client to name when the
 /// generations differ.

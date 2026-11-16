@@ -1008,7 +1008,7 @@ it("reports a user-triggered external Markdown link failure", async () => {
   // The link is the document's own once its renderer is in; a cold import can take seconds.
   await vi.waitFor(async () => {
     await settleLazyImport();
-    expect(document.querySelector('[role=region] a[target=_blank][href="https://example.com/docs"]')).not.toBeNull();
+    expect(document.querySelector('[role=region] a[href="https://example.com/docs"]')).not.toBeNull();
   }, { timeout: LAZY_IMPORT_TIMEOUT_MS });
   await act(async () => document.querySelector<HTMLAnchorElement>('a[href="https://example.com/docs"]')!.click());
   expect(links.open).toHaveBeenCalledExactlyOnceWith("https://example.com/docs");

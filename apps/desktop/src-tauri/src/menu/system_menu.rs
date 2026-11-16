@@ -1,5 +1,5 @@
 //! The Remote items of every window's system menu on Windows, the menu the title bar's icon and
-//! Alt+Space open: after a separator, New remote window, the saved remote daemons (or a disabled
+//! Alt+Space open: after a separator, Remote devices, the saved remote daemons (or a disabled
 //! line saying there is none) and Open this PC's window, as the macOS Remote menu lists them. Their
 //! English defaults are in sentence case, as Windows' own menus are; the UI sends them so in its
 //! catalogs' languages (`useNativeMenuLabels`). Each window is subclassed (`install`) to hear the
@@ -37,7 +37,7 @@ fn label<'a>(labels: &'a HashMap<String, String>, key: &str, default: &'a str) -
 }
 
 /// The lines appended to the system menu, in order, from the UI's labels and the saved entries
-/// (`remote::menu_entries`): a separator, New remote window, a separator, the saved daemons, a
+/// (`remote::menu_entries`): a separator, Remote devices, a separator, the saved daemons, a
 /// separator and Open this PC's window. Daemons past what the commands below the system's own can
 /// number are left out.
 pub fn items(labels: &HashMap<String, String>, entries: &[(String, String)]) -> Vec<Item> {
@@ -48,10 +48,10 @@ pub fn items(labels: &HashMap<String, String>, entries: &[(String, String)]) -> 
         text: text.to_owned(),
         action: Some(action),
     };
-    let new_window = fixed(
+    let devices = fixed(
         0,
-        label(labels, "menu.newRemoteWindow", "New remote window"),
-        MenuAction::NewWindow,
+        label(labels, "menu.remoteDevices", "Remote devices"),
+        MenuAction::Devices,
     );
     let main_window = fixed(
         1,
@@ -68,7 +68,7 @@ pub fn items(labels: &HashMap<String, String>, entries: &[(String, String)]) -> 
         next += COMMAND_STEP;
         item
     };
-    let mut items = vec![Item::Separator, new_window, Item::Separator];
+    let mut items = vec![Item::Separator, devices, Item::Separator];
     if entries.is_empty() {
         items.push(command(
             label(labels, "menu.noRemoteDaemons", "No remote daemons"),
@@ -269,7 +269,8 @@ mod tests {
     }
 
     #[test]
-    fn the_system_menu_gets_new_window_the_saved_daemons_and_the_main_window_after_a_separator() {
+    fn the_system_menu_gets_remote_devices_the_saved_daemons_and_the_main_window_after_a_separator()
+    {
         let entries = vec![
             ("a".to_owned(), "Staging".to_owned()),
             ("b".to_owned(), "Lab".to_owned()),
@@ -283,7 +284,7 @@ mod tests {
         assert_eq!(
             lines,
             [
-                ("New remote window", Some(MenuAction::NewWindow)),
+                ("Remote devices", Some(MenuAction::Devices)),
                 ("Staging", Some(MenuAction::Open("a".into()))),
                 ("Lab", Some(MenuAction::Open("b".into()))),
                 ("Open this PC’s window", Some(MenuAction::MainWindow)),
@@ -306,7 +307,7 @@ mod tests {
     #[test]
     fn the_items_read_the_ui_s_labels() {
         let labels = HashMap::from([
-            ("menu.newRemoteWindow".to_owned(), "新建远程窗口".to_owned()),
+            ("menu.remoteDevices".to_owned(), "远程设备".to_owned()),
             ("menu.openMainWindow".to_owned(), "打开本机窗口".to_owned()),
             (
                 "menu.noRemoteDaemons".to_owned(),
@@ -318,7 +319,7 @@ mod tests {
             .into_iter()
             .map(|(_, text, _)| text)
             .collect();
-        assert_eq!(texts, ["新建远程窗口", "没有远程守护进程", "打开本机窗口"]);
+        assert_eq!(texts, ["远程设备", "没有远程守护进程", "打开本机窗口"]);
     }
 
     #[test]

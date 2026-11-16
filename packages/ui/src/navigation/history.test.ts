@@ -28,6 +28,26 @@ describe("push", () => {
     expect(history.entries).toHaveLength(4);
   });
 
+  it("tells the Remote devices page, and each device on it, from the page it is shown over", () => {
+    const base: Location = { console: "c-1", session: "a" };
+    let history = push(EMPTY_HISTORY, base);
+    history = push(history, { ...base, devices: "d1" });
+    history = push(history, { ...base, devices: "d2" });
+    history = push(history, { ...base, devices: "" });
+    history = push(history, { ...base, devices: "d2" });
+    expect(history.entries.map((entry) => entry.devices)).toEqual([undefined, "d1", "d2", "", "d2"]);
+    // The same device again is not a visit.
+    expect(push(history, { ...base, devices: "d2" })).toBe(history);
+  });
+
+  it("tells the window's places while the local daemon cannot be used from the same ones with it", () => {
+    let history = push(EMPTY_HISTORY, { offline: true });
+    history = push(history, { offline: true, devices: "d1" });
+    history = push(history, {});
+    expect(history.entries).toHaveLength(3);
+    expect(push(history, {})).toBe(history);
+  });
+
   it("drops what was ahead when navigating after going back", () => {
     let history = visit("a", "b", "c");
     history = go(history, -1, everything)!.history;
@@ -117,5 +137,29 @@ describe("isLive", () => {
     ["a deleted console session's archive", { console: "c-1", archive: { console: "c-1", consoleSession: "s-gone" } }, false],
   ])("%s", (_, location, expected) => {
     expect(isLive(location, data)).toBe(expected);
+  });
+
+  const withDevices = { ...data, devices: new Set(["d1"]) };
+  it.each<[string, Location, boolean]>([
+    ["a saved device on the Remote devices page", { console: "c-1", devices: "d1" }, true],
+    ["a deleted device on the Remote devices page", { console: "c-1", devices: "d-gone" }, false],
+    ["the page with no device saved", { console: "c-1", devices: "" }, true],
+    ["the page over a deleted session", { console: "c-1", session: "s-gone", devices: "d1" }, false],
+    ["the page over a deleted console", { console: "c-gone", devices: "d1" }, false],
+  ])("%s", (_, location, expected) => {
+    expect(isLive(location, withDevices)).toBe(expected);
+  });
+
+  it("takes a device for live where the saved devices are not known", () => {
+    expect(isLive({ console: "c-1", devices: "d-anything" }, data)).toBe(true);
+  });
+
+  it.each<[string, Location, boolean, boolean]>([
+    ["the status of an unusable daemon while it is unusable", { offline: true }, true, true],
+    ["the status of an unusable daemon once the daemon can be used", { offline: true }, false, false],
+    ["the page opened over it while unusable", { offline: true, devices: "d1" }, true, true],
+    ["the page opened over it once the daemon can be used", { offline: true, devices: "d1" }, false, false],
+  ])("%s", (_, location, offline, expected) => {
+    expect(isLive(location, { ...withDevices, offline })).toBe(expected);
   });
 });

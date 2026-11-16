@@ -20,14 +20,13 @@ pub struct PathLink {
     pub kind: PathLinkKind,
     /// Where the client reads the file with `read_project_file`, for a file inside the project or
     /// one of its worktrees, or for a directory there, its README or index file when it has one;
-    /// absent for anything else. Whether the viewer can show it is for the client to find out by
-    /// reading it.
+    /// absent for anything else, which a file reads with `read_path_link`. Whether the viewer can
+    /// show it is for the client to find out by reading it.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[cfg_attr(test, ts(optional))]
     pub view: Option<PathLinkView>,
-    /// Set for any file in a project, whatever its type, since the system's default application for
-    /// a file may run it, and for what the system could launch: the viewer shows it and
-    /// `open_path_link` refuses it.
+    /// Set for a file the system could launch rather than show: the host never opens it, so
+    /// `open_path_link` refuses it, and the viewer is the only place it opens from a link.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     #[cfg_attr(test, ts(optional = nullable))]
     pub viewer_only: bool,

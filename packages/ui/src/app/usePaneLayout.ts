@@ -32,6 +32,7 @@ export function usePaneLayout({
   selectedSession,
   selectedSessionId,
   focusTerminal,
+  sidebarWithoutConsole = false,
 }: {
   asideOwner: AsideOwner | undefined;
   hasAside: boolean;
@@ -42,6 +43,8 @@ export function usePaneLayout({
   selectedSession: Session | undefined;
   selectedSessionId: string | undefined;
   focusTerminal: () => void;
+  /** The Remote devices page shows, whose sidebar (the list of devices) is there with no console too. */
+  sidebarWithoutConsole?: boolean;
 }) {
   const daemon = useDaemon();
   // `currentConsole` falls back to the first console (`sidebarView.ts`), so it is missing exactly
@@ -50,6 +53,8 @@ export function usePaneLayout({
   // shows the welcome screen instead. The panes' saved visibility and widths are left as they are:
   // this is an absence of content, not a choice, and they come back as the user left them.
   const noConsoles = currentConsole === undefined;
+  // What has no sidebar and no drawer: no console, unless the page of devices has its own list there.
+  const noSidebar = noConsoles && !sidebarWithoutConsole;
   // The right pane is a stack of its owner's panels (`panels/stackState.ts`) and shows while one is
   // open: the top bar's toggles, the F6 cycle and the pane itself all read the owner's stack. With
   // none open the pane stays hidden until a panel is explicitly opened.
@@ -86,7 +91,7 @@ export function usePaneLayout({
   const paneShown = openPanels.length > 0;
   const [sidebarRequested] = useDockedPanelVisible("sidebar");
   const dockedPanelCount = ownerStack ? stackedKinds(ownerStack, ownerOrder).length : 0;
-  const { sidebarDockable, asideDockable } = usePaneDocking(!noConsoles && sidebarRequested,
+  const { sidebarDockable, asideDockable } = usePaneDocking(!noSidebar && sidebarRequested,
     dockedPanelCount > 2 ? MIN_TWO_COLUMN_ASIDE_WIDTH : MIN_SINGLE_COLUMN_ASIDE_WIDTH);
   const isNarrow = !sidebarDockable;
   const asideOverlay = !asideFloats && (!asideDockable || !asidePinned);
@@ -99,7 +104,7 @@ export function usePaneLayout({
   const columnShown = stackedPanels.length > 0;
   // Hover reveals only an existing floating group; docked and closed cards need a press.
   const panes = usePaneToggles({
-    hasSidebar: !noConsoles,
+    hasSidebar: !noSidebar,
     isNarrow,
     // Below the width that floats panels over the terminal a panel opens only on a press.
     asidePeekable: hasAside && asideOverlay && paneShown && !asideFloats,
@@ -209,7 +214,7 @@ export function usePaneLayout({
   }, [peekedId, peeking, consoles]);
   // At the tablet boundary and below the rail leaves the row and comes in with the sidebar's drawer; the
   // welcome screen has no drawer, and the rail stays as the way to New console and Settings.
-  const railOnDemand = !noConsoles;
+  const railOnDemand = !noSidebar;
   const railAway = railOnDemand && asideFloats && !panes.sidebarOpen;
   // The drawer closing takes the rail with it: focus left in it would fall to `<body>`. A layout
   // effect, so it runs before the browser's own focus fix-up for what just became `inert`, which a
@@ -231,6 +236,7 @@ export function usePaneLayout({
   const stableHoverAside = useStableHandler(hoverAside);
   return {
     noConsoles,
+    noSidebar,
     ownerKind,
     ownerOrder,
     reportSessionId,

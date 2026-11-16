@@ -1,6 +1,8 @@
 // The files behind the path links of the terminal scenarios: what the fixture daemon reads when a
 // link opens in the file viewer, in the project's folder and in a worktree's.
+import type { Fixture } from "../../fixtures/fixture";
 import type { FixtureFiles } from "../../fixtures/sampleFiles";
+import { IMAGES } from "../../fixtures/viewerImages";
 
 const SUMMARY = `import type { ReactElement } from "react";
 
@@ -128,3 +130,28 @@ export const layout = {
 };
 ` },
 };
+
+/** The temporary folder's file the sample output names: a screenshot the agent wrote, where `read_path_link` reads it. */
+export const TEMP_IMAGE_PATH = "/private/tmp/octoboard/scratchpad/icon/sheet3.png";
+
+/** Which of the paths the sample output names the fixture daemon finds, and where it reads each from: files of the
+ * project, one in a side worktree, a program the system could launch (found, but only the viewer shows it), a folder
+ * with a README, and an image in a temporary folder. */
+export const PATH_LINKS = {
+  "/Users/dev/code/website/src/summary/Summary.css": { view: { path: "src/summary/Summary.css" } },
+  "/Users/dev/code/website/src/summary/Summary.tsx": { view: { path: "src/summary/Summary.tsx" } },
+  "/Users/dev/code/website/docs/summary-notes.md": { view: { path: "docs/summary-notes.md" } },
+  "/Users/dev/code/website/bin/helper": { kind: "file", refused: "launchable", view: { path: "bin/helper" } },
+  "/Users/dev/code/website/docs/plans/summary-layout": { kind: "directory", view: { path: "docs/plans/summary-layout/README.md" } },
+  "/Users/dev/code/search-api-experiments/src/ui.ts": { view: { worktree: "wt-side", path: "src/ui.ts" } },
+  [TEMP_IMAGE_PATH]: { content: { image: IMAGES.after_png } },
+} satisfies NonNullable<Fixture["pathLinks"]>;
+
+/** What the path link scenarios share: the sample output naming files, the project's and the side worktree's files, and
+ * which of the paths the fixture daemon finds. */
+export const PATH_LINK_FIXTURE = {
+  terminal: "paths",
+  files: PATH_LINK_FILES,
+  worktreeFiles: { "wt-side": PATH_LINK_WORKTREE_FILES },
+  pathLinks: PATH_LINKS,
+} satisfies Fixture;

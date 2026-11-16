@@ -16,8 +16,9 @@ use rusqlite::Connection;
 /// schema of a released version raises this by one and appends the step from that version to
 /// [`MIGRATIONS`], and the released version's schema is kept as `schema/v{N}.sql` and listed in the
 /// test-only `PAST_SCHEMAS`, for the test that migrates a database built from each and compares the
-/// result with a fresh one.
-pub(super) const SCHEMA_VERSION: i64 = 5;
+/// result with a fresh one. A version that builds of main have written counts as released, so it is
+/// added to rather than changed in place.
+pub(super) const SCHEMA_VERSION: i64 = 6;
 
 /// The `application_id` of an Octoboard database, "OCTB" in ASCII, written into the file's header
 /// when it is created, so that a SQLite file of another program is told apart from one of ours.
@@ -79,6 +80,9 @@ pub(super) const MIGRATIONS: &[&str] = &[
     "ALTER TABLE settings ADD COLUMN allow_remote_access INTEGER NOT NULL DEFAULT 0;
      ALTER TABLE settings ADD COLUMN remote_access_port INTEGER;
      ALTER TABLE settings RENAME COLUMN interface_language TO agent_language;",
+    // 5 to 6: the language is one setting again, held by the daemon for every window and every
+    // session, so the column is `interface_language` once more and keeps the value it holds.
+    "ALTER TABLE settings RENAME COLUMN agent_language TO interface_language;",
 ];
 
 /// Every table, index and trigger of the current schema.
@@ -366,7 +370,7 @@ CREATE TABLE settings (
     default_clone_dir      TEXT,
     -- NULL until a client reports the language the user picked; see
     -- `Store::interface_language`.
-    agent_language     TEXT,
+    interface_language     TEXT,
     -- NULL until the list is first decided; see `Store::added_agents`.
     added_agents           TEXT,
     account_order          TEXT,
@@ -386,9 +390,6 @@ CREATE TABLE settings (
 -- last columns, spelled as a migration leaves them; see `Store::resume_sessions_on_start`,
 -- `Store::keep_awake`, `Store::keep_sessions_in_own_project`, `Store::daemon_update_check`,
 -- `Store::allow_remote_access` and `Store::remote_access_port`.
--- `agent_language` was `interface_language` before version 5, and the comment above it is spelled
--- as the rename leaves it: it is the column of `Store::agent_language`, NULL until a client reports
--- its interface language as the first value or the user picks one.
 -- The user's explicit choice for a setting of a provider, as JSON (`true`, `false` or a quoted
 -- choice); a setting with no row follows its default. Rows naming a provider or setting this
 -- build does not declare are kept and ignored. See `Store::provider_settings`.
@@ -916,6 +917,7 @@ mod tests {
         include_str!("schema/v2.sql"),
         include_str!("schema/v3.sql"),
         include_str!("schema/v4.sql"),
+        include_str!("schema/v5.sql"),
     ];
 
     /// The files next to `path` that are backups from before a migration.
@@ -1042,11 +1044,11 @@ mod tests {
         );
     }
 
-    /// Migrating a version 4 database keeps the language its daemon held as the agent language, so
-    /// sessions go on being told the language they were told before the upgrade.
+    /// Migrating a version 4 database keeps the language its daemon held, which is still the one
+    /// language of the daemon.
     #[test]
-    fn migrating_a_version_4_database_keeps_its_language_as_the_agent_language() {
-        let path = temp_db("migrate-agent-language");
+    fn migrating_a_version_4_database_keeps_its_language() {
+        let path = temp_db("migrate-language-v4");
         {
             let conn = Connection::open(&path).expect("version 4 database");
             conn.execute_batch(PAST_SCHEMAS[3])
@@ -1063,13 +1065,44 @@ mod tests {
         }
 
         let store = Store::open(&path).expect("migrated");
-        assert_eq!(store.agent_language().unwrap().as_deref(), Some("ja"));
+        assert_eq!(store.interface_language().unwrap().as_deref(), Some("ja"));
         let settings = store.get_settings().unwrap();
-        assert_eq!(settings.agent_language.as_deref(), Some("ja"));
+        assert_eq!(settings.interface_language.as_deref(), Some("ja"));
         assert!(
             settings.auto_pull_repositories,
             "the row's other values stay"
         );
+    }
+
+    /// Migrating a version 5 database, whose language column was the agent language, makes that
+    /// value the one language again, and the remote access settings it holds stay.
+    #[test]
+    fn migrating_a_version_5_database_makes_its_agent_language_the_language() {
+        let path = temp_db("migrate-language-v5");
+        {
+            let conn = Connection::open(&path).expect("version 5 database");
+            conn.execute_batch(PAST_SCHEMAS[4])
+                .expect("version 5 schema");
+            conn.pragma_update(None, "user_version", 5)
+                .expect("version");
+            conn.pragma_update(None, "application_id", APPLICATION_ID)
+                .expect("application id");
+            conn.execute_batch(
+                "INSERT INTO settings (id, auto_pull_repositories, agent_language,
+                                       allow_remote_access, remote_access_port)
+                 VALUES ('singleton', 1, 'de', 1, 4000);",
+            )
+            .expect("settings");
+        }
+
+        let store = Store::open(&path).expect("migrated");
+        assert_eq!(store.interface_language().unwrap().as_deref(), Some("de"));
+        assert_eq!(
+            store.get_settings().unwrap().interface_language.as_deref(),
+            Some("de")
+        );
+        assert!(store.allow_remote_access().unwrap());
+        assert_eq!(store.remote_access_port().unwrap(), Some(4000));
     }
 
     /// Migrating a version 4 database adds Allow remote access, off, and the browser port, unset,
@@ -1095,7 +1128,7 @@ mod tests {
         let store = Store::open(&path).expect("migrated");
         assert!(!store.allow_remote_access().unwrap());
         assert_eq!(store.remote_access_port().unwrap(), None);
-        assert_eq!(store.agent_language().unwrap(), None);
+        assert_eq!(store.interface_language().unwrap(), None);
         assert!(store.get_settings().unwrap().auto_pull_repositories);
         store.set_allow_remote_access(true).unwrap();
         store.set_remote_access_port(Some(4000)).unwrap();
@@ -1282,7 +1315,7 @@ mod tests {
         assert_eq!(user_version(&conn).unwrap(), SCHEMA_VERSION);
         let row: (String, i64, i64, Option<String>, i64) = conn
             .query_row(
-                "SELECT id, auto_pull_repositories, auto_start_quota_windows, agent_language,
+                "SELECT id, auto_pull_repositories, auto_start_quota_windows, interface_language,
                         resume_sessions_on_start
                  FROM settings",
                 [],

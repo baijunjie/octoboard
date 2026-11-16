@@ -9,7 +9,8 @@ import { usePlatform } from "../platform/react";
 import type { ViewedFile } from "../viewer/viewedFile";
 import { useDaemon } from "../store";
 import { useHostPaths } from "../components/hooks/useHostPaths";
-import { revealPathTarget } from "./links/revealPathTarget";
+import { openPathInDefaultApplication } from "../components/host/openPathInDefaultApplication";
+import { revealPathTarget } from "../components/host/revealPathTarget";
 import { openPathTarget } from "./links/openPathTarget";
 import type { HoveredTerminalLink } from "./links/terminalLinks";
 import { programCopyHandler } from "./osc52";
@@ -59,7 +60,8 @@ export function useTerminalController({
   inputHeld?: boolean;
   /** The project the paths in the output are asked about, which the controller built once does not otherwise follow. */
   project: string | null | undefined;
-  /** Shows a project file a path in the output named. Without it such a path opens in the default application. */
+  /** Shows a file a path in the output named. Without it a click on a file path does nothing: a file is never opened on
+   * the host from a click. */
   viewFile?: (file: ViewedFile) => void;
   /** Whether an image pasted into the terminal is saved for the session's agent and its path pasted (an agent session's
    * terminal), rather than pasted as the clipboard's text, empty or not (a shell). Read once, when the controller is
@@ -79,6 +81,8 @@ export function useTerminalController({
   const resizingRef = useLatest(holdingSize);
   const pendingFitRef = useRef(false);
   const latest = useLatest({ t, request, project: project ?? undefined, viewFile });
+  // Read once with the controller, like `isLocal` was.
+  const hostActions = isLocal !== false;
   // What the controller's theme currently is: the construction below reads it for the initial
   // value, and the `colorTheme` effect further down both reads and updates it. One ref rather than
   // two so the two can never claim different things about the same instance.
@@ -93,23 +97,28 @@ export function useTerminalController({
         onLinkHover: (link) => setLinkRef.current?.(link),
         copyToClipboard: programCopyHandler(clipboard, () => latest.current),
         pasteImage: pasteImages ? pasteImageHandlers(() => latest.current, clipboard?.readImage?.bind(clipboard)) : undefined,
-        // A path is opened or revealed on the daemon's host, which is this machine's only where the daemon shares it:
-        // in the window of a daemon elsewhere the paths stay plain text, and web links still open.
-        pathLinks: isLocal === false ? undefined : {
+        // A path is checked and read on the daemon's host, whichever it is, but opened or revealed there only where the
+        // host is this machine: in the window of a daemon elsewhere a file opens in the viewer and a folder is a link
+        // only when it has a README or index file for the viewer to show.
+        pathLinks: {
           pathStyle,
           probe: async (paths) => {
             const reply = await latest.current.request({ type: "probe_path_links", project: latest.current.project, paths });
-            return reply.links.map(({ kind, view, viewer_only }) => ({ kind, view, viewerOnly: viewer_only }));
+            return reply.links.map(({ kind, view, viewer_only }) => ({ kind: hostActions || kind !== "directory" || view ? kind : "none", view, viewerOnly: viewer_only }));
           },
           open: (target, onHost) =>
             openPathTarget({
               target,
               onHost,
+              hostActions,
               project: latest.current.project,
               request: latest.current.request,
               viewFile: latest.current.viewFile,
             }),
-          reveal: (target) => revealPathTarget({ target, project: latest.current.project, request: latest.current.request }),
+          ...(hostActions && {
+            reveal: (target) => revealPathTarget({ path: target.path, project: latest.current.project, request: latest.current.request }),
+            openDefault: (target) => openPathInDefaultApplication({ path: target.path, project: latest.current.project, request: latest.current.request }),
+          }),
         },
       },
       appliedColorThemeRef.current,

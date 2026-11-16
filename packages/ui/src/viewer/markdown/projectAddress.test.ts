@@ -18,6 +18,14 @@ it("leaves web and mail addresses to the platform", () => {
   expect(resolveProjectAddress("docs/guide.md", "mailto:a@example.com")).toEqual({ kind: "external", href: "mailto:a@example.com" });
 });
 
+it("takes an IPv6 literal host, bracketed or as the parser percent-encodes it, and leaves the rest of the address alone", () => {
+  expect(resolveProjectAddress("docs/guide.md", "http://[::1]:59302/remote.txt")).toEqual({ kind: "external", href: "http://[::1]:59302/remote.txt" });
+  expect(resolveProjectAddress("docs/guide.md", "http://%5B::1%5D:59302/remote.txt")).toEqual({ kind: "external", href: "http://[::1]:59302/remote.txt" });
+  expect(resolveProjectAddress("docs/guide.md", "http://%5b::%5d:4000/")).toEqual({ kind: "external", href: "http://[::]:4000/" });
+  expect(resolveProjectAddress("docs/guide.md", "http://localhost/a%5Bb%5D")).toEqual({ kind: "external", href: "http://localhost/a%5Bb%5D" });
+  expect(resolveProjectAddress("docs/guide.md", "http://%5Bnot-an-address%5D/")).toEqual({ kind: "refused" });
+});
+
 it("refuses a path that leaves the project, a scheme, or an absolute address", () => {
   for (const href of [
     "../../etc/passwd",

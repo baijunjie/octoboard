@@ -1,8 +1,9 @@
 // What the fixture daemon answers for files and folders: the files of a project, the folders the add-project dialog lists
 // and the paths a terminal shows as links.
-import type { BrowseEntry, DirEntry, PathLinkKind, PathLinkView } from "../protocol";
+import type { BrowseEntry, DirEntry, FileContent, PathLinkKind, PathLinkView } from "../protocol";
+import { refuseUnfillable } from "./banner";
 import { SAMPLE_FILES, type FixtureFile, type FixtureFiles } from "./sampleFiles";
-import { HOME, normalizedPath, type FixtureContext, type Handlers, type Handler } from "./fixtureContext";
+import { HOME, neverReplied, normalizedPath, type FixtureContext, type Handlers, type Handler } from "./fixtureContext";
 
 /** The names the real daemon's file name search skips at every depth, with everything beneath them:
  * Git's metadata and the files an operating system leaves in a folder, matched ignoring ASCII case
@@ -29,6 +30,36 @@ function isLeftOut(name: string): boolean {
  * path gone from one. */
 const TEMPORARY_ROOTS = ["/tmp", "/private/tmp", "/var/folders", "/private/var/folders"];
 const isInTemporaryRoot = (path: string) => TEMPORARY_ROOTS.some((root) => normalizedPath(path).startsWith(`${root}/`));
+
+/** The most a whole read delivers (`MAX_FILE_BYTES` of the daemon's browse budgets); a file past it is refused with
+ * `limit_exceeded`, which the viewer shows as a stand-in. */
+const FILE_BYTES = 4 * 1024 * 1024;
+
+/** The most one `read_file_range` part delivers (`MAX_RANGE_BYTES`). */
+const RANGE_BYTES = 1024 * 1024;
+
+/** The bytes a fixture file holds, for a read in parts: its text, the bytes of its image, or zeros as many as a binary
+ * of no known type reports. */
+function bytesOfFile(file: FixtureFile, from: number, count: number): { size: number; bytes: Uint8Array } {
+  if ("text" in file) {
+    const bytes = new TextEncoder().encode(file.text);
+    return { size: bytes.length, bytes: bytes.subarray(from, from + count) };
+  }
+  if ("image" in file) {
+    const decoded = atob(file.image.data);
+    const bytes = Uint8Array.from(decoded.slice(from, from + count), (char) => char.charCodeAt(0));
+    return { size: decoded.length, bytes };
+  }
+  if ("binary" in file) return { size: file.binary.size, bytes: new Uint8Array(Math.max(0, Math.min(count, file.binary.size - from))) };
+  return { size: 0, bytes: new Uint8Array(0) };
+}
+
+/** The base64 of `bytes`, as a part travels. */
+function base64Of(bytes: Uint8Array): string {
+  let binary = "";
+  for (let at = 0; at < bytes.length; at += 0x8000) binary += String.fromCharCode(...bytes.subarray(at, at + 0x8000));
+  return btoa(binary);
+}
 
 /** A listing for a path the scenario gave none for: a few directories, some of them repositories. */
 export function genericListing(path: string): { path: string; entries: DirEntry[] } {
@@ -67,7 +98,7 @@ function entriesUnder(files: FixtureFiles, dir: string): BrowseEntry[] {
 /** The requests that read a project's files, which `createFileReplies` answers (the Git ones are `fixtureGit.ts`'s, see
  * `GIT_REQUESTS`). The table below is typed by this list, so a request named here without a reply, or a reply for one
  * not named here, does not compile. */
-export const FILE_REQUESTS = ["list_project_dir", "search_project_files", "read_project_file"] as const;
+export const FILE_REQUESTS = ["list_project_dir", "search_project_files", "read_project_file", "read_path_link", "read_file_range"] as const;
 type FileRequest = (typeof FILE_REQUESTS)[number];
 
 /** The replies about files and folders: a project's own, the folders the add-project dialog lists, and the paths the
@@ -84,17 +115,16 @@ export function createFileReplies({ scenario, store, fail, restored }: FixtureCo
     const absolute = absoluteLinkPath(project, path);
     return Object.entries(scenario.pathLinks ?? {}).find(([given]) => normalizedPath(given) === normalizedPath(absolute))?.[1];
   };
-  /** Whether a path found is a file the viewer shows, which the daemon answers `viewer_only` in the probe and refuses
-   * to open from a link: every file of the project or its worktrees is one, a folder and a file outside the projects
-   * are not. */
-  const isViewerOnly = (found: NonNullable<ReturnType<typeof pathLinkFound>>) =>
-    typeof found === "object" && "view" in found && found.view !== undefined && (!("kind" in found) || found.kind === "file");
+  /** Whether a path found is a file the system could launch rather than show, which the daemon answers `viewer_only` in
+   * the probe and refuses to open: only the viewer shows it. */
+  const isLaunchableFile = (found: NonNullable<ReturnType<typeof pathLinkFound>>) =>
+    typeof found === "object" && "refused" in found && found.refused === "launchable" && found.kind === "file";
   /** Refuses a path the daemon will not take from a link, with the path as given, as the daemon does: one gone since the
-   * output was drawn, one that lies outside every root now, one found but refused. Of the `launchable` refusals a reveal
-   * drops only the viewer-only one, as the daemon drops only that and the macOS package folder, which no entry can
-   * express; a launchable path in a temp root or a launchable folder in a project is refused by both. */
-  const refuseUnreachableLink = (body: { project?: string; path: string }, found: ReturnType<typeof pathLinkFound>, action: "open" | "reveal"): void => {
-    const done = action === "open" ? "opened" : "shown";
+   * output was drawn, one that lies outside every root now, one found but refused. Of the `launchable` refusals only a
+   * launchable file is let through to a reveal and a read, as the daemon refuses only opening it (a launchable folder is
+   * never found, and is refused by every request). */
+  const refuseUnreachableLink = (body: { project?: string; path: string }, found: ReturnType<typeof pathLinkFound>, action: "open" | "reveal" | "read"): void => {
+    const done = action === "open" ? "opened" : action === "reveal" ? "shown" : "read";
     if (typeof found === "object" && "gone" in found) {
       // `root` says where the path was: a temporary folder has nowhere to be found again, the project has its files.
       const root = isInTemporaryRoot(absoluteLinkPath(body.project, body.path)) ? "temporary" : "project";
@@ -103,7 +133,7 @@ export function createFileReplies({ scenario, store, fail, restored }: FixtureCo
     if (typeof found === "object" && "outside" in found) {
       fail({ code: "outside_scope", params: { path: body.path, action: "open" }, message: `${body.path} leads outside the project, so it is not ${done}` });
     }
-    if (typeof found === "object" && "refused" in found && (action === "open" || found.refused !== "launchable" || !isViewerOnly(found))) {
+    if (typeof found === "object" && "refused" in found && (action === "open" || found.refused !== "launchable" || !isLaunchableFile(found))) {
       // Only an `unreadable` cause carries the system's text, as the daemon sends `detail` for no other.
       const detail = found.refused === "unreadable" ? found.detail : undefined;
       fail({
@@ -119,6 +149,43 @@ export function createFileReplies({ scenario, store, fail, restored }: FixtureCo
     if (file?.error) return fail(file.error);
     if (!file) return fail({ code: "file_not_found", params: { path }, message: `${path} was not found` });
     return file;
+  };
+
+  /** The file a project's request reads, whole: refused with `limit_exceeded` past what a read delivers, answered with
+   * the size and, for a text or an image, the content. */
+  const wholeFile = (file: FixtureFile): FileContent => {
+    const { size } = bytesOfFile(file, 0, 0);
+    if (size > FILE_BYTES) {
+      fail({ code: "limit_exceeded", params: { limit: "file_bytes", max: String(FILE_BYTES), size: String(size) }, message: `the file is larger than the ${FILE_BYTES}-byte limit` });
+    }
+    return "text" in file
+      ? { size, kind: "text", media_type: null, text: file.text, data: null }
+      : "image" in file
+        ? { size, kind: "binary", media_type: file.image.mediaType, text: null, data: file.image.data }
+        : { size, kind: "binary", media_type: null, text: null, data: "" };
+  };
+  /** The file a path in a terminal's output names, as `read_path_link` and `read_file_range` resolve it again: refused as
+   * the daemon refuses a path it will not take, read from the project's files when the path found has a `view`, else
+   * from the `content` the scenario gives it. */
+  const linkedFile = (body: { project?: string; path: string }): FixtureFile => {
+    const found = pathLinkFound(body.project, body.path);
+    refuseUnreachableLink(body, found, "read");
+    if (found === undefined) {
+      const root = isInTemporaryRoot(absoluteLinkPath(body.project, body.path)) ? "temporary" : "project";
+      return fail({ code: "file_not_found", params: { path: body.path, root }, message: `\`${body.path}\` does not exist` });
+    }
+    if (found === "directory" || (typeof found === "object" && "kind" in found && found.kind === "directory")) {
+      return fail({ code: "unsupported_file_type", params: { path: body.path, file_type: "directory" }, message: `${body.path} is a directory, which cannot be read here` });
+    }
+    const view = typeof found === "object" && "view" in found ? found.view : undefined;
+    if (view) {
+      if (body.project === undefined) return refuseUnfillable(`${body.path} has a view in a project, and the request names none`);
+      return browsed(view.worktree === undefined ? projectFiles(body.project) : scenario.worktreeFiles?.[view.worktree] ?? {}, view.path);
+    }
+    const content = typeof found === "object" && "content" in found ? found.content : undefined;
+    if (!content) return refuseUnfillable(`${body.path} is a file the viewer reads, and the scenario's pathLinks gives it no content`);
+    if (content.error) return fail(content.error);
+    return content;
   };
 
   const browse: { [K in FileRequest]: Handler<K> } = {
@@ -146,28 +213,31 @@ export function createFileReplies({ scenario, store, fail, restored }: FixtureCo
       const files = body.worktree === undefined ? projectFiles(body.project) : scenario.worktreeFiles?.[body.worktree] ?? {};
       const file = browsed(files, body.path);
       const source = { kind: "live" as const, root_id: "fixture", version: "1" };
-      const content =
-        "text" in file
-          ? { size: new TextEncoder().encode(file.text).length, kind: "text" as const, media_type: null, text: file.text, data: null }
-          : "image" in file
-            ? { size: Math.floor((file.image.data.length * 3) / 4), kind: "binary" as const, media_type: file.image.mediaType, text: null, data: file.image.data }
-            : { size: "binary" in file ? file.binary.size : 0, kind: "binary" as const, media_type: null, text: null, data: "" };
-      return { type: "project_file", id: null, project: body.project, worktree: body.worktree ?? null, path: body.path, source, file: content };
+      return { type: "project_file", id: null, project: body.project, worktree: body.worktree ?? null, path: body.path, source, file: wholeFile(file) };
+    },
+    read_path_link: (body) => ({ type: "path_link_file", id: null, path: body.path, version: "1", file: wholeFile(linkedFile(body)) }),
+    read_file_range: (body) => {
+      const file =
+        body.file.kind === "project"
+          ? browsed(body.file.worktree === undefined ? projectFiles(body.file.project) : scenario.worktreeFiles?.[body.file.worktree] ?? {}, body.file.path)
+          : linkedFile(body.file);
+      if (body.version !== undefined && body.version !== "1") {
+        return fail({ code: "source_changed", params: { path: body.file.path }, message: `${body.file.path} changed while it was being read` });
+      }
+      // A copy held part-way: the daemon answers this many parts of 1 MiB, and the next never comes.
+      if ("binary" in file && file.binary.answeredParts !== undefined && body.offset >= file.binary.answeredParts * RANGE_BYTES) return neverReplied();
+      const { size, bytes } = bytesOfFile(file, body.offset, Math.min(body.length, RANGE_BYTES));
+      return { type: "file_range", id: null, offset: body.offset, size, version: "1", data: base64Of(bytes) };
     },
   };
 
   return {
     ...browse,
     open_path_link: (body) => {
-      const found = pathLinkFound(body.project, body.path);
-      refuseUnreachableLink(body, found, "open");
-      // A file the viewer shows is never opened on the host, so the daemon refuses it as one it would launch.
-      if (found !== undefined && isViewerOnly(found)) {
-        return fail({ code: "path_link_refused", params: { path: body.path, cause: "launchable" }, message: `${body.path} is not opened from a link: launchable` });
-      }
+      refuseUnreachableLink(body, pathLinkFound(body.project, body.path), "open");
       return { type: "ack", id: null };
     },
-    // Nothing is launched, so a file the viewer shows is revealed too; a launchable path the daemon never reaches (one in a temp root, a folder in a project) still is not.
+    // Nothing is launched, so a launchable file is revealed too; a launchable folder the daemon never reaches still is not.
     reveal_path_link: (body) => {
       refuseUnreachableLink(body, pathLinkFound(body.project, body.path), "reveal");
       return { type: "ack", id: null };
@@ -179,7 +249,7 @@ export function createFileReplies({ scenario, store, fail, restored }: FixtureCo
         if (typeof found === "string") return { path, kind: found };
         const kind = "kind" in found ? found.kind : "file";
         const view = "view" in found ? found.view : undefined;
-        return { path, kind, ...(view && { view }), ...(isViewerOnly(found) && { viewer_only: true }) };
+        return { path, kind, ...(view && { view }), ...(isLaunchableFile(found) && { viewer_only: true }) };
       });
       return { type: "path_links", id: null, links };
     },

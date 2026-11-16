@@ -1,7 +1,7 @@
 # General settings
 
-Settings' **General** section (see "General" in `docs/product/settings.md`): app-wide settings, the **Interface
-language** and **Agent language** rows first, on their own, then five groups, each under a heading (see "Group
+Settings' **General** section (see "General" in `docs/product/settings.md`): app-wide settings, the **Language** row
+first, on its own, then five groups, each under a heading (see "Group
 headings" in `docs/product/settings.md`):
 
 - **Startup**: **Launch at login**, in the desktop application's main window where the system offers it (see "Launch
@@ -14,7 +14,7 @@ headings" in `docs/product/settings.md`):
 - **Sorting**: **Sessions**, **Active projects** and **Inactive projects**, in every client.
 
 A group with nothing to show in the client is left out, so a browser, and a remote window of the desktop application
-(see "The remote window" in `docs/product/remote-daemons.md`), show the two language rows, then Startup with Resume
+(see "The remote window" in `docs/product/remote-daemons.md`), show Language, then Startup with Resume
 sessions on start alone, Power where the daemon's host can be held awake, Terminals and Sorting. In a remote window
 every setting of the section that the daemon keeps is the remote daemon's.
 
@@ -22,15 +22,11 @@ How each of these switches saves is in "How switches save" in `docs/product/sett
 
 ## Language
 
-Two rows, each a drop-down of the offered languages, each named in its own language:
-
-- **Interface language**: the language of the interface on this device, the client's own — in the desktop
-  application every window's, whichever daemon it shows. What the options are, how a language is picked before one is
-  chosen, what follows it and where it is kept are in "Choosing the interface language" and "Where the interface
-  language is stored" in `docs/product/language.md`.
-- **Agent language**: the language agents talk to the user in, which the window's daemon keeps; in a remote window, the
-  remote daemon's. How it is set at first, what changes it and what sessions are told are in "The agent language" in
-  `docs/product/language.md`.
+The language of every window of the daemon, and the one agents talk to the user in, chosen from a drop-down of the
+offered languages, each named in its own language; the row's description says both. In a remote window it is the
+remote daemon's. What the options are, how a language is picked before one is known, what follows the choice, where it
+is kept, how every window follows it and how it becomes the language sessions are told are in
+`docs/product/language.md`.
 
 ## Launch at login
 

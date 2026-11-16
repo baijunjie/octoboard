@@ -312,10 +312,9 @@ describe("which section each row is indexed under", () => {
     expect(SETTINGS_SEARCH_INDEX.appearance.every((entry) => entry.group === undefined)).toBe(true);
   });
 
-  it("lists the interface and agent language, the startup, window, power and terminal rows and the sorting rows under General, and not the theme or the Markdown style", () => {
+  it("lists the language, the startup, window, power and terminal rows and the sorting rows under General, and not the theme or the Markdown style", () => {
     expect(ids("general")).toEqual([
       "language",
-      "agent-language",
       "launch-at-login",
       "resume_sessions_on_start",
       "run-in-background",

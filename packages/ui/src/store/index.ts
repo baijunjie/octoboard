@@ -1,5 +1,5 @@
 export { applyDaemonEvent, dismissAccountLogin, seedShellTerminal, setAccountSwitchesQueued, setRestartAwaited, trackAccountLogin, trackAgentCliUpdate, trackPagesListing } from "./actions";
-export { createDaemon } from "./connection";
+export { createDaemon, createInertDaemon } from "./connection";
 export type { Daemon } from "./connection";
 export { createImportProgressListeners } from "./importProgressListeners";
 export type { ImportProgressEvent } from "./importProgressListeners";

@@ -161,6 +161,28 @@ it("shows another tab's lines on choosing it and keeps the shared lines", async 
   expect(container.querySelectorAll("[role=separator]").length).toBe(1);
 });
 
+it("switches between tabs whose panels hold different lines at the same positions", async () => {
+  model = {
+    ...MODEL,
+    tabs: [...MODEL.tabs, { key: "staging", label: "Staging", remote: true, raised: false }],
+    panels: [
+      [{ kind: "item", id: "session:a", label: "Fix the tests" }],
+      [{ kind: "item", id: "session:b", label: "Review the build" }],
+      [{ kind: "heading", label: "Idle" }, { kind: "item", id: "session:c", label: "Deploy staging" }],
+    ],
+    actions: [MODEL.actions[0], MODEL.actions[1], MODEL.actions[1]],
+  };
+  const container = await mount();
+  act(() => tabs(container)[0].focus());
+  await key(tabs(container)[0], "ArrowRight");
+  expect(rowNamed(container, "Review the build")).toBeDefined();
+  await key(tabs(container)[1], "ArrowRight");
+  expect(rowNamed(container, "Deploy staging")).toBeDefined();
+  await key(tabs(container)[2], "ArrowLeft");
+  expect(rowNamed(container, "Review the build")).toBeDefined();
+  expect(container.textContent).not.toContain("Deploy staging");
+});
+
 it("selects the tab it is shown on, collapses what was open and focuses the tab", async () => {
   const container = await mount();
   await press(rowNamed(container, "Claude"));
@@ -316,6 +338,52 @@ it("moves between the tabs with the arrow keys, showing each daemon's lines", as
   await key(tabs(container)[1], "ArrowLeft");
   expect(tabs(container)[0].getAttribute("aria-selected")).toBe("true");
   expect(container.textContent).toContain("Fix the tests");
+});
+
+it("moves from the tab strip to the first line with Down, and back to the selected tab with Up from it", async () => {
+  const container = await mount();
+  act(() => tabs(container)[0].focus());
+  await key(tabs(container)[0], "ArrowDown");
+  expect(document.activeElement).toBe(rows(container)[0]);
+  await key(rows(container)[0], "ArrowUp");
+  expect(document.activeElement).toBe(tabs(container)[0]);
+});
+
+it("hands the tab strip's Down to the first choosable line, past an information line, and Up from the first line back", async () => {
+  model = { ...MODEL, panels: [[{ kind: "note", label: "Nothing waiting" }, ...MODEL.panels[0]], []] };
+  const container = await mount();
+  act(() => tabs(container)[0].focus());
+  await key(tabs(container)[0], "ArrowDown");
+  expect(document.activeElement).toBe(rowNamed(container, "Fix the tests"));
+  // Up from the line after the information line is the menu's own, which reaches it; only the first line of all returns.
+  await key(rowNamed(container, "Fix the tests"), "ArrowUp");
+  expect(document.activeElement).toBe(rowNamed(container, "Nothing waiting"));
+  await key(rowNamed(container, "Nothing waiting"), "ArrowUp");
+  expect(document.activeElement).toBe(tabs(container)[0]);
+});
+
+it("leaves Up on the first line to the menu, which wraps, when there is no tab strip", async () => {
+  model = SINGLE;
+  const container = await mount();
+  await act(async () => open({ chosen: 0 }));
+  await key(rowNamed(container, "Fix the tests"), "ArrowUp");
+  expect(document.activeElement).toBe(rowNamed(container, "Quit completely"));
+});
+
+it("leaves Shift+Tab from a tab alone", async () => {
+  const container = await mount();
+  act(() => tabs(container)[0].focus());
+  const event = new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true });
+  await act(async () => { tabs(container)[0].dispatchEvent(event); });
+  expect(event.defaultPrevented).toBe(false);
+  expect(document.activeElement).toBe(tabs(container)[0]);
+});
+
+it("enters the menu on its first line with Tab from the tab strip", async () => {
+  const container = await mount();
+  act(() => tabs(container)[0].focus());
+  await key(tabs(container)[0], "Tab");
+  expect(document.activeElement).toBe(rows(container)[0]);
 });
 
 it("closes what is open in place when another tab is chosen, and when a newer model arrives", async () => {

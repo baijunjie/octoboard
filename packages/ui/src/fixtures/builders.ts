@@ -53,7 +53,7 @@ export const SETTINGS_VERSIONS = versionsOf([
   "auto_close_idle_shell_terminals", "auto_pull_repositories", "auto_delete_unresumable_archives", "auto_approve_session_requests",
   "auto_approve_resume_requests", "auto_approve_account_switches", "auto_approve_handoffs", "ask_questions_as_choices",
   "keep_sessions_in_own_project",
-  "agent_language", "keep_awake", "keep_awake_when", "auto_select_account", "auto_switch_on_usage_limit",
+  "interface_language", "keep_awake", "keep_awake_when", "auto_select_account", "auto_switch_on_usage_limit",
   "auto_start_quota_windows", "default_clone_dir", "resume_sessions_on_start", "daemon_update_check", "daemon_update_channel",
   ...GIT_WORKFLOW_ITEM_KEYS.map((item) => `git_workflow.${item}`),
   ...forEachAgent((agent) => [`agent_tags.${agent}`]),
@@ -325,7 +325,7 @@ export function daemonUpdateOf(parts: Partial<DaemonUpdateStatus> = {}): DaemonU
 
 /** Remote access switched off, over which `parts` lay what a scenario differs in. */
 export function remoteAccessOf(parts: Partial<RemoteAccess> = {}): RemoteAccess {
-  return { allowed: false, state: "off", browser_port: null, address: null, forward_command: null, connection: null, failure: null, ...parts };
+  return { allowed: false, state: "off", browser_port: null, address: null, forward_command: null, server_addresses: [], connection: null, failure: null, ...parts };
 }
 
 /** A connected window's state after its first snapshot, over which a scenario lays what it differs

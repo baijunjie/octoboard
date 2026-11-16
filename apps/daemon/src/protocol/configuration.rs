@@ -22,15 +22,18 @@ pub const CONFIGURATION_FORMAT: &str = "octoboard-configuration";
 /// Raised when a change makes a reader of a released version misread a document: a field removed
 /// or given another meaning. A field added, which a reader that does not know it ignores, does not raise it.
 ///
+/// A version that builds of main have written counts as released: it is added to, never changed in place.
+///
 /// An import reads this version and, through the steps of `config_document::upgrade`, every older
 /// one from the first released; it refuses any other. Version changes and upgrade steps are written
 /// only between released versions: a change no release has carried is made in place, at this
 /// version, and raising it past a released version adds the step that upgrades a document of that
 /// version, so an export made by the release stays importable. Version 1 is what the beta releases
 /// wrote; 2 moved the Agent accounts settings into the accounts region and dropped an account's
-/// sharing flag; 3 dropped the sidebar order setting; 4 took the agent language from
-/// `agent_language` alone, where a document of 3 or older carries it as `interface_language`.
-pub const CONFIGURATION_VERSION: u32 = 4;
+/// sharing flag; 3 dropped the sidebar order setting; 4 (written by builds of main) split
+/// the language into `interface_language`, the client's, and `agent_language`, the daemon's; 5
+/// holds one `interface_language` again, so a document of 4 has its `agent_language` folded into it.
+pub const CONFIGURATION_VERSION: u32 = 5;
 
 #[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -211,19 +214,12 @@ pub struct DocumentSessionOrder {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct DocumentSettings {
     // General.
-    /// The interface language tag, which only the client holds, carried like `run_in_background`:
-    /// the client adds the language it shows to a document it saves and applies it from an
-    /// import's reply when it offers it. A document of version 3 or older, from a build that held
-    /// one language for the windows and the agents alike, carries that language here alone: its
-    /// upgrade copies it into `agent_language`.
+    /// The interface language tag (see `Settings.interface_language`): the daemon writes the one it
+    /// holds. An import applies it only when this build offers it. Absent when the daemon held
+    /// none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(test, ts(optional))]
     pub interface_language: Option<String>,
-    /// The agent language tag (see `Settings.agent_language`): the daemon writes the one it holds.
-    /// An import applies it only when this build offers it. Absent when the daemon held none.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(test, ts(optional))]
-    pub agent_language: Option<String>,
     /// Whether the daemon resumes the interrupted sessions when it starts (see
     /// `Settings.resume_sessions_on_start`). Absent in a document from a build that had no such
     /// setting, which an import then leaves as this machine has it.
@@ -343,7 +339,6 @@ impl DocumentSettings {
         let Self {
             appearance,
             interface_language,
-            agent_language,
             markdown_style,
             terminal_font_size,
             session_order,
@@ -368,7 +363,6 @@ impl DocumentSettings {
         match section {
             SettingsSection::General => {
                 interface_language.is_some()
-                    || agent_language.is_some()
                     || resume_sessions_on_start.is_some()
                     || run_in_background.is_some()
                     || show_menu_bar_icon.is_some()
@@ -419,7 +413,6 @@ impl DocumentSettings {
         let Self {
             appearance,
             interface_language,
-            agent_language,
             markdown_style,
             terminal_font_size,
             session_order,
@@ -444,7 +437,6 @@ impl DocumentSettings {
         Self {
             appearance: appearance.filter(|_| appearance_section),
             interface_language: interface_language.filter(|_| general),
-            agent_language: agent_language.filter(|_| general),
             markdown_style: markdown_style.filter(|_| appearance_section),
             terminal_font_size: terminal_font_size.filter(|_| appearance_section),
             session_order: session_order.filter(|_| general),
@@ -1025,8 +1017,7 @@ mod tests {
     /// A document that carries every key, so a key a section forgets shows up in its tests.
     fn full() -> DocumentSettings {
         DocumentSettings {
-            interface_language: Some("fr".to_string()),
-            agent_language: Some("de".to_string()),
+            interface_language: Some("de".to_string()),
             appearance: Some("dark".to_string()),
             markdown_style: Some("github".to_string()),
             terminal_font_size: Some(18),
@@ -1098,7 +1089,6 @@ mod tests {
         assert_eq!(
             keys_of(&full().only(&[SettingsSection::General])),
             [
-                "agent_language",
                 "auto_close_idle_shell_terminals",
                 "interface_language",
                 "keep_awake",
@@ -1121,14 +1111,7 @@ mod tests {
             (
                 "interface_language",
                 DocumentSettings {
-                    interface_language: Some("fr".to_string()),
-                    ..Default::default()
-                },
-            ),
-            (
-                "agent_language",
-                DocumentSettings {
-                    agent_language: Some("de".to_string()),
+                    interface_language: Some("de".to_string()),
                     ..Default::default()
                 },
             ),

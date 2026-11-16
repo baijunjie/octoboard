@@ -39,6 +39,7 @@ which resets the dev app's `octoboard.*` preferences (hence port 5175 for `pnpm 
   fixture that cannot be answered as the real daemon would, lazy content that failed or never settled, an exit
   transition that never ends) is painted over the page as a `[data-gallery-failure]` overlay
   (`packages/ui/src/fixtures/banner.ts`); check a capture for it even when the page signals ready.
+- The frame holds a read of a file (`read_project_file`, `read_path_link`) back a few milliseconds before the fixture daemon answers it: the real daemon's reply never lands in the task that asked, and a viewer opened by a click on a terminal link asks from an effect, before the render that names the file has committed.
 - `chrome=1` in a frame URL gives the page the desktop window's `windowChrome` capability (the top bar's drag region, and
   on a macOS host the window's own Back and Forward keys), while keeping the browser platform kind. It does not make the
   page the desktop app: what the app alone has by its platform kind (the console-session switch, which exists in the app on
@@ -58,7 +59,7 @@ which resets the dev app's `octoboard.*` preferences (hence port 5175 for `pnpm 
   (Check for updates, Open board, Disconnect, Quit completely) are written out there. `remoteWindow` makes the page a remote daemon's window:
   the shell marks one with `?remote=<name>` and its IPC bridge, which the app reads (`remoteDaemonName`), so the frame puts
   both on the page after the platform adapter has been chosen (choosing it under the marker would build the shell's own
-  adapter). `remoteLogin` stubs the shell's Remote Login (OpenSSH Server on Windows) answer for the Remote access section.
+  adapter). `remoteLogin` stubs the shell's Remote Login (OpenSSH Server on Windows) answer for the Remote access section. For a `remoteWindow`, `remoteForwards` lists the ports the shell forwards to the daemon's machine (the rail's Forwarded ports entry exists while there is one, and Stop lets a port go), `remoteFiles` gives the shell's copy of a remote file (Download and open; it takes every part and shows nothing, and a binary's `answeredParts` makes the daemon stop answering after that many parts, which holds a copy part-way) and `forwardFailure` makes opening an address fail as the shell's forwarding does.
 - A scenario with `liveChanges` lists them as buttons beside the other controls, offered once its page is ready. Each
   makes what another window or the machine would while the view is on screen (an account added, a terminal closed there,
   an agent found missing), as the daemon's own events through the steps' `daemonEvents`, for the motion and focus of a

@@ -19,6 +19,14 @@ function sourceUnavailable(path: string) {
 const failed = (failure: ReturnType<typeof browseFailure>) => (failure.kind === "failed" ? errorText(failure.message) : "");
 
 describe("browseFailure", () => {
+  it("marks a read past the file budget as too large, with the size where the daemon said it, and no other limit", () => {
+    const over = (params: Record<string, string>) => browseFailure(t, "en", new CodedError("too large", "limit_exceeded", params), records);
+    expect(over({ limit: "file_bytes", max: "4194304", size: "9000000" })).toMatchObject({ kind: "failed", tooLarge: { size: 9000000 } });
+    expect(over({ limit: "file_bytes", max: "4194304" })).toMatchObject({ kind: "failed", tooLarge: {} });
+    expect(over({ limit: "file_bytes", max: "4194304" })).not.toHaveProperty("tooLarge.size");
+    for (const limit of ["pending_requests", "patch_bytes", "reply_bytes"]) expect(over({ limit, max: "1", size: "2" }), limit).not.toHaveProperty("tooLarge");
+  });
+
   it("names the project's directory for the empty path, isolated once", () => {
     const failure = browseFailure(t, "en", sourceUnavailable(""), records, "~/project");
     expect(failure).toMatchObject({ kind: "failed" });

@@ -6,10 +6,10 @@ import { textDirection } from "../i18n/languages";
 import { useCurrentLanguage, useT } from "../i18n/react";
 import type { TrayFlyoutLine, TrayFlyoutModel } from "../platform";
 import { usePlatform } from "../platform/react";
-import { Badge, BadgeAnchor, MenuList, MenuSeparator, Tab, TabList, TabListContainer, Tabs, useTabPanelLink } from "../primitives";
+import { MenuList, menuListClassName, MenuSeparator, Tab, TabList, TabListContainer, Tabs, useTabPanelLink } from "../primitives";
 import { FORCED_FOCUS_CLASS, lineRows, openerId } from "./TrayFlyoutLines";
 
-const TAB_CLASS = `gap-1.5 forced-colors:ui-selected:underline forced-colors:ui-selected:decoration-2 ${FORCED_FOCUS_CLASS}`;
+const TAB_CLASS = `gap-2 px-2 forced-colors:ui-selected:underline forced-colors:ui-selected:decoration-2 ${FORCED_FOCUS_CLASS}`;
 
 /**
  * The page of the Windows notification-area flyout (`?flyout=1`, see `windowKind`), which has no daemon: the shell
@@ -83,13 +83,18 @@ export function TrayFlyout(): React.ReactElement {
 
   const current = model?.tabs.find((tab) => tab.key === selected) ?? model?.tabs[0];
   const index = model && current ? model.tabs.indexOf(current) : -1;
-  useTabPanelLink(panel, model && model.tabs.length > 1 && current ? tabs.get(current.key) : undefined);
+  const strip = !!model && model.tabs.length > 1;
+  useTabPanelLink(panel, strip && current ? tabs.get(current.key) : undefined);
+
+  // The line focus enters the menu on, and the one react-aria's menu wraps Up from (an information line before it is
+  // reached with the arrow keys, so the two can differ).
+  const entryLine = () => panel.current?.querySelector<HTMLElement>("[data-flyout-choosable]") ?? undefined;
+  const topLine = () => panel.current?.querySelector<HTMLElement>("[role=menuitem]") ?? undefined;
 
   // After the flyout is shown: the selected tab takes the focus, or the first line where there is no strip.
   useEffect(() => {
     if (opening === 0 || !model || !current) return;
-    const target = model.tabs.length > 1 ? tabs.get(current.key) : panel.current?.querySelector<HTMLElement>("[data-flyout-choosable]");
-    target?.focus();
+    (strip ? tabs.get(current.key) : entryLine())?.focus();
   }, [opening]);
 
   // The opener a collapse hands the focus back to, once its rows are gone from the menu.
@@ -113,13 +118,27 @@ export function TrayFlyout(): React.ReactElement {
   };
 
   // Escape is taken in the capture phase: react-aria's menu answers it on the row and stops it, so a bubbling handler
-  // would never see it.
+  // would never see it. So are the keys between the strip and the lines, which the libraries would get wrong: a
+  // horizontal tab strip ignores Up and Down, the menu wraps Up from its first line to its last, and Tab would enter
+  // the menu on its last line.
   const onKeyDownCapture = (event: React.KeyboardEvent) => {
-    if (event.key !== "Escape") return;
-    event.preventDefault();
-    event.stopPropagation();
-    if (expanded) collapse();
-    else void trayFlyout?.close().catch(() => {});
+    const target = event.target instanceof Element ? event.target : null;
+    const handOn = (to: HTMLElement | undefined) => {
+      if (!to) return;
+      event.preventDefault();
+      event.stopPropagation();
+      to.focus();
+    };
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      if (expanded) collapse();
+      else void trayFlyout?.close().catch(() => {});
+    } else if (target?.closest("[role=tablist]") && !event.shiftKey && (event.key === "ArrowDown" || event.key === "Tab")) {
+      handOn(entryLine());
+    } else if (strip && current && event.key === "ArrowUp" && target?.closest("[role=menuitem]") === topLine()) {
+      handOn(tabs.get(current.key));
+    }
   };
 
   const onKeyDown = (event: React.KeyboardEvent) => {
@@ -162,8 +181,8 @@ export function TrayFlyout(): React.ReactElement {
   return (
     <FadedScroller className="h-dvh overflow-x-hidden bg-background text-foreground" onKeyDownCapture={onKeyDownCapture} onKeyDown={onKeyDown}>
       {/* 300 to 420px wide, which is what the shell is told: the page never scrolls sideways. */}
-      <div ref={content} className="w-max min-w-75 max-w-105 border border-separator p-1">
-        {model.tabs.length > 1 && (
+      <div ref={content} className="w-max min-w-75 max-w-105 border border-separator">
+        {strip && (
           <Tabs variant="underline" selectedKey={current.key} onSelectionChange={(key) => { setSelected(key); setExpanded(undefined); }}>
             {/* Spanning the panel, so the strip's rule runs to its edge; the tabs keep their content width. */}
             <TabListContainer className="min-w-0 max-w-full" reserveScrollButtons>
@@ -173,24 +192,23 @@ export function TrayFlyout(): React.ReactElement {
                     key={tab.key}
                     id={tab.key}
                     size="content"
+                    indicatorClassName="-bottom-1"
                     className={TAB_CLASS}
                     label={tab.raised ? t("trayFlyout.tabRaised", { name: isolate(tab.label) }) : undefined}
                     ref={(element) => {
                       if (element) setTabs((held) => (held.get(tab.key) === element ? held : new Map(held).set(tab.key, element)));
                     }}
                   >
-                    <BadgeAnchor>
-                      <span dir="auto" className="[overflow-wrap:anywhere]">{tab.label}</span>
-                      {tab.raised && <Badge color="warning" size="xs" placement="top-right" />}
-                    </BadgeAnchor>
+                    <span dir="auto" className="[overflow-wrap:anywhere]">{tab.label}</span>
+                    {tab.raised && <span aria-hidden="true" className="tray-flyout-dot" />}
                   </Tab>
                 ))}
               </TabList>
             </TabListContainer>
           </Tabs>
         )}
-        <div ref={panel} role={model.tabs.length > 1 ? "tabpanel" : undefined}>
-          <MenuList label={current.label} onAction={choose}>{rows}</MenuList>
+        <div ref={panel} role={strip ? "tabpanel" : undefined}>
+          <MenuList label={current.label} onAction={choose} className={menuListClassName}>{rows}</MenuList>
         </div>
       </div>
     </FadedScroller>

@@ -102,6 +102,8 @@ export const REPLY_TYPES = {
   search_project_files: "project_file_matches",
   list_project_dir: "project_dir",
   read_project_file: "project_file",
+  read_path_link: "path_link_file",
+  read_file_range: "file_range",
   list_project_changes: "project_changes",
   read_project_change: "project_change",
   list_project_branches: "project_branches",

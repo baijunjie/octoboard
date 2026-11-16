@@ -65,7 +65,7 @@ const CASES: { name: string; platform: PlatformAdapter; state: Partial<State> }[
     state: {
       host: { ...HOST, keep_awake: true },
       settings: { ...DEFAULT_SETTINGS, keep_awake: true, git_workflow: { ...DEFAULT_SETTINGS.git_workflow, development: "worktree" } },
-      remoteAccess: { allowed: true, state: "serving", browser_port: null, address: "http://127.0.0.1:3369/?key=k", forward_command: "ssh -N -L 127.0.0.1:3369:/s u@<server>", connection: null, failure: null },
+      remoteAccess: { allowed: true, state: "serving", browser_port: null, address: "http://127.0.0.1:3369/?key=k", forward_command: "ssh -N -L 127.0.0.1:3369:/s u@<server>", server_addresses: [], connection: null, failure: null },
     },
   },
   {

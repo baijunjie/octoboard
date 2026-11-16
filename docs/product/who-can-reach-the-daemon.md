@@ -54,7 +54,9 @@ password. The desktop application installs a key of its own on the remote machin
   `octoboardd connection` prints on the remote machine, or a desktop's Remote access section shows, as a line of text
   the application takes pasted and as a QR code of that line, carrying the host, SSH port, user, host key fingerprint
   and the path of `octoboardd`, and no secret (see "Printing the connection details" in
-  `docs/product/daemon-command-line.md`).
+  `docs/product/daemon-command-line.md`). The same connection also carries, for a remote window, connections to the
+  loopback ports of the remote machine whose addresses the owner opens there (see "Loopback addresses of the remote
+  machine" in `docs/product/links-and-files-in-a-remote-window.md`).
 
 The server form is the same user reaching their own daemon from another machine, not a daemon shared by several people.
 The daemon does not tell clients apart: whoever reaches it with its key is taken for the owner and can do everything the

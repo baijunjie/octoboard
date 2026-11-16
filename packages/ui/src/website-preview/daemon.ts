@@ -6,6 +6,13 @@ import type { Event, ClientRequestBody } from "../protocol";
 import type { Daemon } from "../store";
 import { previewRepositories } from "./repositories";
 
+/** The project a browse request is about, which picks the repository that answers it: its own `project`, or the one a
+ * ranged read names in `file`. A path link read of a session with no project names none. */
+function browsedProject(body: ClientRequestBody): string | undefined {
+  if (body.type === "read_file_range") return body.file.project;
+  return "project" in body && typeof body.project === "string" ? body.project : undefined;
+}
+
 /** The shared single-repository fixtures are reused behind a project router; app state and
  * terminals still belong to one shared daemon. Every request stays inside these in-memory fakes. */
 export function createPreviewDaemon(scenario: Fixture): Daemon {
@@ -28,19 +35,22 @@ export function createPreviewDaemon(scenario: Fixture): Daemon {
     ...daemon,
     request: looseRequestSender(async (body: ClientRequestBody): Promise<Event> => {
       if (!BROWSE_REQUESTS.has(body.type)) return daemon.request(body);
-      if (!("project" in body) || typeof body.project !== "string")
-        throw new Error("Browse request needs a project");
-      const repository = previewRepositories.get(body.project);
-      const reader = projects.get(body.project);
+      const project = browsedProject(body);
+      // A path link read with no project has no repository to read from: the shared daemon, which holds no files.
+      if (project === undefined && (body.type === "read_path_link" || body.type === "read_file_range"))
+        return daemon.request(body);
+      if (project === undefined) throw new Error("Browse request needs a project");
+      const repository = previewRepositories.get(project);
+      const reader = projects.get(project);
       if (
         !repository ||
         !reader ||
-        !daemon.store.getState().projects.has(body.project)
+        !daemon.store.getState().projects.has(project)
       )
         throw new CodedError(
           "Unknown preview project",
           "unknown_project",
-          { project: body.project },
+          { project },
         );
       const worktree = repository.git.worktrees[0].id;
       if (
@@ -64,7 +74,7 @@ export function createPreviewDaemon(scenario: Fixture): Daemon {
             root_id: repository.rootId,
             git: reply.source.git && {
               ...reply.source.git,
-              repository: body.project,
+              repository: project,
               common_dir: `${repository.root}/.git`,
             },
           },

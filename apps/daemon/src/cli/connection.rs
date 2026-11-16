@@ -8,9 +8,7 @@ use std::path::Path;
 
 use anyhow::Result;
 
-use crate::connection_details::{
-    of_this_machine_at, qr_modules, text_of, Details, DEFAULT_SSH_PORT,
-};
+use crate::connection_details::{of_this_machine_at, qr_modules, Details, DEFAULT_SSH_PORT};
 use crate::platform::fs;
 
 /// The address and port this machine was reached at by the SSH session running the command, from
@@ -105,7 +103,7 @@ pub(super) fn print_details(
     ssh_port: Option<u16>,
     text_only: bool,
 ) -> Result<i32> {
-    let machine_name = fs::host_name().and_then(text_of);
+    let machine_name = crate::platform::net::host_name();
     let ssh_connection = std::env::var("SSH_CONNECTION").ok();
     let Some((host, port, source)) = chosen_host(
         host,

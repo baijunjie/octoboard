@@ -62,6 +62,12 @@ Beside it, the application keeps three more files of its own, each written whole
   for the next launch to bring them back (see "Bringing remote windows back at launch" in
   `docs/product/remote-daemons.md`). A file that cannot be read brings none back.
 
+**In this computer's temporary directory**, under `dev.octoboard.desktop/`, the application keeps in `remote-files/` the
+copies of remote files it opened here, each in a folder of its own, and beside it `remote-files.lock`, which the
+running application holds so that a second one started meanwhile does not remove them (see "Files opened on this
+computer" in `docs/product/links-and-files-in-a-remote-window.md`). The copies are removed when the application next
+starts; deleting them at any time loses nothing but the copies.
+
 **In the system's credential store** — the login keychain on macOS, as a generic password, and the Credential Manager on
 Windows, as a generic credential — the application keeps the private half of each device key it installed on a remote
 machine, one item per saved remote daemon, named by the application's identifier and the saved daemon's id, and

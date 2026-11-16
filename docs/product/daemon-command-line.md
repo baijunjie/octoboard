@@ -298,11 +298,13 @@ lock and creates no data directory, so it prints the same whether a daemon runs 
 
 - **The host and SSH port**: those given with `--host` and `--ssh-port`; else the server address and port of the SSH
   session the command runs in, read from `SSH_CONNECTION`, which is what that session's client reached the machine at;
-  else the name the machine gives itself, at port 22. `--host` with no `--ssh-port` keeps the session's port where
-  there is one. On its error output it says where the host came from — the SSH session, or the machine's own name,
-  which other devices may not know — and that `--host` and `--ssh-port` correct it; with a host given it says nothing
-  of it. Where neither a host is given, nor a session nor the machine's name can be read, it says to give one with
-  `--host` and exits with status 1.
+  else the name the machine announces on its network, at port 22 (on macOS its Bonjour name, `<LocalHostName>.local`; on
+  Linux its host name and on Windows its computer name, each as the system reports it: the same name the Remote access
+  section's SSH forward offers first). `--host` with no `--ssh-port` keeps the session's port where there is one. On its
+  error output it says where the host came from — the SSH session, or the machine's own name, which other devices may
+  not know — and that `--host` and `--ssh-port` correct it; with a host given it says nothing of it. Where neither a
+  host is given, nor a session nor the machine's name can be read, it says to give one with `--host` and exits with
+  status 1.
 - **The user**: the login name the system records for the user it runs as. Where it records none the command says so
   and exits with status 1.
 - **The host key fingerprint**, `SHA256:<base64>` without padding, as `ssh-keygen -l` prints it, of the first of the SSH
@@ -313,7 +315,8 @@ lock and creates no data directory, so it prints the same whether a daemon runs 
 - **The path of `octoboardd`**: the path it was invoked by, found through `PATH` for a bare name, its final symlink
   unresolved (the path `start` launches the daemon from). Where it cannot be told it is left out, and the error output
   says that the application looks in the places Octoboard installs to.
-- **A name**: the name the machine gives itself, for the entry's name, left out where it is the host.
+- **A name**: the name the machine announces on its network, the same name as the default host (on macOS its Bonjour
+  name, `<LocalHostName>.local`), for the entry's name, left out where it is the host.
 
 They are one line of text, a URI, with the fields left out that are missing:
 `octoboard+ssh://<user>@<host>:<port>?fingerprint=<fingerprint>&octoboardd=<path>&name=<name>`. The user, host and values are percent-encoded as UTF-8, except for the

@@ -1,5 +1,6 @@
 import { Dropdown, Separator } from "@heroui/react";
-import React, { useId } from "react";
+import { dropdownVariants } from "@heroui/styles";
+import React, { useEffect, useId, useRef } from "react";
 import { Header, MenuContext, useSlottedContext } from "react-aria-components";
 
 import { useDisabled } from "./busy";
@@ -12,6 +13,10 @@ import { mergeRefs } from "./refs";
 function joinClasses(...names: (string | undefined)[]): string | undefined {
   return names.filter(Boolean).join(" ") || undefined;
 }
+
+/** The classes of HeroUI's dropdown menu, which a `MenuList` outside a `Dropdown` does not get from context: the flex
+ * stack with the gap between items and separators that a dropdown's menus show. */
+export const menuListClassName = dropdownVariants().menu();
 
 /** HeroUI's dropdown: a `MenuTrigger` and the `MenuPopover` it opens. The caller holds the open state. */
 export function Menu({ open, onOpenChange, children }: {
@@ -83,22 +88,40 @@ const KEEP_DISABLED = { disabledBehavior: "selection" } as object;
 
 /** HeroUI's dropdown menu, holding `MenuItem`s, `MenuChoices`, `MenuSeparator`s and `Submenu`s. `onAction` is told the
  * id of the item chosen, in this menu or a submenu below it. `autoFocus` is what takes focus as it opens, its first item
- * or the menu itself; left out, that follows how its trigger opened it. A disabled item stays reachable by the arrow
- * keys and announced, though it cannot be chosen.
+ * (the first that can be chosen) or the menu itself; left out, that follows how its trigger opened it. A disabled item
+ * stays reachable by the arrow keys and announced, though it cannot be chosen.
  *
  * react-aria keeps the trigger's choice from its last opening until the next one through the trigger, so a menu opened
  * some other way (a context menu) gives `autoFocus` for each opening. A menu drawn in the page, outside any popover
- * (the notification-area flyout), has no trigger to name it, so it is given a `label`. */
-export function MenuList({ label, onAction, autoFocus, children }: {
+ * (the notification-area flyout), has no trigger to name it, so it is given a `label`. A menu drawn outside a
+ * `MenuPopover` has no dropdown around it either, so HeroUI's menu class, the stack and its gap, is given as
+ * `className` (`menuListClassName`). */
+export function MenuList({ label, onAction, autoFocus, className, children }: {
   label?: string;
   onAction: (id: string) => void;
   autoFocus?: "first" | "menu";
+  className?: string;
   children: React.ReactNode;
 }): React.ReactElement {
+  const root = useRef<HTMLDivElement>(null);
+  // A disabled item stays in the arrow-key walk (`KEEP_DISABLED`), so react-aria's "first" can be one that cannot be
+  // chosen (a line saying there is nothing): focus goes to the first item that can.
+  useEffect(() => {
+    if (autoFocus !== "first") return;
+    const frame = requestAnimationFrame(() => {
+      const items = [...(root.current?.querySelectorAll<HTMLElement>('[role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"]') ?? [])];
+      const focused = items.find((item) => item === document.activeElement);
+      if (!focused || focused.getAttribute("aria-disabled") !== "true") return;
+      items.find((item) => item.getAttribute("aria-disabled") !== "true")?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [autoFocus]);
   return (
-    <Dropdown.Menu onAction={(key) => onAction(String(key))} {...definedProps({ "aria-label": label, autoFocus: autoFocus && (autoFocus === "menu" ? true : "first") })} {...KEEP_DISABLED}>
-      {children as React.ReactElement}
-    </Dropdown.Menu>
+    <div ref={root} className="contents">
+      <Dropdown.Menu onAction={(key) => onAction(String(key))} {...definedProps({ "aria-label": label, className, autoFocus: autoFocus && (autoFocus === "menu" ? true : "first") })} {...KEEP_DISABLED}>
+        {children as React.ReactElement}
+      </Dropdown.Menu>
+    </div>
   );
 }
 

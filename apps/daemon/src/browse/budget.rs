@@ -20,6 +20,10 @@ use crate::protocol::{BrowseBody, ChangeEntry, ChangeSide};
 /// in a viewer (a `.wasm`, a model file) is refused rather than shipped.
 pub const MAX_FILE_BYTES: usize = 4 * 1024 * 1024;
 
+/// The most bytes one `read_file_range` part returns. A part travels as base64 inside one frame
+/// among the connection's events, so it is kept small enough not to hold them back for long.
+pub const MAX_RANGE_BYTES: usize = 1024 * 1024;
+
 /// The most entries one directory listing carries before it is cut and marked incomplete. The
 /// largest directories seen in real projects held 6,418 entries (a Gradle cache) and 4,536 (an
 /// icon package under `node_modules`); 99.99 % held under 1,600.
@@ -264,6 +268,10 @@ pub const MAX_PENDING_REQUESTS: usize = 16;
 /// that becomes on the wire is not worth a separate bound.
 pub const READ_RESERVATION: usize = 3 * MAX_FILE_BYTES + 64 * 1024;
 
+/// What a file range reserves: the part as read, base64-encoded and serialized again, with room
+/// for the rest of the frame.
+pub const RANGE_RESERVATION: usize = 3 * MAX_RANGE_BYTES + 64 * 1024;
+
 /// What a directory listing reserves: its names at [`MAX_LISTING_NAME_BYTES`] held as read and as
 /// serialized, and the rest of each of [`MAX_DIR_ENTRIES`] entries (kind, size, link target and
 /// the JSON around them, under 200 bytes) likewise. A recursive filename search starts from the
@@ -336,9 +344,10 @@ pub fn reservation_for(body: &BrowseBody) -> usize {
     match body {
         BrowseBody::ListProjectDir { .. } => LISTING_RESERVATION,
         BrowseBody::SearchProjectFiles { .. } => SEARCH_RESERVATION,
-        BrowseBody::GetProjectSource { .. } | BrowseBody::ReadProjectFile { .. } => {
-            READ_RESERVATION
-        }
+        BrowseBody::GetProjectSource { .. }
+        | BrowseBody::ReadProjectFile { .. }
+        | BrowseBody::ReadPathLink { .. } => READ_RESERVATION,
+        BrowseBody::ReadFileRange { .. } => RANGE_RESERVATION,
         BrowseBody::ListProjectChanges { .. } => CHANGE_LIST_RESERVATION,
         BrowseBody::ReadProjectChange { .. }
         | BrowseBody::ReadProjectComparisonChange { .. }
@@ -354,6 +363,7 @@ pub fn reservation_for(body: &BrowseBody) -> usize {
 
 const _: () = assert!(MAX_SEARCH_PATH_BYTES <= MAX_LISTING_NAME_BYTES);
 const _: () = assert!(MAX_SEARCH_MATCHES <= MAX_DIR_ENTRIES);
+const _: () = assert!(RANGE_RESERVATION <= READ_RESERVATION);
 const _: () = assert!(LISTING_RESERVATION <= READ_RESERVATION);
 const _: () = assert!(READ_RESERVATION <= MAX_RETAINED_PER_CONNECTION);
 const _: () = assert!(SEARCH_RESERVATION <= MAX_RETAINED_PER_CONNECTION);

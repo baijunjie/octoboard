@@ -45,9 +45,9 @@ interface TerminalPaneProps {
   /** A modal dialog is open over the window, which hides the pane from assistive technology: the
    * no-process bar's sentence is written once it has closed and its focus move has been spoken. */
   modalOpen?: boolean;
-  /** False while a maximized or floating panel makes the agent area inert, or the archive view covers the pane
-   * (`behindArchive`): a status region's text is lost then, even in a live announcer, so the pane's sentences are held
-   * until it is exposed again, and said once then. */
+  /** False while a maximized or floating panel makes the agent area inert, the archive view covers the pane
+   * (`behindArchive`), or the pane is hidden with `display: none` behind another view: a status region's text is lost
+   * then, even in a live announcer, so the pane's sentences are held until it is exposed again, and said once then. */
   exposed?: boolean;
   /** Adds a project when the current console already has a console session but no projects. */
   onAddProject?: () => void;
@@ -62,8 +62,8 @@ interface TerminalPaneProps {
    * terminal keeps its size until the ease ends, then fits once: a refit per frame rebuilds
    * xterm's dimension styles each time, which costs a full restyle in WebKit. */
   resizing?: boolean;
-  /** Shows a project file a path in the output named, in the file viewer, at its line if the path
-   * gave one. Without it such a path opens in the default application. */
+  /** Shows a file a path in the output named, in the file viewer, at its line if the path gave one. Without it a
+   * click on a file path does nothing: a file is never opened on the host from a click. */
   onViewFile?: (file: ViewedFile) => void;
   /** Shows a session as selecting it in the sidebar would: the history of an archived session links
    * to its owner with it. */

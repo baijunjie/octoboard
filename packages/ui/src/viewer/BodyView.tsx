@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useContext, useState } from "react";
 
 import { PaneFailure } from "../components/alerts/PaneFailure";
 import { useT } from "../i18n/react";
@@ -7,17 +7,21 @@ import { isMarkdownName, type ViewerBody } from "./content";
 import { ZoomableImage } from "./image/ZoomableImage";
 import { MarkdownSurface } from "./markdown/MarkdownSurface";
 import { FileNotice } from "./notices";
+import { StandInActionContext } from "./standInAction";
 import { Unsupported } from "./viewerStates";
 
 /** One file body, whichever kind it is. A Markdown file's text is offered as a document when
  * `asDocument` says so: a whole file shown alone, not a side of a comparison or a conflict body, whose
- * markers are what it is looked at for. */
+ * markers are what it is looked at for. `liveFile` says the body is a file on the daemon's disk the viewer shows as a
+ * subject of its own: where it cannot be displayed, or is too large, its stand-in offers what the viewer provides to
+ * open it elsewhere (`StandInActionContext`). */
 export function BodyView({
   resetKey,
   name,
   body,
   theme,
   asDocument = false,
+  liveFile = false,
   line,
 }: {
   resetKey: string;
@@ -25,9 +29,12 @@ export function BodyView({
   body: ViewerBody;
   theme: "light" | "dark";
   asDocument?: boolean;
+  liveFile?: boolean;
   line?: number;
 }): React.ReactElement {
   const t = useT();
+  const offered = useContext(StandInActionContext);
+  const action = liveFile ? offered : undefined;
   switch (body.kind) {
     case "text":
       if (asDocument && isMarkdownName(name)) return <MarkdownSurface resetKey={resetKey} name={name} text={body.text} theme={theme} line={line} />;
@@ -35,7 +42,9 @@ export function BodyView({
     case "image":
       return <ImageView key={resetKey} name={name} body={body} theme={theme} />;
     case "binary":
-      return <Unsupported message={t("viewer.binary")} sizes={[body.size]} />;
+      return <Unsupported message={t("viewer.binary")} sizes={[body.size]} action={action} name={name} />;
+    case "tooLarge":
+      return <Unsupported message={t("viewer.tooLarge")} sizes={[body.size]} action={action} name={name} />;
   }
 }
 

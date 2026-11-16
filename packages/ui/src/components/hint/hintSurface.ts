@@ -14,3 +14,4 @@ export const OFFSET = 3;
  * element underneath, since a tooltip cannot hold focus or a button and so cannot be what holds a Try
  * again or selectable text. */
 export const TOOLTIP_SURFACE = `${tooltipSurfaceClassName} control-fills outline-none`;
+

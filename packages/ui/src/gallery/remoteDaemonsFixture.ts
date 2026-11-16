@@ -4,8 +4,8 @@ import type { RemoteDaemonsFixture } from "./scenario";
 
 const NEVER = new Promise<never>(() => {});
 
-/** The shell's list of remote daemons as a scenario describes it (`RemoteDaemonsFixture`), which the rail's group
- * then drives exactly as it drives the desktop app's. Saving and removing change the list kept here and tell the
+/** The shell's list of remote daemons as a scenario describes it (`RemoteDaemonsFixture`), which the rail's button and
+ * the Remote devices page then drive exactly as they drive the desktop app's. Saving and removing change the list kept here and tell the
  * listener, as the shell does; a connection ends as the scenario's `outcomes` say, and otherwise never, so the entry
  * that was pressed stays pending. One held for the browser is reported as such until it is disconnected, as is one a
  * window holds. The shell's windows are not drawn here: opening one does nothing. */
@@ -45,8 +45,8 @@ export function fixtureRemoteDaemons({ entries, status = [], outcomes = {} }: Re
       if (at >= 0) states.splice(at, 1);
       changed();
     },
-    newWindow: async () => {},
-    openWindow: async () => {},
+    onHandedOver: () => () => {},
+    onPageRequested: () => () => {},
     showMainWindow: async () => {},
     showUpdates: async () => {},
   };

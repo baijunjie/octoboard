@@ -27,12 +27,13 @@ export function permissionDenied(path: string, detail: string): FixtureError {
 /** One path of a fixture project: a directory (cut short when `complete` is false), a file's text,
  * an image's bytes or a binary of no known type and the size it reports; with `error`, what reading
  * it (listing it, for a directory) is answered with. With `ignored`, Git ignores it, and so
- * everything beneath it, as the daemon marks it. */
+ * everything beneath it, as the daemon marks it. A binary's `answeredParts` is how many parts of 1 MiB `read_file_range`
+ * answers before it stops answering, which holds a copy of it part-way. */
 export type FixtureFile = (
   | { dir: true; complete?: boolean; error?: FixtureError }
   | { text: string; error?: FixtureError }
   | { image: { mediaType: string; data: string }; error?: FixtureError }
-  | { binary: { size: number }; error?: FixtureError }
+  | { binary: { size: number; answeredParts?: number }; error?: FixtureError }
 ) & { ignored?: true };
 
 /** A project's files by wire path; a directory lists the paths directly under it. */

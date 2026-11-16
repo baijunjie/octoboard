@@ -719,9 +719,9 @@ it("leaves this device's keyboard shortcuts alone when the document carries none
   expect(bindingFor("quickCreate")).toEqual({ code: "KeyJ", primary: true, shift: true });
 });
 
-describe("the settings only this client holds, and the agent language", () => {
+describe("the settings only this client holds, and the language", () => {
   const carrying = (settings: Record<string, unknown>) => JSON.stringify({ ...DOCUMENT, settings: { ...DOCUMENT.settings, ...settings } });
-  const FILE = { appearance: "dark", markdown_style: "github", interface_language: "ja", agent_language: "de", run_in_background: true, show_menu_bar_icon: false };
+  const FILE = { appearance: "dark", markdown_style: "github", interface_language: "ja", run_in_background: true, show_menu_bar_icon: false };
   const restoreOnFinish = () =>
     onTestFinished(() => {
       markdownStyle.set("tailwind");
@@ -738,11 +738,9 @@ describe("the settings only this client holds, and the agent language", () => {
     const lines = settingLines();
     expect(lines["Theme"]).toEqual({ badge: "Set to the file's", note: "Dark (now System)" });
     expect(lines["Markdown style"]).toEqual({ badge: "Set to the file's", note: "GitHub (now Tailwind)" });
-    expect(lines["Interface language"]).toEqual({ badge: "Set to the file's", note: "日本語 (now English)" });
-    // The daemon holds no agent language yet, so it would be given the interface language this client shows.
-    expect(lines["Agent language"]).toEqual({ badge: "Set to the file's", note: "Deutsch (now English)" });
+    expect(lines["Language"]).toEqual({ badge: "Set to the file's", note: "日本語 (now English)" });
     // Each name is marked as the language it is written in; the Markdown style names are English.
-    expect(Array.from(document.body.querySelectorAll("[lang]"), (node) => `${node.getAttribute("lang")}:${node.textContent}`)).toEqual(expect.arrayContaining(["ja:日本語", "de:Deutsch", "en:English"]));
+    expect(Array.from(document.body.querySelectorAll("[lang]"), (node) => `${node.getAttribute("lang")}:${node.textContent}`)).toEqual(expect.arrayContaining(["ja:日本語", "en:English"]));
     // A browser has no background running.
     expect(lines["Keep running in the background when the window is closed"]).toBeUndefined();
     expect(Object.keys(lines).filter((label) => /^Show .* icon$/.test(label))).toEqual([]);
@@ -750,38 +748,32 @@ describe("the settings only this client holds, and the agent language", () => {
 
   it("say they change nothing where they are what this client has, and are not listed where the file has none, or one this client does not know", async () => {
     restoreOnFinish();
-    await reviewingSettings({ text: carrying({ markdown_style: "tailwind", appearance: "sepia", interface_language: "tlh", agent_language: "tlh" }) });
+    await reviewingSettings({ text: carrying({ markdown_style: "tailwind", appearance: "sepia", interface_language: "tlh" }) });
     const lines = settingLines();
     expect(lines["Markdown style"]).toEqual({ badge: "No change" });
-    for (const unlisted of ["Theme", "Interface language", "Agent language", "Keep running in the background when the window is closed"]) expect(lines[unlisted]).toBeUndefined();
+    for (const unlisted of ["Theme", "Language", "Keep running in the background when the window is closed"]) expect(lines[unlisted]).toBeUndefined();
     expect(Object.keys(lines).filter((label) => /^Show .* icon$/.test(label))).toEqual([]);
   });
 
   it("are applied to this client from what the daemon says it applied, and told in the result", async () => {
     restoreOnFinish();
-    // English, which this client shows already, so that the result's labels stay readable here.
-    await reviewingSettings({ text: carrying({ ...FILE, interface_language: "en" }), reply: echoing({ agent_language: "de" }) });
+    await reviewingSettings({ text: carrying(FILE), reply: echoing() });
     await press("Import");
     expect(localStorage.getItem("heroui-theme")).toBe("dark");
     expect(markdownStyle.get()).toBe("github");
+    // The language is the daemon's to apply, which the window then follows (see `useInterfaceLanguage`): this client
+    // leaves its own as it is.
+    expect(currentLanguage()).toBe("en");
     await openTab("Settings");
     // Not a platform that runs in the background: the value is not taken.
     expect(runInBackground.get()).toBe(false);
     const lines = resultSettingLines();
     expect(lines["Theme"]).toEqual({ badge: "Dark" });
     expect(lines["Markdown style"]).toEqual({ badge: "GitHub" });
-    expect(lines["Interface language"]).toEqual({ badge: "English" });
-    expect(lines["Agent language"]).toEqual({ badge: "Deutsch" });
+    expect(lines["Language"]).toEqual({ badge: "日本語" });
     expect(Object.keys(lines)).not.toContain("Keep running in the background when the window is closed");
     expect(Object.keys(lines).filter((label) => /^Show .* icon$/.test(label))).toEqual([]);
     expect(showMenuBarIcon.get()).toBe(true);
-  });
-
-  it("switch this client to the interface language the daemon passes back, and leave the agent language to the daemon", async () => {
-    restoreOnFinish();
-    await reviewingSettings({ text: carrying(FILE), reply: echoing({ agent_language: "de" }) });
-    await press("Import");
-    expect(currentLanguage()).toBe("ja");
   });
 
   describe("the terminal font size", () => {

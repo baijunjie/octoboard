@@ -88,3 +88,19 @@ describe("an application preference", () => {
     expect(calls).toEqual(["changed to 16", "changed to 12"]);
   });
 });
+
+describe("following another window's storage", () => {
+  it("is not done by a daemon's preference until asked, and then only for its own key", () => {
+    openWindow();
+    const console = createPersistedPreference<string | undefined>("p.followed", parse(), serialize, { scope: "daemon" });
+    const other = createPersistedPreference<string | undefined>("p.other", parse(), serialize, { scope: "daemon" });
+    storedElsewhere("p.followed", "x");
+    expect(console.get()).toBeUndefined();
+    console.followStorage?.();
+    console.followStorage?.();
+    storedElsewhere("p.followed", "y");
+    storedElsewhere("p.other", "z");
+    expect(console.get()).toBe("y");
+    expect(other.get()).toBeUndefined();
+  });
+});

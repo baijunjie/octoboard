@@ -277,8 +277,8 @@ const remoteDaemons: NonNullable<PlatformAdapter["remoteDaemons"]> = {
   remove: async () => {},
   connect: async () => ({ outcome: "opened" }),
   disconnect: async () => {},
-  newWindow: async () => {},
-  openWindow: async () => {},
+  onPageRequested: () => () => {},
+  onHandedOver: () => () => {},
   showMainWindow: async () => {},
   showUpdates: async () => {},
 };
@@ -321,4 +321,18 @@ it("has no Remote menu button on any platform: the Windows bar's Remote items li
   expect(browser.container.querySelector("button[aria-label=Remote]")).toBeNull();
   const noShell = mount({}, { kind: "tauri", host: WINDOWS_HOST });
   expect(noShell.container.querySelector("button[aria-label=Remote]")).toBeNull();
+});
+
+it.each([
+  ["the sessions", false, true, false, "Hide sessions"],
+  ["the sessions", false, false, false, "Show sessions"],
+  ["the sessions", false, true, true, "Show sessions"],
+  ["the remote devices", true, true, false, "Hide remote devices"],
+  ["the remote devices", true, false, false, "Show remote devices"],
+  ["the remote devices", true, true, true, "Show remote devices"],
+])("names the sidebar's toggle for %s while it lists them", (_, devicesShown, sidebarShown, sidebarRevealOnly, label) => {
+  const { container } = mount({ devicesShown, sidebarShown, sidebarRevealOnly });
+  const names = Array.from(container.querySelectorAll("button")).map((button) => button.getAttribute("aria-label"));
+  expect(names).toContain(label);
+  expect(names.filter((name) => /^(Hide|Show) (sessions|remote devices)$/.test(name ?? ""))).toEqual([label]);
 });

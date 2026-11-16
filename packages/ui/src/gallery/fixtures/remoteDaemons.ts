@@ -1,14 +1,27 @@
 import type { RemoteDaemonEntry } from "../../platform";
-import { SAMPLE, snapshotState } from "../../fixtures/builders";
+import { SAMPLE, consoleOf, snapshotState } from "../../fixtures/builders";
 import type { Ui } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";
 
-const GROUP = "Window layout";
+const RAIL_GROUP = "Window layout";
+const GROUP = "Remote devices";
 
 const { console: console_, web, api, sessions } = SAMPLE;
 
-/** The rail has the consoles above its remote daemons; one console is enough to see the group under them. */
+/** The rail has the consoles above its Remote devices button; one console is enough to see the button under them. */
 const state = snapshotState({ consoles: [console_], projects: [web, api], sessions });
+
+/** No console at all, which the Remote devices page is still reachable from. */
+const noConsoleState = snapshotState({ consoles: [], projects: [], sessions: [] });
+
+/** Enough consoles (about 40px each) that the rail's strip of them scrolls up to a window about 1250px tall, so the
+ * Remote devices button meets the bottom group, which is where the groove under the button is drawn. */
+const CROWD_NAMES = ["Main", "Website", "Search API", "Billing", "Docs", "Mobile app", "Data pipeline", "Infrastructure", "Design system", "Analytics", "Support tools", "Release train", "Internal wiki", "Prototypes", ...Array.from({ length: 10 }, (_, i) => `Archive ${i + 1}`)];
+const crowdedState = snapshotState({
+  consoles: CROWD_NAMES.map((name, i) => (i === 0 ? console_ : consoleOf(`c-crowd-${i}`, name))),
+  projects: [web, api],
+  sessions,
+});
 
 const entryOf = (id: string, name: string, host: string, auth: RemoteDaemonEntry["auth"], overrides: Partial<RemoteDaemonEntry> = {}): RemoteDaemonEntry => ({
   id,
@@ -29,7 +42,7 @@ export const buildServer = entryOf("build", "Build server", "10.0.4.17", "passwo
 export const homeLab = entryOf("home-lab", "Home lab", "lab.local", "key");
 export const relay = entryOf("relay", "Edge relay in the Frankfurt data centre", "relay-fra-02.edge.example.net", "key", { user: "octoboard" });
 
-/** What the connect page lists when it is opened for them: every state a row can be in. */
+/** What the Remote devices page lists: every state a saved daemon can be in. */
 const SAVED = [staging, production, buildServer, homeLab, relay];
 const CONNECTED = [
   { id: staging.id, state: "connected", via: "window" },
@@ -37,247 +50,343 @@ const CONNECTED = [
   { id: buildServer.id, state: "reconnecting", via: "window" },
 ] as const;
 
-/** A row's Connect button, as the page names it. */
+/** The line `octoboardd connection` prints on a server, as it is copied from there. */
+const CONNECTION_LINE = "octoboard+ssh://deploy@staging.example.com:22?fingerprint=SHA256:Qm9vcHNjb25zdGFudGZpbmdlcnByaW50Zm9yZ2FsbGVyeQ&name=Staging";
+
+/** Presses the rail's Remote devices button, which shows the page; its name counts the connections held, when there are any. */
+const showPage = (ui: Ui) => ui.press((name) => name.startsWith(ui.t("remoteDevices.label")));
+
+/** The Connect button in the header of the selected device's page, as it names itself. */
 const connectOf = (ui: Ui, entry: RemoteDaemonEntry) => ui.t("remoteDaemons.connectLabel", { name: entry.name });
+
+/** Selects a device in the sidebar by pressing its row, which the page shows the form of; the first one saved is
+ * selected already. */
+const selectDevice = (ui: Ui, entry: RemoteDaemonEntry) => ui.press(entry.name);
 
 export const remoteDaemonsScenarios: Scenario[] = [
   {
-    id: "rail-remote-daemons",
-    group: GROUP,
+    id: "rail-remote-devices",
+    group: RAIL_GROUP,
     category: "normal",
-    title: "Rail with the connected remote daemons",
+    title: "Rail with the Remote devices button, connections held",
     description:
-      "Under the consoles and a groove, one round Server tile for each remote daemon that is connected, each on a fill picked from its name: Staging (a window is open) with a green check badge, Production the same because its connection is held for the browser (its tooltip says Opened in browser), and Build server with an amber refresh badge (reconnecting). Home lab and the long-named relay are saved but not connected, so they have no tile. Hover a tile for its name, address and state; right-click one for Open and Disconnect. There is no Add button: daemons are added and connected from a new remote window.",
+      "Under the consoles and a groove, the one Remote devices button (the Server glyph) of the main window, with a green badge counting the connections held: 3 here (Staging in a window, Production for the browser, Build server reconnecting). Pressing it only opens the Remote devices page (in the main area, in place of the console's sessions), which the scenarios below draw.",
     state,
     desktopApp: true,
     remoteDaemons: { entries: SAVED, status: [...CONNECTED] },
   },
+
   {
-    id: "rail-remote-daemons-none",
-    group: GROUP,
+    id: "rail-remote-devices-none-held",
+    group: RAIL_GROUP,
     category: "normal",
-    title: "Rail with no remote daemon connected",
-    description: "Remote daemons are saved but none is connected: the rail has no group and no groove under the consoles, as if there were no remote daemons at all.",
+    title: "Rail with the Remote devices button, nothing connected",
+    description: "Remote daemons are saved but none is connected: the button is there all the same, under the consoles and a groove, with no badge.",
     state,
     desktopApp: true,
     remoteDaemons: { entries: SAVED },
   },
+
   {
-    id: "connect-page-list",
-    group: GROUP,
+    id: "rail-remote-devices-crowded",
+    group: RAIL_GROUP,
     category: "normal",
-    title: "Connect page with saved remote daemons",
+    title: "Rail with the Remote devices button, consoles filling the rail",
     description:
-      "The page a new remote window opens on, with an empty title bar (it only keeps the window's controls clear and drags the window) and no daemon behind it: the saved remote daemons as rows set apart by hairline dividers, each with its name in plain text, followed where it is connected by a status badge (Connected and Opened in browser in green, Reconnecting in amber), its address under it, then Edit and Remove and, in place of Connect, Open for a connected one; Add remote daemon follows the list.",
-    state,
+      "So many consoles that the rail's list of them scrolls, fading at its edge, and the Remote devices button meets the group at the bottom (the waiting count, notifications, usage and settings). A groove is drawn above the button, and another between it and the bottom group, with equal spacing around both; nothing overlaps. Making the frame taller until the consoles fit leaves free space under the button, and the lower groove disappears.",
+    state: crowdedState,
     desktopApp: true,
-    connectPage: true,
     remoteDaemons: { entries: SAVED, status: [...CONNECTED] },
   },
+
   {
-    id: "connect-page-empty",
+    id: "remote-devices-list",
     group: GROUP,
     category: "normal",
-    title: "Connect page with no remote daemons",
-    description: "The empty list: the glyph and a heading saying there are none yet, with Add remote daemon as the action of that empty panel; the standalone Add remote daemon button below a list is not drawn.",
-    state,
-    desktopApp: true,
-    connectPage: true,
-    remoteDaemons: { entries: [] },
-  },
-  {
-    id: "connect-page-add",
-    group: GROUP,
-    category: "normal",
-    title: "Add remote daemon with connection details pasted",
+    title: "Remote devices page with saved remote daemons",
     description:
-      "The form opened by Add remote daemon, with the line `octoboardd connection` prints pasted into Connection details: it fills the name, host, port and user below it, and the host key to pin is kept for the first connection.",
+      "The Remote devices page, a page of the main window like a console's sessions: the rail's button is drawn as the current console's tile is, and the top bar's breadcrumb reads Remote devices, then the selected device. The sidebar lists the saved remote daemons as session-style rows: the Server glyph, the name and, where one is connected, a badge (Connected and Opened in browser in green, Reconnecting in amber); the long-named relay is cut off at the row's end. The first, Staging, is selected, with its settings form in the content area: the header with its name, badge, address in monospace and Open (it is connected), the form in three cards, Connection (details, name, then user, host and SSH port on one row), Sign-in (this computer's key as its authentication) and Advanced (the path of octoboardd, the pinned host key with Clear), then Save and Revert, which stay disabled until something is changed, and a Remove card at the bottom. Choose a narrow width to see the sidebar become a drawer that the top bar's toggle opens.",
     state,
     desktopApp: true,
-    connectPage: true,
-    remoteDaemons: { entries: [] },
-    steps: [
-      (ui) => ui.press(ui.t("remoteDaemons.add")),
-      (ui) => ui.focus(ui.t("remoteDaemons.form.details")),
-      (ui) => ui.type("octoboard+ssh://deploy@staging.example.com:22?fingerprint=SHA256:Qm9vcHNjb25zdGFudGZpbmdlcnByaW50Zm9yZ2FsbGVyeQ&name=Staging"),
-    ],
+    remoteDaemons: { entries: SAVED, status: [...CONNECTED] },
+    steps: [showPage],
   },
+
   {
-    id: "connect-page-connecting",
+    id: "remote-devices-unsaved",
     group: GROUP,
     category: "normal",
-    title: "Connect page while a connection is being made",
+    title: "Remote device with unsaved changes",
     description:
-      "Connect was pressed on Staging and the connection has not ended: its Connect button shows its spinner, and the Connect buttons of the other rows are disabled until it does, so a second connection cannot be started. Edit and Remove stay available.",
+      "The long-named relay, which is not connected, selected, with its SSH port changed in the form: the header offers Connect (choose a narrow width to see its long name and host wrap), the selected row stays in the sidebar, and Save and Revert, under the cards and above the Remove card, are enabled. Revert drops the change; selecting another device drops it without asking.",
     state,
     desktopApp: true,
-    connectPage: true,
-    remoteDaemons: { entries: [staging, homeLab, buildServer] },
-    steps: [(ui) => ui.press(connectOf(ui, staging))],
+    remoteDaemons: { entries: SAVED, status: [...CONNECTED] },
+    steps: [showPage, (ui) => selectDevice(ui, relay), (ui) => ui.focus(ui.t("remoteDaemons.form.port")), (ui) => ui.type("2200")],
   },
+
   {
-    id: "connect-page-password",
+    id: "remote-devices-no-console",
     group: GROUP,
     category: "normal",
-    title: "Connect page asking for the password",
-    description: "Connect on an entry that signs in with a password asks for it first, in a dialog of this window: a sentence saying who is being signed in to (the entry's name and the user as chips), then the Password field with its placeholder; the password is used for this connection only and is not stored.",
+    title: "Remote devices page with no console",
+    description:
+      "Nothing but the Remote devices page to show, as before a first console exists: it still has its device sidebar listing the saved remote daemons, with the first one selected and its form in the content area, as it does beside consoles.",
+    state: noConsoleState,
+    desktopApp: true,
+    remoteDaemons: { entries: SAVED, status: [...CONNECTED] },
+    steps: [showPage],
+  },
+
+  {
+    id: "remote-devices-row-menu",
+    group: GROUP,
+    category: "normal",
+    title: "Remote device row's menu",
+    description: "The menu a device row opens (by its button or a right-click), here on Home lab, which is not connected: Connect, then Remove in the destructive style under a separator. A connected device offers Open in place of Connect.",
     state,
     desktopApp: true,
-    connectPage: true,
+    remoteDaemons: { entries: SAVED, status: [...CONNECTED] },
+    steps: [showPage, (ui) => ui.contextMenu(homeLab.name)],
+  },
+
+  {
+    id: "remote-devices-empty",
+    group: GROUP,
+    category: "normal",
+    title: "Remote devices page with no remote daemons",
+    description:
+      "With nothing saved the content area shows the empty state alone, centred in it: the glyph, No remote daemons yet, the line saying what a remote daemon is, and Add remote daemon as the panel's action. The sidebar keeps its header with the add button and holds one compact empty row in the list's place, whose press starts Add remote daemon too. The breadcrumb has no device after Remote devices.",
+    state,
+    desktopApp: true,
+    remoteDaemons: { entries: [] },
+    steps: [showPage],
+  },
+
+  {
+    id: "remote-devices-add-blank",
+    group: GROUP,
+    category: "normal",
+    title: "Add remote daemon form, blank",
+    description:
+      "The blank form Add remote daemon opens in the content area, titled Add remote daemon, with none of the saved devices selected in the sidebar: the Connection details field has focus, with the icon-only Paste button as its trailing control (its tooltip reads Paste), then the cards for the name, address and sign-in, Save and Cancel and no Remove card. Where the platform cannot read the clipboard the button is not drawn. A clipboard that cannot be read opens an error alert titled Could not paste the connection details, laid out as any other error alert.",
+    state,
+    desktopApp: true,
+    clipboard: { text: CONNECTION_LINE },
     remoteDaemons: { entries: [buildServer, homeLab] },
-    steps: [(ui) => ui.press(connectOf(ui, buildServer))],
+    steps: [showPage, (ui) => ui.press(ui.t("remoteDaemons.add"))],
   },
+
   {
-    id: "connect-page-fingerprint",
+    id: "remote-devices-add",
     group: GROUP,
     category: "normal",
-    title: "Connect page confirming a host key",
+    title: "Add remote daemon form after Paste",
+    description:
+      "Paste was pressed on the blank form with the line `octoboardd connection` prints on the clipboard: it fills Connection details and, from it, the name, user, host and port, and the host key to pin is kept for the first connection (shown as pinned, with Clear). The button's brief Pasted state (a check, and the tooltip reading Pasted) is over by the time the view settles.",
+    state,
+    desktopApp: true,
+    clipboard: { text: CONNECTION_LINE },
+    remoteDaemons: { entries: [buildServer, homeLab] },
+    steps: [showPage, (ui) => ui.press(ui.t("remoteDaemons.add")), (ui) => ui.press(ui.t("common.paste"))],
+  },
+
+  {
+    id: "remote-devices-connecting",
+    group: GROUP,
+    category: "normal",
+    title: "Remote devices page while a connection is being made",
+    description:
+      "Connect was pressed on Staging and the connection has not ended: the Connect button in the page's header shows its spinner. Selecting another device shows its Connect disabled until the connection ends, so a second one cannot be started; Remove stays available.",
+    state,
+    desktopApp: true,
+    remoteDaemons: { entries: [staging, homeLab, buildServer] },
+    steps: [showPage, (ui) => ui.press(connectOf(ui, staging))],
+  },
+
+  {
+    id: "remote-devices-password",
+    group: GROUP,
+    category: "normal",
+    title: "Remote devices page asking for the password",
+    description: "Connect on an entry that signs in with a password asks for it first, in a dialog over the page: a sentence saying who is being signed in to (the entry's name and the user as chips), then the Password field with its placeholder; the password is used for this connection only and is not stored.",
+    state,
+    desktopApp: true,
+    remoteDaemons: { entries: [buildServer, homeLab] },
+    steps: [showPage, (ui) => ui.press(connectOf(ui, buildServer))],
+  },
+
+  {
+    id: "remote-devices-fingerprint",
+    group: GROUP,
+    category: "normal",
+    title: "Remote devices page confirming a host key",
     description: "The first connection to a host whose key is not pinned: the dialog's opening sentence names the entry and carries its fingerprint as a monospace chip, then says to compare it with the server's, with the command to run as a chip, before connecting.",
     state,
     desktopApp: true,
-    connectPage: true,
     remoteDaemons: {
       entries: [staging],
       outcomes: { staging: { outcome: "host_key_unknown", fingerprint: "SHA256:Qm9vcHNjb25zdGFudGZpbmdlcnByaW50Zm9yZ2FsbGVyeQ" } },
     },
-    steps: [(ui) => ui.press(connectOf(ui, staging))],
+    steps: [showPage, (ui) => ui.press(connectOf(ui, staging))],
   },
+
   {
-    id: "connect-page-failure",
+    id: "remote-devices-remove",
     group: GROUP,
     category: "normal",
-    title: "Connect page after a failed connection",
-    description: "A connection that fails for a known reason ends in an alert of this window titled Could not reach the server, with the server's address as a chip in its sentence and the shell's own words behind Error details; the list stays as it was. There is no Report issue: this is not an unexpected failure.",
+    title: "Remove remote daemon",
+    description: "Remove at the bottom of Home lab's page asks first, in a destructive confirmation naming the entry over the page; nothing else is touched: the daemon itself and any window or browser tab open on it are not affected.",
     state,
     desktopApp: true,
-    connectPage: true,
+    remoteDaemons: { entries: [staging, homeLab] },
+    steps: [showPage, (ui) => ui.press(homeLab.name), (ui) => ui.press(ui.t("remoteDaemons.removeLabel", { name: homeLab.name }))],
+  },
+
+  {
+    id: "remote-devices-start-daemon",
+    group: GROUP,
+    category: "normal",
+    title: "Remote devices page offering to start the daemon",
+    description: "The server answers but no daemon of Octoboard is running on it: a confirmation titled Start the daemon names the entry and offers Start daemon, which starts it on the server and connects.",
+    state,
+    desktopApp: true,
+    remoteDaemons: { entries: [staging], outcomes: { staging: { outcome: "no_daemon" } } },
+    steps: [showPage, (ui) => ui.press(connectOf(ui, staging))],
+  },
+
+  {
+    id: "remote-devices-locate-daemon",
+    group: GROUP,
+    category: "normal",
+    title: "Remote devices page asking where octoboardd is",
+    description: "octoboardd was not found where the shell looks on the server: a dialog lists the places it looked in, as plain monospace text, not chips, and asks for the path in a field with an example as its placeholder, with Save and connect.",
+    state,
+    desktopApp: true,
+    remoteDaemons: { entries: [staging], outcomes: { staging: { outcome: "octoboardd_not_found", tried: ["/usr/local/bin/octoboardd", "/home/deploy/.octoboard/bin/octoboardd", "/opt/octoboard/bin/octoboardd"] } } },
+    steps: [showPage, (ui) => ui.press(connectOf(ui, staging))],
+  },
+
+  {
+    id: "remote-devices-offline",
+    group: GROUP,
+    category: "exceptional",
+    title: "Remote devices page while the local daemon is unavailable",
+    description:
+      "The rail's Remote devices button, the only one in the rail while the local daemon is not answering, opens the full page: the device sidebar and the selected device's form, with the connection banner along the bottom. Back returns to the status screen.",
+    desktopApp: true,
+    remoteDaemons: { entries: SAVED, status: [...CONNECTED] },
+    state: { connectionState: "closed" },
+    steps: [showPage],
+  },
+
+  {
+    id: "remote-devices-invalid",
+    group: GROUP,
+    category: "exceptional",
+    title: "Remote device form with invalid fields",
+    description:
+      "Home lab's form after its SSH port was set out of range and its key file path emptied, and Save was pressed: every invalid field shows its own error under it and focus is on the first of them, the SSH port. Save stays enabled, since it is the press that reports what is wrong; Revert drops the changes. A field that is only edited shows its error when it is left.",
+    state,
+    desktopApp: true,
+    remoteDaemons: { entries: [staging, homeLab] },
+    steps: [
+      showPage,
+      (ui) => selectDevice(ui, homeLab),
+      (ui) => ui.focus(ui.t("remoteDaemons.form.port")),
+      (ui) => ui.type("99999"),
+      (ui) => ui.focus(ui.t("remoteDaemons.form.keyPath")),
+      (ui) => ui.type(""),
+      (ui) => ui.press(ui.t("common.save")),
+    ],
+  },
+
+  {
+    id: "remote-devices-failure",
+    group: GROUP,
+    category: "exceptional",
+    title: "Remote devices page after a failed connection",
+    description: "A connection that fails for a known reason ends in an alert titled Could not reach the server, with the server's address as a chip in its sentence and the shell's own words behind Error details; the list stays as it was. There is no Report issue: this is not an unexpected failure.",
+    state,
+    desktopApp: true,
     remoteDaemons: {
       entries: [staging],
       outcomes: { staging: { outcome: "unreachable", detail: "ssh: connect to host staging.example.com port 22: Connection timed out" } },
     },
-    steps: [(ui) => ui.press(connectOf(ui, staging))],
+    steps: [showPage, (ui) => ui.press(connectOf(ui, staging))],
   },
+
   {
-    id: "connect-page-version-mismatch",
+    id: "remote-devices-version-mismatch",
     group: GROUP,
-    category: "normal",
-    title: "Connect page with a daemon of another version",
+    category: "exceptional",
+    title: "Remote devices page with a daemon of another version",
     description:
       "The daemon on the server is older than this application: the dialog names both versions, says the daemon has to be updated on the server itself, and offers Open in browser (the primary action), which has the shell open the daemon's own web interface in the system browser, besides Cancel. Nothing here updates the daemon. A daemon that is newer than the application has a different footer, in its own scenario.",
     state,
     desktopApp: true,
-    connectPage: true,
     remoteDaemons: {
       entries: [staging],
       outcomes: { staging: { outcome: "generation_mismatch", remoteGeneration: 1, localGeneration: 2, remoteVersion: "1.4.0", localVersion: "2.0.0" } },
     },
-    steps: [(ui) => ui.press(connectOf(ui, staging))],
+    steps: [showPage, (ui) => ui.press(connectOf(ui, staging))],
   },
+
   {
-    id: "connect-page-edit",
+    id: "remote-devices-version-mismatch-newer",
     group: GROUP,
-    category: "normal",
-    title: "Edit remote daemon",
+    category: "exceptional",
+    title: "Remote devices page with a daemon newer than the application",
     description:
-      "The form opened by Edit on Staging, which already signs in with this computer's own key: the name, host, port and user filled in, each field with its example as a placeholder when emptied; Authentication offers a third choice, This computer's key, besides Password and Key file, with its own description; the pinned host key is shown as plain monospace text, not a chip, with a Clear button and the line saying when clearing it helps. Scroll the dialog to see them.",
+      "The daemon on the server is newer than this application: the dialog names both versions and says they cannot work together until this app is updated, then that the daemon's own web interface can be opened in the browser. Its footer holds Go to Updates and Open in browser (the primary one) and no Cancel; the close button in the header is the way out. Go to Updates is the shell's to answer, which this gallery does not draw, so nothing visible follows.",
     state,
     desktopApp: true,
-    connectPage: true,
-    remoteDaemons: { entries: [{ ...staging, octoboarddPath: "/opt/octoboard/bin/octoboardd" }] },
-    steps: [(ui) => ui.press(ui.t("remoteDaemons.editLabel", { name: staging.name }))],
-  },
-  {
-    id: "connect-page-remove",
-    group: GROUP,
-    category: "normal",
-    title: "Remove remote daemon",
-    description: "Remove on Home lab asks first, in a destructive confirmation naming the entry; nothing else is touched: the daemon itself and its window are not affected.",
-    state,
-    desktopApp: true,
-    connectPage: true,
-    remoteDaemons: { entries: [staging, homeLab] },
-    steps: [(ui) => ui.press(ui.t("remoteDaemons.removeLabel", { name: homeLab.name }))],
-  },
-  {
-    id: "connect-page-start-daemon",
-    group: GROUP,
-    category: "normal",
-    title: "Connect page offering to start the daemon",
-    description: "The server answers but no daemon of Octoboard is running on it: a confirmation titled Start the daemon names the entry and offers Start daemon, which starts it on the server and connects.",
-    state,
-    desktopApp: true,
-    connectPage: true,
-    remoteDaemons: { entries: [staging], outcomes: { staging: { outcome: "no_daemon" } } },
-    steps: [(ui) => ui.press(connectOf(ui, staging))],
-  },
-  {
-    id: "connect-page-locate-daemon",
-    group: GROUP,
-    category: "normal",
-    title: "Connect page asking where octoboardd is",
-    description: "octoboardd was not found where the shell looks on the server: a dialog lists the places it looked in, as plain monospace text, not chips, and asks for the path in a field with an example as its placeholder, with Save and connect.",
-    state,
-    desktopApp: true,
-    connectPage: true,
-    remoteDaemons: { entries: [staging], outcomes: { staging: { outcome: "octoboardd_not_found", tried: ["/usr/local/bin/octoboardd", "/home/deploy/.octoboard/bin/octoboardd", "/opt/octoboard/bin/octoboardd"] } } },
-    steps: [(ui) => ui.press(connectOf(ui, staging))],
-  },
-  {
-    id: "connect-page-version-mismatch-newer",
-    group: GROUP,
-    category: "normal",
-    title: "Connect page with a daemon newer than the application",
-    description:
-      "The daemon on the server is newer than this application: the dialog names both versions and says they cannot work together until this app is updated, then that the daemon's own web interface can be opened in the browser. Its footer holds Go to Updates and Open in browser (the primary one) and no Cancel; the close button in the header is the way out. Go to Updates shows the application's own Updates in its main window, which this gallery does not draw, so nothing visible follows.",
-    state,
-    desktopApp: true,
-    connectPage: true,
     remoteDaemons: {
       entries: [staging],
       outcomes: { staging: { outcome: "generation_mismatch", remoteGeneration: 3, localGeneration: 2, remoteVersion: "2.1.0", localVersion: "2.0.0" } },
     },
-    steps: [(ui) => ui.press(connectOf(ui, staging))],
+    steps: [showPage, (ui) => ui.press(connectOf(ui, staging))],
   },
+
   {
-    id: "connect-page-application-not-running",
+    id: "remote-devices-application-not-running",
     group: GROUP,
     category: "exceptional",
-    title: "Connect page, the application is not running on the server",
+    title: "Remote devices page, the application is not running on the server",
     description:
       "The octoboardd on the server is the desktop application's, whose daemon runs only while the application does, and the application is closed there: a confirmation titled The app is not running on the server says so in a sentence naming the entry, tells to open the app on that computer, and offers Try again besides Cancel. The shell's own words are in a block behind an Error details disclosure, open here.",
     state,
     desktopApp: true,
-    connectPage: true,
     remoteDaemons: { entries: [staging], outcomes: { staging: { outcome: "application_not_running", detail: "octoboardd: the owner endpoint /Users/dev/.octoboard/browser.sock does not exist" } } },
-    steps: [(ui) => ui.press(connectOf(ui, staging)), (ui) => ui.press(ui.t("error.diagnostics"))],
+    steps: [showPage, (ui) => ui.press(connectOf(ui, staging)), (ui) => ui.press(ui.t("error.diagnostics"))],
   },
+
   {
-    id: "connect-page-failure-unexpected",
+    id: "remote-devices-failure-unexpected",
     group: GROUP,
     category: "exceptional",
-    title: "Connect page after a connection failed unexpectedly",
+    title: "Remote devices page after a connection failed unexpectedly",
     description:
       "The shell ended the connection with a failure the application has no wording for: the alert is the unexpected-failure one, titled Could not connect to the remote daemon, saying only that something unexpected went wrong with the Report issue guidance, and the shell's own words behind Error details, closed here. Report issue sits before OK in the footer.",
     state,
     desktopApp: true,
-    connectPage: true,
     remoteDaemons: { entries: [staging], outcomes: { staging: { outcome: "failed", detail: "ssh: unexpected packet type 97 in the key exchange" } } },
-    steps: [(ui) => ui.press(connectOf(ui, staging))],
+    steps: [showPage, (ui) => ui.press(connectOf(ui, staging))],
   },
+
   {
-    id: "connect-page-host-key-changed",
+    id: "remote-devices-host-key-changed",
     group: GROUP,
     category: "exceptional",
-    title: "Connect page after a changed host key",
+    title: "Remote devices page after a changed host key",
     description:
       "The server presented a different host key than the one pinned, so the connection was refused: an alert with a two-sentence body, the second telling to edit the entry and clear the pinned key, and its Error details open on the pinned and the presented fingerprint, one to a line. Unlike a plain failure it has a remedy in the entry's own form.",
     state,
     desktopApp: true,
-    connectPage: true,
     remoteDaemons: {
       entries: [staging],
       outcomes: { staging: { outcome: "host_key_mismatch", expected: "SHA256:Qm9vcHNjb25zdGFudGZpbmdlcnByaW50Zm9yZ2FsbGVyeQ", actual: "SHA256:b3RoZXJob3N0a2V5ZmluZ2VycHJpbnRvZmF0aGlyZHNlcnZlcg" } },
     },
-    steps: [(ui) => ui.press(connectOf(ui, staging)), (ui) => ui.press(ui.t("error.diagnostics"))],
+    steps: [showPage, (ui) => ui.press(connectOf(ui, staging)), (ui) => ui.press(ui.t("error.diagnostics"))],
   },
 ];

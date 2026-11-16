@@ -4,7 +4,7 @@
   "title": "Octoboard control socket: daemon to client",
   "description": "One text frame the daemon sends on `/ws/control`. See `apps/daemon/PROTOCOL.md`.",
   "x-octoboard-protocol": {
-    "generation": 5,
+    "generation": 6,
     "channel": "control",
     "direction": "output"
   },
@@ -3217,11 +3217,7 @@
       "properties": {
         "interface_language": {
           "type": "string",
-          "description": "The interface language tag, which only the client holds, carried like `run_in_background`:\nthe client adds the language it shows to a document it saves and applies it from an\nimport's reply when it offers it. A document of version 3 or older, from a build that held\none language for the windows and the agents alike, carries that language here alone: its\nupgrade copies it into `agent_language`."
-        },
-        "agent_language": {
-          "type": "string",
-          "description": "The agent language tag (see `Settings.agent_language`): the daemon writes the one it holds.\nAn import applies it only when this build offers it. Absent when the daemon held none."
+          "description": "The interface language tag (see `Settings.interface_language`): the daemon writes the one it\nholds. An import applies it only when this build offers it. Absent when the daemon held\nnone."
         },
         "resume_sessions_on_start": {
           "type": "boolean",
@@ -5228,6 +5224,81 @@
             "file"
           ],
           "description": "The reply to `read_project_file`; `project`, `worktree` and `path` echo the request."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "path": {
+              "type": "string"
+            },
+            "version": {
+              "type": "string"
+            },
+            "file": {
+              "$ref": "#/$defs/FileContent"
+            },
+            "type": {
+              "type": "string",
+              "const": "path_link_file"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "path",
+            "version",
+            "file"
+          ],
+          "description": "The reply to `read_path_link`; `path` echoes the request and `version` is the live file's\nversion at the read."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "offset": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "size": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "version": {
+              "type": "string"
+            },
+            "data": {
+              "type": "string"
+            },
+            "launchable": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "file_range"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "offset",
+            "size",
+            "version",
+            "data"
+          ],
+          "description": "The reply to `read_file_range`: `data` is the base64 of the bytes read from `offset`, empty\nat or past the end of the file; `size` and `version` are the file's at this read.\n`launchable` is set only when true: the file has an executable bit. What a name says the\nsystem would run is for the client to judge by the system that opens the copy."
         },
         {
           "type": "object",
@@ -7731,12 +7802,12 @@
           "$ref": "#/$defs/PathLinkKind"
         },
         "view": {
-          "description": "Where the client reads the file with `read_project_file`, for a file inside the project or\none of its worktrees, or for a directory there, its README or index file when it has one;\nabsent for anything else. Whether the viewer can show it is for the client to find out by\nreading it.",
+          "description": "Where the client reads the file with `read_project_file`, for a file inside the project or\none of its worktrees, or for a directory there, its README or index file when it has one;\nabsent for anything else, which a file reads with `read_path_link`. Whether the viewer can\nshow it is for the client to find out by reading it.",
           "$ref": "#/$defs/PathLinkView"
         },
         "viewer_only": {
           "type": "boolean",
-          "description": "Set for any file in a project, whatever its type, since the system's default application for\na file may run it, and for what the system could launch: the viewer shows it and\n`open_path_link` refuses it."
+          "description": "Set for a file the system could launch rather than show: the host never opens it, so\n`open_path_link` refuses it, and the viewer is the only place it opens from a link."
         }
       },
       "required": [
@@ -8399,6 +8470,13 @@
           ],
           "description": "The command the browser's machine forwards the owner socket (on Windows, `browser_port`)\nwith, as `octoboardd address` prints it, the remote host left as `<server>` for the owner to\nfill in; set while `state` is `serving`, null otherwise."
         },
+        "server_addresses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "What another computer can reach this one by, for the owner to put in the forward's\n`<server>`, in the order Settings offers them: this computer's name (on macOS the Bonjour\n`<name>.local`, elsewhere the host name as the system reports it), then its IPv4 and then\nits IPv6 addresses, each as text that `ssh` takes after `user@` as it is. Loopback, unspecified, multicast and link-local addresses and\n`localhost` names are left out, as are deprecated, tentative and failed addresses where the\nsystem says so (Linux, Windows) and temporary IPv6 addresses on Linux (they are kept on\nmacOS and Windows). Read when the state is; set while `state` is `serving`, empty\notherwise, and empty while the computer reports none."
+        },
         "failure": {
           "anyOf": [
             {
@@ -8428,6 +8506,7 @@
         "browser_port",
         "address",
         "forward_command",
+        "server_addresses",
         "failure",
         "connection"
       ],
@@ -9241,12 +9320,12 @@
           "type": "boolean",
           "description": "Whether a project session is kept to its own project: its git is refused a ref update in\nthe repository of another registered project, and its file-edit tools are refused a path\nin one. Off unless the user turned it on. The git check reads it at every ref update, so a\nchange reaches running sessions at once; the edit check keeps the value a session was\nlaunched with, so a change reaches it only in sessions launched afterwards. Only the\nuser's own client changes it."
         },
-        "agent_language": {
+        "interface_language": {
           "type": [
             "string",
             "null"
           ],
-          "description": "The tag of the agent language, one of the tags the interface offers: the language sessions\nare told to talk to the user in. `null` until a client reports one; a client reports its own\ninterface language when it connects to a daemon that holds none, and the user's pick in\nSettings otherwise. The interface language itself is the client's alone and never stored\nhere. Carried by a configuration export in its General section."
+          "description": "The tag of the interface language, one of the tags the interface offers; `null` until a\nclient reports one. It is the one language every client of this daemon shows (each keeps a\ncopy only to render in before it has connected) and the one sessions are told to reply in,\nso a change reaches every window connected to it. Carried by a configuration export in its General section."
         },
         "keep_awake": {
           "type": "boolean",
@@ -9380,7 +9459,7 @@
         "auto_approve_handoffs",
         "ask_questions_as_choices",
         "keep_sessions_in_own_project",
-        "agent_language",
+        "interface_language",
         "keep_awake",
         "keep_awake_when",
         "auto_select_account",

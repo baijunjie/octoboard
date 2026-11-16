@@ -37,6 +37,7 @@ export function EmptyPanel({
   headingId,
   description,
   remedy,
+  progress,
   action,
   secondaryAction,
   linkAction,
@@ -65,6 +66,9 @@ export function EmptyPanel({
   description?: React.ReactNode;
   /** Under the description, outside the announcement: the one main thing to do. */
   remedy?: React.ReactNode;
+  /** The full panel's work in progress, under the lines and before the buttons, in a block of its own, so it may hold
+   * block content (a progress bar with its Cancel) where `description` and `remedy`, which sit in a `p`, may not. */
+  progress?: React.ReactNode;
   compact?: boolean;
   /** The full panel's tone: `danger` for a failure. */
   tone?: "danger";
@@ -174,6 +178,7 @@ export function EmptyPanel({
         {description && <p className="max-w-sm text-sm break-words text-app-muted">{description}</p>}
       </div>
       {remedy && <p className="-mt-3 max-w-sm text-sm break-words text-app-muted">{remedy}</p>}
+      {progress && <div className="max-w-sm text-sm">{progress}</div>}
       {/* Start-aligned, unlike the lines above it: it holds paragraphs and raw text. The border is what
           sets it apart on a dialog or a viewer, which are the default surface's colour themselves. Raw
           text keeps its own bounded scroller rather than pushing the buttons off the page. */}

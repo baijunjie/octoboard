@@ -5,8 +5,10 @@ import type { Agent } from "../protocol";
 
 export { ConfigurationFileError } from "./configurationFileError";
 export { UpdaterError } from "./updaterError";
+export { LinkForwardError } from "./linkForwardError";
+export { RemoteFileError } from "./remoteFileError";
 export type { HostFacts } from "./host";
-export { connectPageEntry, daemonIdentity, remoteDaemonName, windowKind, type WindowKind } from "./windowKind";
+export { daemonIdentity, remoteDaemonName, windowKind, type WindowKind } from "./windowKind";
 
 /**
  * The only route from the UI to anything native. Every capability is optional: a member that is
@@ -43,7 +45,7 @@ export interface PlatformAdapter {
   /** The shell's native menu bar: the items that ask the UI to do something, and the labels the
    * UI gives every item. */
   readonly appMenu?: AppMenuCapability;
-  /** The taskbar's jump list on Windows, whose lines read the labels the UI hands it: New Remote Window, the local
+  /** The taskbar's jump list on Windows, whose lines read the labels the UI hands it: Remote devices, the local
    * window and, under the Remote menu's name, the saved remote daemons. The shell gives every window's system menu the
    * same items from the same labels, with a line saying there is no saved daemon. Absent where there is none. */
   readonly jumpList?: JumpListCapability;
@@ -74,10 +76,17 @@ export interface PlatformAdapter {
    * that window from a browser, whose adapter has none of the shell's capabilities. */
   readonly remoteLogin?: RemoteLoginCapability;
   /** The list of Octoboard daemons on other computers that the shell reaches over SSH, and connecting to one, which
-   * opens a window of its own on it: present in every window of the desktop application (the local daemon's, a connect
-   * window's and a remote daemon's), and in no browser. The rail lists the connected ones in the local daemon's window
-   * only (`remoteDaemonsOffered`). No command of it hands a secret to the page. */
+   * opens a window of its own on it: present in the local daemon's window of the desktop application only, which has the
+   * rail's Remote devices button and the page it shows (`remoteDaemonsOffered`), and in no browser or remote daemon's
+   * window. No command of it hands a secret to the page. */
   readonly remoteDaemons?: RemoteDaemonsCapability;
+  /** The ports of this computer that forward to loopback ports of the remote daemon's machine, for the addresses the
+   * window opens there (`links`); present only in a remote window of the desktop shell, whose own connection carries
+   * them. */
+  readonly remoteForwards?: RemoteForwardsCapability;
+  /** Storing a copy of a file of the remote daemon's machine on this computer and opening it, which the viewer's
+   * Download and open does; present only in a remote window of the desktop shell, whose commands these are. */
+  readonly remoteFiles?: RemoteFilesCapability;
   /** Whether closing the window keeps the app running in the background: present only where a
    * shell answers the window's close button and can do either, so the Settings switch for it
    * exists only there. */
@@ -513,7 +522,8 @@ export interface DirectoryPickerCapability {
 export interface LinkCapability {
   /** Opens `url`, an `http:`, `https:` or `mailto:` address, outside the app. Only the desktop
    * platform reports a refusal, by rejecting: a browser cannot tell a blocked popup from an opened
-   * one, and resolves either way. */
+   * one, and resolves either way. In a remote window an address on the daemon machine's own loopback is opened at
+   * a port of this computer forwarded to it, and one that could not be forwarded rejects with a `LinkForwardError`. */
   open(url: string): Promise<void>;
 }
 
@@ -532,6 +542,41 @@ export interface MacosPermissionsCapability {
   request(kind: MacosPermissionKind): Promise<boolean>;
   /** Opens the System Settings pane for `kind`. Rejects when the system did not open it. */
   openSystemSettings(kind: MacosPermissionKind): Promise<void>;
+}
+
+/** A port of this computer that forwards to a loopback port of the remote daemon's machine. */
+export interface RemoteForward {
+  remotePort: number;
+  localPort: number;
+  /** The address last opened through the forward, as it was written (on the remote machine). */
+  address: string;
+  /** What the browser was given for it (on this computer). */
+  localAddress: string;
+}
+
+export interface RemoteForwardsCapability {
+  /** The forwards the window holds, in the order they were made. */
+  list(): Promise<RemoteForward[]>;
+  /** Lets the port of the forward to `remotePort` go and cuts the connections passing through it. */
+  stop(remotePort: number): Promise<void>;
+  /** Calls `listener` when a forward was made, stopped or opened at another address, for the caller to list again.
+   * Returns the unsubscribe. */
+  onChange(listener: () => void): () => void;
+}
+
+/** A copy of a remote file, kept by the shell in a folder of its own and removed at the next launch, which the page
+ * fills in parts it read from the daemon. Each call rejects with a `RemoteFileError` where the shell says why. */
+export interface RemoteFilesCapability {
+  /** Begins a copy named `name` of `size` bytes and gives its id. `launchable` is the daemon's word for the file; the
+   * shell judges the name as well, and refuses what this computer would run before it stores anything. */
+  begin(file: { name: string; size: number; launchable: boolean }): Promise<string>;
+  /** Appends `part`, handed over as the raw body of the call behind the copy's id, to the copy. */
+  write(id: string, part: Uint8Array): Promise<void>;
+  /** Opens the copy, which has to hold all `size` bytes, with this computer's default application, marked as
+   * downloaded. The copy stays; the next launch removes it. */
+  open(id: string): Promise<void>;
+  /** Removes a copy that was cancelled or failed. Never rejects: what could not be removed goes at the next launch. */
+  discard(id: string): Promise<void>;
 }
 
 /** This computer's SSH server: Remote Login on macOS, OpenSSH Server on Windows. */
@@ -625,6 +670,12 @@ export interface RemoteDaemonStatus {
   via: "window" | "browser";
 }
 
+/** An outcome of a connection to the entry `id` that the Remote devices page has to show: a question or a failure. */
+export interface RemoteDaemonHandedOutcome {
+  id: string;
+  outcome: RemoteDaemonConnectOutcome;
+}
+
 export interface RemoteDaemonsCapability {
   list(): Promise<RemoteDaemonEntry[]>;
   /** The entries whose window is open; any other entry is not connected. */
@@ -642,10 +693,12 @@ export interface RemoteDaemonsCapability {
   /** Ends a connection held for the browser, releasing its port and SSH connection, or closes the daemon's window,
    * which ends its connection. */
   disconnect(id: string): Promise<void>;
-  /** Opens a new window showing the connect page, where a remote daemon is chosen and connected. */
-  newWindow(): Promise<void>;
-  /** Opens or focuses the daemon's window, going through a connect window only where the connection needs input. */
-  openWindow(id: string): Promise<void>;
+  /** Calls `listener` with what a connection asked for away from the Remote devices page (a menu's saved daemon) left
+   * for it to show, those already waiting included; only the main window is given any. Returns the unsubscribe. */
+  onHandedOver(listener: (items: RemoteDaemonHandedOutcome[]) => void): () => void;
+  /** Calls `listener` when the Remote devices page is asked for (the Remote Devices menu item), also for a request made
+   * before this page listened; only the main window is given any. Returns the unsubscribe. */
+  onPageRequested(listener: () => void): () => void;
   /** Shows and focuses this computer's own window. */
   showMainWindow(): Promise<void>;
   /** Shows this computer's own window with Settings open on Updates, as the menu bar icon's Check for updates does. */

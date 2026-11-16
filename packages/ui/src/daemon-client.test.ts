@@ -298,6 +298,16 @@ it("never asks a key check of a connection that is up or a client that was close
   expect(keyCheck).not.toHaveBeenCalled();
 });
 
+it("refuses a daemon of generation 5, the one before the language was held as one setting again", () => {
+  const client = newClient();
+  const states: string[] = [];
+  client.onConnectionChange((state) => states.push(state));
+  const socket = FakeSocket.last;
+  open(socket);
+  socket.receive(hello(5));
+  expect(states.at(-1)).toBe("incompatible");
+});
+
 it("takes a snapshot with no hello before it as a daemon of another generation", () => {
   const client = newClient();
   const states: string[] = [];

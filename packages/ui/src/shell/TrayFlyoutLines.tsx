@@ -153,11 +153,13 @@ function detailRow(item: StatusItemSubmenuItem, id: string, owner: string, langu
   }
 }
 
-/** A line the user can choose, or one that only says something. */
-function plainRow(line: Extract<TrayFlyoutLine, { kind: "item" | "note" }>, key: string): React.ReactElement {
+/** A line the user can choose, or one that only says something. A line the user can choose is keyed by its own id, so
+ * another tab's line at the same position is a different item, not the same one under a new id; `key`, the line's
+ * position, keys and names a note, which has no id. */
+function plainRow(line: Extract<TrayFlyoutLine, { kind: "item" | "note" }>, scope: string, key: string): React.ReactElement {
   if (line.kind === "item") {
     return (
-      <MenuItem key={key} id={line.id} textValue={line.label} className={ROW_CLASS} data-flyout-choosable="">
+      <MenuItem key={`${scope}#${line.id}`} id={line.id} textValue={line.label} className={ROW_CLASS} data-flyout-choosable="">
         <Picture icon={line.icon} />
         <span className="min-w-0 text-sm [overflow-wrap:anywhere]">{line.label}</span>
       </MenuItem>
@@ -192,12 +194,14 @@ export function lineRows(lines: TrayFlyoutLine[], scope: string, context: LineCo
           const next = lines[index + 1];
           if (next.kind !== "item" && next.kind !== "note") break;
           index++;
-          run.push(plainRow(next, `${scope}${index}`));
+          run.push(plainRow(next, scope, `${scope}${index}`));
         }
+        // Optically centred: a heading with nothing under it takes the extra 2px below, so the visible space above the
+        // first heading equals the space below the last line.
         rows.push(
           <MenuSection
             key={at}
-            headingClassName="flex items-center gap-2 px-2 pt-2 pb-1 text-xs font-medium text-app-muted"
+            headingClassName={`flex min-h-[18px] items-center gap-2 px-2 text-xs font-medium text-app-muted ${run.length === 0 ? "pt-[7px] pb-[9px]" : "pt-1.5 pb-1"}`}
             heading={
               <>
                 <Picture icon={line.icon} />
@@ -212,7 +216,7 @@ export function lineRows(lines: TrayFlyoutLine[], scope: string, context: LineCo
       }
       case "item":
       case "note":
-        rows.push(plainRow(line, at));
+        rows.push(plainRow(line, scope, at));
         break;
       case "separator":
         rows.push(<MenuSeparator key={at} />);

@@ -1,8 +1,8 @@
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useSyncExternalStore } from "react";
 
 import { useLatest } from "../components/hooks/useLatest";
 import type { Appearance } from "../preferences/cssColour";
-import { useCurrentLanguage, useT } from "../i18n/react";
+import { localTranslator, useLocalLanguage } from "../i18n/language";
 import { usePlatform } from "../platform/react";
 import type { Session } from "../protocol";
 import { indexSessions } from "../sessions/sessionIndex";
@@ -59,8 +59,9 @@ interface UseStatusItemMenuOptions {
 export function useStatusItemMenu({ ready, selectedSessionId, currentConsoleId, updatesLabel, onSessionChosen }: UseStatusItemMenuOptions): void {
   const { statusItem, host } = usePlatform();
   const { store, request } = useDaemon();
-  const t = useT();
-  const language = useCurrentLanguage();
+  // The menu is worded in the local windows' language, whichever daemon this window shows.
+  const language = useLocalLanguage();
+  const t = useMemo(() => localTranslator(language), [language]);
   const appearance = useSyncExternalStore(subscribeSystemAppearance, systemAppearance);
   // Status flips are frequent and most change nothing the menu shows.
   const lastSentRef = useRef<string | undefined>(undefined);

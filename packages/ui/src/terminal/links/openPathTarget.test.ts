@@ -16,76 +16,50 @@ function click(target: Parameters<typeof openPathTarget>[0]["target"], answer: (
   const request = vi.fn(async (body: { type: string }) => (body.type === "read_project_file" ? answer() : { type: "ack", id: null })) as never;
   return { done: openPathTarget({ target, project: "p", request, viewFile }), request: request as unknown as ReturnType<typeof vi.fn>, viewFile };
 }
-const target = { path: "/r/a.ts", line: 4, view: { worktree: "w", path: "a.ts" } };
+const target = { path: "/r/a.ts", kind: "file" as const, line: 4, view: { worktree: "w", path: "a.ts" } };
 
-it("reads a file with a view first and shows it in the viewer, with what was read, at its line", async () => {
+it("shows a file of the project in the viewer unread, at its line, and never opens it on the host", async () => {
   const { done, request, viewFile } = click(target, async () => readReply());
   await done;
-  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "read_project_file", project: "p", worktree: "w", path: "a.ts", slot: "viewer" });
-  expect(viewFile).toHaveBeenCalledExactlyOnceWith({ project: "p", worktree: "w", path: "a.ts", line: 4, read: readReply() });
+  expect(request).not.toHaveBeenCalled();
+  expect(viewFile).toHaveBeenCalledExactlyOnceWith({ project: "p", worktree: "w", path: "a.ts", line: 4 });
 });
 
-it("shows an image too, but opens other binary on the host", async () => {
-  const image = click(target, async () => readReply({ kind: "binary", media_type: "image/png", text: null, data: "AA" }));
-  await image.done;
-  expect(image.viewFile).toHaveBeenCalledOnce();
-  const binary = click(target, async () => readReply({ kind: "binary", media_type: null, text: null, data: "AA" }));
-  await binary.done;
-  expect(binary.viewFile).not.toHaveBeenCalled();
-  expect(binary.request).toHaveBeenLastCalledWith({ type: "open_path_link", project: "p", path: "/r/a.ts" });
+it("shows a file outside every project directory from its path, without reading or opening it", async () => {
+  const { done, request, viewFile } = click({ path: "/tmp/b.png", kind: "file", line: 2 }, async () => readReply());
+  await done;
+  expect(request).not.toHaveBeenCalled();
+  expect(viewFile).toHaveBeenCalledExactlyOnceWith({ link: "/tmp/b.png", project: "p", line: 2 });
 });
 
-it("opens a file past the read cap on the host, and reports any other failed read, a gone file with the remedy of finding it again", async () => {
-  const big = click(target, () => Promise.reject(new CodedError("too large", "limit_exceeded", {})));
-  await big.done;
-  expect(big.viewFile).not.toHaveBeenCalled();
-  expect(big.request).toHaveBeenLastCalledWith({ type: "open_path_link", project: "p", path: "/r/a.ts" });
-  const failed = click(target, () => Promise.reject(new CodedError("gone", "file_not_found", {})));
-  await failed.done;
-  expect(report).toHaveBeenCalledOnce();
-  expect(report.mock.lastCall![0].recovery).toBe("hostPathGone");
-  expect(failed.request).toHaveBeenCalledTimes(1);
-  const refused = click(target, () => Promise.reject(new CodedError("denied", "permission_denied", { path: "a.ts", detail: "x" })));
-  await refused.done;
-  expect(report).toHaveBeenCalledTimes(2);
-  expect(report.mock.lastCall![0].recovery).toBeUndefined();
+it("marks a file the system could launch for the viewer, whichever kind of path names it", async () => {
+  const project = click({ ...target, viewerOnly: true }, async () => readReply());
+  await project.done;
+  expect(project.request).not.toHaveBeenCalled();
+  expect(project.viewFile).toHaveBeenCalledExactlyOnceWith({ project: "p", worktree: "w", path: "a.ts", line: 4, launchable: true });
+  const temporary = click({ path: "/tmp/run.sh", kind: "file", viewerOnly: true }, async () => readReply());
+  await temporary.done;
+  expect(temporary.viewFile).toHaveBeenCalledExactlyOnceWith({ link: "/tmp/run.sh", project: "p", line: undefined, launchable: true });
 });
 
-it("reports a path outside every root (outside_scope) without the remedy of the browse views, whichever step of the click found it", async () => {
-  const outside = () => Promise.reject(new CodedError("outside", "outside_scope", { path: "/r/a.ts" }));
-  await openPathTarget({ target: { path: "/r/a.ts" }, project: "p", request: outside as never, viewFile: undefined });
-  expect(report.mock.lastCall![0].recovery).toBe("none");
-  const read = click(target, outside);
-  await read.done;
-  expect(report).toHaveBeenCalledTimes(2);
-  expect(report.mock.lastCall![0].recovery).toBe("none");
-});
-
-it("shows a file the system could launch in the viewer unread, and never opens it on the host", async () => {
-  const launchable = click({ ...target, viewerOnly: true }, async () => readReply());
-  await launchable.done;
-  expect(launchable.request).not.toHaveBeenCalled();
-  expect(launchable.viewFile).toHaveBeenCalledExactlyOnceWith({ project: "p", worktree: "w", path: "a.ts", line: 4 });
-});
-
-it("does nothing for a file the system could launch when there is no viewer to show it", async () => {
+it("does nothing for a file when there is no viewer to show it", async () => {
   const request = vi.fn(async () => ({ type: "ack", id: null })) as never;
-  await openPathTarget({ target: { ...target, viewerOnly: true }, project: "p", request, viewFile: undefined });
+  await openPathTarget({ target, project: "p", request, viewFile: undefined });
   expect(request).not.toHaveBeenCalled();
 });
 
-it("opens a path with no view on the host, and says when that fails", async () => {
-  const plain = click({ path: "/tmp/b.png" }, async () => readReply());
+it("opens a folder with no view on the host, and says when that fails", async () => {
+  const plain = click({ path: "/tmp/dir", kind: "directory" }, async () => readReply());
   await plain.done;
-  expect(plain.request).toHaveBeenCalledExactlyOnceWith({ type: "open_path_link", project: "p", path: "/tmp/b.png" });
+  expect(plain.request).toHaveBeenCalledExactlyOnceWith({ type: "open_path_link", project: "p", path: "/tmp/dir" });
   const request = vi.fn(async () => { throw new Error("refused"); }) as never;
-  await openPathTarget({ target: { path: "/tmp/b.png" }, project: undefined, request, viewFile: undefined });
+  await openPathTarget({ target: { path: "/tmp/dir", kind: "directory" }, project: undefined, request, viewFile: undefined });
   expect(report).toHaveBeenCalledOnce();
 });
 
 it("hands a rejection that is not an Error to the alert as it came, titled for the failed open", async () => {
   const request = vi.fn(async () => { throw "native refused"; }) as never;
-  await openPathTarget({ target: { path: "/tmp/b.png" }, project: undefined, request, viewFile: undefined });
+  await openPathTarget({ target: { path: "/tmp/dir", kind: "directory" }, project: undefined, request, viewFile: undefined });
   expect(report).toHaveBeenCalledOnce();
   expect(report.mock.lastCall![0]).toMatchObject({ error: "native refused", title: "Could not open the path", recovery: undefined });
 });
@@ -111,24 +85,29 @@ it("opens the folder itself on the host when its entry file cannot be shown or r
   expect(failed.request).toHaveBeenLastCalledWith({ type: "open_path_link", project: "p", path: "/r/docs" });
 });
 
-it("opens a folder on the host without reading its entry file when asked to, but not a file", async () => {
+it("opens a folder on the host without reading its entry file when asked to", async () => {
   const request = vi.fn(async (body: { type: string }) => (body.type === "read_project_file" ? readReply() : { type: "ack", id: null })) as never;
   const viewFile = vi.fn();
   await openPathTarget({ target: folder, onHost: true, project: "p", request, viewFile });
   expect(request).toHaveBeenCalledExactlyOnceWith({ type: "open_path_link", project: "p", path: "/r/docs" });
   expect(viewFile).not.toHaveBeenCalled();
-  await openPathTarget({ target: { ...target, kind: "file" }, onHost: true, project: "p", request, viewFile });
+});
+
+it("where nothing opens on the host, shows a folder's entry file unread whatever the click asked, and leaves a folder without one alone", async () => {
+  const request = vi.fn(async () => ({ type: "ack", id: null })) as never;
+  const viewFile = vi.fn();
+  await openPathTarget({ target: folder, onHost: true, hostActions: false, project: "p", request, viewFile });
+  expect(viewFile).toHaveBeenCalledExactlyOnceWith({ project: "p", worktree: "w", path: "docs/README.md" });
+  await openPathTarget({ target: { path: "/r/empty", kind: "directory" }, hostActions: false, project: "p", request, viewFile });
+  expect(request).not.toHaveBeenCalled();
   expect(viewFile).toHaveBeenCalledOnce();
 });
 
-it("reports a path gone since it was probed, with the remedy of finding it in the project's files only for one in the project", async () => {
+it("reports a folder gone since it was probed, with the remedy of finding it in the project's files only for one in the project", async () => {
   const gone = (root?: string) => () => Promise.reject(new CodedError("gone", "file_not_found", { path: "x", ...(root && { root }) }));
   const onHost = (answer: () => Promise<unknown>) => vi.fn((body: { type: string }) => (body.type === "open_path_link" ? answer() : Promise.resolve({ type: "ack", id: null }))) as never;
-  await openPathTarget({ target: { path: "/tmp/x.log", line: undefined }, project: "p", request: onHost(gone("temporary")), viewFile: vi.fn() });
+  await openPathTarget({ target: { path: "/tmp/x", kind: "directory", line: undefined }, project: "p", request: onHost(gone("temporary")), viewFile: vi.fn() });
   expect(report.mock.lastCall![0].recovery).toBe("none");
   await openPathTarget({ target: { path: "docs", kind: "directory", line: undefined }, project: "p", request: onHost(gone("project")), viewFile: vi.fn() });
-  expect(report.mock.lastCall![0].recovery).toBe("hostPathGone");
-  await openPathTarget({ target, project: "p", request: vi.fn(gone()) as never, viewFile: vi.fn() });
-  expect(report).toHaveBeenCalledTimes(3);
   expect(report.mock.lastCall![0].recovery).toBe("hostPathGone");
 });

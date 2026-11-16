@@ -4,6 +4,7 @@ import React from "react";
 import { CodeBlock } from "../components/text/CodeBlock";
 import { ErrorAlert } from "../components/alerts/ErrorAlert";
 import { StatusMark } from "../components/status/StatusMark";
+import { InlinePath } from "../i18n/InlinePath";
 import { InlineReference, type InlineReferenceSize } from "../i18n/InlineReference";
 import { StatusBadge, type StatusBadgeColor, type StatusBadgeSize, type StatusBadgeVariant } from "../components/status/StatusBadge";
 import { CodeToneContext, type CodeColor } from "../i18n/codeTone";
@@ -45,6 +46,8 @@ export function CodeGallery(): React.ReactElement {
                   or type <InlineReference className="italic" data-chip-kind="confirmation">Delete 删除</InlineReference> to confirm.
                 </p>
                 <p className="mt-3 leading-relaxed">Long path: <InlineReference monospace wrap>/Users/dev/Projects/octoboard/packages/ui/src/components/InlineReference.tsx</InlineReference> stays within the paragraph.</p>
+                <p data-prose-path="" className="mt-3 leading-relaxed">Path: choose <InlinePath steps={["System", "Optional features", "Add a feature"]} /> to continue.</p>
+                <p dir="rtl" data-prose-path-rtl="" className="mt-3 leading-relaxed">انتقل إلى <InlinePath steps={["النظام", "الميزات الاختيارية"]} /> ثم تابع.</p>
                 <p dir="rtl" data-prose-rtl="" className="mt-3 leading-relaxed">افتح <InlineReference monospace>AGENTS.md</InlineReference> في <InlineReference monospace wrap>/Users/dev/Projects/octoboard</InlineReference> ثم اختر <InlineReference>Main</InlineReference>.</p>
               </div>
             ))}

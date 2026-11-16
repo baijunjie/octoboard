@@ -9,7 +9,7 @@ use std::sync::Mutex;
 use tauri::AppHandle;
 
 /// The labels the UI last sent, in its language, which the jump list's and the system menus' lines
-/// read: `menu.remote`, `menu.newRemoteWindow`, `menu.noRemoteDaemons` and `menu.openMainWindow`
+/// read: `menu.remote`, `menu.remoteDevices`, `menu.noRemoteDaemons` and `menu.openMainWindow`
 /// (`useNativeMenuLabels`), in sentence case as Windows' own menus read, as are the English
 /// defaults here.
 static LABELS: Mutex<Option<HashMap<String, String>>> = Mutex::new(None);
@@ -71,7 +71,7 @@ fn label<'a>(labels: &'a HashMap<String, String>, key: &str, default: &'a str) -
 #[cfg(windows)]
 fn set_jump_list(labels: &HashMap<String, String>, entries: &[(String, String)]) {
     let (tasks, daemons) = super::jump_list::lines(
-        label(labels, "menu.newRemoteWindow", "New remote window"),
+        label(labels, "menu.remoteDevices", "Remote devices"),
         label(labels, "menu.openMainWindow", "Open this PC’s window"),
         entries,
     );

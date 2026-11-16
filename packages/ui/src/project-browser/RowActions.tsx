@@ -10,6 +10,8 @@ import { type HostPath, useHostPathActions } from "../components/host/useHostPat
 import { useDaemon } from "../store";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
+import { useHostPathsOrEmpty } from "../components/hooks/useHostPaths";
+import { isLaunchableName } from "../launchable";
 import { itemKeyOf, itemKeySelector } from "../primitives";
 import { focusRowControl } from "./focusRow";
 
@@ -36,6 +38,7 @@ export function RowActions({ path, name, directory = false, reserve = false, con
   const scope = useContext(RowPathScope);
   const hostAction = useHostPathActions();
   const { isLocal } = useDaemon();
+  const hostPaths = useHostPathsOrEmpty();
   const openTerminal = useContext(OpenShellTerminal);
   const items: ActionMenuEntry[] = [
     { label: t("common.copyRelativePath"), icon: Copy, onClick: () => copyPath(path) },
@@ -55,11 +58,12 @@ export function RowActions({ path, name, directory = false, reserve = false, con
     const fileManager = { label: t("common.fileManager"), icon: FolderOpen, onClick: () => run("reveal_project_path") };
     // A folder's default application would be the file manager again, so a folder offers Terminal in its place.
     const terminal = openTerminal && { label: t("common.terminal"), icon: SquareTerminal, onClick: () => openTerminal({ ...scope, path }) };
-    // The file manager and the default application are this machine's: not offered for a daemon elsewhere.
+    // The file manager and the default application are this machine's: not offered for a daemon elsewhere. A file the
+    // system could launch has no default application, which the daemon would refuse.
     const onHost = isLocal !== false;
     const openIn: ActionMenuEntry[] = directory
       ? [...(onHost ? [fileManager] : []), ...(terminal ? [terminal] : [])]
-      : onHost ? [fileManager, { label: t("common.defaultApplication"), icon: SquareArrowOutUpRight, onClick: () => run("open_project_path") }] : [];
+      : onHost ? [fileManager, ...(isLaunchableName(name, hostPaths.style === "windows") ? [] : [{ label: t("common.defaultApplication"), icon: SquareArrowOutUpRight, onClick: () => run("open_project_path") }])] : [];
     if (openIn.length > 0) items.push("separator", { label: t("common.openIn"), icon: SquareArrowOutUpRight, items: openIn });
   }
   // The tree takes focus to the row as a menu closes, while a menu opened from the keyboard is to

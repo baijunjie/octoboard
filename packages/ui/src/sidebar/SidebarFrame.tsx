@@ -24,6 +24,9 @@ function columnClipClass(easing: boolean): string {
   );
 }
 
+/** What `viewKey` calls the sidebar showing the devices of the Remote devices page in place of a console. */
+export const DEVICES_VIEW_KEY = "remote-devices";
+
 interface SidebarFrameProps {
   /** The id of the console the sidebar shows, which a switch of consoles fades the view in for. */
   shownConsoleId: string;
@@ -51,6 +54,8 @@ interface SidebarFrameProps {
   /** The docked-mode width and its setters; `App` owns it (`app/usePaneWidths.ts`) so it can also
    * be read from outside the sidebar. */
   sidebarWidth: PaneWidth;
+  /** The accessible name of the sidebar, "Sessions" unless it lists something else (the Remote devices page's devices). */
+  label?: string;
   /** What the sidebar shows: the console view, or a focus mode. */
   children: React.ReactNode;
 }
@@ -67,6 +72,7 @@ export function SidebarFrame({
   onPeekPress,
   onColumnPhase,
   sidebarWidth,
+  label,
   children,
 }: SidebarFrameProps): React.ReactElement {
   const t = useT();
@@ -202,7 +208,7 @@ export function SidebarFrame({
           onPointerDownCapture={peek ? onPeekPress : undefined}
           onTransitionEnd={dock.inset ? dock.onInsetTransitionEnd : undefined}
           style={{ width: sidebarWidth.width }}
-          aria-label={t("sidebar.sessions")}
+          aria-label={label ?? t("sidebar.sessions")}
         >
           <div key={focusId ?? "console"} ref={viewRef} className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[inherit]">
             {children}

@@ -15,7 +15,7 @@ type Document = Map<String, Value>;
 
 /// The steps that bring a document up one version: `STEPS[n - OLDEST_VERSION]` takes a document of
 /// version `n` to `n + 1`.
-const STEPS: [fn(&mut Document); 3] = [from_v1, from_v2, from_v3];
+const STEPS: [fn(&mut Document); 4] = [from_v1, from_v2, from_v3, from_v4];
 
 /// Upgrades `document`, of `version`, to the current version, which it then names. The caller has
 /// checked that `version` lies between [`OLDEST_VERSION`] and [`CONFIGURATION_VERSION`].
@@ -102,20 +102,22 @@ fn from_v2(document: &mut Document) {
     }
 }
 
-/// Version 3 to 4.
+/// Version 3 to 4. A document of 3 already carries the one language as `settings.interface_language`,
+/// which is where the current version reads it, so there is nothing to change.
+fn from_v3(_document: &mut Document) {}
+
+/// Version 4 to 5.
 ///
-/// - `settings.agent_language` is the agent language and `settings.interface_language` only the
-///   client's own. A build that held one language for the windows and the agents alike wrote it as
-///   `interface_language` alone, so a document that carries no `agent_language` gets that language
-///   copied into it; `interface_language` stays, for the client to apply as its own.
-fn from_v3(document: &mut Document) {
+/// - A build that split the language wrote the daemon's as `settings.agent_language` and the
+///   client's own as `settings.interface_language`. The current version has the one language,
+///   `interface_language`, so a document that carries an `agent_language` has it become the
+///   `interface_language` (the language the daemon held is the one the user is to see, as before
+///   the split), and the key goes.
+fn from_v4(document: &mut Document) {
     if let Some(Value::Object(settings)) = document.get_mut("settings") {
-        let carries_agent_language = settings
-            .get("agent_language")
-            .is_some_and(|language| !language.is_null());
-        if !carries_agent_language {
-            if let Some(language) = settings.get("interface_language").cloned() {
-                settings.insert("agent_language".to_string(), language);
+        if let Some(language) = settings.remove("agent_language") {
+            if !language.is_null() {
+                settings.insert("interface_language".to_string(), language);
             }
         }
     }

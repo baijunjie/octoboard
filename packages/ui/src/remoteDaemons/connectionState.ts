@@ -1,7 +1,7 @@
 import type { PlainMessageKey } from "../i18n/catalog";
 import type { RemoteDaemonStatus } from "../platform";
 
-/** Where a connected entry stands, as the rail's tiles and the connect page show it: its window is open, or the
+/** Where a connected entry stands, as the Remote devices page shows it: its window is open, or the
  * connection is held for the browser, or it is being brought back after it dropped. */
 export type ConnectionState = "connected" | "browser" | "reconnecting";
 

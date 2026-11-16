@@ -340,8 +340,10 @@ desktop app).
   its containing folder, and a folder is opened. On macOS a folder that macOS treats as a package, such as an `.app` or
   an `.xcodeproj`, which opening would launch, is selected in its containing folder instead, and so is a folder whose
   name has an extension when Spotlight cannot tell its type. **Default application** opens the live file with the
-  operating system's default application. Both act on the machine running the daemon, including when the client is a
-  browser on another machine. Files uses the project directory; a change, uncommitted or committed, uses the worktree
+  operating system's default application. It is left out on a file whose name says the system could launch it rather
+  than show it, and the daemon refuses to open such a file all the same, one with an executable bit included (see "File
+  paths" in `docs/product/terminal-links.md`). Both act on the machine running the daemon, including when the client is
+  a browser on another machine. Files uses the project directory; a change, uncommitted or committed, uses the worktree
   the chosen branch is checked out in and the project's directory within it. When the branch is checked out nowhere, a
   committed change uses the project's registered directory, which can itself be in a linked worktree. A folder row of
   the change list uses the same place as the changes under it. They act on what is on disk now, including for a staged
@@ -453,7 +455,7 @@ file viewer's header already shows that path (see "Notices and stand-ins" in `do
 | The entry is not a regular file — a FIFO, a socket, a device | it is not a regular file |
 | A symbolic link leads outside the project | it leads outside the project, so it is not shown |
 | Octoboard is not allowed to read it | it is not allowed to read it, with the system's reason |
-| The file is larger than 4 MiB | its size, and the most that can be opened |
+| The file is larger than 4 MiB | in the file viewer, that it is too large to display, with its size, as a stand-in rather than an error (see "What it shows" in `docs/product/file-viewer.md`) |
 | A file kept changing while it was being read, after two more tries | it kept changing, and is read again at the next refresh |
 | A folder kept changing while it was being listed, after two more tries | it kept changing, and Refresh tries again |
 | The project's directory itself cannot be read | the folder cannot be read, with the reason |

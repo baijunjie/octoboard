@@ -440,20 +440,6 @@ pub fn save(app: &AppHandle) {
     write_states(app, states);
 }
 
-/// Saves the state of `window` under `identity` from now on: a window on the connect page that
-/// now shows a daemon keeps its frame, and remembers it as that daemon's.
-pub fn retrack(window: &WebviewWindow, identity: String) {
-    if let Some((saved_under, _)) = window
-        .state::<TrackedWindows>()
-        .0
-        .lock()
-        .unwrap_or_else(|err| err.into_inner())
-        .get_mut(window.label())
-    {
-        *saved_under = Some(identity);
-    }
-}
-
 /// Writes the state of the window `window` out and stops following it; for a window that closes
 /// for good while the application runs on.
 pub fn forget(window: &WebviewWindow) {

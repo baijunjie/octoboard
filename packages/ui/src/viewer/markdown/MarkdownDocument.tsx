@@ -169,7 +169,7 @@ function DocumentExternalLink({ href, image, onOpen, children }: {
       {...focus}
       href={action.address}
       title={href}
-      target="_blank"
+      target={action.target}
       rel="noopener noreferrer"
       aria-description={t("common.opensExternally")}
       aria-disabled={action.busy || undefined}

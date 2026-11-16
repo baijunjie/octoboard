@@ -149,14 +149,13 @@ describe("withClientValuesEcho", () => {
     expect(withClientValuesEcho(asked({ keyboard_shortcuts: {} }), applied).settings_applied?.keyboard_shortcuts).toEqual({});
   });
 
-  it("hands back the interface language, appearance, Markdown style, terminal font size, background running and menu bar icon choices the same way, and not the agent language", () => {
+  it("hands back the appearance, Markdown style, terminal font size, background running and menu bar icon choices the same way", () => {
     const echoed = withClientValuesEcho(
-      asked({ appearance: "dark", markdown_style: "github", terminal_font_size: 18, run_in_background: false, show_menu_bar_icon: false, interface_language: "ja", agent_language: "de" }),
+      asked({ appearance: "dark", markdown_style: "github", terminal_font_size: 18, run_in_background: false, show_menu_bar_icon: false, interface_language: "ja" }),
       applied,
     ).settings_applied;
     expect(echoed).toEqual({
       ...documentSettings({ auto_pull_repositories: true }),
-      interface_language: "ja",
       appearance: "dark",
       markdown_style: "github",
       terminal_font_size: 18,
@@ -187,23 +186,23 @@ describe("withClientValuesEcho", () => {
   });
 });
 
-describe("an import's agent language", () => {
+describe("an import's language", () => {
   const importing = (settings_applied: DocumentSettings) => {
     const daemon = createFixtureDaemon({ configuration: { inspection: REVIEW, imported: { ...imported({ consoles: [] }), settings_applied } } });
     const request = daemon.request({ type: "import_configuration", document: { settings: {} }, apply_consoles: false, apply_settings: [...SETTINGS_SECTIONS] });
     return { daemon, request };
   };
 
-  it("is held by the daemon from what the result says it applied", async () => {
-    const { daemon, request } = importing(documentSettings({ agent_language: "ja" }));
+  it("is held by the daemon from what the result says it applied, as every window then follows it", async () => {
+    const { daemon, request } = importing(documentSettings({ interface_language: "ja" }));
     await request;
-    expect(daemon.store.getState().settings.agent_language).toBe("ja");
+    expect(daemon.store.getState().settings.interface_language).toBe("ja");
   });
 
-  it("leaves the agent language the daemon holds where the result applied none", async () => {
+  it("leaves the language the daemon holds where the result applied none", async () => {
     const { daemon, request } = importing(documentSettings({ auto_pull_repositories: true }));
     await request;
-    expect(daemon.store.getState().settings.agent_language).toBeNull();
+    expect(daemon.store.getState().settings.interface_language).toBeNull();
   });
 });
 

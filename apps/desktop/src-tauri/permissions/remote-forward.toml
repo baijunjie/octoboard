@@ -1,0 +1,9 @@
+# A custom permission for the app's own commands that forward the loopback ports of a remote daemon's machine
+# for a remote window; see `exit-lifecycle.toml` for why an app-defined command needs a file like this. Named
+# in the remote capability alone: the local daemon's window has no connection to forward over.
+"$schema" = "./schemas/schema.json"
+
+[[permission]]
+identifier = "allow-remote-forward"
+description = "Allows a remote window to have an address on its daemon machine's loopback forwarded to a port of this computer, to list the ports it forwards and to stop one."
+commands.allow = ["remote_link_address", "remote_forwards_list", "remote_forward_stop"]

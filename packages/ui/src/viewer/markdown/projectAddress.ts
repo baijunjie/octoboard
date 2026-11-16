@@ -5,11 +5,18 @@
  * `..` above the root back to the root and would accept a path that has left the project.
  */
 
+/** The Markdown parser percent-encodes every character outside its safe set in an address, brackets included, so an
+ * IPv6 literal host (`http://[::1]:3000/`) reaches the renderer as `http://%5B::1%5D:3000/`, which is no valid host.
+ * The brackets of the authority are put back; nothing else is touched. */
+function withBracketedHost(href: string): string {
+  return href.replace(/^([a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^/?#]*)/, (authority) => authority.replace(/%5B/gi, "[").replace(/%5D/gi, "]"));
+}
+
 /** An address the platform may open: absolute, and one a person or a mail client takes. */
 export function openableAddress(href: string | undefined): string | undefined {
   if (!href) return undefined;
   try {
-    const url = new URL(href.trim());
+    const url = new URL(withBracketedHost(href.trim()));
     return url.protocol === "http:" || url.protocol === "https:" || url.protocol === "mailto:" ? url.href : undefined;
   } catch {
     return undefined;

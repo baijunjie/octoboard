@@ -1,6 +1,6 @@
-import { createPersistedPreference } from "../preferences/persistedPreference";
+import { createPersistedPreference, storageKeyFor } from "../preferences/persistedPreference";
 import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
-import { format, type MessageArgs, type MessageKey } from "./catalog";
+import { format, translatorFor, type MessageArgs, type MessageKey, type Translate } from "./catalog";
 import { isLanguage, type Language, textDirection } from "./languages";
 import { matchLanguage } from "./matchLanguage";
 
@@ -14,19 +14,39 @@ function systemLanguages(): readonly string[] {
 }
 
 /**
- * The UI's language, the interface language: the client's own, never sent to a daemon, and kept in
- * this client's storage as an application preference, which every window of the desktop application
- * shares (a pick in one window reaches the others), whichever daemon each shows. With nothing kept
- * (the first launch, or cleared storage) it is picked from the system's preferred languages. Without
- * storage nothing is kept, so it is picked from the system again on every load. A daemon that holds
- * no agent language is given this one as its first (`useAgentLanguageSeed`).
+ * The UI's language. Once connected it is the one the window's daemon holds, which every client of
+ * that daemon shares (`useInterfaceLanguage`); what is kept here is only a cache of it, so that the
+ * start renders in that language before it has connected. The cache is kept per daemon, so a window
+ * of another daemon, which may hold another language, neither changes nor is changed by the others;
+ * a daemon's window with none of its own yet starts from the local one's. With no cache (the first
+ * launch, or cleared storage) it is picked from the system's preferred languages. Without storage
+ * nothing is kept, so it is picked from the system again on every load.
  */
 const language = createPersistedPreference<Language>(
   PREFERENCE_KEYS.language,
   (raw) => (isLanguage(raw) ? raw : matchLanguage(systemLanguages())),
   (value) => value,
+  { scope: "daemon", inherit: true },
 );
 language.persist();
+
+/**
+ * The language of the local daemon's windows, which the menu bar icon's menu is worded in whichever daemon a window
+ * shows. In the local window it is the window's own language; in a remote daemon's window, whose own language is kept
+ * under its daemon, it is the local cache under the bare key, which that window only reads and follows when a local
+ * window changes it.
+ */
+const localLanguage =
+  storageKeyFor(PREFERENCE_KEYS.language, "daemon") === PREFERENCE_KEYS.language
+    ? language
+    : createPersistedPreference<Language>(
+      PREFERENCE_KEYS.language,
+      (raw) => (isLanguage(raw) ? raw : matchLanguage(systemLanguages())),
+      (value) => value,
+    );
+
+/** The language of the local daemon's windows, re-rendering the caller when it changes (see `localLanguage`). */
+export const useLocalLanguage = localLanguage.useValue;
 
 function applyToDocument(): void {
   document.documentElement.lang = language.get();
@@ -37,6 +57,17 @@ applyToDocument();
 // Subscribed before anything else can be, so the document already carries the new language when
 // a later subscriber re-renders.
 language.subscribe(applyToDocument);
+
+/** Has a window with no daemon of its own (the tray flyout), which shows the local daemon's language, follow a
+ * change another window of the application makes to it. */
+export function followLocalLanguage(): void {
+  language.followStorage?.();
+}
+
+/** The message in the local daemon's windows' language, for what is worded in it whichever daemon the window shows. */
+export function localTranslator(language: Language): Translate {
+  return translatorFor(language);
+}
 
 /** The language the UI renders right now. */
 export function currentLanguage(): Language {

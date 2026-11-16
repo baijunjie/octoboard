@@ -127,3 +127,14 @@ libc = "0.2"
 # For `remote/credentials.rs`, which keeps each remote daemon's device key in the login keychain as a
 # generic password. The release line the TLS stack's platform verifier already resolves.
 security-framework = "3.7"
+# For `notifications/macos.rs`, which shows the notifications on macOS itself so that a click on one is reported:
+# `notify-rust`, which the notification plugin shows them through, waits for a click only on a notification
+# with buttons. The version the plugin already resolves through `notify-rust`, pinned like `objc2-app-kit`
+# above, and it has to stay the same one: the application it attributes notifications to and the delegate
+# it hears clicks through are set once for the process.
+mac-notification-sys = "=0.6.15"
+
+[dev-dependencies]
+# For the test that the shell plugin's `open` validation set in `tauri.conf.json` admits what the pages open,
+# compiled as the plugin compiles it. The release line the plugin already resolves.
+regex = "1"

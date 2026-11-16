@@ -44,8 +44,10 @@
         to one (the page then reaches `/ws/...` on its own origin; per CSP3, `'self'` covers the
         `ws:`/`wss:` scheme matching the page's `http:`/`https:`). Otherwise the daemon binds an
         OS-assigned loopback port per run, so its port can only be matched by a wildcard. `ipc:`
-        is the scheme Tauri's own `invoke` fetches on macOS, and without it every call falls back
-        to its slower `postMessage` path. `ws://localhost:*` is
+        is the address Tauri's own `invoke` fetches on macOS, and `http://ipc.localhost` the one
+        it fetches on Windows (WebView2 serves a custom protocol as `http://<name>.localhost`, which
+        the window's request filter admits by that exact host); without its own, every call on that
+        system falls back to the slower `postMessage` path. `ws://localhost:*` is
         the Vite dev server's hot-reload socket, which matches nothing in a packaged build — it is
         the one source here that exists only for development. Per CSP3 scheme-part matching, a
         `ws:` source expression also matches `http:`/`https:` URLs on the same host, so
@@ -65,7 +67,7 @@
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src data: http: https:; connect-src 'self' ipc: ws://127.0.0.1:* ws://localhost:*; frame-src 'none'; worker-src 'self'; form-action 'none'; base-uri 'none'"
+      content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src data: http: https:; connect-src 'self' ipc: http://ipc.localhost ws://127.0.0.1:* ws://localhost:*; frame-src 'none'; worker-src 'self'; form-action 'none'; base-uri 'none'"
     />
     <!--
       The page's address carries the daemon's key (`?key=`, see `src/daemon.ts`), which must not leave

@@ -5,11 +5,12 @@
 
 use tauri::AppHandle;
 
-use super::connect;
+use super::{connect, page};
+use crate::diagnostics::diagnostic;
 
-/// The id of the menu item that opens a new remote window on the connect page, in the macOS Remote
-/// menu and Dock menu; the jump list's task for it is `NEW_WINDOW_ARGUMENT`.
-pub const NEW_WINDOW_ITEM_ID: &str = "remote-window-new";
+/// The id of the menu item that shows the Remote devices page, in the macOS Remote menu and Dock
+/// menu; the jump list's task for it is `DEVICES_ARGUMENT`.
+pub const DEVICES_ITEM_ID: &str = "remote-devices-show";
 
 /// What the id of a menu item that opens a saved remote daemon's window starts with, its entry's id
 /// following.
@@ -21,7 +22,7 @@ pub const MAIN_WINDOW_ITEM_ID: &str = "main-window-show";
 /// What one of the remote daemons' menu items asks for.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MenuAction {
-    NewWindow,
+    Devices,
     Open(String),
     MainWindow,
 }
@@ -29,7 +30,7 @@ pub enum MenuAction {
 /// What the menu item `id` asks for, when it is one of the remote daemons' items.
 pub fn menu_action(id: &str) -> Option<MenuAction> {
     match id {
-        NEW_WINDOW_ITEM_ID => Some(MenuAction::NewWindow),
+        DEVICES_ITEM_ID => Some(MenuAction::Devices),
         MAIN_WINDOW_ITEM_ID => Some(MenuAction::MainWindow),
         _ => id
             .strip_prefix(OPEN_ITEM_PREFIX)
@@ -38,10 +39,10 @@ pub fn menu_action(id: &str) -> Option<MenuAction> {
     }
 }
 
-/// The command-line argument a launch asks for a new remote window with (a taskbar jump list's
-/// task); `OPEN_ARGUMENT` followed by an entry's id asks for that remote daemon's window, and
-/// `MAIN_WINDOW_ARGUMENT` for the local daemon's.
-pub const NEW_WINDOW_ARGUMENT: &str = "--remote-window-new";
+/// The command-line argument a launch asks for the Remote devices page with (a taskbar jump list's
+/// task); `OPEN_ARGUMENT` followed by an entry's id asks for that remote daemon's window,
+/// and `MAIN_WINDOW_ARGUMENT` for the local daemon's.
+pub const DEVICES_ARGUMENT: &str = "--remote-devices";
 pub const OPEN_ARGUMENT: &str = "--remote-window-open";
 pub const MAIN_WINDOW_ARGUMENT: &str = "--main-window-show";
 
@@ -57,7 +58,7 @@ where
     while let Some(arg) = args.next() {
         let arg = arg.as_ref();
         match arg {
-            NEW_WINDOW_ARGUMENT => return Some(MenuAction::NewWindow),
+            DEVICES_ARGUMENT => return Some(MenuAction::Devices),
             MAIN_WINDOW_ARGUMENT => return Some(MenuAction::MainWindow),
             OPEN_ARGUMENT => {
                 return args
@@ -84,7 +85,7 @@ where
 /// Does what `action` asks.
 pub fn run_menu_action(app: &AppHandle, action: MenuAction) {
     match action {
-        MenuAction::NewWindow => open_connect_page(app, None),
+        MenuAction::Devices => page::request_page(app),
         MenuAction::Open(entry) => open_entry(app, entry),
         MenuAction::MainWindow => show_main_window(app),
     }
@@ -110,20 +111,8 @@ pub fn menu_entries(app: &AppHandle) -> Vec<(String, String)> {
         .collect()
 }
 
-/// Opens a new remote window on the connect page; with `entry`, the page starts connecting it.
-pub fn open_connect_page(app: &AppHandle, entry: Option<String>) {
-    let label = crate::daemon_window::register(app, None);
-    let opening = app.clone();
-    let forgotten = label.clone();
-    let queued = app.run_on_main_thread(move || {
-        crate::window_factory::open_connect_window(&opening, label, entry)
-    });
-    if queued.is_err() {
-        crate::daemon_window::forget(app, &forgotten);
-    }
-}
-
-/// Shows and focuses the local daemon's window.
+/// Shows and focuses the local daemon's window (the main one), which also holds the Remote devices
+/// page.
 pub(super) fn show_main_window(app: &AppHandle) {
     let showing = app.clone();
     let _ = app.run_on_main_thread(move || crate::background::show_main_window(&showing));
@@ -131,15 +120,20 @@ pub(super) fn show_main_window(app: &AppHandle) {
 
 /// Opens, or brings forward, the window of the saved remote daemon `id`, as a menu's item for it
 /// asks: what already shows it is brought forward (or the browser opened at it again), and
-/// otherwise a connect page opens for it at once, which connects to it as it opens, showing its
-/// progress, and asks the owner only for what the connection needs (a password, a fingerprint to
-/// confirm), becoming the daemon's window once connected. One connection is made, not a quiet one
-/// first and the page's after it.
+/// otherwise the shell connects to it quietly, which opens its window once connected. Nothing is
+/// shown while it connects. An outcome that has to be shown, a question or a failure, is handed to
+/// the Remote devices page, in the main window, which comes forward for it.
 pub(super) fn open_entry(app: &AppHandle, id: String) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
-        if connect::show_existing_entry(&app, &id).is_none() {
-            open_connect_page(&app, Some(id));
+        match connect::connect(&app, connect::quiet_request(&id), None).await {
+            Ok(outcome) if page::needs_showing(&outcome) => page::hand_over(&app, id, outcome),
+            Ok(_) => {}
+            // The entry is no longer saved, or the list cannot be read.
+            Err(err) => {
+                diagnostic!("cannot open the remote daemon {id}: {err}");
+                page::request_page(&app);
+            }
         }
     });
 }
@@ -150,7 +144,7 @@ mod tests {
 
     #[test]
     fn the_remote_daemons_menu_items_are_told_apart_by_their_ids() {
-        assert_eq!(menu_action(NEW_WINDOW_ITEM_ID), Some(MenuAction::NewWindow));
+        assert_eq!(menu_action(DEVICES_ITEM_ID), Some(MenuAction::Devices));
         assert_eq!(
             menu_action(MAIN_WINDOW_ITEM_ID),
             Some(MenuAction::MainWindow)
@@ -165,10 +159,10 @@ mod tests {
     }
 
     #[test]
-    fn a_launch_s_arguments_ask_for_a_remote_window_or_the_main_one() {
+    fn a_launch_s_arguments_ask_for_the_remote_devices_page_or_the_main_window() {
         assert_eq!(
-            launch_action(["octoboard.exe", NEW_WINDOW_ARGUMENT]),
-            Some(MenuAction::NewWindow)
+            launch_action(["octoboard.exe", DEVICES_ARGUMENT]),
+            Some(MenuAction::Devices)
         );
         assert_eq!(
             launch_action(["octoboard.exe", MAIN_WINDOW_ARGUMENT]),
@@ -202,11 +196,11 @@ mod tests {
         );
         // What the first such argument of a launch asks for decides, whatever follows.
         assert_eq!(
-            launch_action(["x", "--other", NEW_WINDOW_ARGUMENT, MAIN_WINDOW_ARGUMENT]),
-            Some(MenuAction::NewWindow)
+            launch_action(["x", "--other", DEVICES_ARGUMENT, MAIN_WINDOW_ARGUMENT]),
+            Some(MenuAction::Devices)
         );
         assert_eq!(
-            launch_action(["x", MAIN_WINDOW_ARGUMENT, NEW_WINDOW_ARGUMENT]),
+            launch_action(["x", MAIN_WINDOW_ARGUMENT, DEVICES_ARGUMENT]),
             Some(MenuAction::MainWindow)
         );
     }

@@ -123,8 +123,8 @@ the launch environment described below:
   changes" in `docs/product/what-every-session-reads.md`). Where its project's effective git workflow settings have
   sessions develop on a branch or in a worktree of their own at the launch, it also carries the development rule (see
   "The development rule" in `docs/product/git-workflow-settings.md`), where **Ask questions as choices** is on at the
-  launch, the guidance on asking the user after it (see "The guidance on asking the user" below), and where the agent
-  language is not English, the guidance on the user's language after that (see "The guidance on the user's
+  launch, the guidance on asking the user after it (see "The guidance on asking the user" below), and where the language
+  the daemon holds is not English, the guidance on the user's language after that (see "The guidance on the user's
   language" below). Every project session's text then says that everything else is the ordinary work of the project,
   under its own instructions, conventions and configuration. Every role description, for console and project sessions
   alike, ends with a separated section on the scope of host instructions: they govern the assistant's behavior without
@@ -210,8 +210,8 @@ separate one on work that touches no project, which it carries out itself. The f
 orchestration and settings tools, and, when **Ask questions as choices** is on as the file is written, the guidance on
 asking the user (see "The guidance on asking the user" below) after the rest of the built-in part, with one sentence
 more: a decision among a few options goes through that question tool rather than a page pushed with `show_page`, which
-is for a choice that needs a page — a rich comparison, many items, a form. When the agent language is not English as
-the file is written, the guidance on the user's language (see "The guidance on the user's language" below)
+is for a choice that needs a page — a rich comparison, many items, a form. When the language the daemon holds is not
+English as the file is written, the guidance on the user's language (see "The guidance on the user's language" below)
 follows, as the built-in part's last section. When the console has console session instructions of the user's (see
 "Console session instructions" in `docs/product/consoles.md`), they are the file's last section, held between a
 `<user_instructions>` and a `</user_instructions>` tag under a heading of the file's own. That heading's paragraph says
@@ -234,7 +234,7 @@ Edits made to the file by hand therefore do not survive the next write. None of 
 console working directory: a console session launch into one is refused instead.
 
 An edit to the console's console session instructions reaches every agent's console sessions begun after it, and so does
-a change to **Ask questions as choices** or to the agent language, neither of which writes a file of its own:
+a change to **Ask questions as choices** or to the language the daemon holds, neither of which writes a file of its own:
 each is read at the next write. A Claude Code or Codex console session resumed after it reads it too (on Codex 0.142.5,
 only after a compaction), while a Grok Build console session never does within its life, resumed or not: only a new one
 does. Codex reads at most 32 KiB of a project's instruction files by default (its own `project_doc_max_bytes` setting),
@@ -265,10 +265,10 @@ a change reaches a console session is in "The console session's instruction file
 ### The guidance on the user's language
 
 A section headed "The user's language", in a project session's role description and in the console session's instruction
-file, while the daemon holds an agent language that is not English, in any region (see "The agent language" in
-`docs/product/language.md`). Nothing is added while the daemon holds none, or for English: sessions then follow the
-language the user writes in. The section names the language in English followed by its tag, such as "Simplified
-Chinese (zh-Hans)" or "Portuguese (pt)", says the user wants agents to talk to them in it, and tells the
+file, while the daemon holds a language that is not English, in any region (see "The language the daemon holds" in
+`docs/product/language.md`). Nothing is added while the daemon holds no language, or for English: sessions then follow
+the language the user writes in. The section names the language in English followed by its tag, such as "Simplified
+Chinese (zh-Hans)" or "Portuguese (pt)", says the user set Octoboard's interface to it, and tells the
 session:
 
 - to talk to the user in it: its replies, its questions, the reports and pages meant for the user, and the titles it

@@ -91,8 +91,9 @@ application buttons and the Keyboard shortcuts section's Cancel and Reset button
 - the rail's buttons — each console's avatar, whose tooltip lists the same session status counts as its accessible name
   (see "The console switcher" in `docs/product/console-switcher.md`), New
   console, the waiting count, whose tooltip says how many sessions are waiting and that pressing it goes to the next
-  one, Turn on notifications and Settings (the rail's Account usage and Processes buttons have none, as said below this
-  list);
+  one, Turn on notifications, Settings, and the main window's Remote devices button, whose tooltip adds how many remote
+  daemons are connected while any is (see "Opening and leaving the page" in `docs/product/remote-devices-page.md`) (the
+  rail's Account usage, Processes and Forwarded ports buttons have none, as said below this list);
 - the ⋮ button that opens an action menu — a sidebar row's, the console's in the sidebar's header, the project's in
   focus mode, a file or folder's in the Files mode's tree or a file's in the Git mode's change list (see "A row's
   actions" in `docs/product/project-pane.md`), and, in Settings' Agent accounts section, an account's and each agent
@@ -133,10 +134,14 @@ application buttons and the Keyboard shortcuts section's Cancel and Reset button
   viewer's Previous file and Next file buttons (see `docs/product/file-viewer.md`);
 - the copy buttons — the file viewer's Copy path, the Git mode's Copy worktree path on the change list's line naming
   the worktree, and a diagnostic block's Copy — whose tooltip, and the name announced with it, turns to the copied
-  wording after a press (see "Copy buttons" below);
+  wording after a press (see "Copy buttons" below), and the Remote devices page's Paste button, whose tooltip and
+  name turn from "Paste" to "Pasted" the same way (see "Pasting connection details" in
+  `docs/product/remote-devices-page.md`);
 - the file viewer's File manager and Default application buttons, whose tooltip is the short "File manager" or "Default
   application" that names the action in a project pane row's menu, while the name announced for each says what pressing
-  it does, "Open in file manager" or "Open in default application" (see "The header" in `docs/product/file-viewer.md`);
+  it does, "Open in file manager" or "Open in default application" (see "The header" in `docs/product/file-viewer.md`),
+  and its Download and open button in a remote window, whose tooltip and announced name are both "Download and open"
+  (see "Download and open" in `docs/product/file-viewer.md`);
 - the file viewer's four view controls, the Files mode's two — its file-name filter toggle and the include-ignored
   toggle in its filter field — and the Git mode's three view toggles — the one that shows and hides the change filter
   field, Group by folder and Group by commit — whose tooltip is the name they announce and alternates with their state
@@ -166,7 +171,9 @@ mouse on it floats its panel in instead (see "Opening the panel" in `docs/produc
 accessible name, which states the selected session's quota when the button shows one, is described in "The selected
 session's quota indicator" in `docs/product/account-quotas.md`. The rail's **Processes** button has no tooltip either:
 resting the mouse on it floats its popover in, and its accessible name is described in "The button" in
-`docs/product/processes-on-the-rail.md`.
+`docs/product/processes-on-the-rail.md`. Nor does a remote window's **Forwarded ports** button (see "Forwarded ports
+on the rail" in `docs/product/links-and-files-in-a-remote-window.md`): resting the mouse on it opens its popover, and
+its accessible name says how many ports are forwarded.
 
 The **expand arrow** before a folder's row in the Files mode's tree and in the Git mode's change list, and before a
 commit row there, is an exception too: it has **no tooltip** and no hover fill of its own, being a bare arrow glyph.

@@ -1211,6 +1211,57 @@ fn host_path_actions_validate_wire_paths_and_recheck_worktree_scopes() {
     );
 }
 
+#[test]
+fn opening_a_project_path_refuses_what_the_system_could_launch() {
+    use super::scope::resolve_project_path_to_open;
+    let fixture = Fixture::new();
+    let directory = ScratchDir::new("host-path-open-launchable");
+    std::fs::write(directory.join("notes.txt"), "x").unwrap();
+    std::fs::write(directory.join("run.sh"), "x").unwrap();
+    std::fs::create_dir_all(directory.join("Thing.app")).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::write(directory.join("tool"), "x").unwrap();
+        std::fs::set_permissions(
+            directory.join("tool"),
+            std::fs::Permissions::from_mode(0o755),
+        )
+        .unwrap();
+    }
+    let project = fixture.project("open-launchable", &directory);
+    let open =
+        |path: &str| resolve_project_path_to_open(&fixture.state, &project, None, path, &git_env);
+    assert!(open("notes.txt").is_ok());
+    let refused = [
+        "run.sh",
+        "Thing.app",
+        #[cfg(unix)]
+        "tool",
+    ];
+    for path in refused {
+        let error = open(path).unwrap_err();
+        let coded = error.downcast_ref::<CodedError>().unwrap();
+        assert_eq!(coded.code, error_code::PATH_LINK_REFUSED, "{path}");
+        assert_eq!(coded.params["cause"], "launchable", "{path}");
+        assert_eq!(coded.params["path"], path);
+    }
+    // What is opened is the target that was checked, never the link's own entry, which could be
+    // pointed elsewhere between the check and the open.
+    #[cfg(unix)]
+    {
+        symlink("notes.txt", directory.join("link")).unwrap();
+        assert_eq!(
+            open("link").unwrap(),
+            crate::hostfs::canonical(directory.join("notes.txt")).unwrap()
+        );
+        symlink("run.sh", directory.join("bad-link")).unwrap();
+        assert!(open("bad-link").is_err());
+    }
+    // Showing it launches nothing, so revealing takes it all the same.
+    assert!(resolve_project_path(&fixture.state, &project, None, "run.sh", &git_env).is_ok());
+}
+
 /// A repository whose files exercise every way Git ignores one: a root pattern, a nested
 /// `.gitignore`, a whole ignored folder, and a tracked file that still matches a pattern.
 fn ignoring_repo(label: &str) -> ScratchDir {
@@ -1866,4 +1917,369 @@ fn a_pattern_named_folder_holding_a_tracked_file_is_not_ignored() {
         ["[slug]"],
         "[id] holds a tracked file, [slug] does not"
     );
+}
+
+/// What `read_file_range` answers: the part's bytes (decoded), the file's size and version, and the daemon's word that
+/// the system could launch it.
+#[derive(Debug)]
+struct Part {
+    offset: u64,
+    bytes: Vec<u8>,
+    size: u64,
+    version: String,
+    launchable: bool,
+}
+
+fn range_of(
+    fixture: &Fixture,
+    file: RangeFile,
+    offset: u64,
+    length: u64,
+    version: Option<&str>,
+) -> anyhow::Result<Part> {
+    match fixture.serve(BrowseBody::ReadFileRange {
+        file,
+        offset,
+        length,
+        version: version.map(str::to_string),
+    })? {
+        Event::FileRange {
+            offset,
+            size,
+            version,
+            data,
+            launchable,
+            ..
+        } => Ok(Part {
+            offset,
+            bytes: base64::engine::general_purpose::STANDARD
+                .decode(data)
+                .unwrap(),
+            size,
+            version,
+            launchable,
+        }),
+        other => panic!("not a file range: {other:?}"),
+    }
+}
+
+fn project_file(project: &str, path: &str) -> RangeFile {
+    RangeFile::Project {
+        project: project.to_string(),
+        worktree: None,
+        path: path.to_string(),
+    }
+}
+
+fn path_link_file(project: Option<&str>, path: &str) -> RangeFile {
+    RangeFile::PathLink {
+        project: project.map(str::to_string),
+        path: path.to_string(),
+    }
+}
+
+fn refusal_code(error: &anyhow::Error) -> crate::protocol::Code {
+    error.downcast_ref::<CodedError>().unwrap().code
+}
+
+#[test]
+fn the_parts_of_a_file_put_together_are_the_file_and_each_part_echoes_where_it_begins() {
+    let fixture = Fixture::new();
+    let directory = ScratchDir::new("browse-range-parts");
+    let content: Vec<u8> = (0..=250u8).cycle().take(1000).collect();
+    std::fs::write(directory.join("data.bin"), &content).unwrap();
+    let project = fixture.project("range-project", &directory);
+    for file in [
+        project_file(&project, "data.bin"),
+        path_link_file(
+            Some(&project),
+            canonical_path(&directory.join("data.bin"))
+                .to_str()
+                .unwrap(),
+        ),
+    ] {
+        let first = range_of(&fixture, file.clone(), 0, 300, None).unwrap();
+        assert_eq!((first.offset, first.size), (0, 1000));
+        let mut put_together = first.bytes.clone();
+        while (put_together.len() as u64) < first.size {
+            let at = put_together.len() as u64;
+            let part = range_of(&fixture, file.clone(), at, 300, Some(&first.version)).unwrap();
+            assert_eq!((part.offset, part.size), (at, 1000));
+            assert_eq!(part.version, first.version);
+            assert!(part.bytes.len() <= 300);
+            assert!(!part.bytes.is_empty());
+            put_together.extend(part.bytes);
+        }
+        assert_eq!(put_together, content);
+    }
+}
+
+fn canonical_path(path: &Path) -> std::path::PathBuf {
+    crate::hostfs::canonical(path).unwrap()
+}
+
+#[test]
+fn a_part_at_or_past_the_end_is_empty_and_still_reports_the_size() {
+    let fixture = Fixture::new();
+    let directory = ScratchDir::new("browse-range-end");
+    std::fs::write(directory.join("a.txt"), b"0123456789").unwrap();
+    let project = fixture.project("range-end-project", &directory);
+    let file = project_file(&project, "a.txt");
+    for offset in [10, 11, u64::MAX] {
+        let part = range_of(&fixture, file.clone(), offset, 4, None).unwrap();
+        assert!(part.bytes.is_empty(), "{offset}");
+        assert_eq!(part.size, 10);
+    }
+    // The last part is cut at the end of the file, not padded.
+    let last = range_of(&fixture, file, 8, 100, None).unwrap();
+    assert_eq!(last.bytes, b"89");
+    // An empty file has one empty part.
+    std::fs::write(directory.join("empty"), b"").unwrap();
+    let empty = range_of(&fixture, project_file(&project, "empty"), 0, 100, None).unwrap();
+    assert_eq!((empty.bytes.len(), empty.size), (0, 0));
+}
+
+#[test]
+fn a_part_is_cut_at_a_mebibyte_however_much_is_asked() {
+    let fixture = Fixture::new();
+    let directory = ScratchDir::new("browse-range-cap");
+    let mebibyte = 1024 * 1024;
+    std::fs::write(directory.join("big.bin"), vec![7u8; mebibyte + 10]).unwrap();
+    let project = fixture.project("range-cap-project", &directory);
+    for length in [mebibyte as u64 + 5, u64::MAX] {
+        let part = range_of(&fixture, project_file(&project, "big.bin"), 0, length, None).unwrap();
+        assert_eq!(part.bytes.len(), mebibyte, "{length}");
+        assert_eq!(part.size, mebibyte as u64 + 10);
+    }
+    let rest = range_of(
+        &fixture,
+        project_file(&project, "big.bin"),
+        mebibyte as u64,
+        u64::MAX,
+        None,
+    )
+    .unwrap();
+    assert_eq!(rest.bytes.len(), 10);
+}
+
+#[test]
+fn a_file_that_changed_since_the_first_part_is_source_changed() {
+    let fixture = Fixture::new();
+    let directory = ScratchDir::new("browse-range-changed");
+    std::fs::write(directory.join("a.txt"), b"0123456789").unwrap();
+    let project = fixture.project("range-changed-project", &directory);
+    for file in [
+        project_file(&project, "a.txt"),
+        path_link_file(
+            Some(&project),
+            canonical_path(&directory.join("a.txt")).to_str().unwrap(),
+        ),
+    ] {
+        let first = range_of(&fixture, file.clone(), 0, 4, None).unwrap();
+        // The same version is accepted again.
+        range_of(&fixture, file.clone(), 4, 4, Some(&first.version)).unwrap();
+        // Rewritten with other content and length between two parts.
+        std::fs::write(directory.join("a.txt"), b"0123456789abcdef").unwrap();
+        let error = range_of(&fixture, file.clone(), 4, 4, Some(&first.version)).unwrap_err();
+        assert_eq!(refusal_code(&error), error_code::SOURCE_CHANGED);
+        // Without a version nothing is pinned: the part is of what the file is now.
+        let now = range_of(&fixture, file, 0, 100, None).unwrap();
+        assert_eq!(now.bytes, b"0123456789abcdef");
+        assert_ne!(now.version, first.version);
+        std::fs::write(directory.join("a.txt"), b"0123456789").unwrap();
+    }
+}
+
+#[test]
+fn a_part_of_what_is_not_a_regular_file_inside_the_scope_is_refused() {
+    let fixture = Fixture::new();
+    let directory = ScratchDir::new("browse-range-refused");
+    std::fs::create_dir(directory.join("folder")).unwrap();
+    std::fs::write(directory.join("a.txt"), b"x").unwrap();
+    let outside = ScratchDir::new("browse-range-refused-outside");
+    std::fs::write(outside.join("secret.txt"), b"x").unwrap();
+    symlink(outside.join("secret.txt"), directory.join("leaving")).unwrap();
+    symlink(directory.join("a.txt"), directory.join("inside")).unwrap();
+    #[cfg(unix)]
+    assert!(std::process::Command::new("mkfifo")
+        .arg(directory.join("pipe"))
+        .status()
+        .unwrap()
+        .success());
+    let project = fixture.project("range-refused-project", &directory);
+    let code = |file: RangeFile| refusal_code(&range_of(&fixture, file, 0, 10, None).unwrap_err());
+    assert_eq!(
+        code(project_file(&project, "folder")),
+        error_code::UNSUPPORTED_FILE_TYPE
+    );
+    #[cfg(unix)]
+    assert_eq!(
+        code(project_file(&project, "pipe")),
+        error_code::UNSUPPORTED_FILE_TYPE
+    );
+    // A link that leads outside the project is outside its scope; the same through a path link.
+    assert_eq!(
+        code(project_file(&project, "leaving")),
+        error_code::OUTSIDE_SCOPE
+    );
+    assert_eq!(
+        code(project_file(&project, "../x")),
+        error_code::INVALID_PATH
+    );
+    assert_eq!(
+        code(project_file(&project, "gone.txt")),
+        error_code::FILE_NOT_FOUND
+    );
+    assert_eq!(
+        code(path_link_file(
+            Some(&project),
+            canonical_path(&directory.join("folder")).to_str().unwrap()
+        )),
+        error_code::UNSUPPORTED_FILE_TYPE
+    );
+    assert_eq!(
+        code(path_link_file(Some(&project), "leaving")),
+        error_code::OUTSIDE_SCOPE
+    );
+    assert_eq!(
+        code(path_link_file(Some(&project), "/etc/hosts")),
+        error_code::OUTSIDE_SCOPE
+    );
+    assert_eq!(
+        code(path_link_file(Some(&project), "gone.txt")),
+        error_code::FILE_NOT_FOUND
+    );
+    assert_eq!(
+        code(project_file("unknown", "a.txt")),
+        error_code::UNKNOWN_PROJECT
+    );
+    assert_eq!(
+        code(path_link_file(Some("unknown"), "a.txt")),
+        error_code::UNKNOWN_PROJECT
+    );
+}
+
+#[test]
+fn a_part_says_only_whether_the_file_has_an_executable_bit() {
+    let fixture = Fixture::new();
+    let directory = ScratchDir::new("browse-range-launchable");
+    std::fs::write(directory.join("notes.txt"), b"x").unwrap();
+    std::fs::write(directory.join("run.sh"), b"x").unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::write(directory.join("tool"), b"x").unwrap();
+        std::fs::set_permissions(
+            directory.join("tool"),
+            std::fs::Permissions::from_mode(0o755),
+        )
+        .unwrap();
+    }
+    let project = fixture.project("range-launchable-project", &directory);
+    let launchable = |file: RangeFile| range_of(&fixture, file, 0, 10, None).unwrap().launchable;
+    assert!(!launchable(project_file(&project, "notes.txt")));
+    // What a name says is for the client to judge, by the system that opens the copy.
+    assert!(!launchable(project_file(&project, "run.sh")));
+    assert!(!launchable(path_link_file(Some(&project), "notes.txt")));
+    assert!(!launchable(path_link_file(Some(&project), "run.sh")));
+    // An executable with no extension counts, whichever way it is reached.
+    #[cfg(unix)]
+    {
+        assert!(launchable(project_file(&project, "tool")));
+        assert!(launchable(path_link_file(Some(&project), "tool")));
+    }
+    // The flag is left off the wire unless it is true.
+    let wire = serde_json::to_value(
+        fixture
+            .serve(BrowseBody::ReadFileRange {
+                file: project_file(&project, "notes.txt"),
+                offset: 0,
+                length: 1,
+                version: None,
+            })
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(wire["type"], "file_range");
+    assert!(wire.get("launchable").is_none_or(|flag| flag.is_null()));
+}
+
+#[test]
+fn a_range_request_parses_with_either_file_and_is_a_browse_request() {
+    let project: BrowseRequest = serde_json::from_value(serde_json::json!({
+        "id": "r1", "slot": "download", "type": "read_file_range",
+        "file": {"kind": "project", "project": "p", "worktree": "w", "path": "a.bin"},
+        "offset": 4, "length": 1048576, "version": "v1"
+    }))
+    .unwrap();
+    assert_eq!(project.slot.as_deref(), Some("download"));
+    let BrowseBody::ReadFileRange {
+        file,
+        offset,
+        length,
+        version,
+    } = project.body
+    else {
+        panic!("not a range request");
+    };
+    assert_eq!(
+        file,
+        RangeFile::Project {
+            project: "p".into(),
+            worktree: Some("w".into()),
+            path: "a.bin".into()
+        }
+    );
+    assert_eq!(
+        (offset, length, version.as_deref()),
+        (4, 1048576, Some("v1"))
+    );
+    let link: BrowseRequest = serde_json::from_value(serde_json::json!({
+        "type": "read_file_range", "file": {"kind": "path_link", "path": "/tmp/x"},
+        "offset": 0, "length": 1
+    }))
+    .unwrap();
+    let BrowseBody::ReadFileRange { file, version, .. } = link.body else {
+        panic!("not a range request");
+    };
+    assert_eq!(
+        file,
+        RangeFile::PathLink {
+            project: None,
+            path: "/tmp/x".into()
+        }
+    );
+    assert_eq!(version, None);
+    let read: BrowseRequest = serde_json::from_value(serde_json::json!({
+        "type": "read_path_link", "path": "/tmp/x"
+    }))
+    .unwrap();
+    assert!(matches!(
+        read.body,
+        BrowseBody::ReadPathLink { project: None, ref path } if path == "/tmp/x"
+    ));
+    for kind in ["read_file_range", "read_path_link"] {
+        assert!(
+            crate::protocol::BROWSE_REQUEST_TYPES.contains(&kind),
+            "{kind}"
+        );
+    }
+}
+
+#[test]
+fn a_range_reserves_what_a_part_takes_and_less_than_a_whole_read() {
+    let range = budget::reservation_for(&BrowseBody::ReadFileRange {
+        file: project_file("p", "a"),
+        offset: 0,
+        length: 1,
+        version: None,
+    });
+    let whole = budget::reservation_for(&BrowseBody::ReadPathLink {
+        project: None,
+        path: "a".into(),
+    });
+    // A part is held as read, as base64 and as serialized: three times its largest size at least.
+    assert!(range >= 3 * budget::MAX_RANGE_BYTES);
+    assert!(range < whole);
+    assert_eq!(budget::MAX_RANGE_BYTES, 1024 * 1024);
 }

@@ -1235,24 +1235,3 @@ fn a_remote_access_request_without_a_usable_value_is_no_request() {
     }
     assert!(read(r#"{"type":"set_remote_access_port"}"#).is_err());
 }
-
-/// The settings change names the agent language; the key an earlier build used for the one language
-/// of the windows and the agents is no longer a setting of the request.
-#[test]
-fn the_settings_request_carries_the_agent_language() {
-    let request =
-        serde_json::from_str::<Request>(r#"{"type":"update_settings","agent_language":"ja"}"#)
-            .unwrap();
-    assert!(matches!(
-        request.body,
-        RequestBody::UpdateSettings { agent_language: Some(ref tag), .. } if tag == "ja"
-    ));
-    let absent = serde_json::from_str::<Request>(r#"{"type":"update_settings"}"#).unwrap();
-    assert!(matches!(
-        absent.body,
-        RequestBody::UpdateSettings {
-            agent_language: None,
-            ..
-        }
-    ));
-}

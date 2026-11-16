@@ -1,0 +1,19 @@
+{
+  "anyComponent": [
+    "app", "appex", "bundle", "framework", "plugin", "kext", "xpc", "prefpane", "saver", "workflow",
+    "action", "command", "tool", "terminal", "scpt", "scptd", "pkg", "mpkg", "dmg", "sh", "bash", "zsh",
+    "desktop", "webloc", "inetloc", "jar", "term", "fileloc", "afploc", "ftploc", "mailloc", "newsloc",
+    "atloc", "nslloc", "url", "csh", "tcsh", "ksh", "fish", "mobileconfig", "shortcut"
+  ],
+  "finalFile": [
+    "py", "pyw", "pyc", "pyo", "pyz", "pl", "rb", "php", "ps1", "vbs", "vbe", "wsf", "jnlp", "exe", "msi",
+    "bat", "cmd", "com", "scr", "appimage", "run", "bin", "deb", "rpm", "flatpak", "flatpakref",
+    "flatpakrepo", "snap", "jse", "wsh", "hta", "reg", "msp", "cpl", "pif"
+  ],
+  "windowsFinalFile": [
+    "lnk", "appref-ms", "application", "settingcontent-ms", "library-ms", "search-ms", "scf", "appx", "msix",
+    "appinstaller", "chm", "wsc", "sct", "inf", "diagcab", "iso", "img", "vhd", "vhdx",
+    "js", "msc", "ws", "vb", "xll", "website", "gadget", "msh", "msh1", "msh2", "mshxml", "msh1xml", "msh2xml",
+    "ps1xml", "ps2xml", "psc1", "psc2", "hlp", "mst", "shb", "shs", "ade", "adp", "mde", "ins", "isp", "vsmacros"
+  ]
+}

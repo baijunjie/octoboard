@@ -1,5 +1,5 @@
-//! Building the daemons' windows: the main window, a remote daemon's window and a window on the
-//! connect page, each on `index.html` with the query that tells its page which daemon it shows and
+//! Building the application's windows: the main window and a remote daemon's window, each on
+//! `index.html` with the query that tells its page which daemon it shows (the main one's none) and
 //! what it needs of the host (`window_query`), created hidden where its frame was last left
 //! (`window_state`) and shown by its page once painted, or by the reveal safety net. Which window
 //! shows which daemon is `daemon_window`'s.
@@ -7,6 +7,7 @@
 use std::thread;
 use std::time::Duration;
 
+use tauri::webview::PageLoadEvent;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 use crate::daemon_window::{self, DaemonWindows, RemoteDaemon};
@@ -29,10 +30,6 @@ use crate::{
 /// without being so long that a genuinely stuck launch reads as a hung application rather than a
 /// slow one. Not armed for the main window after a launch at login.
 const REVEAL_SAFETY_NET: Duration = Duration::from_secs(4);
-
-/// What the frame of a window on the connect page is remembered under, apart from every daemon's
-/// and the main window's.
-const CONNECT_PAGE_IDENTITY: &str = "connect-page";
 
 /// Opens the main window for the daemon as it is when the window is built. On the main thread.
 pub fn open_main_window(
@@ -94,63 +91,8 @@ pub fn open_remote_window(app: &AppHandle, label: String, remote: RemoteDaemon) 
     });
 }
 
-/// Opens a remote window, labelled `label` (`daemon_window::register` took it for no daemon yet),
-/// on the connect page the application provides, where the owner chooses, adds and connects to a
-/// remote daemon; with `entry`, the page starts connecting that one at once. On the main thread.
-pub fn open_connect_window(app: &AppHandle, label: String, entry: Option<String>) {
-    let handle = app.clone();
-    page_isolation::prepare(move |configuration| {
-        let page = match &entry {
-            Some(id) => format!("connect=1&entry={}", percent_encode_query_value(id)),
-            None => "connect=1".to_owned(),
-        };
-        let query = window_query(&handle, &page, &host_facts::remote_window_json());
-        match build_window(
-            &handle,
-            &label,
-            &query,
-            menu::APP_NAME,
-            Some(CONNECT_PAGE_IDENTITY.to_owned()),
-            configuration,
-        ) {
-            Ok(window) => arm_reveal_safety_net(&handle, window),
-            Err(err) => {
-                diagnostic!("cannot open a window on the connect page: {err}");
-                daemon_window::forget(&handle, &label);
-            }
-        }
-    });
-}
-
-/// Turns the window labelled `label`, on the connect page, into the window of `remote`, which it
-/// has just connected to: it is pointed at the daemon, takes its title, and remembers its frame as
-/// that daemon's from now on; the menu bar icon gives it a tab once `remote` reports the
-/// connection. Where the page has closed while it connected, the connection made for it is let go.
-/// On the main thread.
-pub fn show_remote_in(app: &AppHandle, label: &str, remote: RemoteDaemon) {
-    let Some(window) = app.get_webview_window(label) else {
-        window_lost(app, label);
-        return;
-    };
-    daemon_window::show_in(app, label, remote.identity.clone());
-    window_state::retrack(&window, remote.identity.clone());
-    let query = window_query(
-        app,
-        &remote_daemon_query(&remote),
-        &host_facts::remote_window_json(),
-    );
-    let navigated = window.url().and_then(|mut url| {
-        url.set_query(Some(&query));
-        window.navigate(url)
-    });
-    if let Err(err) = navigated {
-        diagnostic!("cannot point the window at {}: {err}", remote.name);
-    }
-    let _ = window.set_title(&daemon_window::remote_title(menu::APP_NAME, &remote));
-}
-
 /// Lets go of what a remote window labelled `label` that is gone, or never came to be, leaves
-/// behind: which daemon it was to show, and the connection made for it.
+/// behind: its label, and the connection made for it.
 pub fn window_lost(app: &AppHandle, label: &str) {
     if let_go(
         &app.state::<DaemonWindows>(),
@@ -237,6 +179,18 @@ fn build_window(
     };
     let builder = page_isolation::apply(builder, configuration);
     let builder = chrome::decorate(builder);
+    // Every load of the main window's page is counted, whoever asks for it (the shell pointing it
+    // at a restarted daemon, the page reloading itself): what a connection had under way from the
+    // page is gone with the page.
+    let builder = if label == MAIN_WINDOW_LABEL {
+        builder.on_page_load(|webview, payload| {
+            if payload.event() == PageLoadEvent::Started {
+                remote::page::page_load_started(webview.app_handle());
+            }
+        })
+    } else {
+        builder
+    };
 
     let window = builder.build()?;
     page_isolation::install(&window);
@@ -290,19 +244,17 @@ mod tests {
     }
 
     #[test]
-    fn a_connect_page_gone_before_its_daemon_could_be_shown_leaves_nothing_behind() {
+    fn a_remote_window_lost_before_it_was_built_leaves_nothing_behind() {
         let windows = DaemonWindows::default();
         let remote = RemoteState::default();
-        let label = windows.register(None);
+        let label = windows.register();
         let stopped = remote.hold_for_test(&label);
         assert!(let_go(&windows, &remote, &label));
-        // The connection is ended, its port let go, and the label no longer names a window.
+        // The connection is ended and its port let go.
         assert!(*stopped.borrow());
         assert!(!remote.end(&label));
-        assert!(!windows.shows_connect_page(&label));
         // A window lost before any connection was made for it leaves nothing either.
-        let other = windows.register(None);
+        let other = windows.register();
         assert!(!let_go(&windows, &remote, &other));
-        assert!(!windows.shows_connect_page(&other));
     }
 }

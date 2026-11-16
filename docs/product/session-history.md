@@ -29,11 +29,13 @@ record dated it, the date and time, written for the app's language:
 
 - **You** — a message the user typed or pasted. A slash command the user invoked reads as typed, `/name args`, not as
   what it expanded to. A paste reads as its text, without the wrapper the agent records around it.
-- **Agent** — the agent's final reply to a turn, always shown. A turn the agent did not answer has none. A reply
-  is rendered as Markdown, its headings ranking below the history's own title; a web address in it opens in the
-  user's own browser. Safe HTML formatting and remote images follow the cleaning, address rules and per-document
-  budgets in `docs/product/markdown-documents.md`; each reply has its own budget. Replies have no project file context,
-  so relative images stay their alt text and relative file links stay text. Links have no external-link icon.
+- **Agent** — the agent's final reply to a turn, always shown. A turn the agent did not answer has none. A reply is
+  rendered as Markdown, its headings ranking below the history's own title; a web address in it opens in the user's own
+  browser (in a remote window, one on the remote machine's own loopback through a forwarded port; see "Loopback
+  addresses of the remote machine" in `docs/product/links-and-files-in-a-remote-window.md`). Safe HTML formatting and
+  remote images follow the cleaning, address rules and per-document budgets in `docs/product/markdown-documents.md`;
+  each reply has its own budget. Replies have no project file context, so relative images stay their alt text and
+  relative file links stay text. Links have no external-link icon.
 
 User messages and agent replies share rounded message surfaces without shadows, distinct from the page. User messages
 have a soft accent-coloured background; agent replies have a neutral gray background. Both follow the app's light or dark

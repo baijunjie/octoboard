@@ -823,21 +823,20 @@ const fileOf = (inspection: Omit<Inspection, "type">, held?: Record<string, unkn
   );
 };
 
-/** The document of those, beside the keyboard shortcuts of `SHORTCUTS`, with an interface language other than the one
- * the window shows and an agent language other than the one the daemon holds: the fixture daemon seeds that with the
- * language the window shows, as the app asks it to when it holds none. */
-const CLIENT_FILE = documentWith({ ...SHORTCUTS, ...CLIENT_VALUES, interface_language: "ja", agent_language: "de" }, SETTINGS_REVIEW.settings!);
+/** The document of those, beside the keyboard shortcuts of `SHORTCUTS`, with a language other than the one the daemon
+ * holds: the fixture daemon seeds that with the language the window shows, as the app asks it to when it holds none. */
+const CLIENT_FILE = documentWith({ ...SHORTCUTS, ...CLIENT_VALUES, interface_language: "ja" }, SETTINGS_REVIEW.settings!);
 
-/** The document of the result: the same with English for both languages, English being the default viewing language,
- * so that importing it leaves the window as it is. Under another viewing language the import switches the window to
- * English, as importing an interface language does. */
-const CLIENT_RESULT_FILE = documentWith({ ...SHORTCUTS, ...CLIENT_VALUES, interface_language: "en", agent_language: "en" }, SETTINGS_REVIEW.settings!);
+/** The document of the result: the same in English, the default viewing language, so that importing it leaves the
+ * window as it is. Under another viewing language the import makes the fixture daemon hold English and the window
+ * follows it, which is expected. */
+const CLIENT_RESULT_FILE = documentWith({ ...SHORTCUTS, ...CLIENT_VALUES, interface_language: "en" }, SETTINGS_REVIEW.settings!);
 
 /** What importing `SETTINGS_REVIEW` with the consoles unchecked came to: no console, as the daemon answers `apply_consoles` false. */
 const SETTINGS_RESULT: Omit<Imported, "type"> = {
   ...MIXED_RESULT,
   consoles: [],
-  settings_applied: { ...MIXED_RESULT.settings_applied!, ask_questions_as_choices: true, agent_language: "en" },
+  settings_applied: { ...MIXED_RESULT.settings_applied!, ask_questions_as_choices: true, interface_language: "en" },
 };
 
 /** `REVIEW` of a file of an earlier version: its accounts region holds the Agent accounts settings alone, with no agent to add

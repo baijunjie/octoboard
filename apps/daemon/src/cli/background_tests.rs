@@ -1103,9 +1103,7 @@ fn connection_prints_the_details_as_text_after_the_qr_code_and_touches_nothing()
 /// the host.
 #[test]
 fn connection_names_the_entry_after_the_machine_unless_that_is_the_host() {
-    let Some(machine) =
-        crate::platform::fs::host_name().and_then(crate::connection_details::text_of)
-    else {
+    let Some(machine) = crate::platform::net::host_name() else {
         return;
     };
     if machine.contains(char::is_whitespace) {

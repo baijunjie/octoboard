@@ -29,7 +29,9 @@ export interface BrowseShare {
  *   of.
  * - `viewer`: the viewer's read, file or change, in one slot for the whole window.
  * - `viewerBodies`: the read of a change's whole bodies, in a slot apart from the viewer's so a click on a separator
- *   never cancels the read of a patch still on its way.
+ *   never cancels the read of a patch still on its way. It also counts for the parts of a file's download
+ *   (`BROWSE_SLOTS.download`), which are asked one at a time and only for a file shown, never beside a change's
+ *   bodies, but for the one part still out when the download is given up.
  */
 export const BROWSE_SHARES = {
   listings: { places: 6, replacementUnits: 0 },
@@ -45,6 +47,8 @@ export const BROWSE_SLOTS = {
   viewer: "viewer",
   viewerBodies: "viewer-bodies",
   documentImage: "document-image",
+  /** The parts of the file a remote window copies to this computer (`viewer/download/downloadFile.ts`). */
+  download: "download",
 } as const;
 
 /** The lane of directory listings. */

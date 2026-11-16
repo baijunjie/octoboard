@@ -1811,7 +1811,7 @@ describe("the fixture daemon's path link probe", () => {
       state: snapshotState({ consoles: [owner], projects: [project] }),
       pathLinks: { [`${project.path}/src/a.ts`]: { view: { path: "src/a.ts" } }, [`${project.path}/docs`]: "directory", "/tmp/out.log": "file" },
     });
-    const viewed = { kind: "file", view: { path: "src/a.ts" }, viewer_only: true };
+    const viewed = { kind: "file", view: { path: "src/a.ts" } };
     await expect(
       daemon.request({ type: "probe_path_links", project: project.id, paths: ["src/a.ts", "~/code/website/docs", "./src/../src/a.ts", "src/b.ts", `${project.path}/src/a.ts`, "/tmp/out.log"] }),
     ).resolves.toEqual({
@@ -1830,16 +1830,23 @@ describe("the fixture daemon's path link probe", () => {
     await expect(daemon.request({ type: "open_path_link", project: project.id, path: "~/code/website/docs" })).resolves.toEqual({ type: "ack", id: null });
   });
 
-  it("refuses opening a file the viewer shows from a link with path_link_refused and cause launchable, as the probe answers it viewer-only", async () => {
+  it("opens a project file from a link with an ack, and refuses a launchable one with path_link_refused and cause launchable, which the probe answers viewer-only", async () => {
     const owner = consoleOf("c", "Main");
     const project = projectOf("p", owner.id, "Website");
     const daemon = createFixtureDaemon({
       state: snapshotState({ consoles: [owner], projects: [project] }),
-      pathLinks: { [`${project.path}/src/a.ts`]: { view: { path: "src/a.ts" } } },
+      pathLinks: {
+        [`${project.path}/src/a.ts`]: { view: { path: "src/a.ts" } },
+        [`${project.path}/bin/helper`]: { kind: "file", refused: "launchable", view: { path: "bin/helper" } },
+      },
     });
-    await expect(daemon.request({ type: "open_path_link", project: project.id, path: "src/a.ts" })).rejects.toMatchObject({
+    await expect(daemon.request({ type: "open_path_link", project: project.id, path: "src/a.ts" })).resolves.toEqual({ type: "ack", id: null });
+    await expect(daemon.request({ type: "open_path_link", project: project.id, path: "bin/helper" })).rejects.toMatchObject({
       code: "path_link_refused",
-      params: { path: "src/a.ts", cause: "launchable" },
+      params: { path: "bin/helper", cause: "launchable" },
+    });
+    await expect(daemon.request({ type: "probe_path_links", project: project.id, paths: ["src/a.ts", "bin/helper"] })).resolves.toMatchObject({
+      links: [{ path: "src/a.ts", kind: "file" }, { path: "bin/helper", kind: "file", viewer_only: true }],
     });
   });
 
@@ -1861,19 +1868,22 @@ describe("the fixture daemon's path link probe", () => {
     await expect(daemon.request({ type: "open_path_link", project: project.id, path: "bin/helper" })).rejects.toMatchObject({ code: "path_link_refused", params: { cause: "launchable" } });
   });
 
-  it("refuses revealing a launchable path of a temp root or a folder of a project, as it refuses opening it", async () => {
+  it("reveals and reads a launchable file of a temp root, which only opening refuses, but refuses a launchable folder in every request", async () => {
     const owner = consoleOf("c", "Main");
     const project = projectOf("p", owner.id, "Website");
     const daemon = createFixtureDaemon({
       state: snapshotState({ consoles: [owner], projects: [project] }),
       pathLinks: {
-        "/tmp/movie.mov": { kind: "file", refused: "launchable" },
+        "/tmp/run.sh": { kind: "file", refused: "launchable", content: { text: "echo hello\n" } },
         [`${project.path}/docs`]: { kind: "directory", refused: "launchable" },
       },
     });
-    for (const path of ["/tmp/movie.mov", "docs"]) {
-      await expect(daemon.request({ type: "reveal_path_link", project: project.id, path })).rejects.toMatchObject({ code: "path_link_refused", params: { path, cause: "launchable" } });
-      await expect(daemon.request({ type: "open_path_link", project: project.id, path })).rejects.toMatchObject({ code: "path_link_refused", params: { path, cause: "launchable" } });
+    await expect(daemon.request({ type: "probe_path_links", project: project.id, paths: ["/tmp/run.sh"] })).resolves.toMatchObject({ links: [{ path: "/tmp/run.sh", kind: "file", viewer_only: true }] });
+    await expect(daemon.request({ type: "reveal_path_link", project: project.id, path: "/tmp/run.sh" })).resolves.toEqual({ type: "ack", id: null });
+    await expect(daemon.request({ type: "read_path_link", project: project.id, path: "/tmp/run.sh" })).resolves.toMatchObject({ file: { text: "echo hello\n" } });
+    await expect(daemon.request({ type: "open_path_link", project: project.id, path: "/tmp/run.sh" })).rejects.toMatchObject({ code: "path_link_refused", params: { path: "/tmp/run.sh", cause: "launchable" } });
+    for (const type of ["reveal_path_link", "open_path_link", "read_path_link"] as const) {
+      await expect(daemon.request({ type, project: project.id, path: "docs" })).rejects.toMatchObject({ code: "path_link_refused", params: { path: "docs", cause: "launchable" } });
     }
   });
 
@@ -1979,7 +1989,7 @@ describe("the fixture daemon's path link probe", () => {
     });
   });
 
-  it("sends where a file the viewer shows (or a folder's README) is read from, and every file of a project as viewer-only, and reads a worktree's files from the worktree", async () => {
+  it("sends where a file the viewer shows (or a folder's README) is read from, and reads a worktree's files from the worktree", async () => {
     const owner = consoleOf("c", "Main");
     const project = projectOf("p", owner.id, "Website");
     const daemon = createFixtureDaemon({
@@ -1990,7 +2000,7 @@ describe("the fixture daemon's path link probe", () => {
         [`${project.path}/a.ts`]: { view: { path: "a.ts" } },
         "/Users/dev/side/a.ts": { view: { worktree: "wt-side", path: "a.ts" } },
         "/tmp/b.png": "file",
-        [`${project.path}/bin/tool`]: { view: { path: "bin/tool" } },
+        [`${project.path}/bin/tool`]: { kind: "file", refused: "launchable", view: { path: "bin/tool" } },
         [`${project.path}/docs/plan`]: { kind: "directory", view: { path: "docs/plan/README.md" } },
       },
     });
@@ -1998,8 +2008,8 @@ describe("the fixture daemon's path link probe", () => {
       type: "path_links",
       id: null,
       links: [
-        { path: "a.ts", kind: "file", view: { path: "a.ts" }, viewer_only: true },
-        { path: "/Users/dev/side/a.ts", kind: "file", view: { worktree: "wt-side", path: "a.ts" }, viewer_only: true },
+        { path: "a.ts", kind: "file", view: { path: "a.ts" } },
+        { path: "/Users/dev/side/a.ts", kind: "file", view: { worktree: "wt-side", path: "a.ts" } },
         { path: "/tmp/b.png", kind: "file" },
         { path: "c.ts", kind: "none" },
         { path: "bin/tool", kind: "file", view: { path: "bin/tool" }, viewer_only: true },
@@ -2010,6 +2020,72 @@ describe("the fixture daemon's path link probe", () => {
     await expect(daemon.request({ type: "read_project_file", project: project.id, path: "bin/tool" })).resolves.toMatchObject({ file: { kind: "binary", size: 2048, media_type: null } });
     await expect(daemon.request({ type: "read_project_file", project: project.id, worktree: "wt-side", path: "a.ts" })).resolves.toMatchObject({ worktree: "wt-side", file: { text: "const a = 2;\n" } });
     await expect(daemon.request({ type: "read_project_file", project: project.id, worktree: "wt-gone", path: "a.ts" })).rejects.toMatchObject({ code: "file_not_found" });
+  });
+
+  it("refuses a read past what the daemon delivers with limit_exceeded, the budget and the size", async () => {
+    const daemon = createFixtureDaemon({ files: { "": { dir: true }, "movie.mov": { binary: { size: 48_000_000 } } } });
+    await expect(daemon.request({ type: "read_project_file", project: "p", path: "movie.mov" })).rejects.toMatchObject({
+      code: "limit_exceeded",
+      params: { limit: "file_bytes", max: "4194304", size: "48000000" },
+    });
+  });
+});
+
+describe("the fixture daemon's reads of a path link and in parts", () => {
+  const owner = consoleOf("c", "Main");
+  const project = projectOf("p", owner.id, "Website");
+  const png = { mediaType: "image/png", data: "iVBORw0KGgo=" };
+  const daemonWith = (extra: Partial<Parameters<typeof createFixtureDaemon>[0]> = {}) =>
+    createFixtureDaemon({
+      state: snapshotState({ consoles: [owner], projects: [project] }),
+      files: { "": { dir: true }, "notes.md": { text: "# Notes\n" }, "capture.mov": { binary: { size: 2_500_000, answeredParts: 1 } } },
+      pathLinks: { "/tmp/sheet.png": { content: { image: png } }, "/tmp/bare.log": "file", [`${project.path}/notes.md`]: { view: { path: "notes.md" } } },
+      ...extra,
+    });
+
+  it("reads a temp file from the content the scenario gives it and a project file from its view, echoing the path as asked", async () => {
+    const daemon = daemonWith();
+    await expect(daemon.request({ type: "read_path_link", project: project.id, path: "/tmp/sheet.png" })).resolves.toMatchObject({
+      type: "path_link_file",
+      path: "/tmp/sheet.png",
+      version: "1",
+      file: { kind: "binary", media_type: "image/png", data: png.data, size: 8 },
+    });
+    await expect(daemon.request({ type: "read_path_link", project: project.id, path: "notes.md" })).resolves.toMatchObject({ path: "notes.md", file: { kind: "text", text: "# Notes\n" } });
+  });
+
+  it("refuses a path link read of a path found with no content as a gap in the scenario, and of one not found with file_not_found", async () => {
+    const daemon = daemonWith();
+    await expect(daemon.request({ type: "read_path_link", project: project.id, path: "/tmp/bare.log" })).rejects.toThrow(/cannot answer faithfully/);
+    await expect(daemon.request({ type: "read_path_link", project: project.id, path: "/tmp/none.log" })).rejects.toMatchObject({ code: "file_not_found", params: { root: "temporary" } });
+  });
+
+  it("answers a part of at most 1 MiB, with the file's size and version, and an empty part at the end", async () => {
+    const daemon = daemonWith();
+    const file = { kind: "project" as const, project: project.id, path: "notes.md" };
+    await expect(daemon.request({ type: "read_file_range", file, offset: 2, length: 4 })).resolves.toEqual({ type: "file_range", id: null, offset: 2, size: 8, version: "1", data: btoa("Note") });
+    await expect(daemon.request({ type: "read_file_range", file, offset: 8, length: 4 })).resolves.toMatchObject({ size: 8, data: "" });
+    const big = { kind: "project" as const, project: project.id, path: "capture.mov" };
+    const part = await daemon.request({ type: "read_file_range", file: big, offset: 0, length: 5_000_000 });
+    expect(part).toMatchObject({ size: 2_500_000 });
+    expect(atob(part.type === "file_range" ? part.data : "")).toHaveLength(1024 * 1024);
+  });
+
+  it("reads a part of a path link, and says a file changed when the part asks for another version", async () => {
+    const daemon = daemonWith();
+    await expect(daemon.request({ type: "read_file_range", file: { kind: "path_link", project: project.id, path: "/tmp/sheet.png" }, offset: 0, length: 4 })).resolves.toMatchObject({ size: 8, data: btoa("\x89PNG") });
+    await expect(daemon.request({ type: "read_file_range", file: { kind: "path_link", path: "/tmp/sheet.png" }, offset: 0, length: 4, version: "2" })).rejects.toMatchObject({ code: "source_changed" });
+  });
+
+  it("stops answering a binary's parts once the ones it answers are given, which holds a copy part-way", async () => {
+    fakeTimers();
+    const daemon = daemonWith();
+    const file = { kind: "project" as const, project: project.id, path: "capture.mov" };
+    await expect(daemon.request({ type: "read_file_range", file, offset: 0, length: 1024 * 1024 })).resolves.toMatchObject({ type: "file_range" });
+    const answered = vi.fn();
+    void daemon.request({ type: "read_file_range", file, offset: 1024 * 1024, length: 1024 * 1024 }).then(answered, answered);
+    await vi.runAllTimersAsync();
+    expect(answered).not.toHaveBeenCalled();
   });
 });
 

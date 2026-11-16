@@ -13,6 +13,7 @@ import { bindingFor, restoreAllBindings, setBinding as setBindingFor } from "../
 import { ShortcutsSection } from "./ShortcutsSection";
 import { BROWSER_HOST, WINDOWS_HOST } from "../test/hosts";
 import { fakeTimers } from "../test/clock";
+import { withoutIsolates } from "../test/dom";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -185,6 +186,7 @@ it("lists Open settings, which the page handles itself, and the console-session 
   act(() => button(windows, "Change the shortcut for Toggle focus mode")!.click());
   press({ code: "Tab", primary: true }, { key: "Tab" });
   expect(windows.querySelector(".text-danger")?.textContent).toBe("Already used for Next console session.");
+  expect([...windows.querySelectorAll(".text-danger [data-inline-reference]")].map((chip) => chip.textContent)).toEqual(["Next console session"]);
 });
 
 it("records the next combination, saves it at once and offers Reset", () => {
@@ -281,6 +283,36 @@ it("shows a refusal as a field's error is, tied to the control, and speaks it ag
   expect(spoken().trim()).toBe(first.trim());
 });
 
+it("names the command in a refusal as a reference in the danger tone, and speaks the refusal as plain text", () => {
+  fakeTimers();
+  const container = mount();
+  act(() => { vi.advanceTimersByTime(FIRST_WRITE_DELAY_MS); });
+  act(() => button(container, FOCUS_MODE_CHANGE)!.click());
+  press({ code: "KeyN", primary: true, shift: true });
+  const chips = [...container.querySelectorAll(".text-danger [data-inline-reference]")];
+  expect(chips.map((chip) => chip.textContent)).toEqual(["New session with defaults"]);
+  expect(chips[0]!.getAttribute("data-color")).toBe("danger");
+  const status = container.querySelector("[role=status]")!;
+  expect(status.querySelector("[data-inline-reference]")).toBeNull();
+  expect(withoutIsolates(status.textContent!.trim())).toBe("Already used for New session with defaults.");
+});
+
+it("names the command as a reference when a reset is refused because its default is taken", () => {
+  setBinding("quickCreate", { code: "KeyK", primary: true, shift: true });
+  setBinding("focusMode", { code: "KeyN", primary: true, shift: true });
+  const container = mount();
+  act(() => button(container, "Reset the shortcut for New session with defaults to its default")!.click());
+  expect([...container.querySelectorAll(".text-danger [data-inline-reference]")].map((chip) => chip.textContent)).toEqual(["Toggle focus mode"]);
+});
+
+it("sets a refusal that names no command as plain text with no reference in it", () => {
+  const container = mount();
+  act(() => button(container, FOCUS_MODE_CHANGE)!.click());
+  press({ code: "KeyK", other: true });
+  expect(container.querySelector(".text-danger")?.textContent).toBe("The system keeps this combination for itself.");
+  expect(container.querySelector(".text-danger [data-inline-reference]")).toBeNull();
+});
+
 it("says a combination is held by a command this client does not list", () => {
   const container = mount();
   act(() => button(container, FOCUS_MODE_CHANGE)!.click());
@@ -349,5 +381,6 @@ it("says Open settings cannot take Shift with a number or symbol key", () => {
   act(() => button(container, "Change the shortcut for Open settings")!.click());
   press({ code: "Digit1", primary: true, shift: true });
   expect(container.querySelector(".text-danger")?.textContent).toBe("Open settings cannot use Shift with a number or symbol key.");
+  expect([...container.querySelectorAll(".text-danger [data-inline-reference]")].map((chip) => chip.textContent)).toEqual(["Open settings"]);
   expect(text(container)).toContain("Press the new keys…");
 });

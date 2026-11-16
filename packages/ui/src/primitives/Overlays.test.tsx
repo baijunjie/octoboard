@@ -10,7 +10,8 @@ import { partSelector, toastStateAttributes } from "./parts";
 import { mount } from "./testSupport";
 import { closeToast, showToast, Toast, ToastContent, ToastRegion } from "./Toast";
 import { Tooltip, TooltipContent, TooltipTrigger, useTooltipState } from "./Tooltip";
-import { flushPromises } from "../test/clock";
+import { withModality } from "../components/dialog/dialogTestSupport";
+import { FAKE_FRAME_MS, fakeTimers, flushPromises } from "../test/clock";
 
 it("announces a modal given the alert dialog role as one, described by the element it names", () => {
   mount(
@@ -72,6 +73,60 @@ it("leaves a menu's popover dialog unnamed, keeps a disabled item reachable, and
   expect(document.activeElement).toBe(items[1]);
   act(() => items[0].click());
   expect(onAction).toHaveBeenCalledWith("rename");
+});
+
+/** A menu already open, with a disabled item first, that takes focus as `autoFocus` says; the clock is faked first, so the
+ * frames it asks for are the test's to run. */
+function openedMenuWithDisabledFirst(autoFocus?: "first" | "menu"): HTMLElement[] {
+  withModality("keyboard");
+  fakeTimers();
+  mount(
+    <Menu open onOpenChange={() => {}}>
+      <MenuTrigger label="More actions">…</MenuTrigger>
+      <MenuPopover>
+        <MenuList onAction={() => {}} autoFocus={autoFocus}>
+          <MenuItem id="none" textValue="Nothing here" disabled>Nothing here</MenuItem>
+          <MenuItem id="rename" textValue="Rename">Rename</MenuItem>
+          <MenuItem id="copy" textValue="Copy">Copy</MenuItem>
+        </MenuList>
+      </MenuPopover>
+    </Menu>,
+  );
+  return [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+}
+
+const framesPass = async (frames = 3) => {
+  for (let frame = 0; frame < frames; frame += 1) {
+    act(() => void vi.advanceTimersByTime(FAKE_FRAME_MS));
+    await flushPromises();
+  }
+};
+
+it("focuses the first item that can be chosen as a menu opens, never a disabled one before it", async () => {
+  const items = openedMenuWithDisabledFirst("first");
+  await framesPass();
+  expect(items[0].getAttribute("aria-disabled")).toBe("true");
+  expect(document.activeElement).toBe(items[1]);
+});
+
+it("leaves focus where the user has moved it before the menu's first frame, rather than taking it back to the first item", async () => {
+  const items = openedMenuWithDisabledFirst("first");
+  const arrowDown = () => act(() => {
+    document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true }));
+    document.activeElement!.dispatchEvent(new KeyboardEvent("keyup", { key: "ArrowDown", bubbles: true, cancelable: true }));
+  });
+  arrowDown();
+  arrowDown();
+  expect(document.activeElement).toBe(items[2]);
+  await framesPass();
+  expect(document.activeElement).toBe(items[2]);
+});
+
+it("takes focus to no item when the menu is to take it itself", async () => {
+  const items = openedMenuWithDisabledFirst("menu");
+  await framesPass();
+  expect(items).not.toContain(document.activeElement);
+  expect(document.activeElement?.getAttribute("role")).toBe("menu");
 });
 
 it("keeps a disabled choice of MenuChoices reachable with the arrow keys", () => {

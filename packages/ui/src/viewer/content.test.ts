@@ -1,7 +1,7 @@
-import { expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import type { FileContent } from "../protocol";
-import { bodiesFailure, bodyFromFileContent, ChangeBodiesError, changePresentation, changeStatus, type ViewerChange, type ViewerChangeSide } from "./content";
+import { bodiesFailure, bodyFromFileContent, ChangeBodiesError, changePresentation, changeStatus, tooLargeBody, type ViewerChange, type ViewerChangeSide } from "./content";
 
 const textFile = (text: string): FileContent => ({ size: text.length, kind: "text", media_type: null, text, data: null });
 const binaryFile = (media_type: string | null): FileContent => ({ size: 3, kind: "binary", media_type, text: null, data: "AAEC" });
@@ -68,4 +68,12 @@ it("carries the wording of a failed read apart from its error message, and none 
   expect(bodiesFailure(new ChangeBodiesError("failed", "It is gone.", "raw", failure))).toEqual({ message: "It is gone.", detail: "raw", failure });
   expect(bodiesFailure(new ChangeBodiesError("failed", undefined, "raw"))).toEqual({ message: undefined, detail: "raw", failure: undefined });
   expect(bodiesFailure(new TypeError("boom"))).toEqual({ detail: "boom" });
+});
+
+describe("tooLargeBody", () => {
+  it("is the stand-in body of a file the daemon would not read, with the size it named or none", () => {
+    expect(tooLargeBody(9_000_000)).toEqual({ kind: "tooLarge", size: 9_000_000 });
+    expect(tooLargeBody(0)).toEqual({ kind: "tooLarge", size: 0 });
+    expect(tooLargeBody(undefined)).toEqual({ kind: "tooLarge", size: null });
+  });
 });

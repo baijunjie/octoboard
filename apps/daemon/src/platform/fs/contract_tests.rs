@@ -222,6 +222,38 @@ fn read_only_and_executable_follow_what_was_set() {
     assert!(!is_executable(&dir.join("missing")));
 }
 
+/// On Unix the executable bit is the permission mode's: a regular file with any execute bit has
+/// it, one without does not, and a directory or a missing path never does.
+#[cfg(unix)]
+#[test]
+fn the_executable_bit_is_the_mode_of_a_regular_file() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = ScratchDir::new("fs-executable-bit");
+    let file = dir.join("tool");
+    std::fs::write(&file, "#!/bin/sh\n").unwrap();
+    for (mode, expected) in [(0o644, false), (0o755, true), (0o700, true), (0o610, true)] {
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(mode)).unwrap();
+        assert_eq!(has_executable_bit(&file), expected, "{mode:o}");
+    }
+    assert!(!has_executable_bit(&dir));
+    assert!(!has_executable_bit(&dir.join("missing")));
+}
+
+/// Windows has no executable bit: not even a file it would run by its extension carries one.
+#[cfg(windows)]
+#[test]
+fn a_file_has_no_executable_bit_on_windows_whatever_its_extension() {
+    let dir = ScratchDir::new("fs-windows-executable-bit");
+    let program = dir.join("hook.cmd");
+    std::fs::write(&program, "@exit /b 0\r\n").unwrap();
+    std::fs::write(dir.join("notes.txt"), "x").unwrap();
+    assert!(is_executable(&program));
+    assert!(!has_executable_bit(&program));
+    assert!(!has_executable_bit(&dir.join("notes.txt")));
+    assert!(!has_executable_bit(&dir));
+    assert!(!has_executable_bit(&dir.join("missing.exe")));
+}
+
 /// A directory is the root of a volume where it has no parent; one that cannot be read counts as
 /// one (unknown never destroys), and an ordinary directory is not one.
 #[test]

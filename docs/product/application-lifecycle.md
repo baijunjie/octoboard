@@ -209,15 +209,15 @@ the same thing, deliberately, and what they do is the user's choice: the **Keep 
 window is closed** switch in Settings' General section, which is **off to begin with** (see "Keep running in the
 background" in `docs/product/general-settings.md`).
 
-**With remote windows open** (see `docs/product/remote-daemons.md`), that choice applies only when the window closed is
-the last one on screen:
+**With other windows open** — remote windows (see `docs/product/remote-daemons.md`) — that choice applies only when the
+window closed is the last one on screen:
 
 - **Closing the main window while another window is on screen only hides it**, whatever the switch says: the local
   daemon and its sessions run on, and the main window comes back as below.
 - **Closing a remote window closes it for good**, which disconnects it and ends nothing on its daemon. With another
   window on screen, nothing else happens.
-- **Closing the last window on screen**, main or remote, follows the switch as below: with it off the application quits,
-  and with it on it goes into the background, the main window staying hidden.
+- **Closing the last window on screen**, whichever it is, follows the switch as below: with it off the application
+  quits, and with it on it goes into the background, the main window staying hidden.
 
 The rest of this section reads "the window" as the last window on screen.
 
@@ -289,7 +289,8 @@ confirmation below asks only about the local daemon's sessions and shell termina
 brought back to ask it. Quitting stops only the local daemon: every remote window is disconnected, asking nothing about
 its daemon, whose sessions run on (see "Disconnecting and closing" in `docs/product/remote-daemons.md`). Which remote
 windows were open is remembered for the next launch; a remote window whose close is the quit counts as open, and stays
-on screen while the quit is being confirmed, and where it is cancelled. The Windows application has no application menu and no `Cmd+Q`: it is
+on screen while the quit is being confirmed, and where it is cancelled. The Windows application has no application
+menu and no `Cmd+Q`: it is
 quit through the notification-area icon's quit entry, or by closing the window while keeping it running in the
 background is off. The difference is the escape hatch in "Quitting when the window has stopped responding" below, which
 the close gestures have no part in. The system logging out, restarting or shutting down is not one of these quits and

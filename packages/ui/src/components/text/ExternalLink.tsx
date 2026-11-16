@@ -2,8 +2,12 @@ import React, { useRef, useState } from "react";
 
 import { ActionableError } from "../../errors/actionableError";
 import type { Translate } from "../../i18n/catalog";
-import { useT } from "../../i18n/react";
+import { Message, useT } from "../../i18n/react";
+import { InlineReference } from "../../i18n/InlineReference";
+import { isolate } from "../../i18n/isolate";
+import { ForwardedLinkOpenError, LinkForwardError } from "../../platform/linkForwardError";
 import { useOptionalPlatform } from "../../platform/react";
+import { remoteDaemonName } from "../../platform/windowKind";
 import { ExternalLinkIcon } from "./ExternalLinkIcon";
 import { settle } from "../hooks/settle";
 import { raiseError } from "../alerts/raiseError";
@@ -28,12 +32,42 @@ export function addressUnavailableContent(message: string, address: string): Rea
   return <div className="flex flex-col gap-4"><p>{message}</p><p dir="ltr" className="font-mono [overflow-wrap:anywhere]">{address}</p></div>;
 }
 
-/** Native menu and terminal links share the anchor's visible failure and manual destination. */
+/** Native menu and terminal links share the anchor's visible failure and manual destination. An address a remote window
+ * could not forward is its own alert (`reportForwardFailure`); a browser that failed to open a forwarded address shows
+ * that one, since the address as written leads to this computer. */
 export function reportExternalLinkFailure(t: Translate, href: string, cause: unknown): void {
-  raiseError(new ActionableError(t("externalLink.unavailable"), "openExternal", { cause }), { title: t("externalLink.unavailableTitle"), content: addressUnavailableContent(t("externalLink.unavailable"), href) });
+  if (cause instanceof LinkForwardError) return reportForwardFailure(t, cause);
+  const address = cause instanceof ForwardedLinkOpenError ? cause.address : href;
+  raiseError(new ActionableError(t("externalLink.unavailable"), "openExternal", { cause: cause instanceof ForwardedLinkOpenError ? cause.cause : cause }), { title: t("externalLink.unavailableTitle"), content: addressUnavailableContent(t("externalLink.unavailable"), address) });
 }
 
-/** Opens an external address without prescribing how its link is drawn. */
+/** The alert for an address a remote window could not open through a forwarded port, worded by what failed with the
+ * port and the daemon's name, and with no address to open by hand: as written it leads to this computer. Nothing
+ * listening says it all; a server that forbids forwarding and a connection that is down have their remedies; anything
+ * else is unexpected, its text under Error details. */
+function reportForwardFailure(t: Translate, failure: LinkForwardError): void {
+  const title = t("externalLink.unavailableTitle");
+  // A port is a number to read digit by digit, with no thousands separator.
+  const params = { port: String(failure.port), name: isolate(remoteDaemonName() ?? "") };
+  // The port and the daemon's name are chips in the alert's body; the message keeps them as text for the report.
+  const chips = { port: <InlineReference monospace dir="ltr">{params.port}</InlineReference>, name: <InlineReference dir="auto" wrap>{remoteDaemonName() ?? ""}</InlineReference> };
+  switch (failure.kind) {
+    case "nothing_listening":
+      return raiseError(new ActionableError(t("remoteForward.nothingListening", params), "none", { cause: failure }), { title, content: <Message id="remoteForward.nothingListening" params={chips} /> });
+    case "forwarding_refused":
+      return raiseError(new ActionableError(t("remoteForward.refused", params), "forwardRefused", { cause: failure }), { title, content: <Message id="remoteForward.refused" params={chips} /> });
+    case "disconnected":
+      return raiseError(new ActionableError(t("remoteForward.disconnected", params), "connection", { cause: failure }), { title, content: <Message id="remoteForward.disconnected" params={chips} /> });
+    case "failed":
+      return raiseError(new Error(failure.message), { title });
+  }
+}
+
+/** Opens an external address without prescribing how its link is drawn. `target` is the anchor's own: `_blank` only where
+ * the browser follows the link itself (a page with no platform adapter, such as a website preview). Where the app opens
+ * it, the anchor has none, because the desktop shell's shell plugin opens every web or mail anchor with
+ * `target="_blank"` on any click that bubbles to the body, even one whose
+ * default is prevented, which would open the address as written a second time and, in a remote window, never forwarded. */
 export function useExternalLinkAction({ href, onOpen, onFailure, isPending = false }: Pick<Props, "href" | "onOpen" | "onFailure" | "isPending">) {
   const t = useT();
   const platform = useOptionalPlatform();
@@ -62,6 +96,7 @@ export function useExternalLinkAction({ href, onOpen, onFailure, isPending = fal
   return {
     address,
     busy,
+    target: intercepted ? undefined : "_blank",
     onClick: (event: React.MouseEvent<HTMLAnchorElement>) => {
       if (busy || opening.current) { event.preventDefault(); return; }
       if (!intercepted) return;
@@ -96,7 +131,7 @@ export function ExternalLink({ href, appearance = "text", size, variant = "secon
       aria-disabled={action.busy || unfollowable || undefined}
       // After the disabled mark, so a browser that blurs the link as its `href` goes finds it already marked.
       href={unfollowable ? undefined : action.address}
-      target="_blank"
+      target={action.target}
       rel="noopener noreferrer"
       aria-description={props["aria-description"] ?? t("common.opensExternally")}
       aria-busy={action.busy || undefined}

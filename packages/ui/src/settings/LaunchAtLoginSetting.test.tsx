@@ -106,7 +106,11 @@ it("raises an error alert when the system refuses, and leaves the switch as it w
   });
   expect(toggleOf(container)!.checked).toBe(false);
   expect(report).toHaveBeenCalledOnce();
-  expect(report.mock.calls[0]![0]).toMatchObject({ title: "Could not change Launch at login" });
+  expect(report.mock.calls[0]![0]).toMatchObject({ title: "Could not change the login setting" });
+  // The title names no setting; the body does, as a reference.
+  const body = mountHost(<LanguageProvider>{report.mock.calls[0]![0].content}</LanguageProvider>, { platform: { kind: "tauri", host: MAC_HOST } });
+  expect(body.textContent).toBe("The system did not accept the change to Launch at login.");
+  expect([...body.querySelectorAll("[data-inline-reference]")].map((chip) => chip.textContent)).toEqual(["Launch at login"]);
 });
 
 it("raises the refusal as an unexpected failure, keeping what the system said as the error to report", async () => {
@@ -189,6 +193,8 @@ it("raises an error alert when the list does not open", async () => {
   await act(async () => {});
   await act(async () => openButton(container)!.click());
   expect(report.mock.calls[0]![0]).toMatchObject({ title: "Could not open System Settings" });
+  const body = mountHost(<LanguageProvider>{report.mock.calls[0]![0].content}</LanguageProvider>, { platform: { kind: "tauri", host: MAC_HOST } });
+  expect(body.querySelector("[data-inline-path]")?.textContent).toBe("General > Login Items");
 });
 
 it("hands focus to the switch when the button it was on goes with the approval", async () => {

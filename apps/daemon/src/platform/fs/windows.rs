@@ -490,6 +490,12 @@ pub fn same_file(a: &Path, b: &Path) -> bool {
     }
 }
 
+/// Whether the file carries an executable bit, which is all a part says of whether the system would run it: never, as
+/// Windows has none and runs a file by its extension, so it says nothing.
+pub fn has_executable_bit(_path: &Path) -> bool {
+    false
+}
+
 /// Whether `path` leads to a regular file the system would run: one whose extension is among those
 /// `PATHEXT` lists (Windows runs a file by its extension, not by a permission).
 pub fn is_executable(path: &Path) -> bool {

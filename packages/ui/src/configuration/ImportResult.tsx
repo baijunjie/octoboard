@@ -4,6 +4,7 @@ import { providerLabel } from "../agents/providers";
 import { ErrorAlert } from "../components/alerts/ErrorAlert";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import type { PlainMessageKey } from "../i18n/catalog";
+import { InlineReference } from "../i18n/InlineReference";
 import { Message, useT } from "../i18n/react";
 import type { ReplyOf } from "../requests";
 import type { Agent, DirectoryChoiceKind, ImportedAccounts, ImportFailure } from "../protocol";
@@ -141,6 +142,7 @@ export function ImportResult({
   sorting?: SettingValue[];
 }): React.ReactElement {
   const t = useT();
+  const settingsDialog = <InlineReference dir="auto" wrap><Message id="settings.title" /></InlineReference>;
   const providers = useProviders();
   const failureNode = useFailureNode();
   const outcome = outcomeOf(result.consoles);
@@ -209,7 +211,7 @@ export function ImportResult({
           announce
           announceDelayMs={AFTER_FOCUS_MOVE_DELAY_MS}
           title={t("configuration.import.result.agentSettings.failedTitle")}
-          remedy={isConflict(accounts.agent_settings_error) ? <Message id="configuration.import.result.agentSettings.conflict.remedy" /> : failureNode(accounts.agent_settings_error, "remedy")}
+          remedy={isConflict(accounts.agent_settings_error) ? <Message id="configuration.import.result.agentSettings.conflict.remedy" params={{ settingsDialog }} /> : failureNode(accounts.agent_settings_error, "remedy")}
           details={failureNode(accounts.agent_settings_error, "details")}>
           {isConflict(accounts.agent_settings_error)
             ? <Message id="configuration.import.result.agentSettings.conflict" />
@@ -235,7 +237,7 @@ export function ImportResult({
           announce
           announceDelayMs={AFTER_FOCUS_MOVE_DELAY_MS}
           title={t("configuration.import.result.settings.failedTitle")}
-          remedy={isConflict(result.settings_error) ? <Message id="configuration.import.result.settings.conflict.remedy" /> : failureNode(result.settings_error, "remedy")}
+          remedy={isConflict(result.settings_error) ? <Message id="configuration.import.result.settings.conflict.remedy" params={{ settingsDialog }} /> : failureNode(result.settings_error, "remedy")}
           details={failureNode(result.settings_error, "details")}>
           {isConflict(result.settings_error)
             ? <Message id="configuration.import.result.settings.conflict" />

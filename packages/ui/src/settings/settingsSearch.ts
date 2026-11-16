@@ -10,7 +10,7 @@ import type { RemoteAccess, Settings } from "../protocol";
 import { SESSION_ORDER_WORDS } from "../sessions/orderWording";
 import { ALL_COMMANDS, clientCapabilities, isAvailable, SHORTCUT_GROUPS } from "../shortcuts/commands";
 import type { SettingsSectionId } from "./sections";
-import { sshServerWords } from "./sshServerWords";
+import { sshServerNames, sshServerWords } from "./sshServerWords";
 
 /** What decides which settings a section shows: the platform's capabilities, whether the daemon's host can be held
  * awake, the daemon's settings, and what the reads of the system that some of them wait on have answered. */
@@ -85,8 +85,7 @@ const ownBranch = ({ settings }: SettingsSearchContext) => settings.git_workflow
  */
 const INDEX = {
   general: [
-    { id: "language", label: "settings.language.label", description: ["settings.language.description"] },
-    { id: "agent-language", label: "settings.agentLanguage.label", description: ["settings.agentLanguage.description"] },
+    { id: "language", label: "settings.language.label", description: ["settings.language.sharedDescription"] },
     {
       id: "launch-at-login",
       label: "settings.launchAtLogin.label",
@@ -191,11 +190,17 @@ const INDEX = {
   // Listed only in the application's window for a daemon that offers it (`remoteAccessOffered`), so the section's own
   // entries need no `shown` for that; what the daemon is doing decides the rest.
   "remote-access": [
-    { id: "remote-access.allow", label: "settings.remoteAccess.allow.label", description: ["settings.remoteAccess.allow.description.on", "settings.remoteAccess.allow.description.off"] },
+    // Worded by the system's name for its SSH server; the daemon whose section it is runs on this computer.
+    {
+      id: "remote-access.remote-login",
+      label: (t) => t(sshServerWords(daemonOs()).label),
+      description: [(t) => t(sshServerWords(daemonOs()).description, sshServerNames((key) => t(key)))],
+    },
+    { id: "remote-access.allow", label: "settings.remoteAccess.allow.label", description: ["settings.remoteAccess.allow.ways.on", "settings.remoteAccess.allow.ways.off"] },
     // What the section says in place of the address when the daemon could not serve, found by its reasons.
     {
       id: "remote-access.failed",
-      label: "settings.remoteAccess.failed.title",
+      label: "settings.remoteAccess.failed.titleWays",
       description: [
         "settings.remoteAccess.failed.noUi",
         "settings.remoteAccess.failed.notPrivate",
@@ -207,6 +212,28 @@ const INDEX = {
       ],
       shown: ({ remoteAccess }) => remoteAccess?.failure != null,
     },
+    {
+      id: "remote-access.connection",
+      label: "settings.remoteAccess.connection.label",
+      description: [(t) => t("settings.remoteAccess.connection.description", { addRemoteDaemon: t("remoteDaemons.add"), connectionDetails: t("remoteDaemons.form.details") })],
+      shown: ({ remoteAccess }) => remoteAccess?.state === "serving" && remoteAccess.connection !== null,
+    },
+    {
+      id: "remote-access.forward",
+      label: "settings.remoteAccess.forward.label",
+      // Said with no address token where the daemon lists no address of this computer, with it otherwise.
+      description: [
+        (t) => t("settings.remoteAccess.forward.description", { server: "<server>" }),
+        (t) => t("settings.remoteAccess.forward.descriptionPick", { manual: t("settings.remoteAccess.forward.address.manual"), server: "<server>" }),
+      ],
+      shown: ({ remoteAccess }) => remoteAccess?.state === "serving" && remoteAccess.forward_command !== null,
+    },
+    {
+      id: "remote-access.address",
+      label: "settings.remoteAccess.address.label",
+      description: ["settings.remoteAccess.address.description"],
+      shown: ({ remoteAccess }) => remoteAccess?.state === "serving" && remoteAccess.address !== null,
+    },
     // The browser port, on Windows alone; the current port is the row's value, not searched.
     {
       id: "remote-access.port",
@@ -215,34 +242,10 @@ const INDEX = {
       shown: ({ remoteAccess }) => remoteAccess?.browser_port != null,
     },
     {
-      id: "remote-access.address",
-      label: "settings.remoteAccess.address.label",
-      description: ["settings.remoteAccess.address.description"],
-      shown: ({ remoteAccess }) => remoteAccess?.state === "serving" && remoteAccess.address !== null,
-    },
-    {
-      id: "remote-access.forward",
-      label: "settings.remoteAccess.forward.label",
-      description: [(t) => t("settings.remoteAccess.forward.description", { server: "<server>" })],
-      shown: ({ remoteAccess }) => remoteAccess?.state === "serving" && remoteAccess.forward_command !== null,
-    },
-    {
-      id: "remote-access.connection",
-      label: "settings.remoteAccess.connection.label",
-      description: [(t) => t("settings.remoteAccess.connection.description", { addRemoteDaemon: t("remoteDaemons.add"), connectionDetails: t("remoteDaemons.form.details") })],
-      shown: ({ remoteAccess }) => remoteAccess?.state === "serving" && remoteAccess.connection !== null,
-    },
-    {
       id: "remote-access.rotate",
       label: "settings.remoteAccess.rotate.label",
       description: ["settings.remoteAccess.rotate.description"],
       shown: ({ remoteAccess }) => remoteAccess?.state === "serving",
-    },
-    // Worded by the system's name for its SSH server; the daemon whose section it is runs on this computer.
-    {
-      id: "remote-access.remote-login",
-      label: (t) => t(sshServerWords(daemonOs()).label),
-      description: [(t) => t(sshServerWords(daemonOs()).description)],
     },
   ],
   // Its description is where notifications stand, not what the setting does, so it is not searched.

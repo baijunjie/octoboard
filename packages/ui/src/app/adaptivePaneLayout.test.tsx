@@ -48,7 +48,7 @@ it("docks only the open columns, protects 400px and restores preferences after r
       asideProjectId: "p", consoles: new Map([["c", currentConsole]]), currentConsole,
       selectedSession: undefined, selectedSessionId: undefined, focusTerminal: () => {},
     });
-    widths = usePaneWidths({ noConsoles: false, isNarrow: layout.isNarrow,
+    widths = usePaneWidths({ noSidebar: false, isNarrow: layout.isNarrow,
       sidebarDocked: layout.panes.sidebarDocked, stackedPanelCount: layout.stackedPanels.length,
       stackedPanelKinds: layout.stackedPanels, asideOverlay: layout.asideOverlay,
       asideDocked: layout.asideDocked, paneShown: layout.paneShown, columnShown: layout.columnShown,

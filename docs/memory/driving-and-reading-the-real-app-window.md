@@ -22,9 +22,16 @@ missing Accessibility or Screen Recording grant nor a missing tool. Reopen the i
 runs from (`open <path to the .app>`, without `-n`; a reopen brings a hidden window back through `show_main_window`),
 not by its bundle identifier: `open -b <identifier>` has failed for a running scratch verification bundle
 (`LSCopyApplicationURLsForBundleIdentifier() failed`) where the path reopened it. Then `AXRaise` its window
-and make it `AXMain`; the WebKit accessibility tree appears once the window is showing. Capture only that window,
-with `screencapture -l <CGWindowID>` and the ID taken from `CGWindowListCopyWindowInfo` filtered to the instance's own
-PID.
+and make it `AXMain`; the WebKit accessibility tree appears only a second or two after the window is raised, so a
+lookup made sooner finds nothing and proves nothing. Capture only that window, with `screencapture -l <CGWindowID>` and
+the ID taken from `CGWindowListCopyWindowInfo` filtered to the instance's own PID. Two of its windows opened at the same
+frame cannot be told apart between that list and the accessibility tree by frame; move one before matching them.
+
+Opening the system browser (a remote daemon's "Open in browser", say) can switch macOS to the Space where the
+browser's window lives, and every window of the app then reads as not on screen — `CGWindowListCopyWindowInfo` with
+on-screen-only lists none and `AXWindows` is empty — although nothing hid them. Before calling that a defect, check
+that `NSRunningApplication.isHidden` is false and the activation policy is still regular, and which Space the browser
+put on screen.
 
 ## Get a diagnosis out of the window by rendering it into the DOM, or log events as image requests
 
@@ -90,9 +97,15 @@ mark in a second move, as a user does, or re-measure the target while the pointe
 Two further limits on macOS: driving the real app this way requires Accessibility permission granted to the host
 application of whatever runs the script, and native `<select>` popups cannot be driven through the accessibility tree
 at all — to make a control scriptable, build it from something other than a native `<select>`, or drive it by hand.
-Nor is an accessibility action's return code a verdict: `AXPress` on the status item returned
-`kAXErrorCannotComplete` although its popup did open, so read what an action did off the tree or a capture, never off
-the call's result.
+Nor is an accessibility action's return code a verdict: `AXPress` on the status item has returned
+`kAXErrorCannotComplete` although its popup did open, and in another build opened nothing, where a real click did. So
+read what an action did off the tree or a capture, never off the call's result, and do not report a status item menu
+that `AXPress` left closed as a defect.
+
+Filling a form through accessibility in this WKWebView needs focus first: an `AXValue` write lands in whichever field
+holds focus, not in the element it is addressed to, so set `AXFocused` on the field and then write its value. A secure
+(password) field ignores `AXValue` altogether; type it as keyboard events carrying the text as a Unicode string
+(`CGEventKeyboardSetUnicodeString`), posted with `CGEventPostToPid` after making the instance's window `AXMain`.
 
 ## Drive the real app without touching the user's work
 

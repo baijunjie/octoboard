@@ -575,6 +575,7 @@ mod tests {
         use std::io::Write;
         use std::process::{Command, Stdio};
 
+        let _spawning = crate::spawning();
         let mut watched = Command::new("/bin/sh")
             .args(["-c", "read line"])
             .stdin(Stdio::piped())
@@ -598,6 +599,7 @@ mod tests {
     fn the_relaunch_script_does_not_wait_for_a_process_that_is_gone() {
         use std::process::Command;
 
+        let _spawning = crate::spawning();
         let mut gone = Command::new("/usr/bin/true")
             .spawn()
             .expect("start a process");

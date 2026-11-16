@@ -4,26 +4,28 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import type { ClipboardCapability } from "../platform";
-import { PlatformProvider } from "../platform/react";
 import type { TerminalController } from "./TerminalController";
 import { TerminalEditMenu } from "./TerminalEditMenu";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { BROWSER_HOST } from "../test/hosts";
+import { testDaemon } from "../test/testDaemon";
+import { TestHost } from "../test/TestHost";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 let root: Root;
 let container: HTMLDivElement;
 let target: HTMLDivElement;
 let input: HTMLTextAreaElement;
-let controller: { selectedText: string; programCopiedText?: string; mouseReporting?: boolean; inputSessionId?: string; selectAll: () => void; pathLinkAt: ReturnType<typeof vi.fn>; revealPathLink: ReturnType<typeof vi.fn>; paste: ReturnType<typeof vi.fn>; pasteImage: ReturnType<typeof vi.fn>; focus: () => void };
+let controller: { selectedText: string; programCopiedText?: string; mouseReporting?: boolean; inputSessionId?: string; selectAll: () => void; pathLinkAt: ReturnType<typeof vi.fn>; revealPathLink: ReturnType<typeof vi.fn>; openPathLinkInDefaultApplication: ReturnType<typeof vi.fn>; paste: ReturnType<typeof vi.fn>; pasteImage: ReturnType<typeof vi.fn>; focus: () => void };
 let clipboard: ClipboardCapability | undefined;
 let sessionId: string;
+let isLocal: boolean | undefined;
 const controllerRef = { current: undefined as TerminalController | undefined };
 const targetRef = createRef<HTMLDivElement>();
 const render = () => act(() => root.render(
-  <PlatformProvider value={{ kind: "browser", host: BROWSER_HOST, clipboard }}>
+  <TestHost daemon={testDaemon({ isLocal })} platform={{ kind: "browser", host: BROWSER_HOST, clipboard }}>
     <TerminalEditMenu key={sessionId} sessionId={sessionId} controllerRef={controllerRef} contextTargetRef={targetRef} />
-  </PlatformProvider>,
+  </TestHost>,
 ));
 beforeEach(() => {
   container = document.body.appendChild(document.createElement("div"));
@@ -31,12 +33,13 @@ beforeEach(() => {
   input = target.appendChild(document.createElement("textarea"));
   targetRef.current = target;
   controller = {
-    selectedText: "", inputSessionId: "s-1", paste: vi.fn(), pasteImage: vi.fn(), pathLinkAt: vi.fn(), revealPathLink: vi.fn(async () => {}), focus: () => input.focus(),
+    selectedText: "", inputSessionId: "s-1", paste: vi.fn(), pasteImage: vi.fn(), pathLinkAt: vi.fn(), revealPathLink: vi.fn(async () => {}), openPathLinkInDefaultApplication: vi.fn(async () => {}), focus: () => input.focus(),
     selectAll: () => { controller.selectedText = "all terminal output"; },
   };
   controllerRef.current = controller as unknown as TerminalController;
   clipboard = { writeText: vi.fn(async () => {}), readText: vi.fn(async () => "clipboard text") };
   sessionId = "s-1";
+  isLocal = true;
   root = createRoot(container);
   render();
 });
@@ -244,24 +247,57 @@ it("intercepts only a secondary press, leaving ordinary terminal mouse input alo
 
 const closeMenu = () => act(() => { document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
 
-it("offers the file manager first, then a separator, over a path link, and reveals that link", async () => {
+const entriesOf = () => [...document.querySelectorAll<HTMLElement>("[role=menuitem], [role=separator]")].map((entry) => entry.getAttribute("role") === "separator" ? "-" : entry.textContent);
+
+it("offers Open in first, then a separator, over a file path link, with File manager and Default application", async () => {
   await open();
-  expect(item("Open in file manager")).toBeUndefined();
+  expect(item("Open in")).toBeUndefined();
   closeMenu();
-  controller.pathLinkAt.mockReturnValue({ path: "/r/a.ts" });
+  controller.pathLinkAt.mockReturnValue({ path: "/r/a.ts", kind: "file" });
   await open();
   expect(controller.pathLinkAt).toHaveBeenLastCalledWith(30, 40);
-  const entries = [...document.querySelectorAll<HTMLElement>("[role=menuitem], [role=separator]")];
-  expect(entries.map((entry) => entry.getAttribute("role") === "separator" ? "-" : entry.textContent)).toEqual(["Open in file manager", "-", "Copy", "Paste", "Select all"]);
-  await choose("Open in file manager");
-  expect(controller.revealPathLink).toHaveBeenCalledExactlyOnceWith({ path: "/r/a.ts" });
+  expect(entriesOf()).toEqual(["Open in", "-", "Copy", "Paste", "Select all"]);
+  await act(async () => { item("Open in").click(); });
+  expect(entriesOf().slice(-2)).toEqual(["File manager", "Default application"]);
+  await choose("File manager");
+  expect(controller.revealPathLink).toHaveBeenCalledExactlyOnceWith({ path: "/r/a.ts", kind: "file" });
+  expect(controller.openPathLinkInDefaultApplication).not.toHaveBeenCalled();
 });
 
-it("offers no file manager item to a menu opened with the keyboard, whatever was hovered", async () => {
-  controller.pathLinkAt.mockReturnValue({ path: "/r/a.ts" });
+it("opens a file path link in the default application from Open in", async () => {
+  controller.pathLinkAt.mockReturnValue({ path: "/r/a.ts", kind: "file" });
+  await open();
+  await act(async () => { item("Open in").click(); });
+  await choose("Default application");
+  expect(controller.openPathLinkInDefaultApplication).toHaveBeenCalledExactlyOnceWith({ path: "/r/a.ts", kind: "file" });
+});
+
+it("offers a folder link and a file the system could launch File manager alone", async () => {
+  for (const link of [{ path: "/r/dir", kind: "directory" }, { path: "/r/run.sh", kind: "file", viewerOnly: true }]) {
+    controller.pathLinkAt.mockReturnValue(link);
+    await open();
+    await act(async () => { item("Open in").click(); });
+    expect(entriesOf().slice(-1)).toEqual(["File manager"]);
+    expect(item("Default application")).toBeUndefined();
+    closeMenu();
+    closeMenu();
+  }
+});
+
+it("offers no Open in to a menu opened with the keyboard, whatever was hovered", async () => {
+  controller.pathLinkAt.mockReturnValue({ path: "/r/a.ts", kind: "file" });
   await act(async () => { input.dispatchEvent(new KeyboardEvent("keydown", { key: "ContextMenu", bubbles: true, cancelable: true })); });
   expect(item("Copy")).toBeDefined();
-  expect(item("Open in file manager")).toBeUndefined();
+  expect(item("Open in")).toBeUndefined();
+});
+
+it("offers no Open in in the window of a daemon elsewhere", async () => {
+  isLocal = false;
+  render();
+  controller.pathLinkAt.mockReturnValue({ path: "/r/a.ts", kind: "file" });
+  await open();
+  expect(item("Copy")).toBeDefined();
+  expect(item("Open in")).toBeUndefined();
 });
 
 it("focuses the terminal when the menu opens, and takes focus into the menu when it is right-clicked open again", async () => {

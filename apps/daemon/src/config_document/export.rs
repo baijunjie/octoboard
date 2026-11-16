@@ -166,7 +166,7 @@ pub fn build(store: &Store, selection: &Selection) -> Result<ConfigurationDocume
         for section in &selection.settings {
             match section {
                 SettingsSection::General => {
-                    settings.agent_language = store.agent_language()?;
+                    settings.interface_language = store.interface_language()?;
                     settings.auto_close_idle_shell_terminals =
                         Some(store.auto_close_idle_shell_terminals()?);
                     settings.resume_sessions_on_start = Some(store.resume_sessions_on_start()?);
@@ -1068,7 +1068,7 @@ mod tests {
         };
         let keys = |sections: Vec<SettingsSection>| {
             let (state, _dir) = crate::test_support::app_state("config-export-sections");
-            state.store.set_agent_language("de").unwrap();
+            state.store.set_interface_language("de").unwrap();
             let selection = Selection {
                 consoles: ConsoleScope::None,
                 settings: sections,
@@ -1096,8 +1096,8 @@ mod tests {
         assert_eq!(
             keys(vec![General]),
             [
-                "agent_language",
                 "auto_close_idle_shell_terminals",
+                "interface_language",
                 "keep_awake",
                 "keep_awake_when",
                 "resume_sessions_on_start"
@@ -1118,30 +1118,6 @@ mod tests {
         assert!(keys(vec![Appearance]).is_empty());
         assert!(keys(vec![KeyboardShortcuts]).is_empty());
         assert!(keys(Vec::new()).is_empty());
-    }
-
-    /// A daemon that holds no agent language writes none, and no document ever carries the old
-    /// `interface_language` key, which only an import reads.
-    #[test]
-    fn the_general_section_writes_the_agent_language_only_where_one_is_held() {
-        let (state, _dir) = crate::test_support::app_state("config-export-no-language");
-        let selection = Selection {
-            consoles: ConsoleScope::None,
-            settings: vec![SettingsSection::General],
-            accounts: false,
-            paths: true,
-        };
-        let written = |state: &crate::state::AppState| {
-            let document = serde_json::to_value(build(&state.store, &selection).unwrap()).unwrap();
-            document["settings"].clone()
-        };
-        let none = written(&state);
-        assert!(none.get("agent_language").is_none(), "{none}");
-        assert!(none.get("interface_language").is_none(), "{none}");
-        state.store.set_agent_language("ja").unwrap();
-        let held = written(&state);
-        assert_eq!(held["agent_language"], "ja");
-        assert!(held.get("interface_language").is_none(), "{held}");
     }
 
     #[test]

@@ -185,8 +185,7 @@ interface HoverPopoverTrigger {
  * - `label` names the dialog. It must not be the text the body holds, or a screen reader says it twice (the
  *   dialog's name, then its content): a body of one line is named by what the line is about instead.
  * - `placement` and `offset` default to the tooltip's; `contentClassName` and `bodyClassName` style the
- *   surface and its body; `contentProps` adds `data-*` attributes (a marker for what watches presses
- *   outside itself).
+ *   surface and its body; `contentProps` adds `data-*` attributes (a marker for what watches presses outside itself).
  * - `isInside`, `yieldsEscape` and `holdsOpen` are for a surface that holds others (see `useHoverPopover`).
  * - `onOpenChange` is told when it opens or closes, `onClosed` when it closes and whether it was the press form.
  *   `onClosed` comes before the surface has left the document, and the press form returns focus to its trigger only

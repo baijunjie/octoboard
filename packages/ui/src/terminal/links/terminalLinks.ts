@@ -44,14 +44,18 @@ const URL_SCHEME = String.raw`(?:https?|HTTPS?):[/]{2}`;
 const URL_CHAR = String.raw`[^\s"'!*(){}|\\^<>\`\u0080-\uffff]`;
 const URL_END_CHAR = String.raw`[^\s"':,.!?{}|\\^~[\]\`()<>\u0080-\uffff]`;
 
+/** The `]` that closes an IPv6 literal host, which may end an address that has no port or path (`http://[::1]`); the
+ * addon's end character leaves every other `]` out. */
+const BRACKETED_HOST_END = String.raw`(?<=[/]{2}\[[0-9A-Fa-f:.]+)\]`;
+
 /**
  * The plain-text addresses the terminal turns into links: `@xterm/addon-web-links`' own pattern,
- * with every non-ASCII character also ending the address. The addon's stops only at ASCII
- * delimiters, so an address written straight into CJK prose would take the full-width bracket or
+ * with every non-ASCII character also ending the address, and the `]` of an IPv6 host allowed to end one. The addon's
+ * stops only at ASCII delimiters, so an address written straight into CJK prose would take the full-width bracket or
  * the words after it along (`…?a=b（加` as one link). An address spelling its path in raw
  * non-ASCII is cut short in exchange; terminal output percent-encodes those nearly always.
  */
-export const TERMINAL_URL_REGEX = new RegExp(`${URL_SCHEME}${URL_CHAR}*${URL_END_CHAR}`);
+export const TERMINAL_URL_REGEX = new RegExp(`${URL_SCHEME}${URL_CHAR}*(?:${URL_END_CHAR}|${BRACKETED_HOST_END})`);
 
 /** An OSC 8 hyperlink under the pointer: its real target, and where it is on screen in viewport
  * pixels, which is what a tooltip on it is placed against. */
@@ -140,9 +144,10 @@ const LIST_MARKER = /^(?:[^A-Za-z0-9]+|(?:[0-9]+|[A-Za-z]|[ivx]+|[IVX]+)\.)$/;
  * edge counts as that column only where `layout.cols` says it does (see `LineLayout`), and even
  * there a row that starts an address of its own does not carry on the one above: a cell lists its
  * addresses one to a row, and one that fills the cell is no sign of a break. A line that stops
- * short does only when the address is its last text and the next row is not a separate word or list
- * marker. A program often breaks at its own text width, short of the terminal's last column, and so
- * does a row xterm wrapped after a resize; a mark such as `-` or `&` shows the rows are one address
+ * short does only when the address is its last text, the next row is indented (a program carries an
+ * address on under an indent; a row at the left edge is the next output, such as a shell prompt) and is
+ * not a separate word or list marker. A program often breaks at its own text width, short of the terminal's last
+ * column, and so does a row xterm wrapped after a resize; a mark such as `-` or `&` shows the rows are one address
  * (`…auto-select-` / `account&…`). A finished address and a word of letters or digits
  * (`http://a.dev/x` / `Hans`) stay apart, and so do an address and the marker of a list item that
  * follows it (`-`, `1.`, `a.`). The width of the lines around is no proof for an address, which a word
@@ -161,7 +166,7 @@ function continuesAddress(above: LineRow[], row: TerminalRow, layout: LineLayout
   const continuation = row.cells.slice(from, end).join("");
   const opensAddress = continuation.search(URL_START) === 0;
   if (textEnd(above[above.length - 1].row.cells) >= layout.cols) return opensAddress && layout.cell ? undefined : from;
-  if (opensAddress || LIST_MARKER.test(continuation)) return undefined;
+  if (from === 0 || opensAddress || LIST_MARKER.test(continuation)) return undefined;
   return WORD_CHAR.test(cells[limit - 1]) && WORD_RUN.test(continuation) ? undefined : from;
 }
 

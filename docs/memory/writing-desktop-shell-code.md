@@ -8,9 +8,13 @@ called from another thread. Called on the main thread — from a notification ob
 the closure at once, before the call returns (`send_user_message` in `tauri-runtime-wry`, as of 2.12.2). So it cannot
 put work after the callback in progress, whatever the name suggests.
 
-On Windows, an action taken from a window procedure (a `WM_SYSCOMMAND` from the system menu, say) that opens or shows a
-window re-enters that procedure when run in place. Leave it first: `tauri::async_runtime::spawn` a task that calls
-`run_on_main_thread`, as the subclass procedure in `apps/desktop/src-tauri/src/menu/system_menu.rs` does.
+On Windows, never open or show a window in place from a native callback or a synchronous command. An action taken from
+a window procedure (a `WM_SYSCOMMAND` from the system menu, say) re-enters that procedure. A synchronous Tauri command
+runs on the main thread inside the WebView2 handler that delivered it, and a window built there, or in a
+`run_on_main_thread` closure it calls (which runs in place), stays at `about:blank`; the Mac shows neither. Leave the
+callback first: `tauri::async_runtime::spawn` a task that calls `run_on_main_thread`, as the subclass procedure in
+`apps/desktop/src-tauri/src/menu/system_menu.rs` and `show_manager_window` in
+`apps/desktop/src-tauri/src/window_factory.rs` do.
 
 When work on the main thread has to wait until the current callback has returned (for example until a menu has
 finished delivering the chosen item's action), queue it with `NSOperationQueue::mainQueue().addOperationWithBlock`
@@ -73,3 +77,13 @@ no descriptor under that keyword. Inside an AppKit callback the panic does not s
 fallback, so such a quit went straight past the exit confirmation with nothing logged. So declare each object answer
 as `Option<Retained<_>>` and turn nil into the caller's "nothing there" (`apps/desktop/src-tauri/src/apple_event.rs`
 is the shape), keeping a plain `Retained<_>` only where Apple's header marks the method's answer nonnull.
+
+## In the desktop shell's tests, hold `crate::spawning()` around every process start
+
+Applies to tests in `apps/desktop/src-tauri/`, and to code they reach that starts a process. A process started while
+another test has a file lock's file open inherits that open file from the fork until the exec, or until it is gone, and
+the lock stays held through it, so the test that lets the lock go and expects it free fails now and then. So a test
+that starts a process holds `crate::spawning()` (`apps/desktop/src-tauri/src/lib.rs`) across the start; code under
+test that starts one takes it under `#[cfg(test)]` (as `command_line` in
+`apps/desktop/src-tauri/src/remote/device_key.rs` does); and a test that takes a file lock and asserts on its release
+holds it for the whole test.

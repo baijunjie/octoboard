@@ -1,0 +1,9 @@
+# A custom permission for the app's own commands that store and open a copy of a remote daemon's file for a
+# remote window ("Download and open"); see `exit-lifecycle.toml` for why an app-defined command needs a file like
+# this. Named in the remote capability alone: the local daemon's window has no remote files to copy.
+"$schema" = "./schemas/schema.json"
+
+[[permission]]
+identifier = "allow-remote-files"
+description = "Allows a remote window to store a file of its daemon's machine on this computer in parts, to open the copy with the default application and to remove it."
+commands.allow = ["remote_file_begin", "remote_file_write", "remote_file_open", "remote_file_discard"]

@@ -585,7 +585,7 @@ pub(super) async fn start_process(
         owner: owner_of(state, session)?,
         git_workflow: launch_git_workflow_settings(state, session)?,
         ask_questions_as_choices: state.store.ask_questions_as_choices()?,
-        user_language: state.store.agent_language()?,
+        user_language: state.store.interface_language()?,
         cwd: cwd.to_path_buf(),
         task: task.map(str::to_string),
         resume_agent_session_id: resume_agent_session_id.map(str::to_string),

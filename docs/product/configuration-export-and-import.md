@@ -189,14 +189,15 @@ declared as carried.
 
 ### Versions
 
-The format marker tells a configuration document from any other JSON. The version is a whole number, **4** today, and
+The format marker tells a configuration document from any other JSON. The version is a whole number, **5** today, and
 is raised only when a change would make a reader written for a released version misread a document — a field dropped,
 or given another meaning. Adding a field is not such a change, and a reader ignores a field it does not know. Version
-changes and upgrade steps are written only between released versions: a change no release has carried is made in place,
-at the current version, and raising the version past a released one adds a step that upgrades a document of that
-version.
+changes and upgrade steps are written only between released versions, and a version counts as released once builds of
+the main branch have written it, whether or not a release carried it: a change no such build has written is made in
+place, at the current version, while one to a version they have written raises the version and adds a step that
+upgrades a document of that version.
 
-An import reads **versions 1 to 4**: version 1 is the one the first beta releases wrote, and is upgraded to the current
+An import reads **versions 1 to 5**: version 1 is the one the first beta releases wrote, and is upgraded to the current
 version as it is read, before anything else looks at it, so the inspection and the import see the same document. It
 refuses a document whose format it does not recognize, and one of any other version, older or newer, before it creates
 anything; the refusal names the versions it reads. Upgrading a version 1 document:
@@ -216,11 +217,12 @@ Upgrading a version 2 document drops its application settings' setting for order
 import no longer reads: the order of sessions and projects travels instead as the Sorting of the General section (see
 "The application settings an export carries" in `docs/product/settings-in-a-configuration.md`).
 
-Upgrading a version 3 document, from a build that held one language for the windows and the agents alike under
-`interface_language`, copies that language into `agent_language` where the document carries none, and keeps
-`interface_language` as the client's own: an import then sets both the agent language and, on the importing client,
-the interface language from it (see "The application settings an export carries" in
-`docs/product/settings-in-a-configuration.md`). In a version 4 document `interface_language` is the client's alone.
+Upgrading a version 3 document changes nothing: it carries the language the daemon held under `interface_language`,
+where the current version reads it. A version 4 document carries the daemon's language under `agent_language`, beside
+an `interface_language` of the client that saved it: upgrading it makes the `agent_language` the document's
+`interface_language`, in place of the one beside it, and drops the key; one that carries no `agent_language` keeps its
+`interface_language` (see "The application settings an export carries" in
+`docs/product/settings-in-a-configuration.md`).
 
 An export always writes an entry for every agent in `accounts`, `launch` and `project_session_launch`. An import reads
 an agent's entry that is left out as unset: a console's account is then the agent's default account, a project's

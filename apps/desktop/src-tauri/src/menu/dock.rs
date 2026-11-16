@@ -1,4 +1,4 @@
-//! The Dock icon's menu: the Remote menu's lines (`macos::remote_items`) above the open windows
+//! The Dock icon's menu: the Remote menu's lines (`macos::remote_items`) below the open windows
 //! the system lists there itself. Tauri offers no Dock menu, so this answers AppKit's
 //! `applicationDockMenu:` on tao's application delegate with a menu built by `muda`, the menu
 //! library Tauri builds on: choosing a line reaches `on_menu_event` in `lib.rs` like any menu item

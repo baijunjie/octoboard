@@ -604,6 +604,7 @@ describe("telling the daemon the person turned to the terminal", () => {
   /** The terminal shown, in a window whose attention `attend` moves. */
   const shown = () => {
     Object.defineProperty(container, "offsetWidth", { configurable: true, value: 800 });
+    Object.defineProperty(container, "offsetHeight", { configurable: true, value: 600 });
     return windowAttention();
   };
 
@@ -661,9 +662,41 @@ describe("telling the daemon the person turned to the terminal", () => {
   });
 });
 
+describe("a terminal that is not laid out", () => {
+  const sizeIs = (width: number, height: number) => {
+    Object.defineProperty(container, "offsetWidth", { configurable: true, value: width });
+    Object.defineProperty(container, "offsetHeight", { configurable: true, value: height });
+  };
+
+  it.each([
+    ["no width", 0, 600],
+    ["no height", 800, 0],
+  ])("tells the daemon no size while its container has %s, as when the Remote devices page takes its place, and the size it has again once it is shown", async (_, width, height) => {
+    fakeTimers();
+    sizeIs(width, height);
+    controller.attach("a", url("a"), false);
+    const live = lastSocket();
+    live.open();
+    const sent = live.sent.length;
+    term.cols = 100;
+    term.rows = 30;
+    controller.syncSize();
+    await vi.advanceTimersByTimeAsync(RESIZE_SETTLE_MS);
+    expect(live.sent.slice(sent)).toEqual([]);
+
+    sizeIs(800, 600);
+    controller.syncSize();
+    await vi.advanceTimersByTimeAsync(RESIZE_SETTLE_MS);
+    expect(live.sent.slice(sent)).toEqual([JSON.stringify({ type: "resize", cols: 100, rows: 30 })]);
+  });
+});
+
 describe("the font size", () => {
   it("starts as the user's choice, and changing it redraws the live terminal and tells the daemon the size it now fits", async () => {
     fakeTimers();
+    // Laid out, as a hidden terminal tells the daemon nothing.
+    Object.defineProperty(container, "offsetWidth", { configurable: true, value: 800 });
+    Object.defineProperty(container, "offsetHeight", { configurable: true, value: 600 });
     expect(term.options.fontSize).toBe(15);
     controller.attach("a", url("a"), false);
     const live = lastSocket();

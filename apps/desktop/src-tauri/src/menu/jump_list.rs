@@ -1,4 +1,4 @@
-//! The taskbar's jump list on Windows: New remote window and the local daemon's window as tasks,
+//! The taskbar's jump list on Windows: Remote devices and the local daemon's window as tasks,
 //! and the saved remote daemons in a category of their own under the Remote menu's name. Each line
 //! starts the application's executable with an argument `remote::launch_action` reads, which the
 //! single-instance plugin hands to the running application (`lifecycle/windows.rs`).
@@ -25,7 +25,7 @@ use windows::Win32::UI::Shell::{
     DestinationList, EnumerableObjectCollection, ICustomDestinationList, IShellLinkW, ShellLink,
 };
 
-use crate::remote::{MAIN_WINDOW_ARGUMENT, NEW_WINDOW_ARGUMENT, OPEN_ARGUMENT};
+use crate::remote::{DEVICES_ARGUMENT, MAIN_WINDOW_ARGUMENT, OPEN_ARGUMENT};
 
 /// One line of the jump list: its title and the arguments the executable is started with.
 #[derive(Debug, PartialEq, Eq)]
@@ -37,14 +37,14 @@ pub struct Line {
 /// The jump list's tasks and its category of saved remote daemons, from the labels and the saved
 /// entries (`remote::menu_entries`).
 pub fn lines(
-    new_window: &str,
+    devices: &str,
     main_window: &str,
     entries: &[(String, String)],
 ) -> (Vec<Line>, Vec<Line>) {
     let tasks = vec![
         Line {
-            title: new_window.to_owned(),
-            arguments: NEW_WINDOW_ARGUMENT.to_owned(),
+            title: devices.to_owned(),
+            arguments: DEVICES_ARGUMENT.to_owned(),
         },
         Line {
             title: main_window.to_owned(),
@@ -146,15 +146,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_jump_list_offers_new_window_and_the_main_window_and_each_saved_daemon() {
+    fn the_jump_list_offers_remote_devices_and_the_main_window_and_each_saved_daemon() {
         let entries = vec![("18e8155aa56af2000".to_owned(), "Lab".to_owned())];
-        let (tasks, daemons) = lines("New remote window", "Open this PC’s window", &entries);
+        let (tasks, daemons) = lines("Remote devices", "Open this PC’s window", &entries);
         assert_eq!(
             tasks,
             [
                 Line {
-                    title: "New remote window".into(),
-                    arguments: NEW_WINDOW_ARGUMENT.into()
+                    title: "Remote devices".into(),
+                    arguments: DEVICES_ARGUMENT.into()
                 },
                 Line {
                     title: "Open this PC’s window".into(),

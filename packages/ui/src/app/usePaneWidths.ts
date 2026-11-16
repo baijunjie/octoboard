@@ -14,7 +14,7 @@ import type { PanelKind } from "../layout/panelKind";
  * The sidebar column's dock phase is set by the sidebar as its ease runs (`setSidebarColumnPhase`).
  */
 export function usePaneWidths({
-  noConsoles,
+  noSidebar,
   isNarrow,
   sidebarDocked,
   stackedPanelCount,
@@ -30,7 +30,8 @@ export function usePaneWidths({
   asidePeek,
   floatingKind,
 }: {
-  noConsoles: boolean;
+  /** There is no sidebar to give room to: no console, and no devices page standing in for its sessions. */
+  noSidebar: boolean;
   isNarrow: boolean;
   sidebarDocked: boolean;
   stackedPanelCount: number;
@@ -54,7 +55,7 @@ export function usePaneWidths({
   // widen and reflow on the first frame. A sidebar that cannot fit floats and takes no room from the aside beside it.
   const asideMin = !asideFloats && stackedPanelCount > 2 ? MIN_TWO_COLUMN_ASIDE_WIDTH : MIN_SINGLE_COLUMN_ASIDE_WIDTH;
   const sidebarWidth = usePaneWidth("sidebar", {
-    sidebar: !noConsoles && !isNarrow && (sidebarDocked || sidebarColumnPhase !== "closed"),
+    sidebar: !noSidebar && !isNarrow && (sidebarDocked || sidebarColumnPhase !== "closed"),
     aside: asideDocked,
   }, asideMin);
   const [allocation, setAllocation] = useState<{
@@ -71,7 +72,7 @@ export function usePaneWidths({
     pair: { width: number; kinds: string } | undefined;
   }>();
   const asideWidth = usePaneWidth("aside", {
-    sidebar: !noConsoles && !isNarrow && sidebarDocked,
+    sidebar: !noSidebar && !isNarrow && sidebarDocked,
     aside: asideDocked,
   }, asideMin, allocation?.adjustment ?? 0);
   const kinds = stackedPanelKinds ?? Array.from({ length: stackedPanelCount }, (_, index) => String(index));

@@ -76,7 +76,7 @@ draws it (`StaticTag`, `GroupFieldError`), marks and all.
 - **Class and style helpers.** Where a consumer has to give its own element the look of a wrapped component (a button
   drawn as a link, a scroller with HeroUI's scroll shadow, a tooltip's surface), the layer exports the helper instead
   of the class names: `buttonClassName`, `scrollShadowClassName`, `scrollShadowStripStyle`, `scrollShadowAutoProps`,
-  `tooltipSurfaceClassName`.
+  `tooltipSurfaceClassName`, `menuListClassName`.
 - **Honour a busy modal.** A `Modal` given `busy` disables every control in it but a `pending` `Button`, and the
   wrappers do it themselves: each interactive wrapper takes its `disabled` from `useDisabled` (`busy.ts`), which reads
   the modal's busy state, and a new interactive wrapper does the same (a pending action passes `exempt`). A container

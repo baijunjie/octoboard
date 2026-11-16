@@ -115,6 +115,7 @@ const macServing = snapshotState({
     state: "serving",
     address: "http://127.0.0.1:3366/?key=Zm9yLXRoZS1nYWxsZXJ5LW9ubHk",
     forward_command: "ssh -N -L 3366:/Users/dev/.octoboard/browser.sock dev@<server>",
+    server_addresses: ["Devs-MacBook.local", "192.168.1.20", "100.101.102.103", "fd7a:115c:a1e0::1", "2400:4051:8e2:a00:1c3a:5f2b:9d4e:7a10"],
     connection: MAC_CONNECTION,
   }),
 });
@@ -132,6 +133,7 @@ const windowsServing = snapshotState({
     browser_port: 3369,
     address: "http://127.0.0.1:3369/?key=Zm9yLXRoZS1nYWxsZXJ5LW9ubHk",
     forward_command: "ssh -N -L 3369:127.0.0.1:3369 dev@<server>",
+    server_addresses: ["STUDIO-PC", "192.168.1.31", "100.101.102.104"],
     connection: WINDOWS_CONNECTION,
   }),
 });
@@ -153,6 +155,9 @@ const windowsPortInUse = snapshotState({
 
 const OPEN_REMOTE_ACCESS: Step[] = [(ui) => ui.press(ui.t("rail.settings")), (ui) => ui.press(ui.t("settings.section.remoteAccess"))];
 
+/** The section with its Browser tab selected, the other of the two ways in. */
+const OPEN_BROWSER_TAB: Step[] = [...OPEN_REMOTE_ACCESS, (ui) => ui.press(ui.t("settings.remoteAccess.tabs.browser"))];
+
 export const remoteAccessScenarios: Scenario[] = [
   {
     id: "settings-remote-access-macos",
@@ -160,7 +165,7 @@ export const remoteAccessScenarios: Scenario[] = [
     category: "normal",
     title: "Remote access on macOS, serving",
     description:
-      "The Remote access section of the Mac application with Allow remote access on. Below the switch: the browser address and the SSH forward, each with its copy button, the forward's description naming the server placeholder in a monospace chip; the connection details, whose description names the Add remote daemon button and the Connection details field as chips, as one line of text with Copy connection details and, beneath it, their QR code on a white square (it stays black on white in the dark theme); Rotate key; and, below the fold of a short window, Remote Login with its On badge, since the Mac's SSH server is running (scroll the section). There is no browser port row: the Mac serves through the owner socket.",
+      "The Remote access section of the Mac application with Allow remote access on, in the order: Remote Login first, with its On badge, since the Mac's SSH server is running and both ways in log in through it (its description says so); then the Allow remote access switch; then a strip of two tabs, Octoboard app (selected) and Browser. The Octoboard app tab holds the connection details, whose short description names the Add remote daemon button and the Connection details field as chips, as one line of text with Copy connection details and, beneath it, their QR code on a white square (it stays black on white in the dark theme). The Browser tab is the next scenario.",
     state: macServing,
     host: MAC_HOST,
     desktopApp: true,
@@ -169,12 +174,40 @@ export const remoteAccessScenarios: Scenario[] = [
     steps: OPEN_REMOTE_ACCESS,
   },
   {
+    id: "settings-remote-access-macos-browser",
+    group: GROUP,
+    category: "normal",
+    title: "Remote access on macOS, Browser tab",
+    description:
+      "The Browser tab of the Mac's Remote access section: Step 1: SSH forward, whose description says to run it on the other computer, to keep it running and what it does, with the command and the address in it as a dotted-underlined token on a faint fill, showing the Mac's Bonjour name (Devs-MacBook.local) so the command is ready to copy; Step 2: Browser address, to open once step 1 is running, with its copy button; and Rotate key. There is no browser port row: the Mac serves through the owner socket.",
+    state: macServing,
+    host: MAC_HOST,
+    desktopApp: true,
+    remoteLogin: "on",
+    clipboard: { text: "" },
+    steps: OPEN_BROWSER_TAB,
+  },
+  {
+    id: "settings-remote-access-forward-address-menu",
+    group: GROUP,
+    category: "normal",
+    title: "Remote access, choosing the forward's address",
+    description:
+      "Pressing the address token in the SSH forward command opens the standard dropdown menu under it, listing this computer's names and addresses (Devs-MacBook.local with its check, then 192.168.1.20, 100.101.102.103 and an IPv6 address, each with a network glyph) and a last item, Enter the address yourself, with a pencil, which puts the <server> placeholder back. Choosing an item closes the menu and the token and the command show it.",
+    state: macServing,
+    host: MAC_HOST,
+    desktopApp: true,
+    remoteLogin: "on",
+    clipboard: { text: "" },
+    steps: [...OPEN_BROWSER_TAB, (ui) => ui.press(ui.t("settings.remoteAccess.forward.address.change", { address: "Devs-MacBook.local" }))],
+  },
+  {
     id: "settings-remote-access-macos-off",
     group: GROUP,
     category: "normal",
     title: "Remote access on macOS, off, Remote Login off",
     description:
-      "Allow remote access off: the switch row says that once it is on a browser on another computer can use the app through an SSH connection to this one, and nothing else is offered above Remote Login, which has no On badge but says it is off and where to switch it on, with an Open System Settings button.",
+      "Allow remote access off: Remote Login at the top has no On badge but says it is off and where to switch it on, with an Open System Settings button; the switch row below it says that once it is on another computer's app or a browser can use the app through an SSH connection to this one; nothing else is offered, no tabs.",
     state: macOff,
     host: MAC_HOST,
     desktopApp: true,
@@ -187,7 +220,7 @@ export const remoteAccessScenarios: Scenario[] = [
     category: "normal",
     title: "Remote access on Windows, serving",
     description:
-      "The Remote access section of the Windows application with Allow remote access on. Between the switch and the address, a Browser port row names Port 3369 with a Change port button, since Windows' SSH server cannot forward to a socket. The address, the forward command, the connection details with their QR code and Rotate key follow, as on macOS. OpenSSH Server, at the end of the section (scroll to it), is not running: its row says where to add and start it, with an Open Settings button in place of the On badge.",
+      "The Remote access section of the Windows application with Allow remote access on: OpenSSH Server first, which is not running, so its row says where to add and start it, with an Open Settings button in place of the On badge; the switch; then the Octoboard app and Browser tabs, the first selected, with the connection details and their QR code as on macOS. There is no Browser port row on this tab: while serving, the port is in the Browser tab (see the port dialog scenario).",
     state: windowsServing,
     host: WINDOWS_HOST,
     desktopApp: true,
@@ -200,7 +233,7 @@ export const remoteAccessScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Remote access on Windows, off",
-    description: "Allow remote access off on Windows: the switch and the Browser port row, which is the user's setting whether or not the daemon serves, then OpenSSH Server running with its On badge; no address, forward command or connection details.",
+    description: "Allow remote access off on Windows: OpenSSH Server running with its On badge, the switch, then the Browser port row under it (the user's setting whether or not the daemon serves, so while nothing is served it stays under the switch and there are no tabs); no address, forward command or connection details.",
     state: windowsOff,
     host: WINDOWS_HOST,
     desktopApp: true,
@@ -225,12 +258,12 @@ export const remoteAccessScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Change the browser port",
-    description: "Change port opens a small dialog with one Port field, filled with the current port, a line saying what a valid one is and, when the field is emptied, an example port as its placeholder, and Save.",
+    description: "On Windows the Browser tab holds Step 1 and Step 2, then the Browser port row (Port 3369) and Rotate key. Change port opens a small dialog with one Port field, filled with the current port, a line saying what a valid one is and, when the field is emptied, an example port as its placeholder, and Save.",
     state: windowsServing,
     host: WINDOWS_HOST,
     desktopApp: true,
     remoteLogin: "on",
-    steps: [...OPEN_REMOTE_ACCESS, (ui) => ui.press(ui.t("settings.remoteAccess.port.change"))],
+    steps: [...OPEN_BROWSER_TAB, (ui) => ui.press(ui.t("settings.remoteAccess.port.change"))],
   },
   {
     id: "settings-remote-access-failed",
@@ -238,7 +271,7 @@ export const remoteAccessScenarios: Scenario[] = [
     category: "exceptional",
     title: "Remote access on, the browser port in use",
     description:
-      "Allow remote access is on but the daemon could not serve: an error alert under the switch, titled Remote access is on, but no browser can be served, says the browser port is in use and to change it, with the system's own words (os error 10048) behind its Details button. The Browser port row follows, with Change port; no address, forward command or connection details are offered. Every other failure reason (the named pipe, the socket, the key) is the same alert with its own sentence.",
+      "Allow remote access is on but the daemon could not serve: an error alert under the switch, titled Remote access is on, but this computer cannot be reached, says the browser port is in use and to change it, with the system's own words (os error 10048) behind its Details button. The Browser port row follows under the switch, with Change port; no tabs, address, forward command or connection details are offered. Every other failure reason (the named pipe, the socket, the key) is the same alert with its own sentence.",
     state: windowsPortInUse,
     host: WINDOWS_HOST,
     desktopApp: true,

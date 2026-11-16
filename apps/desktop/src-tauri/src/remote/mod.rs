@@ -6,24 +6,27 @@
 //! window opens, and then opens the window (`daemon_window`) on a loopback port of its own whose
 //! connections are each carried by a run of `octoboardd proxy` over that connection (`tunnel`).
 //! The pipeline is `connect`'s. The remote daemon never listens beyond its own loopback and owner
-//! endpoint; nothing here asks anything of it beyond carrying connections, so closing the window or
-//! quitting the application ends the SSH connection and nothing on the remote daemon.
+//! endpoint; nothing here asks anything of it beyond carrying connections (a remote window also
+//! forwards the loopback addresses of the daemon's machine it opens, `forward`), so closing the
+//! window or quitting the application ends the SSH connection and nothing on the remote daemon.
 //!
 //! After a first connection authenticated with the remote user's own password or key, the
 //! application installs a key of this device's own for the remote user and connects with it from
 //! then on (`device_key`), its private key kept in the system's credential store (`credentials`)
 //! for as long as the entry names the same destination.
 //!
-//! The owner reaches a remote daemon from a remote window on the connect page the application
-//! provides (`open_connect_page`, from New Remote Window), which lists, adds and connects to the
-//! saved remote daemons and becomes the window of the one it connects to; or directly from the
+//! The owner reaches a remote daemon from the Remote devices page the main window provides
+//! (`page::request_page`, from the Remote Devices item), which lists, adds and connects to the
+//! saved remote daemons and opens the window of the one it connects to; or directly from the
 //! Remote menu, the Dock menu, the windows' system menus on Windows (`menu::system_menu`) and the
-//! jump list (`actions`). The menu bar icon's menu lists the connected ones, and offers no way to
-//! connect. Every window may use the commands (`permissions/remote-daemons.toml`), and none of them
-//! returns a secret: a password or passphrase goes in, the browser's address with the owner key is
-//! opened by the shell itself (`browser`), and device keys stay in the credential store. The local
-//! window's rail shows the connected remote daemons, kept up to date through `CHANGED_EVENT` and
-//! `remote_daemons_status`. The types the UI exchanges with these commands are `outcome`'s.
+//! jump list (`actions`), which connect quietly and leave a question or a failure to that page
+//! (`page`). The menu bar icon's menu lists the connected ones, and offers no way to connect. Only
+//! the local daemon's window may use the commands (`permissions/remote-daemons.toml`), and none of
+//! them returns a secret: a password or passphrase goes in, the browser's address with the owner
+//! key is opened by the shell itself (`browser`), and device keys stay in the credential store.
+//! The page lists the saved remote daemons and how each is connected, kept up to date through
+//! `CHANGED_EVENT` and `remote_daemons_status`. The types the UI exchanges with these commands
+//! are `outcome`'s.
 
 mod actions;
 mod browser;
@@ -31,15 +34,18 @@ mod connect;
 mod credentials;
 mod device_key;
 mod entries;
+pub mod files;
+mod forward;
 mod octoboardd;
 mod outcome;
+pub mod page;
 mod restore;
 mod ssh;
 mod tunnel;
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::watch;
@@ -47,14 +53,14 @@ use tokio::sync::watch;
 use crate::config_dir::config_path;
 use crate::diagnostics::diagnostic;
 pub use actions::{
-    handle_menu_item, launch_action, menu_entries, open_connect_page, run_menu_action, MenuAction,
-    MAIN_WINDOW_ARGUMENT, NEW_WINDOW_ARGUMENT, OPEN_ARGUMENT, OPEN_ITEM_PREFIX,
+    handle_menu_item, launch_action, menu_entries, run_menu_action, MenuAction, DEVICES_ARGUMENT,
+    MAIN_WINDOW_ARGUMENT, OPEN_ARGUMENT, OPEN_ITEM_PREFIX,
 };
 // The macOS Remote menu's and the Dock menu's item ids.
 #[cfg(all(test, target_os = "macos"))]
 pub use actions::menu_action;
 #[cfg(target_os = "macos")]
-pub use actions::{MAIN_WINDOW_ITEM_ID, NEW_WINDOW_ITEM_ID};
+pub use actions::{DEVICES_ITEM_ID, MAIN_WINDOW_ITEM_ID};
 pub use entries::{Entry, EntryInput};
 pub use outcome::{ConnectOutcome, ConnectRequest, ConnectionState, Status, ViaName};
 pub use restore::{
@@ -70,6 +76,10 @@ pub struct RemoteState {
     windows: Mutex<HashMap<String, Live>>,
     /// The daemons a connection is being made to, by identity, for a second request to wait on.
     connecting: connect::Connecting,
+    /// What a connection asked for away from the Remote devices page left it to show.
+    page: page::PageState,
+    /// The copies of remote files being written for "Download and open" (`files`).
+    files: files::Copies,
 }
 
 struct Live {
@@ -86,6 +96,9 @@ struct Live {
     /// Whether its SSH connection is up.
     connected: watch::Receiver<bool>,
     via: Via,
+    /// The loopback ports of the daemon's machine its window forwards (`forward`); none for a
+    /// connection held for the browser, which has no window to open an address from.
+    forwards: Option<Arc<forward::Forwards>>,
 }
 
 /// The rank the next connection is given (`Live::order`).
@@ -168,6 +181,10 @@ pub fn connected_daemons(app: &AppHandle) -> Vec<ConnectedDaemon> {
     held.into_iter().map(|(_, daemon)| daemon).collect()
 }
 
+/// The event a remote window is sent when its forwarded ports (`forward`) changed: one made, stopped, or
+/// opened at another address.
+pub const FORWARDS_CHANGED_EVENT: &str = "remote-forwards-changed";
+
 /// What a held connection is shown in.
 #[derive(Clone, Debug)]
 enum Via {
@@ -183,7 +200,7 @@ enum Via {
 const BROWSER_LABEL_PREFIX: &str = "browser-";
 
 /// The event every window is sent when the remote daemons, or the state of their connections, may
-/// have changed: the local window's rail and any connect page read them again.
+/// have changed: the local window's Remote devices button and page read them again.
 pub const CHANGED_EVENT: &str = "remote-daemons-changed";
 
 /// The saved remote daemons changed: every window is told, and the native menus that list them
@@ -200,16 +217,57 @@ pub(crate) fn connections_changed(app: &AppHandle) {
     crate::tray::daemons_changed(app);
 }
 
-/// Opens a new remote window on the connect page.
-#[tauri::command]
-pub fn remote_window_new(app: AppHandle) {
-    open_connect_page(&app, None);
+/// The forwarded ports of the remote window labelled `label`, if it holds a connection: no window
+/// forwards through another's.
+fn forwards_of(app: &AppHandle, label: &str) -> Option<Arc<forward::Forwards>> {
+    app.state::<RemoteState>()
+        .windows()
+        .get(label)
+        .and_then(|live| live.forwards.clone())
 }
 
-/// Opens, or brings forward, the window of the saved remote daemon `id`; see `actions::open_entry`.
+/// The address to open `url` at in this computer's browser, for the calling window: `url` as it is
+/// unless it is an address on the loopback of the daemon's machine and the window holds a connection
+/// to forward it over, and else the address of this computer's port forwarded to it, once that is
+/// held (see `forward`). A failure is told by kind, for the page to word.
 #[tauri::command]
-pub fn remote_window_open(app: AppHandle, id: String) {
-    actions::open_entry(&app, id);
+pub async fn remote_link_address(
+    app: AppHandle,
+    webview_window: tauri::WebviewWindow,
+    url: String,
+) -> Result<String, forward::Failure> {
+    let Some(target) = forward::target(&url) else {
+        return Ok(url);
+    };
+    let label = webview_window.label();
+    match forwards_of(&app, label) {
+        Some(forwards) => forwards.open(&url, &target).await,
+        // Only a remote window may call this; any other is given the address as written. A remote
+        // daemon's window whose connection is gone has nowhere to forward to, and as written the
+        // address would lead to this computer.
+        None if label.starts_with(crate::daemon_window::REMOTE_LABEL_PREFIX) => {
+            Err(forward::Failure::disconnected(target.port))
+        }
+        None => Ok(url),
+    }
+}
+
+/// The calling window's forwarded ports, in the order they were made.
+#[tauri::command]
+pub fn remote_forwards_list(
+    app: AppHandle,
+    webview_window: tauri::WebviewWindow,
+) -> Vec<forward::ForwardInfo> {
+    forwards_of(&app, webview_window.label()).map_or_else(Vec::new, |forwards| forwards.list())
+}
+
+/// Stops the calling window's forward of the remote port `remote_port`: its port is let go and the
+/// connections passing through it are cut.
+#[tauri::command]
+pub fn remote_forward_stop(app: AppHandle, webview_window: tauri::WebviewWindow, remote_port: u16) {
+    if let Some(forwards) = forwards_of(&app, webview_window.label()) {
+        forwards.stop(remote_port);
+    }
 }
 
 /// Shows and focuses the local daemon's window.
@@ -315,18 +373,24 @@ fn pin(app: &AppHandle, id: &str, fingerprint: &str) {
 
 /// Connects to a remote daemon and opens its window, or says why it did not.
 ///
-/// From a window on the connect page, the window itself becomes the daemon's once it is connected;
-/// where the daemon has a window already, that one is brought forward and the connect page closed,
-/// as it is once the daemon is opened in the browser.
+/// Where the daemon has a window already, that one is brought forward. Called from the Remote
+/// devices page, which may have been loaded again while the connection was made, an outcome that
+/// has to be shown is handed to the page again (`page::hand_over`) rather than lost with the page
+/// that asked.
 #[tauri::command]
 pub async fn remote_daemon_connect(
     app: AppHandle,
     webview_window: tauri::WebviewWindow,
     request: ConnectRequest,
 ) -> Result<ConnectOutcome, String> {
-    let caller = webview_window.label().to_owned();
-    let page = crate::daemon_window::on_connect_page(&app, &caller).then_some(caller);
-    connect::connect(&app, request, page, None).await
+    let from_main = crate::daemon_window::is_main(webview_window.label());
+    let loads = page::loads(&app);
+    let id = request.id.clone();
+    let outcome = connect::connect(&app, request, None).await?;
+    if from_main && page::should_hand_back(loads, page::loads(&app), &outcome) {
+        page::hand_over(&app, id, outcome.clone());
+    }
+    Ok(outcome)
 }
 
 /// Ends the connection to the remote daemon `id`: the one held for the browser, or its window's,
@@ -353,9 +417,13 @@ pub fn remote_daemon_disconnect(app: AppHandle, id: String) {
 }
 
 /// Ends the connection of the remote window labelled `label`, which has closed (or never opened):
-/// the port is let go and the SSH connection ended, nothing asked of the remote daemon.
+/// the port is let go and the SSH connection ended, nothing asked of the remote daemon, and the copies it
+/// had begun and not opened are removed.
 pub fn window_closed(app: &AppHandle, label: &str) {
-    if app.state::<RemoteState>().end(label) {
+    let ended = app.state::<RemoteState>().end(label);
+    // After the connection is gone, so that a copy begun meanwhile was refused, or is removed here.
+    app.state::<RemoteState>().files.window_closed(label);
+    if ended {
         connections_changed(app);
     }
 }
@@ -413,6 +481,7 @@ fn live(identity: &str, entry_id: &str, order: u64, via: Via) -> (Live, watch::R
             stop,
             connected,
             via,
+            forwards: None,
         },
         stopped,
     )
@@ -450,17 +519,13 @@ mod tests {
     }
 
     #[test]
-    fn every_window_may_use_the_remote_daemons_and_no_answer_carries_a_secret() {
-        // The local window, the remote windows and the connect pages all have the commands.
-        for capability in [
-            include_str!("../../capabilities/default.json"),
-            include_str!("../../capabilities/remote.json"),
-        ] {
-            assert!(
-                capability.contains("\"allow-remote-daemons\""),
-                "{capability}"
-            );
-        }
+    fn only_the_local_window_may_use_the_remote_daemons_and_no_answer_carries_a_secret() {
+        assert!(
+            include_str!("../../capabilities/default.json").contains("\"allow-remote-daemons\"")
+        );
+        assert!(
+            !include_str!("../../capabilities/remote.json").contains("\"allow-remote-daemons\"")
+        );
         let permission = include_str!("../../permissions/remote-daemons.toml");
         for command in [
             "remote_daemons_list",
@@ -469,8 +534,8 @@ mod tests {
             "remote_daemon_connect",
             "remote_daemons_status",
             "remote_daemon_disconnect",
-            "remote_window_new",
-            "remote_window_open",
+            "remote_connect_pending_take",
+            "remote_page_requested_take",
             "main_window_show",
         ] {
             assert!(permission.contains(&format!("\"{command}\"")), "{command}");

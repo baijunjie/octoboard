@@ -176,7 +176,7 @@ fn build_menu(
         .build()
 }
 
-/// The Remote menu: New Remote Window, the saved remote daemons (choosing one opens or brings
+/// The Remote menu: Remote Devices, the saved remote daemons (choosing one opens or brings
 /// forward its window), and the local daemon's window. Its items' ids are the remote daemons'
 /// (`remote::menu_action`), which `on_menu_event` in `lib.rs` hands to `remote`.
 fn remote_menu(
@@ -209,10 +209,10 @@ pub(super) enum RemoteItem {
     Separator,
 }
 
-/// The Remote menu's lines, in order: New Remote Window; each saved remote daemon by its name (or a
+/// The Remote menu's lines, in order: Remote Devices; each saved remote daemon by its name (or a
 /// disabled line saying there is none); Open This Mac's Window.
 pub(super) fn remote_items(labels: &Labels, entries: &[(String, String)]) -> Vec<RemoteItem> {
-    use crate::remote::{MAIN_WINDOW_ITEM_ID, NEW_WINDOW_ITEM_ID, OPEN_ITEM_PREFIX};
+    use crate::remote::{DEVICES_ITEM_ID, MAIN_WINDOW_ITEM_ID, OPEN_ITEM_PREFIX};
     let item = |id: String, text: &str, enabled: bool| RemoteItem::Item {
         id,
         text: text.to_owned(),
@@ -220,8 +220,8 @@ pub(super) fn remote_items(labels: &Labels, entries: &[(String, String)]) -> Vec
     };
     let mut items = vec![
         item(
-            NEW_WINDOW_ITEM_ID.to_owned(),
-            labels.get("menu.newRemoteWindow", "New Remote Window"),
+            DEVICES_ITEM_ID.to_owned(),
+            labels.get("menu.remoteDevices", "Remote Devices"),
             true,
         ),
         RemoteItem::Separator,
@@ -250,7 +250,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_remote_menu_lists_new_window_the_saved_daemons_and_the_main_window() {
+    fn the_remote_menu_lists_the_remote_devices_the_saved_daemons_and_the_main_window() {
         let entries = vec![
             ("a".to_owned(), "Staging".to_owned()),
             ("b".to_owned(), "Lab".to_owned()),
@@ -266,7 +266,7 @@ mod tests {
         assert_eq!(
             ids,
             [
-                Some("remote-window-new"),
+                Some("remote-devices-show"),
                 None,
                 Some("remote-window-open:a"),
                 Some("remote-window-open:b"),
@@ -280,6 +280,19 @@ mod tests {
                 assert!(crate::remote::menu_action(id).is_some(), "{id}");
             }
         }
+    }
+
+    #[test]
+    fn the_remote_menu_reads_the_ui_s_label_for_the_remote_devices_line() {
+        let labels = Labels(HashMap::from([(
+            "menu.remoteDevices".to_owned(),
+            "远程设备".to_owned(),
+        )]));
+        let items = remote_items(&labels, &[]);
+        assert!(matches!(
+            &items[0],
+            RemoteItem::Item { text, enabled: true, .. } if text == "远程设备"
+        ));
     }
 
     #[test]
@@ -333,7 +346,7 @@ mod tests {
         assert_eq!(
             texts(&remote_items(&Labels::default(), &entries)),
             [
-                Some(("New Remote Window", true)),
+                Some(("Remote Devices", true)),
                 None,
                 Some(("Lab", true)),
                 None,
@@ -343,7 +356,7 @@ mod tests {
         assert_eq!(
             texts(&remote_items(&Labels::default(), &[])),
             [
-                Some(("New Remote Window", true)),
+                Some(("Remote Devices", true)),
                 None,
                 Some(("No Remote Daemons", false)),
                 None,
@@ -355,7 +368,7 @@ mod tests {
     #[test]
     fn the_remote_menu_reads_in_the_language_the_ui_sent() {
         let labels = Labels(HashMap::from([
-            ("menu.newRemoteWindow".to_owned(), "新建远程窗口".to_owned()),
+            ("menu.remoteDevices".to_owned(), "远程设备".to_owned()),
             (
                 "menu.openMainWindow".to_owned(),
                 "打开这台 Mac 的窗口".to_owned(),
@@ -365,7 +378,7 @@ mod tests {
         assert_eq!(
             texts(&remote_items(&labels, &entries)),
             [
-                Some(("新建远程窗口", true)),
+                Some(("远程设备", true)),
                 None,
                 Some(("实验室", true)),
                 None,

@@ -14,7 +14,9 @@ export type BrowseFailure =
   | { kind: "superseded" }
   | { kind: "changed" }
   | { kind: "disconnected" }
-  | { kind: "failed"; message: ErrorPresentation; code: string };
+  /** `tooLarge` is set for a read past the file budget, with the file's size where the daemon said it: a viewer of a live
+   * file shows that as a stand-in, not as an error. */
+  | { kind: "failed"; message: ErrorPresentation; code: string; tooLarge?: { size?: number } };
 
 /** The code the daemon client rejects a pending request with when its connection closes (`daemon-client.ts`). */
 const CONNECTION_CLOSED = "connection_closed";
@@ -78,6 +80,7 @@ export function browseFailure(
         err.params.size !== undefined
           ? t("browser.error.fileTooLarge", { size: params.size!, max: params.max })
           : t("browser.error.fileTooLargeNoSize", { max: params.max }),
+      tooLarge: Number.isFinite(Number(err.params.size)) && err.params.size !== undefined ? { size: Number(err.params.size) } : {},
     };
   }
   if (err.code === "limit_exceeded" && err.params.limit === "patch_bytes") {

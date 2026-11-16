@@ -14,8 +14,8 @@ opens, is described under "Web addresses" and "File paths" below; the rest holds
 - **Selecting text does not open a link**: a click that leaves a terminal selection, including dragging within a link,
   opens nothing. Other mouse buttons and a Mac's Control-click do not open a link. Right-click and a Mac's Control-click
   open the editing menu described in "The editing menu" in `docs/product/terminal-copy-paste-and-selection.md`; on a
-  file path link it offers **Open in file manager** (see "File paths" below), and it has nothing of its own for a web
-  address. Opening a link does not resume an interrupted session or reopen an archived one.
+  file path link it offers **Open in** (see "File paths" below), and it has nothing of its own for a web address.
+  Opening a link does not resume an interrupted session or reopen an archived one.
 - **A scrollbar a full-screen program draws down the terminal's last column is no part of a row's text** — as Grok
   Build draws one when the conversation overflows its view, its thumb a `█`, its track blank cells. A block element
   (U+2580–U+259F, such as `█`, `▐`, `▕`, `▓` or `░`) alone in the terminal's last column, with a blank cell right
@@ -38,10 +38,15 @@ opens, is described under "Web addresses" and "File paths" below; the rest holds
   quote mark, a parenthesis, a brace or an angle bracket; a trailing punctuation mark such as `.`, `,`, `:`, `!` or `?`
   is left out. So an address written straight into CJK prose stops before the full-width bracket or the words that
   follow it. An address that spells its host or path in raw non-ASCII characters is cut short at the first one, and one
-  whose host starts with one (`http://例え.jp`) is not a link at all; a percent-encoded address is recognised whole. An
-  OSC 8 hyperlink is not affected, its target being the one the program gives.
+  whose host starts with one (`http://例え.jp`) is not a link at all; a percent-encoded address is recognised whole. A
+  host written as an IPv6 literal in brackets is part of the address, and its closing bracket may end one with no port
+  or path (`http://[::1]`, `http://[::1]:3000/`). An OSC 8 hyperlink is not affected, its target being the one the
+  program gives.
 - **An address opens in the user's own browser** — to a new tab, in the UI opened in a browser — as a web link in a
-  Markdown document does (see `docs/product/markdown-documents.md`).
+  Markdown document does (see `docs/product/markdown-documents.md`). It opens as written, with one exception: in a
+  remote window of the desktop application, an address on the remote machine's own loopback (`http://localhost:3000/`
+  and the like), plain text and OSC 8 hyperlink alike, opens through a port of this computer forwarded to it (see
+  "Loopback addresses of the remote machine" in `docs/product/links-and-files-in-a-remote-window.md`).
 - **An OSC 8 hyperlink shows its real target as a tooltip** once the pointer has rested on it for the window's usual
   tooltip delay, in the terminal's own monospace font and reading left to right in every language (see "How a tooltip
   behaves" in
@@ -50,7 +55,8 @@ opens, is described under "Web addresses" and "File paths" below; the rest holds
   scrolls, and when the terminal is cleared to draw a session afresh — selecting another session, a reattach, a fresh
   paint sent to a client that fell behind the output, or an interrupted session's preview replacing the screen. It
   also closes on any key press or pointer press, including the click that opens the link. The target reaches no
-  assistive technology, as none of the terminal's output does.
+  assistive technology, as none of the terminal's output does. The tooltip shows the target as the program gave it,
+  also where the address opens through a forwarded port.
 - **An address the program itself breaks onto the next line is joined**: when the program ends a row partway through an
   address and carries on with it on the next row — as Claude Code does with a long line of text, usually after an indent
   — the pieces are one link, which covers the rows it spans and opens the whole address; the next row's indent is no
@@ -61,10 +67,12 @@ opens, is described under "Web addresses" and "File paths" below; the rest holds
 
   - **When the row above reaches the terminal's last column**, the piece takes along the next row's address characters,
     even when they form a separate word: a finished address at that column and a broken one cannot be told apart.
-  - **When the row above stops short of the last column**, the piece joins unless the next row starts a separate `http`
-    or `https` address, the piece ends with an ASCII letter or digit and the next row's run of address characters
-    consists entirely of ASCII letters and digits, or that run is a list item marker — marks alone, with no letter or
-    digit (`-`, `+`), or a number, a single letter or a roman numeral written with i, v and x alone, in either case,
+  - **When the row above stops short of the last column**, the piece joins only when the next row is indented — its
+    first non-blank text does not start at the row's left edge, since a row at the left edge is the next thing the
+    program printed, a shell prompt under the output of `printf`, not a continuation — and not even then if the next row
+    starts a separate `http` or `https` address, the piece ends with an ASCII letter or digit and the next row's run of
+    address characters consists entirely of ASCII letters and digits, or that run is a list item marker — marks alone,
+    with no letter or digit (`-`, `+`), or a number, a single letter or a roman numeral written with i, v and x alone, in either case,
     followed by a period (`1.`, `a.`, `iv.`, `IV.`). Thus `…auto-select-` followed by `account&theme=light&lang=zh-Hans`
     joins, while `http://a.dev/x` followed by `Hans` stays separate, and so does `…lang=zh-Hans` followed by the list
     item `- Show the hint`. A break inside an ordinary word may therefore leave an address incomplete, and a piece made
@@ -111,12 +119,13 @@ opens, is described under "Web addresses" and "File paths" below; the rest holds
 ## File paths
 
 A file path in the output is a link only once the machine the daemon runs on has confirmed it names a file or folder the
-session may open. In a remote window of the desktop application file paths are never links, and stay plain text (see
-"The remote window" in `docs/product/remote-daemons.md`); web addresses still are. Until then — for a moment after it appears — and whenever it does not, it is plain text. A path the
-pointer already rests on when it is confirmed becomes a link under the pointer — underlined, and opened by a click —
-without the pointer having to move; when the pointer is outside the terminal or a mouse button is held at that moment,
-it does so at the pointer's next move over the terminal or the button's release there. In a terminal one row high, the
-pointer has to move first.
+session may open. That machine does the checking for every client — the desktop application's main window, a browser,
+and a remote window of the desktop application, whose daemon is another machine's — so a path is always one of the
+daemon's machine; what a remote window leaves out is under "In a remote window" below. Until then — for a moment after
+it appears — and whenever it does not, it is plain text. A path the pointer already rests on when it is confirmed
+becomes a link under the pointer — underlined, and opened by a click — without the pointer having to move; when the
+pointer is outside the terminal or a mouse button is held at that moment, it does so at the pointer's next move over the
+terminal or the button's release there. In a terminal one row high, the pointer has to move first.
 
 - **What is taken for a path**:
   - an absolute path, `/…`;
@@ -173,11 +182,13 @@ pointer has to move first.
   - A console session has no project: in it, only absolute and `~/` paths inside a temporary directory are links. A
     project whose directory cannot be found still has its paths inside a temporary directory linked.
 - **Anything that is neither a file nor a folder** is never a link.
-- **No file in the project is ever opened on the host by a click**, whatever its type: the system's default application
-  for a file may run it, so every file found in the project — its directory or a worktree's place, including a project
-  kept inside a temporary directory, however its path is written — only ever opens in the file viewer (see "Opened from
-  the terminal" in `docs/product/file-viewer.md`).
-- **What the system could launch rather than show is never opened on the host by a click** either:
+- **No file is ever opened on the host by a click**, whatever its type and wherever it lies: the system's default
+  application for a file may run it, so every file a path link leads to — in the project's directory or a worktree's
+  place, or in a temporary directory outside the project — only ever opens in the file viewer (see "Opened from the
+  terminal" in `docs/product/file-viewer.md`). A file reaches its default application only by the user's own choice of
+  **Default application**, under Open in (below) or in the file viewer.
+- **What the system could launch rather than show is never opened on the host** — neither a folder by a click, nor a
+  file by Default application:
   - a file with an executable bit;
   - a path any part of which, below the project or temporary directory, has one of these extensions, compared without
     regard to case — so an application bundle and everything inside it as well: `app`, `appex`, `bundle`, `framework`,
@@ -190,33 +201,38 @@ pointer has to move first.
     `wsh`, `jse`, `hta`, `jnlp`, `exe`, `msi`, `msp`, `bat`, `cmd`, `com`, `scr`, `cpl`, `pif`, `reg`, `appimage`,
     `run`, `bin`, `deb`, `rpm`, `flatpak`, `flatpakref`, `flatpakrepo` and `snap`. A folder so named (`github.com`) is
     an ordinary folder;
+  - on Windows, a file — not a folder — whose own name has one of these extensions, which Windows' shell launches or
+    acts on when it opens one, compared without regard to case: `lnk`, `appref-ms`, `application`, `settingcontent-ms`,
+    `library-ms`, `search-ms`, `scf`, `appx`, `msix`, `appinstaller`, `chm`, `wsc`, `sct`, `inf`, `diagcab`, `iso`,
+    `img`, `vhd`, `vhdx`, `js`, `msc`, `ws`, `vb`, `xll`, `website`, `gadget`, `msh`, `msh1`, `msh2`, `mshxml`,
+    `msh1xml`, `msh2xml`, `ps1xml`, `ps2xml`, `psc1`, `psc2`, `hlp`, `mst`, `shb`, `shs`, `ade`, `adp`, `mde`, `ins`,
+    `isp` and `vsmacros`. On any other system these are ordinary files;
   - on macOS, a folder the system treats as a package, such as an `.xcodeproj` or a `.playground`, even one no list
     above names — and a folder whose name has an extension when its type cannot be told. This is decided only as the
     folder is about to be opened on the host, so such a folder is still a link, and a click that would open it in the
     file manager is refused.
 
-  Inside a temporary directory such a file or folder, a macOS package apart, is no link at all, and in the project
-  neither is such a folder. A file of this kind in the project is a link like any other project file, opening in the
-  file viewer.
+  A folder of this kind, a macOS package apart, is no link at all, in the project or in a temporary directory. A file of
+  this kind is a link like any other file, opening in the file viewer, and Open in offers it File manager alone.
 - **Inside a temporary directory**, which other users can write to, the file or folder and every folder from the
   temporary directory down to it must also belong to the user the daemon runs as and be closed to writes by its group
-  and by others. A file of a project kept inside a temporary directory is exempt, since it only opens in the file
-  viewer; a folder of such a project, however its path is written, must pass this rule all the same.
-- **A click** on a file inside the project opens it in Octoboard's file viewer, at the path's line; how the viewer then
-  behaves is in "Opened from the terminal" in `docs/product/file-viewer.md`. A click on a folder there opens the
-  folder's README or index file in the file viewer instead, when it has one the viewer can show; which file that is, and
-  when and how the folder opens in the file manager instead, is in the same section. Anything else — a file or folder in
-  a temporary directory outside the project, or a project folder that opens in the file manager by that section's rules —
-  opens on the machine the daemon runs on, not on the machine a browser client happens to be open on: a file with its
-  default application, a folder in the file manager.
-  A line given with the path plays no part there, so such a file opens as it would from the file manager. A path link
-  has no tooltip. The path is checked again by the rules above as it is opened on the host, and one that no longer
-  passes them is not opened. Every error alert a click raises is titled that the path could not be opened; which of them
-  carry a remedy is in "Recovery and unexpected errors" in `docs/product/error-alerts.md`. The system failing to open
-  the path raises one. One written inside the project or a temporary directory where nothing is any more — deleted,
-  moved or renamed since it was checked, a file now where a folder on the way should be, or a symbolic link leading
-  nowhere or round in a loop — raises one saying it does not exist any more. Any other that no longer passes them is
-  refused with one whose sentence says why:
+  and by others. A file of a project kept inside a temporary directory is a link without passing this rule, since a
+  click only opens it in the file viewer; Default application opens it only when it passes. A folder of such a
+  project, however its path is written, must pass this rule all the same.
+- **A click** on a file opens it in Octoboard's file viewer, at the path's line, whether it lies inside the project or
+  in a temporary directory outside it; how the viewer then behaves, and how it says that a file can no longer be read,
+  is in "Opened from the terminal" in `docs/product/file-viewer.md`. A click on a folder inside the project opens the
+  folder's README or index file in the file viewer instead, when it has one the viewer can show; which file that is,
+  and when and how the folder opens in the file manager instead, is in the same section. Any other folder — one in a
+  temporary directory outside the project, or a project folder that opens in the file manager by that section's rules
+  — opens in the file manager on the machine the daemon runs on, not on the machine a browser client happens to be open
+  on. A line given with a folder's path plays no part. A path link has no tooltip. A folder is checked again by the
+  rules above as it is opened on the host, and one that no longer passes them is not opened. Every error alert a click
+  raises is titled that the path could not be opened; which of them carry a remedy is in "Recovery and unexpected
+  errors" in `docs/product/error-alerts.md`. The system failing to open the folder raises one. One written inside the
+  project or a temporary directory where nothing is any more — deleted, moved or renamed since it was checked, a file
+  now where a folder on the way should be, or a symbolic link leading nowhere or round in a loop — raises one saying it
+  does not exist any more. Any other that no longer passes them is refused with one whose sentence says why:
   - it leads outside the project and the temporary directories — written outside them, or leading out of them through
     a symbolic link;
   - a relative path is found in more than one of the places it is looked for;
@@ -226,19 +242,33 @@ pointer has to move first.
   - Octoboard is not allowed to read it, or a directory on the way to it;
   - it could not be read for another reason, the system's own text then under **Error details**;
   - for any other reason, or one the window does not know, only that it cannot be opened from a link.
-- **Open in file manager**, in the editing menu a right-click on a path link opens, shows the path in the file manager
-  on the machine the daemon runs on, whatever a click would do with it, and launches nothing: a file is selected in its
-  folder, a folder is opened, and on macOS a folder the system treats as a package is selected in its containing folder.
-  So it also shows a file of the project, which a click only opens in the file viewer. A symbolic link is selected by
-  its own name in its folder, not followed, as File manager in the project pane does (see "A row's actions" in
-  `docs/product/project-pane.md`), whether it leads to a file or a folder; the rules above still judge where it leads. A
-  root, a link whose folder lies outside the roots, a link in a temp root whose folder is not closed to others or that
-  is not the daemon user's, and a path ending in `/`, `/.` or `..` are shown as what they resolve to. A line given with
-  the path plays no part. Success says nothing. The path is checked again by the rules above as it is shown; only what
-  keeps a click from opening it on the host — being a file of the project, or a macOS package folder — does not stop it
-  being shown. A failure raises an error alert titled that it
-  could not open in the file manager, with the sentence and remedy the same failure of a click opening the path on the
-  host gets (above), the system's own failure being the file manager's.
+- **Open in**, in the editing menu a right-click on a path link opens, is the submenu a row of the project pane has
+  under the same name, with the same items, glyphs and order (see "A row's actions" in `docs/product/project-pane.md`):
+  **File manager**, then, for a file, **Default application**. A folder's holds File manager alone. Both act on the
+  machine the daemon runs on. A line given with the path plays no part in either, and success says nothing.
+  - **File manager** shows the path in the file manager, whatever a click would do with it, and launches nothing: a
+    file is selected in its folder, a folder is opened, and on macOS a folder the system treats as a package is selected
+    in its containing folder. A symbolic link is selected by its own name in its folder, not followed, as File manager
+    in the project pane does, whether it leads to a file or a folder; the rules above still judge where it leads. A
+    root, a link whose folder lies outside the roots, a link in a temp root whose folder is not closed to others or that
+    is not the daemon user's, and a path ending in `/`, `/.` or `..` are shown as what they resolve to. The path is
+    checked again by the rules above as it is shown; being something the system could launch does not stop a file, or a
+    macOS package folder, being shown. A failure raises an error alert titled that it could not open in the file
+    manager, with the sentence and remedy the same failure of a click opening a folder on the host gets (above), the
+    system's own failure being the file manager's.
+  - **Default application** opens a file with the operating system's default application, as it would open from the
+    file manager. It is not offered for a file the system could launch rather than show (above), which has File manager
+    alone. The path is checked again by the rules above as it is opened, the rule about other users of the machine
+    included for a file of a project kept inside a temporary directory, and one that no longer passes them is not
+    opened. A failure raises an error alert titled that it could not open in the default application, with the
+    sentence and remedy the same failure of a click opening a folder on the host gets (above), the system's own failure
+    being the default application's.
+- **In a remote window** of the desktop application nothing is opened on the daemon's machine, whose screen is not the
+  user's (see "The remote window" in `docs/product/remote-daemons.md`). A file link opens in the file viewer as in any
+  window, from where a copy of the file can be opened on this computer (see "Download and open" in
+  `docs/product/file-viewer.md`). A folder is a link only when it has a README or index file, which a click opens in
+  the viewer, the viewer saying why where it cannot show that file; any other folder stays plain text. Cmd/Ctrl changes
+  nothing about a click, and the editing menu has no Open in.
 - **When paths are checked**: only paths on screen, or under the pointer, are checked; those that appear together are
   checked together, about 120 ms after they appear, at most 64 at a time. An answer is kept for about 30 seconds for a
   path found and about 10 seconds for one that was not, and a path still on screen is checked again once its answer is

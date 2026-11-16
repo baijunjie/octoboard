@@ -227,11 +227,25 @@ impl RemoteAccess {
     /// Where remote access stands, for the snapshot; `None` where it is not offered.
     pub fn info(&self, state: &AppState) -> Option<RemoteAccessInfo> {
         let data = self.data.get()?;
+        // Read before the lock is taken: it asks the system (a process on macOS), which nothing holding a lock waits on.
+        // Only while the owner key is held, as only then can the state be serving.
+        let addresses = if state.owner_key.current().is_some() {
+            crate::platform::net::server_addresses()
+        } else {
+            Vec::new()
+        };
         let inner = self.inner.lock().unwrap();
-        Some(self.info_of(state, data, &inner))
+        Some(self.info_of(state, data, &inner, addresses))
     }
 
-    fn info_of(&self, state: &AppState, data: &Path, inner: &Inner) -> RemoteAccessInfo {
+    /// The state as `inner` stands, with `server_addresses` as read for it (given only while serving).
+    fn info_of(
+        &self,
+        state: &AppState,
+        data: &Path,
+        inner: &Inner,
+        server_addresses: Vec<String>,
+    ) -> RemoteAccessInfo {
         let allowed = state.store.allow_remote_access().unwrap_or(false);
         let octoboardd = Path::new(&state.install_exe);
         let browser_port = self.browser_port(state);
@@ -256,6 +270,11 @@ impl RemoteAccess {
                 Some(port) => browser::forward::to_port_for_account(port),
                 None => browser::forward::to_socket_in(port, data),
             }),
+            server_addresses: if serving {
+                server_addresses
+            } else {
+                Vec::new()
+            },
             failure,
             connection,
         }
@@ -1143,6 +1162,45 @@ mod port_tests {
         let failed = state.remote_access.info(&state).unwrap();
         assert_eq!(failed.state, RemoteAccessState::Failed);
         assert_eq!(failed.connection, None);
+        drop(taken);
+        drop(state.remote_access.close());
+    }
+
+    /// The names and addresses another computer reaches this one by are told while the way in is
+    /// served, as this computer's own list gives them, and not while it is off or has failed.
+    #[tokio::test]
+    async fn the_server_addresses_are_given_while_serving_and_not_otherwise() {
+        let (state, _dir) = port_daemon("remote-access-server-addresses");
+        let reserved = ClosedPort::new();
+        state
+            .remote_access
+            .set_port(&state, reserved.port())
+            .unwrap();
+        assert_eq!(
+            state.remote_access.info(&state).unwrap().server_addresses,
+            Vec::<String>::new()
+        );
+
+        state.remote_access.set(&state, true).unwrap();
+        let info = state.remote_access.info(&state).unwrap();
+        assert_eq!(info.state, RemoteAccessState::Serving, "{:?}", info.failure);
+        assert_eq!(
+            info.server_addresses,
+            crate::platform::net::server_addresses()
+        );
+
+        state.remote_access.set(&state, false).unwrap();
+        assert_eq!(
+            state.remote_access.info(&state).unwrap().server_addresses,
+            Vec::<String>::new()
+        );
+        let taken = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let taken_port = taken.local_addr().unwrap().port();
+        state.remote_access.set_port(&state, taken_port).unwrap();
+        state.remote_access.set(&state, true).unwrap();
+        let failed = state.remote_access.info(&state).unwrap();
+        assert_eq!(failed.state, RemoteAccessState::Failed);
+        assert_eq!(failed.server_addresses, Vec::<String>::new());
         drop(taken);
         drop(state.remote_access.close());
     }

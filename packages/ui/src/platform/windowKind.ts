@@ -8,12 +8,10 @@ import { inTauri } from "./host";
  * - `local`: the local daemon's window, and every page outside the desktop shell.
  * - `remote`: a window the shell opened on a daemon elsewhere (`?remote=<name>`), reached at a loopback address through
  *   the connection the application holds to it.
- * - `connect`: the connect page a new remote window opens on (`?connect=1`), with no daemon behind it; once a
- *   connection is made the shell turns the window into that daemon's window, so the page unloads.
  * - `flyout`: the Windows notification-area flyout (`?flyout=1`), which the shell creates hidden and shows on a click
  *   of the icon, with no daemon behind it.
  */
-export type WindowKind = "local" | "remote" | "connect" | "flyout";
+export type WindowKind = "local" | "remote" | "flyout";
 
 function query(): URLSearchParams {
   return new URLSearchParams(window.location.search);
@@ -23,7 +21,6 @@ export function windowKind(): WindowKind {
   if (!inTauri()) return "local";
   const params = query();
   if (params.get("flyout") === "1") return "flyout";
-  if (params.get("connect") === "1") return "connect";
   if (params.get("remote")) return "remote";
   return "local";
 }
@@ -40,9 +37,4 @@ export function remoteDaemonName(): string | undefined {
  */
 export function daemonIdentity(): string | undefined {
   return windowKind() === "remote" ? query().get("daemon") || undefined : undefined;
-}
-
-/** The saved remote daemon the connect page starts connecting to at once (`&entry=`), as if the user had chosen it. */
-export function connectPageEntry(): string | undefined {
-  return windowKind() === "connect" ? query().get("entry") || undefined : undefined;
 }

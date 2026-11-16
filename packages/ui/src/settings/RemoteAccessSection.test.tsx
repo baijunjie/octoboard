@@ -1,17 +1,20 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, type ComponentProps } from "react";
 import { beforeEach, expect, it, vi } from "vitest";
 
 import { errorAlerts } from "../components/alerts/errorAlerts";
+import { stubListMotion } from "../components/motion/listMotionTestSupport";
 import { remoteAccessOf } from "../fixtures/builders";
 import { acknowledgeAllAlerts } from "../test/alertQueue";
 import { LanguageProvider } from "../i18n/react";
 import type { PlatformAdapter } from "../platform";
 import type { Event, RemoteAccess } from "../protocol";
 import { BROWSER_HOST, MAC_HOST, WINDOWS_HOST } from "../test/hosts";
+import { click } from "../test/dom";
 import { mountHost } from "../test/mountHost";
 import { testDaemon } from "../test/testDaemon";
 import { RemoteAccessSection } from "./RemoteAccessSection";
+import { SettingsSearchProvider } from "./settingsSearchFilter";
 import { remoteAccessOffered } from "./remoteAccessOffered";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -44,11 +47,11 @@ const SERVING = remoteAccessOf({
 const DETAILS = "octoboard+ssh://me@my-mac.local:22?fingerprint=SHA256%3Aabc&octoboardd=%2FApplications%2FOctoboard.app&name=my-mac";
 const WITH_DETAILS = { ...SERVING, connection: { text: DETAILS, qr: ["1010", "0101", "1010", "0101"] } };
 
-async function mount(remoteAccess: RemoteAccess, platform: PlatformAdapter = DESKTOP) {
+async function mount(remoteAccess: RemoteAccess, platform: PlatformAdapter = DESKTOP, matches?: ComponentProps<typeof SettingsSearchProvider>["matches"]) {
   const daemon = testDaemon({ request, state: { connectionState: "open", remoteAccess } });
   let container!: HTMLElement;
   await act(async () => {
-    container = mountHost(<LanguageProvider><RemoteAccessSection /></LanguageProvider>, { platform, daemon });
+    container = mountHost(<LanguageProvider><SettingsSearchProvider matches={matches}><RemoteAccessSection /></SettingsSearchProvider></LanguageProvider>, { platform, daemon });
   });
   return { container, daemon };
 }
@@ -104,7 +107,20 @@ it("shows the address and the forward while serving, and rotates the key once co
   expect(request).toHaveBeenCalledWith({ type: "rotate_owner_key" });
 });
 
-it("shows the connection details as text and a QR code while serving, ahead of Rotate key", async () => {
+const tabNamed = (container: HTMLElement, name: string) =>
+  Array.from(container.querySelectorAll<HTMLElement>('[role="tab"]')).find((tab) => tab.textContent?.trim() === name)!;
+const rowsOf = (container: HTMLElement) =>
+  Array.from(container.querySelectorAll("[data-settings-search-id]")).map((row) => row.getAttribute("data-settings-search-id"));
+
+it("puts the SSH server first, then the switch, then one tab per way in, the application's selected to begin with", async () => {
+  const { container } = await mount(WITH_DETAILS);
+  expect(Array.from(container.querySelectorAll('[role="tab"]')).map((tab) => tab.textContent?.trim())).toEqual(["Octoboard app", "Browser"]);
+  expect(tabNamed(container, "Octoboard app").getAttribute("aria-selected")).toBe("true");
+  expect(rowsOf(container)).toEqual(["remote-access.remote-login", "remote-access.allow", "remote-access.connection"]);
+  expect(container.textContent).not.toContain(SERVING.forward_command);
+});
+
+it("shows the connection details as text and a QR code in the application's tab", async () => {
   const { container } = await mount(WITH_DETAILS);
   expect(container.textContent).toContain("Connection details");
   expect(container.textContent).toContain("Add remote daemon");
@@ -112,9 +128,39 @@ it("shows the connection details as text and a QR code while serving, ahead of R
   const qr = container.querySelector("svg[role=img]")!;
   expect(qr.getAttribute("aria-label")).toBe("QR code of the connection details");
   expect(qr.querySelectorAll("path")).toHaveLength(1);
-  const rows = Array.from(container.querySelectorAll("[data-list-motion]")).map((row) => row.getAttribute("data-list-motion"));
-  expect(rows.indexOf("remote-access.connection")).toBeGreaterThan(rows.indexOf("remote-access.forward"));
-  expect(rows.indexOf("remote-access.connection")).toBeLessThan(rows.indexOf("remote-access.rotate"));
+});
+
+it("shows the numbered forward and address, then the port on Windows and Rotate key, in the Browser tab", async () => {
+  const { container } = await mount({ ...WINDOWS_SERVING, connection: WITH_DETAILS.connection }, WINDOWS);
+  await click(tabNamed(container, "Browser"));
+  expect(rowsOf(container)).toEqual(["remote-access.remote-login", "remote-access.allow", "remote-access.forward", "remote-access.address", "remote-access.port", "remote-access.rotate"]);
+  expect(container.textContent).toContain("Step 1: SSH forward");
+  expect(container.textContent).toContain("Step 2: Browser address");
+  expect(container.textContent).not.toContain(DETAILS);
+});
+
+it("keeps the browser port under the switch, with no tabs, while nothing is served", async () => {
+  const { container } = await mount(remoteAccessOf({ browser_port: 3369 }), WINDOWS);
+  expect(container.querySelector('[role="tab"]')).toBeNull();
+  expect(rowsOf(container)).toEqual(["remote-access.remote-login", "remote-access.allow", "remote-access.port"]);
+});
+
+it("shows the tab that holds what a search found, whichever was selected", async () => {
+  const forwardOnly = { ids: new Set(["remote-access.forward" as const]), groups: new Set<never>() };
+  const { container } = await mount(WITH_DETAILS, DESKTOP, forwardOnly);
+  expect(tabNamed(container, "Browser").getAttribute("aria-selected")).toBe("true");
+  expect(tabNamed(container, "Octoboard app").getAttribute("aria-disabled")).toBe("true");
+  expect(tabNamed(container, "Browser").getAttribute("aria-disabled")).not.toBe("true");
+  const connectionOnly = { ids: new Set(["remote-access.connection" as const]), groups: new Set<never>() };
+  const other = await mount(WITH_DETAILS, DESKTOP, connectionOnly);
+  expect(tabNamed(other.container, "Octoboard app").getAttribute("aria-selected")).toBe("true");
+  expect(tabNamed(other.container, "Browser").getAttribute("aria-disabled")).toBe("true");
+});
+
+it("offers the Browser tab alone when the daemon gives no connection details", async () => {
+  const { container } = await mount(SERVING);
+  expect(tabNamed(container, "Browser").getAttribute("aria-selected")).toBe("true");
+  expect(container.textContent).toContain(SERVING.forward_command);
 });
 
 it("shows no connection details when the daemon gives none, or while off", async () => {
@@ -139,7 +185,7 @@ it("says why no browser is served, beside the daemon's own words", async () => {
   const { container } = await mount(
     remoteAccessOf({ allowed: true, state: "failed", failure: { reason: "not_private", detail: "/Users/me/.octoboard is not private" } }),
   );
-  expect(container.textContent).toContain("Remote access is on, but no browser can be served");
+  expect(container.textContent).toContain("Remote access is on, but this computer cannot be reached");
   expect(container.textContent).toContain("is not private to your account");
   expect(container.textContent).not.toContain("Browser address");
   // The daemon's own words are behind the alert's Details button.
@@ -155,7 +201,7 @@ it("shows Remote Login on, or off with the way to System Settings", async () => 
 
   loginStatus.mockResolvedValue(false);
   const off = await mount(SERVING);
-  expect(off.container.textContent).toContain("turn on Remote Login");
+  expect(off.container.textContent).toContain("go to General > Sharing, then turn on Remote Login");
   await act(async () => buttonNamed(off.container, "Open System Settings")!.click());
   expect(openLoginSettings).toHaveBeenCalled();
 });
@@ -238,7 +284,7 @@ it("names OpenSSH Server on Windows, with the way to Settings while it is not ru
   loginStatus.mockResolvedValue(false);
   const { container } = await mount(WINDOWS_SERVING, WINDOWS);
   expect(container.textContent).toContain("OpenSSH Server");
-  expect(container.textContent).toContain("Optional features");
+  expect(container.textContent).toContain("add OpenSSH Server under System > Optional features");
   expect(container.textContent).not.toContain("Remote Login");
   await act(async () => buttonNamed(container, "Open Settings")!.click());
   expect(openLoginSettings).toHaveBeenCalled();
@@ -250,13 +296,190 @@ const copyButton = (container: HTMLElement, name: string) => container.querySele
 it("copies the browser address, the forward command and the connection details, each exactly as shown", async () => {
   const writeText = vi.fn(async (_text: string) => {});
   const { container } = await mount(WITH_DETAILS, withClipboard(writeText));
+  await act(async () => copyButton(container, "Copy connection details").click());
+  expect(writeText).toHaveBeenLastCalledWith(DETAILS);
+  await click(tabNamed(container, "Browser"));
   await act(async () => copyButton(container, "Copy address").click());
   expect(writeText).toHaveBeenLastCalledWith(SERVING.address);
   await act(async () => copyButton(container, "Copy forward command").click());
   expect(writeText).toHaveBeenLastCalledWith(SERVING.forward_command);
-  await act(async () => copyButton(container, "Copy connection details").click());
-  expect(writeText).toHaveBeenLastCalledWith(DETAILS);
   expect(writeText).toHaveBeenCalledTimes(3);
+});
+
+const chipsOf = (root: ParentNode) => [...root.querySelectorAll("[data-inline-reference]")].map((chip) => chip.textContent);
+
+const WITH_ADDRESSES = { ...SERVING, server_addresses: ["my-mac.local", "192.168.1.20", "fd00::20"] };
+const tokenOf = (container: HTMLElement) => container.querySelector<HTMLButtonElement>('button[aria-label*="This computer\'s address"]');
+const menuItems = () => Array.from(document.body.querySelectorAll<HTMLElement>('[role="menuitemradio"]'));
+const commandWith = (address: string) => SERVING.forward_command?.replace("<server>", address);
+
+it("shows the command as plain text, with its placeholder, where the daemon lists no address", async () => {
+  const { container } = await mount(SERVING);
+  expect(tokenOf(container)).toBeNull();
+  expect(container.textContent).toContain("Run it on the other computer, replacing");
+  expect(container.textContent).toContain(SERVING.forward_command);
+});
+
+it("treats a daemon that sends no list of addresses as one that lists none", async () => {
+  const { server_addresses: _omitted, ...older } = SERVING;
+  const { container } = await mount(older as RemoteAccess);
+  expect(tokenOf(container)).toBeNull();
+  expect(container.textContent).toContain(SERVING.forward_command);
+});
+
+it("puts the computer's name, the first address listed, in the command as a token that names itself, and copies it", async () => {
+  const writeText = vi.fn(async (_text: string) => {});
+  const { container } = await mount(WITH_ADDRESSES, withClipboard(writeText));
+  expect(tokenOf(container)?.textContent).toBe("my-mac.local");
+  expect(tokenOf(container)?.getAttribute("aria-label")).toContain("This computer's address");
+  expect(tokenOf(container)?.getAttribute("aria-label")).toContain("my-mac.local");
+  expect(container.textContent).toContain(commandWith("my-mac.local"));
+  expect(container.textContent).toContain("press the address in it to choose");
+  await act(async () => copyButton(container, "Copy forward command").click());
+  expect(writeText).toHaveBeenLastCalledWith(commandWith("my-mac.local"));
+});
+
+it("opens a menu of the addresses and a last item to enter it yourself, and shows and copies the command with the one chosen", async () => {
+  const writeText = vi.fn(async (_text: string) => {});
+  const { container } = await mount(WITH_ADDRESSES, withClipboard(writeText));
+  await click(tokenOf(container));
+  expect(menuItems().map((item) => item.textContent)).toEqual(["my-mac.local", "192.168.1.20", "fd00::20", "Enter the address yourself"]);
+  expect(menuItems()[0].getAttribute("aria-checked")).toBe("true");
+  await click(menuItems().find((item) => item.textContent === "fd00::20"));
+  expect(tokenOf(container)?.textContent).toBe("fd00::20");
+  expect(container.textContent).toContain(commandWith("fd00::20"));
+  await act(async () => copyButton(container, "Copy forward command").click());
+  expect(writeText).toHaveBeenLastCalledWith(commandWith("fd00::20"));
+});
+
+it("puts the placeholder back, in the command and its copy, when the last item is chosen", async () => {
+  const writeText = vi.fn(async (_text: string) => {});
+  const { container } = await mount(WITH_ADDRESSES, withClipboard(writeText));
+  await click(tokenOf(container));
+  await click(menuItems().find((item) => item.textContent === "Enter the address yourself"));
+  expect(tokenOf(container)?.textContent).toBe("<server>");
+  await act(async () => copyButton(container, "Copy forward command").click());
+  expect(writeText).toHaveBeenLastCalledWith(SERVING.forward_command);
+});
+
+it("opens its menu from the keyboard on the token", async () => {
+  const { container } = await mount(WITH_ADDRESSES);
+  await act(async () => {
+    tokenOf(container)!.focus();
+    tokenOf(container)!.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true }));
+    tokenOf(container)!.dispatchEvent(new KeyboardEvent("keyup", { key: "ArrowDown", bubbles: true, cancelable: true }));
+  });
+  expect(menuItems()).toHaveLength(4);
+});
+
+it("falls back to the first address when the one chosen is no longer listed", async () => {
+  const { container, daemon } = await mount(WITH_ADDRESSES);
+  await click(tokenOf(container));
+  await click(menuItems().find((item) => item.textContent === "192.168.1.20"));
+  await act(async () => {
+    daemon.store.setState({ remoteAccess: { ...WITH_ADDRESSES, server_addresses: ["my-mac.local"] } });
+  });
+  expect(tokenOf(container)?.textContent).toBe("my-mac.local");
+});
+
+it("keeps the chosen placeholder when the daemon's list changes, and marks that last item as the one chosen", async () => {
+  const { container, daemon } = await mount(WITH_ADDRESSES);
+  await click(tokenOf(container));
+  await click(menuItems().find((item) => item.textContent === "Enter the address yourself"));
+  await act(async () => {
+    daemon.store.setState({ remoteAccess: { ...WITH_ADDRESSES, server_addresses: ["other.local", "10.0.0.5"] } });
+  });
+  expect(tokenOf(container)?.textContent).toBe("<server>");
+  expect(container.textContent).toContain(SERVING.forward_command);
+  await click(tokenOf(container));
+  expect(menuItems().map((item) => item.textContent)).toEqual(["other.local", "10.0.0.5", "Enter the address yourself"]);
+  expect(menuItems().map((item) => item.getAttribute("aria-checked"))).toEqual(["false", "false", "true"]);
+});
+
+it("keeps the address chosen while the list grows", async () => {
+  const { container, daemon } = await mount(WITH_ADDRESSES);
+  await click(tokenOf(container));
+  await click(menuItems().find((item) => item.textContent === "192.168.1.20"));
+  await act(async () => {
+    daemon.store.setState({ remoteAccess: { ...WITH_ADDRESSES, server_addresses: [...WITH_ADDRESSES.server_addresses, "10.0.0.5"] } });
+  });
+  expect(tokenOf(container)?.textContent).toBe("192.168.1.20");
+});
+
+it("shows a command with no placeholder in it as it is, whatever addresses are listed", async () => {
+  const plain = "ssh -N -L 127.0.0.1:3369:/Users/me/.octoboard/browser.sock me@host.example";
+  const { container } = await mount({ ...WITH_ADDRESSES, forward_command: plain });
+  expect(tokenOf(container)).toBeNull();
+  expect(container.textContent).toContain(plain);
+});
+
+it("sets the placeholder in the forward's description as a monospace reference while no address is listed", async () => {
+  const { container } = await mount(SERVING);
+  const chip = [...container.querySelectorAll("[data-inline-reference]")].find((reference) => reference.textContent === "<server>")!;
+  expect(chip.querySelector("code")).not.toBeNull();
+});
+
+it("names the Add remote daemon button and the Connection details field in the application tab as references", async () => {
+  const { container } = await mount(WITH_DETAILS);
+  expect(chipsOf(container)).toEqual(expect.arrayContaining(["Add remote daemon", "Connection details"]));
+  const description = [...container.querySelectorAll("[data-settings-search-id='remote-access.connection'] *")].find((node) => node.textContent?.startsWith("On the other computer"));
+  expect(description?.querySelectorAll("[data-inline-reference]")).toHaveLength(2);
+});
+
+it("keeps the browser port under the switch, with no tabs and no Rotate key, while remote access has failed", async () => {
+  const { container } = await mount(
+    remoteAccessOf({ allowed: true, state: "failed", browser_port: 3369, failure: { reason: "port_in_use", detail: "address in use" } }),
+    WINDOWS,
+  );
+  expect(container.querySelector('[role="tab"]')).toBeNull();
+  const rows = rowsOf(container);
+  expect(rows.slice(0, 2)).toEqual(["remote-access.remote-login", "remote-access.allow"]);
+  expect(rows).toContain("remote-access.port");
+  expect(rows).not.toContain("remote-access.rotate");
+});
+
+it.each(["remote-access.forward", "remote-access.address", "remote-access.port", "remote-access.rotate"] as const)(
+  "shows the Browser tab when a search finds only %s",
+  async (id) => {
+    const found = { ids: new Set([id]), groups: new Set<never>() };
+    const { container } = await mount({ ...WINDOWS_SERVING, connection: WITH_DETAILS.connection }, WINDOWS, found);
+    expect(tabNamed(container, "Browser").getAttribute("aria-selected")).toBe("true");
+    expect(rowsOf(container)).toContain(id);
+    expect(rowsOf(container)).not.toContain("remote-access.connection");
+  },
+);
+
+it("shows no tabs when a search finds nothing that either tab holds", async () => {
+  const found = { ids: new Set(["remote-access.allow" as const]), groups: new Set<never>() };
+  const { container } = await mount(WITH_DETAILS, DESKTOP, found);
+  expect(container.querySelector('[role="tab"]')).toBeNull();
+  expect(rowsOf(container)).toContain("remote-access.allow");
+  expect(rowsOf(container)).not.toContain("remote-access.connection");
+  expect(container.textContent).not.toContain(DETAILS);
+});
+
+it("shows the other tab's panel at once on a switch, with no motion of the rows", async () => {
+  const motion = stubListMotion();
+  const { container } = await mount(WITH_DETAILS);
+  motion.clear();
+  await click(tabNamed(container, "Browser"));
+  expect(tabNamed(container, "Browser").getAttribute("aria-selected")).toBe("true");
+  expect(rowsOf(container)).toContain("remote-access.forward");
+  expect(rowsOf(container)).not.toContain("remote-access.connection");
+  await click(tabNamed(container, "Octoboard app"));
+  expect(rowsOf(container)).toContain("remote-access.connection");
+  expect(rowsOf(container)).not.toContain("remote-access.forward");
+  await act(async () => {});
+  expect(container.querySelector("[data-list-motion-ghost]")).toBeNull();
+  expect(motion.played()).toEqual([]);
+});
+
+it("does not remember the tab across mounts: the application's tab is selected again", async () => {
+  const first = await mount(WITH_DETAILS);
+  await click(tabNamed(first.container, "Browser"));
+  first.container.remove();
+  const second = await mount(WITH_DETAILS);
+  expect(tabNamed(second.container, "Octoboard app").getAttribute("aria-selected")).toBe("true");
 });
 
 it("shows the connection details as the single line another computer pastes, with no key in it", async () => {
@@ -323,6 +546,33 @@ it("sends nothing for the port when the dialog is cancelled", async () => {
   await typeInto(textField(), "4000");
   await act(async () => buttonNamed(document.body, "Cancel")!.click());
   expect(request).not.toHaveBeenCalled();
+});
+
+it("sets the system's names and the steps to them as chips in a path, on macOS and on Windows", async () => {
+  loginStatus.mockResolvedValue(false);
+  const mac = await mount(SERVING);
+  const macPath = mac.container.querySelector("[data-inline-path]")!;
+  expect([...macPath.querySelectorAll("[data-inline-reference]")].map((chip) => chip.textContent)).toEqual(["General", "Sharing"]);
+  expect(macPath.textContent).toBe("General > Sharing");
+  expect(chipsOf(mac.container)).toEqual(expect.arrayContaining(["Remote Login"]));
+
+  const windows = await mount(WINDOWS_SERVING, WINDOWS);
+  const windowsPath = windows.container.querySelector("[data-inline-path]")!;
+  expect(windowsPath.textContent).toBe("System > Optional features");
+  expect(chipsOf(windows.container)).toEqual(expect.arrayContaining(["System", "Optional features", "OpenSSH Server", "OpenSSH SSH Server", "Services"]));
+});
+
+it("raises the failed opening of the settings as an alert whose steps are chips in a path", async () => {
+  loginStatus.mockResolvedValue(false);
+  openLoginSettings.mockRejectedValueOnce(new Error("no"));
+  const { container } = await mount(SERVING);
+  await act(async () => buttonNamed(container, "Open System Settings")!.click());
+  const [alert] = errorAlerts.getSnapshot();
+  // The error's own message stays text; the alert's body takes the path as chips.
+  expect(alert!.message).toContain("go to General > Sharing > Remote Login");
+  const body = mountHost(<LanguageProvider>{alert!.content}</LanguageProvider>, { platform: DESKTOP, daemon: testDaemon({ request }) });
+  expect(body.querySelector("[data-inline-path]")?.textContent).toBe("General > Sharing > Remote Login");
+  expect(body.querySelectorAll("[data-inline-path] [data-inline-reference]")).toHaveLength(3);
 });
 
 it("says it could not tell whether the SSH server is on, and still offers the way to the settings", async () => {

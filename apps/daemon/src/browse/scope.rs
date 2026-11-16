@@ -27,13 +27,54 @@ pub fn resolve_project_path(
     path: &str,
     git: &dyn Fn() -> Result<IsolatedGit>,
 ) -> Result<std::path::PathBuf> {
+    Ok(resolve_entry(state, project, worktree, path, git)?.entry)
+}
+
+/// [`resolve_project_path`] for opening the path with its default application, which refuses what
+/// the system could launch rather than show (see `crate::path_links`) with `path_link_refused`
+/// and the cause `launchable`. It answers the path the check was made on, with every link followed.
+pub fn resolve_project_path_to_open(
+    state: &AppState,
+    project: &str,
+    worktree: Option<&str>,
+    path: &str,
+    git: &dyn Fn() -> Result<IsolatedGit>,
+) -> Result<std::path::PathBuf> {
+    let resolved = resolve_entry(state, project, worktree, path, git)?;
+    crate::path_links::refuse_launchable(&resolved.root, &resolved.target, path)?;
+    // The checked target, not the entry: a link re-pointed since would otherwise open what was not
+    // checked.
+    Ok(resolved.target)
+}
+
+/// A live path as a host action reaches it.
+struct ProjectEntry {
+    /// The scope directory, canonical.
+    root: std::path::PathBuf,
+    /// What the path resolves to with every link followed.
+    target: std::path::PathBuf,
+    /// The path with its final entry's own name kept, a link included.
+    entry: std::path::PathBuf,
+}
+
+fn resolve_entry(
+    state: &AppState,
+    project: &str,
+    worktree: Option<&str>,
+    path: &str,
+    git: &dyn Fn() -> Result<IsolatedGit>,
+) -> Result<ProjectEntry> {
     let rel = parse_path(path)?;
     let record = stored_project(state, project)?;
     let git = BrowseGit::new(git);
     let scope = scope_for(&record, worktree, &git, &AtomicBool::new(false))?;
-    live::resolve(&scope.canonical, &rel)?;
+    let target = live::resolve(&scope.canonical, &rel)?;
     if rel.is_root() {
-        return Ok(scope.canonical);
+        return Ok(ProjectEntry {
+            entry: scope.canonical.clone(),
+            root: scope.canonical,
+            target,
+        });
     }
     // Keep the final entry's name so revealing a symlink selects that entry, while both its
     // target and its containing directory must stay inside the project scope.
@@ -43,7 +84,11 @@ pub fn resolve_project_path(
     );
     let parent = rel.parent().expect("a relative entry has a parent");
     let directory = live::resolve(&scope.canonical, &parent)?;
-    Ok(directory.join(lexical.file_name().expect("a non-root entry has a name")))
+    Ok(ProjectEntry {
+        root: scope.canonical,
+        target,
+        entry: directory.join(lexical.file_name().expect("a non-root entry has a name")),
+    })
 }
 
 /// Resolves a live path that must be a folder, for a host action that starts something in it, to

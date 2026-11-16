@@ -2,11 +2,11 @@ import type { ReactNode } from "react";
 import type { StoreApi } from "zustand";
 
 import { DaemonClient } from "../daemon-client";
-import type { RequestSender } from "../requests";
+import { looseRequestSender, type RequestSender } from "../requests";
 import { CodedError } from "../errors/codedError";
 import { daemonMessage } from "../errors/daemonMessage";
 import { daemonRefusedKey, daemonWsUrl, isLocalDaemon, type DaemonAddress } from "../daemon";
-import { currentLanguage } from "../i18n/language";
+import { currentLanguage, t } from "../i18n/language";
 import type { Event, ClientRequestBody } from "../protocol";
 import { createImportProgressListeners, type ImportProgressEvent } from "./importProgressListeners";
 import { createOwnTrustNotices } from "./ownTrustNotices";
@@ -128,5 +128,27 @@ export function createDaemon(address: DaemonAddress, { remote = false }: { remot
     dismissTrustPrompt: (session) => dispatch({ kind: "dismiss_trust_prompt", session }),
     reconnect: () => client.reconnect(),
     terminalUrl: (session) => daemonWsUrl(address, `/ws/term/${session}`),
+  };
+}
+
+/**
+ * A daemon that is not there, for the application's own window while it has none to connect to (it failed to start):
+ * the window still has what does not need one (the Remote devices page), and it is told, by the screen it is given,
+ * why. Its store never leaves the first state, nothing is connected to, and every request is refused.
+ */
+export function createInertDaemon(): Daemon {
+  const store = createStateStore();
+  return {
+    isLocal: true,
+    store,
+    request: looseRequestSender(async () => {
+      throw new CodedError(t("connection.error.connectionIsClosed"), "connection_closed", {});
+    }),
+    showNotice: () => {},
+    onNotification: () => () => {},
+    onImportProgress: () => () => {},
+    dismissTrustPrompt: () => {},
+    reconnect: () => {},
+    terminalUrl: () => "",
   };
 }

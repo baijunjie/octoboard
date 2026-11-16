@@ -10,7 +10,8 @@ is opened from three places:
 - **a change in the project pane's Git mode**; what the viewer shows of a change, how it moves through the change list,
   closes and follows a change is in `docs/product/project-pane-git-change-viewer.md`;
 - **a file or folder path link in a session's terminal or a shell terminal** (see "File paths" in
-  `docs/product/terminal-links.md`); how that differs is in "Opened from the terminal" below.
+  `docs/product/terminal-links.md`), whether the file lies in the project or in a temporary directory outside it; how
+  that differs is in "Opened from the terminal" below.
 
 Nothing can be edited or saved in it.
 
@@ -36,16 +37,20 @@ The header has three parts, one under the other:
   fixed width at which they wrap. Their fixed order is **Find in file** (see
   `docs/product/finding-in-the-file-viewer.md`), then **Copy path**, then the document-or-source choice for a Markdown
   file (see `docs/product/markdown-documents.md`), then the diff's unified-or-split choice, then the wrap choice (see
-  "Wrapping long lines" below), then **File manager** and **Default application**. The size shows as a tag of its own,
-  drawn as the title's neutral stage tag is; a rename's origin reads as a sentence naming the path.
+  "Wrapping long lines" below), then **File manager** and **Default application** — in a remote window of the desktop
+  application, **Download and open** alone. The size shows as a tag of its own, drawn as the title's neutral stage tag
+  is, where the size is known; a rename's origin reads as a sentence naming the path. A file in a temporary directory
+  outside the project, which only a terminal's path link opens, shows its full path on the daemon's machine — under the
+  home folder written from `~` on a Linux or macOS machine — and Copy path copies it as shown.
   Right after the file's path stand the marks of the **notices about the whole file or change** on screen, one mark per
   notice (see "Notices and stand-ins" below); they belong to the path's own item, and the path's fade cuts only the
   path, never them. They come before the controls in the keyboard's order.
 
 At most two of the three view choices are ever offered at once, since the document-or-source choice belongs to a whole
 Markdown file's body and the unified-or-split choice to a two-sided diff, and a Markdown diff keeps its source view
-alone. So the header never holds more than Find in file, Copy path, two view choices, File manager and Default
-application, and the order on screen is also the order the keyboard moves through them.
+alone. So the header never holds more than Find in file, Copy path, two view choices, and File manager and Default
+application or, in a remote window, Download and open, and the order on screen is also the order the keyboard moves
+through them.
 
 **Copy path** is the same action a file's row offers, on the same path and in the same form (see "A row's actions" in
 `docs/product/project-pane.md`), but as a copy button, which says the path was copied on itself rather than in a toast:
@@ -67,8 +72,14 @@ and with the same effect (see "A row's actions" in `docs/product/project-pane.md
 holding the file and selects it, Default application opens the file with the operating system's default application, both on the
 machine running the daemon. They are offered only on a live file — a file opened from Files or from the terminal, and an
 uncommitted change that is not a deletion, in the worktree it is read from; a committed change and a change that deletes
-the file have neither; nor has any file in a remote window of the desktop application (see "The remote window" in
-`docs/product/remote-daemons.md`). Each is an icon button whose tooltip is the short name the row's menu uses while the name
+the file have neither; a remote window of the desktop application has neither, and offers **Download and open** on the
+same live files in their place (see "Download and open" below and "The remote window" in
+`docs/product/remote-daemons.md`). On a file in a temporary directory outside the project they are the two actions of
+the terminal's Open in on that path, by its rules (see "File paths" in `docs/product/terminal-links.md`). **Default
+application is left out for a file the system could launch rather than show** — told by the daemon for a file opened
+from the terminal, and by the file's name otherwise — and the daemon refuses to open such a file all the same, one with
+an executable bit and no telling name included, so a file that would run is never opened from here. Each is an icon
+button whose tooltip is the short name the row's menu uses while the name
 announced says what pressing does (see "Tooltips on icon-only controls" in `docs/product/labels-and-tooltips.md`).
 Neither says anything when it succeeds; a refusal or a failure raises the same error alert as from a row, with the same
 remedy for a file that is no longer there.
@@ -102,7 +113,12 @@ one's do not, or when one subject has the subtitle row and the next has none.
   (see "Zooming an image" below). An image is only displayed: an SVG's scripts
   never run and nothing it refers to is fetched. An image that cannot be decoded is an error in its place (see "Notices
   and stand-ins" below); an SVG that cannot be decoded is shown as its text instead, with a failure notice saying so.
-- **Any other binary file** says it cannot be displayed, with its size.
+- **Any other binary file** says it cannot be displayed, with its size, and **a file larger than the 4 MiB a read
+  delivers** says it is too large to display, with its size where the daemon gives it, whatever it holds. Under either,
+  a live file (see "The header" above) has a button that opens it outside the viewer: **Open in default application**
+  in the main window and in a browser, which is the header's Default application; **Download and open** in a remote
+  window of the desktop application (see "Download and open" below). A file the system could launch rather than show
+  has no such button.
 - **While a file is being read**, and until its code is drawn, the viewer says it is loading. It never shows another
   file's content under this file's name, not even for a moment while moving between files. Assistive technology is
   told it is loading while the file is read — in a viewer just opened, after the viewer itself has been announced —
@@ -164,11 +180,12 @@ line meets the sentence once, on its mark.
 
 **A stand-in** fills the body when there is nothing to draw at all: the empty state's own panel, centred in the body — a
 glyph saying what kind of nothing this is, a heading naming it, and, where there is more to say than the heading
-carries, a line under it, which is where a size goes (see "The full panel" in `docs/product/empty-states.md`). It is
-what the viewer shows for
+carries, a line under it, which is where a size goes (see "The full panel" in `docs/product/empty-states.md`), and,
+under a live file that cannot be displayed or is too large, the button that opens it outside the viewer (see "What it
+shows" above). It is what the viewer shows for
 
-- nothing it can show at all: a body it cannot display, with its size — or, for a change between two such bodies, the
-  size before and after — and a change with no diff at all, which take the same glyph;
+- nothing it can show at all: a body it cannot display or a file too large to display, with its size — or, for a change
+  between two such bodies, the size before and after — and a change with no diff at all, which take the same glyph;
 - a change with no differences to show — its two sides holding the same content, or a rename with no change to its
   content — but only where that content could not be read; where it was read, the change shows the file whole with a
   note instead (see "What it shows" in `docs/product/project-pane-git-change-viewer.md`);
@@ -331,13 +348,21 @@ connection was lost and that it is read again once the connection is back.
 ## Opened from the terminal
 
 A click on a file path link in a session's terminal, or in a shell terminal of the Terminal panel (see "The shell
-terminal" in `docs/product/terminal-panel.md`), that names a file inside that terminal's project — its directory or its
-place in a worktree of the same repository (see "File paths" in `docs/product/terminal-links.md`) — always opens it in
-the file viewer, from the directory it was found in, whatever kind of file it is; it is never opened on the host by the
-click. The viewer reads and shows it as any file (see "What it shows" above): a binary file that is not an image it
-draws, such as a PDF, says it cannot be displayed, and a file that cannot be read says why in the viewer. Such a file is
-opened in its default application only by the user's own choice of Default application in the viewer's header (see
-"The header" above).
+terminal" in `docs/product/terminal-panel.md`), always opens the file in the file viewer, whatever kind of file it is
+and wherever the link may lead (see "File paths" in `docs/product/terminal-links.md`): a file inside that terminal's
+project — its directory or its place in a worktree of the same repository — from the directory it was found in, and a
+file in a temporary directory outside the project from where it lies. It is never opened on the host by the click. The
+viewer reads and shows it as any file (see "What it shows" above): a binary file that is not an image it draws, such as
+a PDF, says it cannot be displayed, and a file that cannot be read says why in the viewer. Such a file is opened in its
+default application only by the user's own choice of Default application, in the viewer's header (see "The header"
+above), on the stand-in of a file the viewer cannot display (see "What it shows" above), or under Open in in the
+terminal's editing menu.
+
+**A file in a temporary directory outside the project** is read by the rules that make its path a link, checked again
+at the read: one that no longer passes them — gone, leading outside the temporary directories, changeable by other users
+of the machine — says so in the viewer in place of the file, and raises no error alert. It has no project around it, so
+in a Markdown file there a relative link stays its text and a relative image shows its alt text. A console session,
+which has no project, opens such files the same way.
 
 **A folder** inside the same project or worktree place opens its **entry file** in the viewer, when it has one: a
 regular file directly in the folder named `README` or `README.<anything>`, or, when there is none, one named
@@ -359,6 +384,10 @@ A folder inside a temporary directory always opens in the file manager. On macOS
 in the file manager, one the system treats as a package is refused instead (see "File paths" in
 `docs/product/terminal-links.md`).
 
+In a remote window of the desktop application, which offers no file manager (see "The remote window" in
+`docs/product/remote-daemons.md`), a folder is a link only when it has an entry file, a click opens that file in the
+viewer whatever it holds, the viewer saying why where it cannot show it, and Cmd+click changes nothing.
+
 **The viewer is shown over the window and leaves the right pane as it is**: no Files panel is opened and no tree row is
 selected. It shows only the file it was opened on: it has no Previous file or Next file, and the arrow keys do not
 move it. A file found in a worktree is read from that worktree; its path in the header, and what Copy path copies, is
@@ -379,8 +408,9 @@ the file is shown; a column plays no part.
 
 **Links in a Markdown document** opened from the terminal open in the same viewer, as in any document (see
 `docs/product/markdown-documents.md`), with two differences: a link to a folder is not told from one to a file, so it
-opens as a file and the viewer says why it cannot be shown; and in a document read from a worktree, a relative link
-stays its text and a relative image shows its alt text, as an address that is not a project file does.
+opens as a file and the viewer says why it cannot be shown; and in a document read from a worktree or from a temporary
+directory, a relative link stays its text and a relative image shows its alt text, as an address that is not a project
+file does.
 
 **The first time a viewer is opened from the terminal** its code is loaded, and nothing is shown until it has loaded.
 A load that fails raises an error alert, titled that the file viewer could not be shown, saying that it did not load
@@ -388,3 +418,27 @@ and that opening the file again tries once more; it is a known failure and asks 
 again. In a page the daemon serves, talking to the daemon at the address it was loaded from (see "The UI the daemon
 serves" in `docs/product/server-form.md`), the alert says instead to reload the page, then open the file again, since a
 page left open across a restart of the daemon into another build asks for code that daemon no longer has.
+
+## Download and open
+
+In a remote window of the desktop application, where nothing is opened on the daemon's machine, **Download and open**
+copies the file to this computer and opens the copy with this computer's default application for it. What may be
+copied, how it travels, where the copy is kept and what is refused is in "Files opened on this computer" in
+`docs/product/links-and-files-in-a-remote-window.md`. It is offered on every live file (see "The header" above), in two
+places: as an icon button at the end of the header's controls, whose tooltip and name are "Download and open", and as
+the button of the stand-in of a file the viewer cannot display or finds too large (see "What it shows" above). It is
+not offered for a file this computer could launch rather than show. Both start the same copy, and there is one copy at
+a time.
+
+- **While the file is copied**, the header's button shows that it is busy and does nothing more. A stand-in shows, in
+  its button's place, a progress bar named for the file being downloaded, how much has arrived of the file's size — or,
+  until the first part has arrived, that the size is not known yet, the bar then showing no amount — and **Cancel**.
+  Assistive technology is told once that the file is being downloaded, and the bar says how far it is. Focus on the
+  stand-in's button moves to Cancel as the copy starts, and back to the button when the copy ends.
+- **Cancel, closing the viewer, or moving it to another file** ends the copy and removes what had arrived, and says
+  nothing. Nothing is copied in the background.
+- **When the copy is complete** it is opened, and the viewer says nothing. Choosing Download and open again copies the
+  file again.
+- **A failure** raises an error alert titled that the file could not be downloaded, or, where the whole file arrived but
+  no application opened it, that the downloaded file could not be opened, and removes what had arrived (see "Recovery
+  and unexpected errors" in `docs/product/error-alerts.md`).

@@ -31,6 +31,8 @@ import { afterQueuedWork, fakeTimers } from "../test/clock";
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /** A controller whose socket the test settles by hand: `attach` leaves it `connecting`. */
+type PathTarget = { path: string; kind?: "file" | "directory"; line?: number; view?: { worktree?: string; path: string } };
+
 const { FakeController } = vi.hoisted(() => {
   class FakeController {
     static last: FakeController;
@@ -40,18 +42,20 @@ const { FakeController } = vi.hoisted(() => {
       onStatusChange: (status: TermStatus) => void;
       onPaintedChange?: (painted: boolean) => void;
       openLink?: (url: string) => Promise<void>;
-      pathLinks?: { open: (target: { path: string; line?: number; view?: { worktree?: string; path: string } }) => Promise<void> };
+      pathLinks?: { open: (target: PathTarget) => Promise<void>; probe: (paths: string[]) => Promise<{ kind: string; view?: unknown }[]>; reveal?: unknown; openDefault?: unknown };
       pasteImage?: { save: (image: Blob, sessionId: string) => Promise<string | undefined>; read?: () => Promise<Blob | undefined> };
     }) {
       FakeController.last = this;
     }
     /** The image paste handlers the pane gave the controller, if any. */
     get pasteImage() { return this.callbacks.pasteImage; }
-    openPath(target: { path: string; line?: number; view?: { worktree?: string; path: string } }): Promise<void> | undefined {
+    openPath(target: PathTarget): Promise<void> | undefined {
       return this.callbacks.pathLinks?.open(target);
     }
     openLink(url: string): Promise<void> | undefined { return this.callbacks.openLink?.(url); }
     hasPathLinks(): boolean { return this.callbacks.pathLinks !== undefined; }
+    hasHostActions(): boolean { return this.callbacks.pathLinks?.reveal !== undefined && this.callbacks.pathLinks.openDefault !== undefined; }
+    probe(paths: string[]) { return this.callbacks.pathLinks!.probe(paths); }
     mount(): void {}
     inputLabel: string | undefined;
     setInputLabel(label: string): void {
@@ -555,32 +559,42 @@ it("reports a native terminal opener failure with the shared actionable destinat
   });
 });
 
-it("hands a path with a view to the file viewer once it has read it, and opens any other on the host", async () => {
+it("hands a file to the file viewer unread, a folder with no view to the host", async () => {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
   const onViewFile = vi.fn();
   const inProject = { ...session, project_id: "p-1" };
   request.mockClear();
-  request.mockResolvedValueOnce({ type: "project_file", id: null, project: "p-1", worktree: "w", path: "src/a.ts", source: { kind: "live", version: "1" }, file: { size: 1, kind: "text", media_type: null, text: "x", data: null } } as never);
   act(() => root.render(host(<TerminalPane session={inProject} onResume={async () => true} onAddAgent={() => {}} onViewFile={onViewFile} />)));
-  await act(async () => FakeController.last.openPath({ path: "/r/src/a.ts", line: 3, view: { worktree: "w", path: "src/a.ts" } }));
-  expect(onViewFile).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ project: "p-1", worktree: "w", path: "src/a.ts", line: 3 }));
-  expect(request.mock.calls.map(([body]) => (body as { type: string }).type)).toEqual(["read_project_file"]);
-  await act(async () => FakeController.last.openPath({ path: "/tmp/b.png" }));
-  expect(onViewFile).toHaveBeenCalledOnce();
-  expect(request).toHaveBeenLastCalledWith({ type: "open_path_link", project: "p-1", path: "/tmp/b.png" });
+  await act(async () => FakeController.last.openPath({ path: "/r/src/a.ts", kind: "file", line: 3, view: { worktree: "w", path: "src/a.ts" } }));
+  expect(onViewFile).toHaveBeenCalledExactlyOnceWith({ project: "p-1", worktree: "w", path: "src/a.ts", line: 3 });
+  await act(async () => FakeController.last.openPath({ path: "/tmp/b.png", kind: "file" }));
+  expect(onViewFile).toHaveBeenLastCalledWith({ link: "/tmp/b.png", project: "p-1", line: undefined });
+  expect(request).not.toHaveBeenCalled();
+  await act(async () => FakeController.last.openPath({ path: "/tmp/dir", kind: "directory" }));
+  expect(request).toHaveBeenLastCalledWith({ type: "open_path_link", project: "p-1", path: "/tmp/dir" });
 });
 
-it("leaves paths plain text in the window of a daemon elsewhere, and still opens web links", async () => {
+it("makes paths links in the window of a daemon elsewhere too, with nothing to open on the host, and still opens web links", async () => {
   daemon = testDaemon({ state: { connectionState: "open" }, request, terminalUrl: () => "", isLocal: false });
   platform.links = { open: vi.fn().mockResolvedValue(undefined) };
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
   render(root);
-  expect(FakeController.last.hasPathLinks()).toBe(false);
+  expect(FakeController.last.hasPathLinks()).toBe(true);
+  expect(FakeController.last.hasHostActions()).toBe(false);
   await act(async () => FakeController.last.openLink("https://example.com/docs"));
   expect(platform.links.open).toHaveBeenCalledExactlyOnceWith("https://example.com/docs");
+});
+
+it("leaves a folder with no entry file to show as plain text where nothing opens on the host", async () => {
+  daemon = testDaemon({ state: { connectionState: "open" }, request, terminalUrl: () => "", isLocal: false });
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  roots.push(root);
+  request.mockResolvedValueOnce({ type: "path_links", id: null, links: [{ path: "a", kind: "directory" }, { path: "b", kind: "directory", view: { path: "b/README.md" } }, { path: "c", kind: "file" }] } as never);
+  render(root);
+  expect((await FakeController.last.probe(["a", "b", "c"])).map(({ kind }) => kind)).toEqual(["none", "directory", "file"]);
 });
 
 it("makes paths links in the local daemon's window", () => {
