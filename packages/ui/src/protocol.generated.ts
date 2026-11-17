@@ -3292,6 +3292,12 @@ export type ProcessTree = {
    */
   ports: Array<number>,
   /**
+   * The ports of `ports` that answered an HTTP request on loopback, which a browser can open.
+   * Present where the trees come from a listing of a session's or a project's trees
+   * (`list_processes`, the MCP `get_session`); absent wherever the ports were not asked.
+   */
+  http_ports?: Array<number>,
+  /**
    * A `keep_processes` naming the tree can keep it; when not, `unkeepable_reason` says why.
    */
   keepable: boolean,

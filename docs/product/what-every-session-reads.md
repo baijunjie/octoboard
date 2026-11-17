@@ -449,8 +449,10 @@ And each record carries what tells sessions apart and what an owner decides on:
   read in the daemon's own environment rather than a launch's, so in rare cases a resume can find otherwise. A running
   session's record has no `resumable`.
 - `processes`, in `get_session`'s record only: for a session with a process running, the process trees its launch
-  holds (a dev server, a preview, a watcher), each with its `id`, `command`, `cwd`, `ports` and `started_at`, as the
-  process list shows them (see "Process information and actions" in `docs/product/background-processes.md`); an empty
+  holds (a dev server, a preview, a watcher), each with its `id`, `command`, `cwd`, `ports`, `http_ports` (those of
+  `ports` that serve web pages, which a browser can open; see "Ports that serve web pages" in
+  `docs/product/background-processes.md`) and `started_at`, as the process list shows them (see "Process information
+  and actions" in `docs/product/background-processes.md`); an empty
   list for any other session. These are the trees `transfer_processes` names by `id`, and those stopped when the
   session's process ends.
 - `model` and `effort`, the session's own launch choices (see `docs/product/model-and-reasoning-effort.md`): a key is

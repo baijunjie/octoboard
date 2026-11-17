@@ -10,7 +10,9 @@ import { CONTROL_TOOLTIP_DELAY_MS, enter, mountForTooltip, openTooltip } from ".
 import { CodedError } from "../errors/codedError";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
+import type { PlatformAdapter } from "../platform";
 import type { Event, ProcessTree, ClientRequestBody, Session } from "../protocol";
+import { BROWSER_HOST } from "../test/hosts";
 import { TestHost } from "../test/TestHost";
 import { testDaemon } from "../test/testDaemon";
 import { POLL_MS } from "./processPolling";
@@ -35,7 +37,7 @@ const tree = (id: string, extra: Partial<ProcessTree> = {}): ProcessTree => ({
 });
 
 /** Mounts the panel over a store holding `sessions`, with the daemon answering `request`. */
-async function mount(scope: ProcessesScope, request: (body: ClientRequestBody) => Promise<Event>, sessions: Session[] = [running, second]) {
+async function mount(scope: ProcessesScope, request: (body: ClientRequestBody) => Promise<Event>, sessions: Session[] = [running, second], platform?: PlatformAdapter) {
   fakeTimers({ now: NOW });
   const handler = vi.fn(request);
   const daemon = testDaemon({
@@ -51,7 +53,7 @@ async function mount(scope: ProcessesScope, request: (body: ClientRequestBody) =
     const data = useProcessPanel(owner, "session" in view ? view.session.id : undefined, "live");
     return <ProcessPanelProvider value={data}><section data-region="panel-processes" tabIndex={-1}><ProcessesPanel /></section></ProcessPanelProvider>;
   }
-  mountForTooltip(<TestHost daemon={daemon}><Panel /></TestHost>);
+  mountForTooltip(<TestHost daemon={daemon} platform={platform}><Panel /></TestHost>);
   await act(async () => {});
   return { daemon, request: handler, switchScope };
 }
@@ -85,6 +87,27 @@ it("lists a session's trees with their command, working directory, ports, memory
   expect(rows()[1].textContent).toContain("2.5 MB of memory · started 5 minutes ago");
   expect(rows()[1].textContent).not.toContain("process");
   expect(panel().querySelector("h2")?.textContent).toBe("Processes");
+});
+
+it("links a tree's web ports from its card, but not from the confirmation of a stop", async () => {
+  const open = vi.fn(async () => {});
+  await mount(
+    { session: running },
+    async () => ({ type: "processes_listed", id: null, trees: [tree("1:1", { ports: [3000, 9229], http_ports: [3000] }), tree("2:2", { ports: [9229], http_ports: [] })] }),
+    [running, second],
+    { kind: "tauri", host: BROWSER_HOST, links: { open } },
+  );
+  const links = (scope: Element) => [...scope.querySelectorAll<HTMLAnchorElement>("a[data-external-link]")];
+  expect(links(rows()[0]).map((anchor) => anchor.textContent)).toEqual(["localhost:3000"]);
+  expect(links(rows()[1])).toEqual([]);
+  await act(async () => links(rows()[0])[0].click());
+  expect(open).toHaveBeenCalledExactlyOnceWith("http://localhost:3000/");
+
+  await act(async () => button("Stop").click());
+  expect(confirmation().textContent).toContain("npm run dev");
+  expect(confirmation().textContent!.replace(/[\u2066-\u2069]/g, "")).toContain("listening on ports 3000 and 9229");
+  expect(links(confirmation())).toEqual([]);
+  expect(confirmation().textContent).not.toContain("localhost:3000");
 });
 
 it("words a command and a working directory that could not be read, and marks a deleted one", async () => {

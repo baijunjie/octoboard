@@ -243,7 +243,7 @@ const threePanelState = snapshotState({
   pages: { [withReport.id]: [pageOf("pc-1", withReport.id, summary("Idempotency keys, ready for review"), 20)] },
   shellTerminals: [shellTerminalOf("sh-report", project, "zsh", 0)],
 });
-const panelProcesses = { trees: [processTreeOf("400:1", withReport, "pnpm dev", 60, { ports: [5173] })] };
+const panelProcesses = { trees: [processTreeOf("400:1", withReport, "pnpm dev", 60, { ports: [5173], http_ports: [5173] })] };
 
 export const reportScenarios: Scenario[] = [
   {

@@ -394,7 +394,7 @@ function TreeRow({ tree, acting, offersKeep, onStop, onKeep }: {
   return (
     <div className="group flex min-w-0 flex-col gap-1 rounded-lg bg-(--panel-row) px-3 py-2 shadow-(--panel-shadow)">
       <ProcessCommand tree={tree} />
-      <ProcessTreeDetails tree={tree} actions={
+      <ProcessTreeDetails tree={tree} links actions={
         /* Clipping keeps hidden actions reachable with Tab without taking width from the facts;
            revealing them leaves the command and directory at the card's full width. */
         <div className={`${HOVER_ACTIONS_CLASS} items-center gap-1 [@media(hover:none)]:ms-2 group-hover:ms-2 group-focus-within:ms-2`}>

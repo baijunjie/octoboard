@@ -316,7 +316,8 @@ session is responsible for cannot be transferred.
 
 A process tree comprises a top process and its attributed descendants, so one tree may cover several processes. Its
 information includes the top process's command and working directory, whether that directory has been deleted, its
-age, the tree's resident memory, its process count and the TCP ports it listens on. Command and directory information
+age, the tree's resident memory, its process count and the TCP ports it listens on, with, where it is listed, which of
+those serve web pages (see "Ports that serve web pages" below). Command and directory information
 may be unavailable. Trees within a session are oldest first. Requests for the same scope within **2 seconds** may share
 a daemon answer; a stop or keep invalidates that cached answer.
 
@@ -333,6 +334,26 @@ denied**, the system refused to end it for lack of permission (another user's pr
 than the daemon), or **other**, refused for another reason or still running after it was killed. A tree with such a
 process is not reported as stopped. Only this stop reports them (see the known limit on automatic stops in "Automatic
 stopping and its boundaries" above).
+
+## Ports that serve web pages
+
+Where a session's or a project's trees are listed — the Processes panel (see "A tree's card" in
+`docs/product/processes-panel.md`) and `get_session`'s `processes` (see "Session records" in
+`docs/product/what-every-session-reads.md`) — each tree also says which of its listening ports **serve web pages**, the
+ones a browser can open. No other list of processes says it.
+
+The daemon tells them apart by asking each listening port, on loopback: it connects to `127.0.0.1`, or to `::1` where
+nothing takes the connection over IPv4, and sends a plain-HTTP `HEAD /` addressed to `localhost:<port>`, with the user
+agent `Octoboard`. A port serves web pages when it answers, within 0.8 seconds, with an HTTP status line of any status
+except `400`, the refusal of a debugger port such as Node's inspector, and `426`, that of a WebSocket-only server such as
+a dev server's live-reload port. A port that answers nothing in time, speaks another protocol, or serves only HTTPS does
+not count.
+
+An answer is kept for the tree and port it was given for: one that served pages for **60 seconds**, one that did not
+for **15 seconds**, before the port is asked again at a later listing. So a server that starts serving a moment after it
+begins listening is recognised within about 15 seconds, and while its tree keeps being listed, a server that serves
+pages receives this request about once a minute, which its log may show. The same port listened on later by another
+tree is asked afresh. Only a few ports are asked at once.
 
 ## Processes left behind in a project
 

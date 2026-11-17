@@ -1005,6 +1005,7 @@ fn describe(
         process_count: members.len(),
         memory_bytes: members.iter().filter_map(|id| table::memory(*id)).sum(),
         ports: table::listening_ports(&pids),
+        http_ports: None,
         keepable: unkeepable.is_none(),
         unkeepable_reason: unkeepable,
     }

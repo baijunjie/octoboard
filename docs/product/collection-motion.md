@@ -7,7 +7,8 @@ new positions over **300 ms**. This applies to navigation lists, session cards a
 rows of Settings' Git section that come and go with its Where sessions develop choice (see "Development" in
 `docs/product/git-settings.md`), the section tabs of Settings and the rows, group headings and blocks of a Settings section
 as a search hides and shows them (see `docs/product/searching-settings.md`), selected tags and wrapping chips, the file and Git change lists and trees, the accounts
-listed in the account quota panel on the rail, the rows of the rail's Processes popover, and tab strips: the agent tabs in Settings' Agent accounts section, in
+listed in the account quota panel on the rail, the rows of the rail's Processes popover, the web links of a process
+tree's card in the Processes panel, and tab strips: the agent tabs in Settings' Agent accounts section, in
 the account quota panel and in the console dialog's Advanced section, and the Terminal panel's tabs. The quota meters
 within one account are not such a collection: they appear and disappear without motion as its readings change, and
 neither are the pickers of the project dialog's Git workflow tab, which appear and disappear without motion as its

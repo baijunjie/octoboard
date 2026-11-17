@@ -11,6 +11,7 @@ use std::time::Duration;
 use anyhow::Result;
 
 use crate::processes::ledger::{SharesAgentConsole, TreesStopped};
+use crate::processes::web_ports;
 use crate::protocol::{error_code, CodedError, ProcessCount, ProcessTarget, ProcessTree, Project};
 use crate::state::AppState;
 use crate::store::LOCAL_HOST_ID;
@@ -81,7 +82,8 @@ fn count_wait() -> Duration {
 
 /// The trees `target` names. A session that has no process is refused; a project with none
 /// running lists only its processes, the trees no session owns: its leftovers and the trees kept
-/// under it. A list of the same target computed less than [`LIST_FLOOR`] ago answers again.
+/// under it. A list of the same target computed less than [`LIST_FLOOR`] ago answers again. Each
+/// tree carries which of its ports serve web pages (`crate::processes::web_ports`).
 pub async fn list(state: &Arc<AppState>, target: ProcessTarget) -> Result<Vec<ProcessTree>> {
     let floor = list_floor();
     match target {
@@ -101,9 +103,10 @@ pub async fn list(state: &Arc<AppState>, target: ProcessTarget) -> Result<Vec<Pr
             let state = Arc::clone(state);
             Ok(tokio::task::spawn_blocking(move || {
                 let generation = state.process_ledger.lists_generation();
-                let trees = state
+                let mut trees = state
                     .process_ledger
                     .trees_of_sessions(&[session_id], Duration::ZERO);
+                web_ports::fill(&mut trees);
                 state
                     .process_ledger
                     .note_listed(key, generation, trees.clone());
@@ -131,9 +134,11 @@ pub async fn list(state: &Arc<AppState>, target: ProcessTarget) -> Result<Vec<Pr
             Ok(tokio::task::spawn_blocking(move || {
                 let dirs = project_dirs(&project);
                 let generation = state.process_ledger.lists_generation();
-                let trees = state
-                    .process_ledger
-                    .trees_of_project(&sessions, &project.id, &dirs);
+                let mut trees =
+                    state
+                        .process_ledger
+                        .trees_of_project(&sessions, &project.id, &dirs);
+                web_ports::fill(&mut trees);
                 state
                     .process_ledger
                     .note_listed(key, generation, trees.clone());

@@ -521,7 +521,9 @@ which the Linux release archive ships and the website's `install.sh` installs wi
 - [`src/processes/ledger/`](../../apps/daemon/src/processes/ledger/README.md) — attributing, listing, stopping, keeping
   and carrying over the processes an agent launch started.
 - `src/processes/` — the rest: `subprocess.rs` (running a spawned process within bounds; what a stop reaches, the signals
-  and the pipe readers are `platform::proc`'s).
+  and the pipe readers are `platform::proc`'s), `web_ports.rs` (which of a listed tree's listening ports serve web
+  pages, by a bounded `HEAD /` probe on loopback with the answers cached per tree and port; `coordinator::processes`
+  fills `ProcessTree.http_ports` from it).
 - `src/platform/` — the only place OS-specific code lives, with no use of anything else in the crate, so any module may
   use it. `build_files.rs` the files a copy of a build holds beside the executable on this host (on Windows `conpty.dll`
   and the `OpenConsole.exe` of `x64/` and `arm64/`, none elsewhere) and `remove_installer_set_aside`, which `run_daemon`

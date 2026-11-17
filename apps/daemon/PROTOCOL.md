@@ -3002,11 +3002,14 @@ A `ProcessTree` is a top process (one whose parent is not attributed to the same
 a tree no session owns: a leftover or a kept tree), `kept` (the user kept the tree), `command` (the top's arguments
 joined by spaces, at most 1024 bytes; empty when they could not be read), `cwd` (null when unknown), `cwd_missing` (the
 top's working directory was removed), `started_at` (milliseconds since the Unix epoch), `process_count`, `memory_bytes`
-(resident memory of the tree, summed), `ports` (the TCP ports the tree listens on, sorted), `keepable` (whether
-`keep_processes` can keep it) and `unkeepable_reason` (absent when it can). `agent_console`, the one reason, is a tree of
-a running launch with a process attached to the agent's own console, which ends it with the session whatever keeps it:
-on Windows, where the agent runs on a pseudoconsole whose closing ends every process attached to it; never on macOS or
-Linux, where what sits in the agent's own terminal session is not listed at all. Trees are listed oldest first.
+(resident memory of the tree, summed), `ports` (the TCP ports the tree listens on, sorted), `http_ports` (present in
+`processes_listed`, and in the MCP `get_session`'s processes: those of `ports` that answered an HTTP `HEAD /` on
+loopback with a status other than `400` or `426`, the refusals of a debugger or a WebSocket server, so the ports a
+browser can open; a port that served pages is asked again after a minute, one that did not after 15 seconds), `keepable`
+(whether `keep_processes` can keep it) and `unkeepable_reason` (absent when it can). `agent_console`, the one reason, is
+a tree of a running launch with a process attached to the agent's own console, which ends it with the session whatever
+keeps it: on Windows, where the agent runs on a pseudoconsole whose closing ends every process attached to it; never on
+macOS or Linux, where what sits in the agent's own terminal session is not listed at all. Trees are listed oldest first.
 
 A **leftover** is a process of the daemon's user that no followed launch has and that is not kept, working in a removed
 directory under a local project's directory (its `.worktrees/` included). The daemon's own direct children, Octoboard's

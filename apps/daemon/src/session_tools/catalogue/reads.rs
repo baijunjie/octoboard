@@ -111,9 +111,10 @@ pub(super) const GET_SESSION: ToolDef = ToolDef {
          when it is proven gone, so that `resume_session` would refuse it, `null` when that cannot \
          be told (`resume_session` goes ahead then). Always carries `processes`, the process \
          trees the session started that are still running (a dev server, a preview, a watcher), \
-         each with its `id`, `command`, `cwd`, `ports` and `started_at`: they are stopped when \
-         its process ends, unless `transfer_processes` moves them to another session first; an \
-         empty list for a session with no process running. ",
+         each with its `id`, `command`, `cwd`, `ports`, `http_ports` (those of `ports` that \
+         answered an HTTP request on loopback: a page a browser can open) and `started_at`: they \
+         are stopped when its process ends, unless `transfer_processes` moves them to another \
+         session first; an empty list for a session with no process running. ",
         session_record_fields!(),
         session_context_field!()
     ),

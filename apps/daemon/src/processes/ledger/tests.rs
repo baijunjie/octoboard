@@ -1435,6 +1435,14 @@ fn trees_are_listed_kept_and_stopped_by_their_top() {
         "{listening:?}"
     );
     assert_eq!(listening.ports, vec![port]);
+    // The ledger does not ask which ports serve web pages; only a `list_processes` answer does.
+    assert!(
+        trees.iter().all(|tree| tree.http_ports.is_none()),
+        "{trees:?}"
+    );
+    assert!(!serde_json::to_string(listening)
+        .unwrap()
+        .contains("http_ports"));
     assert_eq!(listening.process_count, 1);
     assert!(listening.memory_bytes > 0);
     assert!(!listening.cwd_missing);

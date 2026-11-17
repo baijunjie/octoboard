@@ -28,6 +28,12 @@ pub struct ProcessTree {
     pub memory_bytes: u64,
     /// The TCP ports the tree's processes listen on, sorted.
     pub ports: Vec<u16>,
+    /// The ports of `ports` that answered an HTTP request on loopback, which a browser can open.
+    /// Present where the trees come from a listing of a session's or a project's trees
+    /// (`list_processes`, the MCP `get_session`); absent wherever the ports were not asked.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub http_ports: Option<Vec<u16>>,
     /// A `keep_processes` naming the tree can keep it; when not, `unkeepable_reason` says why.
     pub keepable: bool,
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -101,6 +101,11 @@ async fn a_session_lists_its_trees_and_a_session_without_a_process_or_a_record_i
     assert_eq!(trees[0].session_id.as_deref(), Some("s1"));
     assert!(trees[0].id.starts_with(&format!("{}:", pids[0])));
     assert!(trees[0].command.contains("sleep"), "{:?}", trees[0]);
+    // A `list_processes` answer says which ports serve web pages, even when there is none.
+    assert_eq!(trees[0].http_ports, Some(Vec::new()));
+    assert!(serde_json::to_string(&trees[0])
+        .unwrap()
+        .contains("\"http_ports\":[]"));
 
     let not_running = super::list(
         &state,
@@ -143,6 +148,10 @@ async fn a_project_lists_its_running_sessions_trees_and_its_leftovers_without_a_
         .expect("the leftover");
     assert_eq!(leftover.session_id, None);
     assert!(leftover.cwd_missing);
+    assert!(
+        trees.iter().all(|tree| tree.http_ports == Some(Vec::new())),
+        "{trees:?}"
+    );
     assert_eq!(
         trees
             .iter()

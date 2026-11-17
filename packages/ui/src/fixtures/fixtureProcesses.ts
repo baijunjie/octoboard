@@ -71,11 +71,15 @@ export function createProcessLedger({ scenario, store, fail }: FixtureContext) {
   };
   /** The trees of a project that no session owns (kept ones, and ones left behind in a session's ending), oldest first. */
   const projectTrees = (project: string) => oldestFirst(projectProcesses.get(project) ?? []);
+  /** A tree as the daemon reports it wherever its ports were not asked (the long-running trees an archive or a project's
+   * removal confirms, a branch inspection's): the same tree without `http_ports`, which only a `list_processes` answer
+   * carries. */
+  const unprobed = ({ http_ports: _webPorts, ...tree }: ProcessTree): ProcessTree => tree;
   /** The end of sessions takes the trees they were following out of the ledger. */
   const endSessions = (ended: ReadonlySet<string>) => {
     followed = followed.filter((tree) => !ended.has(tree.session_id));
   };
-  return { hasProcess, oldestFirst, treesOfSession, stopTrees, leftRunning, keepTrees, refuseUnkeepable, projectTrees, endSessions, allProcessCounts };
+  return { hasProcess, oldestFirst, treesOfSession, stopTrees, leftRunning, keepTrees, refuseUnkeepable, projectTrees, unprobed, endSessions, allProcessCounts };
 }
 
 /** The process ledger of `createProcessLedger`. */

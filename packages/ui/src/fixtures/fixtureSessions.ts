@@ -27,7 +27,7 @@ const agentNotAdded = (agent: Agent) => ({
 /** The replies about sessions. */
 export function createSessionReplies({ scenario, store, fail, refuseLocked }: FixtureContext, guards: AccountGuards, ledger: ProcessLedger): Handlers {
   const { launchAccount, refuseIfSharingChanges, refuseIfDisabled, refuseIfQuotaExhausted, refuseIfNotSignedIn } = guards;
-  const { treesOfSession, oldestFirst, keepTrees, refuseUnkeepable, endSessions } = ledger;
+  const { treesOfSession, oldestFirst, keepTrees, refuseUnkeepable, unprobed, endSessions } = ledger;
   let openedSessionCount = 0;
   let pastedImageCount = 0;
   // The daemon remembers its ordinal counter independently of session history. Seed it from
@@ -365,7 +365,7 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
       const items = (scenario.sessionBranches ?? []).filter((item) => item.session !== null && asked.has(item.session));
       if (!body.processes) return { type: "session_branches_inspected", id: null, items };
       const oldest = Date.now() - PROCESS_ASK_AFTER_MS;
-      const processes = oldestFirst([...asked].flatMap(treesOfSession)).filter((tree) => tree.started_at <= oldest);
+      const processes = oldestFirst([...asked].flatMap(treesOfSession)).filter((tree) => tree.started_at <= oldest).map(unprobed);
       return { type: "session_branches_inspected", id: null, items, ...(processes.length > 0 ? { processes } : {}) };
     },
     delete_session: (body) => {

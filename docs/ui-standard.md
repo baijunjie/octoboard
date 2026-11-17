@@ -2148,11 +2148,14 @@ and line height, link colour and an underline. A link that stands beside buttons
 actions are buttons — a footer's one external action, a settings row's link beside the row's button, a startup screen's
 Report issue in the empty state's row or under the no-address screen's instructions (see "A whole subject that failed")
 — uses the shared button appearance instead, which applies HeroUI's secondary-button styles to the anchor, at the size
-of those buttons. A control label mentioned within copy uses the shared chip appearance, without quotation marks. A chip
-that only names a separate control remains non-interactive; a chip is never itself a link, and a reference in the body
-to a separate external action is a plain chip. Do not make both the reference and the separate control interactive. All
-appearances retain a visible keyboard focus ring, and a pending open keeps the label and icon visible while preventing
-repeated activation. Callers may not remove the icon or substitute arbitrary local colours, padding or typography.
+of those buttons. A link whose text is a value, an address shown as data rather than an action (a process card's
+`localhost:<port>` links, on their own line above the card's Keep and Stop buttons), keeps the text appearance even
+where the place's actions are buttons. A control label mentioned within copy uses the shared chip appearance, without
+quotation marks. A chip that only names a separate control remains non-interactive; a chip is never itself a link, and a
+reference in the body to a separate external action is a plain chip. Do not make both the reference and the separate
+control interactive. All appearances retain a visible keyboard focus ring, and a pending open keeps the label and icon
+visible while preventing repeated activation. Callers may not remove the icon or substitute arbitrary local colours,
+padding or typography.
 
 Native menu items that open a browser use the same external-link indicator within their menu primitive. Markdown links
 use the document's own anchors and measured link palette, with no added external-link icon for either text or images.

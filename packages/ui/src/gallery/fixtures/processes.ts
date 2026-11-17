@@ -32,11 +32,19 @@ const openProject: Step[] = [
 // A session's trees, one of each kind a row has to draw: the long command with two ports and several processes, the
 // newest one, a command the daemon could not read in a folder it could not read either, and a folder since deleted.
 const sessionTrees = [
-  processTreeOf("100:1", preview, VITE, 95, { process_count: 6, memory_bytes: 412_000_000, ports: [5173, 24678] }),
+  processTreeOf("100:1", preview, VITE, 95, { process_count: 6, memory_bytes: 412_000_000, ports: [5173, 24678], http_ports: [5173] }),
   processTreeOf("101:1", preview, "pnpm test --watch", 0.2, { process_count: 3, memory_bytes: 120_000_000 }),
-  processTreeOf("102:1", preview, "python3 -m http.server 8000", 14, { cwd: `${WEBSITE}/dist`, memory_bytes: 18_000_000, ports: [8000] }),
+  processTreeOf("102:1", preview, "python3 -m http.server 8000", 14, { cwd: `${WEBSITE}/dist`, memory_bytes: 18_000_000, ports: [8000], http_ports: [8000] }),
   processTreeOf("103:1", preview, "", 3, { cwd: null, memory_bytes: 2_000_000 }),
   processTreeOf("104:1", preview, "tail -f logs/dev.log", 130, { cwd: `${WEBSITE}/.worktrees/old-nav`, cwd_missing: true, memory_bytes: 1_000_000 }),
+];
+
+// The rows whose ports decide what a card links to, beside the Vite tree (one web port among two) and the Python server
+// (its only port): a monorepo's dev servers, four of five ports answering web requests so the links need a second line
+// in a narrow panel, and a database, whose port answers no web request, so its card has no link line.
+const portTrees = [
+  processTreeOf("106:1", preview, "pnpm turbo run dev --parallel", 50, { process_count: 9, memory_bytes: 640_000_000, ports: [3000, 3001, 4000, 6006, 9229], http_ports: [3000, 3001, 4000, 6006] }),
+  processTreeOf("107:1", preview, "postgres -D /opt/homebrew/var/postgresql@16", 400, { cwd: "/opt/homebrew/var", process_count: 5, memory_bytes: 96_000_000, ports: [5432], http_ports: [] }),
 ];
 
 // A tree with a process on its agent's own console (Windows): it ends with its session whatever keeps it, so the daemon
@@ -52,24 +60,24 @@ const stopOf = (ui: Ui, tree: ProcessTree) => ui.t("processes.stopNamed", { comm
 const keepOf = (ui: Ui, tree: ProcessTree) => ui.t("processes.keepNamed", { command: tree.command });
 
 const projectTrees = [
-  processTreeOf("200:1", preview, VITE, 95, { process_count: 6, memory_bytes: 412_000_000, ports: [5173, 24678] }),
-  processTreeOf("201:1", preview, "python3 -m http.server 8000", 14, { cwd: `${WEBSITE}/dist`, memory_bytes: 18_000_000, ports: [8000] }),
+  processTreeOf("200:1", preview, VITE, 95, { process_count: 6, memory_bytes: 412_000_000, ports: [5173, 24678], http_ports: [5173] }),
+  processTreeOf("201:1", preview, "python3 -m http.server 8000", 14, { cwd: `${WEBSITE}/dist`, memory_bytes: 18_000_000, ports: [8000], http_ports: [8000] }),
   processTreeOf("202:1", summary, "node scripts/build-summary.mjs --watch", 40, { process_count: 2, memory_bytes: 96_000_000 }),
 ];
 // What no session owns: one tree the user kept past its session, beside two left in a directory since deleted.
 const projectProcesses = [
-  keptOf("302:1", "node scripts/serve-docs.mjs --port 4000", 300, { memory_bytes: 64_000_000, ports: [4000] }),
-  leftoverOf("300:1", `node ${WEBSITE}/.worktrees/old-nav/node_modules/.bin/vite --port 5180`, 600, { cwd: `${WEBSITE}/.worktrees/old-nav`, process_count: 4, memory_bytes: 230_000_000, ports: [5180] }),
+  keptOf("302:1", "node scripts/serve-docs.mjs --port 4000", 300, { memory_bytes: 64_000_000, ports: [4000], http_ports: [4000] }),
+  leftoverOf("300:1", `node ${WEBSITE}/.worktrees/old-nav/node_modules/.bin/vite --port 5180`, 600, { cwd: `${WEBSITE}/.worktrees/old-nav`, process_count: 4, memory_bytes: 230_000_000, ports: [5180], http_ports: [5180] }),
   leftoverOf("301:1", "esbuild --service=0.21.5 --ping", 610, { cwd: `${WEBSITE}/.worktrees/old-nav`, memory_bytes: 24_000_000 }),
 ];
 
 // Enough rows in both categories to scroll each heading to the top and see the next replace it.
 const scrollingProjectProcesses = [
   ...projectProcesses,
-  keptOf("303:1", "pnpm storybook --port 6006", 240, { memory_bytes: 180_000_000, ports: [6006] }),
+  keptOf("303:1", "pnpm storybook --port 6006", 240, { memory_bytes: 180_000_000, ports: [6006], http_ports: [6006] }),
   keptOf("304:1", "pnpm exec tsc --watch", 180, { memory_bytes: 92_000_000 }),
   keptOf("305:1", "node scripts/watch-content.mjs", 120, { memory_bytes: 36_000_000 }),
-  keptOf("306:1", "python3 -m http.server 8080", 60, { memory_bytes: 18_000_000, ports: [8080] }),
+  keptOf("306:1", "python3 -m http.server 8080", 60, { memory_bytes: 18_000_000, ports: [8080], http_ports: [8080] }),
 ];
 
 const listFailed: FixtureError = { code: "internal_error", params: { detail: "the process table could not be read" }, message: "the process table could not be read" };
@@ -96,19 +104,19 @@ const railState = snapshotState({
   sessions: [preview, summary, mobileSession, mobileTests, longHub],
 });
 const railTrees = [
-  processTreeOf("500:1", preview, VITE, 95, { process_count: 6, memory_bytes: 412_000_000, ports: [5173, 24678] }),
+  processTreeOf("500:1", preview, VITE, 95, { process_count: 6, memory_bytes: 412_000_000, ports: [5173, 24678], http_ports: [5173] }),
   processTreeOf("501:1", summary, "node scripts/build-summary.mjs --watch", 40, { process_count: 2, memory_bytes: 96_000_000 }),
-  processTreeOf("502:1", mobileSession, "pnpm exec expo start --tunnel", 25, { cwd: "/Users/dev/code/mobile-app", process_count: 4, memory_bytes: 210_000_000, ports: [8081] }),
+  processTreeOf("502:1", mobileSession, "pnpm exec expo start --tunnel", 25, { cwd: "/Users/dev/code/mobile-app", process_count: 4, memory_bytes: 210_000_000, ports: [8081], http_ports: [8081] }),
   processTreeOf("504:1", mobileTests, "pnpm exec detox test --watch", 12, { cwd: "/Users/dev/code/mobile-app", process_count: 3, memory_bytes: 150_000_000 }),
-  processTreeOf("503:1", longHub, "caddy run --config /Users/dev/Caddyfile --watch", 180, { cwd: "/Users/dev", ports: [2019, 8443] }),
+  processTreeOf("503:1", longHub, "caddy run --config /Users/dev/Caddyfile --watch", 180, { cwd: "/Users/dev", ports: [2019, 8443], http_ports: [2019] }),
   processTreeOf("505:1", longHub, "tail -f /Users/dev/digest/logs/send.log", 90, { cwd: "/Users/dev/digest", memory_bytes: 1_000_000 }),
 ];
 const railProcesses = {
   [web.id]: [
-    keptOf("510:1", "node scripts/serve-docs.mjs --port 4000", 300, { memory_bytes: 64_000_000, ports: [4000] }),
+    keptOf("510:1", "node scripts/serve-docs.mjs --port 4000", 300, { memory_bytes: 64_000_000, ports: [4000], http_ports: [4000] }),
     leftoverOf("511:1", "esbuild --service=0.21.5 --ping", 610, { cwd: `${WEBSITE}/.worktrees/old-nav`, memory_bytes: 24_000_000 }),
   ],
-  [SAMPLE.api.id]: [keptOf("512:1", "uvicorn app.main:app --reload --port 8000", 420, { cwd: "/Users/dev/code/search-api", process_count: 3, memory_bytes: 88_000_000, ports: [8000] })],
+  [SAMPLE.api.id]: [keptOf("512:1", "uvicorn app.main:app --reload --port 8000", 420, { cwd: "/Users/dev/code/search-api", process_count: 3, memory_bytes: 88_000_000, ports: [8000], http_ports: [8000] })],
 };
 // More than the badge can count, kept under one project.
 const manyKept = Array.from({ length: 104 }, (_, index) => keptOf(`${600 + index}:1`, `node scripts/watch-${index}.mjs`, 10 + index));
@@ -122,10 +130,10 @@ export const processScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Processes of a session, one row of each kind",
-    description: "The native right panel is open beside the selected session. Its session filter is shown automatically for the selected session, and stays visible when focus leaves it. The picker has no label and follows the session's long title: the text fades before a visible gap to its clear (×) button. Choose 800px to inspect the narrow docked panel or 420px for the floating panel. The automatic-stop note has compact vertical spacing and shares the cards' leading edge. At a short height, scroll the list: the note stays at the top on an opaque panel background while cards pass underneath, and keyboard focus brings row actions below the whole note. Below it are that session's processes, oldest first, each in a white card whose leading success-green Play icon stays still. At the end of the command's line, hovering the row or moving keyboard focus into it reveals a danger-soft Stop and a secondary Keep button without moving the command; touch devices show both directly. The directory and the facts line below take the card's whole width, with or without the buttons. The top-bar Processes toggle uses a SquareActivity glyph; the leading command control lines up with the folder icon before its working directory. The Vite command is longer than the row: it fades at its end and its tooltip (hover it) shows it whole; under it come the working directory and one line of facts: memory, the two ports it listens on (\"5173 and 24678\"), its age and, for a tree of several processes, the number of its child processes, one fewer than the tree holds (\"5 child processes\" for the Vite tree; a single process shows no such count). The newest row reads \"started just now\". The row with no readable command says Unknown command over Working directory unknown, which starts in the text column, level with the directories above it, and the row whose directory was deleted carries a soft warning badge Directory deleted after the path.",
+    description: "The native right panel is open beside the selected session. Its session filter is shown automatically for the selected session, and stays visible when focus leaves it. The picker has no label and follows the session's long title: the text fades before a visible gap to its clear (×) button. Choose 800px to inspect the narrow docked panel or 420px for the floating panel. The automatic-stop note has compact vertical spacing and shares the cards' leading edge. At a short height, scroll the list: the note stays at the top on an opaque panel background while cards pass underneath, and keyboard focus brings row actions below the whole note. Below it are that session's processes, oldest first, each in a white card whose leading success-green Play icon stays still. At the end of the command's line, hovering the row or moving keyboard focus into it reveals a danger-soft Stop and a secondary Keep button without moving the command; touch devices show both directly. The directory and the facts line below take the card's whole width, with or without the buttons. The top-bar Processes toggle uses a SquareActivity glyph; the leading command control lines up with the folder icon before its working directory. The Vite command is longer than the row: it fades at its end and its tooltip (hover it) shows it whole; under it come the working directory and one line of facts: memory, the two ports it listens on (\"5173 and 24678\"), its age and, for a tree of several processes, the number of its child processes, one fewer than the tree holds (\"5 child processes\" for the Vite tree; a single process shows no such count). The newest row reads \"started just now\". The row with no readable command says Unknown command over Working directory unknown, which starts in the text column, level with the directories above it, and the row whose directory was deleted carries a soft warning badge Directory deleted after the path. A card whose process serves web pages has a line of links between the directory and the facts, a globe glyph and one monospace localhost:<port> link for each port that answers: Vite links only localhost:5173, though its facts line still names 24678 too; the Python server links localhost:8000; the pnpm turbo tree links four ports (3000, 3001, 4000 and 6006) and not its debugger port 9229, so in the narrow panel they wrap to a second line, level with the first link and not under the globe; the Postgres row lists port 5432 in its facts but has no link line, and neither do the rows with no port at all.",
     state: snapshotState({ consoles: [console_], projects: [web], sessions: [longPreview, summary] }),
     preferences: panelPreferences,
-    processes: { trees: sessionTrees },
+    processes: { trees: [...sessionTrees, ...portTrees] },
     steps: [
       (ui) => ui.press(ui.session(longPreview.title)),
       (ui) => ui.press(ui.t("titleBar.processes.show")),
@@ -209,7 +217,7 @@ export const processScenarios: Scenario[] = [
     description: "The console session's own Processes panel lists only what it started. There is no session filter, Files panel or project shell Terminal toggle; Report and Processes are the available panel toggles. The automatic-stop note shares the row's leading edge and stays pinned when a shorter viewport makes the list scroll; keyboard focus keeps the row actions below the note. Its row offers Stop alone, with no Keep, since nothing a console session started outlives it.",
     state: snapshotState({ consoles: [console_], projects: [web], sessions: [SAMPLE.consoleSession] }),
     preferences: panelPreferences,
-    processes: { trees: [processTreeOf("400:1", SAMPLE.consoleSession, "caddy run --config /Users/dev/Caddyfile --watch", 180, { cwd: "/Users/dev", ports: [2019, 8443] })] },
+    processes: { trees: [processTreeOf("400:1", SAMPLE.consoleSession, "caddy run --config /Users/dev/Caddyfile --watch", 180, { cwd: "/Users/dev", ports: [2019, 8443], http_ports: [2019] })] },
     steps: [
       (ui) => ui.press(ui.session(SAMPLE.consoleSession.title)),
       (ui) => ui.press(ui.t("titleBar.processes.show")),

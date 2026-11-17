@@ -434,6 +434,7 @@ mod tests {
             process_count: 1,
             memory_bytes: 0,
             ports: ports.to_vec(),
+            http_ports: None,
             keepable: true,
             unkeepable_reason: None,
         }

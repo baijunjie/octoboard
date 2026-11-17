@@ -141,7 +141,7 @@ export function createProjectReplies({ scenario, store, fail, git, restored, sta
       const found = scenario.projectRemovalBranches?.[body.project] ?? [];
       if ("code" in found) return fail(found);
       // The project's processes its removal stops, whatever it was asked to remove with them.
-      const processes = ledger.projectTrees(body.project);
+      const processes = ledger.projectTrees(body.project).map(ledger.unprobed);
       return Array.isArray(found) ? { type: "project_removal_inspected", id: null, items: found, processes } : { type: "project_removal_inspected", id: null, ...found, processes };
     },
     switch_project_branch: (body) => {

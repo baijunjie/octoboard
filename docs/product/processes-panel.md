@@ -86,11 +86,23 @@ Each tree is a card:
   `docs/product/labels-and-tooltips.md`). A command that could not be read reads "Unknown command";
 - **its working directory**, after a folder glyph, or a crossed-out folder glyph and a line saying it is unknown,
   with an amber "Directory deleted" badge after it when the directory was removed;
-- **a line of facts**: how much memory the tree uses, the ports it listens on, when its top process started ("started
-  just now", or how long ago, kept up to date), and, for a tree with child processes, how many child processes it holds
-  (its processes other than the top one), as "N child processes". The facts stay on one line, fading out where they
-  are cut, with the whole line as their tooltip; this also applies to the facts in a process's confirmation and Details
-  disclosure.
+- **its web links**, only for a tree with ports that serve web pages (see "Ports that serve web pages" in
+  `docs/product/background-processes.md`): a globe glyph, then one link per such port, in ascending order, reading
+  `localhost:<port>` in monospace with the external-link glyph after it. A link opens `http://localhost:<port>/` in the
+  user's own browser, as a web address in terminal output does (see "Web addresses" in
+  `docs/product/terminal-links.md`); its description for assistive technology says it opens in the browser, and an
+  address that cannot be opened raises the "Could not open the link" alert (see "Recovery and unexpected errors" in
+  `docs/product/error-alerts.md`). The address names `localhost`, so it reaches the server only from a browser on the
+  daemon's host: in a remote window, or in the UI opened in a browser on another computer, it opens on the viewer's
+  computer. The links run in the interface's reading direction from the glyph, each address itself reading left to
+  right, and wrap onto further lines when they do not fit; links that appear or go as ports start or stop serving pages
+  move the others as a collection's items do (see "Items moving within a collection" in
+  `docs/product/collection-motion.md`). A tree with no such port has no line;
+- **a line of facts**: how much memory the tree uses, the ports it listens on (every one, those with a web link
+  included), when its top process started ("started just now", or how long ago, kept up to date), and, for a tree
+  with child processes, how many child processes it holds (its processes other than the top one), as "N child
+  processes". The facts stay on one line, fading out where they are cut, with the whole line as their tooltip; this
+  also applies to the facts in a process's confirmation and Details disclosure.
 
 What a tree is and what these facts are taken from is in "Process information and actions" in
 `docs/product/background-processes.md`.
@@ -119,7 +131,7 @@ it running — or, for a reason this window does not know, only that the process
 in `docs/product/error-alerts.md`).
 
 **Each asks for confirmation first**, showing the tree's command whole, wrapped rather than cut, and its working
-directory and facts:
+directory and facts, without its web links:
 
 - **Stop process** says the process and its child processes will be stopped; its confirm button, **Stop**, is in the
   danger colour, and the command's glyph is a crossed-out play glyph in the danger colour.
