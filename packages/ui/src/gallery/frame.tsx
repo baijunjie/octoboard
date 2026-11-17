@@ -290,7 +290,8 @@ function CheckedOnOpen(): null {
  * put on the window only now, after the platform adapter has been chosen: choosing it under the marker would build the
  * shell's own adapter, whose capabilities need the bridge, in place of the browser's the gallery adds to. What reads
  * the marker and the name does so as it renders, so the title bar names the daemon and the application's own features
- * are absent. The daemon is not this machine's (`isLocal`), so what acts on its files is absent too. */
+ * are absent. The daemon is not this machine's (`isLocal`), so what acts on its files is absent too, and the window's
+ * client retries until it connects (`retriesUntilConnected`), as the shell's remote window's does. */
 function enterRemoteWindow(name: string): void {
   const address = new URL(window.location.href);
   address.searchParams.set("remote", name);
@@ -311,7 +312,7 @@ ReactDOM.createRoot(document.getElementById("root")!, {
   <React.StrictMode>
     <AppRoot
       platform={platformOfWindow}
-      daemon={daemon && scenario?.remoteWindow ? { ...daemon, isLocal: false } : daemon}
+      daemon={daemon && scenario?.remoteWindow ? { ...daemon, isLocal: false, retriesUntilConnected: true } : daemon}
       nativeSync={false}
       firstCheckDelayMs={null}
       insideUpdates={scenario?.updater?.checked && <CheckedOnOpen />}

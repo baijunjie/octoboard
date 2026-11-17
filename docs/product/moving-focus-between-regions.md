@@ -71,7 +71,7 @@ Where focus lands in each region:
 | Processes panel | Try again while the first reading of its list failed (see "Loading, refreshing and failures" in `docs/product/processes-panel.md`); otherwise, in a project's panel, its session filter while the field is shown, or its header's filter toggle while the field is hidden; in a console session's, the first tree's Stop, else its Close panel |
 | Terminal panel | the shown tab's shell terminal, so typing reaches the shell; instead its cover's Reconnect while that is offered, its cover while the shell's process cannot be reached, and New terminal on its tab row while the project has no terminal (see "Keyboard focus" in `docs/product/terminal-panel.md`) |
 | Update notice | its first button: What is new while a newer version is offered, including one the daemon cannot install itself; Restart now once the update is installed; Reload when the page is asked to reload into the version the daemon now runs (see "What the browser shows" in `docs/product/server-form-updates.md`); it has none while the update downloads, and F6 then skips it |
-| Connection banner | its Retry button; it has none while the banner only says it is reconnecting, and F6 then skips it |
+| Connection banner | its Retry button; it has none while the banner only says it is reconnecting, and F6 then skips it (a remote daemon's window offers Retry all the while, see "A dropped connection" in `docs/product/remote-daemons.md`) |
 | Toasts | the newest toast |
 
 Pressing Retry from the keyboard works as with the mouse. If Retry holds focus when it goes away — because a retry

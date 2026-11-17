@@ -275,15 +275,35 @@ The loopback port a remote window is opened on is the application's from before 
 reconnections included, so that the owner key is never sent to a port another user of this computer could have taken.
 When the SSH connection drops, the window loses its daemon connection as any window does (see "Losing the daemon
 connection" in `docs/product/application-lifecycle.md`), and the daemon is shown **Reconnecting** on the Remote
-devices page; the next connection the window makes connects over SSH again, with pauses that grow between failed
-attempts, up to **30 seconds**. The owner key is read again over each new SSH connection, and whenever
-the window has no connection open, so a key rotated meanwhile is followed: the window is pointed at the new key only
-where it changed.
+devices page until the SSH connection is made again. The application makes it again by itself, after pauses that grow
+between failed attempts, 1 second, then 2, 4, 8 and 16, up to **30 seconds**, for as long as the window is open, and as
+long as a connection is held for the browser (see "Opening a remote daemon in the browser" above). Every connection
+made to the daemon's loopback port meanwhile — the window's own, a terminal's, a file it loads, the browser's —
+also connects over SSH again, without waiting for that pause; connections that come while an attempt is under way wait
+for it, and fail with it. A connection through a forwarded port fails while a pause runs instead (see below).
+
+**The window retries until it connects or is closed**, with no number of attempts after which it gives up, its own
+pauses growing in the same way, so that an attempt it makes once the remote machine can be reached again connects.
+Once the SSH connection is made again, by whichever connection, the window is told and connects to its daemon at once,
+its pauses started over, so that it and the Remote devices page stop saying it is reconnecting within moments of each
+other.
+Its connection banner says it is reconnecting all the while, with **Try again**, which attempts at once, after an
+attempt still under way has ended, starts the window's pauses over from 1 second, and shows as busy until its attempt
+connects or fails.
+
+**A connection that would meet the same answer again** — the remote machine refuses the password or the key, or
+shows a host key other than the one pinned, or the key file cannot be read or needs a passphrase — is tried again only
+after **5 minutes**, whatever connection asks, so that a password the machine refuses is not sent again and again (a
+host may ban a computer that does so). Try again tries it at once all the same.
+
+The owner key is read again over each new SSH connection, and whenever the window has no connection open, so a key
+rotated meanwhile is followed: the window is pointed at the new key only where it changed.
 
 **A reconnection asks nothing and reports nothing outside its window**: it signs in with what the connection was made
-with, kept in memory, and a failed attempt is only tried again after its pause. No dialog opens for it, in the remote
-window or on the Remote devices page. To start over, with another password say, the owner closes the window or
-chooses Disconnect, and connects again.
+with, kept in memory, and a failed attempt is tried again by itself after its pause — one that would meet the same
+answer only after the long pause above, or at once on Try again. No dialog opens for it, in the remote window or on
+the Remote devices page. To start over, with another password say, the owner
+closes the window or chooses Disconnect, and connects again.
 
 The ports forwarded for the window's loopback addresses (see "Loopback addresses of the remote machine" in
 `docs/product/links-and-files-in-a-remote-window.md`) stay the application's meanwhile: a connection through one fails

@@ -20,7 +20,7 @@ use super::ssh::{self, ConnectError, RunError, Secret, Session, Target};
 use super::{
     browser, connections_changed, device_key, forward, key_service, next_order, pin, tunnel,
     use_device_key, window_closed, Live, RemoteState, Via, BROWSER_LABEL_PREFIX,
-    FORWARDS_CHANGED_EVENT,
+    CONNECTION_UP_EVENT, FORWARDS_CHANGED_EVENT,
 };
 use crate::daemon_window::{self, RemoteDaemon};
 use crate::diagnostics::diagnostic;
@@ -530,7 +530,7 @@ async fn hold(
         },
     ));
     let (stop, stopped) = watch::channel(false);
-    let mut connected = link.live();
+    let connected = link.live();
     let forwards = (!request.browser).then(|| {
         let changing = app.clone();
         let window = label.clone();
@@ -553,18 +553,40 @@ async fn hold(
             connected: connected.clone(),
             via: via.clone(),
             forwards,
+            link: Some(link.clone()),
         },
     );
     tauri::async_runtime::spawn(tunnel::serve(listener, link, stopped));
-    // The rail is told of every change of the connection's state, until the link is gone.
+    // The rail is told of every change of the connection's state, and the window of the connection
+    // coming back, until the link is gone.
     let watching = app.clone();
-    tauri::async_runtime::spawn(async move {
-        while connected.changed().await.is_ok() {
-            connections_changed(&watching);
-        }
-    });
+    let window = (!request.browser).then(|| label.clone());
+    tauri::async_runtime::spawn(follow(
+        connected,
+        {
+            let app = app.clone();
+            move || connections_changed(&app)
+        },
+        move || {
+            if let Some(window) = &window {
+                let _ = watching.emit_to(window, CONNECTION_UP_EVENT, ());
+            }
+        },
+    ));
     connections_changed(app);
     Ok(Held { label, via, remote })
+}
+
+/// Follows whether a link's SSH connection is up until the link is gone: `changed` at every change,
+/// and then `up` where it came up again.
+async fn follow(mut connected: watch::Receiver<bool>, changed: impl Fn(), up: impl Fn()) {
+    while connected.changed().await.is_ok() {
+        let is_up = *connected.borrow_and_update();
+        changed();
+        if is_up {
+            up();
+        }
+    }
 }
 
 /// Shows the connection `held` holds: opens the browser at its address, or a new window on its
@@ -606,6 +628,30 @@ mod tests {
     use super::super::live;
     use super::super::ssh::test_server::{Behaviour, TestServer};
     use super::*;
+
+    #[tokio::test]
+    async fn a_link_coming_back_up_is_told_once_per_return_and_every_change_to_the_rail() {
+        let (state, connected) = watch::channel(true);
+        let changes = Arc::new(Mutex::new(0usize));
+        let ups = Arc::new(Mutex::new(0usize));
+        let (counted_changes, counted_ups) = (changes.clone(), ups.clone());
+        let following = tokio::spawn(follow(
+            connected,
+            move || *counted_changes.lock().unwrap() += 1,
+            move || *counted_ups.lock().unwrap() += 1,
+        ));
+        for (seen, up) in [false, true, false, true].into_iter().enumerate() {
+            state.send(up).unwrap();
+            // Each change is seen before the next is made.
+            while *changes.lock().unwrap() <= seen {
+                tokio::task::yield_now().await;
+            }
+        }
+        drop(state);
+        following.await.unwrap();
+        assert_eq!(*ups.lock().unwrap(), 2);
+        assert_eq!(*changes.lock().unwrap(), 4);
+    }
 
     fn entry(server: &TestServer) -> Entry {
         Entry {

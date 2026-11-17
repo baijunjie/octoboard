@@ -10,6 +10,39 @@ type QueuedRequest = { payload: string; timer: ReturnType<typeof setTimeout> };
 
 export const MAX_RECONNECT_ATTEMPTS = 2;
 export const RECONNECT_BASE_DELAY_MS = 500;
+/** The first and the longest wait between two attempts of a client that retries until it connects
+ * (`ENDLESS_RECONNECT`). */
+export const ENDLESS_RECONNECT_BASE_DELAY_MS = 1000;
+export const ENDLESS_RECONNECT_MAX_DELAY_MS = 30_000;
+
+/** The longest Retry waits for its policy's `beforeRetry` before it attempts all the same: longer than the desktop
+ * shell may take to make an SSH connection, connecting and signing in, while an attempt under way holds it. */
+export const BEFORE_RETRY_TIMEOUT_MS = 45_000;
+
+/** How a lost connection is retried: how many automatic attempts follow one another (`Infinity`: until one connects),
+ * the wait before attempt number `attempt`, counting from 0, and what Retry waits for before it attempts. */
+export interface ReconnectPolicy {
+  readonly attempts: number;
+  readonly delay: (attempt: number) => number;
+  /** Settles once Retry may attempt; a failure is passed over. */
+  readonly beforeRetry?: () => Promise<void>;
+}
+
+/** A couple of quick attempts, then Retry: a window on the daemon of its own machine. */
+export const BRIEF_RECONNECT: ReconnectPolicy = {
+  attempts: MAX_RECONNECT_ATTEMPTS,
+  delay: (attempt) => RECONNECT_BASE_DELAY_MS * 2 ** attempt,
+};
+
+/** Attempts until one connects, the wait doubling from `ENDLESS_RECONNECT_BASE_DELAY_MS` up to
+ * `ENDLESS_RECONNECT_MAX_DELAY_MS`: a remote daemon's
+ * window, whose connection goes over SSH and comes back once the network does (see "A dropped connection" in
+ * `docs/product/remote-daemons.md`). */
+export const ENDLESS_RECONNECT: ReconnectPolicy = {
+  attempts: Infinity,
+  delay: (attempt) => Math.min(ENDLESS_RECONNECT_BASE_DELAY_MS * 2 ** attempt, ENDLESS_RECONNECT_MAX_DELAY_MS),
+};
+
 /** How long a request may sit queued (socket not open yet, or a reconnect in flight) before giving
  * up on it. Without this, a caller awaiting a request made right as the connection drops — most
  * importantly `shutdown` during the quit flow — would hang forever once the reconnect budget above
@@ -61,12 +94,15 @@ export type ConnectionState = "connecting" | "open" | "reconnecting" | "closed" 
  * IPC is involved anywhere in this path (see "Why the daemon is split out" in
  * `docs/architecture.md`).
  *
- * A dropped connection gets a couple of quick, backed-off reconnect attempts rather than being
- * treated as final: where the shell runs the daemon as its sidecar, the daemon dies together with
- * the application (so most drops are either a brief hiccup or the whole process being gone, not
- * something retrying forever would fix), and it re-sends a full `snapshot` on every new control
- * connection, so a reconnect needs no replay logic of its own. Once the budget is spent, `reconnect()` is the way back —
- * called from a user-facing Retry affordance rather than retried automatically forever.
+ * A dropped connection is retried as the client's `ReconnectPolicy` says, and the daemon re-sends a full `snapshot` on
+ * every new control connection, so a reconnect needs no replay logic of its own. By default (`BRIEF_RECONNECT`) that is a
+ * couple of quick, backed-off attempts rather than treating the drop as final: where the shell runs the daemon as its
+ * sidecar, the daemon dies together with the application, so most drops are either a brief hiccup or the whole process
+ * being gone, not something retrying forever would fix. Once the budget is spent, `reconnect()` is the way back —
+ * called from a user-facing Retry affordance rather than retried automatically forever. A remote daemon's window is
+ * given `ENDLESS_RECONNECT` instead: its drops are the network's, which comes back on its own, so it keeps trying, and
+ * `reconnect()` there only tries at once. While the attempt a `reconnect()` started is under way, the client says so
+ * (`onRetryPendingChange`), for Retry to show it.
  *
  * A connection that goes silent past the heartbeat's timeout is taken as dropped, with no close event to wait for: a
  * dead connection may never deliver one.
@@ -82,6 +118,7 @@ export type ConnectionState = "connecting" | "open" | "reconnecting" | "closed" 
 export class DaemonClient {
   private readonly url: string;
   private readonly keyCheck?: () => Promise<boolean>;
+  private readonly policy: ReconnectPolicy;
   private socket?: WebSocket;
   /** Bumped on every `connect()`, and when a heartbeat timeout disowns its socket; a socket's listeners no-op once
    * their generation is stale. */
@@ -95,6 +132,11 @@ export class DaemonClient {
   private flushFrame?: number;
   private flushTimer?: ReturnType<typeof setTimeout>;
   private connectionListeners = new Set<(state: ConnectionState) => void>();
+  private retryListeners = new Set<(pending: boolean) => void>();
+  /** Whether the attempt a `reconnect()` started has not opened or failed yet. */
+  private retryPending = false;
+  /** The generation of the socket that attempt opened, once it has. */
+  private retryGeneration?: number;
   private pending = new Map<string, PendingReply>();
   /** Requests made before the socket reaches `OPEN` and its hello is read are queued rather than dropped or thrown, each
    * with the timer that gives up on it while it waits. Once sent, a request waits for its reply as
@@ -117,9 +159,10 @@ export class DaemonClient {
   /** The last heartbeat id handed out, numbered apart from request ids. */
   private heartbeatSeq = 0;
 
-  constructor(url: string, keyCheck?: () => Promise<boolean>) {
+  constructor(url: string, keyCheck?: () => Promise<boolean>, policy: ReconnectPolicy = BRIEF_RECONNECT) {
     this.url = url;
     this.keyCheck = keyCheck;
+    this.policy = policy;
     this.connect();
   }
 
@@ -170,6 +213,7 @@ export class DaemonClient {
         }
         this.startHeartbeat(socket);
         this.setConnectionState("open");
+        this.endRetry();
         return;
       }
       if (event.type === "snapshot" && !this.greeted) {
@@ -190,7 +234,7 @@ export class DaemonClient {
   }
 
   /** The current connection is gone, whether its socket closed or its heartbeat timed out: what it had outstanding
-   * fails, and a reconnect is scheduled while the budget lasts. */
+   * fails, and a reconnect is scheduled while the policy's attempts last. */
   private lose(): void {
     this.stopHeartbeat();
     // What arrived before the drop is delivered ahead of the state change it precedes.
@@ -203,9 +247,15 @@ export class DaemonClient {
     // flushed on the next connection and run an action the caller was already told had failed.
     for (const queued of this.sendQueue.splice(0)) clearTimeout(queued.timer);
     if (this.closedPermanently) return;
+    if (this.generation === this.retryGeneration) this.endRetry();
     this.checkKey();
-    if (this.reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-      const delay = RECONNECT_BASE_DELAY_MS * 2 ** this.reconnectAttempts;
+    if (this.retryPending) {
+      // Retry's own attempt is being prepared (`beforeRetry`) and follows: no automatic one is made before it.
+      this.setConnectionState("reconnecting");
+      return;
+    }
+    if (this.reconnectAttempts < this.policy.attempts) {
+      const delay = this.policy.delay(this.reconnectAttempts);
       this.reconnectAttempts += 1;
       this.setConnectionState("reconnecting");
       this.reconnectTimer = setTimeout(() => this.connect(), delay);
@@ -267,19 +317,77 @@ export class DaemonClient {
   /** Ends the client for good in the final state `state`, failing what it had outstanding. */
   private giveUp(state: "incompatible" | "keyRefused"): void {
     this.close();
+    this.endRetry();
     this.failPending(t("connection.error.connectionClosed"));
     for (const queued of this.sendQueue.splice(0)) clearTimeout(queued.timer);
     this.setConnectionState(state);
   }
 
-  /** Retries right away after the automatic reconnect budget was spent — the user-facing Retry
-   * affordance calls this; nothing calls it automatically. Does nothing once the client is closed for good. */
+  /** Retries right away, with the automatic attempts' waits started over — the user-facing Retry calls this, after
+   * the automatic attempts were spent or, with attempts that do not end, during a wait for the next one; nothing calls
+   * it automatically. Does nothing once the client is closed for good. */
   reconnect(): void {
-    if (this.closedPermanently) return;
+    if (this.closedPermanently || this.retryPending) return;
     this.reconnectAttempts = 0;
+    this.retryGeneration = undefined;
+    this.setRetryPending(true);
     // The banner says a retry is under way until the socket opens or drops again.
     this.setConnectionState("reconnecting");
+    const attempt = () => {
+      if (this.closedPermanently || !this.retryPending) return;
+      // An automatic attempt that connected meanwhile is kept.
+      if (this.connectionState === "open") {
+        this.endRetry();
+        return;
+      }
+      this.connect();
+      this.retryGeneration = this.generation;
+    };
+    const before = this.policy.beforeRetry;
+    if (!before) {
+      attempt();
+      return;
+    }
+    // No automatic attempt is made while Retry's is prepared: the wait under way ends here, and a loss meanwhile
+    // schedules none (`lose`). A preparation that does not settle is not waited for past `BEFORE_RETRY_TIMEOUT_MS`.
+    clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = undefined;
+    let bound: ReturnType<typeof setTimeout> | undefined;
+    const prepared = before().catch(() => {});
+    const bounded = new Promise<void>((resolve) => (bound = setTimeout(resolve, BEFORE_RETRY_TIMEOUT_MS)));
+    void Promise.race([prepared, bounded]).then(() => {
+      clearTimeout(bound);
+      attempt();
+    });
+  }
+
+  /** Says the daemon can be reached again (for a remote daemon's window, its SSH connection is back): a wait for the
+   * next automatic attempt ends at once, and the waits start over. An attempt under way is left to finish. Not the
+   * user's Retry: nothing is shown pending. */
+  reachable(): void {
+    if (this.closedPermanently || this.connectionState === "open") return;
+    this.reconnectAttempts = 0;
+    if (this.reconnectTimer === undefined) return;
     this.connect();
+  }
+
+  /** Subscribes to whether the attempt a `reconnect()` started is under way, reporting the current value straight
+   * away. */
+  onRetryPendingChange(listener: (pending: boolean) => void): () => void {
+    this.retryListeners.add(listener);
+    listener(this.retryPending);
+    return () => this.retryListeners.delete(listener);
+  }
+
+  private endRetry(): void {
+    this.retryGeneration = undefined;
+    this.setRetryPending(false);
+  }
+
+  private setRetryPending(pending: boolean): void {
+    if (this.retryPending === pending) return;
+    this.retryPending = pending;
+    for (const listener of this.retryListeners) listener(pending);
   }
 
   /** Fails every request still waiting for an answer. A reconnect's socket is a fresh connection

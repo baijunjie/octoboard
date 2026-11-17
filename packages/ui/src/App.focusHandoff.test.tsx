@@ -49,6 +49,8 @@ const project = projectOf("p-site", console_.id, "Website");
 const live = sessionOf("s-live", console_.id, project.id, "Fix header", "idle");
 const other = consoleOf("c-other", "Other");
 const agentInput = () => document.querySelector("[data-region=terminal] textarea[aria-label='Agent terminal']");
+/** The connection banner's Try again, where it is offered. */
+const bannerTryAgain = () => Array.from(document.querySelectorAll<HTMLElement>("[data-region=banner] button")).find((button) => button.textContent === "Try again");
 
 it("hands focus on an archived session's owner link to its history when the owner's record is deleted", async () => {
   stubWindow();
@@ -127,7 +129,7 @@ it("hands focus on the connection banner's Try again to the agent terminal once 
   mountApp(daemon);
   await pressElement(row(live.title));
   await act(async () => daemon.store.setState({ connectionState: "closed" }));
-  const retry = Array.from(document.querySelectorAll<HTMLElement>("[data-region=banner] button")).find((button) => button.textContent === "Try again");
+  const retry = bannerTryAgain();
   expect(retry).toBeDefined();
   act(() => retry!.focus());
 
@@ -139,6 +141,69 @@ it("hands focus on the connection banner's Try again to the agent terminal once 
   await act(async () => daemon.store.setState({ connectionState: "reconnecting" }));
   expect(document.querySelector("[data-region=banner] button")).toBeNull();
   expect(document.activeElement).toBe(agentInput());
+});
+
+it("keeps Try again, and focus on it, on the banner of a window that retries until it connects, as Retry tries again", async () => {
+  stubWindow();
+  const daemon = { ...fakeDaemon(snapshotState({ consoles: [console_], projects: [project], sessions: [live] })), retriesUntilConnected: true };
+  mountApp(daemon);
+  await pressElement(row(live.title));
+  await act(async () => daemon.store.setState({ connectionState: "reconnecting" }));
+  const retry = bannerTryAgain();
+  expect(retry).toBeDefined();
+  act(() => retry!.focus());
+
+  await pressElement(retry);
+  expect(daemon.reconnect).toHaveBeenCalledOnce();
+  expect(document.activeElement).toBe(retry);
+});
+
+it("offers Try again in a window that retries until it connects while its first connection keeps failing", async () => {
+  stubWindow();
+  const daemon = { ...fakeDaemon({ connectionState: "reconnecting" }), retriesUntilConnected: true };
+  mountApp(daemon);
+  const retry = bannerTryAgain();
+  expect(retry).toBeDefined();
+  await pressElement(retry);
+  expect(daemon.reconnect).toHaveBeenCalledOnce();
+});
+
+it("says a window that retries until it connects is not getting an answer, with Try again, before its first snapshot", async () => {
+  stubWindow();
+  const daemon = { ...fakeDaemon({ connectionState: "reconnecting" }), retriesUntilConnected: true };
+  mountApp(daemon);
+  expect(document.body.textContent).toContain("The daemon is not answering.");
+  expect(document.body.textContent).not.toContain("Connecting to the daemon");
+  expect(bannerTryAgain()).toBeDefined();
+});
+
+it("says a window that does not retry until it connects is connecting while it reconnects, without Try again", async () => {
+  stubWindow();
+  mountApp(fakeDaemon({ connectionState: "reconnecting" }));
+  expect(document.body.textContent).toContain("Connecting to the daemon");
+  expect(document.body.textContent).not.toContain("The daemon is not answering.");
+  expect(bannerTryAgain()).toBeUndefined();
+});
+
+it.each([
+  // No session is selected yet, so focus meant for the terminal goes to the top bar.
+  { content: "a console", state: { consoles: [console_], projects: [project], sessions: [live] }, region: "topbar" },
+  // The welcome screen stands in for the terminal and takes focus only from somewhere else.
+  { content: "no console", state: {}, region: "welcome" },
+])("hands focus on Try again on, once the window has content ($content), where its first connection opened under it", async ({ state, region }) => {
+  stubWindow();
+  const daemon = { ...fakeDaemon({ connectionState: "reconnecting" }), retriesUntilConnected: true };
+  mountApp(daemon);
+  const retry = bannerTryAgain();
+  expect(retry).toBeDefined();
+  act(() => retry!.focus());
+
+  // The connection opens: the banner goes with nothing yet to hand focus to, and the snapshot follows.
+  await act(async () => daemon.store.setState({ connectionState: "open" }));
+  expect(document.querySelector("[data-region=banner]")).toBeNull();
+  await act(async () => daemon.store.setState(snapshotState(state)));
+  expect(document.activeElement?.closest("[data-region]")?.getAttribute("data-region")).toBe(region);
+  expect(document.activeElement?.matches("button")).toBe(true);
 });
 
 /** The app with an archived session's history on screen and focus in it, under `modality`. */

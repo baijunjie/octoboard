@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { StoreApi } from "zustand";
 
-import { DaemonClient } from "../daemon-client";
+import { BRIEF_RECONNECT, DaemonClient, ENDLESS_RECONNECT } from "../daemon-client";
 import { looseRequestSender, type RequestSender } from "../requests";
 import { CodedError } from "../errors/codedError";
 import { daemonMessage } from "../errors/daemonMessage";
@@ -42,7 +42,12 @@ export interface Daemon {
    * confirmation for the user in the terminal, and the daemon asks again for it only after a
    * `snapshot`. */
   dismissTrustPrompt: (session: string) => void;
-  /** Retries the control connection right away after the automatic reconnect budget was spent. */
+  /** Whether a lost control connection is retried until it connects, with Retry offered all the while: a window the
+   * desktop shell opened on a remote daemon. Otherwise a couple of attempts are made, and Retry offered once they are
+   * spent. */
+  readonly retriesUntilConnected?: boolean;
+  /** Retries the control connection right away: after the automatic attempts were spent, or, where they do not end,
+   * without waiting for the next one. */
   reconnect: () => void;
   /** The URL of a session's terminal stream (`GET /ws/term/:session`), on the same daemon the
    * control connection goes to. */
@@ -52,8 +57,17 @@ export interface Daemon {
   terminalReconnectDelay?: (attempt: number) => number;
 }
 
-/** `remote`: the window is one the desktop shell opened on a daemon elsewhere (the platform layer's `windowKind`). */
-export function createDaemon(address: DaemonAddress, { remote = false }: { remote?: boolean } = {}): Daemon {
+/** `remote`: the window is one the desktop shell opened on a daemon elsewhere (the platform layer's `windowKind`). For
+ * such a window, from the platform's `remoteConnection`: `beforeRetry`, what Retry waits for before it attempts, and
+ * `onReachable`, which calls its listener when the daemon can be reached again and returns the unsubscribe. */
+export function createDaemon(
+  address: DaemonAddress,
+  {
+    remote = false,
+    beforeRetry,
+    onReachable,
+  }: { remote?: boolean; beforeRetry?: () => Promise<void>; onReachable?: (listener: () => void) => () => void } = {},
+): Daemon {
   const store = createStateStore();
   const dispatch = (action: Action) => store.setState((state) => reducer(state, action));
   // The events that arrived together are one update: a burst renders once, not once per event.
@@ -63,6 +77,7 @@ export function createDaemon(address: DaemonAddress, { remote = false }: { remot
   const client = new DaemonClient(
     daemonWsUrl(address, "/ws/control"),
     address.servedByDaemon ? () => daemonRefusedKey(address) : undefined,
+    remote ? { ...ENDLESS_RECONNECT, beforeRetry } : BRIEF_RECONNECT,
   );
   const importProgress = createImportProgressListeners();
   const notificationListeners = new Set<(notification: WindowNotification) => void>();
@@ -93,6 +108,9 @@ export function createDaemon(address: DaemonAddress, { remote = false }: { remot
     }
   });
   client.onConnectionChange((state) => dispatch({ kind: "connection", state }));
+  client.onRetryPendingChange((pending) => dispatch({ kind: "retry_pending", pending }));
+  // For as long as the window lives, as the client does.
+  onReachable?.(() => client.reachable());
 
   // A failure's message is worded here, in the language and with the names of the moment it
   // arrives, so every caller shows `err.message` as it always did.
@@ -116,6 +134,7 @@ export function createDaemon(address: DaemonAddress, { remote = false }: { remot
 
   return {
     isLocal: !remote && isLocalDaemon(address),
+    retriesUntilConnected: remote,
     store,
     request,
     showNotice: (message, content) => notify({ kind: "notice", message, content }),

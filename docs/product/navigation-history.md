@@ -36,12 +36,12 @@ ended. Back from it returns to where the window was before the press. A selectio
 a visit of its own.
 
 The history starts once the daemon's state has first arrived. In the main window of the desktop application it starts
-with the window: what the window shows while its daemon cannot be used — while it connects, while the daemon is not
-answering, and the screens for a daemon that could not start and for a daemon of another version — is a place of its
-own, whichever of those it is, and so is the Remote devices page shown meanwhile; both are passed over once the daemon
-can be used (see "Without the local daemon" in `docs/product/remote-devices-page.md`). The history is kept in memory
-for the window alone: it is not stored, so reloading the window or restarting the application starts it empty, and
-every client has its own. It holds the **100** most recent places; older ones are dropped.
+with the window: what the window shows while its daemon cannot be used — while it connects at launch, while that first
+connection is not answered, and the screens for a daemon that could not start and for a daemon of another version — is a
+place of its own, whichever of those it is, and so is the Remote devices page shown meanwhile; both are passed over once
+the daemon can be used (see "Without the local daemon" in `docs/product/remote-devices-page.md`). The history is kept in
+memory for the window alone: it is not stored, so reloading the window or restarting the application starts it empty,
+and every client has its own. It holds the **100** most recent places; older ones are dropped.
 
 ## Moving back and forward
 

@@ -9,6 +9,7 @@ import { sessionRequestOf, withRequest } from "./sessionRequests";
 
 export type Action =
   | { kind: "connection"; state: ConnectionState }
+  | { kind: "retry_pending"; pending: boolean }
   | { kind: "event"; event: Event }
   | { kind: "dismiss_trust_prompt"; session: string }
   | { kind: "track_account_login"; key: string; tracked: boolean }
@@ -137,6 +138,8 @@ export function reducer(state: State, action: Action): State {
       // A dropped connection forgets the daemon its hello described: the next one may meet another daemon, which
       // greets it again, or sends no hello at all.
       return { ...state, connectionState: action.state, daemon: action.state === "reconnecting" || action.state === "closed" ? null : state.daemon };
+    case "retry_pending":
+      return { ...state, retryPending: action.pending };
     case "dismiss_trust_prompt":
       return { ...state, trustPrompts: state.trustPrompts.filter((p) => p.session !== action.session) };
     case "track_account_login": {

@@ -203,4 +203,25 @@ export const remoteWindowScenarios: Scenario[] = [
     forwardFailure: "forwarding_refused",
     steps: [pickSession, (ui) => ui.wait(800), (ui) => ui.clickTerminalLink("http://localhost:5176/gallery.html")],
   },
+  {
+    id: "remote-window-reconnecting",
+    group: "Startup and connection",
+    category: "exceptional",
+    title: "Remote daemon's window reconnecting after a drop",
+    description:
+      "The window opened on Staging lost its connection to the daemon and keeps the last known sessions on screen. The banner along the bottom says it is disconnected and reconnecting, with Try again beside the line: a remote window retries without end, so Try again is there all the while, not only once attempts are spent as in a local window (`daemon-reconnecting`, `daemon-lost`).",
+    ...REMOTE_WINDOW,
+    state: { ...remoteState, connectionState: "reconnecting" },
+    steps: [pickSession],
+  },
+  {
+    id: "remote-window-reconnecting-before-snapshot",
+    group: "Startup and connection",
+    category: "exceptional",
+    title: "Remote daemon's window that has not connected yet",
+    description:
+      "The window opened on Staging has never received a snapshot and its first connection keeps failing. Nothing to show yet, so the content area holds only the line saying the daemon is not answering, as a local window's does once its attempts are spent (`daemon-closed-before-snapshot`), with the title bar naming Staging, and the banner along the bottom offers Try again beside the reconnecting line. A local window has neither until its attempts are spent.",
+    ...REMOTE_WINDOW,
+    state: { connectionState: "reconnecting" },
+  },
 ];

@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { accountOf, markdownContent, pageOf, sessionOf } from "../fixtures/builders";
 import { DEFAULT_SETTINGS } from "./defaultSettings";
-import type { ConnectionState } from "../daemon-client";
+import { BRIEF_RECONNECT, ENDLESS_RECONNECT, type ConnectionState, type ReconnectPolicy } from "../daemon-client";
 import type { Event, Project, ProviderInfo, ShellTerminal } from "../protocol";
 import { TEST_PROVIDERS } from "../test/testProviders";
 import { accountQuotaOf } from "../accounts/accountQuotaOf";
@@ -14,13 +14,22 @@ const client = vi.hoisted(() => ({
   onEvents: undefined as ((events: Event[]) => void) | undefined,
   onConnectionChange: undefined as ((state: ConnectionState) => void) | undefined,
   keyCheck: undefined as (() => Promise<boolean>) | undefined,
+  policy: undefined as ReconnectPolicy | undefined,
+  onRetryPendingChange: undefined as ((pending: boolean) => void) | undefined,
+  reachable: vi.fn(),
 }));
-vi.mock("../daemon-client", () => ({
+vi.mock("../daemon-client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../daemon-client")>()),
   DaemonClient: class {
-    constructor(_url: string, keyCheck?: () => Promise<boolean>) { client.keyCheck = keyCheck; }
+    constructor(_url: string, keyCheck?: () => Promise<boolean>, policy?: ReconnectPolicy) {
+      client.keyCheck = keyCheck;
+      client.policy = policy;
+    }
     onEvent(listener: (event: Event) => void) { client.onEvent = listener; }
     onEvents(listener: (events: Event[]) => void) { client.onEvents = listener; }
     onConnectionChange(listener: (state: ConnectionState) => void) { client.onConnectionChange = listener; }
+    onRetryPendingChange(listener: (pending: boolean) => void) { client.onRetryPendingChange = listener; }
+    reachable() { client.reachable(); }
   },
 }));
 
@@ -75,6 +84,32 @@ it("gives the client a key check only for a page the daemon itself served", () =
   expect(client.keyCheck).toBeUndefined();
   createDaemon({ origin: "ws://localhost:1234", key: "k", servedByDaemon: true });
   expect(client.keyCheck).toBeTypeOf("function");
+});
+
+it("has a remote daemon's window retry until it connects, and another give up after a couple of attempts", () => {
+  const beforeRetry = async () => {};
+  const remote = createDaemon({ origin: "ws://127.0.0.1:1234", key: "k" }, { remote: true, beforeRetry });
+  expect(client.policy).toEqual({ ...ENDLESS_RECONNECT, beforeRetry });
+  expect(remote.retriesUntilConnected).toBe(true);
+  const local = createDaemon({ origin: "ws://127.0.0.1:1234", key: "k" });
+  expect(client.policy).toBe(BRIEF_RECONNECT);
+  expect(local.retriesUntilConnected).toBe(false);
+});
+
+it("tells a remote daemon's client when its daemon can be reached again", () => {
+  let reachable: (() => void) | undefined;
+  createDaemon({ origin: "ws://127.0.0.1:1234", key: "k" }, { remote: true, onReachable: (listener) => ((reachable = listener), () => {}) });
+  client.reachable.mockClear();
+  reachable!();
+  expect(client.reachable).toHaveBeenCalledOnce();
+});
+
+it("holds whether the attempt Retry started is under way", () => {
+  const daemon = createDaemon({ origin: "ws://127.0.0.1:1234", key: "k" });
+  client.onRetryPendingChange!(true);
+  expect(daemon.store.getState().retryPending).toBe(true);
+  client.onRetryPendingChange!(false);
+  expect(daemon.store.getState().retryPending).toBe(false);
 });
 
 it("applies the events of one batch as a single update", () => {

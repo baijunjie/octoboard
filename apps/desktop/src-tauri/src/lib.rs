@@ -127,6 +127,7 @@ pub fn run() {
             remote::remote_daemon_disconnect,
             remote::page::remote_connect_pending_take,
             remote::page::remote_page_requested_take,
+            remote::remote_connection_retry,
             remote::remote_link_address,
             remote::remote_forwards_list,
             remote::remote_forward_stop,

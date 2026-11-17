@@ -23,6 +23,7 @@ import type {
   RemoteDaemonsCapability,
   RemoteForward,
   RemoteFilesCapability,
+  RemoteConnectionCapability,
   RemoteForwardsCapability,
   RemoteDaemonStatus,
   RemoteLoginCapability,
@@ -73,7 +74,8 @@ export function tauriPlatform(): PlatformAdapter {
     // The Remote devices page, where a daemon elsewhere is chosen and connected to, is the local window's alone, and
     // so are the shell's commands for it.
     remoteDaemons: local ? tauriRemoteDaemons() : undefined,
-    // Only a remote window has a connection of its own to forward over.
+    // Only a remote window has a connection of its own: to make again, and to forward over.
+    remoteConnection: kind === "remote" ? tauriRemoteConnection() : undefined,
     remoteForwards: kind === "remote" ? tauriRemoteForwards() : undefined,
     // Only a remote window has files of a daemon elsewhere to copy.
     remoteFiles: kind === "remote" ? tauriRemoteFiles() : undefined,
@@ -464,6 +466,17 @@ function tauriLinks(remote: boolean): LinkCapability {
         throw address === url ? failure : new ForwardedLinkOpenError(address, failure);
       }
     },
+  };
+}
+
+/** The SSH connection this remote window's daemon is reached over. */
+function tauriRemoteConnection(): RemoteConnectionCapability {
+  return {
+    async retryNow() {
+      const { invoke } = await import("@tauri-apps/api/core");
+      await invoke("remote_connection_retry");
+    },
+    onUp: (listener) => listenTo("remote-connection-up", listener),
   };
 }
 

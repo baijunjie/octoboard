@@ -559,8 +559,25 @@ describe("the forwarded ports", () => {
   it("are a remote window's alone", () => {
     openAs("&daemon=me%40host&remote=host");
     expect(tauriPlatform().remoteForwards).toBeDefined();
+    expect(tauriPlatform().remoteConnection).toBeDefined();
     openAs("");
     expect(tauriPlatform().remoteForwards).toBeUndefined();
+    expect(tauriPlatform().remoteConnection).toBeUndefined();
+  });
+
+  it("has the shell make the SSH connection again at once for Try again, and hears it say the connection is up", async () => {
+    openAs("&daemon=me%40host&remote=host");
+    const { remoteConnection } = tauriPlatform();
+    invoke.mockResolvedValueOnce(undefined);
+    await remoteConnection!.retryNow();
+    expect(invoke).toHaveBeenLastCalledWith("remote_connection_retry");
+    const listener = vi.fn();
+    const undo = remoteConnection!.onUp(listener);
+    await afterQueuedWork();
+    listeners.get("remote-connection-up")!({ payload: null });
+    expect(listener).toHaveBeenCalledTimes(1);
+    undo();
+    expect(listeners.has("remote-connection-up")).toBe(false);
   });
 
   it("are listed and stopped by the shell's commands, and the shell's event is heard in this window", async () => {

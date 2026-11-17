@@ -4,12 +4,13 @@ import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 import { sessionOf } from "./fixtures/builders";
 import { PROTOCOL_GENERATION, type Event } from "./protocol";
 import {
-  BROADCAST_FLUSH_FALLBACK_MS, DaemonClient, HEARTBEAT_INTERVAL_MS, HEARTBEAT_TICK_MS, HEARTBEAT_TIMEOUT_MS, MAX_RECONNECT_ATTEMPTS,
-  QUEUED_REQUEST_TIMEOUT_MS, RECONNECT_BASE_DELAY_MS,
+  BEFORE_RETRY_TIMEOUT_MS, BROADCAST_FLUSH_FALLBACK_MS, DaemonClient, ENDLESS_RECONNECT, ENDLESS_RECONNECT_BASE_DELAY_MS, ENDLESS_RECONNECT_MAX_DELAY_MS,
+  HEARTBEAT_INTERVAL_MS, HEARTBEAT_TICK_MS, HEARTBEAT_TIMEOUT_MS,
+  MAX_RECONNECT_ATTEMPTS, QUEUED_REQUEST_TIMEOUT_MS, RECONNECT_BASE_DELAY_MS, type ReconnectPolicy,
 } from "./daemon-client";
 import { CodedError } from "./errors/codedError";
 import { setLanguage } from "./i18n/language";
-import { fakeTimers } from "./test/clock";
+import { afterQueuedWork, fakeTimers } from "./test/clock";
 
 class FakeSocket extends EventTarget {
   static OPEN = 1;
@@ -42,8 +43,8 @@ let frame: (() => void) | undefined;
 const clients: DaemonClient[] = [];
 
 /** A client that is closed when the test ends, so that no reconnect timer is left to open a socket after the stubs are gone. */
-function newClient(keyCheck?: () => Promise<boolean>): DaemonClient {
-  const client = new DaemonClient("ws://test", keyCheck);
+function newClient(keyCheck?: () => Promise<boolean>, policy?: ReconnectPolicy): DaemonClient {
+  const client = new DaemonClient("ws://test", keyCheck, policy);
   clients.push(client);
   return client;
 }
@@ -374,6 +375,155 @@ it("reports a Retry as reconnecting until the socket opens with its hello", () =
   expect(states.at(-1)).toBe("reconnecting");
   FakeSocket.last.receive(hello());
   expect(states.at(-1)).toBe("open");
+});
+
+/** Drops the client's current socket and checks that the next one is opened `wait` ms later, not before. */
+function dropAndAwaitNext(wait: number): void {
+  const dropped = FakeSocket.last;
+  drop(dropped);
+  vi.advanceTimersByTime(wait - 1);
+  expect(FakeSocket.last).toBe(dropped);
+  vi.advanceTimersByTime(1);
+  expect(FakeSocket.last).not.toBe(dropped);
+}
+
+/** The wait before attempt number `attempt` of a client that retries until it connects: doubling from the first, up
+ * to the longest. */
+const endlessWait = (attempt: number) => Math.min(ENDLESS_RECONNECT_BASE_DELAY_MS * 2 ** attempt, ENDLESS_RECONNECT_MAX_DELAY_MS);
+/** Attempts enough for the waits to reach the longest one and stay there. */
+const PAST_THE_LONGEST_WAIT = Math.ceil(Math.log2(ENDLESS_RECONNECT_MAX_DELAY_MS / ENDLESS_RECONNECT_BASE_DELAY_MS)) + 4;
+
+it("keeps a client that retries until it connects reconnecting, the waits doubling up to the longest", () => {
+  const client = newClient(undefined, ENDLESS_RECONNECT);
+  const states: string[] = [];
+  client.onConnectionChange((state) => states.push(state));
+  open(FakeSocket.last);
+  greet(FakeSocket.last);
+  // Many more attempts than a local window's budget, the last ones each after the longest wait.
+  for (let attempt = 0; attempt < PAST_THE_LONGEST_WAIT; attempt += 1) {
+    dropAndAwaitNext(endlessWait(attempt));
+    expect(states.at(-1)).toBe("reconnecting");
+  }
+  expect(endlessWait(PAST_THE_LONGEST_WAIT - 1)).toBe(ENDLESS_RECONNECT_MAX_DELAY_MS);
+  expect(states).not.toContain("closed");
+  open(FakeSocket.last);
+  greet(FakeSocket.last);
+  expect(states.at(-1)).toBe("open");
+  // A connection that delivered its snapshot starts the waits over when it drops.
+  dropAndAwaitNext(ENDLESS_RECONNECT_BASE_DELAY_MS);
+});
+
+it("tries at once on Retry while a client that retries until it connects waits, and starts the waits over", () => {
+  const client = newClient(undefined, ENDLESS_RECONNECT);
+  const states: string[] = [];
+  client.onConnectionChange((state) => states.push(state));
+  for (let attempt = 0; attempt < PAST_THE_LONGEST_WAIT; attempt += 1) dropAndAwaitNext(endlessWait(attempt));
+  const waiting = FakeSocket.last;
+  drop(waiting);
+  client.reconnect();
+  expect(FakeSocket.last).not.toBe(waiting);
+  expect(states.at(-1)).toBe("reconnecting");
+  // The attempt the wait led to is not made on top of the one Retry made.
+  const retried = FakeSocket.last;
+  vi.advanceTimersByTime(ENDLESS_RECONNECT_MAX_DELAY_MS);
+  expect(FakeSocket.last).toBe(retried);
+  dropAndAwaitNext(ENDLESS_RECONNECT_BASE_DELAY_MS);
+});
+
+it("attempts at once when told the daemon can be reached again, the waits started over and nothing shown pending", () => {
+  const client = newClient(undefined, ENDLESS_RECONNECT);
+  const pending: boolean[] = [];
+  client.onRetryPendingChange((value) => pending.push(value));
+  for (let attempt = 0; attempt < PAST_THE_LONGEST_WAIT; attempt += 1) dropAndAwaitNext(endlessWait(attempt));
+  const waiting = FakeSocket.last;
+  drop(waiting);
+  client.reachable();
+  expect(FakeSocket.last).not.toBe(waiting);
+  // The attempt the wait led to is not made on top of it.
+  const attempted = FakeSocket.last;
+  vi.advanceTimersByTime(ENDLESS_RECONNECT_MAX_DELAY_MS);
+  expect(FakeSocket.last).toBe(attempted);
+  dropAndAwaitNext(ENDLESS_RECONNECT_BASE_DELAY_MS);
+  expect(pending).toEqual([false]);
+  // An open connection is left alone.
+  open(FakeSocket.last);
+  greet(FakeSocket.last);
+  const healthy = FakeSocket.last;
+  client.reachable();
+  expect(FakeSocket.last).toBe(healthy);
+});
+
+it.each(["opens", "fails"] as const)("reports the attempt Retry started as pending until it %s, and takes no second press meanwhile", (outcome) => {
+  const client = newClient(undefined, ENDLESS_RECONNECT);
+  const pending: boolean[] = [];
+  client.onRetryPendingChange((value) => pending.push(value));
+  drop(FakeSocket.last);
+  client.reconnect();
+  expect(pending).toEqual([false, true]);
+  const retried = FakeSocket.last;
+  client.reconnect();
+  expect(FakeSocket.last).toBe(retried);
+  if (outcome === "opens") {
+    open(retried);
+    expect(pending.at(-1)).toBe(true);
+    greet(retried);
+  } else {
+    drop(retried);
+  }
+  expect(pending).toEqual([false, true, false]);
+  // Pressable again: another press is another attempt.
+  if (outcome === "fails") {
+    client.reconnect();
+    expect(FakeSocket.last).not.toBe(retried);
+  }
+});
+
+it("makes no automatic attempt after a loss while Retry's attempt is prepared, and makes Retry's once it is", async () => {
+  let ready: () => void = () => {};
+  const client = newClient(undefined, { ...ENDLESS_RECONNECT, beforeRetry: () => new Promise<void>((resolve) => (ready = resolve)) });
+  // An automatic attempt is under way as Retry is pressed, and fails meanwhile.
+  drop(FakeSocket.last);
+  vi.advanceTimersByTime(ENDLESS_RECONNECT_BASE_DELAY_MS);
+  const automatic = FakeSocket.last;
+  client.reconnect();
+  drop(automatic);
+  vi.advanceTimersByTime(ENDLESS_RECONNECT_MAX_DELAY_MS);
+  expect(FakeSocket.last).toBe(automatic);
+  ready();
+  await afterQueuedWork();
+  expect(FakeSocket.last).not.toBe(automatic);
+});
+
+it("attempts all the same once Retry's preparation has not settled in its time, and the attempt ends the pending", async () => {
+  const client = newClient(undefined, { ...ENDLESS_RECONNECT, beforeRetry: () => new Promise<void>(() => {}) });
+  const pending: boolean[] = [];
+  client.onRetryPendingChange((value) => pending.push(value));
+  drop(FakeSocket.last);
+  const waiting = FakeSocket.last;
+  client.reconnect();
+  vi.advanceTimersByTime(BEFORE_RETRY_TIMEOUT_MS - 1);
+  await afterQueuedWork();
+  expect(FakeSocket.last).toBe(waiting);
+  vi.advanceTimersByTime(1);
+  await afterQueuedWork();
+  expect(FakeSocket.last).not.toBe(waiting);
+  drop(FakeSocket.last);
+  expect(pending).toEqual([false, true, false]);
+});
+
+it("has Retry wait for what its policy says before it attempts, making no automatic attempt meanwhile", async () => {
+  let ready: () => void = () => {};
+  const beforeRetry = vi.fn(() => new Promise<void>((resolve) => (ready = resolve)));
+  const client = newClient(undefined, { ...ENDLESS_RECONNECT, beforeRetry });
+  drop(FakeSocket.last);
+  const waiting = FakeSocket.last;
+  client.reconnect();
+  expect(beforeRetry).toHaveBeenCalledOnce();
+  vi.advanceTimersByTime(ENDLESS_RECONNECT_MAX_DELAY_MS);
+  expect(FakeSocket.last).toBe(waiting);
+  ready();
+  await afterQueuedWork();
+  expect(FakeSocket.last).not.toBe(waiting);
 });
 
 it("gives every request its own id, across reconnects", () => {

@@ -99,6 +99,8 @@ struct Live {
     /// The loopback ports of the daemon's machine its window forwards (`forward`); none for a
     /// connection held for the browser, which has no window to open an address from.
     forwards: Option<Arc<forward::Forwards>>,
+    /// The connection itself, for its window's Try again (`remote_connection_retry`).
+    link: Option<Arc<tunnel::Link>>,
 }
 
 /// The rank the next connection is given (`Live::order`).
@@ -185,6 +187,10 @@ pub fn connected_daemons(app: &AppHandle) -> Vec<ConnectedDaemon> {
 /// opened at another address.
 pub const FORWARDS_CHANGED_EVENT: &str = "remote-forwards-changed";
 
+/// The event a remote window is sent when its SSH connection is up again after it dropped, for the
+/// window to connect to its daemon at once rather than after its pause.
+pub const CONNECTION_UP_EVENT: &str = "remote-connection-up";
+
 /// What a held connection is shown in.
 #[derive(Clone, Debug)]
 enum Via {
@@ -267,6 +273,20 @@ pub fn remote_forwards_list(
 pub fn remote_forward_stop(app: AppHandle, webview_window: tauri::WebviewWindow, remote_port: u16) {
     if let Some(forwards) = forwards_of(&app, webview_window.label()) {
         forwards.stop(remote_port);
+    }
+}
+
+/// Lets the calling remote window's next connection make the SSH connection again at once, whatever
+/// pause a failed attempt left: the window's Try again, which calls this before it connects.
+#[tauri::command]
+pub async fn remote_connection_retry(app: AppHandle, webview_window: tauri::WebviewWindow) {
+    let link = app
+        .state::<RemoteState>()
+        .windows()
+        .get(webview_window.label())
+        .and_then(|live| live.link.clone());
+    if let Some(link) = link {
+        link.retry_now().await;
     }
 }
 
@@ -482,6 +502,7 @@ fn live(identity: &str, entry_id: &str, order: u64, via: Via) -> (Live, watch::R
             connected,
             via,
             forwards: None,
+            link: None,
         },
         stopped,
     )

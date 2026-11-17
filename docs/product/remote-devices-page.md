@@ -160,13 +160,18 @@ a question for a daemon that has been connected since; a failure is still shown.
 
 ## Without the local daemon
 
-Remote connections do not go through the local daemon, so the page works while the local daemon cannot be used: while
-the main window is connecting to it, while it is not answering, on the screen for a daemon that could not start and on
-the screen for a daemon of another version. The main window then keeps its top bar, with Back and Forward, and its
-rail, which holds only the Remote devices button: no consoles, no New console and nothing of the rail's bottom group,
-Settings included. The content panel shows the daemon's state where the panes would be (see "The window chrome and the
-content panel" in `docs/product/window-layout.md`), with the connection banner as usual while the daemon is not
-answering.
+Remote connections do not go through the local daemon, so the page works while the main window has nothing from the
+local daemon to show: while it connects to the daemon at launch, before anything has been read from it, and while
+that first connection is not answered; on the screen for a daemon that could not start; and on the screen for a daemon
+of another version, which takes the place of whatever the window showed. The main window then keeps its top bar, with
+Back and Forward, and its rail, which holds only the Remote devices button: no consoles, no New console and nothing of
+the rail's bottom group, Settings included. The content panel shows the daemon's state where the panes would be (see
+"The window chrome and the content panel" in `docs/product/window-layout.md`), with the connection banner as usual
+while that first connection is not answered.
+
+**A daemon lost once the window has shown what it read from it does not bring this frame back**: the window keeps the
+consoles, sessions and everything else it last read, with the connection banner along its bottom, while it reconnects
+(see "Losing the daemon connection" in `docs/product/application-lifecycle.md`).
 
 - **The page shows only when asked for**, by the Remote devices button, the menus' Remote Devices item or a question or
   failure handed to it; the brief connecting at launch never shows it.

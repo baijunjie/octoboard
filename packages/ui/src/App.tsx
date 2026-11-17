@@ -13,6 +13,8 @@ import { ContentPanel } from "./shell/ContentPanel";
 import { HandoffOnUnmount } from "./components/focus/HandoffOnUnmount";
 import { PaneResizeHandle } from "./layout/PaneResizeHandle";
 import { refocusIfLost } from "./components/focus/refocusIfLost";
+import { focusLanding, focusTopBar } from "./components/focus/regionFocus";
+import { ringForAutomaticFocus } from "./input/lastInput";
 import { focusNewConsole, Rail } from "./shell/Rail";
 import { Scrim } from "./shell/Scrim";
 import { BareTitleBar, TitleBar } from "./shell/TitleBar";
@@ -108,8 +110,9 @@ const NO_PROJECTS = new Map<string, Project>();
  */
 export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {}): React.ReactElement {
   const t = useT();
-  const { request, reconnect, store, isLocal } = useDaemon();
+  const { request, reconnect, store, isLocal, retriesUntilConnected = false } = useDaemon();
   const connectionState = useDaemonStore((s) => s.connectionState);
+  const retryPending = useDaemonStore((s) => s.retryPending);
   const hosts = useDaemonStore((s) => s.hosts);
   const offline = startupScreen !== undefined || connectionState === "incompatible" || connectionState === "keyRefused" || !hosts;
   const storedConsoles = useDaemonStore((s) => s.consoles);
@@ -306,6 +309,20 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
   }, [projects, offline]);
   // What the aside showed goes with its owner; focus that was inside it goes to the terminal.
   useEffect(() => refocusIfLost(focusTerminal), [ownerKey(asideOwner)]);
+  // The banner of a window with nothing to show yet goes when the connection opens, before there is anything to hand
+  // its focus to: focus it held is handed on once the window's content is there, where it still lies on nothing.
+  const focusLeftBareBanner = useRef(false);
+  useEffect(() => {
+    if (offline || !focusLeftBareBanner.current) return;
+    focusLeftBareBanner.current = false;
+    if (document.activeElement !== document.body) return;
+    ringForAutomaticFocus();
+    focusTerminal();
+    // The welcome screen, with no console, takes focus only from somewhere else.
+    const welcome = document.querySelector("[data-region=welcome]");
+    if (document.activeElement === document.body && welcome) focusLanding(welcome);
+    if (document.activeElement === document.body) focusTopBar();
+  }, [offline]);
 
   useWaitingNotifications(hosts !== undefined);
   const updatesLabel = useUpdateMenuLabel();
@@ -567,8 +584,8 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
   // What the window says while the local daemon cannot be used, where the session UI would be. A daemon of another
   // protocol generation: nothing it sent is shown, whatever an earlier connection had loaded. The page's key is no longer
   // the daemon's, so nothing can load or be retried: the same, with the way to a working address. Nothing to show until
-  // the first snapshot: the banner with the Retry the client offers once it has given up is there with it (below),
-  // otherwise this would say it is connecting forever with nothing the user can do about it.
+  // the first snapshot: the banner with the client's Retry is there with it once Retry is offered (below), otherwise this
+  // would say it is connecting forever with nothing the user can do about it.
   let status: React.ReactNode;
   if (startupScreen !== undefined) status = startupScreen;
   else if (connectionState === "incompatible") status = <IncompatibleDaemonScreen onRestart={exit.restartNow} />;
@@ -576,7 +593,9 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
   else if (!hosts) {
     status = (
       <ContentMain className="items-center justify-center text-app-muted">
-        {connectionState === "closed" ? t("app.daemonNotAnswering") : t("app.connecting")}
+        {connectionState === "closed" || (retriesUntilConnected && connectionState === "reconnecting")
+          ? t("app.daemonNotAnswering")
+          : t("app.connecting")}
       </ContentMain>
     );
   }
@@ -591,7 +610,20 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
         <BareTitleBar />
         <Toasts focusTerminal={focusTerminal} />
         <ContentPanel bare>{status}</ContentPanel>
-        {connectionState === "closed" && <ConnectionBanner state={connectionState} onRetry={reconnect} focusTerminal={focusTerminal} />}
+        {/* A client that retries until it connects offers Retry from its first failed attempt on, where another offers it
+            once its attempts are spent: either way the window does not say it is connecting with nothing to do about it. */}
+        {(connectionState === "closed" || (retriesUntilConnected && connectionState === "reconnecting")) && (
+          <>
+            <HandoffOnUnmount from="[data-region=banner]" to={() => (focusLeftBareBanner.current = true)} ring={false} />
+            <ConnectionBanner
+              state={connectionState}
+              retryWhileReconnecting={retriesUntilConnected}
+              retryPending={retryPending}
+              onRetry={reconnect}
+              focusTerminal={focusTerminal}
+            />
+          </>
+        )}
       </div>
     );
   }
@@ -868,7 +900,13 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
       {/* Without the daemon, mounted only while closed, so that its focus handoff does not run as the daemon connects;
           nothing is lost, as there is no terminal and an empty bar to hand focus to. */}
       {(!offline || (connectionState === "closed" && startupScreen === undefined)) && (
-        <ConnectionBanner state={connectionState} onRetry={reconnect} focusTerminal={focusTerminal} />
+        <ConnectionBanner
+          state={connectionState}
+          retryWhileReconnecting={retriesUntilConnected}
+          retryPending={retryPending}
+          onRetry={reconnect}
+          focusTerminal={focusTerminal}
+        />
       )}
       {!offline && (
         <div ref={announcementRef}>

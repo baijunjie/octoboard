@@ -26,9 +26,11 @@ const RETRY_CLASS =
 
 /**
  * The strip along the bottom edge while the control connection is down: it says the client is
- * retrying on its own while the automatic attempts last, then offers a Retry once they are spent,
- * because nothing retries forever (see "Losing the daemon connection" in
- * `docs/product/application-lifecycle.md`). In any other state it draws nothing, leaving only the
+ * retrying on its own while the automatic attempts last, then offers a Retry once they are spent
+ * (see "Losing the daemon connection" in `docs/product/application-lifecycle.md`). Where the attempts
+ * do not end (`retryWhileReconnecting`, a remote daemon's window), Retry is offered beside the
+ * reconnecting text all the while, and tries at once (see "A dropped connection" in
+ * `docs/product/remote-daemons.md`). In any other state it draws nothing, leaving only the
  * element its top-layer marking and announcement region have to stay in, with no visible height.
  *
  * Retry keeps keyboard focus where it is on a mouse press, but a keyboard user reaches it with
@@ -54,10 +56,16 @@ const RETRY_CLASS =
  */
 export function ConnectionBanner({
   state,
+  retryWhileReconnecting = false,
+  retryPending = false,
   onRetry,
   focusTerminal,
 }: {
   state: ConnectionState;
+  /** Whether Retry is offered while reconnecting too: the client retries until it connects. */
+  retryWhileReconnecting?: boolean;
+  /** Whether the attempt Retry started is under way: Retry is pending until it opens or fails. */
+  retryPending?: boolean;
   onRetry: () => void;
   /** Where focus goes when Retry held it as the banner went away (`useFocusHandoff`). */
   focusTerminal: () => void;
@@ -97,24 +105,22 @@ export function ConnectionBanner({
           className="flex min-h-8 items-center justify-center gap-3 bg-warning px-3 py-1 text-xs text-warning-foreground"
         >
           {state === "closed" ? (
-            <>
-              <Unplug aria-hidden="true" className="size-3.5 shrink-0" />
-              <span aria-hidden="true">{message}</span>
-              <Button
-                size="xs"
-                variant="outline"
-                className={RETRY_CLASS}
-                focusOnPress={false}
-                onPress={onRetry}
-              >
-                {t("connection.retry")}
-              </Button>
-            </>
+            <Unplug aria-hidden="true" className="size-3.5 shrink-0" />
           ) : (
-            <>
-              <RefreshCw aria-hidden="true" className="size-3.5 shrink-0 motion-safe:animate-spin-slow" />
-              <span aria-hidden="true">{message}</span>
-            </>
+            <RefreshCw aria-hidden="true" className="size-3.5 shrink-0 motion-safe:animate-spin-slow" />
+          )}
+          <span aria-hidden="true">{message}</span>
+          {(state === "closed" || retryWhileReconnecting) && (
+            <Button
+              size="xs"
+              variant="outline"
+              className={RETRY_CLASS}
+              focusOnPress={false}
+              pending={retryPending}
+              onPress={onRetry}
+            >
+              {t("connection.retry")}
+            </Button>
           )}
         </div>
       )}

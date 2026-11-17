@@ -80,6 +80,15 @@ pub enum ConnectError {
     AuthFailed(String),
 }
 
+impl ConnectError {
+    /// Whether trying again with the same target would meet the same answer: every failure but a
+    /// host that could not be reached — a refused password or key, a host key other than the one
+    /// expected, and a key file that cannot be read or needs its passphrase.
+    pub fn is_refusal(&self) -> bool {
+        !matches!(self, Self::Unreachable(_))
+    }
+}
+
 /// The fingerprint of a host key as OpenSSH prints it, `SHA256:<base64>`.
 pub fn fingerprint(key: &PublicKeyOrCertificate) -> String {
     let data = match key {

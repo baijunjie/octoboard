@@ -206,3 +206,56 @@ it.each(["reconnecting", "open"] as const)("returns Retry focus to the dialog wh
   render(next);
   expect(document.activeElement).toBe(control);
 });
+
+it.each([
+  { retryWhileReconnecting: true, offered: true },
+  { retryWhileReconnecting: false, offered: false },
+])("offers Retry while reconnecting only where the client retries until it connects: $retryWhileReconnecting", ({ retryWhileReconnecting, offered }) => {
+  vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  const onRetry = vi.fn();
+  act(() => root.render(
+    <ConnectionBanner state="reconnecting" retryWhileReconnecting={retryWhileReconnecting} onRetry={onRetry} focusTerminal={() => {}} />,
+  ));
+  const strip = container.querySelector('[data-region="banner"]');
+  expect(strip?.textContent).toContain("Disconnected from the daemon. Reconnecting…");
+  const retry = strip!.querySelector("button");
+  if (!offered) {
+    expect(retry).toBe(null);
+    return;
+  }
+  expect(retry?.textContent).toBe("Try again");
+  act(() => retry!.click());
+  expect(onRetry).toHaveBeenCalledOnce();
+});
+
+it("holds Retry pending while the attempt it started is under way, keeping focus on it, and pressable again after", () => {
+  vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => {
+    act(() => root.unmount());
+    container.remove();
+  });
+  const onRetry = vi.fn();
+  const render = (retryPending: boolean) => act(() => root.render(
+    <ConnectionBanner state="reconnecting" retryWhileReconnecting retryPending={retryPending} onRetry={onRetry} focusTerminal={() => {}} />,
+  ));
+  render(false);
+  const retry = container.querySelector<HTMLButtonElement>('[data-region="banner"] button')!;
+  act(() => retry.focus());
+  render(true);
+  expect(retry.getAttribute("aria-busy")).toBe("true");
+  expect(document.activeElement).toBe(retry);
+  act(() => retry.click());
+  expect(onRetry).not.toHaveBeenCalled();
+  render(false);
+  expect(retry.hasAttribute("aria-busy")).toBe(false);
+  act(() => retry.click());
+  expect(onRetry).toHaveBeenCalledOnce();
+});

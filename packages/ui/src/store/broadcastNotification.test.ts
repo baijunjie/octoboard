@@ -15,6 +15,7 @@ vi.mock("../daemon-client", async (importOriginal) => ({
     onEvent(listener: (event: Event) => void) { client.onEvent = listener; }
     onEvents() {}
     onConnectionChange() {}
+    onRetryPendingChange() {}
   },
 }));
 

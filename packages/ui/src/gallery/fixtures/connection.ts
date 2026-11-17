@@ -113,7 +113,7 @@ export const connectionScenarios: Scenario[] = [
     group: STARTUP_AND_CONNECTION,
     category: "exceptional",
     title: "Reconnecting",
-    description: "The connection banner along the bottom over the last known state.",
+    description: "The connection banner along the bottom over the last known state, with no Try again while the automatic attempts last. A remote daemon's window offers Try again here too: see `remote-window-reconnecting`.",
     state: connected("reconnecting"),
     steps: [pickSession],
   },

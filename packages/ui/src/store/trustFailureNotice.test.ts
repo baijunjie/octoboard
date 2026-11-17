@@ -18,6 +18,7 @@ vi.mock("../daemon-client", async (importOriginal) => ({
     onEvent(listener: (event: Event) => void) { client.onEvent = listener; }
     onEvents(listener: (events: Event[]) => void) { client.onEvents = listener; }
     onConnectionChange() {}
+    onRetryPendingChange() {}
     request() { return new Promise<Event>((resolve, reject) => { client.resolve = () => resolve({ type: "ok", id: null } as unknown as Event); client.reject = reject; }); }
   },
 }));

@@ -86,7 +86,11 @@ const daemonAddress = resolveDaemonAddress(platform);
 const pageWithoutDaemon = !trayFlyout && !!startupError && remoteDaemonsOffered(platform);
 const daemon = pageWithoutDaemon
   ? createInertDaemon()
-  : !trayFlyout && !startupError && daemonAddress ? createDaemon(daemonAddress, { remote: kind === "remote" }) : undefined;
+  : !trayFlyout && !startupError && daemonAddress ? createDaemon(daemonAddress, {
+    remote: kind === "remote",
+    beforeRetry: platform.remoteConnection?.retryNow,
+    onReachable: platform.remoteConnection?.onUp,
+  }) : undefined;
 
 function screen(): React.ReactElement {
   if (trayFlyout) return <TrayFlyout />;

@@ -113,11 +113,12 @@ for the file viewer's header, and a report page's content starts at it too.
 On the screens shown before there is anything to show — while connecting to the daemon, and the screens for a daemon
 that could not start, for a daemon of another version, for an address that does not open the daemon, for no daemon
 address or key being known, or for a UI that failed — there is no rail: under the top bar, the content panel spans the
-window. The main window of the desktop application is the exception while it is connecting to its daemon, while the
-daemon is not answering, and on the screens for a daemon that could not start and for a daemon of another version: it
-keeps its rail, holding only the Remote devices button, and its top bar's Back and Forward, and the screen's content
-fills the content panel where the panes would be (see "Without the local daemon" in
-`docs/product/remote-devices-page.md`).
+window. The main window of the desktop application is the exception while it has nothing from its daemon to show —
+while it is connecting to its daemon at launch and while that first connection is not answered — and on the screens
+for a daemon that could not start and for a daemon of another version: it keeps its rail, holding only the Remote
+devices button, and its top bar's Back and Forward, and the screen's content fills the content panel where the panes
+would be (see "Without the local daemon" in `docs/product/remote-devices-page.md`). A daemon lost once the window has
+shown what it read leaves that on screen, with the connection banner.
 
 The screens for a daemon that could not start, for a daemon of another version, for an address that does not open the
 daemon and for a UI that failed are each an empty-state failure of the whole page (see "Failures shown on the screen" in `docs/product/error-alerts.md`), centred

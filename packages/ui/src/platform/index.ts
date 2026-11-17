@@ -84,6 +84,9 @@ export interface PlatformAdapter {
    * window opens there (`links`); present only in a remote window of the desktop shell, whose own connection carries
    * them. */
   readonly remoteForwards?: RemoteForwardsCapability;
+  /** The SSH connection the window's daemon is reached over; present only in a remote window of the desktop shell,
+   * which holds that connection. */
+  readonly remoteConnection?: RemoteConnectionCapability;
   /** Storing a copy of a file of the remote daemon's machine on this computer and opening it, which the viewer's
    * Download and open does; present only in a remote window of the desktop shell, whose commands these are. */
   readonly remoteFiles?: RemoteFilesCapability;
@@ -552,6 +555,15 @@ export interface RemoteForward {
   address: string;
   /** What the browser was given for it (on this computer). */
   localAddress: string;
+}
+
+export interface RemoteConnectionCapability {
+  /** Lets the window's next connection make the SSH connection again at once, whatever pause a failed attempt left (a
+   * host that turned the connection down is otherwise asked again only after a long one); settles once it may, after
+   * an attempt still under way has ended. */
+  retryNow(): Promise<void>;
+  /** Calls `listener` each time the SSH connection is up again after it dropped. Returns the unsubscribe. */
+  onUp(listener: () => void): () => void;
 }
 
 export interface RemoteForwardsCapability {

@@ -1,0 +1,9 @@
+# A custom permission for the app's own command that lets a remote window's Try again make the SSH connection again
+# at once; see `exit-lifecycle.toml` for why an app-defined command needs a file like this. Named in the remote
+# capability alone: the local daemon's window has no SSH connection.
+"$schema" = "./schemas/schema.json"
+
+[[permission]]
+identifier = "allow-remote-connection"
+description = "Allows a remote window to have its SSH connection made again at its next connection, whatever pause a failed attempt left."
+commands.allow = ["remote_connection_retry"]

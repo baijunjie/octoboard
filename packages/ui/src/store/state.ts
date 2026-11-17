@@ -22,6 +22,8 @@ export interface TrustPrompt {
 
 export interface State {
   connectionState: ConnectionState;
+  /** Whether the attempt the connection banner's Retry started is under way. */
+  retryPending: boolean;
   /** The daemon as its `hello` described it: its release version and the protocol generation it speaks. Null until a
    * hello arrives, and for a daemon too old to send one. */
   daemon: { version: string; generation: number } | null;
@@ -155,6 +157,7 @@ export interface State {
 
 const initialState: State = {
   connectionState: "connecting",
+  retryPending: false,
   daemon: null,
   consoles: new Map(),
   projects: new Map(),

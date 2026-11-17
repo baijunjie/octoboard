@@ -2,14 +2,18 @@
 //! the system and held from before the window opens until it closes, each connection it accepts
 //! carried by one run of `octoboardd proxy` over the SSH connection.
 //!
-//! The window retries its daemon's address by itself after a lost connection, so the port is never
-//! let go while the window lives, reconnections included: another user of this computer could
-//! otherwise take it and be sent the owner key. When the SSH connection has dropped, the next
-//! connection the window makes reconnects it (with growing pauses between failed attempts); until
-//! then the window's own lost-connection handling covers the gap. The owner key is read again over
-//! a new SSH connection, and whenever the window has no connection open (rotating the key closes
-//! every connection it opened), and the window is pointed at the new key only where it changed.
+//! The port is never let go while the window lives, reconnections included: another user of this
+//! computer could otherwise take it and be sent the owner key. When the SSH connection has dropped,
+//! it is made again in the background after growing pauses, for as long as the link is held, and by
+//! the window's own connections, which are not held back by those pauses: the window spaces its
+//! attempts itself and its Try again attempts at once. A failure that would meet the same answer
+//! again (a refused password or key, another host key, an unreadable key file) is tried again only
+//! after a long pause, whoever asks, unless the window's Try again lifts it. The owner key is read
+//! again over a new SSH connection, and whenever the window has no connection open (rotating the key
+//! closes every connection it opened), and the window is pointed at the new key only where it
+//! changed. See "A dropped connection" in `docs/product/remote-daemons.md`.
 
+use std::mem::Discriminant;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -18,11 +22,19 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::watch;
 
 use super::octoboardd::{Address, Remote};
-use super::ssh::{self, Session, Target};
+use super::ssh::{self, ConnectError, Session, Target};
 use crate::diagnostics::diagnostic;
 
 /// The longest pause between two failed reconnection attempts.
 const MAX_RETRY_PAUSE: Duration = Duration::from_secs(30);
+
+/// The pause after a failure that would meet the same answer again (`ConnectError::is_refusal`):
+/// long, so that a password the host refuses is not sent again and again, which a host may answer
+/// by banning this computer.
+const REFUSED_PAUSE: Duration = Duration::from_secs(5 * 60);
+
+/// How often a reconnection that keeps failing in the same way is written to the diagnostics log.
+const LOG_EVERY: Duration = Duration::from_secs(10 * 60);
 
 /// How long the pause after `failures` failed attempts in a row is: 1 s, 2 s, 4 s, … up to
 /// `MAX_RETRY_PAUSE`.
@@ -36,6 +48,36 @@ struct Slot {
     session: Option<Arc<Session>>,
     failures: u32,
     retry_at: Option<Instant>,
+    /// When the last attempt failed, while none has succeeded since.
+    failed_at: Option<Instant>,
+    /// Whether the last attempt failed in a way that would meet the same answer again
+    /// (`REFUSED_PAUSE`).
+    refused: bool,
+    /// The kind of failure last written to the diagnostics log since the last success, and when.
+    logged: Option<(Discriminant<ConnectError>, Instant)>,
+}
+
+/// Whether a failed attempt of `kind` at `now` is written to the diagnostics log, `last` being
+/// the one last written since the last success: the first, one of another kind, and otherwise one
+/// every `LOG_EVERY`.
+fn worth_logging(
+    last: Option<(Discriminant<ConnectError>, Instant)>,
+    kind: Discriminant<ConnectError>,
+    now: Instant,
+) -> bool {
+    last.is_none_or(|(logged, at)| logged != kind || now.duration_since(at) >= LOG_EVERY)
+}
+
+/// What holds back an attempt to make the SSH connection again.
+#[derive(Clone, Copy)]
+enum Pace {
+    /// The pause after a failed attempt: a connection asked for meanwhile is not made.
+    Pause,
+    /// The pause after a failure that would meet the same answer again, and an attempt that failed
+    /// after `asked`, while the connection asked for then waited for the slot: it takes that
+    /// failure rather than making the same attempt again. One of the window's connections, which
+    /// the window spaces itself.
+    Asked(Instant),
 }
 
 /// One remote window's connection to its daemon, kept for as long as the window lives.
@@ -57,6 +99,8 @@ pub struct Link {
     live: watch::Sender<bool>,
     /// Set by `close`: no connection is made again after it, by a carry that was under way then.
     closed: AtomicBool,
+    /// Whether `keep_up` has an attempt under way.
+    keeping_up: AtomicBool,
 }
 
 impl Link {
@@ -84,6 +128,7 @@ impl Link {
             on_key_changed: Box::new(on_key_changed),
             live: watch::Sender::new(true),
             closed: AtomicBool::new(false),
+            keeping_up: AtomicBool::new(false),
         }
     }
 
@@ -116,6 +161,12 @@ impl Link {
     /// running; `None` when there is none to carry a connection on now, and always once the link
     /// is closed.
     pub(super) async fn session(&self) -> Option<Arc<Session>> {
+        self.reach(Pace::Pause).await
+    }
+
+    /// The SSH connection, made again when it has dropped unless `pace` holds the attempt back;
+    /// `None` when there is none to carry a connection on now, and always once the link is closed.
+    async fn reach(&self, pace: Pace) -> Option<Arc<Session>> {
         let mut slot = self.slot.lock().await;
         if self.closed.load(Ordering::SeqCst) {
             return None;
@@ -129,7 +180,14 @@ impl Link {
             self.live
                 .send_if_modified(|was| std::mem::replace(was, false));
         }
-        if slot.retry_at.is_some_and(|at| Instant::now() < at) {
+        let pausing = slot.retry_at.is_some_and(|at| Instant::now() < at);
+        let held_back = match pace {
+            Pace::Pause => pausing,
+            Pace::Asked(asked) => {
+                (slot.refused && pausing) || slot.failed_at.is_some_and(|at| at >= asked)
+            }
+        };
+        if held_back {
             return None;
         }
         match ssh::connect(&self.target).await {
@@ -139,23 +197,63 @@ impl Link {
                 self.set_up(Some(session.clone()));
                 slot.failures = 0;
                 slot.retry_at = None;
+                slot.failed_at = None;
+                slot.refused = false;
+                slot.logged = None;
                 self.reread.store(true, Ordering::SeqCst);
                 self.live
                     .send_if_modified(|was| !std::mem::replace(was, true));
                 Some(session)
             }
             Err(err) => {
+                let now = Instant::now();
                 slot.failures += 1;
-                slot.retry_at = Some(Instant::now() + retry_pause(slot.failures));
-                diagnostic!(
-                    "cannot reconnect to {}@{}:{}: {err:?}",
-                    self.target.user,
-                    self.target.host,
-                    self.target.port
-                );
+                slot.failed_at = Some(now);
+                slot.refused = err.is_refusal();
+                let pause = if slot.refused {
+                    REFUSED_PAUSE
+                } else {
+                    retry_pause(slot.failures)
+                };
+                slot.retry_at = Some(now + pause);
+                let kind = std::mem::discriminant(&err);
+                if worth_logging(slot.logged, kind, now) {
+                    slot.logged = Some((kind, now));
+                    diagnostic!(
+                        "cannot reconnect to {}@{}:{} (attempt {}): {err:?}",
+                        self.target.user,
+                        self.target.host,
+                        self.target.port,
+                        slot.failures
+                    );
+                }
                 None
             }
         }
+    }
+
+    /// Lets the next attempt be made at once, whatever pause a failed one left: the window's Try
+    /// again. Waits for an attempt under way to end first.
+    pub(super) async fn retry_now(&self) {
+        let mut slot = self.slot.lock().await;
+        slot.retry_at = None;
+        slot.refused = false;
+    }
+
+    /// Makes the SSH connection again in the background where it has dropped and no pause holds it
+    /// back, unless such an attempt is under way already.
+    fn keep_up(self: &Arc<Self>) {
+        if self.closed.load(Ordering::SeqCst) || self.current().is_some() {
+            return;
+        }
+        if self.keeping_up.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        let link = self.clone();
+        tokio::spawn(async move {
+            let _ = link.reach(Pace::Pause).await;
+            link.keeping_up.store(false, Ordering::SeqCst);
+        });
     }
 
     fn set_up(&self, session: Option<Arc<Session>>) {
@@ -200,9 +298,10 @@ impl Link {
         }
     }
 
-    /// Carries `stream` to the daemon's owner endpoint until either side closes it.
+    /// Carries `stream`, one of the window's connections, to the daemon's owner endpoint until
+    /// either side closes it.
     async fn carry(&self, mut stream: TcpStream) {
-        let Some(session) = self.session().await else {
+        let Some(session) = self.reach(Pace::Asked(Instant::now())).await else {
             return;
         };
         if self.reread.swap(false, Ordering::SeqCst) {
@@ -263,16 +362,31 @@ pub async fn bind() -> std::io::Result<TcpListener> {
     TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).await
 }
 
-/// How often whether the SSH connection is up is looked at between the window's connections.
+/// How often whether the SSH connection is up is looked at between the window's connections, and
+/// made again where it is not.
 const LIVE_CHECK: Duration = Duration::from_secs(1);
 
-/// Accepts the window's connections on `listener` and carries each over `link`, until `stop` is
-/// set; the port is let go then, and the SSH connection ended.
-pub async fn serve(listener: TcpListener, link: Arc<Link>, mut stop: watch::Receiver<bool>) {
-    let mut check = tokio::time::interval(LIVE_CHECK);
+/// Accepts the window's connections on `listener` and carries each over `link`, keeping the SSH
+/// connection up meanwhile, until `stop` is set; the port is let go then, and the SSH connection
+/// ended.
+pub async fn serve(listener: TcpListener, link: Arc<Link>, stop: watch::Receiver<bool>) {
+    serve_checking(listener, link, stop, LIVE_CHECK).await;
+}
+
+/// `serve`, looking at the SSH connection every `every`.
+async fn serve_checking(
+    listener: TcpListener,
+    link: Arc<Link>,
+    mut stop: watch::Receiver<bool>,
+    every: Duration,
+) {
+    let mut check = tokio::time::interval(every);
     loop {
         tokio::select! {
-            _ = check.tick() => link.note_live(),
+            _ = check.tick() => {
+                link.note_live();
+                link.keep_up();
+            }
             accepted = listener.accept() => match accepted {
                 Ok((stream, _)) => {
                     let link = link.clone();
@@ -316,9 +430,16 @@ mod tests {
         serving: tokio::task::JoinHandle<()>,
     }
 
+    /// A link over a connection to `server`, served without looking at the SSH connection between
+    /// the window's connections, so that nothing but the test makes it again.
     async fn run(server: &TestServer) -> Running {
-        let target = target(server);
-        let session = ssh::connect(&target).await.unwrap();
+        run_with(server, target(server), Duration::from_secs(3600)).await
+    }
+
+    /// A link over a connection to `server` that makes it again with `target`, served looking at
+    /// the SSH connection every `every`.
+    async fn run_with(server: &TestServer, target: Target, every: Duration) -> Running {
+        let session = ssh::connect(&self::target(server)).await.unwrap();
         let keys = Arc::new(Mutex::new(Vec::new()));
         let seen = keys.clone();
         let link = Arc::new(Link::new(
@@ -331,7 +452,7 @@ mod tests {
         let listener = bind().await.unwrap();
         let port = listener.local_addr().unwrap().port();
         let (stop, stopped) = watch::channel(false);
-        let serving = tokio::spawn(serve(listener, link.clone(), stopped));
+        let serving = tokio::spawn(serve_checking(listener, link.clone(), stopped, every));
         Running {
             port,
             keys,
@@ -486,6 +607,170 @@ mod tests {
         assert!(running.link.session().await.is_none());
         assert_eq!(server.connections(), 1);
         assert!(running.link.slot.lock().await.session.is_none());
+    }
+
+    /// Notes a failed attempt at `at`, as `reach` does, its pause still running.
+    async fn failed(link: &Link, at: Instant) {
+        let mut slot = link.slot.lock().await;
+        slot.failures = 6;
+        slot.failed_at = Some(at);
+        slot.retry_at = Some(at + retry_pause(6));
+    }
+
+    #[tokio::test]
+    async fn a_window_connection_reaches_the_host_in_the_pause_a_failed_attempt_left() {
+        let server = TestServer::start(Behaviour::default()).await;
+        let running = run(&server).await;
+        dropped(&running, &server).await;
+        failed(&running.link, Instant::now() - Duration::from_millis(1)).await;
+        // A forward waits out the pause.
+        assert!(running.link.session().await.is_none());
+        assert_eq!(server.connections(), 1);
+        // The window spaces its attempts itself, and its Try again attempts at once: the host,
+        // back meanwhile, is reached.
+        assert_eq!(echo(running.port, b"back").await, b"back");
+        assert_eq!(server.connections(), 2);
+        assert!(*running.link.live().borrow());
+    }
+
+    #[tokio::test]
+    async fn window_connections_made_while_an_attempt_fails_take_its_failure_and_make_no_other() {
+        let server = TestServer::start(Behaviour::default()).await;
+        // A host that takes the connection and drops it a second later without a word, counting
+        // the attempts made to it.
+        let host = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+        let host_port = host.local_addr().unwrap().port();
+        let attempts = Arc::new(Mutex::new(0usize));
+        let counted = attempts.clone();
+        tokio::spawn(async move {
+            while let Ok((stream, _)) = host.accept().await {
+                *counted.lock().unwrap() += 1;
+                tokio::spawn(async move {
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    drop(stream);
+                });
+            }
+        });
+        let silent = Target {
+            port: host_port,
+            ..target(&server)
+        };
+        let running = run_with(&server, silent, Duration::from_secs(3600)).await;
+        dropped(&running, &server).await;
+        let mut streams = Vec::new();
+        for _ in 0..4 {
+            streams.push(
+                TcpStream::connect(("127.0.0.1", running.port))
+                    .await
+                    .unwrap(),
+            );
+        }
+        for mut stream in streams {
+            let mut back = Vec::new();
+            tokio::time::timeout(Duration::from_secs(10), stream.read_to_end(&mut back))
+                .await
+                .expect("the connection was closed")
+                .unwrap();
+            assert!(back.is_empty());
+        }
+        assert_eq!(*attempts.lock().unwrap(), 1);
+    }
+
+    #[tokio::test]
+    async fn a_refused_reconnection_is_asked_again_only_after_the_long_pause_or_a_try_again() {
+        let server = TestServer::start(Behaviour::default()).await;
+        let refused = Target {
+            secret: Secret::Password("wrong".into()),
+            ..target(&server)
+        };
+        let running = run_with(&server, refused, Duration::from_secs(3600)).await;
+        dropped(&running, &server).await;
+        assert!(running
+            .link
+            .reach(Pace::Asked(Instant::now()))
+            .await
+            .is_none());
+        assert_eq!(server.connections(), 2);
+        {
+            let slot = running.link.slot.lock().await;
+            assert!(slot.refused);
+            let pause = slot.retry_at.unwrap() - slot.failed_at.unwrap();
+            assert_eq!(pause, REFUSED_PAUSE);
+        }
+        // Neither the window's connections nor the others ask again meanwhile.
+        assert!(running
+            .link
+            .reach(Pace::Asked(Instant::now()))
+            .await
+            .is_none());
+        assert!(running.link.session().await.is_none());
+        assert_eq!(server.connections(), 2);
+        // The window's Try again does.
+        running.link.retry_now().await;
+        assert!(running
+            .link
+            .reach(Pace::Asked(Instant::now()))
+            .await
+            .is_none());
+        assert_eq!(server.connections(), 3);
+    }
+
+    #[tokio::test]
+    async fn an_unreachable_host_is_asked_again_after_the_growing_pause() {
+        let server = TestServer::start(Behaviour::default()).await;
+        let closed = TcpListener::bind(("127.0.0.1", 0)).await.unwrap();
+        let nowhere = Target {
+            port: closed.local_addr().unwrap().port(),
+            ..target(&server)
+        };
+        drop(closed);
+        let running = run_with(&server, nowhere, Duration::from_secs(3600)).await;
+        dropped(&running, &server).await;
+        assert!(running
+            .link
+            .reach(Pace::Asked(Instant::now()))
+            .await
+            .is_none());
+        let slot = running.link.slot.lock().await;
+        assert!(!slot.refused);
+        assert_eq!(
+            slot.retry_at.unwrap() - slot.failed_at.unwrap(),
+            retry_pause(1)
+        );
+    }
+
+    #[tokio::test]
+    async fn the_link_makes_a_dropped_connection_again_by_itself() {
+        let server = TestServer::start(Behaviour::default()).await;
+        let running = run_with(&server, target(&server), Duration::from_millis(50)).await;
+        let mut live = running.link.live();
+        dropped(&running, &server).await;
+        // Made again with no connection of the window asking for it, and then told up.
+        tokio::time::timeout(Duration::from_secs(10), async {
+            while server.connections() < 2 {
+                tokio::time::sleep(Duration::from_millis(20)).await;
+            }
+            live.wait_for(|live| *live).await.unwrap();
+        })
+        .await
+        .expect("the connection was made again");
+        assert_eq!(server.connections(), 2);
+    }
+
+    #[test]
+    fn a_failure_is_logged_first_when_its_kind_changes_and_every_ten_minutes_otherwise() {
+        let unreachable = std::mem::discriminant(&ConnectError::Unreachable(String::new()));
+        let refused = std::mem::discriminant(&ConnectError::AuthFailed(String::new()));
+        let then = Instant::now();
+        assert!(worth_logging(None, unreachable, then));
+        let last = Some((unreachable, then));
+        assert!(!worth_logging(
+            last,
+            unreachable,
+            then + Duration::from_secs(60)
+        ));
+        assert!(worth_logging(last, refused, then + Duration::from_secs(60)));
+        assert!(worth_logging(last, unreachable, then + LOG_EVERY));
     }
 
     #[test]

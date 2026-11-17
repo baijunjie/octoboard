@@ -267,6 +267,7 @@ mod tests {
         assert_eq!(windows, [format!("{REMOTE_LABEL_PREFIX}*")]);
         let own = reachable("remote-window.json");
         for command in [
+            "remote_connection_retry",
             "remote_link_address",
             "remote_forwards_list",
             "remote_forward_stop",
@@ -374,6 +375,7 @@ mod tests {
         let main = reachable("default.json");
         // The forwarding and file commands act on a remote window's own connection, which the local window has none of.
         let remote_only = [
+            "remote_connection_retry",
             "remote_link_address",
             "remote_forwards_list",
             "remote_forward_stop",
