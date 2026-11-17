@@ -1020,6 +1020,100 @@ describe("the fixture daemon's session release", () => {
   });
 });
 
+describe("the fixture daemon's session binding", () => {
+  const hub = sessionOf("hub", "c", undefined, "Hub", "idle", { colour: "pink", ordinal: 1 });
+  const otherHub = sessionOf("other-hub", "c2", undefined, "Other hub", "idle", { colour: "blue", ordinal: 1 });
+  const coordinator = sessionOf("coordinator", "c", "p", "Coordinator", "working");
+  const worker = sessionOf("worker", "c", "p", "Worker", "idle", { bound_to: coordinator.id });
+  const loner = sessionOf("loner", "c", "p", "Loner", "idle");
+  const parent = sessionOf("parent", "c", "p", "Parent", "idle");
+  const parentChild = sessionOf("parent-child", "c", "p", "Parent child", "idle", { bound_to: parent.id });
+  const archivedParent = sessionOf("archived-parent", "c", "p", "Archived parent", "idle");
+  const archivedChild = sessionOf("archived-child", "c", "p", "Archived child", "archived", { bound_to: archivedParent.id });
+  const archived = sessionOf("archived", "c", "p", "Archived", "archived");
+  const archivedBound = sessionOf("archived-bound", "c", "p", "Archived bound", "archived", { bound_to: hub.id, role: "coordinator" });
+  const foreignCoordinator = sessionOf("foreign-coordinator", "c", "q", "Foreign coordinator", "idle");
+  const interrupted = sessionOf("interrupted", "c", "p", "Interrupted", "interrupted");
+  const starting = sessionOf("starting", "c", "p", "Starting", "starting");
+  const archivedOwner = sessionOf("archived-owner", "c", "p", "Archived owner", "archived");
+  const interruptedHub = sessionOf("interrupted-hub", "c", undefined, "Interrupted hub", "interrupted", { colour: "red", ordinal: 2 });
+  const archivedHub = sessionOf("archived-hub", "c", undefined, "Archived hub", "archived", { colour: "green", ordinal: 3 });
+  const startingHub = sessionOf("starting-hub", "c", undefined, "Starting hub", "starting", { colour: "teal", ordinal: 4 });
+  const sessions = [hub, otherHub, coordinator, worker, loner, parent, parentChild, archivedParent, archivedChild, archived, archivedBound, foreignCoordinator, interrupted, starting, archivedOwner, interruptedHub, archivedHub, startingHub];
+  const state = snapshotState({
+    consoles: [consoleOf("c", "Main"), consoleOf("c2", "Other")],
+    projects: [projectOf("p", "c", "Website"), projectOf("q", "c", "Docs")],
+    sessions,
+  });
+  const scenario = { state };
+  const bind = (daemon: ReturnType<typeof createFixtureDaemon>, session: string, owner: string) => daemon.request({ type: "bind_session", session, owner });
+  const stored = (daemon: ReturnType<typeof createFixtureDaemon>) => [...daemon.store.getState().sessions.values()];
+
+  it("binds an independent session to a console session and it stays a coordinator", async () => {
+    const daemon = createFixtureDaemon(scenario);
+    await expect(bind(daemon, loner.id, hub.id)).resolves.toEqual({ type: "ack", id: null });
+    expect(daemon.store.getState().sessions.get(loner.id)).toMatchObject({ bound_to: hub.id, role: "coordinator" });
+  });
+
+  it("binds an independent session to a project coordinator and makes it a worker", async () => {
+    const daemon = createFixtureDaemon(scenario);
+    await expect(bind(daemon, loner.id, coordinator.id)).resolves.toEqual({ type: "ack", id: null });
+    expect(daemon.store.getState().sessions.get(loner.id)).toMatchObject({ bound_to: coordinator.id, role: "worker" });
+  });
+
+  it("changes only the bound session", async () => {
+    const daemon = createFixtureDaemon(scenario);
+    await bind(daemon, loner.id, coordinator.id);
+    const others = (list: ReturnType<typeof stored>) => list.filter((session) => session.id !== loner.id);
+    expect(others(stored(daemon))).toEqual(others(sessions));
+  });
+
+  it("accepts a console owner even when the session has sessions of its own", async () => {
+    const daemon = createFixtureDaemon(scenario);
+    await expect(bind(daemon, parent.id, hub.id)).resolves.toEqual({ type: "ack", id: null });
+    expect(daemon.store.getState().sessions.get(parent.id)).toMatchObject({ bound_to: hub.id, role: "coordinator" });
+    expect(daemon.store.getState().sessions.get(parentChild.id)?.bound_to).toBe(parent.id);
+  });
+
+  it("refuses an unknown session or owner and names the missing id", async () => {
+    const daemon = createFixtureDaemon(scenario);
+    await expect(bind(daemon, "missing", hub.id)).rejects.toMatchObject({ code: "unknown_session", params: { session: "missing" } });
+    await expect(bind(daemon, loner.id, "missing")).rejects.toMatchObject({ code: "unknown_session", params: { session: "missing" } });
+    expect(stored(daemon)).toEqual(sessions);
+  });
+
+  it("refuses a console session, an archived session and an already bound session, in that order", async () => {
+    const daemon = createFixtureDaemon(scenario);
+    await expect(bind(daemon, hub.id, coordinator.id)).rejects.toMatchObject({ code: "console_session_never_bound", params: { session: hub.id } });
+    await expect(bind(daemon, hub.id, "missing")).rejects.toMatchObject({ code: "console_session_never_bound", params: { session: hub.id } });
+    await expect(bind(daemon, archivedHub.id, hub.id)).rejects.toMatchObject({ code: "console_session_never_bound", params: { session: archivedHub.id } });
+    await expect(bind(daemon, archived.id, hub.id)).rejects.toMatchObject({ code: "session_archived", params: { session: archived.id } });
+    await expect(bind(daemon, archivedBound.id, hub.id)).rejects.toMatchObject({ code: "session_archived", params: { session: archivedBound.id } });
+    await expect(bind(daemon, worker.id, hub.id)).rejects.toMatchObject({ code: "session_already_bound", params: { session: worker.id } });
+    await expect(bind(daemon, worker.id, archivedOwner.id)).rejects.toMatchObject({ code: "session_already_bound", params: { session: worker.id } });
+    expect(stored(daemon)).toEqual(sessions);
+  });
+
+  it.each([
+    ["is the session itself", loner.id, loner.id],
+    ["is a console session of another console", loner.id, otherHub.id],
+    ["is a project coordinator of another project", loner.id, foreignCoordinator.id],
+    ["is a worker", loner.id, worker.id],
+    ["is a project session while the session has sessions of its own", parent.id, coordinator.id],
+    ["is a project session while the session has an archived session of its own", archivedParent.id, coordinator.id],
+    ["is an interrupted project coordinator", loner.id, interrupted.id],
+    ["is an archived project coordinator", loner.id, archivedOwner.id],
+    ["is a starting project coordinator", loner.id, starting.id],
+    ["is an interrupted console session", loner.id, interruptedHub.id],
+    ["is an archived console session", loner.id, archivedHub.id],
+    ["is a starting console session", loner.id, startingHub.id],
+  ])("refuses an owner that %s", async (_reason, session, owner) => {
+    const daemon = createFixtureDaemon(scenario);
+    await expect(bind(daemon, session, owner)).rejects.toMatchObject({ code: "owner_cannot_own", params: { session, owner } });
+    expect(stored(daemon)).toEqual(sessions);
+  });
+});
+
 describe("the fixture daemon's account switches", () => {
   const work = accountOf("work", "claude", "Work", "/Users/dev/.claude-work");
   const session = sessionOf("s", "c", "p", "Release", "working", { model: "opus", effort: "high", bound_to: "hub" });
