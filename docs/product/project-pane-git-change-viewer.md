@@ -80,7 +80,9 @@ the commit's first parent — the empty tree for a commit with none — and its 
   `docs/product/right-to-left-layout.md`) and one above the other otherwise. Both sides use a checkerboard background,
   including a side with no file or no content to show, whose explanation is centred on that background. Each side is
   headed Before or After, and what is said about one side's own content stands beside its heading rather than in the
-  viewer's header (see "Notices and stand-ins" in `docs/product/file-viewer.md`).
+  viewer's header (see "Notices and stand-ins" in `docs/product/file-viewer.md`). The two sides zoom and scroll as
+  one, with a single zoom bar over the After side, and the next change opens fitted (see "An image change's two sides"
+  in `docs/product/zooming-images-in-the-file-viewer.md`).
 - **Any other binary change**, or an image changed to or from text, says it cannot be shown as a diff, with the size
   before and after.
 - **An untracked file** is shown as new content: the file itself, as the file viewer shows a file; its Untracked tag

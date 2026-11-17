@@ -4,7 +4,7 @@ import { PaneFailure } from "../components/alerts/PaneFailure";
 import { useT } from "../i18n/react";
 import { CodeSurface } from "./code/CodeSurface";
 import { isMarkdownName, type ViewerBody } from "./content";
-import { FrameSurface } from "./FrameSurface";
+import { ZoomableImage } from "./image/ZoomableImage";
 import { MarkdownSurface } from "./markdown/MarkdownSurface";
 import { FileNotice } from "./notices";
 import { Unsupported } from "./viewerStates";
@@ -39,10 +39,10 @@ export function BodyView({
   }
 }
 
-/** An image scaled down to fit, never up. One that cannot be decoded falls back to its own text
- * when it has some (an SVG), and otherwise is an error in place of the image, since the pane's
- * subject failed to load. Keyed by its subject by
- * the caller, so a failure is never carried over to the next image. */
+/** An image the reader can zoom, opened scaled down to fit, never up. One that cannot be decoded
+ * falls back to its own text when it has some (an SVG), and otherwise is an error in place of the
+ * image, since the pane's subject failed to load. Keyed by its subject by the caller, so a failure
+ * is never carried over to the next image, nor a zoom to the next file. */
 function ImageView({
   name,
   body,
@@ -66,13 +66,5 @@ function ImageView({
       <PaneFailure announce title={t("viewer.image.failed")} summary={t("viewer.image.failed.summary")} remedy={t("viewer.image.failed.remedy")} />
     );
   }
-  return (
-    <FrameSurface>
-      <div className="viewer-checkerboard flex min-h-0 flex-1 items-center justify-center overflow-hidden p-2">
-        {/* The `error` event is the signal: an image's size is no test (an SVG with only a `viewBox`
-            has none of its own) and `decode()` has wrongly rejected valid SVGs in older WebKit. */}
-        <img src={body.url} alt={name} onError={() => setFailed(true)} className="max-h-full max-w-full object-contain" />
-      </div>
-    </FrameSurface>
-  );
+  return <ZoomableImage url={body.url} name={name} onError={() => setFailed(true)} />;
 }

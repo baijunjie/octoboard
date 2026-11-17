@@ -97,8 +97,9 @@ one's do not, or when one subject has the subtitle row and the next has none.
   Markdown documents could not be loaded, it is loaded again once the viewer shows another file or change. A
   **Markdown** file opens as a rendered document instead, with its source a choice away (see
   `docs/product/markdown-documents.md`).
-- **Images** — PNG, JPEG, GIF, WebP, BMP, ICO and SVG; AVIF on macOS 13 and later — are shown scaled down to fit and
-  never scaled up, on a checkerboard that shows their transparent areas. An image is only displayed: an SVG's scripts
+- **Images** — PNG, JPEG, GIF, WebP, BMP, ICO and SVG; AVIF on macOS 13 and later — open scaled down to fit and
+  never above their actual size, on a checkerboard that shows their transparent areas, and can be zoomed and panned
+  (see "Zooming an image" below). An image is only displayed: an SVG's scripts
   never run and nothing it refers to is fetched. An image that cannot be decoded is an error in its place (see "Notices
   and stand-ins" below); an SVG that cannot be decoded is shown as its text instead, with a failure notice saying so.
 - **Any other binary file** says it cannot be displayed, with its size.
@@ -269,6 +270,13 @@ another file (see "Moving between files" below).
 
 **Find in file** — ⌘F (Ctrl+F off macOS) or the header's Find in file control — searches the text the viewer shows and
 highlights what it finds, as described in `docs/product/finding-in-the-file-viewer.md`.
+
+## Zooming an image
+
+An image shown as an image opens fitted to the view and is zoomed with the zoom bar over its top trailing corner, with
+⌘+, ⌘− and ⌘0 (Ctrl off macOS) anywhere in the viewer, with a pinch or ⌘ or Ctrl and the wheel, and with a
+double-click, and is panned once it is larger than the view, as described in
+`docs/product/zooming-images-in-the-file-viewer.md`.
 
 ## Moving between files
 

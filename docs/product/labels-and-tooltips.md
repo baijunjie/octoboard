@@ -140,6 +140,9 @@ application buttons and the Keyboard shortcuts section's Cancel and Reset button
   (see "Two-state icon toggles" below);
 - the buttons of the file viewer's find bar — Match case, Whole word, Use regular expression, Previous match, Next match
   and Close find (see "The find bar" in `docs/product/finding-in-the-file-viewer.md`);
+- the buttons of an image's zoom bar in the file viewer — Zoom out, Zoom in and the fit button, whose name alternates
+  between "Actual size" and "Zoom to fit" to say what pressing it does (see "The zoom bar" in
+  `docs/product/zooming-images-in-the-file-viewer.md`);
 - the two controls of the console dialog's Avatar field (see "Avatar" in `docs/product/consoles.md`) — the round control
   itself, named for choosing an image while it is empty and for replacing it once one is picked, and the delete button
   over its corner, named for removing the image;

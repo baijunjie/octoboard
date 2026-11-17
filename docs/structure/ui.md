@@ -184,7 +184,8 @@ their cascade order does not depend on which screen opened first.
   selections) and the list helpers the two modes share; `useServedByDaemon.ts` tells whether this page is the browser build the daemon serves itself, which its lazy-load failures use to offer a reload.
 - `src/viewer/` — the read-only file viewer modal (the shell at its root), and the app's Markdown and code rendering
   library, which `terminal/history/` uses too: `markdown/` (documents, sanitized HTML, images, Mermaid, formulas, fenced code), `code/` (the
-  code and diff renderer and its budgets) and `find/` (the find bar); `@pierre/diffs` is imported only inside it.
+  code and diff renderer and its budgets), `find/` (the find bar) and `image/` (the zoomable image of an image file or an image change:
+  `ZoomableImage`, `ZoomBar`, the zoom arithmetic in `zoom.ts`, and `ZoomGroup` in `zoomGroup.ts`, which makes the two sides of an image change zoom and scroll as one); `@pierre/diffs` is imported only inside it.
 - `src/quota/` — plan quota wording, meters, reset credits, and the rail's quota panels (`RailQuotaBars`, `QuotaPanel`,
   `AgentPanel`, `QuotaAccount`).
 - `src/settings/` — the settings modal and its sections (`sections.ts` holds the section ids and `SettingsNavigation`).

@@ -18,7 +18,7 @@ import { FileViewer } from "./FileViewer";
 import type { ViewerNavigation } from "./viewerNavigation";
 import { framesAsTimers, settleFrames } from "../components/dialog/dialogTestSupport";
 import { detailsButton } from "../components/alerts/detailsTestSupport";
-import { enter, leave, openTooltip, press, tap } from "../components/hint/tooltipTestSupport";
+import { activate, enter, leave, openTooltip, press, tap } from "../components/hint/tooltipTestSupport";
 import { chooseItem, closeMenu, markNames, menuEntries, recordSelections, rightClick, ViewerHost } from "./viewerTestSupport";
 import { rawFailureText } from "../errors/errorText";
 import { LAZY_IMPORT_TIMEOUT_MS, settleLazyImport } from "../test/lazyImport";
@@ -26,6 +26,7 @@ import { viewerErrorText } from "./viewerError";
 import { wordWrap } from "./code/wordWrap";
 import { fakeTimers } from "../test/clock";
 import { IS_MAC } from "../test/hosts";
+import { load, stubScrollerLayout } from "./image/zoomTestSupport";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -239,6 +240,82 @@ it("shows an SVG through an image, and as text when it cannot be decoded, never 
   expect(document.querySelector("img")).toBeNull();
   expect(document.querySelector("[data-renderer]")?.textContent).toBe(svg);
   expect(repositoryMarkup()).toBe(0);
+});
+
+// The zoom keys are the viewer's wherever focus is in its dialog, and an image opens fitted each time.
+const zoomReadouts = () => [...dialog()!.querySelectorAll('[role=group][aria-label="Zoom"] span[aria-hidden="true"]')].map((readout) => readout.textContent);
+const pressZoomKey = (init: KeyboardEventInit) => {
+  const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init, ...(IS_MAC ? { metaKey: true } : { ctrlKey: true }) });
+  act(() => void dialog()!.querySelector("button")!.dispatchEvent(event));
+  return event;
+};
+const png = (key: string): ViewerSubject => ({ key, path: `${key}.png`, content: { state: "file", body: { kind: "image", mediaType: "image/png", url: `data:image/png;base64,${key}`, size: 4 } } });
+
+it("zooms an opened image with the platform's modifier from anywhere in the viewer, and opens the next image fitted", () => {
+  stubScrollerLayout();
+  show(png("first"));
+  load(document.querySelector("img")!, 2000, 1000);
+  expect(zoomReadouts()).toEqual(["50%"]);
+  expect(pressZoomKey({ key: "=", code: "Equal" }).defaultPrevented).toBe(true);
+  expect(zoomReadouts()).toEqual(["67%"]);
+  pressZoomKey({ key: "+", code: "Equal", shiftKey: true });
+  expect(zoomReadouts()).toEqual(["75%"]);
+  pressZoomKey({ key: "-", code: "Minus" });
+  expect(zoomReadouts()).toEqual(["67%"]);
+
+  show(png("second"));
+  load(document.querySelector("img")!, 2000, 1000);
+  expect(zoomReadouts()).toEqual(["50%"]);
+});
+
+it("zooms both sides of an image change as one, with one bar over the After side, and opens the next change fitted", () => {
+  stubScrollerLayout();
+  const side = (path: string): ViewerChangeSide => ({ state: "present", path, kind: "file", body: { kind: "image", mediaType: "image/png", url: `data:image/png;base64,${path}`, size: 4 } });
+  const change = (key: string): ViewerSubject => ({ key, path: "a.png", content: { state: "change", change: { old: side(`${key}-old`), new: side(`${key}-new`), patch: "Binary files differ" } } });
+  show(change("pair"));
+  const images = () => [...document.querySelectorAll("img")];
+  expect(images()).toHaveLength(2);
+  // The Before side is half the size: it fits at 100%, the After side at 50%, and the bar tells the After side's.
+  load(images()[0], 1000, 500);
+  load(images()[1], 2000, 1000);
+  expect(zoomReadouts()).toEqual(["50%"]);
+  const sections = dialog()!.querySelectorAll("section");
+  expect(sections[1].querySelector('[role=group][aria-label="Zoom"]')).not.toBeNull();
+  expect(sections[0].querySelector("[role=group]")).toBeNull();
+  const drawn = () => images().map((image) => parseFloat(image.style.width));
+  expect(drawn()).toEqual([1000, 1000]);
+
+  // One key, one step: 50% to 67% on the After side, and the Before side in proportion.
+  pressZoomKey({ key: "=", code: "Equal" });
+  expect(zoomReadouts()).toEqual(["67%"]);
+  expect(drawn()[1]).toBeCloseTo(2000 * 0.67);
+  expect(drawn()[0]).toBeCloseTo(1000 * 0.67 * 2);
+  pressZoomKey({ key: "0", code: "Digit0" });
+  expect(zoomReadouts()).toEqual(["50%"]);
+  expect(drawn()).toEqual([1000, 1000]);
+
+  pressZoomKey({ key: "=", code: "Equal" });
+  expect(zoomReadouts()).toEqual(["67%"]);
+  show(change("next"));
+  load(images()[0], 1000, 500);
+  load(images()[1], 2000, 1000);
+  expect(zoomReadouts()).toEqual(["50%"]);
+  expect(drawn()).toEqual([1000, 1000]);
+});
+
+it("names each side's scroll region of an image change by the file, the side's section carrying the heading", () => {
+  stubScrollerLayout();
+  const side = (path: string): ViewerChangeSide => ({ state: "present", path, kind: "file", body: { kind: "image", mediaType: "image/png", url: `data:image/png;base64,${path}`, size: 4 } });
+  show({ key: "named", path: "a.png", content: { state: "change", change: { old: side("old"), new: side("new"), patch: "Binary files differ" } } });
+  const images = [...document.querySelectorAll("img")];
+  load(images[0], 2000, 1000);
+  load(images[1], 2000, 1000);
+  activate(dialog()!.querySelector<HTMLButtonElement>('button[aria-label="Actual size"]')!);
+  const regions = images.map((image) => image.parentElement!);
+  expect(regions.map((region) => region.getAttribute("role"))).toEqual(["region", "region"]);
+  expect(regions.map((region) => region.getAttribute("aria-label"))).toEqual(["a.png", "a.png"]);
+  expect(regions.map((region) => region.hasAttribute("aria-labelledby"))).toEqual([false, false]);
+  expect(regions.map((region) => region.closest("section")?.getAttribute("aria-label"))).toEqual(["Before", "After"]);
 });
 
 it("shows an empty-state failure that announces itself when a raster image cannot be decoded", () => {

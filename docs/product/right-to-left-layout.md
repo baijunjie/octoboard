@@ -25,7 +25,9 @@ product docs name for parts of the window:
 - Each resize handle stays on its pane's inner edge, the sidebar's left edge and the right pane's right one. Dragging
   toward the terminal still widens the pane, and so does the arrow key pointing away from the pane.
 - Settings and the other dialogs are mirrored the same way, and toasts sit at the bottom left. So is the file viewer's
-  layout: an image change's Before and After images, side by side, have Before on the right.
+  layout: an image change's Before and After images, side by side, have Before on the right, and an image's zoom bar
+  floats over its top left corner. The image's own area is not mirrored, an image having no reading direction (see
+  `docs/product/zooming-images-in-the-file-viewer.md`).
 - A number field, such as the Terminal font size row's in Settings, is mirrored with its row: its **−** button at the
   field's start, on the right, and its **+** button at its end, on the left, with the row's **Reset font size** button
   before the field, on its right (see "Terminal font size" in `docs/product/settings.md`).

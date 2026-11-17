@@ -136,6 +136,8 @@ covers. These are:
   sideways** — a code block, a diff and monospaced copyable text, named by its label or, without one, as code, a diff
   or text to copy, and a table wider than the page, named by its caption or as a table (see
   `docs/product/report-page-components.md`).
+- **an image in the file viewer zoomed larger than its view**, named by the file; Left and Right there move between
+  files rather than scroll it (see "Panning a zoomed image" in `docs/product/zooming-images-in-the-file-viewer.md`).
 - **the list of accounts in the rail's account quota panel**, named "Accounts". Its rows hold nothing that takes focus,
   so nothing else would scroll it. In Tab order it comes after the agent tabs and before Manage accounts (see "What the
   panel shows" in `docs/product/account-quota-panel.md`).

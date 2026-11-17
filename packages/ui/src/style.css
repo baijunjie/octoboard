@@ -289,7 +289,7 @@ html {
 /* The dark floating surfaces: a dialog, a menu or submenu, a select's or combo box's list, a popover, a tooltip and
    what is drawn as one (the touch and hint popovers, the rail's quota panel), a toast, and a bar floating over the
    terminal or over the file viewer's content (`floating-surface`: the terminal notice bar, the viewer's find
-   bar). HeroUI draws them on `--overlay` and `--surface` (L 0.21), darker than the content
+   bar and an image's zoom bar). HeroUI draws them on `--overlay` and `--surface` (L 0.21), darker than the content
    panel, so a menu sinks into the sidebar under it. Here they are drawn on `--floating`, a step lighter than the panel,
    as a white surface sits over the light window, and every level keeps light's step: the surface's over `--panel` and
    `--panel-sidebar`, the `--default` family's resting and hovered, `--border` and `--separator` (the edge of HeroUI's

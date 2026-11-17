@@ -15,6 +15,7 @@ import { bodyFromFileContent, type ChangeBodies, ChangeBodiesError, type ViewerB
 import { describing, type Step, type Ui } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";
 import { IMAGES } from "../../fixtures/viewerImages";
+import { screenshotImage } from "./screenshotImage";
 
 const GROUP = "File viewer";
 
@@ -214,7 +215,7 @@ if __name__ == "__main__":
 const MARKDOWN = `# Release notes
 
 - The viewer keeps **code** and paths left to right.
-- Images fit the window and are never scaled up.
+- Images open fitted to the window, never scaled up, and zoom from there.
 
 \`\`\`sh
 pnpm build:app --bundles app
@@ -1328,7 +1329,7 @@ export const viewerScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Files",
-    description: "Successful code, Markdown, images, inert repository markup, unsupported binary formats, large-file fallbacks (a note mark after the path) and loading views. Dedicated internationalization subjects cover Arabic document direction and mixed-script source. Previous / Next stays within normal subjects. The five-line src/describe.ts has long lines: its code surface fills the available height with the rows at the top and its horizontal scrollbar at the bottom of the window. Toggle word wrap and compare src/generated/table.ts or logs/server.log for vertical scrolling. Compare long paths, source/document controls and scroll fades using the width and language controls. The current path and file size stay on one row; long paths stay on one line with a fade at the start. Header icon controls end the details' last row, bottom-aligned; narrow the window to see them wrap to a row of their own directly above the file content, only once the path and size no longer fit beside them. Below phone width, the viewer fills the window with square corners; wider windows retain the inset dialog. File manager and Default application are the last two buttons of every file's header row, after the copy, view and wrap buttons.",
+    description: "Successful code, Markdown, images (96 x 64, so each opens at 100% with the Actual size button disabled: zoom in with the bar or ⌘/Ctrl + plus to see crisp blocks of pixels, and ⌘/Ctrl + 0 or double-click to return), inert repository markup, unsupported binary formats, large-file fallbacks (a note mark after the path) and loading views. Dedicated internationalization subjects cover Arabic document direction and mixed-script source. Previous / Next stays within normal subjects. The five-line src/describe.ts has long lines: its code surface fills the available height with the rows at the top and its horizontal scrollbar at the bottom of the window. Toggle word wrap and compare src/generated/table.ts or logs/server.log for vertical scrolling. Compare long paths, source/document controls and scroll fades using the width and language controls. The current path and file size stay on one row; long paths stay on one line with a fade at the start. Header icon controls end the details' last row, bottom-aligned; narrow the window to see them wrap to a row of their own directly above the file content, only once the path and size no longer fit beside them. Below phone width, the viewer fills the window with square corners; wider windows retain the inset dialog. File manager and Default application are the last two buttons of every file's header row, after the copy, view and wrap buttons.",
     viewer: { subjects: files },
   },
   {
@@ -1376,17 +1377,36 @@ export const viewerScenarios: Scenario[] = [
     },
   },
   {
+    id: "viewer-image-zoom",
+    group: GROUP,
+    category: "normal",
+    title: "Large image, zoomable",
+    description: "A 2400 x 1500 screenshot-like image opens fitted, below 100%: the bar at the top trailing corner of the image area (top left in a right-to-left language) shows the percentage between Zoom out and Zoom in, and its last button, Actual size, is enabled. Zoom with the bar, ⌘/Ctrl + plus, minus and 0, ⌘/Ctrl with the wheel or a trackpad pinch around the pointer, or a double-click, which goes between fitted and actual size; the last button then reads Zoom to fit. Past 100% the one-pixel checkerboards in the grid cells turn into crisp blocks, and the image scrolls and drags (grab cursor) once it is larger than the area; the numbers in the grid are the pixel coordinates of each cell.",
+    viewer: {
+      subjects: async () => {
+        const image = await screenshotImage();
+        return [file("screenshots/overview.png", binary("screenshots/overview.png", image))];
+      },
+    },
+  },
+  {
     id: "viewer-image-changes",
     group: GROUP,
     category: "normal",
     title: "Image changes",
-    description: "The added image uses the same transparency checkerboard on the empty Before side and the image's After side, without an inner border or rounded corners. Both headings have space above, below and beside their text. Next shows two images with the same heading spacing; narrow the window to compare the stacked layout.",
+    description: "Opens on a modified screenshot-like image with a Before and an After side by side, each fitted below 100% (narrow the window to compare the stacked layout): five grid cells are highlighted with a red chip in After. One zoom bar floats at the top trailing corner of the After image, inset like the find bar on wide windows, and zooms both sides, showing the After side's percentage; ⌘/Ctrl + plus, minus and 0, the wheel or a pinch on either side, and a double-click do the same. Scrolling or dragging either side scrolls the other to the same fraction of its own scroll range, so same-size images line up pixel for pixel and images of different sizes reach their edges together. Next shows the landscape screenshot replaced by an unrelated portrait phone-screen picture (different size and shape), a small two-sided change with both sides at 100%, the screenshot against a smaller crop of it, and an added image, whose empty Before side uses the same transparency checkerboard as the After side, without an inner border or rounded corners; the bar is over the After side in all of them. Headings have space above, below and beside their text in all of them.",
     viewer: {
       subjects: async (language) => {
         const t = translatorFor(language);
+        const [screenshotBefore, screenshotAfter, screenshotCropped, phone] = await Promise.all([
+          screenshotImage("before"), screenshotImage("after"), screenshotImage("cropped"), screenshotImage("phone"),
+        ]);
         return [
-          change(t, "assets/new.png", { state: "absent" }, present("assets/new.png", after)),
+          change(t, "screenshots/overview.png", present("screenshots/overview.png", binary("screenshots/overview.png", screenshotBefore)), present("screenshots/overview.png", binary("screenshots/overview.png", screenshotAfter))),
+          change(t, "screenshots/replaced.png", present("screenshots/replaced.png", binary("screenshots/replaced.png", screenshotBefore)), present("screenshots/replaced.png", binary("screenshots/replaced.png", phone))),
           change(t, "assets/logo.png", present("assets/logo.png", before), present("assets/logo.png", after)),
+          change(t, "screenshots/detail.png", present("screenshots/detail.png", binary("screenshots/detail.png", screenshotBefore)), present("screenshots/detail.png", binary("screenshots/detail.png", screenshotCropped))),
+          change(t, "assets/new.png", { state: "absent" }, present("assets/new.png", after)),
         ];
       },
     },

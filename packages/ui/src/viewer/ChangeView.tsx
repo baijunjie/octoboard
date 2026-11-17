@@ -6,6 +6,7 @@ import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
 import { displayWirePath } from "../format/wirePath";
 import { BodyView } from "./BodyView";
+import { ZoomGroup, ZoomGroupContext } from "./image/zoomGroup";
 import { DiffSurface } from "./code/CodeSurface";
 import {
   bodiesFailure,
@@ -89,16 +90,7 @@ export function ChangeView({
     case "notFile":
       return <NotFile kind={presentation.sideKind} />;
     case "image":
-      return (
-        <div className="@container flex min-h-0 flex-1">
-          <div className="grid min-h-0 flex-1 grid-rows-2 gap-3 @2xl:grid-cols-2 @2xl:grid-rows-1">
-            {/* An image that cannot be decoded can fall back to its text, on either side; the wrap
-                choice in the header serves whichever sides did. */}
-            <ImageSide label={t("viewer.change.before")} side={change.old} name={name} resetKey={`${resetKey}:old`} theme={theme} />
-            <ImageSide label={t("viewer.change.after")} side={change.new} name={name} resetKey={`${resetKey}:new`} theme={theme} />
-          </div>
-        </div>
-      );
+      return <ImageChange key={resetKey} change={change} name={name} resetKey={resetKey} theme={theme} />;
     case "binary": {
       const size = (side: ViewerChangeSide) => (side.state === "present" && side.body ? side.body.size : null);
       return <Unsupported message={t("viewer.change.binary")} sizes={[size(change.old), size(change.new)]} />;
@@ -206,6 +198,33 @@ function UnchangedView({
   );
 }
 
+/** The two sides of an image change, side by side or stacked, zooming and scrolling as one: the After side leads, so
+ * the bar over it and the keys tell its scale (`ZoomGroup`). Keyed by the change, so the next one opens fitted. */
+function ImageChange({
+  change,
+  name,
+  resetKey,
+  theme,
+}: {
+  change: { old: ViewerChangeSide; new: ViewerChangeSide };
+  name: string;
+  resetKey: string;
+  theme: "light" | "dark";
+}): React.ReactElement {
+  const t = useT();
+  const [group] = useState(() => new ZoomGroup());
+  return (
+    <div className="@container flex min-h-0 flex-1">
+      <div className="grid min-h-0 flex-1 grid-rows-2 gap-3 @2xl:grid-cols-2 @2xl:grid-rows-1">
+        {/* An image that cannot be decoded can fall back to its text, on either side; the wrap
+            choice in the header serves whichever sides did. */}
+        <ImageSide label={t("viewer.change.before")} side={change.old} name={name} resetKey={`${resetKey}:old`} theme={theme} group={group} priority={0} />
+        <ImageSide label={t("viewer.change.after")} side={change.new} name={name} resetKey={`${resetKey}:new`} theme={theme} group={group} priority={1} />
+      </div>
+    </div>
+  );
+}
+
 /** One side of an image change, labelled; an absent side says so instead of showing nothing. */
 function ImageSide({
   label,
@@ -213,12 +232,16 @@ function ImageSide({
   name,
   resetKey,
   theme,
+  group,
+  priority,
 }: {
   label: string;
   side: ViewerChangeSide;
   name: string;
   resetKey: string;
   theme: "light" | "dark";
+  group: ZoomGroup;
+  priority: number;
 }): React.ReactElement {
   return (
     <NoticeSlotsProvider>
@@ -230,7 +253,9 @@ function ImageSide({
           <NoticeSlotBoxes />
         </div>
         {side.state === "present" && side.body ? (
-          <BodyView resetKey={resetKey} name={name} body={side.body} theme={theme} />
+          <ZoomGroupContext value={{ group, priority }}>
+            <BodyView resetKey={resetKey} name={name} body={side.body} theme={theme} />
+          </ZoomGroupContext>
         ) : (
           side.state !== "out_of_scope" && <SideNote side={side} />
         )}

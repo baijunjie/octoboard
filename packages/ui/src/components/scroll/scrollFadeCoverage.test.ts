@@ -42,6 +42,13 @@ type Exemption = {
  */
 const EXEMPTIONS: Exemption[] = [
   {
+    surface: "viewer/image/ZoomableImage.tsx: a zoomed image's scroller",
+    reason:
+      "A pan surface over the image itself: a fade would dim the image's own edges, the very pixels a zoomed-in reader is looking at, and the scrollbars and the image running off the view already say there is more. It is a focusable region while it overflows, so the keyboard still reaches it.",
+    seen: true,
+    site: { file: "viewer/image/ZoomableImage.tsx", text: "overflow-auto" },
+  },
+  {
     surface: "App.tsx: the window's main column",
     reason:
       "Scrolls sideways only, dropped at the `docked` breakpoint. The rule is the vertical edges; what it owes the other axis is keeping the mask off a sideways scrollbar, which the capability does itself.",

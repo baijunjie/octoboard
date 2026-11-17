@@ -250,6 +250,9 @@ Where to start, by question:
 - [Markdown documents in the file viewer](product/markdown-documents.md) — how a Markdown file renders as a document.
 - [Finding in the file viewer](product/finding-in-the-file-viewer.md) — Find in file: opening the find bar, what is
   searched, its switches and count, how matches are highlighted and stepped through, and closing it.
+- [Zooming images in the file viewer](product/zooming-images-in-the-file-viewer.md) — the zoom bar, keys, wheel,
+  pinch and double-click, zoom limits and steps, panning, crisp pixels past 100%, and how an image change's two sides
+  zoom and scroll as one.
 - [Report panel](product/report-panel.md) — the panel where a console session, or a project session that faces the
   user, pushes, withdraws and pages through its pages and receives form submissions, each page submitted at most once.
 - [Report page components](product/report-page-components.md) — what a report page is built from: the component

@@ -278,6 +278,12 @@ highlights in the project's `--find-match-bg`, with the current match in `--find
 `--find-current-fg` and underlined, so the current one is not told by colour alone; code and document text keep 4.5:1
 on the match fill. The bar floats over its content as a `floating-surface`.
 
+An image's zoom bar in the file viewer (`ZoomBar` in `packages/ui/src/viewer/image/ZoomBar.tsx`) floats over the image
+the same way, as a `floating-surface`, standing as far from the trailing edge as the find bar so a scrollbar that takes
+space stays clear of it. Its fit button follows the maximize-and-restore pattern rather than a two-state toggle: its
+name and icon say what pressing does ("Actual size" / "Zoom to fit"), since zoomed is a range of scales, not one state
+to show.
+
 #### The Settings section menu
 
 Above the `tablet` breakpoint the Settings dialog's sections are a menu column rather than HeroUI's filled vertical

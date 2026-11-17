@@ -111,7 +111,8 @@ that is one of Octoboard's own, such as Find's `Ctrl+F`, reaches the page as usu
 field — select all, copy, paste and the like — are not browser keys and keep working.
 
 The terminal font size keys act only while a terminal has keyboard focus, so a browser's own page zoom keeps those keys
-everywhere else. They change the same size as the Terminal font size row of Settings' Appearance section (see
+everywhere else, except in the file viewer while it shows an image that can be zoomed, where the same keys zoom the
+image (see "Ways to zoom" in `docs/product/zooming-images-in-the-file-viewer.md`). They change the same size as the Terminal font size row of Settings' Appearance section (see
 `docs/product/terminal-font-size.md`). `Cmd++` is typed with whatever key the layout has for
 `+`; it and `Cmd+-` typed on another key of a layout work only while the commands keep their default keys and
 the combination is not the keys of another command this client has (on a German keyboard, where `+` is the key Forward

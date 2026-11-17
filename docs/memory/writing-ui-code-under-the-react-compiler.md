@@ -12,7 +12,12 @@ moves, a selection that does not follow).
 
 So feed a render only from props, state, context and hooks: pass `useNow()` (`packages/ui/src/format/useNow.ts`) as the
 `now` of anything that formats a time, read the daemon store through a `useDaemonStore` selector, and move state that
-changes in place behind a store or `useSyncExternalStore`. A value only a menu's items need (a row's menu judging
+changes in place behind a store or `useSyncExternalStore`. Subscribing is not enough on its own: a render that calls
+methods on the store object (`store.current()`, `store.valueOf(id)`) while `getSnapshot` returns a version number it
+never reads re-renders on every change and still shows the first results, since the compiler caches those calls on
+the store object, which never changes. Have `getSnapshot` return a new immutable object on each change (the same one
+until then), and read everything the render shows from that snapshot, as `ZoomGroup` in
+`packages/ui/src/viewer/image/zoomGroup.ts` does. A value only a menu's items need (a row's menu judging
 quotas against the clock) is not worth a `useNow()` that re-renders every row: give `ActionMenu` its `items` as a
 function, which it calls when the menu opens and mounts its content, so that function may read `Date.now()` and
 `store.getState()` itself. Where module state has to stay as it is, put
