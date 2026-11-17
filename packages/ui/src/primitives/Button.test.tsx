@@ -1,10 +1,20 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { act } from "react";
-import { expect, it, vi } from "vitest";
+import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
+
 
 import { BareButton, Button, buttonClassName, type ButtonPress } from "./Button";
 import { mount, pressWithMouse } from "./testSupport";
 import { ToggleButton, ToggleButtonGroup } from "./ToggleButton";
+
+beforeEach(() => {
+  const style = document.head.appendChild(document.createElement("style"));
+  style.textContent = readFileSync(join(import.meta.dirname, "Button.css"), "utf8");
+  onTestFinished(() => style.remove());
+});
 
 function pressWithKeyboard(element: HTMLElement): void {
   act(() => {
@@ -53,13 +63,24 @@ it("stays focusable and pressable while unavailable, describing itself with the 
   expect(onPress).toHaveBeenCalledTimes(1);
 });
 
-it("shows a decorative spinner before the unchanged label while pending", () => {
+it("overlays a decorative spinner while keeping the hidden label as its accessible name", () => {
   const { container } = mount(<Button pending>Save</Button>);
   const button = container.querySelector("button")!;
   const spinner = button.querySelector("[data-slot=spinner]")!;
   expect(button.textContent).toBe("Save");
   expect(spinner.getAttribute("aria-hidden")).toBe("true");
-  expect(button.firstElementChild).toBe(spinner);
+  const content = document.getElementById(button.getAttribute("aria-labelledby")!.split(" ")[0])!;
+  expect(content).not.toBeNull();
+  expect(content.textContent).toBe("Save");
+  expect(getComputedStyle(content).display).toBe("contents");
+  expect(getComputedStyle(content).visibility).toBe("hidden");
+  expect(content.hasAttribute("aria-hidden")).toBe(false);
+  const overlay = spinner.parentElement!;
+  expect(overlay.getAttribute("aria-hidden")).toBe("true");
+  expect(getComputedStyle(overlay).position).toBe("absolute");
+  expect(getComputedStyle(overlay).inset).toBe("0px");
+  expect(getComputedStyle(overlay).alignItems).toBe("center");
+  expect(getComputedStyle(overlay).justifyContent).toBe("center");
   expect(button.getAttribute("aria-busy")).toBe("true");
   expect(button.classList.contains("[--disabled-opacity:1]")).toBe(false);
 });
@@ -71,10 +92,13 @@ it("shows neither spinner nor busy state when not pending", () => {
   expect(button.hasAttribute("aria-busy")).toBe(false);
 });
 
-it("lets a pending icon-only button show the spinner in place of its icon", () => {
+it("keeps a pending icon-only button's icon hidden in place beneath its spinner", () => {
   const { container } = mount(<Button iconOnly pending label="Pick"><span data-testid="icon" /></Button>);
   const button = container.querySelector("button")!;
-  expect(button.querySelector("[data-testid=icon]")).toBeNull();
+  const icon = button.querySelector("[data-testid=icon]")!;
+  expect(icon).not.toBeNull();
+  expect(getComputedStyle(icon.parentElement!).visibility).toBe("hidden");
+  expect(button.getAttribute("aria-label")).toBe("Pick");
   expect(button.querySelector("[data-slot=spinner]")).not.toBeNull();
 });
 
@@ -90,10 +114,12 @@ it.each([false, true])("uses a custom indicator and opts out of dimming only whi
   expect(button.querySelector("[data-testid=pending-indicator]")).toBeNull();
   expect(button.querySelector("[data-testid=content]")).not.toBeNull();
   expect(button.classList.contains("[--disabled-opacity:1]")).toBe(false);
+  act(() => button.focus());
   render(view(true));
+  expect(document.activeElement).toBe(button);
   expect(button.querySelector("[data-testid=pending-indicator]")).not.toBeNull();
   expect(button.querySelector("[data-slot=spinner]")).toBeNull();
-  expect(button.querySelector("[data-testid=content]") === null).toBe(iconOnly);
+  expect(button.querySelector("[data-testid=content]")).not.toBeNull();
   expect(button.getAttribute("aria-busy")).toBe("true");
   expect(button.classList.contains("[--disabled-opacity:1]")).toBe(true);
   pressWithKeyboard(button);
@@ -102,9 +128,32 @@ it.each([false, true])("uses a custom indicator and opts out of dimming only whi
   expect(button.querySelector("[data-testid=pending-indicator]")).toBeNull();
   expect(button.querySelector("[data-testid=content]")).not.toBeNull();
   expect(button.classList.contains("[--disabled-opacity:1]")).toBe(false);
+  expect(getComputedStyle(button.querySelector("[data-testid=content]")!.parentElement!).visibility).toBe("visible");
   expect(button.getAttribute("aria-busy")).toBeNull();
   pressWithKeyboard(button);
   expect(onPress).toHaveBeenCalledTimes(1);
+});
+
+it("preserves explicit naming and the same content nodes through pending transitions", () => {
+  const view = (pending: boolean) => (
+    <>
+      <span id="action-name">Save changes</span>
+      <Button pending={pending} label="Save document"><span data-testid="label-content">Save</span></Button>
+      <Button pending={pending} labelledBy="action-name" label="Ignored">Save</Button>
+    </>
+  );
+  const { container, render } = mount(view(false));
+  const content = container.querySelector("[data-testid=label-content]")!;
+  const [labelled, referenced] = Array.from(container.querySelectorAll("button"));
+  for (const pending of [true, false]) {
+    render(view(pending));
+    expect(labelled.getAttribute("aria-label")).toBe("Save document");
+    expect(labelled.getAttribute("aria-labelledby")?.split(" ") ?? []).not.toContain(content.parentElement!.id);
+    expect(referenced.getAttribute("aria-labelledby")!.split(" ")).toContain("action-name");
+    expect(document.getElementById("action-name")!.textContent).toBe("Save changes");
+    expect(container.querySelector("[data-testid=label-content]")).toBe(content);
+    expect(getComputedStyle(content.parentElement!).visibility).toBe(pending ? "hidden" : "visible");
+  }
 });
 
 it("marks an autofocused button as its dialog's opening focus", () => {

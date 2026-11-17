@@ -112,15 +112,15 @@ export function baseButtonProps({
 }
 
 /** HeroUI's button, in its `variant` (`primary` by default) and `size` (HeroUI's `md` by default, or the project's
- * `xs`). While `pending`, a decorative indicator (a spinner by default) leads the unchanged content (it replaces the
- * content of an icon-only button), and the button reports itself busy (`aria-busy`). In a busy `Modal` it is disabled,
+ * `xs`). While `pending`, a decorative indicator (a spinner by default) covers the hidden content, which keeps its
+ * layout space and accessible name, and the button reports itself busy (`aria-busy`). In a busy `Modal` it is disabled,
  * unless it is `pending`: the pending button is the one control left, and takes the focus the others give up (see
  * `busy.ts`). */
 export function Button({ variant, size, type = "button", pending, pendingIndicator, dimWhilePending = true, unavailable, current, hasPopup, onPress, className, children, ref: forwarded, ...rest }: ButtonBaseProps & {
   variant?: ButtonVariant;
   /** `submit` submits the form around it. */
   type?: "button" | "submit";
-  /** Shows the pending indicator before the unchanged content and keeps the button where it is, unavailable and busy,
+  /** Shows the pending indicator over the hidden content without changing the button's width, unavailable and busy,
    * while what it started runs. */
   pending?: boolean;
   /** A decorative indicator to show while pending, in place of the default spinner. */
@@ -152,12 +152,13 @@ export function Button({ variant, size, type = "button", pending, pendingIndicat
     return () => element?.removeAttribute("aria-busy");
   }, [pending, ref]);
   const indicator = pending && (pendingIndicator ?? <Spinner color="current" size={size === "lg" ? "md" : "sm"} className={size === "xs" ? "size-3" : undefined} />);
+  const contentId = useId();
   const reasonId = useId();
   const reason = unavailable !== undefined && <span id={reasonId} className="sr-only">{unavailable}</span>;
-  const classes = [size === "xs" && XS_CLASS, pending && !dimWhilePending && "[--disabled-opacity:1]", unavailable !== undefined && UNAVAILABLE_CLASS, className, placement].filter(Boolean).join(" ");
+  const classes = [pending && "app-button--pending", size === "xs" && XS_CLASS, pending && !dimWhilePending && "[--disabled-opacity:1]", unavailable !== undefined && UNAVAILABLE_CLASS, className, placement].filter(Boolean).join(" ");
   return (
     <HeroButton
-      {...baseButtonProps({ ...rest, disabled, describedBy: unavailable === undefined ? rest.describedBy : reasonId })}
+      {...baseButtonProps({ ...rest, disabled, labelledBy: rest.labelledBy ?? (pending && !rest.label ? contentId : undefined), describedBy: unavailable === undefined ? rest.describedBy : reasonId })}
       ref={ref}
       {...fieldClear}
       type={type}
@@ -172,7 +173,8 @@ export function Button({ variant, size, type = "button", pending, pendingIndicat
       className={classes || undefined}
     >
       {reason}
-      {indicator && rest.iconOnly ? indicator : <>{indicator}{children}</>}
+      <span id={contentId} className="app-button__content">{children}</span>
+      {indicator && <span className="app-button__indicator" aria-hidden="true">{indicator}</span>}
     </HeroButton>
   );
 }

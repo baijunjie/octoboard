@@ -24,3 +24,20 @@
   height: 14px;
   margin-block: 0;
 }
+
+/* Pending content keeps its flex items and width; its id still names the button while hidden.
+   See docs/ui-standard.md, "Buttons". */
+.app-button__content {
+  display: contents;
+}
+.app-button--pending > .app-button__content {
+  visibility: hidden;
+}
+.app-button__indicator {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}

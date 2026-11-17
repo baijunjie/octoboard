@@ -191,7 +191,7 @@ it("rereads with the refresh flag, keeping the last reading while it runs and ig
   expect(refresh.querySelector("svg")!.classList.contains("motion-safe:animate-spin-slow")).toBe(false);
   press(refresh);
   press(refresh);
-  const icon = refresh.querySelector("svg.lucide-refresh-cw")!;
+  const icon = refresh.querySelector('[aria-hidden="true"] > svg.lucide-refresh-cw')!;
   expect(icon).not.toBeNull();
   expect(icon.getAttribute("aria-hidden")).toBe("true");
   expect(icon.classList.contains("motion-safe:animate-spin-slow")).toBe(true);

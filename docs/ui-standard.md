@@ -608,14 +608,14 @@ the full name, and pressing it runs nothing. Under that setting react-aria sets 
 `aria-disabled` on a select option, so the option gets it by hand.
 
 **A running action holds its button pending.** A button whose action is running is pending, not relabelled and not
-merely disabled: it sets `pending` on the wrapper layer's `Button` (`primitives/Button.tsx`). It keeps its label and
-shows a decorative spinner before it (in place of the content of an icon-only button), is reported busy (`aria-busy`),
-takes no further press, and keeps focus, so a dialog's Escape and Tab containment survive; the button grows by the
-spinner's width. The label never changes to a progressive form ("Saving…", "Importing…"), so no catalog carries a
-pending variant of a button's label. A link drawn as a button (`ExternalLink`) shows the same spinner while its target
-opens. The account MCP dialog's Refresh button keeps its refresh icon and rotates it at the file panel's slow
-pace while pending, respecting reduced motion, in place of the default spinner. It keeps its normal opacity and
-colour while pending; only further presses are blocked. (Source: user decision.)
+merely disabled: it sets `pending` on the wrapper layer's `Button` (`primitives/Button.tsx`). It hides its content
+visually while preserving its layout space and accessible name, and overlays a decorative spinner at the center, so its
+width stays unchanged, including for icon-only buttons. It is reported busy (`aria-busy`), takes no further press, and
+keeps focus, so a dialog's Escape and Tab containment survive. The label never changes to a progressive form ("Saving…",
+"Importing…"), so no catalog carries a pending variant of a button's label. A link drawn as a button (`ExternalLink`)
+shows a spinner before its label while its target opens. The account MCP dialog's Refresh button keeps its refresh icon
+and rotates it at the file panel's slow pace while pending, respecting reduced motion, in place of the default spinner.
+It keeps its normal opacity and colour while pending; only further presses are blocked. (Source: user decision.)
 
 **A busy dialog disables everything in it but the pending action.** While a dialog's action runs the dialog is busy
 (`busy` on the shared `Dialog`, which gives it to the layer's `Modal`) and cannot be left: every control in it is

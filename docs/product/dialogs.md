@@ -94,19 +94,20 @@ is ticked:
   `docs/product/removing-accounts.md`).
 
 What a ticked option adds is said in the confirmation's message and in the lines under its options, not on the button.
-While the action runs, the button shows as pending under the label it already has (see "A button while its action
+While the action runs, the button shows as pending without changing its action name (see "A button while its action
 runs" below).
 
 ## A button while its action runs
 
-**A button whose action is running shows as pending**: a spinner comes before its label, which stays as it was — no
-button changes its words to say what is under way. An icon-only button shows the spinner in place of its icon. A pending
-button cannot be pressed, keeps keyboard focus when it has it, and is reported to assistive technology as busy; the
-spinner itself is not announced. This holds for every button in the window, in a dialog or not, and for a link drawn
-as a button while what it opens is being opened, except **Refresh** on the Connectors and MCP dialog. While a further
-reading of that account runs, it keeps its refresh icon and rotates it, unless reduced motion is requested, and keeps
-its normal opacity and colour. It takes no further press and is reported to assistive technology as busy; the icon
-itself is not announced.
+**A button whose action is running shows as pending**: its content is hidden visually but keeps its space, and a spinner
+is centered over it, so the button stays the same width. Its accessible name stays the action it already named; no
+button changes its words to say what is under way. This includes icon-only buttons. A pending button cannot be pressed,
+keeps keyboard focus when it has it, and is reported to assistive technology as busy; the spinner itself is not
+announced. This holds for every button in the window, in a dialog or not. A link drawn as a button instead shows its
+spinner before its visible label while what it opens is being opened. **Refresh** on the Connectors and MCP dialog uses
+its refresh icon in place of the spinner. While a further reading of that account runs, it rotates the icon, unless
+reduced motion is requested, and keeps its normal opacity and colour. It takes no further press and is reported to
+assistive technology as busy; the icon itself is not announced.
 
 ## A dialog cannot be left while its request runs
 

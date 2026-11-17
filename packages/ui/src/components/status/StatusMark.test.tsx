@@ -89,7 +89,12 @@ it("draws a visible word after the glyph inside the trigger, named by the label 
   const button = mountForTooltip(<StatusMark label="Website failed" text="Failed">Path not found.</StatusMark>).querySelector("button")!;
   expect(button.getAttribute("aria-label")).toBe("Website failed");
   expect(button.textContent).toBe("Failed");
-  expect(button.firstElementChild?.getAttribute("class")).toContain("size-4");
+  const glyph = button.querySelector("svg.lucide-circle-alert")!;
+  expect(glyph).not.toBeNull();
+  expect(glyph.getAttribute("class")).toContain("size-4");
+  const text = document.createTreeWalker(button, NodeFilter.SHOW_TEXT).nextNode()!;
+  expect(text.textContent).toBe("Failed");
+  expect(glyph.compareDocumentPosition(text) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   press(button);
   expect(dialog()?.getAttribute("aria-label")).toBe("Website failed");
   expect(dialog()?.textContent).toBe("Path not found.");

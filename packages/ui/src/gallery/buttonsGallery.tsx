@@ -10,10 +10,10 @@ const VARIANTS = ["primary", "secondary", "danger"] as const;
 const LINK_SIZES = ["xs", "sm"] as const;
 const LINK_VARIANTS = ["secondary", "outline"] as const;
 
-/** One settled page of the shared button while it waits: each size and variant beside the same button idle, so the spinner
- * ahead of the label and the width it adds can be compared, the link drawn as a button (`ExternalLink`) the same way, and
- * the icon-only button the spinner replaces the content of (the console dialog's avatar field, the real component). The real buttons that wait are in the scenarios of the dialogs and
- * rows that hold them; no screen holds a pending button of every size at once. */
+/** Each size and variant beside the same button idle, so the centered pending indicator and unchanged width can be
+ * compared, plus the link drawn as a button (`ExternalLink`) with its leading spinner and the console dialog's
+ * icon-only avatar field. Real pending actions live in the scenarios of their dialogs and rows; no screen holds a
+ * pending button of every size at once. */
 export function ButtonsGallery(): React.ReactElement {
   const region = useFadeRegion({ label: "Pending buttons" });
   return (
