@@ -47,8 +47,8 @@ const BUTTON_CLASS = `${UNAVAILABLE_BUTTON_CLASS} [--button-bg-hover:var(--accen
  * applies the update (Windows) it only says the update is downloaded, and installed when the application quits or
  * restarts (`installedMessageKey`). For a daemon that cannot replace its own executable it says so, with the
  * install command to copy and no download; and a page whose daemon now runs another version is asked to reload (a
- * Reload that is the user's to press, never done automatically). Nothing here restarts anything: Restart now goes
- * through the window's exit confirmation (`UpdateStore.restart`).
+ * Reload that is the user's to press, never done automatically). An install's completion and Restart now both go
+ * through the window's exit flow (`UpdateStore.restart`).
  *
  * Mounted whatever the update does, so the announcement region is not inserted already holding its text; the strip
  * is a stop of the F6 region cycle (`data-region="update"`) while shown. A button pressed there that makes the strip

@@ -76,6 +76,7 @@ export function ExitConfirmDialog({ exit }: { exit: UseAppExitResult }): React.R
         ) : undefined
       }
       confirmLabel={t(exitRestarts ? "common.restart" : "common.quit")}
+      cancelLabel={exitRestarts ? t("updates.notice.later") : undefined}
       destructive
       onCancel={closeExitConfirm}
       onConfirm={confirmExit}

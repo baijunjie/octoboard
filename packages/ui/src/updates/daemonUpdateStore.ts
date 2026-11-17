@@ -16,7 +16,7 @@ const CHECK_UNCHANGED_HOLD_MS = 1200;
  * status as the store of the connection holds it. It is the same interface as the desktop application's (`createUpdateStore`),
  * so the notice and the Settings section serve both: a check and a download are requests, whose end arrives as the
  * status; a restart goes through the window's exit flow, which asks about the sessions it would interrupt and sends
- * `restart_daemon`. Nothing is downloaded or restarted but by the user's press.
+ * `restart_daemon`. A successful install this page requested also asks for that restart.
  *
  * What only this window knows stays here: whether its notice was dismissed or its restart notice hidden (for the version
  * installed), whether its restart is pending (until the daemon that follows greets, `restartAwaited`), and the check and
@@ -57,6 +57,8 @@ export function createDaemonUpdateStore({
   let askedCheck: { after: number | null; seenChecking: boolean } | undefined;
   /** An install this window asked for: `startedAt` once the daemon's reply has named it. */
   let askedInstall: { startedAt?: number } | undefined;
+  /** Only a successful install this page started asks for a restart; an installed status alone is not consent. */
+  let restartAfterInstall = false;
   let checkAsked: UpdateState["checkAsked"];
   const save = createSettingsWriter({ store, request, onFailure: reportSaveFailure });
 
@@ -108,9 +110,16 @@ export function createDaemonUpdateStore({
 
   function refresh() {
     const next = derive(store.getState(), state);
-    if (next === state) return;
-    state = next;
-    base.notify();
+    if (next !== state) {
+      state = next;
+      base.notify();
+    }
+    if (restartAfterInstall && state.phase === "installed") {
+      restartAfterInstall = false;
+      if (!state.restartBlocked && !state.reloadNeeded) void base.restart();
+    } else if (state.phase === "idle") {
+      restartAfterInstall = false;
+    }
   }
 
   /** Reports the end of what this window asked for, once. `fresh` is a status a new `snapshot` brought (a new connection,
@@ -134,6 +143,7 @@ export function createDaemonUpdateStore({
     const install = status.install;
     if (askedInstall?.startedAt !== undefined && install?.started_at === askedInstall.startedAt && install.state !== "running") {
       askedInstall = undefined;
+      restartAfterInstall = install.state === "succeeded";
       if (install.state === "failed") reportFailure({ action: "install", reason: "failed", detail: install.detail ?? "", code: install.error ?? undefined });
     } else if (askedInstall?.startedAt !== undefined && fresh && status.phase !== "downloading") {
       askedInstall = undefined;

@@ -338,7 +338,9 @@ The rail runs from under the top bar to the window's bottom (or the connection b
   whose answer to notifications is still undecided; pressing it asks the browser (see "Asking a browser" in
   `docs/product/notification-settings.md`); - **Account usage**, a gauge with a small quota indicator for the selected session's
   account (see "The selected session's quota indicator" in `docs/product/account-quotas.md`), whose floating panel
-  shows the available agents' accounts and their quotas (see `docs/product/account-quota-panel.md`); - **Settings**,
+  shows the available agents' accounts and their quotas (see `docs/product/account-quota-panel.md`); - the **upgrade
+  entry**, directly above Settings while an update is available or installed, with a circular download progress indicator
+  during installation (see "The rail upgrade entry" in `docs/product/in-app-updates.md`); - **Settings**,
   which opens the settings dialog.
 
 Above 768 px the rail is the same at every width; while the sidebar floats it stays beside that card, which opens past

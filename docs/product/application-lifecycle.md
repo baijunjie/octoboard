@@ -406,8 +406,8 @@ on (see "Resuming the interrupted sessions at start" in `docs/product/archiving-
 
 ### Restarting
 
-Octoboard restarts itself to apply an installed update, when the user presses **Restart now** (see "Restarting to
-apply an update" in `docs/product/in-app-updates.md`), and when the user presses **Restart** where its daemon failed
+Octoboard restarts itself to apply an installed update after an installation the user started succeeds, or when the
+user presses **Restart now** (see "Restarting to apply an update" in `docs/product/in-app-updates.md`), and when the user presses **Restart** where its daemon failed
 (see "Restarting from a daemon failure" below, which says what such a restart does differently). **A restart is no quit: it hands every session and shell terminal
 over to the new version**, which takes them over running, with their screens exactly as they were wherever the saved
 screen can reproduce them (see "The screen of a terminal handed over" in `docs/product/process-holders.md`). No session
@@ -428,8 +428,9 @@ is interrupted, no preview is frozen, and nothing a session started is stopped.
   a listed shell terminal that is busy, a listed shell terminal the window does not know (counted as busy), or a shell
   terminal that cannot be reached. A listed shell terminal at its prompt does not ask by itself, but ends all the same.
   An answer that lists nothing restarts at once, asking nothing.
-- **The confirmation** is titled as a restart and its confirming button reads Restart; Cancel leaves everything
-  running. It names the sessions it would interrupt by title, up to five, or four followed by "and N more" past five;
+- **The confirmation** is titled as a restart and its confirming button reads Restart; **Later** leaves everything
+  running and the update installed, with no automatic retry. It names the sessions it would interrupt by title, up to
+  five, or four followed by "and N more" past five;
   listed sessions the window cannot name are counted in "and N more", and when it can name none its message states how
   many sessions restarting interrupts. Its message says that restarting interrupts those sessions, each resumable after
   the restart, and, when a busy shell terminal is among what it would not carry over, that it ends what the terminals

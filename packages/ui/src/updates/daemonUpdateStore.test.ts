@@ -606,3 +606,68 @@ describe("the restart held back by an agent's update", () => {
     expect(updates.getState()).toMatchObject({ phase: "installed", installedVersion: "0.2.0", installedHolderFloor: "0.1.0", restarting: false });
   });
 });
+
+
+describe("automatic restart after this page's install", () => {
+  const INSTALLED: DaemonUpdateStatus = { ...IDLE, phase: "installed", installed: { version: "0.2.0", holder_floor: "0.1.0" }, install: INSTALL("succeeded", 3) };
+
+  it.each([false, true])("asks once even when successful status precedes the request reply: %s", async (ahead) => {
+    const { updates, answers, send } = setup({ ...IDLE, available: AVAILABLE });
+    const handler = vi.fn(async () => {});
+    updates.onRestartRequested(handler);
+    if (ahead) answers.beforeReply = () => send(INSTALLED);
+    await updates.install();
+    if (!ahead) send(INSTALLED);
+    expect(handler).toHaveBeenCalledExactlyOnceWith("0.1.0", "0.2.0");
+    await Promise.resolve();
+    updates.hideRestartNotice();
+    send({ ...INSTALLED, last_check: CHECKED(10) });
+    expect(handler).toHaveBeenCalledOnce();
+    await updates.restart();
+    expect(handler).toHaveBeenCalledTimes(2);
+  });
+
+  it("never restarts for an installed state learned from another page or before this page opened", () => {
+    const existing = setup(INSTALLED);
+    const observer = setup({ ...IDLE, available: AVAILABLE });
+    const handler = vi.fn(async () => {});
+    existing.updates.onRestartRequested(handler);
+    observer.updates.onRestartRequested(handler);
+    existing.send({ ...INSTALLED, last_check: CHECKED(5) });
+    observer.send(INSTALLED);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("does not restart on a failed or refused installation", async () => {
+    const { updates, send, answers } = setup({ ...IDLE, available: AVAILABLE });
+    const handler = vi.fn(async () => {});
+    updates.onRestartRequested(handler);
+    await updates.install();
+    send({ ...IDLE, available: AVAILABLE, install: INSTALL("failed", 3) });
+    answers.fail = new CodedError("running", "daemon_update_running", {});
+    await updates.install();
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("leaves restart to the user when an agent CLI update blocks it, even after that update ends", async () => {
+    const { updates, send, store } = setup({ ...IDLE, available: AVAILABLE });
+    const handler = vi.fn(async () => {});
+    updates.onRestartRequested(handler);
+    store.setState({ agentCliStatuses: agentCliStatusesOf([agentCliStatusOf("claude", { update: agentCliUpdateOf() })]) });
+    await updates.install();
+    send(INSTALLED);
+    expect(handler).not.toHaveBeenCalled();
+    store.setState({ agentCliStatuses: agentCliStatusesOf([]) });
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("does not restart from a page whose build no longer matches the daemon", async () => {
+    const { updates, send, store } = setup({ ...IDLE, available: AVAILABLE });
+    const handler = vi.fn(async () => {});
+    updates.onRestartRequested(handler);
+    await updates.install();
+    store.setState({ daemon: { version: "0.1.1", generation: 1 } });
+    send(INSTALLED);
+    expect(handler).not.toHaveBeenCalled();
+  });
+});

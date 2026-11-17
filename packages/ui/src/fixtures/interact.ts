@@ -200,8 +200,9 @@ export interface Ui {
    * section heading is a `role="row"` band holding the button that folds it, and pressing the band
    * does nothing). Mind a name that exists twice side by side: a tag already picked in the filter is
    * on the sidebar's heading row (earlier in the DOM) and in the filter picker, so pressing it
-   * again to unpick it would hit the sidebar row. */
-  press: (matcher: Matcher) => Promise<void>;
+   * again to unpick it would hit the sidebar row. `region` disambiguates an update action offered both on the rail and
+   * in the bottom update notice. */
+  press: (matcher: Matcher, region?: "rail" | "update") => Promise<void>;
   /** Presses the control named `matcher` inside the first row `row` names that holds one (as `press` finds a row), for a
    * control that every row of a list names alike, such as the icon-only Delete of an archived session's row; a row of the
    * same name elsewhere that holds none (the session's row in the sidebar) is passed over. */
@@ -1372,8 +1373,14 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
     async contextMenu(matcher) {
       await rightClick(await waitFor(() => find(matcher), `Nothing to right-click matching ${String(matcher)}`));
     },
-    async press(matcher) {
-      await clickWhenFound(() => find(matcher), `Nothing to press matching ${String(matcher)}`);
+    async press(matcher, region) {
+      await clickWhenFound(() => {
+        if (!region) return find(matcher);
+        const root = doc.querySelector<HTMLElement>(`[data-region="${region}"]`);
+        const control = root ? findAll(matcher, root)[0] : undefined;
+        if (!control && root?.hasAttribute("inert")) inClosedDrawer = true;
+        return control;
+      }, `Nothing to press matching ${String(matcher)}${region ? ` in ${region}` : ""}`);
     },
     async pressInRow(row, matcher) {
       await clickWhenFound(() => {

@@ -617,6 +617,10 @@ shows a spinner before its label while its target opens. The account MCP dialog'
 and rotates it at the file panel's slow pace while pending, respecting reduced motion, in place of the default spinner.
 It keeps its normal opacity and colour while pending; only further presses are blocked. (Source: user decision.)
 
+The rail's upgrade button replaces its icon with a 16px circular download indicator while pending: a determinate ring
+when the total size is known, an indeterminate ring otherwise. It keeps its normal opacity, and its tooltip remains
+reachable by hover and keyboard focus, naming the version and the percentage when known. (Source: user decision.)
+
 **A busy dialog disables everything in it but the pending action.** While a dialog's action runs the dialog is busy
 (`busy` on the shared `Dialog`, which gives it to the layer's `Modal`) and cannot be left: every control in it is
 disabled, Cancel and the close button included, and so is every link (`ExternalLink` then has no `href` and no tab stop,

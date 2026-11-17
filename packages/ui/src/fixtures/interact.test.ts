@@ -114,6 +114,27 @@ it("press takes the control inside a band of the same name, not the band", async
   expect(pressed).toEqual(["fold"]);
 });
 
+it.each([
+  ["update", "notice"],
+  ["rail", "rail"],
+  [undefined, "rail"],
+] as const)("press disambiguates the duplicated update action in %s, leaving an unscoped press unchanged", async (region, expected) => {
+  document.body.innerHTML = '<nav data-region="rail"><button id="rail">Download and install</button></nav><div data-region="update"><button id="notice">Download and install</button></div>';
+  const pressed: string[] = [];
+  for (const button of document.querySelectorAll("button")) button.addEventListener("click", () => pressed.push(button.id));
+  await settle(createUi(document, "en").press("Download and install", region));
+  expect(pressed).toEqual([expected]);
+});
+
+it("a scoped press never falls back to an identically named action outside its region", async () => {
+  document.body.innerHTML = '<nav data-region="rail"><button>Download and install</button></nav><div data-region="update"></div>';
+  const pressed = vi.fn();
+  document.querySelector("button")!.addEventListener("click", pressed);
+  const rejected = expect(createUi(document, "en").press("Download and install", "update")).rejects.toThrow(/Nothing to press matching Download and install in update/);
+  await settle(rejected);
+  expect(pressed).not.toHaveBeenCalled();
+});
+
 it("press names a menu item by its label without its keyboard hint", async () => {
   document.body.innerHTML = '<div role="menuitem"><span><label data-slot="label"><span>Archive</span></label></span><kbd slot="keyboard">⇧⌘A</kbd></div>';
   const item = document.querySelector<HTMLElement>('[role="menuitem"]')!;
@@ -363,6 +384,35 @@ it("press opens the sidebar's drawer first for a control that is only inside it,
   await settle(done);
   expect(drawer.hasAttribute("inert")).toBe(false);
   expect(pressed).toHaveBeenCalledOnce();
+});
+
+it.each([false, true])("a rail-scoped press opens its closed drawer despite a visible notice, with delayed settling: %s", async (delaySettling) => {
+  windowOfWidth(420);
+  const { toggle, drawer } = drawerWithToggle();
+  document.body.insertAdjacentHTML("beforeend", '<nav data-region="rail" inert><button id="rail-update">Download and install</button></nav><div data-region="update"><button id="notice-update">Download and install</button></div>');
+  const rail = document.querySelector<HTMLElement>('[data-region="rail"]')!;
+  toggle.addEventListener("click", () => rail.toggleAttribute("inert", drawer.hasAttribute("inert")));
+  const pressed: string[] = [];
+  document.getElementById("rail-update")!.addEventListener("click", () => pressed.push("rail"));
+  document.getElementById("notice-update")!.addEventListener("click", () => pressed.push("notice"));
+  const pressedInRail = createUi(document, "en").press("Download and install", "rail");
+  if (delaySettling) await vi.advanceTimersToNextTimerAsync();
+  await settle(pressedInRail);
+  expect(drawer.hasAttribute("inert")).toBe(false);
+  expect(rail.hasAttribute("inert")).toBe(false);
+  expect(pressed).toEqual(["rail"]);
+});
+
+it("an update-scoped press leaves the closed rail drawer alone when the notice already offers the action", async () => {
+  windowOfWidth(420);
+  const { toggle, drawer } = drawerWithToggle();
+  document.body.insertAdjacentHTML("beforeend", '<nav data-region="rail" inert><button id="rail-update">Download and install</button></nav><div data-region="update"><button id="notice-update">Download and install</button></div>');
+  const pressed = vi.fn();
+  document.getElementById("notice-update")!.addEventListener("click", pressed);
+  await settle(createUi(document, "en").press("Download and install", "update"));
+  expect(pressed).toHaveBeenCalledOnce();
+  expect(toggle.getAttribute("aria-label")).toBe(SHOW_SESSIONS);
+  expect(drawer.hasAttribute("inert")).toBe(true);
 });
 
 it("press leaves the drawer alone in a docked window and fails for a control inert in it", async () => {

@@ -13,6 +13,7 @@ import type { OpenSettings } from "../settings/settingsLauncher";
 import { RailRemoteDaemons } from "./RailRemoteDaemons";
 import { RailQuotaEntry } from "./RailQuotaEntry";
 import { RailProcessesEntry } from "./RailProcessesEntry";
+import { RailUpdateEntry } from "./RailUpdateEntry";
 import { RailCountBadge } from "./RailCountBadge";
 import type { ProcessJump } from "../process/processJump";
 import { useArchivedOwnerSessions, useConsoleStatus, useConsoleStatusCounts } from "../store";
@@ -253,6 +254,7 @@ export function Rail({
         <RailProcessesEntry onOpen={onOpenProcesses} />
         <NotificationsBell focusTerminal={focusTerminal} />
         <RailQuotaEntry selectedSessionId={selectedSessionId} onOpenSettingsAt={onOpenSettingsAt} />
+        <RailUpdateEntry focusTerminal={focusTerminal} onOpenSettingsAt={onOpenSettingsAt} />
         <ChromeButton label={t("rail.settings")} onPress={onOpenSettings} tooltipPlacement="end">
           <Settings aria-hidden="true" className="size-4" />
         </ChromeButton>

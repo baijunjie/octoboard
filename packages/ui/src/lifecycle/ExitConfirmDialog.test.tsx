@@ -190,7 +190,7 @@ describe("ExitConfirmDialog", () => {
     const buttons = [...document.querySelectorAll("button")];
     await act(async () => buttons.find((b) => b.textContent === "Restart")!.click());
     expect(confirmExit).toHaveBeenCalledOnce();
-    act(() => buttons.find((b) => b.textContent === "Cancel")!.click());
+    act(() => buttons.find((b) => b.textContent === "Later")!.click());
     expect(closeExitConfirm).toHaveBeenCalledOnce();
   });
 });

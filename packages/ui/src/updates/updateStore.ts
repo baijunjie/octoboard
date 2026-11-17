@@ -77,8 +77,8 @@ export interface UpdateStore {
    * failure; an `automatic` one only records it. A check that settles after the channel was changed says nothing about
    * the new one, so its result is dropped and the new channel is checked in its place. */
   check(trigger: "manual" | "automatic"): Promise<void>;
-  /** Downloads and installs the update the last check found. Does nothing without one, while anything else is
-   * under way or once an update is installed, so nothing is ever installed twice. */
+  /** Downloads and installs the update the last check found, then requests a restart through the exit flow. Does nothing
+   * without one, while anything else is under way or once an update is installed, so nothing is ever installed twice. */
   install(): Promise<void>;
   /** Chooses the channel to look on, withdrawing an update another channel offered, and, where the automatic checks are on, looks again at once on it. For the daemon's update it is the setting the daemon
    * holds, so the promise is the save, which reports its own failure. */
@@ -260,11 +260,13 @@ export function createUpdateStore({
         if (state.phase === "downloading") set({ progress });
       });
       set(installed(update));
+      await base.restart();
     } catch (error) {
       const kind = error instanceof UpdaterError ? error.kind : "failed";
       if (kind === "installed") {
         // Installed already, by an earlier press this window lost track of: it only awaits the restart.
         set(installed(update));
+        await base.restart();
       } else if (kind === "busy") {
         // The shell is busy with something of its own; the update stays offered for another press.
         set({ phase: "idle", progress: undefined });

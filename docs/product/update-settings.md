@@ -51,7 +51,9 @@ Beside the row one button moves the update on:
   sends nothing and opens an error alert saying why (see "Restarting into the update" in
   `docs/product/server-form-updates.md`);
 - **Download and install** once a newer version is found that can be installed from here, showing the spinner while a
-  check or the download is under way — in a browser, from the press;
+  check or the download is under way — in a browser, from the press. A successful installation also starts the restart
+  flow described in "Restarting to apply an update" in `docs/product/in-app-updates.md` and "Restarting into the update"
+  in `docs/product/server-form-updates.md`;
 - otherwise **Check for updates**, showing the spinner while a check runs. In a browser it shows it from the press until
   the check the daemon started for it ends; when the daemon starts none — within 30 seconds of the end of its last check
   or download, or while a check or a download runs (see "When the daemon checks" in
@@ -98,7 +100,8 @@ A switch, **on to begin with**: whether Octoboard looks for updates by itself. I
 checks for updates in the background and nothing is downloaded or installed until the user chooses to; while off, that
 turning it on lets Octoboard check in the background, on the same terms. Off, only the checks the user asks for are made
 — **Check for updates** here and, in the desktop application, the menu bar icon's update entry; nothing is ever
-downloaded, installed or restarted by itself either way. Turning it on checks at once.
+downloaded or installed by an automatic check either way. Starting an installation still requests a restart when it
+succeeds, on the terms above. Turning the switch on checks at once.
 
 - **In the desktop application** it is the client's own choice, kept in the window's own browser storage as the update
   channel is (see "Update channels" in `docs/product/in-app-updates.md`), and takes effect as it is turned. The daemon

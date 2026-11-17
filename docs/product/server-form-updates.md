@@ -4,9 +4,10 @@ The server form (the daemon `octoboardd` alone on a Linux server; see `docs/prod
 way the desktop application does (see `docs/product/in-app-updates.md`): the daemon looks for a newer release by itself
 and the browser says when it finds one, but **nothing is downloaded and nothing is restarted on the daemon's own**. The
 new executable is downloaded, checked and put in place only when the user asks — **Download and install** in a browser,
-or `octoboardd update` on the server — and runs only after a restart the user asks for — **Restart now** in a browser,
-or `octoboardd restart` — which is a planned restart, so every session keeps running. Upgrading with the install script
-instead is in "Upgrading" in `docs/product/installing-the-server-form.md`.
+or `octoboardd update` on the server. A successful installation started in a browser also requests a planned restart,
+checking first whether sessions can be handed over (see "Restarting into the update" below). An update installed from
+the command line waits for **Restart now** in a browser or `octoboardd restart` on the server. Upgrading with the install
+script instead is in "Upgrading" in `docs/product/installing-the-server-form.md`.
 
 ## Which daemons update themselves
 
@@ -91,6 +92,11 @@ The update notice is the desktop application's strip along the bottom of the win
   and to reload the page to use it, with **Reload**. It outranks every other notice and has no Later. Nothing reloads by
   itself, except the page that asked for the restart (see "Restarting into the update" below).
 
+The rail has the same upgrade entry, download ring and installed restart entry as the desktop application (see
+"The rail upgrade entry" in `docs/product/in-app-updates.md`). When the daemon cannot install the update itself, the
+rail button opens Settings on Updates to show the install command instead of starting a download. An agent CLI update
+holds its installed restart entry unavailable in the same way as the notice and Settings.
+
 **Later** hides the notice in that page alone, until it is reloaded: the notice of a newer version until a different
 version is found, and the notice of an installed update for that installed version only, so that an update of another
 version installed later brings it back.
@@ -101,14 +107,14 @@ install script — each browser shows once, per version, a toast saying that Oct
 it, at any time while that daemon runs; a browser that keeps no site data shows it once per page load instead. A daemon
 knows the version it replaced from `daemon.version` (see `docs/product/files-octoboard-owns.md`), so the first start of
 a daemon that updates itself shows nothing. A page about to reload leaves the toast to the page it reloads into: the
-page that pressed **Restart now** shows it once it has reloaded (see "Restarting into the update" below).
+page that requested the restart shows it once it has reloaded (see "Restarting into the update" below).
 
 Settings' Updates section holds the version, the update's controls, the automatic check and the channel (see
 `docs/product/update-settings.md`), and About names the daemon's version (see `docs/product/about-octoboard.md`).
 
 ## Downloading and replacing the executable
 
-**Download and install**, in the notice or in Settings, starts the download of the update the last check found, in the
+**Download and install**, on the rail, in the notice or in Settings, starts the download of the update the last check found, in the
 daemon; the download goes on whether or not the page stays open, and every browser shows its progress, a bar with the
 percentage when the archive's size is known. The page where it was pressed shows the download under way from the
 press, with an indeterminate bar until the daemon reports its progress, and a second press there does nothing; a
@@ -171,8 +177,13 @@ writable, and while the daemon is stopping or restarting.
 
 ## Restarting into the update
 
-**Restart now**, in the notice or in Settings, exists once an update is installed. It goes through the same check and
-confirmation as the desktop application's restart (see "Restarting" in `docs/product/application-lifecycle.md`): the page
+Once an installation this page started succeeds, this page requests the restart flow once. Other pages that observe
+the installed status, and a page opened after installation, do not request a restart automatically. If the initiating
+page is gone before installation ends, the daemon finishes installing but waits for a later restart request.
+Choosing **Later** in a restart confirmation leaves the update installed and does not retry automatically.
+
+**Restart now**, on the rail, in the notice or in Settings, exists once an update is installed. It goes through the same
+check and confirmation as the desktop application's restart (see "Restarting" in `docs/product/application-lifecycle.md`): the page
 asks the daemon which sessions and shell terminals the new version would not take over, given the update's holder floor
 and version, and asks the user to confirm when the restart would interrupt something. For an update installed without a
 known version or floor the daemon cannot tell, and the page asks as it does with no answer.
@@ -185,7 +196,8 @@ manager starts the new file; the unit file is never changed.
 **Restart now** shows a pending spinner from the press until a confirmation opens, and again from when the restart is
 sent until the next daemon greets the page, or the page reloads; a refusal ends it.
 
-The page that pressed **Restart now** waits for the daemon to come back. Once its connection's own reconnect attempts
+The page that requested the restart, automatically after installation or through **Restart now**, waits for the daemon
+to come back. Once its connection's own reconnect attempts
 are spent (see "Losing the daemon connection" in `docs/product/application-lifecycle.md`), it starts them again by
 itself until **60 seconds** after the restart was sent, since a planned restart can take longer than they last: up to
 about 15 seconds for the holders, up to 30 seconds for the next daemon to come up, and whatever delay a service manager
@@ -208,8 +220,9 @@ mid-install). The page foresees only the last: while an update of any agent's CL
 and in Settings, is unavailable — faded, still focusable, its tooltip and accessible description saying that an agent
 is being updated and to restart when the update finishes — and pressing it sends nothing and opens that same alert,
 saying that restarting the daemon now could leave the agent partly updated and to try again when the update finishes.
-It becomes available again once the agent update ends. The alert still comes from the daemon when an agent update
-began after the press. A page whose connection to the daemon is not open sends nothing and says that the connection is
+It becomes available again once the agent update ends. If an agent update blocked the automatic restart after
+installation, it does not retry when that update ends; **Restart now** remains for the user to press. The alert still
+comes from the daemon when an agent update began after the press. A page whose connection to the daemon is not open sends nothing and says that the connection is
 closed. `octoboardd restart` on the server
 restarts into the update just the same.
 

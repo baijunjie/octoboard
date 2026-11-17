@@ -54,8 +54,9 @@ const openSettings: Step = async (ui) => {
   await ui.press(ui.t("rail.settings"));
   await ui.press(ui.t("settings.section.updates"));
 };
-const downloadAndInstall: Step = (ui) => ui.press(ui.t("updates.notice.install"));
-const restartNow: Step = (ui) => ui.press(ui.t("updates.notice.restart"));
+const downloadAndInstall: Step = (ui) => ui.press(ui.t("updates.notice.install"), "update");
+const railDownloadAndInstall: Step = (ui) => ui.press(ui.t("updates.notice.install"), "rail");
+const restartNow: Step = (ui) => ui.press(ui.t("updates.notice.restart"), "update");
 
 export const updateScenarios: Scenario[] = [
   {
@@ -64,40 +65,58 @@ export const updateScenarios: Scenario[] = [
     category: "normal",
     title: "Update notice, a newer version found",
     description:
-      "A strip along the bottom edge under the terminal, in the accent colour: a download icon, the sentence naming the version, What is new (an external-link icon, opening the offered version's GitHub release page), Download and install and an X icon named Later (its tooltip says so) that puts the notice off. Choose Phone (390px) to see the sentence and controls wrap.",
+      "A strip along the bottom edge under the terminal, with What is new, Download and install and Later. An accent upgrade button with a circled upward arrow also sits directly above Settings in the rail. Choose Phone (390px) to see the notice wrap and the rail inside the sidebar drawer.",
     state: quiet,
     updater: { check: newer, checked: true },
     steps: [openSession],
+  },
+  {
+    id: "updates-rail-available",
+    group: GROUP,
+    category: "normal",
+    title: "Rail upgrade button after the notice is put off",
+    description: "The bottom notice is hidden, but the accent upgrade button with a circled upward arrow remains directly above Settings. Its tooltip names version 0.2.0. Pressing it downloads and installs the update, then checks whether the sessions can be handed over before restarting.",
+    state: quiet,
+    updater: { check: newer, checked: true },
+    steps: [openSession, (ui) => ui.press(ui.t("updates.notice.dismiss")), (ui) => ui.hoverTitledControl(ui.t("updates.notice.install"), ui.t("updates.notice.install") + ui.t("updates.notice.available", { version: newer.version }))],
   },
   {
     id: "updates-notice-downloading-unknown-size",
     group: GROUP,
     category: "normal",
     title: "Update notice, downloading, size unknown",
-    description: "One row holds the sentence \"Downloading version …\", ending in an ellipsis, and an indeterminate progress bar after it; there is no percentage, no Later icon and no other button, and the strip is no taller than the others.",
+    description: "The bottom strip has an indeterminate progress bar and no percentage or dismissal. Above Settings, the upgrade button holds an indeterminate download ring and takes no further presses.",
     state: quiet,
     updater: { check: newer, checked: true, install: { progress: { downloaded: 3_400_000 }, ends: "pending" } },
-    steps: [openSession, downloadAndInstall],
+    steps: [openSession, railDownloadAndInstall],
   },
   {
     id: "updates-notice-downloading-percent",
     group: GROUP,
     category: "normal",
     title: "Update notice, downloading, with a percentage",
-    description: "One row: the sentence, a determinate bar filled to 45% and the percentage at the row's end, where the unknown-size scenario's bar is indeterminate. Label, track, fill and percentage are all legible on the strip.",
+    description: "The bottom strip shows a download bar filled to 45%. Above Settings, the upgrade button shows the same progress as a circular ring; its tooltip names the version and percentage, and the pending button takes no further presses.",
     state: quiet,
     updater: { check: newer, checked: true, install: { progress: { downloaded: 18_555_000, total: 41_234_567 }, ends: "pending" } },
-    steps: [openSession, downloadAndInstall],
+    steps: [openSession, railDownloadAndInstall],
   },
   {
     id: "updates-notice-installed",
     group: GROUP,
     category: "normal",
     title: "Update notice, installed, waiting for a restart",
-    description: "The strip says the version is installed and takes effect after a restart, with Restart now and Later; neither is a dismissal, and nothing restarts by itself.",
-    state: quiet,
-    updater: { check: newer, checked: true },
-    steps: [openSession, downloadAndInstall],
+    description: "An installed update the page did not start waits for a restart, with Restart now and Later in the bottom strip. The rail's entry is now a restart icon with the installed version in its tooltip.",
+    state: browserQuiet(daemonInstalled),
+    steps: [openSession],
+  },
+  {
+    id: "updates-rail-installed",
+    group: GROUP,
+    category: "normal",
+    title: "Rail restart button after the installed notice is put off",
+    description: "The installed update's bottom notice is hidden with Later. The rail still offers Restart now above Settings, with the installed version in its tooltip. Pressing it checks whether the sessions can be handed over before restarting.",
+    state: browserQuiet(daemonInstalled),
+    steps: [openSession, (ui) => ui.press(ui.t("updates.notice.later")), (ui) => ui.hoverTitledControl(ui.t("updates.notice.restart"), ui.t("updates.notice.restart") + ui.t("updates.notice.installed", { version: newer.version }))],
   },
   {
     id: "updates-settings-idle",
@@ -156,20 +175,19 @@ export const updateScenarios: Scenario[] = [
     category: "normal",
     title: "Updates section waiting for a restart",
     description: "The notice was hidden with Later; the Version row still says the version takes effect after a restart and offers What is new, for the installed version, and Restart now. The same row when the installed version is not known to this window names no version and has no What is new.",
-    state: quiet,
-    updater: { check: newer, checked: true },
-    steps: [downloadAndInstall, (ui) => ui.press(ui.t("updates.notice.later")), openSettings],
+    state: browserQuiet(daemonInstalled),
+    steps: [(ui) => ui.press(ui.t("updates.notice.later")), openSettings],
   },
   {
     id: "updates-restart-sessions-and-terminals",
     group: GROUP,
     category: "normal",
     title: "Restart held up by sessions and a terminal",
-    description: "The confirmation says the restart interrupts the sessions below and ends programs running in terminals, names two sessions (one working, one idle) and ends with \"Everything else keeps running.\". The waiting session is not listed, since it is carried over.",
+    description: "The finished download opens a restart confirmation: two sessions cannot be carried over, and a terminal is busy. The dialog names the sessions, says what will be interrupted, and offers Restart and Later.",
     state: bothRunning,
     handover: { sessions: ["s-web-1", "s-web-2"], shellTerminals: [busyShell.id] },
     updater: { check: newer, checked: true },
-    steps: [downloadAndInstall, restartNow],
+    steps: [downloadAndInstall],
   },
   {
     id: "updates-restart-idle-session",
@@ -180,7 +198,7 @@ export const updateScenarios: Scenario[] = [
     state: bothRunning,
     handover: { sessions: ["s-web-2"] },
     updater: { check: newer, checked: true },
-    steps: [downloadAndInstall, restartNow],
+    steps: [downloadAndInstall],
   },
   {
     id: "updates-restart-terminals-only",
@@ -191,7 +209,7 @@ export const updateScenarios: Scenario[] = [
     state: bothRunning,
     handover: { shellTerminals: [busyShell.id] },
     updater: { check: newer, checked: true },
-    steps: [downloadAndInstall, restartNow],
+    steps: [downloadAndInstall],
   },
   {
     id: "updates-restart-many-sessions",
@@ -202,7 +220,7 @@ export const updateScenarios: Scenario[] = [
     state: manyRunning,
     handover: { sessions: manySessions.map(({ id }) => id) },
     updater: { check: newer, checked: true },
-    steps: [downloadAndInstall, restartNow],
+    steps: [downloadAndInstall],
   },
   {
     id: "updates-daemon-settings",
@@ -218,7 +236,7 @@ export const updateScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Update notice, the daemon cannot replace itself",
-    description: "The strip names the version and says the application cannot replace its own file and that the owner of that file's folder has to run the install command on the machine the application runs on. It has What is new, Copy install command and the Later icon, and no Download and install; Copy install command copies the command with the executable's folder after --bin-dir. Choose Phone (390px) to see the sentence and the three controls wrap.",
+    description: "The rail entry opens Updates in Settings for the install command. The strip names the version and says the application cannot replace its own file and that the owner of that file's folder has to run the install command on the machine the application runs on. It has What is new, Copy install command and the Later icon, and no Download and install; Copy install command copies the command with the executable's folder after --bin-dir. Choose Phone (390px) to see the sentence and the three controls wrap.",
     state: browserQuiet(daemonUpdateOf({ available: daemonOffer, manual: NOT_WRITABLE, last_check: foundOffer })),
     steps: [openSession],
   },
@@ -236,7 +254,7 @@ export const updateScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Reload bar, the daemon now runs another version",
-    description: "This page was loaded for the daemon's own version, which has since restarted into 0.2.0, as another tab's restart does: the strip along the bottom edge carries a refresh icon, the sentence that the application was updated to 0.2.0 and the page is to be reloaded, and Reload. It has no Later icon: the page is out of date until it is reloaded, and nothing reloads by itself.",
+    description: "The rail upgrade entry is absent. This page was loaded for the daemon's own version, which has since restarted into 0.2.0, as another tab's restart does: the strip along the bottom edge carries a refresh icon, the sentence that the application was updated to 0.2.0 and the page is to be reloaded, and Reload. It has no Later icon: the page is out of date until it is reloaded, and nothing reloads by itself.",
     state: browserQuiet(daemonUpdateOf()),
     steps: [
       openSession,
@@ -273,7 +291,7 @@ export const updateScenarios: Scenario[] = [
     title: "Update notice, installed, restart held back by an agent's update",
     description: "An agent's CLI is being updated, so the strip says the version is installed and to restart when the agent update finishes. Restart now is faded, as an unavailable button is, and still legible on the accent strip, and the mouse rests on it: its tooltip gives the reason. Later is as in the ordinary installed strip. Pressing the faded Restart now opens the alert of the \"Alert, restart refused while an agent is updated\" scenario.",
     state: restartBlockedByAgentUpdate(),
-    steps: [openSession, (ui) => ui.hoverTitledControl(ui.t("updates.notice.restart"), ui.t("updates.restartBlocked"))],
+    steps: [openSession, (ui) => ui.hoverTitledControl(ui.t("updates.notice.restart"), ui.t("updates.notice.restart") + ui.t("updates.notice.installedAgentUpdate", { version: newer.version }))],
   },
   {
     id: "updates-daemon-settings-restart-blocked",
@@ -293,7 +311,7 @@ export const updateScenarios: Scenario[] = [
     state: workingAndIdle,
     handover: { known: false, sessions: ["s-web-1", "s-web-2"], unreachedShellTerminals: ["sh-unreached"] },
     updater: { check: newer, checked: true },
-    steps: [downloadAndInstall, restartNow],
+    steps: [downloadAndInstall],
   },
   {
     id: "updates-restart-unreached-terminals",
@@ -304,7 +322,7 @@ export const updateScenarios: Scenario[] = [
     state: bothRunning,
     handover: { unreachedShellTerminals: ["sh-unreached"] },
     updater: { check: newer, checked: true },
-    steps: [downloadAndInstall, restartNow],
+    steps: [downloadAndInstall],
   },
   {
     id: "updates-restart-unnamed-and-unreached",
@@ -315,7 +333,7 @@ export const updateScenarios: Scenario[] = [
     state: bothRunning,
     handover: { sessions: ["s-web-1"], unnamedSessions: ["s-unheard-1", "s-unheard-2"], unreachedShellTerminals: ["sh-unreached"] },
     updater: { check: newer, checked: true },
-    steps: [downloadAndInstall, restartNow],
+    steps: [downloadAndInstall],
   },
   {
     id: "updates-restart-unnamed-sessions-only",
@@ -326,7 +344,7 @@ export const updateScenarios: Scenario[] = [
     state: bothRunning,
     handover: { unnamedSessions: ["s-unheard-1", "s-unheard-2", "s-unheard-3"] },
     updater: { check: newer, checked: true },
-    steps: [downloadAndInstall, restartNow],
+    steps: [downloadAndInstall],
   },
   {
     id: "updates-notice-with-connection-banner",

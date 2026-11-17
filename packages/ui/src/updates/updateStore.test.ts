@@ -335,6 +335,42 @@ describe("installing", () => {
   });
 });
 
+describe("automatically restarting after installation", () => {
+  it.each([undefined, new UpdaterError("installed")])("asks the exit flow once after a completed install (%s), and leaves Later final", async (result) => {
+    const { store, checks, installs } = setup();
+    const handler = vi.fn(async () => {});
+    store.onRestartRequested(handler);
+    const checked = store.check("manual");
+    checks[0].settle({ ...FOUND, holderFloor: "0.1.0" });
+    await checked;
+    const installed = store.install();
+    expect(handler).not.toHaveBeenCalled();
+    installs[0].settle(result);
+    await installed;
+    expect(handler).toHaveBeenCalledExactlyOnceWith("0.1.0", FOUND.version);
+    store.hideRestartNotice();
+    await store.check("manual");
+    await store.install();
+    expect(handler).toHaveBeenCalledOnce();
+    expect(store.getState()).toMatchObject({ phase: "installed", restartNoticeHidden: true, restarting: false });
+    await store.restart();
+    expect(handler).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(["failed", "busy", "nothing_to_install"] as const)("does not restart after an install refused as %s", async (kind) => {
+    const { store, checks, installs } = setup();
+    const handler = vi.fn(async () => {});
+    store.onRestartRequested(handler);
+    const checked = store.check("manual");
+    checks[0].settle(FOUND);
+    await checked;
+    const installed = store.install();
+    installs[0].settle(new UpdaterError(kind));
+    await installed;
+    expect(handler).not.toHaveBeenCalled();
+  });
+});
+
 describe("an install the shell refuses", () => {
   async function found() {
     const context = setup();

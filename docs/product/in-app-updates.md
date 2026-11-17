@@ -2,8 +2,9 @@
 
 The desktop application, on macOS and on Windows, updates itself: it looks for a newer version on the release channel
 the user follows, tells the user when it finds one, downloads and installs it only when the user asks, and the new
-version takes effect the next time Octoboard starts. Nothing is ever installed, and Octoboard never restarts, without
-the user asking. Settings' Updates section, where its update is followed and its checks and channel chosen, is in
+version takes effect after a restart. Starting an installation also starts its restart flow once installation succeeds:
+compatible sessions carry on without another question, while a restart that would or may interrupt work asks first.
+Settings' Updates section, where its update is followed and its checks and channel chosen, is in
 `docs/product/update-settings.md`. A browser updates nothing itself: a browser open on a daemon of the server form that
 updates itself shows that daemon's update instead, in the same notice and Settings section (see
 `docs/product/server-form-updates.md`), and one open on any other daemon shows none. Everything below happens in the
@@ -122,9 +123,9 @@ A check ends in one of three ways:
 
 - **Up to date**: the channel offers no version newer than the one running. A channel with no release published yet,
   and a release with no build for this platform, count as up to date too.
-- **A newer version is available**: it is offered in the update notice (see "The update notice" below) and in
-  Settings, with a link to its release page, and named in the menu bar icon's update entry (see "The menu bar update
-  entry" below).
+- **A newer version is available**: it is offered on the rail (see "The rail upgrade entry" below), in the update
+  notice (see "The update notice" below) and in Settings, with a link to its release page, and named in the menu bar
+  icon's update entry (see "The menu bar update entry" below).
 - **The check failed**: the update server could not be reached, did not answer within **30 seconds**, or answered with
   any error other than the channel having no release (an HTTP `404` for the channel's manifest). A failed check is never
   read as "up to date". A version offered by an earlier check stays offered after a later check fails, and is withdrawn
@@ -149,6 +150,25 @@ When no newer version is known, choosing the entry also starts a manual check, w
 limits as any other check (see "When the application checks" above). When a version is already offered, it only opens
 Settings. The entry itself starts no download, installation or restart.
 
+## The rail upgrade entry
+
+An upgrade button appears directly above Settings on the rail when a newer version is available, independently of
+whether the bottom update notice was hidden. Its icon is an upward arrow in a circle, in the accent colour. Its
+tooltip names the available version, and pressing it starts **Download and install**, including the restart flow
+below.
+
+During the download the icon becomes a 16px circular progress indicator: a filled ring when the total size is known,
+an indeterminate ring otherwise. The button keeps its normal opacity, cannot start another download, and its tooltip
+remains reachable on mouse hover and keyboard focus, naming the version and the percentage when known. With reduced
+motion enabled the indeterminate ring does not rotate.
+
+Once an update is installed and still waits for a restart, the button becomes **Restart now**, with a restart icon and
+the installed version in its tooltip where known. It remains after **Later** hides the notice or defers the restart;
+pressing it goes through the same restart check. Without an available or installed update there is no button. A
+browser whose daemon now runs a different version of the page shows its reload notice instead, with no rail upgrade
+entry. The server form's manual installation case is in "What the browser shows" in
+`docs/product/server-form-updates.md`.
+
 ## The update notice
 
 The update notice is a full-width strip along the window's bottom edge, in the accent colour, directly above the
@@ -165,8 +185,8 @@ The notice names the version, with:
 - **What is new**, a link drawn as a button with an external-link icon, which opens the offered version's GitHub
   release page in the browser (see "Where updates come from" above);
 - **Download and install**, which starts the download (see "Downloading and installing" below);
-- **Later**, an icon button, which hides the notice. The update is still offered in Settings. The notice comes back
-  when a later check finds a different version, or when an update is found after the channel was switched; the same
+- **Later**, an icon button, which hides the notice. The update is still offered on the rail and in Settings. The notice
+  comes back when a later check finds a different version, or when an update is found after the channel was switched; the same
   version found again leaves it hidden.
 
 ### Downloading
@@ -201,8 +221,8 @@ it was announced is never announced.
 
 ## Downloading and installing
 
-**Download and install**, in the notice or in Settings, downloads the update the last check found and installs it. The
-download is checked against the release's signature before anything is installed; one that does not verify is not
+**Download and install**, on the rail, in the notice or in Settings, downloads the update the last check found and
+installs it, then starts the restart flow in "Restarting to apply an update" below. The download is checked against the release's signature before anything is installed; one that does not verify is not
 installed and the install fails. A download may take up to **30 minutes** before it fails. On macOS the new version
 replaces the application in place while Octoboard keeps running. On Windows the downloaded installer is kept and runs
 when Octoboard quits: the installer cannot replace the running application, and starting it ends Octoboard at once.
@@ -216,9 +236,10 @@ already the new version's; the window says so and offers **Restart**, which rest
 "Starting up" and "Restarting from a daemon failure" in `docs/product/application-lifecycle.md`). On Windows the files stay the running version's until the installer runs, so
 a daemon that ends unexpectedly is started again under the same rules as when no update is waiting.
 
-The restart is suggested, never forced: **Restart now** applies it at once, and quitting Octoboard in any ordinary way
-and starting it again later applies it just the same, except that only a restart keeps the sessions running (see
-"Restarting to apply an update" below): a quit interrupts them as any quit does. On Windows every quit of Octoboard while it holds a downloaded
+An installation started in this window requests a restart once it succeeds. If the restart is deferred, fails, or the
+window learns of an update installed earlier, **Restart now** applies it later. Quitting Octoboard in any ordinary way
+and starting it again later applies it just the same, except that only a restart keeps compatible sessions running
+(see "Restarting to apply an update" below): a quit interrupts them as any quit does. On Windows every quit of Octoboard while it holds a downloaded
 update installs it on the way out, without starting Octoboard again: a quit it confirms itself (its Quit, or closing the
 window when it does not run in the background), and equally a quit that skips the confirmation — one made while the
 daemon is not running, the second quit gesture within 2 seconds that forces a quit through (see "Quitting when the
@@ -249,7 +270,16 @@ an update is installed.
 
 ## Restarting to apply an update
 
-**Restart now**, in the notice or in Settings, exists only once an update is installed. It restarts Octoboard into the
+An installation started on the rail, in the notice or in Settings requests this restart automatically once it succeeds,
+including when the updater says that the update was already installed. It is attempted once; choosing **Later** in a
+confirmation leaves the update installed, with no automatic retry. The installed update remains reachable through
+**Restart now** on the rail, in the notice and in Settings. An installed update merely learned of by a check does not
+start a restart on its own.
+
+The restart flow is independent of **Keep running in the background when the window is closed**: that setting decides
+what closing the window does, not whether a restart can hand sessions over.
+
+**Restart now** exists only once an update is installed. It restarts Octoboard into the
 new version and hands every session and shell terminal over to it, running, instead of ending them: it asks for
 confirmation whenever the new version would not take over a running session, idle ones included, a busy shell
 terminal or a shell terminal that cannot be reached — one whose process holder is older than the update's holder
