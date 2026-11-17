@@ -65,15 +65,20 @@ On every daemon start:
   `docs/product/background-processes.md`.
 
 **One Octoboard at a time.** A second daemon running against the same `~/.octoboard` would own a second set of agent
-processes while sharing one database, so it refuses to start, on every attempt. The application then opens its window
-anyway, on a screen that says the daemon failed to start — a failed start never leaves a window with no explanation.
-The screen says what the daemon is and that opening Octoboard again tries once more, with the reason under its
-explanation; no error alert opens over it. It is a known failure, not an unexpected one: it asks for a report only if
-those steps do not resolve it (the screen is described in "The window chrome and the content panel" in
-`docs/product/window-layout.md`). It has no Quit button; it quits like any window with no daemon running, at once and
-asking nothing, and with nothing to keep running, closing the window quits whatever that setting says (see "Closing
-the window" and "Quitting" below). The lock is per data directory, so on a server it is one daemon per Unix user,
-whose `~/.octoboard` is the daemon's (see "The daemon on its own" in `docs/product/server-form.md`).
+processes while sharing one database, so it refuses to start: it exits with status **73**, with an error saying that
+another daemon is already running against that data directory. The desktop application's start meets that refusal on
+every one of its attempts, and then opens its window anyway, on a screen that says the daemon failed to start — a failed
+start never leaves a window with no explanation. The screen says what the daemon is, then the remedy, with the reason under its explanation; no error alert opens over
+it. The application tells this refusal apart by the daemon's exit status: then the remedy says that another copy of
+Octoboard is already using the same application data folder, and to quit it, then restart this one; for any other
+failed start it says that Octoboard cannot work without the daemon, and to restart Octoboard to try again. It is a
+known failure, not an unexpected one: it asks for a report only if those steps do not resolve it (the screen is
+described in "The window chrome and the content panel" in `docs/product/window-layout.md`). Its **Restart** restarts
+Octoboard at once, asking nothing (see "Restarting from a daemon failure" below); nothing tries starting the daemon
+again in place. It has no Quit button; it quits like any window with no daemon running, at once and asking nothing,
+and with nothing to keep running, closing the window quits whatever that setting says (see "Closing the window" and
+"Quitting" below). The lock is per data directory, so on a server it is one daemon per Unix user, whose `~/.octoboard`
+is the daemon's (see "The daemon on its own" in `docs/product/server-form.md`).
 
 **A daemon that dies later is started again.** When the daemon has started and then ends on its own, with a non-zero
 exit status or by a signal, the application starts a new one after **1**, then **2**, then **4 seconds**, at most **3
@@ -88,14 +93,17 @@ macOS, once an in-app update is installed and waits for the restart that applies
 relaunch was pending: the installed update has already replaced the application, so a relaunch would pair the new
 version's daemon with the running window of the old one. On Windows a downloaded update leaves the running version's
 files in place until its installer runs as Octoboard quits, so a daemon that ends meanwhile is started again under the
-rules above. There is no button to start the daemon by hand.
+rules above. There is no button to start the daemon by hand; the alert below offers restarting Octoboard instead.
 
 When the daemon is not started again — those 3 relaunches in the last 10 minutes are spent, on macOS an update is
 installed and waits for its restart, or it ended with exit status 0, as on a requested shutdown, a termination signal or a
 planned stop (see "The daemon on its own" in `docs/product/server-form.md`) — the application says so in an error alert
 titled "The daemon exited unexpectedly", which says that the daemon runs the user's sessions and terminals, that
 Octoboard cannot work without it, and asks the user to restart Octoboard; it does not silently keep showing a stale
-session list. The alert treats it as an unexpected failure, offering **Report issue**, with the detail behind **Error
+session list. Its footer holds **Report issue** and **Restart**, the primary button, with no acknowledgement button: the
+close button acknowledges it (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`). **Restart**
+acknowledges the alert and restarts Octoboard at once, asking nothing (see "Restarting from a daemon failure" below).
+The alert treats it as an unexpected failure, offering **Report issue**, with the detail behind **Error
 details** rather than in its sentence (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`): how the
 daemon ended (its exit status, or a signal, or why the last relaunch failed) and, when the relaunches are spent, that it
 was restarted that many times in the last 10 minutes and is not restarted again, or, when an update is installed
@@ -179,15 +187,16 @@ reconnects, and fails any request still waiting, saying that the connection clos
 the screen for a daemon of another version (see "The window chrome and the content panel" in
 `docs/product/window-layout.md`), even when the window was already in use on an earlier connection: nothing the window
 had shown stays. No connection banner shows and there is no Retry, since another attempt would meet the same daemon.
-The way out is the screen's: in the desktop application, quitting and opening Octoboard again, which brings up the
-daemon bundled with it; in a browser, reloading the page. A remote daemon of another version never gets this far in
+The way out is the screen's: in the desktop application, its **Restart**, which restarts Octoboard at once, asking
+nothing, and brings up the daemon bundled with it afresh (see "Restarting from a daemon failure" below); in a browser,
+reloading the page. A remote daemon of another version never gets this far in
 the desktop application: it is refused before its window loads (see "A version mismatch" in
 `docs/product/remote-daemons.md`). A browser page waiting for its daemon to come back from a
 restart into an update it asked for reloads itself instead of showing the screen (see "Restarting into the update" in
 `docs/product/server-form-updates.md`).
 
-A quit while that screen is shown — its own **Quit**, or any of the shell's quit gestures (see "Quitting"
-below) — quits at once, asking nothing about running sessions or terminals: that daemon is not talked to.
+A quit while that screen is shown — any of the shell's quit gestures (see "Quitting" below) — quits at once, asking
+nothing about running sessions or terminals: that daemon is not talked to.
 
 ## Closing the window
 
@@ -397,8 +406,9 @@ on (see "Resuming the interrupted sessions at start" in `docs/product/archiving-
 
 ### Restarting
 
-Octoboard restarts itself only to apply an installed update, when the user presses **Restart now** (see "Restarting to
-apply an update" in `docs/product/in-app-updates.md`). **A restart is no quit: it hands every session and shell terminal
+Octoboard restarts itself to apply an installed update, when the user presses **Restart now** (see "Restarting to
+apply an update" in `docs/product/in-app-updates.md`), and when the user presses **Restart** where its daemon failed
+(see "Restarting from a daemon failure" below, which says what such a restart does differently). **A restart is no quit: it hands every session and shell terminal
 over to the new version**, which takes them over running, with their screens exactly as they were wherever the saved
 screen can reproduce them (see "The screen of a terminal handed over" in `docs/product/process-holders.md`). No session
 is interrupted, no preview is frozen, and nothing a session started is stopped.
@@ -464,6 +474,28 @@ is interrupted, no preview is frozen, and nothing a session started is stopped.
 - If the application cannot restart, an error alert titled "Could not restart" says Octoboard kept running instead of
   relaunching and asks the user to quit it and open it again. It is treated as an unexpected failure, as a failed quit
   is.
+
+### Restarting from a daemon failure
+
+In the desktop application three places offer **Restart** as the way back to a working daemon: the screen for a daemon
+that could not start (see "One Octoboard at a time" above), the error alert that the daemon exited unexpectedly (see
+"Starting up" above) and the screen for a daemon of another version (see "A daemon of another version" above). Each
+takes the restart above, except that:
+
+- **It restarts at once and asks nothing.** There is no daemon the window can ask what the restart would not carry over
+  — it is gone, or is not talked to — so there is no such check and no confirmation, whatever is running.
+- **The window asks no daemon for a planned stop.** The application stops a daemon still running itself, as above, with
+  the planned-stop request it sends directly after 2 seconds, so that daemon leaves its sessions and shell terminals
+  running in their process holders; a daemon that exited has already left them there. The new launch's daemon takes
+  them over as it starts (see "What a daemon start takes over" in `docs/product/process-holders.md`), and is started
+  afresh with the attempts in "Starting up" above.
+- **A pending update goes with it**, as with any restart: on macOS the new launch is the installed update's version,
+  and on Windows a downloaded update waiting to be installed is installed by it, its installer starting the new
+  version.
+
+On the two screens the button shows a pending spinner from the press until the window goes, and a second press does
+nothing; when the application refuses the restart, the "Could not restart" alert above opens and the button can be
+pressed again. On the alert, **Restart** acknowledges it first; a refused restart opens the same alert.
 
 ### Quitting when the window has stopped responding
 

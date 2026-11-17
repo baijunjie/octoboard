@@ -1,4 +1,5 @@
 import type { ThirdPartyLicenses } from "../about/thirdPartyLicenses";
+import type { StartupCause } from "../daemon";
 import type { Language } from "../i18n/languages";
 import type { AvailableUpdate, HostFacts, LaunchAtLoginStatus, MacosPermissionsStatus, RemoteDaemonConnectOutcome, RemoteDaemonEntry, RemoteDaemonStatus, UpdateProgress } from "../platform";
 import type { Fixture } from "../fixtures/fixture";
@@ -11,7 +12,7 @@ import type { GroupTitle } from "./fixtures/groups";
 /** What the window shows in place of the app, for the screens that have no daemon behind them. A
  * crash shows `stack` as the error's stack, which is otherwise the browser's own and so as long as
  * the engine makes it; it is what gives the stack block a length the scenario chooses. */
-export type Startup = { kind: "noAddress" } | { kind: "daemonFailed"; error: string } | { kind: "crash"; stack?: string };
+export type Startup = { kind: "noAddress" } | { kind: "daemonFailed"; error: string; cause?: StartupCause } | { kind: "crash"; stack?: string };
 
 /** A change the daemon makes while the window already shows the scenario's view (an account added by another
  * window, a terminal closed there), for the motion and focus that only a live change shows: the view never

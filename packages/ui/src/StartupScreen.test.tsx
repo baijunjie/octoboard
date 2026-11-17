@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { expect, it, onTestFinished, vi } from "vitest";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { errorAlerts } from "./components/alerts/errorAlerts";
 import { t } from "./i18n/language";
@@ -60,6 +60,82 @@ it.each([
   const container = mount(screen, { kind: "tauri", host: BROWSER_HOST, exit });
   expect([...container.querySelectorAll("button")].map((button) => button.textContent)).not.toContain(t("common.quit"));
   expect(register).not.toHaveBeenCalled();
+});
+
+it("tells a held data folder apart from any other failed start by its own remedy, under the same heading and issue title", () => {
+  const container = mount(<DaemonFailedScreen error={DIAGNOSTIC} cause="instanceLocked" />);
+  const panel = container.querySelector('[data-slot="empty-state"]')!;
+  const lines = [...panel.querySelectorAll("p")].map((line) => line.textContent);
+  expect(lines.slice(0, 2)).toEqual([t("startup.daemonFailed.description"), t("startup.daemonFailed.remedy.instanceLocked")]);
+  expect(lines).not.toContain(t("startup.daemonFailed.remedy"));
+  expect(t("startup.daemonFailed.remedy.instanceLocked")).not.toBe(t("startup.daemonFailed.remedy"));
+  const report = new URL(panel.querySelector<HTMLAnchorElement>("a[data-external-link]")!.href);
+  expect(container.querySelector("h1")?.textContent).toBe(t("startup.daemonFailed.title"));
+  expect(report.searchParams.get("title")).toBe("The daemon failed to start");
+  expect(report.searchParams.get("body")).toContain("EADDRINUSE");
+  expect(panel.querySelector(':scope > [data-slot="surface"] pre')?.textContent).toBe(DIAGNOSTIC);
+});
+
+describe("restarting from the daemon-failed page", () => {
+  const desktopExit = (confirmQuit: ExitCapability["confirmQuit"] = async () => {}) => {
+    const register = vi.fn(() => () => {});
+    const exit: ExitCapability = { register, heartbeat: vi.fn(async () => {}), beginQuit: vi.fn(async () => {}), confirmQuit: vi.fn(confirmQuit) };
+    return { exit, register };
+  };
+  const restartButton = (container: HTMLElement) => [...container.querySelectorAll("button")].find((button) => button.textContent === t("common.restart"));
+
+  it("offers Restart before Report issue under the desktop shell, for either cause", () => {
+    for (const cause of [undefined, "instanceLocked"] as const) {
+      const { exit } = desktopExit();
+      const container = mount(<DaemonFailedScreen error={DIAGNOSTIC} cause={cause} />, { kind: "tauri", host: BROWSER_HOST, exit, links: { open: async () => {} } });
+      expect(restartButton(container)?.classList.contains("button--primary")).toBe(true);
+      const row = container.querySelector('[data-slot="empty-state"]')!.lastElementChild!;
+      expect([...row.children].map((child) => child.textContent)).toEqual([t("common.restart"), t("error.issue.report")]);
+    }
+  });
+
+  it("asks the shell to restart directly, without registering with the exit flow or asking anything first", async () => {
+    const { exit, register } = desktopExit();
+    const container = mount(<DaemonFailedScreen error={DIAGNOSTIC} />, { kind: "tauri", host: BROWSER_HOST, exit });
+    await act(async () => restartButton(container)!.click());
+    expect(exit.confirmQuit).toHaveBeenCalledExactlyOnceWith({ restart: true });
+    expect(exit.beginQuit).not.toHaveBeenCalled();
+    expect(register).not.toHaveBeenCalled();
+    expect(errorAlerts.getSnapshot()).toEqual([]);
+  });
+
+  it("holds Restart pending from the press, and keeps it so once the shell accepts", async () => {
+    const { exit } = desktopExit();
+    const container = mount(<DaemonFailedScreen error={DIAGNOSTIC} />, { kind: "tauri", host: BROWSER_HOST, exit });
+    expect(restartButton(container)!.getAttribute("aria-busy")).not.toBe("true");
+    await act(async () => restartButton(container)!.click());
+    expect(restartButton(container)!.getAttribute("aria-busy")).toBe("true");
+    // Pressed again while pending, it asks nothing more.
+    await act(async () => restartButton(container)!.click());
+    expect(exit.confirmQuit).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["an error", new Error("ipc: no such window"), "ipc: no such window"],
+    ["a plain string", "no such window", "no such window"],
+  ])("raises the restart-failed alert and releases Restart when the shell refuses with %s", async (_name, refusal, text) => {
+    const { exit } = desktopExit(async () => { throw refusal; });
+    const container = mount(<DaemonFailedScreen error={DIAGNOSTIC} />, { kind: "tauri", host: BROWSER_HOST, exit });
+    await act(async () => restartButton(container)!.click());
+    const [alert] = errorAlerts.getSnapshot();
+    onTestFinished(() => act(() => errorAlerts.acknowledge()));
+    expect(alert.title).toBe(t("exit.restartFailed.title"));
+    expect(alert.message).toBe(t("exit.restartFailed"));
+    expect(JSON.stringify(alert.details)).toContain(text);
+    expect(restartButton(container)!.getAttribute("aria-busy")).not.toBe("true");
+  });
+
+  it("offers no button where there is no shell to relaunch", () => {
+    const browser = mount(<DaemonFailedScreen error={DIAGNOSTIC} />);
+    expect(restartButton(browser)).toBeUndefined();
+    const withoutExit = mount(<DaemonFailedScreen error={DIAGNOSTIC} />, { kind: "tauri", host: BROWSER_HOST });
+    expect(restartButton(withoutExit)).toBeUndefined();
+  });
 });
 
 it("offers Report issue on the no-address screen, after the instructions and a sentence that does not call it a bug", () => {

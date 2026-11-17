@@ -69,10 +69,12 @@ describe("restarting", () => {
   ) {
     const { confirmQuit = async () => {}, handover = known(), terminals = [], withoutCheck = false } = options;
     let quitGesture = () => {};
+    let daemonExited: (detail: string) => void = () => {};
     const order: string[] = [];
     const exit: ExitCapability = {
-      register: ({ onQuitRequested }) => {
+      register: ({ onQuitRequested, onDaemonExited }) => {
         quitGesture = onQuitRequested;
+        daemonExited = onDaemonExited;
         return () => {};
       },
       heartbeat: async () => {},
@@ -101,7 +103,7 @@ describe("restarting", () => {
       container.remove();
     });
     act(() => root.render(createElement(PlatformProvider, { value: { kind: "tauri", host: BROWSER_HOST, exit } }, createElement(Host))));
-    return { exit, order, requestShutdown, requestPlannedStop, checkHandover, hook: () => current, quit: () => quitGesture() };
+    return { exit, order, requestShutdown, requestPlannedStop, checkHandover, hook: () => current, quit: () => quitGesture(), daemonExited: (detail: string) => daemonExited(detail) };
   }
 
   it("asks the daemon even when nothing is running, and relaunches at once on an answer that lists nothing", async () => {
@@ -298,6 +300,85 @@ describe("restarting", () => {
     expect(exit.confirmQuit).not.toHaveBeenCalled();
   });
 
+  describe("restarting now", () => {
+    it("asks the shell to restart at once, asking nothing, whatever is running, and says it is under way", async () => {
+      const { exit, order, requestShutdown, checkHandover, hook } = mount([sessionOf("w", "c", "p", "W", "working")], { handover: known({ sessions: ["w"] }), terminals: [shell("t", true)] });
+      let underWay: boolean | undefined;
+      await act(async () => { underWay = await hook().restartNow(); });
+      expect(underWay).toBe(true);
+      expect(hook().exitConfirmOpen).toBe(false);
+      expect(checkHandover).not.toHaveBeenCalled();
+      expect(requestShutdown).not.toHaveBeenCalled();
+      expect(exit.beginQuit).not.toHaveBeenCalled();
+      expect(exit.confirmQuit).toHaveBeenCalledExactlyOnceWith({ restart: true });
+      expect(order).toEqual(["confirmQuit"]);
+    });
+
+    it("sends no planned stop of its own, the shell making it, and so waits on none", async () => {
+      const { exit, requestPlannedStop, hook } = mount([]);
+      requestPlannedStop.mockImplementation(() => new Promise(() => {}));
+      await act(async () => hook().restartNow());
+      expect(requestPlannedStop).not.toHaveBeenCalled();
+      expect(exit.confirmQuit).toHaveBeenCalledExactlyOnceWith({ restart: true });
+    });
+
+    it("says in its own words that the restart did not happen, and that it is not under way, when the shell cannot relaunch", async () => {
+      const { hook } = mount([], { confirmQuit: async () => { throw new Error("ipc: no such window"); } });
+      let underWay: boolean | undefined;
+      await act(async () => { underWay = await hook().restartNow(); });
+      expect(underWay).toBe(false);
+      const [alert] = errorAlerts.getSnapshot();
+      onTestFinished(() => act(() => errorAlerts.acknowledge()));
+      expect(alert.title).toBe("Could not restart");
+      expect(alert.message).toBe("The app kept running instead of relaunching. Quit it and open it again.");
+    });
+
+    it("shows a refusal the shell gives as plain text, not as undefined", async () => {
+      const { hook } = mount([], { confirmQuit: async () => { throw "no such window"; } });
+      await act(async () => hook().restartNow());
+      const [alert] = errorAlerts.getSnapshot();
+      onTestFinished(() => act(() => errorAlerts.acknowledge()));
+      expect(JSON.stringify(alert.details)).not.toContain("undefined");
+    });
+
+    it("takes the daemon's going away for the restart's own doing while under way, and not once the shell refused", async () => {
+      const under = mount([]);
+      await act(async () => under.hook().restartNow());
+      act(() => under.daemonExited("signal 9"));
+      expect(errorAlerts.getSnapshot()).toEqual([]);
+
+      const refused = mount([], { confirmQuit: async () => { throw new Error("ipc"); } });
+      await act(async () => refused.hook().restartNow());
+      onTestFinished(() => { act(() => errorAlerts.acknowledge()); act(() => errorAlerts.acknowledge()); });
+      expect(errorAlerts.getSnapshot().map((alert) => alert.title)).toEqual(["Could not restart"]);
+      act(() => refused.daemonExited("signal 9"));
+      expect(errorAlerts.getSnapshot().map((alert) => alert.title)).toEqual(["Could not restart", "The daemon exited unexpectedly"]);
+    });
+
+    it("does nothing without a shell, even where a page could restart a daemon", async () => {
+      const restartDaemon = vi.fn(async () => {});
+      const requestPlannedStop = vi.fn(async () => {});
+      let current!: ReturnType<typeof useAppExit>;
+      const Host = () => {
+        current = useAppExit({ restartDaemon, requestPlannedStop });
+        return null;
+      };
+      const container = document.body.appendChild(document.createElement("div"));
+      const root = createRoot(container);
+      onTestFinished(() => {
+        act(() => root.unmount());
+        container.remove();
+      });
+      act(() => root.render(createElement(PlatformProvider, { value: { kind: "browser", host: BROWSER_HOST } }, createElement(Host))));
+      let underWay: boolean | undefined;
+      await act(async () => { underWay = await current.restartNow(); });
+      expect(underWay).toBe(false);
+      expect(restartDaemon).not.toHaveBeenCalled();
+      expect(requestPlannedStop).not.toHaveBeenCalled();
+      expect(errorAlerts.getSnapshot()).toEqual([]);
+    });
+  });
+
   it("turns an open restart confirmation into a quit when a quit is asked for meanwhile", async () => {
     const { exit, hook, quit } = mount([sessionOf("s", "c", "p", "S", "working")], { handover: known({ sessions: ["s"] }) });
     await act(async () => hook().requestRestart("0.2.0", "0.3.0"));
@@ -356,6 +437,38 @@ describe("the daemon exiting by itself", () => {
     expect(alert.message).not.toContain("signal");
     expect(alert.details).not.toBeNull();
     expect(alert.classification.kind).toBe("unexpected");
+  });
+
+  it("offers Restart on the alert, which relaunches the application at once", async () => {
+    let exited: (detail: string) => void = () => {};
+    const exit: ExitCapability = {
+      register: ({ onDaemonExited }) => {
+        exited = onDaemonExited;
+        return () => {};
+      },
+      heartbeat: async () => {},
+      beginQuit: vi.fn(async () => {}),
+      confirmQuit: vi.fn(async () => {}),
+    };
+    const Host = () => {
+      useAppExit();
+      return null;
+    };
+    const container = document.body.appendChild(document.createElement("div"));
+    const root = createRoot(container);
+    onTestFinished(() => {
+      act(() => root.unmount());
+      container.remove();
+    });
+    act(() => root.render(createElement(PlatformProvider, { value: { kind: "tauri", host: BROWSER_HOST, exit } }, createElement(Host))));
+    act(() => exited("signal 9"));
+    const [alert] = errorAlerts.getSnapshot();
+    onTestFinished(() => act(() => errorAlerts.acknowledge()));
+    expect(alert.action?.label).toBe("Restart");
+    expect(exit.confirmQuit).not.toHaveBeenCalled();
+    await act(async () => alert.action!.onPress());
+    expect(exit.beginQuit).not.toHaveBeenCalled();
+    expect(exit.confirmQuit).toHaveBeenCalledExactlyOnceWith({ restart: true });
   });
 });
 

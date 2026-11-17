@@ -6,7 +6,7 @@ import ReactDOM from "react-dom/client";
 import { App } from "./App";
 import { AppRoot } from "./AppRoot";
 import { suppressNativeContextMenu } from "./input/contextMenuGuard";
-import { isKeylessDaemonPage, resolveDaemonAddress, resolveRecovered, resolveStartupError } from "./daemon";
+import { isKeylessDaemonPage, resolveDaemonAddress, resolveRecovered, resolveStartupCause, resolveStartupError } from "./daemon";
 import { runtimeError } from "./errors/runtimeError";
 import { ConnectPage } from "./shell/ConnectPage";
 import { TrayFlyout } from "./shell/TrayFlyout";
@@ -74,6 +74,7 @@ const initialNativeThemePush = shownWindow
   .catch(() => {});
 
 const startupError = resolveStartupError(platform);
+const startupCause = resolveStartupCause(platform);
 const daemonAddress = resolveDaemonAddress(platform);
 // Created here rather than by a component: the connection lives as long as the window, and a
 // component that owned it would drop it, for good, on its first unmount (StrictMode's included).
@@ -88,7 +89,7 @@ function screen(): React.ReactElement {
     // The daemon failed to start before the window even opened, and the shell passed the message
     // along via `?error=` instead of `?port=` — there is nothing to connect to, same as the
     // missing-address case below, just with a specific reason instead of a generic one.
-    return <DaemonFailedScreen error={startupError} />;
+    return <DaemonFailedScreen error={startupError} cause={startupCause} />;
   }
   if (!daemon) {
     if (isKeylessDaemonPage(platform)) {

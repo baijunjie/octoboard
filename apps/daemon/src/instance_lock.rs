@@ -3,7 +3,8 @@
 //! Two daemons would own two sets of agent processes while sharing one database, and the second
 //! one's startup would mark the first one's live sessions interrupted — the session list of a
 //! perfectly healthy application would go stale in front of the user. Refusing to start is the
-//! legible failure; the application surfaces the message below.
+//! legible failure: the daemon exits with [`HELD_EXIT_STATUS`], which the desktop application names
+//! on its startup screen, and the message below.
 //!
 //! A user-run command finds a running daemon without talking to it: [`is_running`] says whether one
 //! runs, which only the lock can say; which process it is, where it listens and what key it
@@ -13,9 +14,30 @@ use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 
 use crate::platform::fs::Busy;
+
+/// The status the daemon exits with when another daemon holds the lock (`EX_CANTCREAT`, 73): the
+/// desktop application tells this refusal apart from any other failed start by it, so its window
+/// can say what to do about it (see "Starting up" in `docs/product/application-lifecycle.md`).
+pub const HELD_EXIT_STATUS: i32 = 73;
+
+/// The refusal to start because another daemon holds the lock, which [`HELD_EXIT_STATUS`] reports.
+#[derive(Debug)]
+pub struct Held(PathBuf);
+
+impl std::fmt::Display for Held {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "another octoboardd is already running against {}",
+            self.0.display()
+        )
+    }
+}
+
+impl std::error::Error for Held {}
 
 /// How long [`acquire`] keeps trying while the lock is held. [`is_running`] holds the lock for
 /// microseconds to find out, while a daemon holds it for its lifetime, so a lock still held after
@@ -46,10 +68,7 @@ pub fn acquire() -> Result<InstanceLock> {
     let path = lock_path();
     match lock_waiting(&path, ACQUIRE_WAIT, ACQUIRE_STEP) {
         Ok(file) => Ok(InstanceLock { _file: file }),
-        Err(Busy::Held) => bail!(
-            "another octoboardd is already running against {}",
-            dir.display()
-        ),
+        Err(Busy::Held) => Err(Held(dir).into()),
         Err(Busy::Open(err)) => Err(err).with_context(|| format!("opening {}", path.display())),
         Err(Busy::Lock(err)) => Err(err).with_context(|| format!("locking {}", path.display())),
     }
@@ -157,5 +176,79 @@ mod tests {
         let refused = lock_waiting(&path, wait, Duration::from_millis(5));
         assert!(matches!(refused, Err(Busy::Held)));
         assert!(began.elapsed() >= wait, "it waited the whole window");
+    }
+
+    #[test]
+    fn the_refusal_says_which_directory_and_is_told_apart_by_its_type_and_status() {
+        let err = anyhow::Error::from(Held(PathBuf::from("/data/octoboard")));
+        assert!(err.downcast_ref::<Held>().is_some());
+        assert_eq!(
+            err.to_string(),
+            "another octoboardd is already running against /data/octoboard"
+        );
+        // The desktop application reads the status as `EX_CANTCREAT`.
+        assert_eq!(HELD_EXIT_STATUS, 73);
+        // Any other failure is not the refusal.
+        let other =
+            anyhow::anyhow!("another octoboardd is already running against /data/octoboard");
+        assert!(other.downcast_ref::<Held>().is_none());
+    }
+
+    /// What the test below starts: a daemon's [`acquire`], with what it returned printed.
+    #[test]
+    #[ignore = "started by the test below as the daemon"]
+    fn acquire_child() {
+        match acquire() {
+            Ok(_lock) => println!("acquired"),
+            Err(err) => match err.downcast_ref::<Held>() {
+                Some(_) => println!("held: {err}"),
+                None => println!("failed: {err:?}"),
+            },
+        }
+    }
+
+    /// A start against a data directory another daemon holds is refused with [`Held`]; once the
+    /// lock is released, a start against the same directory takes it.
+    #[test]
+    fn a_start_while_another_daemon_holds_the_lock_is_refused_as_held() {
+        let home = ScratchDir::new("acquire-refused");
+        let data = home.join(".octoboard");
+        std::fs::create_dir_all(&data).unwrap();
+        let acquire_in_home = || {
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "instance_lock::tests::acquire_child",
+                    "--ignored",
+                    "--nocapture",
+                ])
+                .env("HOME", &*home)
+                .env("USERPROFILE", &*home)
+                .stdin(std::process::Stdio::null())
+                .output()
+                .unwrap();
+            String::from_utf8_lossy(&output.stdout)
+                .lines()
+                .find(|line| {
+                    ["acquired", "held: ", "failed: "]
+                        .iter()
+                        .any(|start| line.starts_with(start))
+                })
+                .map(str::to_owned)
+        };
+        let held = crate::platform::fs::try_lock_file(&data.join("daemon.lock"))
+            .expect("the lock was taken");
+        let refused = acquire_in_home().expect("the daemon said what it got");
+        assert!(
+            refused.starts_with("held: another octoboardd is already running against "),
+            "{refused}"
+        );
+        assert!(refused.ends_with(".octoboard"), "{refused}");
+        drop(held);
+        let released = crate::session::wait::wait_for(crate::test_support::PATIENCE, || {
+            !is_running_at(&data.join("daemon.lock")).unwrap()
+        });
+        assert!(released, "the lock was released");
+        assert_eq!(acquire_in_home().as_deref(), Some("acquired"));
     }
 }

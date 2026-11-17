@@ -135,6 +135,19 @@ export function resolveStartupError(platform: PlatformAdapter): string | undefin
   return raw ?? undefined;
 }
 
+/** A cause of a failed start that the window says what to do about on its own. */
+export type StartupCause = "instanceLocked";
+
+/**
+ * The cause of the failed start that the shell recognised, passed as `?cause=` next to `?error=`:
+ * `instance_locked` when another daemon already runs against the same data directory, which no
+ * further attempt gets past. Read under the shell only, as `?error=` is.
+ */
+export function resolveStartupCause(platform: PlatformAdapter): StartupCause | undefined {
+  if (platform.kind !== "tauri") return undefined;
+  return new URLSearchParams(window.location.search).get("cause") === "instance_locked" ? "instanceLocked" : undefined;
+}
+
 /**
  * Whether the shell reloaded this page after restarting a daemon that had died, which it marks with
  * `?recovered=1`. The page is then not an opening but a reload of a window the user may have closed

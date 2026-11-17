@@ -119,8 +119,10 @@ other words; when the title says it all, the body starts with the next step. It 
 close button (×) at its top trailing corner, which acknowledges it exactly as that button does: pressing either is a
 deliberate dismissal. Escape and a click outside never dismiss it, being too easily set off by accident, and it never
 dismisses itself. Its footer holds at most two buttons: where both **Report issue** and a recovery action are offered
-(see "Recovery and unexpected errors" below), the acknowledgement button is left out and the close button stands for
-it. Acknowledgement does not retry the failed operation. The originating dialog remains available for correcting inputs or retrying unless that operation's own
+— only an alert's own recovery action, such as **Restart** on the alert that the daemon exited, ever comes with
+**Report issue** (see "Recovery and unexpected errors" below) — the acknowledgement button is left out, the close
+button stands for it, and the recovery action takes its place as the footer's primary button, in the accent colour.
+Acknowledgement does not retry the failed operation. The originating dialog remains available for correcting inputs or retrying unless that operation's own
 contract closes it, or a recovery action navigates Settings and closes its account or agent forms (see "Opening and
 closing Settings" in `docs/product/settings.md`).
 
@@ -703,6 +705,12 @@ and nothing if the session no longer exists. The alert is still acknowledged in 
 is handled by the Change model dialog's failure modal (see "Changing a session's model and effort" in
 `docs/product/model-and-reasoning-effort.md`).
 
+**A recovery the application can make itself has a button of its own**: the alert that the daemon exited unexpectedly
+has **Restart**, which acknowledges the alert and restarts Octoboard (see "Restarting from a daemon failure" in
+`docs/product/application-lifecycle.md`). Such an alert is an unexpected failure, so beside **Report issue** the button
+is the footer's primary, with no acknowledgement button (see "The error alert" above); where the platform cannot open
+links, and there is no **Report issue**, it is a secondary button before the acknowledgement button.
+
 **A plain alert** is a known refusal that says what happened in its own sentences, with no remedy line added after them,
 no request to report an issue and nothing but its acknowledgement button. It is used for a switch confirmed onto an
 account that was used up after the confirmation opened (see "Confirming a switch" in
@@ -721,8 +729,8 @@ context, even when they have no stack trace. It asks the user to use **Report is
 that led to the failure.
 
 **Report issue** is a secondary action in the footer, before the acknowledgement button, with a trailing
-external-link icon; beside a recovery action, the two fill the footer and the close button acknowledges (see "The error
-alert" above). The guidance names it with a non-interactive inline reference; only the footer action is a link. It
+external-link icon; beside an alert's own recovery action, the two fill the footer and the close button acknowledges
+(see "The error alert" above). The guidance names it with a non-interactive inline reference; only the footer action is a link. It
 opens the explicit `issueUrl` configured in `config/app.json` when the user activates it, as a new Issue prefilled
 with a title and a body that describe the failure, its personal information removed (see `docs/product/issue-reports.md`).
 Repeated activation is blocked while opening is pending. It does not create the Issue itself, and attaches no

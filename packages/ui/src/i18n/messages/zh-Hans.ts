@@ -61,7 +61,8 @@ export const zhHans: Translation<"other"> = {
 
   "startup.daemonFailed.title": "守护进程启动失败",
   "startup.daemonFailed.description": "守护进程是运行会话和终端的后台进程。",
-  "startup.daemonFailed.remedy": "应用需要守护进程才能运行。请重新打开本应用重试。",
+  "startup.daemonFailed.remedy": "应用需要守护进程才能运行。请重新启动本应用重试。",
+  "startup.daemonFailed.remedy.instanceLocked": "另一个 {appName} 正在使用同一应用数据文件夹。请先退出它，再重新启动本应用。",
   "startup.noAddress.title": "未指定守护进程地址或密钥",
   "startup.noAddress.alertTitle": "无法连接守护进程",
   "startup.noAddress.description": "无法获取守护进程地址或密钥。",
@@ -824,7 +825,7 @@ export const zhHans: Translation<"other"> = {
   "connection.incompatible.body": "此窗口与所连接的守护进程使用不同的协议版本，无法通信。",
   "connection.incompatible.versions": "窗口版本：{appVersion}。守护进程版本：{daemonVersion}。",
   "connection.incompatible.versionUnknown": "未知",
-  "connection.incompatible.remedy.desktop": "请退出本应用后重新打开。如果问题仍然出现，请重新安装。",
+  "connection.incompatible.remedy.desktop": "请重新启动本应用。如果问题仍然出现，请重新安装。",
   "connection.incompatible.remedy.browser": "请重新载入页面。如果问题仍然出现，请更新本应用，使此页面与守护进程版本一致。",
   "connection.incompatible.reload": "重新载入",
   "connection.keyRefused.title": "此地址已无法访问守护进程",

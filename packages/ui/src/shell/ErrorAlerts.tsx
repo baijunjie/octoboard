@@ -69,9 +69,13 @@ function ErrorAlertHost(): React.ReactElement | null {
   const found = error.sharedRecovery ? recoveryAction(t, error.sharedRecovery) : undefined;
   const session = error.session;
   const action = found?.kind === "sessionModel" && !session ? undefined : found;
+  const own = error.action;
   // The close button acknowledges as OK does, on every alert. OK is left out only where the footer would hold three
-  // buttons (Report issue, the remedy and OK): the close button then stands for it.
-  const acknowledgement = !(action && unexpected && issue.link);
+  // buttons (Report issue, the alert's own action and OK): the close button then stands for it, and the action takes
+  // OK's place as the footer's primary, in the accent colour rather than OK's danger one, since it is the way forward,
+  // not a destructive step. A remedy a recovery category names never meets Report issue: it comes only with a failure
+  // that is not unexpected.
+  const acknowledgement = !(own && unexpected && issue.link);
   return (
     <Dialog
       key={error.id}
@@ -86,6 +90,7 @@ function ErrorAlertHost(): React.ReactElement | null {
       footer={<>
         {unexpected && issue.link}
         {action && <RecoveryControl action={action} session={session} />}
+        {own && <Button variant={acknowledgement ? "secondary" : "primary"} onPress={() => { errorAlerts.acknowledge(); own.onPress(); }}>{own.label}</Button>}
         {acknowledgement && <Button variant="danger" onPress={() => errorAlerts.acknowledge()}>{t("error.acknowledge")}</Button>}
       </>}
     >

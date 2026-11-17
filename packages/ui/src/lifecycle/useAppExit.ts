@@ -149,6 +149,11 @@ export interface UseAppExitResult {
   requestRestart: (holderFloor: string | null, targetVersion: string | null) => Promise<void>;
   /** Asks for a quit from a control of the window's own, as the shell's quit gestures do, confirmation included. */
   requestQuit: () => Promise<void>;
+  /** Restarts the application at once, asking nothing: for a window whose daemon is gone or cannot be talked to, which
+   * has nothing to say about what a restart would interrupt, and whose sessions the shell's planned stop leaves to their
+   * holders all the same. Nothing where there is no shell to relaunch. Resolves to whether the restart is under way:
+   * false where there is no shell, or where the shell refused it, which raises an alert saying so. */
+  restartNow: () => Promise<boolean>;
 }
 
 /**
@@ -208,7 +213,7 @@ export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
       // Quitting must not depend on this succeeding, but a quit that silently does nothing is
       // worse than one that says why, so the failure is surfaced rather than swallowed.
       quittingRef.current = false;
-      reportExitFailure(restart, (err as Error).message);
+      reportExitFailure(restart, err);
     }
   };
 
@@ -288,6 +293,20 @@ export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
 
   const requestRestart = (holderFloor: string | null, targetVersion: string | null) => request(true, holderFloor, targetVersion);
   const requestQuit = () => request(false);
+  // No planned stop from the page: its daemon is gone or not talked to, and the shell makes the planned stop itself.
+  const restartNow = async (): Promise<boolean> => {
+    if (!exit) return false;
+    requestCount.current++;
+    quittingRef.current = true;
+    try {
+      await exit.confirmQuit({ restart: true });
+      return true;
+    } catch (err) {
+      quittingRef.current = false;
+      reportExitFailure(true, err);
+      return false;
+    }
+  };
 
   const confirmExit = async (): Promise<void> => {
     await doQuit(exitRestarts);
@@ -304,7 +323,7 @@ export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
           // The daemon going away is the quit's own doing, which needs neither a notice nor the
           // window.
           if (quittingRef.current) return;
-          reportDaemonExit(detail);
+          reportDaemonExit(detail, () => void restartNow());
           // A window hidden in the background would leave the notice unseen; a visible one is left
           // where it is, so a crash does not take the focus from whatever the user is doing.
           void (async () => {
@@ -334,5 +353,6 @@ export function useAppExit(options: UseAppExitOptions = {}): UseAppExitResult {
     confirmExit,
     requestRestart,
     requestQuit,
+    restartNow,
   };
 }

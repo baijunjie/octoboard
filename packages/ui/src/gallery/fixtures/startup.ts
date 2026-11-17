@@ -20,17 +20,12 @@ function stackOf(frames: number): string {
 
 const DAEMON_FAILED: Startup = {
   kind: "daemonFailed",
+  cause: "instanceLocked",
+  // The shell's own message for a start that failed three times, the last with the daemon refusing a data directory
+  // another daemon holds: the daemon's stderr, which ends with a newline, closes it.
   error:
-    "another instance already holds the lock at /Users/dev/.octoboard/daemon.lock (held by process 4821, started at 2026-10-12 09:14 from /Applications/Octoboard.app/Contents/MacOS/octoboardd). " +
-    "Caused by: failed to acquire an exclusive lock on /Users/dev/.octoboard/daemon.lock: Resource temporarily unavailable (os error 35). " +
-    "Caused by: the previous instance did not answer on /Users/dev/.octoboard/daemon.sock within 5 seconds: Connection timed out (os error 60). " +
-    "Caused by: no port file was found at /Users/dev/.octoboard/octoboardd.port, so the instance could not be asked to shut down. " +
-    "Caused by: the database at /Users/dev/.octoboard/octoboard.db is opened by the same process, which was last seen writing to /Users/dev/.octoboard/octoboard.db-wal at 2026-10-12 09:58, " +
-    "and a second connection would risk corrupting it: refusing to continue. " +
-    "Caused by: the supervisor that restarted the daemon three times in the last minute, at 2026-10-12 09:57:12, 09:57:31 and 09:57:50, gave up after the third attempt, " +
-    "and left the state it found in /Users/dev/.octoboard/supervisor.state untouched so that the cause could be looked into: " +
-    "the log of the last attempt is at /Users/dev/.octoboard/logs/octoboardd-2026-10-12.log. " +
-    "Close the other instance, or remove /Users/dev/.octoboard/daemon.lock if no process holds it, and start Octoboard again.",
+    "the daemon did not start in 3 attempts. The last one: the daemon stopped with exit code 73 before reporting its port and key. " +
+    "Error: another octoboardd is already running against /Users/dev/.octoboard\n",
 };
 
 export const startupScenarios: Scenario[] = [
@@ -48,8 +43,9 @@ export const startupScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "The daemon failed to start",
+    desktopApp: true,
     description:
-      "The page is the whole failure, in the empty-state shape, with no error dialog over it: a danger glyph, the heading naming the failure as the page's only h1 with no mark beside it, one line saying what the daemon is, and under it a second line saying that Octoboard cannot work without it and should be opened again. Under them, start-aligned on a surface of its own, are the sentence saying that, if the steps above do not resolve it, Report issue files an Issue, and then the daemon's text as one original long line, scrolling horizontally without automatic wrapping. The block takes only the height it needs, up to 40% of the window's height, and the floating Copy button stays at its top right and copies the complete original text; Tab onto the text, named Error details, for its focus ring and keyboard scrolling. Use Short to see the page scroll as well, its region named Message. The row under the surface holds Report issue alone (a link in the shape of a button that opens the Issue page prefilled with the title \"The daemon failed to start\"): there is no Try again, since nothing can be retried from here, no Quit and no Details button.",
+      "The page is the whole failure, in the empty-state shape, with no error dialog over it: a danger glyph, the heading naming the failure as the page's only h1 with no mark beside it, one line saying what the daemon is, and under it a second line, the remedy, saying that another copy of Octoboard is already using the same application data folder and to quit it, then restart this app. Under them, start-aligned on a surface of its own, are the sentence saying that, if the steps above do not resolve it, Report issue files an Issue, and then the daemon's text as one original long line, scrolling horizontally without automatic wrapping. The block takes only the height it needs, up to 40% of the window's height, and the floating Copy button stays at its top right and copies the complete original text; Tab onto the text, named Error details, for its focus ring and keyboard scrolling. Use Short to see the page scroll as well, its region named Message. The row under the surface holds the primary Restart button, as in the desktop app, and Report issue after it (a link in the shape of a button that opens the Issue page prefilled with the title \"The daemon failed to start\"): there is no Try again, since nothing can be retried from here, no Quit and no Details button. Pressing Restart holds the button pending, and it stays so, since the gallery's shell never closes the window.",
     startup: DAEMON_FAILED,
   },
   {

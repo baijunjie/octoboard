@@ -136,7 +136,14 @@ fn main() -> Result<()> {
         state.agent_clis.wait_for_updates();
     }
     shut_down_runtime(runtime, RUNTIME_SHUTDOWN_WAIT);
-    // Once the runtime is gone.
+    // Once the runtime is gone. A refusal to share the data directory says so in its status too,
+    // with the same message as any other failure.
+    if let Err(err) = &exit_status {
+        if err.downcast_ref::<instance_lock::Held>().is_some() {
+            eprintln!("Error: {err:?}");
+            std::process::exit(instance_lock::HELD_EXIT_STATUS);
+        }
+    }
     if let Some(status) = exit_status? {
         std::process::exit(status);
     }

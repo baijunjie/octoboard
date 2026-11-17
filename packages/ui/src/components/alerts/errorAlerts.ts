@@ -24,6 +24,9 @@ export interface ErrorAlertRequest {
   notice?: { session: string; code: string };
   error?: unknown;
   recovery?: ErrorRecovery;
+  /** The failure's recovery, done from the alert's own button, which acknowledges the alert first: for a failure whose
+   * remedy is something the application can do itself (restarting it), rather than one a recovery category names. */
+  action?: { label: string; onPress: () => void };
   failures?: readonly ErrorAlertFailure[];
   /** What the alert's "Error details" disclosure holds, in place of the diagnostics it works out from the errors: for
    * an alert whose failures each have details of their own, set apart by whose they are. `null` says there are none,

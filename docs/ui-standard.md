@@ -1629,8 +1629,10 @@ An error alert dialog's recovery action is a secondary button in its footer besi
 button inside its body. The footer is trailing-aligned, so Report issue and the recovery action come first and the
 acknowledgement button, the dialog's primary, stands at the trailing edge. Where Report issue and a recovery action
 are both offered, the footer's two-button limit applies (see "Buttons"): the acknowledgement button goes, the close
-button doing exactly what it did, and the footer holds Report issue and the recovery action, which stays a secondary
-button. A dialog that must be acknowledged in the same way, such as the ended login dialog, follows the same rules: a
+button doing exactly what it did, and the footer holds Report issue and the recovery action, which takes the
+acknowledgement button's place as the primary (only a recovery the alert offers of its own, such as Restart on the alert
+that the daemon exited, ever meets Report issue: a recovery category's comes only with a known failure), in the accent colour, since it is the way forward rather than a
+destructive step (by the user's decision). A dialog that must be acknowledged in the same way, such as the ended login dialog, follows the same rules: a
 close button, no Escape and no outside press. Its body is the dialog's own prose in the
 application's own words: the explanation, the remedy and any further explanation follow one another without an Alert
 inside the dialog. What is not written for the reader — a message passed through from the system, Git, the daemon or an
@@ -1773,15 +1775,16 @@ in use, focus has
 fallen to the document, as what held it went with the view it replaced and there is nothing to restore it to.
 
 Every error screen — the daemon that failed to start, the crash screen, the screen with no daemon address, the screen
-for a daemon of another protocol generation and the key-refused screen — offers Report issue, and only the last has a Quit button. Report issue is
+for a daemon of another protocol generation and the key-refused screen — offers Report issue, and none has a Quit button;
+the daemon that failed to start and, on the desktop, the incompatible-daemon screen have Restart. Report issue is
 the error alert dialog's own prefilled link (`useIssueReport`), built from the screen's own text: the daemon's message,
 the crash's stack, the no-address screen's sentence, a fixed English sentence naming both versions and generations, or
 one saying the daemon refused the page's key, or that the page had none.
 It reads the record names to remove from the daemon in context, so that daemon is provided around the crash boundary
-too. The row holds at most two buttons: the recovery as the primary (Try again, on the crash screen; Quit on the desktop
-or Reload in a browser, on the incompatible-daemon screen) and then Report issue, or Report issue alone where there is
-no recovery (the daemon screen, and the key-refused screen, where reloading meets the same refusal and the way out is a
-new address from the server). Where the platform cannot open links the link is left out and a sentence names the
+too. The row holds at most two buttons: the recovery as the primary (Try again, on the crash screen; Restart on the
+desktop or Reload in a browser, on the incompatible-daemon screen; Restart on the daemon screen, which only the desktop
+shows) and then Report issue, or Report issue alone where there is no recovery (the key-refused screen, where reloading
+meets the same refusal and the way out is a new address from the server). Where the platform cannot open links the link is left out and a sentence names the
 address to report at instead.
 
 The crash screen is the one failure that may be a bug: its remedy line already asks for the report, so the sentence
@@ -1792,15 +1795,18 @@ none is called a bug: their sentence says to report it if the steps given do not
 on the surface of the daemon, incompatible-daemon and key-refused screens, after the instructions on the no-address
 screen), and their Issues carry the screen's English heading as the title.
 
-Quit is left out of the other screens because the window still quits through Cmd+Q, the app menu, the menu bar icon's
+Quit is left out of every screen because the window still quits through Cmd+Q, the app menu, the menu bar icon's
 Quit and, where it quits rather than hides the window (not while the user runs in the background with a live daemon),
 the close button. Only the crash screen registers for the quit flow, since the application had registered before it
 crashed and the shell cannot unregister it: it answers a quit at once, with no confirmation, asking about no sessions
 and shutting no daemon down. The incompatible-daemon screen is drawn by the application in place of its window, so it is
-the application's registration that answers, and its Quit and the shell's quit gestures alike quit at once, asking about
-no sessions, since that daemon is not talked to; so would a quit while the key-refused screen is drawn there, which only
-a browser shows, where there is no quit. Its Quit is there because quitting is its recovery: the application
-brings its own daemon up again on the next launch. The others register nothing, so the shell quits natively. The raw
+the application's registration that answers, and its Restart and the shell's quit gestures alike act at once, asking
+about no sessions, since that daemon is not talked to; so would a quit while the key-refused screen is drawn there, which
+only a browser shows, where there is no quit. Restart is there because restarting is the recovery of that screen and of
+the daemon that failed to start: the application brings its own daemon up afresh as it starts again. The daemon screen
+registers nothing, so its Restart asks the shell directly, and a refusal raises the alert that the restart did not
+happen; either Restart holds its button pending until the window goes, or until the restart is refused. The others register nothing, so the shell quits
+natively. The raw
 text — the daemon's message or the crash's stack — sits on the surface under the lines, as on any other such page. A
 screen whose only content is an explanation with no raw text in it — the startup screen with no daemon address, and its
 instructions for giving one — is the error's own surface, as the error alert dialog is, kept apart on purpose: it is no

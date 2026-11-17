@@ -275,8 +275,9 @@ export function App(): React.ReactElement {
 
   // The exit flow's frontend owner: it registers with the shell on mount, which is what makes the
   // window quittable. The main app has no "Quit" control of its own; the screen for a daemon of another
-  // protocol generation does. That daemon, like one that refused the page's key, is not talked to, and
-  // neither screen has room for the quit's confirmation, so a quit while one is shown asks about nothing.
+  // protocol generation has a Restart button. That daemon, like one that refused the page's key, is not talked to,
+  // and neither screen has room for the quit's confirmation, so a quit or restart while one is shown asks about
+  // nothing.
   const reachable = () => {
     const state = store.getState().connectionState;
     return state !== "incompatible" && state !== "keyRefused";
@@ -504,7 +505,7 @@ export function App(): React.ReactElement {
   useEffect(() => setFocusAfterModalLoss(focusAfterModal), [focusAfterModal]);
 
   // A daemon of another protocol generation: nothing it sent is shown, whatever an earlier connection had loaded.
-  if (connectionState === "incompatible") return <IncompatibleDaemonScreen onQuit={() => void exit.requestQuit()} />;
+  if (connectionState === "incompatible") return <IncompatibleDaemonScreen onRestart={exit.restartNow} />;
 
   // The page's key is no longer the daemon's, so nothing can load or be retried: the same, with the way to a working
   // address.

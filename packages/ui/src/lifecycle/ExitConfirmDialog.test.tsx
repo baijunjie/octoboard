@@ -27,6 +27,7 @@ function restartOf(titles: string[], change: Partial<UseAppExitResult> = {}): Us
     confirmExit: async () => {},
     requestRestart: async () => {},
     requestQuit: async () => {},
+    restartNow: async () => true,
     ...change,
   };
 }

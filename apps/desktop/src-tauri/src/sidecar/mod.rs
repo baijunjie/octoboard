@@ -127,7 +127,13 @@ pub fn mark_daemon_stopping(app: &AppHandle) {
 
 /// Records that there is no daemon, and `detail` as what a window opened from now on is told.
 pub fn mark_daemon_down(app: &AppHandle, detail: String) {
-    record_no_daemon(app, DaemonStatus::Down(detail));
+    record_no_daemon(
+        app,
+        DaemonStatus::Down {
+            detail,
+            cause: None,
+        },
+    );
 }
 
 fn record_no_daemon(app: &AppHandle, gone: DaemonStatus) {
@@ -188,6 +194,26 @@ fn error_param(detail: &str) -> String {
     format!("error={}", crate::percent_encode_query_value(detail))
 }
 
+/// The status `octoboardd` exits with when another daemon already runs against its data
+/// directory (its `instance_lock::HELD_EXIT_STATUS`).
+const INSTANCE_LOCK_HELD_EXIT_STATUS: i32 = 73;
+
+/// A cause of a failed start the window names on its own, as `cause=` next to `error=`, to say what
+/// to do about it rather than only that the start failed.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum StartupCause {
+    /// Another daemon holds the data directory, which no further attempt gets past.
+    InstanceLocked,
+}
+
+impl StartupCause {
+    fn param(self) -> &'static str {
+        match self {
+            StartupCause::InstanceLocked => "cause=instance_locked",
+        }
+    }
+}
+
 /// Where the daemon is, as far as a window that does not exist yet needs to know, and whether the
 /// shell has given up on it, as far as a page that loads in the window needs to know.
 #[derive(Default)]
@@ -195,8 +221,11 @@ enum DaemonStatus {
     #[default]
     Starting,
     Up(DaemonAddress),
-    /// There is none, with the words for why.
-    Down(String),
+    /// There is none, with the words for why and the cause the window names, where it is one.
+    Down {
+        detail: String,
+        cause: Option<StartupCause>,
+    },
     /// There is none and none is started again, with the words for how the last one ended.
     GaveUp(String),
 }
@@ -205,7 +234,15 @@ impl DaemonStatus {
     fn window_params(&self) -> String {
         match self {
             DaemonStatus::Up(address) => daemon_params(address),
-            DaemonStatus::Down(detail) | DaemonStatus::GaveUp(detail) => error_param(detail),
+            DaemonStatus::Down {
+                detail,
+                cause: Some(cause),
+            } => format!("{}&{}", error_param(detail), cause.param()),
+            DaemonStatus::Down {
+                detail,
+                cause: None,
+            }
+            | DaemonStatus::GaveUp(detail) => error_param(detail),
             DaemonStatus::Starting => error_param("the daemon has not started"),
         }
     }
@@ -245,7 +282,13 @@ pub fn start_daemon(app: &AppHandle) -> Result<DaemonAddress, String> {
     }
     let failure = failure.expect("at least one attempt was made");
     let message = startup_failure_message(STARTUP_ATTEMPTS, &failure);
-    mark_daemon_down(app, message.clone());
+    record_no_daemon(
+        app,
+        DaemonStatus::Down {
+            detail: message.clone(),
+            cause: failure.cause(),
+        },
+    );
     Err(message)
 }
 
@@ -271,6 +314,19 @@ pub(crate) enum AttemptFailure {
     OutputEnded,
     /// A restart or a quit began while the attempt was waiting.
     Quitting,
+}
+
+impl AttemptFailure {
+    /// The cause the window names for a start that failed this way, where it is one.
+    fn cause(&self) -> Option<StartupCause> {
+        match self {
+            Self::Exited {
+                code: Some(INSTANCE_LOCK_HELD_EXIT_STATUS),
+                ..
+            } => Some(StartupCause::InstanceLocked),
+            _ => None,
+        }
+    }
 }
 
 impl fmt::Display for AttemptFailure {
@@ -525,9 +581,9 @@ pub fn daemon_params(address: &DaemonAddress) -> String {
     format!("port={}&key={}", address.port, address.key)
 }
 
-/// The names of the parameters `daemon_params` writes, and of `error`, which a window opened while
-/// there was no daemon got instead of them.
-pub const DAEMON_PARAMS: [&str; 3] = ["port", "key", "error"];
+/// The names of the parameters `daemon_params` writes, and of `error` and `cause`, which a window
+/// opened while there was no daemon got instead of them.
+pub const DAEMON_PARAMS: [&str; 4] = ["port", "key", "error", "cause"];
 
 const STARTUP_LINE_PREFIX: &str = "octoboardd listening on 127.0.0.1:";
 
@@ -601,6 +657,38 @@ mod startup_tests {
     }
 
     #[test]
+    fn only_a_daemon_refused_the_data_directory_names_its_cause_to_the_window() {
+        let locked = AttemptFailure::Exited {
+            code: Some(INSTANCE_LOCK_HELD_EXIT_STATUS),
+            stderr: String::new(),
+        };
+        assert_eq!(locked.cause(), Some(StartupCause::InstanceLocked));
+        for other in [
+            AttemptFailure::Exited {
+                code: Some(1),
+                stderr: String::new(),
+            },
+            AttemptFailure::Exited {
+                code: None,
+                stderr: String::new(),
+            },
+            AttemptFailure::Timeout,
+            AttemptFailure::OutputEnded,
+        ] {
+            assert_eq!(other.cause(), None);
+        }
+        let down = |cause| DaemonStatus::Down {
+            detail: "did not start".to_string(),
+            cause,
+        };
+        assert_eq!(
+            down(Some(StartupCause::InstanceLocked)).window_params(),
+            "error=did%20not%20start&cause=instance_locked"
+        );
+        assert_eq!(down(None).window_params(), "error=did%20not%20start");
+    }
+
+    #[test]
     fn the_initial_start_waits_longer_after_each_failure() {
         assert_eq!([1, 2].map(|n| startup_backoff(n).as_secs()), [1, 2]);
     }
@@ -652,7 +740,10 @@ mod startup_tests {
         for status in [
             DaemonStatus::Starting,
             up,
-            DaemonStatus::Down("It is being restarted.".to_string()),
+            DaemonStatus::Down {
+                detail: "It is being restarted.".to_string(),
+                cause: None,
+            },
         ] {
             assert_eq!(status.exit_detail(), None);
         }

@@ -276,7 +276,11 @@ mod tests {
         );
         // A window opened while there was no daemon carries its error instead of an address.
         assert_eq!(
-            rebuild_query(Some("error=gone&languages=en"), "port=4&key=dd", "S"),
+            rebuild_query(
+                Some("error=gone&cause=instance_locked&languages=en"),
+                "port=4&key=dd",
+                "S"
+            ),
             "port=4&key=dd&languages=en&settings=S&recovered=1"
         );
     }

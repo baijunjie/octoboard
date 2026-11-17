@@ -232,7 +232,7 @@ it("neither walks the records nor builds a report for an actionable failure that
 
 it("carries the detail of a lifecycle failure into the report", () => {
   mount();
-  act(() => reportDaemonExit("daemon exited at /Users/alice/run: status 1"));
+  act(() => reportDaemonExit("daemon exited at /Users/alice/run: status 1", vi.fn()));
   expect(reportOf().get("body")).toContain("```\ndaemon exited at <path>: status 1\n```");
 });
 
@@ -370,6 +370,60 @@ describe("the session an alert is about", () => {
     act(() => raiseError(new Error("boom"), { title: "Could not start the session", session: "s9" }));
     expect(alertText()).toContain("Could not start the session");
     expect(alertText()).not.toContain("Session: ");
+  });
+});
+
+describe("an alert's own action", () => {
+  const controls = () => Array.from(document.querySelectorAll<HTMLElement>('[role="alertdialog"] button, [role="alertdialog"] a')).map((c) => c.getAttribute("aria-label") ?? c.textContent);
+  const press = (label: string) => act(() => Array.from(document.querySelectorAll<HTMLElement>('[role="alertdialog"] button')).find((b) => b.textContent === label)!.click());
+  const known = () => new CodedError("Session locked", "session_locked", { session: "s1" });
+  const buttonNamed = (label: string) => Array.from(document.querySelectorAll<HTMLElement>('[role="alertdialog"] button')).find((b) => b.textContent === label)!;
+
+  it("sits beside OK on a failure the application names, and acknowledges the alert before it runs", () => {
+    mount();
+    const queued: number[] = [];
+    const onPress = vi.fn(() => { queued.push(errorAlerts.getSnapshot().length); });
+    act(() => errorAlerts.report({ message: "Session locked", error: known(), action: { label: "Try it", onPress } }));
+    expect(controls()).toEqual(expect.arrayContaining(["Close", "Try it", "OK"]));
+    expect(controls()).not.toContain("Report issue");
+    expect(buttonNamed("Try it").classList.contains("button--secondary")).toBe(true);
+    expect(buttonNamed("Try it").classList.contains("button--primary")).toBe(false);
+    expect(onPress).not.toHaveBeenCalled();
+    press("Try it");
+    expect(onPress).toHaveBeenCalledOnce();
+    expect(queued).toEqual([0]);
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+  });
+
+  it("leaves OK out beside Report issue, the close button standing for it", () => {
+    mount();
+    const onPress = vi.fn();
+    act(() => errorAlerts.report({ message: "Boom", error: new Error("boom"), action: { label: "Try it", onPress } }));
+    expect(controls()).toEqual(expect.arrayContaining(["Close", "Report issue", "Try it"]));
+    expect(controls()).not.toContain("OK");
+    expect(buttonNamed("Try it").classList.contains("button--primary")).toBe(true);
+    expect(buttonNamed("Try it").classList.contains("button--secondary")).toBe(false);
+    act(() => document.querySelector<HTMLButtonElement>('[role="alertdialog"] [aria-label="Close"]')!.click());
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(onPress).not.toHaveBeenCalled();
+  });
+
+  it("keeps OK beside Report issue on an alert that has none", () => {
+    mount();
+    act(() => errorAlerts.report({ message: "Boom", error: new Error("boom") }));
+    expect(controls()).toEqual(expect.arrayContaining(["Close", "Report issue", "OK"]));
+  });
+
+  it("is the daemon-exited alert's Restart, beside Report issue, without OK", () => {
+    mount();
+    const restart = vi.fn();
+    act(() => reportDaemonExit("daemon exited: status 1", restart));
+    expect(controls()).toEqual(expect.arrayContaining(["Close", "Report issue", "Restart"]));
+    expect(controls()).not.toContain("OK");
+    expect(buttonNamed("Restart").classList.contains("button--primary")).toBe(true);
+    press("Restart");
+    expect(restart).toHaveBeenCalledOnce();
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
   });
 });
 

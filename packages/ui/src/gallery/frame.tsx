@@ -240,7 +240,7 @@ function screen(): React.ReactElement {
     case "noAddress":
       return <StartupScreen message={<NoAddressMessage />} />;
     case "daemonFailed":
-      return <DaemonFailedScreen error={scenario.startup.error} />;
+      return <DaemonFailedScreen error={scenario.startup.error} cause={scenario.startup.cause} />;
     case "crash":
       return <Crash stack={scenario.startup.stack} />;
   }

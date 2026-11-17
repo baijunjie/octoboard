@@ -212,12 +212,12 @@ document says of an installed update (the notice, Settings, **Restart now**, no 
 the notice and Settings say it is downloaded, not installed (see "Installed, waiting for a restart" above).
 
 On macOS, until the restart a daemon that ends unexpectedly is not started again, since the application's files are
-already the new version's; the window says so and asks for the restart (see "Starting up" in
-`docs/product/application-lifecycle.md`). On Windows the files stay the running version's until the installer runs, so
+already the new version's; the window says so and offers **Restart**, which restarts into the new version (see
+"Starting up" and "Restarting from a daemon failure" in `docs/product/application-lifecycle.md`). On Windows the files stay the running version's until the installer runs, so
 a daemon that ends unexpectedly is started again under the same rules as when no update is waiting.
 
 The restart is suggested, never forced: **Restart now** applies it at once, and quitting Octoboard in any ordinary way
-and starting it again later applies it just the same, except that only **Restart now** keeps the sessions running (see
+and starting it again later applies it just the same, except that only a restart keeps the sessions running (see
 "Restarting to apply an update" below): a quit interrupts them as any quit does. On Windows every quit of Octoboard while it holds a downloaded
 update installs it on the way out, without starting Octoboard again: a quit it confirms itself (its Quit, or closing the
 window when it does not run in the background), and equally a quit that skips the confirmation — one made while the
@@ -228,7 +228,9 @@ made while the installer is being started waits for it. If the installer cannot 
 update stays unapplied, offered again by a later check. The system ending the user's session — signing out or shutting
 down Windows — is not a quit and installs nothing: Octoboard stops its daemon as the session ends (see "When the system
 ends the session" in `docs/product/application-lifecycle.md`) and ends, and the update is offered again by the
-automatic check after the next start (see "When the application checks" above).
+automatic check after the next start (see "When the application checks" above). **Restart** where the daemon failed is
+no quit: it installs a downloaded update as **Restart now** does, the installer starting the new version (see
+"Restarting from a daemon failure" in `docs/product/application-lifecycle.md`).
 
 On Windows the installer replaces every file it ships without asking, even while a process still runs from the
 installation folder. Octoboard itself is ended first, so it never runs on past its update. Any other shipped file a

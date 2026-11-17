@@ -124,20 +124,21 @@ glyph is drawn in the danger colour.
   the stack already begins with it. Its row holds **Try again**, the primary button, then **Report issue**.
 - **A daemon that could not start**, shown only in the desktop application, whose shell passes the failure to the
   window (a browser page never shows it): headed that the daemon failed to start, with the line saying that the daemon
-  is the background process that runs the user's sessions and terminals, then the remedy saying Octoboard cannot work
-  without it and that opening Octoboard again tries once more. The surface starts with a sentence saying that if the
-  steps above do not resolve it, **Report issue** files an Issue with the steps that led to it; the reason the daemon
-  did not start follows (see "Starting up" in `docs/product/application-lifecycle.md`). Its row holds **Report issue**
-  alone.
+  is the background process that runs the user's sessions and terminals, then the remedy: where another daemon already
+  runs against the same data directory, that another copy of Octoboard is already using the same application data
+  folder, and to quit it, then restart this one; otherwise, that Octoboard cannot work without the daemon, and to
+  restart it to try again (see "One Octoboard at a time" in `docs/product/application-lifecycle.md`). The surface
+  starts with a sentence saying that if the steps above do not resolve it, **Report issue** files an Issue with the
+  steps that led to it; the reason the daemon did not start follows (see "Starting up" in
+  `docs/product/application-lifecycle.md`). Its row holds **Restart**, the primary button, then **Report issue**.
 - **A daemon of another version**: headed that Octoboard and its daemon are different versions, with the line saying
   that the window cannot read the daemon it connected to because the two speak different versions of their protocol,
-  then the remedy: in the desktop application, to quit Octoboard and open it again, and to reinstall it if this keeps
-  happening; in a browser, to reload the page, and if this keeps happening to update Octoboard so that the page and the
+  then the remedy: in the desktop application, to restart Octoboard, and to reinstall it if this keeps happening; in a browser, to reload the page, and if this keeps happening to update Octoboard so that the page and the
   daemon are the same version. The surface starts with the same sentence about **Report issue** as the screen for a
   daemon that could not start, then a line giving the window's version and the daemon's, each said to be unknown where
   it is not known: the window's version is the application's as the desktop shell reports it, so a browser shows it
   unknown, and the daemon's is the release version its greeting gave, unknown for a daemon that sent none (see "A
-  daemon of another version" in `docs/product/application-lifecycle.md`). Its row holds **Quit** in the desktop application, or
+  daemon of another version" in `docs/product/application-lifecycle.md`). Its row holds **Restart** in the desktop application, or
   **Reload** in a browser, as the primary button, then **Report issue**.
 - **An address that does not open the daemon**, shown only by a page the server form's daemon served: headed that this
   address no longer opens the daemon, with the line saying its key has changed, when the daemon refused the page's key
@@ -158,8 +159,9 @@ open links it is left out, and its sentence names the issue address to open in t
 a UI that failed, which has no such sentence otherwise, that sentence — that this may be a bug, with the address to
 report it at — comes first on the surface, above the stack trace.
 
-Of the five screens only the one for a daemon of another version has a **Quit** button, and only in the desktop
-application: the window still quits through `Cmd+Q`, the application menu's Quit, the menu bar icon's quit entry
+**Restart**, on the screen for a daemon that could not start and, in the desktop application, on the screen for a
+daemon of another version, restarts Octoboard at once, asking nothing (see "Restarting from a daemon failure" in `docs/product/application-lifecycle.md`). None of the five screens has
+a **Quit** button: the window still quits through `Cmd+Q`, the application menu's Quit, the menu bar icon's quit entry
 (the notification-area icon's on Windows) and, where closing the window quits, its close button (see "Quitting" in
 `docs/product/application-lifecycle.md`). As
 the screens for a daemon that could not start, for a daemon of another version, for an address that does not open the

@@ -1,5 +1,5 @@
 import { CircleAlert } from "lucide-react";
-import React from "react";
+import React, { useState } from "react";
 
 import { ContentPanel } from "./shell/ContentPanel";
 import { EmptyPanel } from "./components/panel/EmptyPanel";
@@ -10,14 +10,16 @@ import { BareTitleBar } from "./shell/TitleBar";
 import { FadedScroller, useFadeRegion } from "./components/scroll/scrollFade";
 import { Message, useT } from "./i18n/react";
 import { useIssueReport } from "./components/alerts/useIssueReport";
+import type { StartupCause } from "./daemon";
+import { reportExitFailure } from "./lifecycle/exitFailure";
+import { usePlatform } from "./platform/react";
 
 /**
  * The window with no daemon connection behind it: no address known yet, the daemon failed to
  * start, the daemon speaks another protocol generation or does not accept the page's key (or the
- * page has none), or the UI itself crashed. It has no Quit button of its own and registers nothing
+ * page has none), or the UI itself crashed. It has no button of its own and registers nothing
  * with the shell's exit flow; whichever caller needs either brings it: the crash screen registers,
- * and the incompatible-daemon screen, drawn inside the application whose registration answers its
- * quits, has a Quit button.
+ * and the daemon-failed and incompatible-daemon screens have a Restart button.
  * `message` is what the screen says: `NoAddressMessage`, or a `StartupFailure`.
  */
 export function StartupScreen({ message }: { message: React.ReactNode }): React.ReactElement {
@@ -61,7 +63,7 @@ export function StartupScreen({ message }: { message: React.ReactNode }): React.
  */
 export function StartupFailure({ failure, action, diagnostic, known }: {
   failure: { title: React.ReactNode; description: React.ReactNode; remedy?: React.ReactNode; details: React.ReactNode };
-  action?: { label: string; onSelect: () => void };
+  action?: { label: string; onSelect: () => void; isPending?: boolean };
   diagnostic: string;
   known?: { title: string };
 }): React.ReactElement {
@@ -77,7 +79,7 @@ export function StartupFailure({ failure, action, diagnostic, known }: {
       announce
       // After the first paint, so the alert is a change to the page rather than part of its first render.
       announceDelayMs={0}
-      action={action ? { label: action.label, variant: "primary", onPress: action.onSelect } : undefined}
+      action={action ? { label: action.label, variant: "primary", onPress: action.onSelect, isPending: action.isPending } : undefined}
       linkAction={issue.link}
       details={<>{(known || !issue.link) && <p>{issue.guidance}</p>}{failure.details}</>}
     />
@@ -90,9 +92,21 @@ function StartupHeading({ children }: { children: React.ReactNode }): React.Reac
 }
 
 /** The screen for a daemon that failed to start, which the shell passed along as `?error=`: the failure in the
- * application's own words, with the daemon's own message under it, which is also what its report is built from. */
-export function DaemonFailedScreen({ error }: { error: string }): React.ReactElement {
+ * application's own words, with the daemon's own message under it, which is also what its report is built from. A
+ * `cause` the shell recognised words the remedy for it. Its recovery restarts the application, which starts the daemon
+ * afresh; the page registered nothing with the exit flow, so it asks the shell directly. */
+export function DaemonFailedScreen({ error, cause }: { error: string; cause?: StartupCause }): React.ReactElement {
   const t = useT();
+  const { exit } = usePlatform();
+  // Held from the press until the window goes, or until the shell refuses.
+  const [restarting, setRestarting] = useState(false);
+  const restart = exit && (() => {
+    setRestarting(true);
+    exit.confirmQuit({ restart: true }).catch((err: unknown) => {
+      setRestarting(false);
+      reportExitFailure(true, err);
+    });
+  });
   return (
     <StartupScreen
       message={
@@ -100,9 +114,10 @@ export function DaemonFailedScreen({ error }: { error: string }): React.ReactEle
           failure={{
             title: t("startup.daemonFailed.title"),
             description: t("startup.daemonFailed.description"),
-            remedy: t("startup.daemonFailed.remedy"),
+            remedy: t(cause === "instanceLocked" ? "startup.daemonFailed.remedy.instanceLocked" : "startup.daemonFailed.remedy"),
             details: <DiagnosticBlock>{error}</DiagnosticBlock>,
           }}
+          action={restart && { label: t("common.restart"), onSelect: restart, isPending: restarting }}
           diagnostic={error}
           known={{ title: "The daemon failed to start" }}
         />

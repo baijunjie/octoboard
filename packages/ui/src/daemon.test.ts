@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
-import { daemonRefusedKey, daemonWsUrl, isKeylessDaemonPage, isLocalDaemon, KEY_CHECK_TIMEOUT_MS, resolveDaemonAddress, resolveRecovered, resolveStartupError } from "./daemon";
+import { daemonRefusedKey, daemonWsUrl, isKeylessDaemonPage, isLocalDaemon, KEY_CHECK_TIMEOUT_MS, resolveDaemonAddress, resolveRecovered, resolveStartupCause, resolveStartupError } from "./daemon";
 import type { PlatformAdapter } from "./platform";
 import { BROWSER_HOST } from "./test/hosts";
 
@@ -53,6 +53,21 @@ it("reads the shell's startup failure from ?error=, percent-decoded, only under 
 it("ignores ?error= in a browser, where anyone can put text there", () => {
   openAt("?error=Daemon%20failed");
   expect(resolveStartupError({ kind: "browser", host: BROWSER_HOST } as PlatformAdapter)).toBeUndefined();
+});
+
+it("reads the shell's named cause of a failed start from ?cause=, only under the desktop shell", () => {
+  openAt("?error=Another%20instance%20is%20running&cause=instance_locked");
+  expect(resolveStartupCause(platform)).toBe("instanceLocked");
+  expect(resolveStartupCause({ kind: "browser", host: BROWSER_HOST } as PlatformAdapter)).toBeUndefined();
+});
+
+it("names no cause for a failed start without ?cause= or with one it does not know", () => {
+  openAt("?error=Daemon%20failed");
+  expect(resolveStartupCause(platform)).toBeUndefined();
+  openAt("?error=Daemon%20failed&cause=something_else");
+  expect(resolveStartupCause(platform)).toBeUndefined();
+  openAt("?error=Daemon%20failed&cause=");
+  expect(resolveStartupCause(platform)).toBeUndefined();
 });
 
 it("takes the port and the key from the page's query", () => {

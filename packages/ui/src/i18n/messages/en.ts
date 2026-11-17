@@ -79,7 +79,8 @@ export const en = {
 
   "startup.daemonFailed.title": "The daemon failed to start",
   "startup.daemonFailed.description": "The daemon is the background process that runs your sessions and terminals.",
-  "startup.daemonFailed.remedy": "The daemon is required to run the application. Open the app again to retry.",
+  "startup.daemonFailed.remedy": "The daemon is required to run the application. Restart the app to retry.",
+  "startup.daemonFailed.remedy.instanceLocked": "Another copy of {appName} is already using the same application data folder. Quit it, then restart this app.",
   "startup.noAddress.title": "No daemon address or key",
   "startup.noAddress.alertTitle": "Could not connect to the daemon",
   "startup.noAddress.description": "The daemon’s address or key is unavailable.",
@@ -930,7 +931,7 @@ export const en = {
   "connection.incompatible.body": "This window cannot communicate with the connected daemon because their protocol versions differ.",
   "connection.incompatible.versions": "Window version: {appVersion}. Daemon version: {daemonVersion}.",
   "connection.incompatible.versionUnknown": "unknown",
-  "connection.incompatible.remedy.desktop": "Quit the app and open it again. If this keeps happening, reinstall it.",
+  "connection.incompatible.remedy.desktop": "Restart the app. If this keeps happening, reinstall it.",
   "connection.incompatible.remedy.browser": "Reload the page. If this keeps happening, update the app so that this page and the daemon are the same version.",
   "connection.incompatible.reload": "Reload",
   "connection.keyRefused.title": "This address no longer opens the daemon",
