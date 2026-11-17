@@ -22,6 +22,7 @@ import { listPages } from "./listPages";
 import { formatPageTime } from "./pageTime";
 import type { Pressed } from "./page/PageFormContext";
 import { defaultValues, type FormValues } from "./page/formModel";
+import { heldDrafts, holdDrafts, type SessionDrafts } from "./pageDrafts";
 import { PageView } from "./page/PageView";
 
 /**
@@ -100,9 +101,13 @@ export function ReportPanel({ sessionId }: { sessionId: string }): React.ReactEl
   const [acceptedById, setAcceptedById] = useState<Readonly<Record<string, Record<string, SubmittedValue>>>>({});
 
   // What the user has entered into each page's form, by page id, so that it outlives the page's view: paging away
-  // unmounts it, and a failed submission unlocks the form on a page the user may not be looking at. A page
-  // that has left the list loses its draft and what was accepted for it.
-  const [drafts, setDrafts] = useState<Readonly<Record<string, FormValues>>>({});
+  // unmounts it, and a failed submission unlocks the form on a page the user may not be looking at. It is held outside
+  // the panel too (`pageDrafts.ts`), so that closing the panel, or switching to another session, and coming back finds
+  // it as it was left. A page that has left the list loses its draft and what was accepted for it.
+  const [drafts, setDrafts] = useState<SessionDrafts>(() => heldDrafts(store, sessionId));
+  useEffect(() => {
+    holdDrafts(store, sessionId, drafts);
+  }, [store, sessionId, drafts]);
   useEffect(() => {
     if (sessionPages === undefined) return;
     function listed<T>(held: Readonly<Record<string, T>>): Readonly<Record<string, T>> {

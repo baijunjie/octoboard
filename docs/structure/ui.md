@@ -168,7 +168,9 @@ their cascade order does not depend on which screen opened first.
   xterm's private members are reached from two adapters only: `xtermInternals.ts` (`watchUserInput`, the mark that
   tells the user's input from xterm's own replies) and `links/terminalLinks.ts` (OSC 8 link data).
 - `src/report/` — a session's report panel: `ReportPanel.tsx` (pager, header badges, the drafts and the pending or
-  accepted submission of each page), `listPages.ts`, `useProjectReportSession.ts`, `pageTime.ts`; `page/` renders a
+  accepted submission of each page), `pageDrafts.ts` (the drafts held outside the panel, per daemon store and
+  session, so they outlive the panel closing: `ReportPanel.tsx` reads them with `heldDrafts` and writes them with
+  `holdDrafts`), `listPages.ts`, `useProjectReportSession.ts`, `pageTime.ts`; `page/` renders a
   page, which is a component tree the daemon has validated, with native components rather than a frame: `PageView.tsx`
   (the page and its form), `registry.tsx` (`COMPONENT_RENDERERS`: the renderer of every kind of component), `formModel.ts`
   (the pure form: values, visibility, issues and the submission), `fields.tsx`, `submitters.tsx`, `layout.tsx`,

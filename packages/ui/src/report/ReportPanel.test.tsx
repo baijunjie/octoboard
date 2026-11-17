@@ -6,7 +6,7 @@ import { getInteractionModality } from "react-aria/private/interactions/useFocus
 import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { FIRST_WRITE_DELAY_MS } from "../components/announce/StatusAnnouncer";
-import { markdownContent, pageOf, snapshotState } from "../fixtures/builders";
+import { markdownContent, pageOf, sessionOf, snapshotState } from "../fixtures/builders";
 import { press } from "../components/alerts/detailsTestSupport";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { PanelFrameProvider } from "../components/panel/PanelHeader";
@@ -20,6 +20,7 @@ import { applyDaemonEvent, createStateStore, DaemonProvider, type Daemon } from 
 import { click, type } from "../test/dom";
 import { testDaemon } from "../test/testDaemon";
 import { ReportPanel } from "./ReportPanel";
+import { heldDrafts } from "./pageDrafts";
 import { BROWSER_HOST } from "../test/hosts";
 import { fakeTimers } from "../test/clock";
 
@@ -41,28 +42,40 @@ const formContent = (label: string): PageContent => ({
   ],
 });
 
-function renderReport(pageCount = 2) {
-  const pages = Array.from({ length: pageCount }, (_, i) => pageOf(`page-${i}`, "console-session", formContent(`Page ${i}`), i));
-  const store = createStateStore({ pages: new Map([["console-session", pages]]) });
-  const daemon = testDaemon({ store, request: vi.fn(), showNotice: vi.fn() });
+/** Mounts the report panel of `sessionId` over `daemon`, in the providers and strict mode the app renders it in, in a
+ * section of its own that is removed when the test finishes. `close` unmounts it sooner, as closing the panel or
+ * switching to another session does. */
+function mountPanel(daemon: Daemon, sessionId: string) {
   const container = document.body.appendChild(document.createElement("section"));
   container.dataset.region = "panel-report";
   const root = createRoot(container);
-  onTestFinished(() => {
+  let open = true;
+  const close = () => {
+    if (!open) return;
+    open = false;
     act(() => root.unmount());
     container.remove();
-  });
+  };
+  onTestFinished(close);
   act(() => root.render(
     <StrictMode>
       <PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}>
         <DaemonProvider value={daemon}>
           <PanelFrameProvider value={{ canMaximize: false, maximized: false, onToggleMaximized: () => {}, onClose: () => {} }}>
-            <ReportPanel sessionId="console-session" />
+            <ReportPanel key={sessionId} sessionId={sessionId} />
           </PanelFrameProvider>
         </DaemonProvider>
       </PlatformProvider>
     </StrictMode>,
   ));
+  return { container, close };
+}
+
+function renderReport(pageCount = 2) {
+  const pages = Array.from({ length: pageCount }, (_, i) => pageOf(`page-${i}`, "console-session", formContent(`Page ${i}`), i));
+  const store = createStateStore({ pages: new Map([["console-session", pages]]) });
+  const daemon = testDaemon({ store, request: vi.fn(), showNotice: vi.fn() });
+  const { container } = mountPanel(daemon, "console-session");
   return {
     container,
     append: (session = "console-session") => act(async () => {
@@ -630,6 +643,122 @@ it("keeps a draft typed into the newest page when the user pages to a history pa
   await goTo("Previous page");
   await goTo("Next page");
   expect(noteField(container).value).toBe("half-typed");
+});
+
+const HELD_SESSIONS = ["console-session", "other-session"];
+
+/** A daemon serving two sessions, each with the same two pages by id: an older, read-only one, and the newest, a form.
+ * Its requests are answered by `request`. */
+function heldDaemon(request: Daemon["request"] = vi.fn()) {
+  const store = createStateStore({
+    sessions: new Map(HELD_SESSIONS.map((id) => [id, sessionOf(id, "console", undefined, id, "idle")])),
+    pages: new Map(HELD_SESSIONS.map((id) => [id, [pageOf("page-0", id, { body: [{ type: "markdown", text: "Older" }, ...SURVEY.body] }, 1), pageOf("page-1", id, SURVEY, 0)]])),
+  });
+  return testDaemon({ store, request, showNotice: vi.fn() });
+}
+
+it("keeps what was entered into the newest page's form when the panel is closed and opened again", () => {
+  const daemon = heldDaemon();
+  const first = mountPanel(daemon, "console-session");
+  type(noteField(first.container), "half-typed");
+  first.close();
+  const second = mountPanel(daemon, "console-session");
+  expect(noteField(second.container).value).toBe("half-typed");
+  expect(noteField(second.container).readOnly).toBe(false);
+});
+
+it("keeps the draft through the panel being closed and opened again more than once, and takes on what is typed since", () => {
+  const daemon = heldDaemon();
+  const first = mountPanel(daemon, "console-session");
+  type(noteField(first.container), "half-typed");
+  first.close();
+  const second = mountPanel(daemon, "console-session");
+  type(noteField(second.container), "half-typed, then more");
+  second.close();
+  const third = mountPanel(daemon, "console-session");
+  expect(noteField(third.container).value).toBe("half-typed, then more");
+});
+
+it("keeps each session's draft for when the user switches to another session and back, and shows none in another session's panel", () => {
+  const daemon = heldDaemon();
+  const first = mountPanel(daemon, "console-session");
+  type(noteField(first.container), "for the console");
+  first.close();
+
+  // The other session has pages of the same ids, and shows nothing of the console session's draft.
+  const other = mountPanel(daemon, "other-session");
+  expect(noteField(other.container).value).toBe("");
+  type(noteField(other.container), "for the other");
+  other.close();
+
+  expect(noteField(mountPanel(daemon, "console-session").container).value).toBe("for the console");
+  expect(noteField(mountPanel(daemon, "other-session").container).value).toBe("for the other");
+});
+
+it("still keeps the draft of the page the user paged away from and back to", async () => {
+  const daemon = heldDaemon();
+  const first = mountPanel(daemon, "console-session");
+  type(noteField(first.container), "half-typed");
+  await click(first.container.querySelector('[aria-label="Previous page"]'));
+  await click(first.container.querySelector('[aria-label="Next page"]'));
+  expect(noteField(first.container).value).toBe("half-typed");
+  first.close();
+  expect(noteField(mountPanel(daemon, "console-session").container).value).toBe("half-typed");
+});
+
+it("loses the draft of a page deleted while the panel was closed, and holds it no longer", async () => {
+  const daemon = heldDaemon();
+  const first = mountPanel(daemon, "console-session");
+  type(noteField(first.container), "half-typed");
+  first.close();
+  expect(heldDrafts(daemon.store, "console-session")).toEqual({ "page-1": { note: "half-typed" } });
+
+  await act(async () => {
+    applyDaemonEvent(daemon.store, { type: "pages_deleted", session_id: "console-session", pages: ["page-1"] });
+  });
+  const second = mountPanel(daemon, "console-session");
+  // What is left is the older page, which is now the newest and takes a submission, with nothing entered.
+  expect(second.container.textContent).toContain("Older");
+  expect(noteField(second.container).readOnly).toBe(false);
+  expect(noteField(second.container).value).toBe("");
+  expect(heldDrafts(daemon.store, "console-session")).toEqual({});
+});
+
+it("loses the draft of a page deleted while the panel is open", async () => {
+  const daemon = heldDaemon();
+  const { container } = mountPanel(daemon, "console-session");
+  type(noteField(container), "half-typed");
+  await act(async () => {
+    applyDaemonEvent(daemon.store, { type: "pages_deleted", session_id: "console-session", pages: ["page-1"] });
+  });
+  expect(heldDrafts(daemon.store, "console-session")).toEqual({});
+});
+
+it("unlocks a page whose submission certainly failed while the panel was closed, with the values entered, when it is opened again", async () => {
+  let refuse!: (error: Error) => void;
+  const request = vi.fn((body: { type: string }) => (body.type === "submit_page" ? new Promise((_, reject) => void (refuse = reject)) : Promise.resolve({ type: "ack", id: null })));
+  onTestFinished(() => act(() => { while (errorAlerts.getSnapshot().length > 0) errorAlerts.acknowledge(); }));
+  const daemon = heldDaemon(request as Daemon["request"]);
+  const first = mountPanel(daemon, "console-session");
+  type(noteField(first.container), "Ada");
+  await click([...first.container.querySelectorAll("button")].find((candidate) => candidate.textContent === "Send"));
+  expect(request.mock.calls.filter(([body]) => body.type === "submit_page")).toHaveLength(1);
+  first.close();
+  await act(async () => refuse(new CodedError("This session is not running.", "session_not_running", { session: "console-session" })));
+
+  const second = mountPanel(daemon, "console-session");
+  const send = [...second.container.querySelectorAll("button")].find((candidate) => candidate.textContent === "Send")!;
+  expect(second.container.textContent).not.toContain("Submitted");
+  expect(noteField(second.container).readOnly).toBe(false);
+  expect(noteField(second.container).value).toBe("Ada");
+  expect(send.disabled).toBe(false);
+  expect(send.getAttribute("aria-busy")).toBeNull();
+});
+
+it("starts a daemon of its own with no draft, whatever another daemon holds for a session of the same id", () => {
+  const first = heldDaemon();
+  type(noteField(mountPanel(first, "console-session").container), "half-typed");
+  expect(noteField(mountPanel(heldDaemon(), "console-session").container).value).toBe("");
 });
 
 it("puts the page's timestamp and badges after the pager in the panel header", async () => {

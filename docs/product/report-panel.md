@@ -139,16 +139,23 @@ The position, the total and the badges all count the selected session's pages on
 the time is what shortens first (see "A panel's header" in `docs/product/right-pane-panels.md`).
 
 The page itself fills the card under the header and scrolls within it (see `docs/product/scrolling-surfaces.md`). The
-place the user has paged to is not kept: whenever the report panel gives way in the right pane — another session
-selected, or Open panel in a project's action menu putting a project's panel in its place — coming back to it shows its
-newest page again, with anything typed into any page's form and not submitted gone.
+place the user has paged to is not kept: whenever the report panel is closed or gives way in the right pane — another
+session selected, or Open panel in a project's action menu putting a project's panel in its place — coming back to it
+shows its newest page again. What was typed into its pages' forms is kept (see below).
 
 - The panel follows the newest page: a page pushed while the user is on the newest one moves the view
   to it.
 - A page pushed while the user is reading **history** does not move them. The view stays on the page
   they paged to, and only the total grows.
-- Paging away from a page keeps what was typed into its form: paging back to it shows those values again, for as
-  long as the panel stays in the right pane. A page that is withdrawn takes what was typed into it with it.
+- What was typed into a page's form and not submitted is kept for that page: paging back to it, opening the closed
+  panel again, or coming back to the session after the panel gave way in the right pane shows those values again. The
+  window keeps them in memory, for each session's pages: reloading the window loses them, and another window does not
+  see them. A page that no longer exists — withdrawn, for instance — takes what was typed into it with it, also when it
+  went while the panel was closed.
+- A submission whose request was still out when the panel was closed or gave way is not shown as under way when the
+  panel comes back: the page shows as submitted, since the daemon marks it so before delivering (see "Submitting a form
+  back to the session" below), and if the delivery certainly did not happen, it comes back unlocked with the values
+  entered.
 - A console session with no pages — none pushed yet, or all withdrawn — shows, under the panel's header, an empty panel
   filling the card, saying there are no pages yet (see "The full panel" in `docs/product/empty-states.md`). While the
   console session's pages are first being listed, the card shows its header alone; keyboard focus on a header control

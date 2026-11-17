@@ -382,8 +382,8 @@ Report panel" in `docs/product/right-pane-panels.md`).
   `docs/product/right-pane-panels.md`); when the sidebar floats automatically it also closes its overlay. It selects,
   starts and resumes no session: the selected session's terminal stays, and the breadcrumb still names it.
 - **Open panel while a console session's report panel is shown** puts the project's chosen panel in its place. Selecting
-  the console session again brings the report panel back, on its newest page; anything typed into a page's form and not
-  submitted is gone (see "Paging through the history" in `docs/product/report-panel.md`).
+  the console session again brings the report panel back, on its newest page, with what was typed into its pages' forms
+  and not submitted still there (see "Paging through the history" in `docs/product/report-panel.md`).
 - **Making another console the current one** — pressing its avatar on the rail, pressing inside the floating sidebar
   while it previews that console, or a console created from this window appearing — gives the right pane to the own
   owner of the session the switch shows, the one last selected in that console; with no session shown there is no right
