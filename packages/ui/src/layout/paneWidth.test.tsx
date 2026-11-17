@@ -140,6 +140,27 @@ it("lets a floating pane reach the docked sidebar and follows changes to that bo
   expect(handle.getAttribute("aria-valuemax")).toBe("1392");
 });
 
+it("lets a docked pane exceed 720px while reserving 400px for the terminal", () => {
+  const test = mount();
+  test.viewport(1800);
+  act(() => test.sidebar().setWidth(480));
+  act(() => test.aside().setWidth(2000));
+  expect(test.aside().width).toBe(872);
+  expect(test.aside().max).toBe(872);
+  expect(1800 - 48 - test.sidebar().width - test.aside().width).toBe(400);
+
+  test.render(320, { sidebar: false, aside: true });
+  const handle = test.container.querySelector<HTMLElement>("[role=separator]")!;
+  expect(handle.getAttribute("aria-valuemax")).toBe("1352");
+  act(() => handle.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true })));
+  expect(test.aside().width).toBe(1352);
+  expect(localStorage.getItem(PREFERENCE_KEYS.asideWidth)).toBe("1352");
+
+  test.render();
+  expect(test.aside().width).toBe(872);
+  expect(localStorage.getItem(PREFERENCE_KEYS.asideWidth)).toBe("1352");
+});
+
 it("keeps a floating width above 720 across docking and viewport changes", () => {
   const test = mount();
   test.viewport(1200);
@@ -152,7 +173,7 @@ it("keeps a floating width above 720 across docking and viewport changes", () =>
   expect(test.aside().width).toBe(552);
   test.viewport(1800);
   test.render();
-  expect(test.aside().width).toBe(720);
+  expect(test.aside().width).toBe(1000);
   expect(localStorage.getItem(PREFERENCE_KEYS.asideWidth)).toBe("1000");
   test.render(320, { sidebar: true, aside: false });
   expect(test.aside().width).toBe(1000);

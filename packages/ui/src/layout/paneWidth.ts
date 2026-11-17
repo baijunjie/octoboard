@@ -13,8 +13,8 @@ export type PaneSide = "sidebar" | "aside";
  * replacing the user's choices. Floating groups use the same chosen width as docked groups. */
 const PANES = {
   sidebar: { key: PREFERENCE_KEYS.sidebarWidth, min: MIN_PANEL_COLUMN_WIDTH, default: 280, max: 480 },
-  aside: { key: PREFERENCE_KEYS.asideWidth, min: MIN_SINGLE_COLUMN_ASIDE_WIDTH, default: 420, max: 720 },
-} satisfies Record<PaneSide, { key: string; min: number; default: number; max: number }>;
+  aside: { key: PREFERENCE_KEYS.asideWidth, min: MIN_SINGLE_COLUMN_ASIDE_WIDTH, default: 420 },
+} satisfies Record<PaneSide, { key: string; min: number; default: number; max?: number }>;
 
 /** The agent terminal keeps about 40 columns beside docked panes. */
 export const TERMINAL_FLOOR = 400;
@@ -40,14 +40,14 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 function createChosenWidth(side: PaneSide) {
-  const { key, min, max } = PANES[side];
+  const { key, min } = PANES[side];
   // The width the user chose, never rewritten by the viewport clamp below: a window narrowed and
   // widened again gives the chosen width back. `undefined` means the default.
   return createPersistedPreference<number | undefined>(
     key,
     (raw) => {
       const width = Number(raw);
-      return Number.isFinite(width) && width > 0 ? Math.max(min, side === "aside" ? width : Math.min(width, max)) : undefined;
+      return Number.isFinite(width) && width > 0 ? Math.max(min, side === "aside" ? width : Math.min(width, PANES.sidebar.max)) : undefined;
     },
     (width) => (width === undefined ? null : String(width)),
     LAYOUT_SCOPE,
@@ -86,9 +86,9 @@ export interface DockedPanes {
  * sidebar receives spare width.
  */
 function maxWidthFor(side: PaneSide, docked: DockedPanes, chosenSidebar: number | undefined, railWidth: number, asideMin: number): number {
-  const { max } = PANES[side];
   const min = side === "aside" ? asideMin : PANES.sidebar.min;
   if (side === "sidebar") {
+    const { max } = PANES.sidebar;
     if (!docked.sidebar) return max;
     const asideReserve = docked.aside ? asideMin : 0;
     return clamp(viewportWidth - railWidth - TERMINAL_FLOOR - asideReserve, min, max);
@@ -98,7 +98,7 @@ function maxWidthFor(side: PaneSide, docked: DockedPanes, chosenSidebar: number 
     ? clamp(chosenSidebar ?? sidebar.default, sidebar.min, maxWidthFor("sidebar", docked, chosenSidebar, railWidth, asideMin))
     : 0;
   const available = viewportWidth - railWidth - sidebarWidth;
-  return docked.aside ? clamp(available - TERMINAL_FLOOR, min, max) : Math.max(min, available);
+  return Math.max(min, available - (docked.aside ? TERMINAL_FLOOR : 0));
 }
 
 export interface PaneWidth {

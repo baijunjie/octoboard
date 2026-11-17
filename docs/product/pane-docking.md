@@ -32,7 +32,7 @@ panel floats over the terminal" in `docs/product/right-pane-panels.md`).
 | Pane | Default | Range the user can choose |
 |---|---|---|
 | Sidebar | 280 px | 260–480 px |
-| Docked right pane | 420 px | 276–720 px; at least 546 px with three or four cards |
+| Docked right pane | 420 px | from 276 px up to the space available beside the terminal; at least 546 px with three or four cards |
 | Terminal | everything left over | never below 400 px (about 40 columns) |
 
 The right pane's width includes the gaps around its cards (see "The panel cards" in
@@ -41,6 +41,10 @@ The right pane's width includes the gaps around its cards (see "The panel cards"
 opening or closing panels changes the number of columns (see "Opening and closing panels" in
 `docs/product/right-pane-panels.md`). Extra width a wider window frees goes to the terminal. The right pane has one
 width, whoever owns it.
+
+**The docked right pane has no fixed maximum width.** It can widen to the window's width less the **48 px rail**,
+the displayed width of the docked sidebar while shown, and the terminal's **400 px** minimum. A hidden or floating
+sidebar reserves no width.
 
 **The terminal always keeps its 400 px.** Where the window cannot afford every pane its chosen width, the right pane
 gives up width first, down to its effective minimum, and only then the sidebar, down to 260 px. Three or four cards
@@ -105,13 +109,14 @@ revealed throughout the drag and does not resize the agent terminal.
 
 **A floating right pane can widen to the sidebar's content-side edge**, keeping the cards' usual insets. Its maximum
 total width is the window's width less the **48 px rail** and the width of the docked sidebar while shown. With the
-sidebar hidden or itself floating, only the rail is reserved. Above 768 px, floating widths have no fixed 720 px cap.
+sidebar hidden or itself floating, only the rail is reserved. Above 768 px, floating widths have no fixed maximum.
 
 **Each pane's chosen width is remembered per client**, in that client's own browser storage, as the appearance choice
 is (see "Where the choice is stored" in `docs/product/appearance.md`); without that storage a choice lasts until the
-page is reloaded. A stored sidebar width below 260 px is used as 260 px. A right-pane width above 720 px is remembered
-too: docking the pane or narrowing the window limits its rendered width without replacing that choice. Floating it
-again or widening the available space restores the chosen width as far as the current bounds allow.
+page is reloaded. A stored sidebar width below 260 px is used as 260 px. A right-pane width beyond the space currently
+available is remembered too: docking the pane or narrowing the window limits its rendered width without replacing
+that choice. Floating it again or widening the available space restores the chosen width as far as the current bounds
+allow.
 
 ## Hiding the sidebar
 

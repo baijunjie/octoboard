@@ -82,6 +82,7 @@ it("keeps the total width when a third card needs no extra column", () => {
 
 it("preserves the surviving column after expansion reaches the docked maximum", () => {
   const test = mount(false);
+  test.viewport(1448);
   test.render(["terminal", "files", "processes"]);
   expect(test.widths().asideWidth.width).toBe(720);
   test.render(["files", "processes"]);
