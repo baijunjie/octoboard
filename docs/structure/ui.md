@@ -406,6 +406,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | A provider's setting in Settings; its copy | `AgentProviderSettings` (`src/settings/accounts/AgentProviderSettings.tsx`) over the served `ProviderInfo.settings`; copy keys by `settingMessageKey` (`src/agents/providers.ts`), messages in the provider's module |
 | A provider setting's copy and help text, wherever the setting is shown | `useSettingCopy`, `settingText` and `SettingHelp` (`src/settings/accounts/providerSettingCopy.tsx`) |
 | A launch level's compatibility switches (rows, or one cell of a matrix) | `AgentCompatibilityField` and `CompatibilityPicker` (`src/dialogs/AgentCompatibilityField.tsx`) over `compatibilitySettings` and the diff helpers of `src/agents/launchCompatibility.ts`; no per-switch UI code |
+| A select field, including a branch picker | `OptionSelect` (`src/components/form/OptionSelect.tsx`) owns the field and its option list, including virtualization; feature adapters supply the values and their presentation |
 | A choice between following the parent, On and Off | `FollowSwitchSelect` (`src/components/form/FollowSwitchSelect.tsx`), as the Git workflow field and the compatibility pickers use it |
 | A provider's name set apart in a sentence | `ProviderName` (`src/components/text/ProviderName.tsx`) |
 | A provider's mark and colour | `providerMark`, `providerColour` (`src/providers/registry.ts`); `AgentIcon` (`src/components/icons/`) draws the mark, `providerFillVars` (`src/quota/providerFill.ts`) paints a quota bar |

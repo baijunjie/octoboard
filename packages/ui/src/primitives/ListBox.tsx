@@ -10,13 +10,16 @@ import { type DataAttributes, definedProps } from "./props";
  * `children` function and rebuilt when `items` or `dependencies` change, as react-aria caches each item's row
  * otherwise. With `rowHeight` the list is virtualized, every row that tall, for a list too long to mount whole. The rest
  * of the props (a scroll fade's, a list motion's) go on the list's element. */
-export function ListBox<T extends object>({ ref, label, items, dependencies, onAction, rowHeight, className, children, ...rest }: DataAttributes & Omit<React.HTMLAttributes<HTMLDivElement>, "children"> & {
+export function ListBox<T extends object>({ ref, label, items, dependencies, onAction, rowHeight, rowGap, rowPadding, className, children, ...rest }: DataAttributes & Omit<React.HTMLAttributes<HTMLDivElement>, "children"> & {
   ref?: React.Ref<HTMLDivElement>;
   label?: string;
   items?: Iterable<T>;
   dependencies?: readonly unknown[];
   onAction?: (id: string) => void;
   rowHeight?: number;
+  /** Spacing and inset owned by the virtualized layout rather than CSS margins and padding. */
+  rowGap?: number;
+  rowPadding?: number;
   className?: string;
   children: React.ReactNode | ((item: T) => React.ReactElement);
 }): React.ReactElement {
@@ -37,7 +40,7 @@ export function ListBox<T extends object>({ ref, label, items, dependencies, onA
   );
   if (rowHeight === undefined) return list;
   return (
-    <Virtualizer layout={ListLayout} layoutOptions={{ rowHeight }}>
+    <Virtualizer layout={ListLayout} layoutOptions={{ rowHeight, gap: rowGap, padding: rowPadding }}>
       {list}
     </Virtualizer>
   );

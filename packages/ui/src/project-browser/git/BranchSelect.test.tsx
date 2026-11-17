@@ -75,3 +75,30 @@ it("draws the branch choice in HeroUI's default field variant, as a control on t
   expect(select.classList.contains("select--primary")).toBe(true);
   expect(select.classList.contains("select--secondary")).toBe(false);
 });
+
+it("keeps a gone branch visible without offering it as a choice, and allows choosing an existing branch", async () => {
+  const changed = vi.fn();
+  const container = mountRows(<BranchSelect label="Branch" branches={branches} value="removed/topic" gone selectedSessionId={undefined} onChange={changed} />);
+  const trigger = container.querySelector<HTMLButtonElement>("[data-slot=select-trigger]")!;
+  expect(trigger.textContent).toContain("removed/topic");
+  expect(trigger.textContent).toContain("No longer exists");
+  expect(container.querySelectorAll("button")).toHaveLength(1);
+  await act(async () => trigger.click());
+  const choices = [...document.querySelectorAll<HTMLElement>('[role="option"]')];
+  expect(choices).toHaveLength(branches.length);
+  expect(choices.every((option) => !option.textContent?.includes("removed/topic"))).toBe(true);
+  await act(async () => choices.find((option) => option.textContent?.startsWith("main"))!.click());
+  expect(changed).toHaveBeenCalledExactlyOnceWith("main");
+});
+
+it("cannot clear a chosen branch with Backspace or Delete", () => {
+  const changed = vi.fn();
+  const container = mountRows(<BranchSelect label="Branch" branches={branches} value="main" gone={false} selectedSessionId={undefined} onChange={changed} />);
+  const trigger = container.querySelector<HTMLButtonElement>("[data-slot=select-trigger]")!;
+  act(() => {
+    for (const key of ["Backspace", "Delete"]) trigger.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+  });
+  expect(changed).not.toHaveBeenCalled();
+  expect(trigger.textContent).toBe("main");
+  expect(container.querySelector<HTMLSelectElement>("select")?.value).toBe("main");
+});

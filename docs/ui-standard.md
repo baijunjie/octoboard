@@ -2453,6 +2453,14 @@ full strength instead of dimmed; a text field's value stays selectable. The wrap
 Checkboxes, radios and switches have no separate read-only look: HeroUI draws them undimmed already, and they simply
 take no press.
 
+### Select options share one component
+
+Every Select field uses `OptionSelect` (`packages/ui/src/components/form/OptionSelect.tsx`), including feature
+wrappers such as the branch picker. Feature code supplies the labels, value presentation and option metadata;
+the shared component owns the option layout. Ordinary and virtualized single-line options keep the same HeroUI
+default row height, spacing and inset. A caller never sets its own option height or padding. Options with a visible
+reason retain their natural height rather than being forced into a fixed-height virtual row. (Source: user decision.)
+
 ### Selects while their options load
 
 A select shows its options loading inside the control: a decorative spinner replaces the trailing chevron, and

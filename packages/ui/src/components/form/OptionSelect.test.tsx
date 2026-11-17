@@ -11,6 +11,9 @@ import { InlineReference } from "../../i18n/InlineReference";
 import { currentLanguage, setLanguage } from "../../i18n/language";
 import { fakeTimers, runOutTimers } from "../../test/clock";
 
+import { enter, leave, mountForTooltip, openTooltip, tooltipsCooledDown } from "../hint/tooltipTestSupport";
+import { expectIndependentMarquees, stubMarquee } from "../motion/marqueeTestSupport";
+
 import { OptionSelect } from "./OptionSelect";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -350,4 +353,125 @@ it("gives the label and the description of a select the direction of their text 
   render("auto");
   expect(container.querySelector("[data-slot=label]")!.getAttribute("dir")).toBe("auto");
   expect(container.querySelector("[data-slot=description]")!.getAttribute("dir")).toBe("auto");
+});
+
+it.each([false, true])("keeps list metadata out of native option text and the selected value (virtualized: %s)", async (virtualized) => {
+  const changed = vi.fn();
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  function Field() {
+    const [value, setValue] = useState("main");
+    return <OptionSelect label="Branch" virtualized={virtualized} value={value} onChange={(next) => { changed(next); setValue(next); }} options={[
+      { value: "main", label: "main", endContent: <span>abc1234</span> },
+      { value: "topic", label: "مراجعة/topic", labelDir: "ltr", labelClip: "start", endContent: <span>def5678</span> },
+    ]} />;
+  }
+  act(() => root.render(<Field />));
+  const trigger = container.querySelector<HTMLButtonElement>("[data-slot=select-trigger]")!;
+  expect(trigger.textContent).toBe("main");
+  expect(container.querySelector('option[value="topic"]')?.textContent).toBe("مراجعة/topic");
+  await act(async () => trigger.click());
+  const topic = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((option) => option.textContent?.includes("مراجعة/topic"))!;
+  expect(topic.textContent).toContain("def5678");
+  expect(topic.querySelector('[dir="ltr"]')?.textContent).toBe("مراجعة/topic");
+  await act(async () => topic.click());
+  expect(changed).toHaveBeenCalledExactlyOnceWith("topic");
+  expect(trigger.textContent).toBe("مراجعة/topic");
+  expect(container.querySelector<HTMLSelectElement>("select")?.value).toBe("topic");
+});
+
+it.each([false, true])("updates open options when their metadata changes (virtualized: %s)", async (virtualized) => {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  const render = (commit: string) => act(() => root.render(
+    <OptionSelect label="Branch" virtualized={virtualized} value="main" onChange={() => {}} options={[
+      { value: "main", label: "main", endContent: <span>{commit}</span> },
+    ]} />,
+  ));
+  render("abc1234");
+  await act(async () => container.querySelector<HTMLButtonElement>("[data-slot=select-trigger]")!.click());
+  expect(document.querySelector('[role="option"]')?.textContent).toContain("abc1234");
+  render("def5678");
+  expect(document.querySelector('[role="option"]')?.textContent).toContain("def5678");
+  expect(document.querySelector('[role="option"]')?.textContent).not.toContain("abc1234");
+});
+
+it("shows a held value outside the choices and keeps the beside label associated with the trigger", async () => {
+  const changed = vi.fn();
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  act(() => root.render(<OptionSelect label="Branch" besideLabel value="gone" valueContent={<span>gone (no longer exists)</span>} onChange={changed} options={[
+    { value: "main", label: "main" },
+  ]} />));
+  const trigger = container.querySelector<HTMLButtonElement>("[data-slot=select-trigger]")!;
+  const label = container.querySelector<HTMLElement>("[data-slot=label]")!;
+  expect(trigger.textContent).toBe("gone (no longer exists)");
+  expect(trigger.getAttribute("aria-labelledby")?.split(" ")).toContain(label.id);
+  expect(label.textContent).toBe("Branch");
+  expect(container.querySelectorAll("button")).toHaveLength(1);
+  await act(async () => trigger.click());
+  const options = [...document.querySelectorAll<HTMLElement>('[role="option"]')];
+  expect(options.map((option) => option.textContent)).toEqual(["main"]);
+  await act(async () => options[0]!.click());
+  expect(changed).toHaveBeenCalledExactlyOnceWith("main");
+});
+
+it("keeps multiline reason options outside the fixed-height virtualized layout", async () => {
+  onTestFinished(() => { vi.restoreAllMocks(); });
+  for (const property of ["clientWidth", "clientHeight", "offsetWidth", "offsetHeight"] as const) {
+    vi.spyOn(HTMLElement.prototype, property, "get").mockReturnValue(300);
+  }
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  const options = [
+    ...Array.from({ length: 30 }, (_, index) => ({ value: String(index), label: `Model ${index}` })),
+    { value: "unavailable", label: "Unavailable", detail: "Quota exhausted", reason: { state: "Quota exhausted" } },
+  ];
+  act(() => root.render(<OptionSelect label="Model" virtualized value="0" onChange={() => {}} options={options} />));
+  await act(async () => container.querySelector<HTMLButtonElement>("[data-slot=select-trigger]")!.click());
+  const choices = [...document.querySelectorAll<HTMLElement>('[role="option"]')];
+  expect(choices).toHaveLength(options.length);
+  expect(choices.at(-1)?.textContent).toContain("Quota exhausted");
+});
+
+
+it("keeps a technical option's plain-label tooltip left to right and in the label's font", async () => {
+  await tooltipsCooledDown();
+  stubMarquee();
+  const name = "مراجعة/a-long-branch-name";
+  const container = mountForTooltip(<OptionSelect label="Branch" value="topic" onChange={() => {}} options={[
+    { value: "topic", label: name, labelDir: "ltr", labelClip: "start", endContent: <span>abc1234</span> },
+  ]} />);
+  act(() => container.querySelector<HTMLButtonElement>("[data-slot=select-trigger]")!.click());
+  runOutTimers();
+  const label = document.querySelector<HTMLElement>('[role="option"] [dir="ltr"]')!;
+  label.style.fontFamily = "monospace";
+  enter(label);
+  runOutTimers();
+  expect(openTooltip()?.textContent).toBe(name);
+  const value = openTooltip()?.querySelector<HTMLElement>('[dir="ltr"]');
+  expect(value?.textContent).toBe(name);
+  expect(value?.style.fontFamily).toBe("monospace");
+  leave(label);
+  runOutTimers();
+});
+
+it("does not start a clipped option's marquee when hovering its metadata or surrounding row", () => {
+  stubMarquee();
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  onTestFinished(() => { act(() => root.unmount()); container.remove(); });
+  act(() => root.render(<OptionSelect label="Branch" value="topic" onChange={() => {}} options={[
+    { value: "topic", label: "feature/a-long-branch-name", labelDir: "ltr", labelClip: "start", endContent: <span data-testid="commit">abc1234</span> },
+  ]} />));
+  act(() => container.querySelector<HTMLButtonElement>("[data-slot=select-trigger]")!.click());
+  runOutTimers();
+  const row = document.querySelector<HTMLElement>('[role="option"]')!;
+  const label = row.querySelector<HTMLElement>('[dir="ltr"]')!;
+  const metadata = row.querySelector<HTMLElement>('[data-testid="commit"]')!;
+  expectIndependentMarquees([label], [metadata, row]);
 });

@@ -106,9 +106,8 @@ const WHOLE_COMMITS: FixtureCommit[] = [
 ];
 
 /** The sample repository's branches and a dozen more, past what a selector's list shows without
- * scrolling (ten rows of its height). The first of the others starts with right-to-left letters and
- * is long enough to be cut, within the rows in sight: a name is read left to right whatever it starts
- * with. */
+ * scrolling. The first of the others starts with right-to-left letters and is long enough to be cut,
+ * within the rows in sight: a name is read left to right whatever it starts with. */
 const CROWDED_BRANCHES: BranchInfo[] = [
   ...BRANCHES,
   ...[

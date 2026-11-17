@@ -10,6 +10,7 @@ import { MotionListBox } from "../motion/MotionListBox";
 import { ReasonText } from "../text/ReasonText";
 import type { Reason } from "../../format/reason";
 import { StatusBadge } from "../status/StatusBadge";
+import { useScrollFade } from "../scroll/scrollFade";
 import { Description, Label, ListBoxItem, ListBoxItemLabel, OutsideFieldParts, Select, SelectClearButton, SelectPopover, SelectTrigger } from "../../primitives";
 
 /** One choice of an `OptionSelect`. */
@@ -18,6 +19,11 @@ export type Option<T extends string> = {
   label: string;
   /** Visible whole-label presentation; matching and hidden native options retain the raw label. */
   labelContent?: React.ReactNode;
+  /** Technical names keep their reading direction and may preserve the end when clipped. */
+  labelDir?: "ltr";
+  labelClip?: "start";
+  /** Metadata shown after the label in the list alone, before the selection indicator. */
+  endContent?: React.ReactNode;
   lang?: string;
   icon?: React.ReactNode;
   /** A status badge after the label ("Not added"), which never shrinks: the label gives way first (unless `badgeInLabel`). */
@@ -63,15 +69,17 @@ function OptionText({ label, badge, inTooltip }: { label: React.ReactNode; badge
 
 /** An option's label in its fade, with the badge inside it when there is one, and the same text as the
  * tooltip of a clipped label. */
-function FadeLabel({ label, badge, lang, className, as }: {
+function FadeLabel({ label, badge, lang, dir = "auto", clip, className, as }: {
   label: React.ReactNode;
   badge?: string;
   lang?: string;
+  dir?: "auto" | "ltr";
+  clip?: "start";
   className: string;
   as?: "span";
 }): React.ReactElement {
   return (
-    <FadeOverflow as={as} lang={lang} dir="auto" className={className} titleWhenClipped={<OptionText label={label} badge={badge} inTooltip />}>
+    <FadeOverflow as={as} lang={lang} dir={dir} clip={clip} className={className} titleWhenClipped={badge ? <OptionText label={label} badge={badge} inTooltip /> : label}>
       <OptionText label={label} badge={badge} />
     </FadeOverflow>
   );
@@ -139,6 +147,9 @@ export function OptionSelect<T extends string>({
   labelMark,
   landing,
   variant = "secondary",
+  besideLabel = false,
+  valueContent,
+  virtualized = false,
 }: {
   label: string;
   options: Option<T>[];
@@ -179,6 +190,12 @@ export function OptionSelect<T extends string>({
   /** HeroUI's field variant: `secondary` for a field on a surface (the default), `primary` (HeroUI's default) for one
    * on a pane's own background. */
   variant?: "primary" | "secondary";
+  /** Places the label and control in the two columns of a parent subgrid. */
+  besideLabel?: boolean;
+  /** A domain-specific value, including a held value no longer present among the choices. */
+  valueContent?: React.ReactNode;
+  /** Virtualizes single-line choices using the same row height, gap and inset as the ordinary list. */
+  virtualized?: boolean;
 } & (
   | { value: T; onChange: (value: T) => void; placeholder?: undefined }
   | { value: T | null; onChange: (value: T | null) => void; placeholder: string }
@@ -195,6 +212,8 @@ export function OptionSelect<T extends string>({
   const invalid = isInvalid === true || (errorMessage !== undefined && errorMessage !== null && errorMessage !== false && errorMessage !== "");
   const textProps = textDir === undefined ? {} : { dir: textDir, className: "align-match-parent" };
   const hasReason = options.some((option) => option.reason);
+  const virtual = virtualized && !hasReason;
+  const listFade = useScrollFade({ className: "relative max-h-80 overflow-y-auto p-0" });
   // Decided once the commit has set the trigger's `disabled`, and before the effects of a caller's own handoff.
   const handoffFrom = useHandoffAfterRemoval(() => trigger.current);
   const handoffToTrigger = (id: string) => handoffFrom(`[data-status-mark-id="${id}"]`);
@@ -206,7 +225,7 @@ export function OptionSelect<T extends string>({
       // trigger and the later half would otherwise paint over it along the shared edge. The raise
       // is on the flex item, the root, which a trigger's own `z-index` would not be.
       // Both halves may carry a badge. Share the width so either name gives way within its own half.
-      className={inline ? "w-48" : joined ? "min-w-0 basis-0 flex-1 has-ui-keyboard-focus:z-10" : undefined}
+      className={besideLabel ? "col-span-2 grid grid-cols-subgrid items-center gap-x-2" : inline ? "w-48" : joined ? "min-w-0 basis-0 flex-1 has-ui-keyboard-focus:z-10" : undefined}
       label={(inline || joined || hideLabel) && !labelledBy ? label : undefined}
       labelledBy={labelledBy}
       // react-aria drops the slot's id when no note exists on mount and does not restore it when
@@ -236,7 +255,7 @@ export function OptionSelect<T extends string>({
         </div>
       ) : <Label {...textProps}>{label}</Label>)}
       {/* The trigger and the mark share a box, as the mark is laid over the trigger's trailing room. */}
-      <div className="relative">
+      <div className="relative min-w-0">
         {/* Joined: the two parts square the corners they meet at and touch. Nothing is drawn between
             them: a gap shows the dialog's surface through in the light theme, and a border would sit close to this
             variant's fill in the dark one, and HeroUI's own input group draws no boundary between its parts
@@ -253,9 +272,9 @@ export function OptionSelect<T extends string>({
                 : "w-full"
           }
           valueClassName="flex min-w-0 flex-1 items-center gap-2 text-clip"
-          value={<>
+          value={valueContent ?? <>
             {current?.icon && <span aria-hidden="true" className="flex shrink-0">{current.icon}</span>}
-            <FadeLabel as="span" lang={current?.lang} className={!badge || badgeInLabel ? "min-w-0 flex-1" : "min-w-0"} label={current?.labelContent ?? current?.label ?? shownPlaceholder} badge={badgeInLabel ? badge : undefined} />
+            <FadeLabel as="span" lang={current?.lang} dir={current?.labelDir} clip={current?.labelClip} className={!badge || badgeInLabel ? "min-w-0 flex-1" : "min-w-0"} label={current?.labelContent ?? current?.label ?? shownPlaceholder} badge={badgeInLabel ? badge : undefined} />
             {badge && !badgeInLabel && <StatusBadge>{badge}</StatusBadge>}
           </>}
         >
@@ -284,11 +303,17 @@ export function OptionSelect<T extends string>({
         placement={hasReason ? "bottom start" : undefined}
         className={hasReason ? "w-max max-w-[min(20rem,calc(100vw-2rem))]" : "w-(--trigger-width) max-w-[calc(100vw-2rem)]"}
       >
-        <MotionListBox className="relative">
-          {options.map((option) => (
+        <MotionListBox
+          items={options}
+          rowHeight={virtual ? 36 : undefined}
+          rowGap={virtual ? 4 : undefined}
+          rowPadding={virtual ? 6 : undefined}
+          {...(virtual ? listFade : { className: "relative" })}
+        >
+          {(option) => (
             <ListBoxItem
               data-list-motion={option.value}
-              data-marquee-scope
+              data-marquee-scope={option.endContent === undefined ? true : undefined}
               // A disabled option is dimmed by its name taking the secondary text colour and its icon fading;
               // react-aria marks no option disabled under `disabledBehavior="selection"`, so nothing fades the row.
               className="pe-7"
@@ -310,18 +335,19 @@ export function OptionSelect<T extends string>({
                   {/* The option's name is its label and badge alone: the `label` slot keeps the description
                       (and the note under the label) out of it, so a screen reader does not say it twice. */}
                   <ListBoxItemLabel className="flex min-w-0 items-center gap-2">
-                    <FadeLabel as="span" lang={option.lang} className={option.isDisabled ? `min-w-0 ${DISABLED_NAME}` : "min-w-0"} label={option.labelContent ?? option.label} badge={option.badgeInLabel ? option.badge : undefined} />
+                    <FadeLabel as="span" lang={option.lang} dir={option.labelDir} clip={option.labelClip} className={option.isDisabled ? `min-w-0 ${DISABLED_NAME}` : "min-w-0"} label={option.labelContent ?? option.label} badge={option.badgeInLabel ? option.badge : undefined} />
                     {option.badge && !option.badgeInLabel && <StatusBadge>{option.badge}</StatusBadge>}
                   </ListBoxItemLabel>
                   <Description className="sr-only">{option.detail}</Description>
                   {option.reason && <span aria-hidden="true" className="text-xs text-app-muted"><ReasonText reason={option.reason} /></span>}
                 </span>
               ) : (
-                <FadeLabel lang={option.lang} className={`${option.badge && !option.badgeInLabel ? "min-w-0" : "min-w-0 flex-1"}${option.isDisabled ? ` ${DISABLED_NAME}` : ""}`} label={option.labelContent ?? option.label} badge={option.badgeInLabel ? option.badge : undefined} />
+                <FadeLabel lang={option.lang} dir={option.labelDir} clip={option.labelClip} className={`${option.badge && !option.badgeInLabel ? "min-w-0" : "min-w-0 flex-1"}${option.isDisabled ? ` ${DISABLED_NAME}` : ""}`} label={option.labelContent ?? option.label} badge={option.badgeInLabel ? option.badge : undefined} />
               )}
               {option.badge && !option.badgeInLabel && !option.detail && <StatusBadge>{option.badge}</StatusBadge>}
+              {option.endContent}
             </ListBoxItem>
-          ))}
+          )}
         </MotionListBox>
       </SelectPopover>
       {description && <Description id={descriptionId} {...textProps}>{description}</Description>}
