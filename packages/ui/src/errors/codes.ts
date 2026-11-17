@@ -151,7 +151,8 @@ const CORE_CODES = {
   connection_closed: { origin: "client", recovery: "connection" },
   console_has_running_sessions: { origin: "daemon", recovery: "stopSessions", recoveryLine: true },
   // `console_session_never_bound` and `session_not_bound_to_owner` cannot come from the UI: the window sends
-  // release_session without an owner, and offers Unbind only on a bound project session.
+  // release_session without an owner, and offers Unbind only on a bound project session and Bind to only on an
+  // independent one.
   console_session_never_bound: { origin: "daemon", recovery: "none" },
   console_session_trust_not_asked: { origin: "daemon", unexpected: "the window never offers to answer a console session's trust confirmation" },
   conversation_held_in_console: { origin: "ui", recordIds: ["session", "console"], nameParams: ["session", "console"] },
@@ -262,6 +263,9 @@ const CORE_CODES = {
   not_a_git_repository: { origin: "daemon", recovery: "repository", recordIds: ["project"], nameParams: ["project"] },
   not_on_a_branch: { origin: "daemon", recovery: "branch" },
   outside_scope: { origin: "daemon", recovery: "scope", codeParams: ["path"], variants: { open: { codeParams: ["path"] } }, variantOf: (params) => params.action === "open" ? "open" : undefined },
+  // The owner chosen under Bind to, or the session, changed after the menu opened, which lists only the sessions that
+  // can own it as it opens; the message says what can have changed, and there is no remedy of its own to give.
+  owner_cannot_own: { origin: "daemon", recovery: "none", recordIds: ["owner"], nameParams: ["owner"] },
   page_already_submitted: { origin: "daemon", recovery: "refresh" },
   page_not_current: { origin: "daemon", recovery: "refresh" },
   path_already_exists: { origin: "daemon", recovery: "pathExists", codeParams: ["path"] },
@@ -315,6 +319,7 @@ const CORE_CODES = {
   restore_not_on_branch: { origin: "daemon", recovery: "branch", recoveryLine: true },
   resume_for_console_session: { origin: "daemon", unexpected: "the window never asks to resume a conversation for a console session" },
   resume_id_invalid: { origin: "daemon", recovery: "conversation", codeParams: ["example"], uiParams: { example: EXAMPLE_CONVERSATION_ID } },
+  session_already_bound: { origin: "daemon", recovery: "none" },
   session_already_on_account: { origin: "daemon", recovery: "session" },
   session_already_running: { origin: "daemon", recovery: "wait" },
   session_already_starting: { origin: "daemon", recovery: "wait" },

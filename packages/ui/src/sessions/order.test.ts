@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
 import type { Project, Session, SessionStatus } from "../protocol";
-import { DEFAULT_SESSION_ORDER, type SessionOrder, archiveNeedsConfirmation, archivedDeletionScope, isUnusedSession, topStatus, INACTIVE_PROJECT_RANK, STATUS_RANK, archivePreviewSessions, projectRank, liveConsoleSessions, archivedSessionRows, boundArchivedSessions, boundElsewhere, boundSessionsArchivedWith, focusGroups, liveSessionRows, liveSessions, notUnderConsoleSession, sessionsInTreeOrder, sortProjects, switchStrip } from "./order";
+import { DEFAULT_SESSION_ORDER, type SessionOrder, archiveNeedsConfirmation, archivedDeletionScope, isUnusedSession, topStatus, INACTIVE_PROJECT_RANK, STATUS_RANK, archivePreviewSessions, projectRank, liveConsoleSessions, bindableOwners, type BindOwners, archivedSessionRows, boundArchivedSessions, boundElsewhere, boundSessionsArchivedWith, focusGroups, liveSessionRows, liveSessions, notUnderConsoleSession, sessionsInTreeOrder, sortProjects, switchStrip } from "./order";
 import { FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
 import { delegatingSessionIds, type ShownStatusKind } from "./sessionStatus";
 
@@ -82,6 +82,56 @@ describe("liveSessions", () => {
   it("does not offer a console session that is still starting as an owner", () => {
     const owners = ["starting", "idle", "archived"].map((status) => ({ ...session(status, status as SessionStatus, 1), kind: "console" as const }));
     expect(liveConsoleSessions(owners, "c").map((s) => s.id)).toEqual(["idle"]);
+  });
+});
+
+describe("bindableOwners", () => {
+  const free = sessionOf("free", "c", "p", "Free", "idle");
+  const hub = (id: string, status: SessionStatus, startedAt: number, extra: Partial<Session> = {}) => sessionOf(id, "c", undefined, id, status, { started_at: startedAt, ...extra });
+  const peer = (id: string, status: SessionStatus, startedAt: number, extra: Partial<Session> = {}) => sessionOf(id, "c", "p", id, status, { started_at: startedAt, ...extra });
+  const ids = (owners: BindOwners | undefined) => owners && { console: owners.console.map((s) => s.id), project: owners.project.map((s) => s.id) };
+  const NOTHING = { console: [], project: [] };
+
+  it("offers the running console sessions of its console and the running coordinators of its project, newest first", () => {
+    const owners = bindableOwners([hub("old-hub", "idle", 1), peer("old-peer", "working", 2), hub("new-hub", "waiting_user", 5), peer("new-peer", "dormant", 6), free], free);
+    expect(ids(owners)).toEqual({ console: ["new-hub", "old-hub"], project: ["new-peer", "old-peer"] });
+  });
+
+  it("leaves out sessions that are still starting, interrupted or archived", () => {
+    const sessions = ["starting", "interrupted", "archived"].flatMap((status) => [hub(`hub-${status}`, status as SessionStatus, 1), peer(`peer-${status}`, status as SessionStatus, 1)]);
+    expect(ids(bindableOwners(sessions, free))).toEqual(NOTHING);
+  });
+
+  it("leaves out the session itself and a worker, who cannot own a session", () => {
+    const owners = bindableOwners([free, peer("worker", "idle", 1, { bound_to: "hub" }), peer("coordinator", "idle", 2)], free);
+    expect(ids(owners)?.project).toEqual(["coordinator"]);
+  });
+
+  it("leaves out a console session of another console and a project session of another project", () => {
+    const sessions = [sessionOf("other-hub", "other", undefined, "Other hub", "idle"), sessionOf("other-project", "c", "q", "Other project", "idle")];
+    expect(ids(bindableOwners(sessions, free))).toEqual(NOTHING);
+  });
+
+  it.each<SessionStatus>(["idle", "working", "interrupted", "archived"])("offers no project session to a session that has a session bound to it (%s), but still the console sessions", (status) => {
+    const owners = bindableOwners([hub("hub", "idle", 1), peer("peer", "idle", 2), free, peer("child", status, 3, { bound_to: "free" })], free);
+    expect(ids(owners)).toEqual({ console: ["hub"], project: [] });
+  });
+
+  it("is not kept from project sessions by a session bound to another one", () => {
+    const owners = bindableOwners([hub("hub", "idle", 1), peer("peer", "idle", 2), free, peer("child", "idle", 3, { bound_to: "peer" })], free);
+    expect(ids(owners)?.project).toEqual(["peer"]);
+  });
+
+  it.each<[string, Session]>([
+    ["a console session", hub("self", "idle", 1)],
+    ["a bound session", peer("bound", "idle", 1, { bound_to: "hub" })],
+    ["an archived session", peer("gone", "archived", 1)],
+  ])("offers nothing, not even an empty list, to %s", (_name, target) => {
+    expect(bindableOwners([hub("hub", "idle", 1), peer("peer", "idle", 2), target], target)).toBeUndefined();
+  });
+
+  it("reads any iterable of sessions", () => {
+    expect(ids(bindableOwners(new Map([["hub", hub("hub", "idle", 1)]]).values(), free))?.console).toEqual(["hub"]);
   });
 });
 

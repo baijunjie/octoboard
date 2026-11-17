@@ -480,6 +480,7 @@ export function App(): React.ReactElement {
     stablePushProjectBranch,
     stableLoadProjectBranches,
     stableSetLocked,
+    stableBindSession,
     stableSetPinned,
   } = useRowRequests();
   usePaneSwipe({
@@ -652,6 +653,7 @@ export function App(): React.ReactElement {
                 onLoadProjectBranches={stableLoadProjectBranches}
                 onSetSessionColour={stableSetSessionColour}
                 onSetLocked={stableSetLocked}
+                onBindSession={stableBindSession}
                 onSetPinned={stableSetPinned}
                 onReopenSession={stableReopenSession}
                 onArchiveSession={stableArchiveSession}

@@ -167,35 +167,64 @@ fn refuse_if_owner_claimed(state: &Arc<AppState>, session_id: &str, owner_id: &s
     Ok(())
 }
 
-/// Binds the unbound project session `session_id` to `owner_id`, at its own request, and tells
-/// every client. Bound to a console session it stays a coordinator, keeping the sessions it
-/// started and the tools it drives them with; bound to a project session it becomes a worker,
+/// Binds the unbound project session `session_id` to `owner_id`, at its own request or the user's,
+/// and tells every client. Bound to a console session it stays a coordinator, keeping the sessions
+/// it started and the tools it drives them with; bound to a project session it becomes a worker,
 /// which only one with no sessions of its own may (see [`owner_refusal`]).
 ///
 /// Refused, with nothing changed, for a session or an owner under a claim (see
-/// [`claim_for_binding`], [`refuse_if_owner_claimed`]), a console session, a session that is
-/// already bound, and an owner [`owner_refusal`] refuses. Returns the session as it is now bound,
-/// and the owner as it was checked.
+/// [`claim_for_binding`], [`refuse_if_owner_claimed`]), a console session
+/// ([`error_code::CONSOLE_SESSION_NEVER_BOUND`]), an archived one
+/// ([`error_code::SESSION_ARCHIVED`]), a session that is already bound
+/// ([`error_code::SESSION_ALREADY_BOUND`]), and an owner [`owner_refusal`] refuses, or that stopped
+/// being able to own the session while the binding was being made, the owner being looked at but
+/// not claimed ([`error_code::OWNER_CANNOT_OWN`]). Returns the session as it is now bound, the
+/// owner as it was checked, and whether the session has a process to be told in; one that has none
+/// (only the user binds a session that is not running) is left owed the notice for its next
+/// launch, decided while the claim is held and recorded by the binding write itself.
 pub fn bind_session(
     state: &Arc<AppState>,
     session_id: &str,
     owner_id: &str,
-) -> Result<(Session, Session)> {
+) -> Result<(Session, Session, bool)> {
     let _claim = claim_for_binding(state, session_id)?;
     let session = state.session_record(session_id)?;
+    let params = [("session", session_id), ("owner", owner_id)];
     if session.kind == SessionKind::Console {
-        anyhow::bail!("a console session cannot be bound to another session");
+        return Err(CodedError::raised(
+            error_code::CONSOLE_SESSION_NEVER_BOUND,
+            format!(
+                "`{session_id}` is a console session, and a console session cannot be bound to \
+                 another session"
+            ),
+            &params[..1],
+        ));
+    }
+    if session.status == SessionStatus::Archived {
+        return Err(CodedError::raised(
+            error_code::SESSION_ARCHIVED,
+            format!("`{session_id}` is archived, so it cannot be bound to an owner"),
+            &params[..1],
+        ));
     }
     if let Some(owner) = &session.bound_to {
-        anyhow::bail!(
-            "this session is already bound to `{owner}`: only an unbound session binds itself to \
-             an owner"
-        );
+        return Err(CodedError::raised(
+            error_code::SESSION_ALREADY_BOUND,
+            format!(
+                "`{session_id}` is already bound to `{owner}`: only an unbound session can be \
+                 bound to an owner"
+            ),
+            &params[..1],
+        ));
     }
     refuse_if_owner_claimed(state, session_id, owner_id)?;
     let owner = state.session_record(owner_id)?;
     if let Some(reason) = owner_refusal(state, &session, &owner)? {
-        anyhow::bail!(reason);
+        return Err(CodedError::raised(
+            error_code::OWNER_CANNOT_OWN,
+            reason,
+            &params,
+        ));
     }
     // Under a console session it stays the coordinator it is; under a project session it becomes
     // a worker, which may then have no sessions of its own.
@@ -205,19 +234,64 @@ pub fn bind_session(
     } else {
         Role::Worker
     };
+    // Decided here, under the claim, and recorded by the binding write itself when there is no
+    // process to tell.
+    let running = owner_notices::is_running(state, &session);
     let bound = state
         .store
-        .set_binding(session_id, None, owner_id, role, !to_console, false)?
+        .set_binding(session_id, None, owner_id, role, !to_console, !running)?
         .ok_or_else(|| {
-            anyhow::anyhow!(
-                "the binding changed while it was being made — this session was bound, it gained \
-                 sessions of its own, or `{owner_id}` can no longer own sessions; look again \
-                 before retrying"
+            // The session's own binding cannot have changed under its claim: the owner stopped
+            // being able to own sessions, or the session gained sessions of its own.
+            CodedError::raised(
+                error_code::OWNER_CANNOT_OWN,
+                format!(
+                    "the binding changed while it was being made — `{session_id}` gained sessions \
+                     of its own, or `{owner_id}` can no longer own sessions; look again before \
+                     retrying"
+                ),
+                &params,
             )
         })?;
     state.publish_session(&bound);
     withdraw_pages_if_now_worker(state, &session, &bound);
-    Ok((bound, owner))
+    Ok((bound, owner, running))
+}
+
+/// Binds the unbound project session `id` to `owner_id` at the user's request (see
+/// [`bind_session`]), then tells it and, once it is told, its new owner, so the owner cannot drive
+/// it before it knows whose it is. Nobody asked for the notices: the binding stands whatever
+/// becomes of them, and each failure is logged on its own.
+pub(super) async fn bind_requested(
+    state: &Arc<AppState>,
+    id: String,
+    owner_id: String,
+) -> Result<()> {
+    let (bound, owner, running) = bind_session(state, &id, &owner_id)?;
+    let told = owner_notices::tell_now_or_leave(
+        state,
+        &bound.id,
+        owner_notices::bound_by_user(&bound, &owner),
+        running,
+        None,
+    )
+    .await;
+    if let Err(err) = told {
+        tracing::warn!(session = %id, %err, "telling a session the user bound failed");
+    }
+    let told_owner = crate::messaging::delivery::write_notice_to_owner_off_runtime(
+        state,
+        &owner,
+        &bound,
+        owner_notices::bound_to_owner_by_user(state, &owner, &bound, running),
+    )
+    .await;
+    if let Err(err) = told_owner {
+        tracing::warn!(
+            session = %owner_id, %err, "telling the owner of a session the user bound failed"
+        );
+    }
+    Ok(())
 }
 
 /// Withdraws the report-panel pages of a session that a binding change has just given the role of

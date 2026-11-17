@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
-import { KeyRound, SquareActivity, SquareTerminal, Terminal } from "lucide-react";
+import { KeyRound, Link, SquareActivity, SquareTerminal, Terminal } from "lucide-react";
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuSubmenu } from "../components/menus/menuEntries";
 import { SessionRelativeTime } from "../components/status/SessionMetadata";
 import { accountOf, consoleOf, sessionOf } from "../fixtures/builders";
+import { DEFAULT_ACCOUNT_NAME } from "../accounts/defaultAccount";
 import { format } from "../i18n/catalog";
+import { isolate } from "../i18n/isolate";
 import type { Translate } from "../i18n/catalog";
 import type { Account, Project, Session } from "../protocol";
 import { archiveSubmenu, consoleMenu, type MenuPlacement, projectMenu, sessionMenu } from "./menus";
@@ -807,6 +809,98 @@ it("offers unbinding only on a bound session that is not archived", () => {
   expect(handlers.onOpenDialog).toHaveBeenCalledExactlyOnceWith({ kind: "unbind-session", session: bound });
   expect(unbind(sessionOf("new", "c", "p", "New", "starting", { bound_to: "hub" }))).toMatchObject({ disabled: true });
   expect(unbind(sessionOf("gone", "c", "p", "Gone", "archived", { bound_to: "hub" }))).toBeUndefined();
+});
+
+describe("the Bind to entry", () => {
+  const free = sessionOf("free", "c", "p", "Free", "idle");
+  const hub = sessionOf("hub", "c", undefined, "Hub", "idle");
+  const coordinator = sessionOf("coord", "c", "p", "Coordinator", "idle", { agent: "codex" });
+  const menuOf = (session: Session, bindOwners: { console: Session[]; project: Session[] } | undefined, handlers = {} as SidebarHandlers, switching = false) =>
+    sessionMenu(t, handlers, session, [], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching, bindOwners });
+  const bindOf = (menu: ActionMenuEntry[]) => menu.find((entry) => typeof entry === "object" && entry.label === "Bind to");
+  const labelsOf = (menu: ActionMenuEntry[]) => menu.map((entry) => (entry === "separator" ? entry : entry.label));
+
+  it("is offered where Unbind would be, right after Hand off", () => {
+    const labels = labelsOf(menuOf(free, { console: [hub], project: [] }));
+    expect(labels.indexOf("Bind to")).toBe(labels.indexOf("Hand off") + 1);
+    expect(labels).not.toContain("Unbind");
+  });
+
+  it("is a submenu with the Link icon", () => {
+    const entry = bindOf(menuOf(free, { console: [hub], project: [] })) as ActionMenuSubmenu;
+    expect(entry.items).toBeInstanceOf(Array);
+    expect(entry.icon).toBe(Link);
+  });
+
+  it("is not offered when the menu is given no owners", () => {
+    expect(bindOf(menuOf(free, undefined))).toBeUndefined();
+  });
+
+  it("is not offered on a bound session that is given no owners, which offers Unbind instead", () => {
+    const bound = sessionOf("bound", "c", "p", "Bound", "idle", { bound_to: "hub" });
+    const menu = menuOf(bound, undefined);
+    expect(bindOf(menu)).toBeUndefined();
+    expect(labelsOf(menu)).toContain("Unbind");
+  });
+
+  it("groups the owners under a Console sessions and a Project sessions heading, with a separator between the groups", () => {
+    const entry = bindOf(menuOf(free, { console: [hub], project: [coordinator] })) as ActionMenuSubmenu;
+    expect(entry.items.map((item) => (item === "separator" ? item : item.label))).toEqual(["Console sessions", "Hub", "separator", "Project sessions", "Coordinator"]);
+    expect(entry.items[0]).toMatchObject({ heading: true });
+    expect(entry.items[3]).toMatchObject({ heading: true });
+  });
+
+  it("shows only the heading of the group that has owners, with no separator", () => {
+    const only = (owners: { console: Session[]; project: Session[] }) => (bindOf(menuOf(free, owners)) as ActionMenuSubmenu).items.map((item) => (item === "separator" ? item : item.label));
+    expect(only({ console: [hub], project: [] })).toEqual(["Console sessions", "Hub"]);
+    expect(only({ console: [], project: [coordinator] })).toEqual(["Project sessions", "Coordinator"]);
+  });
+
+  it("keeps the owners in the order given", () => {
+    const second = sessionOf("hub2", "c", undefined, "Second", "idle");
+    const entry = bindOf(menuOf(free, { console: [second, hub], project: [] })) as ActionMenuSubmenu;
+    expect(entry.items.slice(1).map((item) => (item as ActionMenuItem).label)).toEqual(["Second", "Hub"]);
+  });
+
+  it("binds the session to the owner that is chosen, showing the owner's agent", () => {
+    const handlers = { onBindSession: vi.fn() } as unknown as SidebarHandlers;
+    const entry = bindOf(menuOf(free, { console: [], project: [coordinator] }, handlers)) as ActionMenuSubmenu;
+    const item = entry.items[1] as ActionMenuItem;
+    expect(item.icon).toBeTruthy();
+    expect(item).toHaveProperty("content");
+    item.onClick();
+    expect(handlers.onBindSession).toHaveBeenCalledExactlyOnceWith(free, coordinator);
+  });
+
+  it("names each owner for assistive technology by its title and its agent with the account it runs under", () => {
+    const plain = sessionOf("hub2", "c", undefined, "Second hub", "idle");
+    const onAccount = sessionOf("hub3", "c", undefined, "Third hub", "idle", { account_id: "w", config_dir: "/home/w" });
+    const menu = sessionMenu(t, {} as SidebarHandlers, free, [account("w", "claude")], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false, bindOwners: { console: [plain, onAccount], project: [] } });
+    const items = (bindOf(menu) as ActionMenuSubmenu).items.filter((item): item is ActionMenuItem => typeof item === "object" && "onClick" in item);
+    const agent = format("en", "provider.claude.label");
+    const agentOn = (name: string) => format("en", "session.agentAccount", { agent: isolate(agent), account: isolate(name) });
+    const withAccount = agentOn("w");
+    expect(items[0]!.ariaLabel).toBe(format("en", "sidebar.session.bindOwnerName", { title: isolate("Second hub"), agent: isolate(agentOn(DEFAULT_ACCOUNT_NAME)) }));
+    expect(items[1]!.ariaLabel).toBe(format("en", "sidebar.session.bindOwnerName", { title: isolate("Third hub"), agent: isolate(withAccount) }));
+  });
+
+  it("is a submenu of a single disabled item when no session can own it", () => {
+    const entry = bindOf(menuOf(free, { console: [], project: [] })) as ActionMenuSubmenu;
+    expect(entry.items).toHaveLength(1);
+    expect(entry.items[0]).toMatchObject({ label: "No possible owners", disabled: true });
+  });
+
+  it("is a disabled plain item, not a submenu, while the session is still starting", () => {
+    const entry = bindOf(menuOf(sessionOf("new", "c", "p", "New", "starting"), { console: [hub], project: [] }));
+    expect(entry).toMatchObject({ label: "Bind to", disabled: true });
+    expect(entry).not.toHaveProperty("items");
+  });
+
+  it("is a disabled plain item, not a submenu, while an account switch holds the session", () => {
+    const entry = bindOf(menuOf(free, { console: [hub], project: [] }, {} as SidebarHandlers, true));
+    expect(entry).toMatchObject({ label: "Bind to", disabled: true });
+    expect(entry).not.toHaveProperty("items");
+  });
 });
 
 it.each([false, true])("offers no lock controls on archived sessions, locked=%s", (locked) => {

@@ -38,6 +38,15 @@ it("words the refusals of an owner change under way without ids, naming the owne
   }
 });
 
+it("words the refusals of binding a session to an owner, naming the owner by its title and keeping an id out of the text", () => {
+  expect(daemonMessage("en", "session_already_bound", { session: "s2" }, "x", records)).toBe("This session already has an owner.");
+  const refusal = daemonMessage("en", "owner_cannot_own", { session: "s2", owner: "s1" }, "x", records);
+  expect(refusal).toContain(isolate("Hub"));
+  expect(refusal).not.toContain("s1");
+  expect(refusal).not.toContain("s2");
+  expect(daemonMessage("zh-Hans", "owner_cannot_own", { session: "s2", owner: "s1" }, "x", records)).toContain(isolate("Hub"));
+});
+
 it("shows a shell terminal param by the terminal's name, and by its id once the terminal is gone", () => {
   const withTerminal = { ...records, shellTerminals: new Map([["t1", { id: "t1", title: "npm run dev" } as ShellTerminal]]) };
   expect(daemonMessage("en", "unknown_shell_terminal", { shell_terminal: "t1" }, "x", withTerminal)).toBe(`Unknown terminal ${isolate("npm run dev")}.`);

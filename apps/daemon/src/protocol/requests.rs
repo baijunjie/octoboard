@@ -718,6 +718,13 @@ pub enum RequestBody {
     ReleaseSession {
         session: String,
     },
+    /// Binds an unbound project session to an owner at the user's request: a console session of
+    /// its console or a coordinator of its project (see
+    /// `crate::coordinator::bindings::bind_session`).
+    BindSession {
+        session: String,
+        owner: String,
+    },
     /// The pages a session pushed. `session` is the session that pushed them, a console session
     /// or a project session.
     ListPages {
@@ -1432,6 +1439,7 @@ impl RequestBody {
             | Self::InterruptSession { .. }
             | Self::RenameSession { .. }
             | Self::ReleaseSession { .. }
+            | Self::BindSession { .. }
             | Self::ListPages { .. }
             | Self::SubmitPage { .. }
             | Self::ConfirmTrust { .. }

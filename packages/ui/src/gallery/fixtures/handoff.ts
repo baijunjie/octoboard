@@ -104,6 +104,37 @@ const stoppedState = snapshotState({
   sessions: [hub, coordinator, ...owned, ...hubOwned, bare, working, stopped],
   settings,
 });
+// An independent project session beside what could own it: two console sessions, and two running coordinators of its
+// project, one of them with a title that runs past the menu. The sessions that cannot own it stay in the sidebar: a
+// worker and a coordinator of another project.
+const bindable = sessionOf("s-bind-free", console_.id, api.id, "Add idempotency keys", "waiting_user", { started_at: minutesAgo(30) });
+const bindConsoleSessions = [
+  hub,
+  sessionOf("s-bind-hub-codex", console_.id, undefined, "Release coordinator", "working", { agent: "codex", ordinal: 2, colour: "blue", started_at: minutesAgo(70) }),
+];
+const bindCoordinators = [
+  sessionOf("s-bind-coordinator", console_.id, api.id, "Rework the search index", "idle", { bound_to: hub.id, role: "coordinator", started_at: minutesAgo(50) }),
+  sessionOf(
+    "s-bind-coordinator-long",
+    console_.id,
+    api.id,
+    "Migrate every endpoint to the new pagination scheme and update the clients, the fixtures and the documentation",
+    "working",
+    { agent: "codex", started_at: minutesAgo(20) },
+  ),
+];
+const bindExcluded = [
+  sessionOf("s-bind-worker", console_.id, api.id, "Update the search fixtures", "idle", { bound_to: "s-bind-coordinator", started_at: minutesAgo(40) }),
+  sessionOf("s-bind-other-project", console_.id, web.id, "Tidy the changelog", "idle", { started_at: minutesAgo(35) }),
+];
+const bindState = snapshotState({
+  consoles: [console_],
+  projects: [web, api],
+  sessions: [...bindConsoleSessions, ...bindCoordinators, ...bindExcluded, bindable],
+  settings,
+});
+// No running console session and no other coordinator: nothing can own the session.
+const bindNoneState = snapshotState({ consoles: [console_], projects: [web, api], sessions: [bindable], settings });
 
 const GROUP = "Sidebar sessions";
 
@@ -148,17 +179,35 @@ export const handoffScenarios: Scenario[] = [
     id: "sidebar-session-menu-unbound",
     group: GROUP,
     category: "normal",
-    title: "Menu of an unbound project session, no Unbind",
-    description: "The selected independent project session's Focus mode entry shows the current global shortcut and enters Search API's focus mode. Hand off is enabled and is followed by the divider, then Rename, then a divider, then Archive: with no owner to be released from, there is no Unbind entry.",
+    title: "Menu of an unbound project session, Bind to in place of Unbind",
+    description: "The selected independent project session's Focus mode entry shows the current global shortcut and enters Search API's focus mode. Hand off is enabled and is followed by Bind to, with a chevron and the link icon, in the place a bound session shows Unbind, then a divider, then Rename, then a divider, then Archive: with no owner to be released from, there is no Unbind entry.",
     state,
     steps: [(ui) => ui.press(ui.session(bare.title)), openMenu(bare.title)],
+  },
+  {
+    id: "sidebar-session-menu-bind",
+    group: GROUP,
+    category: "normal",
+    title: "Bind to submenu of an independent project session",
+    description: "The Bind to submenu is open on the independent session, in the place a bound session's menu shows Unbind. It lists two groups: first the console sessions under the heading Console sessions, then a divider, then the project sessions under the heading Project sessions. Each row is the session's title with its agent icon, newest first; the long title is clipped with a fade, not wrapped. The two headings are small muted text that cannot be chosen or focused. A worker and a coordinator of another project are in the sidebar but are not listed. Choosing a row binds the session at once, with no confirmation, and it moves under that owner in the sidebar, after which its menu offers Unbind here.",
+    state: bindState,
+    steps: [openMenu(bindable.title), (ui) => ui.press(ui.t("sidebar.session.bind"))],
+  },
+  {
+    id: "sidebar-session-menu-bind-none",
+    group: GROUP,
+    category: "exceptional",
+    title: "Bind to submenu with no session able to own it",
+    description: "The Bind to submenu is open on an independent project session that no running console session or coordinator could own, and holds one greyed-out item, No possible owners, with no headings.",
+    state: bindNoneState,
+    steps: [openMenu(bindable.title), (ui) => ui.press(ui.t("sidebar.session.bind"))],
   },
   {
     id: "sidebar-console-session-menu-handoff",
     group: GROUP,
     category: "normal",
     title: "Menu of an idle console session, Hand off offered",
-    description: "Dividers separate Lock and Pin, Colour, Copy session ID, Hand off, Rename, and Archive, with Copy session ID in its own group and no group headings. Colour is its own group after Lock and Pin. Rename sits immediately above Archive, with a divider between them. This console session is not selected, so its menu has no Focus mode entry. Hand off is enabled. A console session is never bound, so there is no Unbind.",
+    description: "Dividers separate Lock and Pin, Colour, Copy session ID, Hand off, Rename, and Archive, with Copy session ID in its own group and no group headings. Colour is its own group after Lock and Pin. Rename sits immediately above Archive, with a divider between them. This console session is not selected, so its menu has no Focus mode entry. Hand off is enabled. A console session is never bound and never bound to an owner, so there is neither Unbind nor Bind to.",
     state,
     steps: [openMenu(hub.title)],
   },
@@ -274,7 +323,7 @@ export const handoffScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Unbind a session from its live owner",
-    description: "A warning confirmation titled Unbind session, with the warning icon leading its header, then Cancel and the primary Unbind. Both titles here are paragraph-long, and each appears once, as a chip that wraps inside the dialog: one paragraph that runs on from the first sentence into the next (the session will no longer report to the owner; it will answer only to you; only the session itself can bind to an owner again, the app cannot do it for you), then a separate paragraph of consequences (the owner can no longer instruct it, archive it or give it to another owner, and archiving the owner will not archive it; the two can still send each other messages). All body text is in the foreground colour, none of it muted.",
+    description: "A warning confirmation titled Unbind session, with the warning icon leading its header, then Cancel and the primary Unbind. Both titles here are paragraph-long, and each appears once, as a chip that wraps inside the dialog: one paragraph that runs on from the first sentence into the next (the session will no longer report to the owner; it will answer only to you, until it binds itself to an owner or you bind it to one again), then a separate paragraph of consequences (the owner can no longer instruct it, archive it or give it to another owner, and archiving the owner will not archive it; the two can still send each other messages). All body text is in the foreground colour, none of it muted.",
     state: longTitleState,
     steps: openUnbind(longCoordinator.title),
   },

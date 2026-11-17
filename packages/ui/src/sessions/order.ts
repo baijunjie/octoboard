@@ -1,5 +1,5 @@
 import { type Console, type Project, type Session } from "../protocol";
-import { runsInBackground, sessionShownStatusKind, sessionStatusKind, showsSwitching, type ShownStatusKind } from "./sessionStatus";
+import { isLive, runsInBackground, sessionShownStatusKind, sessionStatusKind, showsSwitching, type ShownStatusKind } from "./sessionStatus";
 
 /** How soon a session wants a person: the ones that need someone to act or look come first (a raised
  * hand, a session that cannot take messages while its background agents are on view, a turn that ended
@@ -206,6 +206,28 @@ export function liveConsoleSessions(sessions: Session[], consoleId: string): Ses
   return sessions
     .filter((s) => s.console_id === consoleId && s.kind === "console" && s.status !== "archived" && s.status !== "starting")
     .sort((a, b) => b.started_at - a.started_at);
+}
+
+/** What an independent project session can be bound to, grouped by the owner's kind. */
+export interface BindOwners {
+  console: Session[];
+  project: Session[];
+}
+
+/** What `session` can be bound to, by the rules the daemon keeps (`owner_refusal` in
+ * `apps/daemon/src/coordinator/bindings.rs`), or `undefined` when it cannot be bound at all: a console session, or a
+ * bound or archived one. The owners are the running console sessions of its console, and the running coordinators of
+ * its project other than itself, which only a session with no sessions of its own (archived ones included) may have;
+ * each newest first. Running is having a process, not still starting: an interrupted or archived session cannot own
+ * one. */
+export function bindableOwners(sessions: Iterable<Session>, session: Session): BindOwners | undefined {
+  if (session.kind !== "project" || session.bound_to || session.status === "archived") return undefined;
+  const all = Array.from(sessions);
+  const running = all.filter((s) => isLive(s.status) && s.status !== "starting").sort((a, b) => b.started_at - a.started_at);
+  return {
+    console: running.filter((s) => s.kind === "console" && s.console_id === session.console_id),
+    project: hasBoundSessions(all, session.id) ? [] : running.filter((s) => s.kind === "project" && s.id !== session.id && s.project_id === session.project_id && s.role !== "worker"),
+  };
 }
 
 /** The sessions bound to the session `ownerId` (a console session, or a project session that started

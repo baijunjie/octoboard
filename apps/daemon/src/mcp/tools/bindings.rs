@@ -143,7 +143,8 @@ pub(in crate::mcp) async fn bind_to_session(
 ) -> Result<Value> {
     let owner_id = required_str(arguments, "owner")?;
     let summary = required_str(arguments, "summary")?;
-    let (bound, owner) = coordinator::bindings::bind_session(state, &caller.id, owner_id)?;
+    let (bound, owner, _running) =
+        coordinator::bindings::bind_session(state, &caller.id, owner_id)?;
     let coordinator = bound.role == Role::Coordinator;
 
     // The binding is this round's report, so the round ending without another is not reported on
@@ -206,8 +207,10 @@ mod tests {
     use super::*;
     use crate::mcp::dispatch::call;
     use crate::mcp::test_support::{arguments, peer_state};
-    use crate::protocol::AgentId;
-    use crate::test_support::{fake_live_session, heard_after_marker, output_containing, running};
+    use crate::protocol::{error_code, AgentId};
+    use crate::test_support::{
+        code_of, fake_live_session, heard_after_marker, output_containing, running,
+    };
 
     /// A transfer moves the session to its new owner, tells it whose it now is, and sends the new
     /// owner the note, quoted; the session is the new owner's to drive from then on, not the old
@@ -599,6 +602,49 @@ mod tests {
         .await
         .expect_err("no longer offered");
         assert!(err.to_string().contains("is not a tool"), "{err}");
+    }
+
+    /// The refusal of a bind for an owner that cannot own the session is coded like the user's
+    /// (`owner_cannot_own`, naming the session and the owner), and the bind of a running owner
+    /// still goes through.
+    #[tokio::test]
+    async fn a_refused_bind_is_coded_and_a_running_owner_still_takes_it() {
+        let (state, _dir) = peer_state("bind-coded");
+        let _loose = running(&state, "loose");
+        let bind = |owner: &str| {
+            let arguments = arguments(json!({ "owner": owner, "summary": "Ready." }));
+            let state = &state;
+            async move { call(state, "loose", "bind_to_session", &arguments).await }
+        };
+
+        // `a` is a console session with no process behind it.
+        let err = bind("a").await.expect_err("not running");
+        assert_eq!(code_of(&err), error_code::OWNER_CANNOT_OWN, "{err}");
+        let coded = err.downcast_ref::<crate::protocol::CodedError>().unwrap();
+        assert_eq!(
+            coded.params.get("session").map(String::as_str),
+            Some("loose")
+        );
+        assert_eq!(coded.params.get("owner").map(String::as_str), Some("a"));
+        assert!(err.to_string().contains("not running"), "{err}");
+        assert_eq!(
+            state.store.get_session("loose").unwrap().unwrap().bound_to,
+            None
+        );
+
+        let _a = running(&state, "a");
+        let result = bind("a").await.unwrap();
+        assert_eq!(result["owner"], "a");
+        assert_eq!(
+            state
+                .store
+                .get_session("loose")
+                .unwrap()
+                .unwrap()
+                .bound_to
+                .as_deref(),
+            Some("a")
+        );
     }
 
     /// What the caller of a change of owner is told became of each notice, and of its summary

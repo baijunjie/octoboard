@@ -96,9 +96,10 @@ project session's Report panel goes, its toggle with it (see "A project session'
 
 ## When a session becomes a worker
 
-A session that pushed pages can come to have the worker role in two ways: an independent project session binding
-itself to a project session with `bind_to_session`, and a coordinator with a parent handed to a project session with
-`transfer_session` (see `docs/product/changing-session-owners.md`). Either takes `show_page`, `page_guide`,
+A session that pushed pages can come to have the worker role in three ways: an independent project session binding
+itself to a project session with `bind_to_session`, the user binding one to a project session from the window, and a
+coordinator with a parent handed to a project session with `transfer_session` (see
+`docs/product/changing-session-owners.md`). Each takes `show_page`, `page_guide`,
 `list_pages` and `delete_pages` away from it, and **every page it pushed is withdrawn at once**, as `delete_pages` with `all: true`
 withdraws them: the panel follows in every window as in "Withdrawing pages" above, so no form is left offered that the
 session could no longer read the submission of. Nothing brings the pages back, a later release included.
@@ -107,8 +108,8 @@ session could no longer read the submission of. Nothing brings the pages back, a
   coordinator to another console session, keeps the report panel tools and pages.
 - **The agent is told.** The descriptions of `show_page`, `bind_to_session` and `transfer_session`, and what a project
   session's role description says of the latter two, say beforehand that such a binding withdraws the pages, and the
-  binding's own word to the session — the `bind_to_session` result, the message a transfer writes into it, or the notice
-  at its next launch (see "A change of owner told at the next launch" in `docs/product/changing-session-owners.md`) —
+  binding's own word to the session — the `bind_to_session` result, the message a transfer or the user's bind writes
+  into it, or the notice at its next launch (see "A change of owner told at the next launch" in `docs/product/changing-session-owners.md`) —
   says afterwards that its pages were withdrawn with the tools for them.
 - **Pages a withdrawal missed go when Octoboard starts.** Each time the daemon starts, it withdraws every page still
   held by a session with the worker role — one whose withdrawal failed, say — and the windows are told as for

@@ -435,8 +435,8 @@ Claude Code alike, and the agent still took input and gave output through the ho
   already has reach. A binding changes after launch by a call of a session concerned, or by the user: an owner hands a
   child session to another parent with `transfer_session` or releases it with `release_session`, an independent
   project coordinator sets a console session or a coordinator of its own project as its parent with `bind_to_session`
-  (how a session that asked for a console session comes to be directed by it), and the user lets a session work
-  independently from the sidebar. The session's role description is fixed at its first launch, so the change is told
+  (how a session that asked for a console session comes to be directed by it), and the user binds an independent
+  project session to an owner, or lets a session work independently, from the sidebar. The session's role description is fixed at its first launch, so the change is told
   to it in prose instead — in the call's result or a message, or at its next launch if it is not running. The behaviour
   of a request is in `docs/product/session-requests.md`, the rules a binding keeps in "Who can own a session" in
   `docs/product/changing-session-owners.md`, and the deferred notice in "A change of owner told at the next launch"

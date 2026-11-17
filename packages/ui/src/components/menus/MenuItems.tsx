@@ -16,7 +16,7 @@ import { MODAL_DIALOG, TABBABLE } from "../focus/selectors";
 import { useResolvedMenuEntries } from "./useResolvedMenuEntries";
 import { MenuShortcutScope } from "./menuShortcutScope";
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuPanelContext } from "./menuEntries";
-import { activateMenuItem, containsText, Description, Kbd, KbdContent, Label, MenuChoices, MenuItem, MenuItemCheck, MenuList, MenuPopover, MenuSeparator, Submenu, SubmenuIndicator, useMenuFiltered, useSubmenuPanel } from "../../primitives";
+import { activateMenuItem, containsText, Description, Kbd, KbdContent, Label, MenuChoices, MenuItem, MenuItemCheck, MenuList, MenuPopover, MenuSection, MenuSeparator, Submenu, SubmenuIndicator, useMenuFiltered, useSubmenuPanel } from "../../primitives";
 
 /** HeroUI's menu item label ignores the pointer, and its content inherits that, so a clipped label never sees
  * the hover that opens its tooltip. The label's content takes the pointer back, a disabled item's too (see
@@ -55,11 +55,11 @@ function ItemIcon({
   return <Icon aria-hidden="true" className={`size-4 shrink-0 ${destructive ? "text-danger" : "text-app-muted"}${className ? ` ${className}` : ""}`} />;
 }
 
-function isLeaf(entry: ActionMenuEntry): entry is ActionMenuItem {
-  return entry !== "separator" && !("items" in entry) && !("panel" in entry) && !("note" in entry);
+function isLeaf(entry: ActionMenuEntry | undefined): entry is ActionMenuItem {
+  return entry !== undefined && entry !== "separator" && !("items" in entry) && !("panel" in entry) && !("note" in entry) && !("heading" in entry);
 }
 
-function isChoice(entry: ActionMenuEntry): entry is ActionMenuItem {
+function isChoice(entry: ActionMenuEntry | undefined): entry is ActionMenuItem {
   return isLeaf(entry) && entry.selected !== undefined;
 }
 
@@ -98,7 +98,8 @@ function PanelBody({ children }: { children: (context: ActionMenuPanelContext) =
  * as a menu opened from its trigger with the keyboard does, a right-click's the menu itself. `noMatch` is for a menu
  * a `MenuFilter` narrows to the items whose label contains `query`: `message` is what the menu says while none does. */
 export function MenuItems({ entries: source, autoFocus, noMatch }: { entries: ActionMenuEntry[]; autoFocus?: "first" | "menu"; noMatch?: { query: string; message: string } }): React.ReactElement {
-  const entries = useResolvedMenuEntries(source);
+  // A heading with no plain item after it draws nothing, so it is dropped before a separator next to it is judged.
+  const entries = useResolvedMenuEntries(source).filter((entry, index, all) => typeof entry !== "object" || !("heading" in entry) || (isLeaf(all[index + 1]) && !isChoice(all[index + 1])));
   const t = useT();
   // A filtered menu runs no shortcut letter, so it draws no key cap for one either.
   const filtered = useMenuFiltered();
@@ -197,6 +198,15 @@ export function MenuItems({ entries: source, autoFocus, noMatch }: { entries: Ac
       // A menu built from conditional items can leave a separator with nothing on one side; a separator
       // is drawn only between two items, and a run of them draws one.
       if (nodes.length > 0 && index < entries.length - 1 && entries[index + 1] !== "separator") nodes.push(<MenuSeparator key={index} />);
+    } else if ("heading" in entry) {
+      // The plain items that follow, up to the first entry that is not a plain item, are its section.
+      const group: number[] = [];
+      while (index + 1 < entries.length && isLeaf(entries[index + 1]) && !isChoice(entries[index + 1])) group.push(++index);
+      nodes.push(
+        <MenuSection key={index} heading={entry.label} headingClassName="px-2.5 pt-2 pb-1 text-xs font-medium text-app-muted [overflow-wrap:anywhere]">
+          {group.map((i) => renderItem(entries[i] as ActionMenuItem, i))}
+        </MenuSection>,
+      );
     } else if ("note" in entry) {
       nodes.push(
         // Disabled so that it cannot be chosen, yet drawn at full opacity as the quiet text it is, not as a
@@ -250,7 +260,7 @@ export function MenuItems({ entries: source, autoFocus, noMatch }: { entries: Ac
       <MenuList onAction={run} autoFocus={autoFocus}>
         {nodes}
       </MenuList>
-      {noMatch && <NoMatchLine message={noMatch.message} nothingMatches={!entries.some((entry) => entry !== "separator" && containsText(entry.label, noMatch.query))} />}
+      {noMatch && <NoMatchLine message={noMatch.message} nothingMatches={!entries.some((entry) => entry !== "separator" && !("heading" in entry) && containsText(entry.label, noMatch.query))} />}
     </div>
   );
 }

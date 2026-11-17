@@ -17,9 +17,9 @@ import { alertFailure } from "../components/alerts/raiseError";
 /**
  * The project and session rows' requests that only ask the daemon or the host for something and
  * say how it went: Git pulls, pushes and branch switches, revealing and copying, the terminal app,
- * the repository's page, and a session's colour, lock and pin. Each is one function for good
- * (`useStableHandler`), as every row of the sidebar takes it. The repository opener is there only
- * where the platform can open links.
+ * the repository's page, and a session's colour, lock, pin and binding to an owner. Each is one
+ * function for good (`useStableHandler`), as every row of the sidebar takes it. The repository
+ * opener is there only where the platform can open links.
  */
 export function useRowRequests() {
   const t = useT();
@@ -94,6 +94,10 @@ export function useRowRequests() {
     request({ type: "set_session_locked", session: session.id, locked }).catch(alertFailure({ title: t(locked ? "sidebar.session.lockFailedTitle" : "sidebar.session.unlockFailedTitle"), session: session.id }));
   };
 
+  const bindSession = (session: Session, owner: Session) => {
+    request({ type: "bind_session", session: session.id, owner: owner.id }).catch(alertFailure({ title: t("sidebar.session.bindFailedTitle"), session: session.id }));
+  };
+
   const setPinned = (target: { project: Project } | { session: Session }, pinned: boolean) => {
     const [body, failedTitle, session] =
       "project" in target
@@ -118,6 +122,7 @@ export function useRowRequests() {
   const stablePushProjectBranch = useStableHandler(pushProjectBranch);
   const stableLoadProjectBranches = useStableHandler(loadProjectBranches);
   const stableSetLocked = useStableHandler(setLocked);
+  const stableBindSession = useStableHandler(bindSession);
   const stableSetPinned = useStableHandler(setPinned);
   const stableOpenRepositoryIfAny = links ? stableOpenRepository : undefined;
   return {
@@ -132,6 +137,7 @@ export function useRowRequests() {
     stablePushProjectBranch,
     stableLoadProjectBranches,
     stableSetLocked,
+    stableBindSession,
     stableSetPinned,
   };
 }

@@ -2349,6 +2349,27 @@
             "session": {
               "type": "string"
             },
+            "owner": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "bind_session"
+            }
+          },
+          "required": [
+            "type",
+            "session",
+            "owner"
+          ],
+          "description": "Binds an unbound project session to an owner at the user's request: a console session of\nits console or a coordinator of its project (see\n`crate::coordinator::bindings::bind_session`)."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "string"
+            },
             "type": {
               "type": "string",
               "const": "list_pages"

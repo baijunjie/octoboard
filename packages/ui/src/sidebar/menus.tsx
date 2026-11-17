@@ -1,4 +1,4 @@
-import { AppWindow, Archive, ArrowLeftRight, Copy, Cpu, Download, Focus, Forward, Folder, FolderPlus, GitBranch, KeyRound, List, Lock, LockOpen, Palette, PanelRight, Pencil, Pin, PinOff, RotateCcw, Settings2, Terminal, Trash2, Undo2, Unlink, Upload, SquareArrowOutUpRight } from "lucide-react";
+import { AppWindow, Archive, ArrowLeftRight, Copy, Cpu, Download, Focus, Forward, Folder, FolderPlus, GitBranch, KeyRound, Link, List, Lock, LockOpen, Palette, PanelRight, Pencil, Pin, PinOff, RotateCcw, Settings2, Terminal, Trash2, Undo2, Unlink, Upload, SquareArrowOutUpRight } from "lucide-react";
 
 import { handoffBlock, switchEntries, switchEntryBlock } from "../accounts/switchEntries";
 import type { QuotaReadings } from "../accounts/choiceEntries";
@@ -11,14 +11,15 @@ import { SessionRelativeTime } from "../components/status/SessionMetadata";
 import { AgentIcon } from "../components/icons/AgentIcon";
 import { PathText } from "../components/text/PathText";
 import type { Translate } from "../i18n/catalog";
+import { isolate } from "../i18n/isolate";
 import type { Account, AccountSharing, Agent, Console, Project, ProviderInfo, Session, Settings } from "../protocol";
 import { PANEL_META } from "../panels/panelMeta";
 import { accountUsage } from "../quota/accountUsage";
-import { sessionChoiceTitle, sessionDisplayTitle } from "../sessions/sessionLabel";
+import { sessionAgentLabel, sessionChoiceTitle, sessionDisplayTitle } from "../sessions/sessionLabel";
 import { ShortcutKbd } from "../shortcuts/ShortcutKbd";
 import { ariaBinding, type ModifierHost } from "../shortcuts/binding";
 import { bindingFor, matchesCommand } from "../shortcuts/store";
-import { archivePreviewSessions, isUnusedSession } from "../sessions/order";
+import { archivePreviewSessions, type BindOwners, isUnusedSession } from "../sessions/order";
 import { openInAppBlock, openInAppNote } from "../sessions/nativeApp";
 import { SessionColourSwatches } from "./SessionColourSwatches";
 import type { ArchiveScope, FocusTarget, ProjectPanelKind, SidebarHandlers } from "./types";
@@ -27,6 +28,16 @@ import type { ArchiveScope, FocusTarget, ProjectPanelKind, SidebarHandlers } fro
  * panel is not among them: whether it exists depends on the selected session's pages, which the
  * menu cannot tell for a project that does not yet own the pane. */
 const PROJECT_PANELS: readonly ProjectPanelKind[] = ["terminal", "files", "processes"];
+
+/** A menu item naming `session` by its title, which fades where it is clipped, with its agent's mark. */
+function sessionItem(t: Translate, session: Session, onClick: () => void): ActionMenuItem {
+  return {
+    label: sessionChoiceTitle(t, session),
+    content: <FadeOverflow as="span" dir="auto" className="block" titleWhenClipped={sessionDisplayTitle(t, session)}>{sessionDisplayTitle(t, session)}</FadeOverflow>,
+    icon: <AgentIcon agent={session.agent} />,
+    onClick,
+  };
+}
 
 /** "View archive": the archive's preview (`archivePreviewSessions`), each item selecting its session
  * and showing its archive time, then "View all", which opens the full archive. */
@@ -38,12 +49,9 @@ export function archiveSubmenu(
   onViewAll: () => void,
 ): ActionMenuSubmenu {
   const items: ActionMenuItem[] = archivePreviewSessions(archived).map((session) => ({
-    label: sessionChoiceTitle(t, session),
-    content: <FadeOverflow as="span" dir="auto" className="block" titleWhenClipped={sessionDisplayTitle(t, session)}>{sessionDisplayTitle(t, session)}</FadeOverflow>,
-    icon: <AgentIcon agent={session.agent} />,
+    ...sessionItem(t, session, () => onSelect(session)),
     // A press on the item selects the session, so a tap opens no popover of the dates.
     end: session.ended_at != null ? <SessionRelativeTime session={session} touchPopover={false} /> : undefined,
-    onClick: () => onSelect(session),
   }));
   if (archived.length === 0) {
     items.push({ label: t("sidebar.archive.empty"), icon: Archive, onClick: () => {}, disabled: true });
@@ -321,8 +329,29 @@ function colourSubmenu(t: Translate, handlers: SidebarHandlers, session: Session
   };
 }
 
+/** Bind: a submenu of the sessions `session` can be bound to, the console sessions and the project coordinators each
+ * under their own heading, choosing one binding it at once; a disabled item saying so when there is none. A session
+ * still starting, or switching account, is refused by the daemon, so it offers a disabled item instead. */
+function bindEntry(t: Translate, handlers: SidebarHandlers, session: Session, owners: BindOwners, busy: boolean, agentOf: (owner: Session) => string): ActionMenuEntry {
+  const label = t("sidebar.session.bind");
+  if (busy) return { label, icon: Link, disabled: true, onClick: () => {} };
+  // Two owners can share a title, and the agent's mark tells them apart only to the eye, so the name says the agent.
+  const ownerItem = (owner: Session): ActionMenuItem => ({
+    ...sessionItem(t, owner, () => handlers.onBindSession(session, owner)),
+    ariaLabel: t("sidebar.session.bindOwnerName", { title: isolate(sessionDisplayTitle(t, owner)), agent: isolate(agentOf(owner)) }),
+  });
+  const items: ActionMenuEntry[] = [
+    ...(owners.console.length > 0 ? [{ label: t("sidebar.session.bindConsoleSessions"), heading: true as const }, ...owners.console.map(ownerItem)] : []),
+    ...(owners.console.length > 0 && owners.project.length > 0 ? ["separator" as const] : []),
+    ...(owners.project.length > 0 ? [{ label: t("sidebar.session.bindProjectSessions"), heading: true as const }, ...owners.project.map(ownerItem)] : []),
+  ];
+  if (items.length === 0) items.push({ label: t("sidebar.session.bindNone"), icon: Link, disabled: true, onClick: () => {} });
+  return { label, icon: Link, items };
+}
+
 /** A session's actions: pin, lock, rename, colour (a console session's), focus mode, change model, switch account,
- * hand off, unbind (a bound session's, disabled while it is still starting, which the daemon refuses) and archive;
+ * hand off, bind (offered when given `bindOwners`, which only an independent project session has) or unbind (a bound
+ * session's), both disabled while it is still starting or switching account, which the daemon refuses, and archive;
  * an archived session (listed in focus mode) and one never used offer deleting instead.
  * `hasBoundSessions` says whether any session is bound to this one, which makes it used. Resuming
  * an interrupted session happens on selection; an archived session offers Reopen and Delete. Shared by a
@@ -343,7 +372,7 @@ export function sessionMenu(
   session: Session,
   accounts: Account[],
   defaultNames: Settings["default_account_names"],
-  { host, placement = "list", focusTarget, focusShortcut, hasBoundSessions = false, canHandoff = true, switching, childActive = false, nativeApp, quota, providers, sharing, disabledDefaults, accountOrder }: {
+  { host, placement = "list", focusTarget, focusShortcut, hasBoundSessions = false, canHandoff = true, switching, childActive = false, nativeApp, quota, providers, sharing, disabledDefaults, accountOrder, bindOwners }: {
     host: ModifierHost;
     placement?: MenuPlacement;
     focusTarget?: FocusTarget;
@@ -358,6 +387,7 @@ export function sessionMenu(
     sharing?: Map<string, AccountSharing>;
     disabledDefaults?: Agent[];
     accountOrder?: Settings["account_order"];
+    bindOwners?: BindOwners;
   },
 ): ActionMenuEntry[] {
   const focused = placement === "focused";
@@ -397,6 +427,7 @@ export function sessionMenu(
     ...(switchAccount ? [switchAccount] : []),
     ...(archived ? [] : [{ ...handoffItem(t, handlers, session, canHandoff, { switching, childActive, ownChanging: sharing?.get(session.account_id ?? "")?.progress !== undefined }), shortcut: "H" }]),
     ...(openInApp ? [openInApp] : []),
+    ...(bindOwners ? [bindEntry(t, handlers, session, bindOwners, session.status === "starting" || switching, (owner) => sessionAgentLabel(t, providers, owner, accounts, defaultNames))] : []),
     ...(session.bound_to && !archived ? [{ label: t("sidebar.session.unbind"), shortcut: "U", icon: Unlink, disabled: session.status === "starting" || switching, onClick: () => handlers.onOpenDialog({ kind: "unbind-session", session }) }] : []),
     "separator",
     ...(!archived ? [{ label: t("sidebar.session.rename"), shortcut: "R", icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-session", session }) }, "separator" as const] : []),

@@ -58,6 +58,7 @@ export const REPLY_TYPES = {
   interrupt_session: "session_interrupted",
   rename_session: "ack",
   release_session: "ack",
+  bind_session: "ack",
   list_pages: "page_list",
   submit_page: "ack",
   confirm_trust: "ack",

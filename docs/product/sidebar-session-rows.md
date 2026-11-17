@@ -38,8 +38,8 @@ no badge for a removed account that recorded no directory; it shows the same acc
 Confirmations provide the agent and account as hidden accessible text beside the icon.
 
 A live session's action menu separates these groups, in order: Lock / Unlock, Pin / Unpin and Focus mode; Copy session
-ID alone; Change model, Switch account, Hand off, Open in the agent's app and Unbind; then Rename on its own; then
-Archive or Delete. A live
+ID alone; Change model, Switch account, Hand off, Open in the agent's app, and Bind to or Unbind; then Rename on its
+own; then Archive or Delete. A live
 console session inserts Colour as its own group between the first of these and Copy session ID. Rename sits above
 Archive, or above Delete when Delete is offered instead, with a divider between them, and Archive or Delete stays
 last. Items appear only where available as described below. An archived session's menu offers Reopen, Copy
@@ -117,6 +117,14 @@ A session row's action menu offers:
   below). Present only for a project session with a parent — a project session bound to a console session or to a
   project session; an archived session has no such entry. Disabled while the session is *starting* and while it is shown
   as switching its account.
+- **Bind to** — a submenu of the sessions that can own the session, the running console sessions of its console and,
+  while it has no sessions of its own, the running coordinators of its project, each group under its own heading;
+  choosing one binds the session to it at once, with no confirmation (see "Binding a session from the window" in
+  `docs/product/changing-session-owners.md`); its row then shows it with its owner (see "Project rows" in
+  `docs/product/sidebar-project-rows.md` and "The binding badge" below). Present only for an independent project
+  session — one with no parent that is not archived — in the place a bound session has **Unbind**; a console
+  session has neither. While the session is *starting* or shown as switching its account, it is a disabled item with no
+  submenu.
 - **Archive** — archives the session (see "Archiving, interruption and resuming" in
   `docs/product/archiving-and-resuming-sessions.md`). A session at its prompt or interrupted, with no unarchived session
   under it, is archived at once, unless a branch or worktree bound to it needs the user's word (see "The confirmation"
@@ -179,8 +187,8 @@ the session the menu belongs to under "Menu keyboard shortcuts" in `docs/product
 | Delete | D |
 
 Focus mode is separate from these fixed letters: when offered, it shows and takes the current Toggle focus mode
-combination described above. Colour and Switch account open submenus or a panel, so neither has a temporary letter
-shortcut.
+combination described above. Colour, Switch account and Bind to open submenus or a panel, so none of them has a
+temporary letter shortcut.
 
 ## The binding badge
 

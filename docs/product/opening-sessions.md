@@ -83,8 +83,8 @@ A dialog without tabs, and the **New conversation** tab, offer these fields in t
   session is an independent project coordinator. A session still starting is not offered because its launch may yet fail
   and remove it; `open_session` refuses one named as the owner (`unknown_session`), as it does an archived one, which
   the dialog does not offer either. A binding can change afterwards — the owner hands the session to another, an
-  independent project coordinator sets one as its parent, or the owner or the user releases the session, leaving it
-  independent; see `docs/product/changing-session-owners.md`. A session the console
+  independent project coordinator sets one as its parent or the user binds it to one, or the owner or the user
+  releases the session, leaving it independent; see `docs/product/changing-session-owners.md`. A session the console
   session itself starts is always bound to it, and one a project session starts is bound to that project session; one
   started on another session's request is bound to nobody; see "Which sessions an owner drives" in
   `docs/product/hub-orchestration.md`. The choice is offered from the project list and the terminal's **New session**

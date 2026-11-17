@@ -236,7 +236,8 @@ which the Linux release archive ships and the website's `install.sh` installs wi
 - `src/coordinator/` — what each control-socket request does to the stored records and which host-role work it triggers:
   `mod.rs` the dispatcher, then one file per request family (`consoles`, `projects`, `open`, `resume`, `launch`,
   `restart` (what the restarts of a session's process share: `run` drives the stop and relaunch of an account switch and
-  a model change, the other helpers also serve a sharing change), `bindings`, `lifecycle` (archiving, deleting, and a
+  a model change, the other helpers also serve a sharing change), `bindings` (binding a session to an owner, for the MCP `bind_to_session` tool and the user's `bind_session`
+  request alike), `lifecycle` (archiving, deleting, and a
   session's own archive when its work is finished: `lifecycle/finished.rs`), `handoff`, `native_app` (opening a stopped session's conversation in its agent's desktop
   application, `open_session_in_app`, and the `probe_native_apps` answer: which agents' applications are installed and
   which sessions' conversations they can see), `account_switch`,
@@ -994,7 +995,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Whether an agent is on the added list (every agent is while the list is undecided) | `Store::agent_is_added` (`src/store/agents.rs`); refusing a request for an agent that is not: `refuse_unless_agent_added` (opening a session) and `refuse_unless_agent_added_to` (any other purpose), `src/accounts/choice/refusals.rs` |
 | Clean a project's or an agent's tag list before storing it | `normalise_tags` (`src/coordinator/validate.rs`) |
 | Word what became of a delivery | `Delivery::note` (`src/messaging/delivery.rs`) |
-| Word a notice to an owner, or a session's role after its parent changed | `src/messaging/owner_notices.rs` (`tell_owner_*`, `parent_changed_notice`, `new_owner_notice`, `transferred_to_you`, `transferred_to_owner`, `first_report_on_bind`, `role_after_owner_change`, `duties_under_new_parent`) |
+| Word a notice to an owner, or a session's role after its parent changed | `src/messaging/owner_notices.rs` (`tell_owner_*`, `parent_changed_notice`, `new_owner_notice`, `transferred_to_you`, `transferred_to_owner`, `first_report_on_bind`, `bound_by_user`, `bound_to_owner_by_user`, `role_after_owner_change`, `duties_under_new_parent`) |
 | Name a session or put a title on one line in a model-facing message | `src/messaging/naming.rs` (`label`, `named_session`, `one_line`, `quote`) |
 | Which agent and account a session started for another opens with; the accounts of an agent as a listing shows them; why one cannot open a session | `src/accounts/choice/` (`started.rs`: `choice_for_started_session`; `automatic.rs`: `candidate_accounts`; `standing.rs`: `cannot_open`) |
 | Refuse an operation on a locked or an archived session | `state::refusals::ensure_unlocked`, `refuse_if_archived` (`src/state/refusals.rs`) |

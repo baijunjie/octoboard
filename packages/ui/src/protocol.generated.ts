@@ -4206,6 +4206,11 @@ export type Request = {
   session: string,
 }
   | {
+  "type": "bind_session",
+  session: string,
+  owner: string,
+}
+  | {
   "type": "list_pages",
   session: string,
 }
@@ -5095,6 +5100,11 @@ export type RequestBody = {
 | {
   "type": "release_session",
   session: string,
+}
+| {
+  "type": "bind_session",
+  session: string,
+  owner: string,
 }
 | {
   "type": "list_pages",

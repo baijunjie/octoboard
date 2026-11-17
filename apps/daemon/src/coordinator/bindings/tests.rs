@@ -203,10 +203,11 @@ fn a_project_session_binds_only_to_an_unbound_or_bound_coordinator_of_its_own_pr
 /// An unbound project session binds itself to a running console session of its console and
 /// becomes a bound coordinator keeping its own sessions, or, with none of its own, to a running
 /// project session of its project that can own sessions and becomes an ordinary bound one.
-/// Each refusal names its reason and changes nothing.
+/// Each refusal names its reason, carries its own code and the session (the owner too, for an owner
+/// that cannot own it), and changes nothing.
 #[tokio::test]
 async fn a_session_binds_itself_only_where_orchestration_stays_two_levels_deep() {
-    use SessionStatus::{Idle, Interrupted, Starting};
+    use SessionStatus::{Archived, Idle, Interrupted, Starting};
     let (state, _dir, _live) = binding_fixture(
         "bind",
         vec![
@@ -215,6 +216,7 @@ async fn a_session_binds_itself_only_where_orchestration_stays_two_levels_deep()
             console_session("starting-hub", Starting),
             // Reads running, but has no process behind it.
             console_session("ghost-hub", Idle),
+            console_session("archived-hub", Archived),
             Session {
                 console_id: "console-2".to_string(),
                 ..console_session("foreign-hub", Idle)
@@ -222,6 +224,10 @@ async fn a_session_binds_itself_only_where_orchestration_stays_two_levels_deep()
             project_session("starter", AgentId::CLAUDE, Idle),
             project_session("other-starter", AgentId::CLAUDE, Idle),
             project_session("loner", AgentId::CLAUDE, Idle),
+            project_session("archived-loner", AgentId::CLAUDE, Archived),
+            // Its only session of its own is archived, which still counts as one.
+            project_session("with-archived-child", AgentId::CLAUDE, Idle),
+            bound_session("archived-child", Archived, "with-archived-child"),
             Session {
                 project_id: Some("project-2".to_string()),
                 ..project_session("elsewhere", AgentId::CLAUDE, Idle)
@@ -239,29 +245,115 @@ async fn a_session_binds_itself_only_where_orchestration_stays_two_levels_deep()
         ],
     );
 
-    for (session, owner, reason) in [
-        ("bound", "hub", "already bound"),
-        ("hub", "starter", "console session cannot be bound"),
+    // (session, owner, the reason it names, the code, whether the refusal names the owner)
+    let owner_cannot_own = error_code::OWNER_CANNOT_OWN;
+    for (session, owner, reason, code, names_owner) in [
+        (
+            "bound",
+            "hub",
+            "already bound",
+            error_code::SESSION_ALREADY_BOUND,
+            false,
+        ),
+        (
+            "hub",
+            "starter",
+            "console session cannot be bound",
+            error_code::CONSOLE_SESSION_NEVER_BOUND,
+            false,
+        ),
+        (
+            "archived-loner",
+            "hub",
+            "is archived",
+            error_code::SESSION_ARCHIVED,
+            false,
+        ),
         (
             "starter",
             "other-starter",
             "has sessions of its own (`mine`)",
+            owner_cannot_own,
+            true,
         ),
-        ("loner", "mine", "cannot own sessions"),
-        ("loner", "elsewhere", "another project"),
-        ("loner", "foreign-hub", "another console"),
-        ("loner", "sleeping-hub", "not running"),
-        ("loner", "starting-hub", "not running"),
-        ("loner", "ghost-hub", "not running"),
-        ("loner", "loner", "its own owner"),
+        (
+            "with-archived-child",
+            "other-starter",
+            "has sessions of its own (`archived-child`)",
+            owner_cannot_own,
+            true,
+        ),
+        (
+            "loner",
+            "mine",
+            "cannot own sessions",
+            owner_cannot_own,
+            true,
+        ),
+        (
+            "loner",
+            "elsewhere",
+            "another project",
+            owner_cannot_own,
+            true,
+        ),
+        (
+            "loner",
+            "foreign-hub",
+            "another console",
+            owner_cannot_own,
+            true,
+        ),
+        (
+            "loner",
+            "sleeping-hub",
+            "not running",
+            owner_cannot_own,
+            true,
+        ),
+        (
+            "loner",
+            "starting-hub",
+            "not running",
+            owner_cannot_own,
+            true,
+        ),
+        ("loner", "ghost-hub", "not running", owner_cannot_own, true),
+        (
+            "loner",
+            "archived-hub",
+            "not running",
+            owner_cannot_own,
+            true,
+        ),
+        ("loner", "loner", "its own owner", owner_cannot_own, true),
     ] {
+        let before = state.store.get_session(session).unwrap().unwrap();
         let err = bind_session(&state, session, owner).expect_err(reason);
         assert!(err.to_string().contains(reason), "{session} {owner}: {err}");
+        assert_eq!(code_of(&err), code, "{session} {owner}: {err}");
+        let coded = err.downcast_ref::<CodedError>().expect("a coded refusal");
+        assert_eq!(
+            coded.params.get("session").map(String::as_str),
+            Some(session),
+            "{session} {owner}"
+        );
+        assert_eq!(
+            coded.params.get("owner").map(String::as_str),
+            names_owner.then_some(owner),
+            "{session} {owner}"
+        );
+        let after = state.store.get_session(session).unwrap().unwrap();
+        assert_eq!(
+            (before.bound_to, before.role),
+            (after.bound_to, after.role),
+            "{session} {owner}"
+        );
     }
     let loner = state.store.get_session("loner").unwrap().unwrap();
     assert_eq!((loner.bound_to, loner.role), (None, Role::Coordinator));
 
-    let (coordinator, _) = bind_session(&state, "starter", "hub").unwrap();
+    let (coordinator, _, _) = bind_session(&state, "starter", "hub").unwrap();
     assert_eq!(
         (coordinator.bound_to.as_deref(), coordinator.role),
         (Some("hub"), Role::Coordinator)
@@ -270,7 +362,7 @@ async fn a_session_binds_itself_only_where_orchestration_stays_two_levels_deep()
     let mine = state.store.get_session("mine").unwrap().unwrap();
     assert_eq!(mine.bound_to.as_deref(), Some("starter"));
 
-    let (joined, _) = bind_session(&state, "loner", "other-starter").unwrap();
+    let (joined, _, _) = bind_session(&state, "loner", "other-starter").unwrap();
     assert_eq!(
         (joined.bound_to.as_deref(), joined.role),
         (Some("other-starter"), Role::Worker)
@@ -457,7 +549,7 @@ async fn a_claimed_session_or_owner_is_not_bound_to_or_from() {
     );
     drop(claim);
 
-    let (loner, _) = bind_session(&state, "loner", "hub").unwrap();
+    let (loner, _, _) = bind_session(&state, "loner", "hub").unwrap();
     assert_eq!(loner.bound_to.as_deref(), Some("hub"));
     let (plain, ..) = transfer_session(&state, "plain", "hub", "hub-2").unwrap();
     assert_eq!(plain.bound_to.as_deref(), Some("hub-2"));
@@ -528,7 +620,7 @@ async fn a_session_is_released_into_an_unbound_one_that_keeps_its_own_sessions()
     assert_eq!(code_of(&err), error_code::SESSION_NOT_BOUND, "{err}");
 
     // Unbound now, it can be bound again like any unbound project session.
-    let (rebound, _) = bind_session(&state, "plain", "hub").unwrap();
+    let (rebound, _, _) = bind_session(&state, "plain", "hub").unwrap();
     assert_eq!(rebound.bound_to.as_deref(), Some("hub"));
 }
 
@@ -755,7 +847,7 @@ async fn a_no_process_release_keeps_the_parting_note_for_the_next_launch() {
 
     // A transfer or a bind after the release makes the note stale, so it is dropped.
     release_session(&state, "moved", Some("hub"), Some("Pick up at step 3.")).unwrap();
-    let (moved, _) = bind_session(&state, "moved", "hub-2").unwrap();
+    let (moved, _, _) = bind_session(&state, "moved", "hub-2").unwrap();
     assert_eq!(moved.bound_to.as_deref(), Some("hub-2"));
     assert_eq!(state.store.owner_notice_note("moved").unwrap(), None);
     release_session(&state, "rebound", Some("hub"), Some("Pick up at step 3.")).unwrap();
@@ -976,4 +1068,215 @@ async fn an_instruction_after_an_owed_notice_keeps_who_sent_it() {
     let prompt = prompt.unwrap();
     let notice = prompt.strip_suffix(&format!("\n\n{instruction}")).unwrap();
     assert!(notice.starts_with(texts::NOTICE_PREFIX), "{prompt}");
+}
+
+/// Bound to a console session a session stays the coordinator it is, with its report-panel pages;
+/// bound to a project coordinator it becomes a worker, and its pages are withdrawn.
+#[tokio::test]
+async fn a_bind_sets_the_role_the_owner_makes_it_and_withdraws_a_new_workers_pages() {
+    use SessionStatus::Idle;
+    let (state, _dir, _live) = binding_fixture(
+        "bind-roles",
+        vec![
+            console_session("hub", Idle),
+            project_session("under-console", AgentId::CLAUDE, Idle),
+            project_session("under-project", AgentId::CLAUDE, Idle),
+            project_session("coordinator", AgentId::CLAUDE, Idle),
+        ],
+        &["hub", "coordinator", "under-console", "under-project"],
+    );
+    for (page, session) in [("c-1", "under-console"), ("p-1", "under-project")] {
+        state
+            .store
+            .insert_page(&crate::test_support::test_page(page, session, 1))
+            .unwrap();
+    }
+
+    let (kept, owner, _) = bind_session(&state, "under-console", "hub").unwrap();
+    assert_eq!(owner.id, "hub");
+    assert_eq!(
+        (kept.bound_to.as_deref(), kept.role),
+        (Some("hub"), Role::Coordinator)
+    );
+    assert_eq!(state.store.list_pages("under-console").unwrap().len(), 1);
+
+    let (worker, owner, _) = bind_session(&state, "under-project", "coordinator").unwrap();
+    assert_eq!(owner.id, "coordinator");
+    assert_eq!(
+        (worker.bound_to.as_deref(), worker.role),
+        (Some("coordinator"), Role::Worker)
+    );
+    assert!(state.store.list_pages("under-project").unwrap().is_empty());
+    let stored = state.store.get_session("under-project").unwrap().unwrap();
+    assert_eq!(
+        (stored.bound_to.as_deref(), stored.role),
+        (Some("coordinator"), Role::Worker)
+    );
+}
+
+/// A bind says whether the session has a process to be told in. A running one is owed nothing; one
+/// with none is left owed the notice for its next launch, which the binding write itself records,
+/// and the launch delivers it, naming the new owner.
+#[tokio::test]
+async fn a_bind_leaves_a_session_with_no_process_owed_its_notice() {
+    use SessionStatus::Idle;
+    let (state, _dir, _live) = binding_fixture(
+        "bind-running",
+        vec![
+            console_session("hub", Idle),
+            project_session("live", AgentId::CLAUDE, Idle),
+            Session {
+                bound_to: None,
+                role: Role::Coordinator,
+                ..no_process_with_conversation("asleep", AgentId::CLAUDE, "hub")
+            },
+        ],
+        &["hub", "live"],
+    );
+
+    let (_, _, running) = bind_session(&state, "live", "hub").unwrap();
+    assert!(running);
+    assert_eq!(state.store.owner_notice_pending("live").unwrap(), 0);
+
+    let (asleep, _, running) = bind_session(&state, "asleep", "hub").unwrap();
+    assert!(!running);
+    assert_eq!(asleep.bound_to.as_deref(), Some("hub"));
+    assert_eq!(state.store.owner_notice_pending("asleep").unwrap(), 1);
+    let (prompt, _) = relaunch_stand_in(&state, "asleep", false).await.unwrap();
+    let prompt = prompt.unwrap();
+    assert!(prompt.contains("`hub`"), "{prompt}");
+    assert!(prompt.contains("parent session"), "{prompt}");
+    // It had no parent when it was launched, so it is told what ending a round does under one.
+    assert!(
+        prompt.contains(
+            "`done` with no open items archives you, and is refused while a session you started \
+             is not archived; `needs_decision` or open items leave you running. Items that are \
+             your parent session's to carry out rather than yours go in `owner_items`, not \
+             `open_items`."
+        ),
+        "{prompt}"
+    );
+    assert_eq!(state.store.owner_notice_pending("asleep").unwrap(), 0);
+}
+
+/// A bind by the user tells both sessions: the one bound that the user set its parent, and the new
+/// owner that the session is its own from now on. A session with no process is told at its next
+/// launch instead, and the owner is told all the same. A refused bind tells nobody.
+#[tokio::test]
+async fn a_bind_by_the_user_tells_the_session_and_its_owner() {
+    use crate::test_support::{heard_after_marker, output_containing, running};
+    use SessionStatus::Idle;
+    let (state, _dir, _live) = binding_fixture(
+        "bind-by-user",
+        vec![
+            console_session("hub", Idle),
+            Session {
+                title: "Retry audit".to_string(),
+                ..project_session("loner", AgentId::CLAUDE, Idle)
+            },
+            Session {
+                title: "Slow migration".to_string(),
+                bound_to: None,
+                role: Role::Coordinator,
+                ..no_process_with_conversation("asleep", AgentId::CLAUDE, "hub")
+            },
+            bound_session("bound", Idle, "hub"),
+        ],
+        &[],
+    );
+    let hub = running(&state, "hub");
+    let loner = running(&state, "loner");
+    let bind = |session: &str| {
+        handle(
+            &state,
+            None,
+            RequestBody::BindSession {
+                session: session.to_string(),
+                owner: "hub".to_string(),
+            },
+        )
+    };
+
+    bind("loner").await.unwrap();
+    let stored = state.store.get_session("loner").unwrap().unwrap();
+    assert_eq!(stored.bound_to.as_deref(), Some("hub"));
+    let told = output_containing(&loner, "the user set");
+    assert!(told.contains("your role is coordinator"), "{told}");
+    assert!(told.contains("as your parent session"), "{told}");
+    assert!(told.contains("`hub`"), "{told}");
+    let told_owner = output_containing(&hub, "the user bound");
+    assert!(told_owner.contains("`loner`"), "{told_owner}");
+    assert!(told_owner.contains("Retry audit"), "{told_owner}");
+    assert!(
+        told_owner.contains("It is yours from now on"),
+        "{told_owner}"
+    );
+    assert!(
+        told_owner.contains("It had no parent session before. It is being told so."),
+        "{told_owner}"
+    );
+    assert_eq!(state.store.owner_notice_pending("loner").unwrap(), 0);
+
+    // No process: the session is told at its next launch, the owner now.
+    bind("asleep").await.unwrap();
+    assert_eq!(
+        state
+            .store
+            .get_session("asleep")
+            .unwrap()
+            .unwrap()
+            .bound_to
+            .as_deref(),
+        Some("hub")
+    );
+    assert_eq!(state.store.owner_notice_pending("asleep").unwrap(), 1);
+    let told_owner = output_containing(&hub, "Slow migration");
+    assert!(told_owner.contains("the user bound"), "{told_owner}");
+    assert!(
+        told_owner.contains("It is not running, and will be told so when it next starts."),
+        "{told_owner}"
+    );
+    let (prompt, _) = relaunch_stand_in(&state, "asleep", false).await.unwrap();
+    assert!(prompt.unwrap().contains("`hub`"));
+    assert_eq!(state.store.owner_notice_pending("asleep").unwrap(), 0);
+
+    // A refused bind changes nothing and tells nobody.
+    let err = bind("bound").await.expect_err("already bound");
+    assert_eq!(code_of(&err), error_code::SESSION_ALREADY_BOUND);
+    assert!(!heard_after_marker(&state, &hub).contains("`bound`"));
+}
+
+/// An owner that stops being able to own sessions between the check and the write (here, one whose
+/// record is no coordinator, which the check does not look at for a console session) refuses the
+/// bind as an owner that cannot own it, naming the session and the owner, and changes nothing; the
+/// session's own binding cannot have changed under its claim, so it is never reported as already
+/// bound.
+#[tokio::test]
+async fn an_owner_that_cannot_own_by_the_time_of_the_write_is_refused_as_such() {
+    use SessionStatus::Idle;
+    let (state, _dir, _live) = binding_fixture(
+        "bind-owner-changed",
+        vec![
+            Session {
+                role: Role::Worker,
+                ..console_session("hub", Idle)
+            },
+            project_session("loner", AgentId::CLAUDE, Idle),
+        ],
+        &["hub", "loner"],
+    );
+
+    let err = bind_session(&state, "loner", "hub").expect_err("owner cannot own");
+    assert_eq!(code_of(&err), error_code::OWNER_CANNOT_OWN, "{err}");
+    let coded = err.downcast_ref::<CodedError>().expect("a coded refusal");
+    assert_eq!(
+        coded.params.get("session").map(String::as_str),
+        Some("loner")
+    );
+    assert_eq!(coded.params.get("owner").map(String::as_str), Some("hub"));
+    assert_eq!(
+        state.store.get_session("loner").unwrap().unwrap().bound_to,
+        None
+    );
+    assert_eq!(state.store.owner_notice_pending("loner").unwrap(), 0);
 }

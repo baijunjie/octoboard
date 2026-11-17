@@ -88,4 +88,13 @@ export interface ActionMenuNote {
   note: true;
 }
 
-export type ActionMenuEntry = ActionMenuItem | ActionMenuSubmenu | ActionMenuPanel | ActionMenuNote | "separator";
+/** The heading of a group of items: the plain items that follow it (no submenu, panel, note or choice) are a section
+ * under it, which names the group for assistive technology; the section ends at the first entry of any other kind,
+ * and a heading with no plain item after it is left out. It is not an item and takes no focus. */
+export interface ActionMenuHeading {
+  /** The heading's text. */
+  label: string;
+  heading: true;
+}
+
+export type ActionMenuEntry = ActionMenuItem | ActionMenuSubmenu | ActionMenuPanel | ActionMenuNote | ActionMenuHeading | "separator";

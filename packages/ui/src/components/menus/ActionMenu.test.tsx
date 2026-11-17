@@ -75,6 +75,68 @@ it("draws a separator only between two items", async () => {
   expect([...menu.children].map((el) => el.getAttribute("role") ?? el.textContent)).toEqual(["menuitem", "separator", "menuitem"]);
 });
 
+describe("a heading", () => {
+  const item = (label: string): ActionMenuEntry => ({ label, icon: Trash2, onClick: () => {} });
+  const heading = (label: string): ActionMenuEntry => ({ label, heading: true });
+  const groups = () => [...document.querySelectorAll("[role=group]")].map((group) => ({
+    name: group.getAttribute("aria-labelledby") ? document.getElementById(group.getAttribute("aria-labelledby")!)?.textContent : group.getAttribute("aria-label"),
+    items: [...group.querySelectorAll("[role=menuitem]")].map((el) => el.textContent),
+  }));
+
+  it("names the plain items after it, up to a separator or the next heading, as a group", async () => {
+    await openMenu([heading("Console sessions"), item("Hub"), item("Other hub"), "separator", heading("Project sessions"), item("Coordinator"), heading("Last"), item("Tail")]);
+    expect(groups()).toEqual([
+      { name: "Console sessions", items: ["Hub", "Other hub"] },
+      { name: "Project sessions", items: ["Coordinator"] },
+      { name: "Last", items: ["Tail"] },
+    ]);
+  });
+
+  it("is not an item: only the items after it are menu items", async () => {
+    await openMenu([heading("Console sessions"), item("Hub"), item("Other hub")]);
+    expect([...document.querySelectorAll("[role=menuitem]")].map((el) => el.textContent)).toEqual(["Hub", "Other hub"]);
+    expect(document.querySelectorAll("[role=menuitem]")).toHaveLength(2);
+  });
+
+  it("takes no focus: the arrow keys move between the items alone", async () => {
+    await openMenu([heading("First group"), item("A"), heading("Second group"), item("B")]);
+    const press = (target: Element, key: string) => act(async () => void target.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true })));
+    const [a, b] = [...document.querySelectorAll<HTMLElement>("[role=menuitem]")];
+    await act(async () => a!.focus());
+    await press(a!, "ArrowDown");
+    expect(document.activeElement).toBe(b);
+    await press(b!, "ArrowUp");
+    expect(document.activeElement).toBe(a);
+  });
+
+  it("draws nothing when no plain item follows it", async () => {
+    await openMenu([heading("Empty"), "separator", item("A"), heading("Also empty")]);
+    expect(document.querySelector("[role=group]")).toBeNull();
+    expect(document.body.textContent).not.toContain("Empty");
+    expect(document.body.textContent).not.toContain("Also empty");
+    expect([...document.querySelectorAll("[role=menuitem]")].map((el) => el.textContent)).toEqual(["A"]);
+  });
+
+  it("leaves no separator behind a heading that draws nothing", async () => {
+    await openMenu([item("A"), "separator", heading("Last")]);
+    expect([...document.querySelector("[role=menu]")!.children].map((el) => el.getAttribute("role"))).toEqual(["menuitem"]);
+  });
+
+  it("draws nothing for a heading followed by a submenu, which is not a plain item, and keeps the submenu", async () => {
+    await openMenu([heading("Group"), { label: "More", icon: Trash2, items: [item("Inner")] }, item("After")]);
+    expect(document.querySelector("[role=group]")).toBeNull();
+    expect(document.body.textContent).not.toContain("Group");
+    expect([...document.querySelectorAll("[role=menuitem]")].map((el) => el.textContent)).toEqual(["More", "After"]);
+  });
+
+  it("runs the action of an item under it", async () => {
+    const picked = vi.fn();
+    await openMenu([heading("Group"), { label: "Pick me", icon: Trash2, onClick: picked }]);
+    await act(async () => document.querySelector<HTMLElement>("[role=menuitem]")!.click());
+    expect(picked).toHaveBeenCalledOnce();
+  });
+});
+
 it("names a submenu once, though its items form a single-selection group", async () => {
   await openMenu([
     {
@@ -1133,6 +1195,14 @@ describe("a filter", () => {
   it("does not count a separator as a match, so the message is spoken while only separators would be left", async () => {
     await openBy(mountFilter([item("Website"), "separator", item("Docs")]), "pointer");
     await typeInFilter("zzz");
+    expect(spoken()).toContain(EMPTY);
+    await pressInFilter("Escape");
+    expect(spoken()).not.toContain(EMPTY);
+  });
+
+  it("does not count a heading as a match, so the message is spoken while only a heading would match", async () => {
+    await openBy(mountFilter([{ label: "Console sessions", heading: true }, item("Hub")]), "pointer");
+    await typeInFilter("console");
     expect(spoken()).toContain(EMPTY);
     await pressInFilter("Escape");
     expect(spoken()).not.toContain(EMPTY);

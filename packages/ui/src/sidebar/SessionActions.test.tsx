@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, expect, it, onTestFinished, vi } from "vitest";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import type { RequestHandler } from "../requests";
 import { enter, openTooltip, press } from "../components/hint/tooltipTestSupport";
@@ -20,10 +20,10 @@ import { fakeTimers, runOutTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-function mount(session: Session, inspect: RequestHandler, state: Partial<State> = {}) {
-  const handlers = { onOpenDialog: vi.fn(), onArchiveSession: vi.fn(), onCopySessionId: vi.fn() } as unknown as SidebarHandlers;
+function mount(session: Session, inspect: RequestHandler, state: Partial<State> = {}, others: Session[] = []) {
+  const handlers = { onOpenDialog: vi.fn(), onArchiveSession: vi.fn(), onCopySessionId: vi.fn(), onBindSession: vi.fn() } as unknown as SidebarHandlers;
   const request = vi.fn(inspect);
-  const daemon = testDaemon({ state: { sessions: new Map([[session.id, session]]), ...state }, request });
+  const daemon = testDaemon({ state: { sessions: new Map([session, ...others].map((s) => [s.id, s])), ...state }, request });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   const render = (next: Session) => act(() => root.render(
@@ -241,4 +241,53 @@ it.each([
   const item = itemNamed([...document.querySelectorAll<HTMLElement>("[role=menuitem]")], "Open in Claude app");
   expect(item?.getAttribute("aria-disabled")).toBe("true");
   expect(item?.textContent).toContain(reason);
+});
+
+describe("the Bind to entry of a session's menu", () => {
+  const hub = sessionOf("hub", "console", undefined, "Hub", "idle");
+  const coordinator = sessionOf("coordinator", "console", "project", "Coordinator", "idle");
+  const free = sessionOf("free", "console", "project", "Free", "idle");
+  const openMenu = async (session: Session, others: Session[]) => {
+    const mounted = mount(session, async () => ({ type: "ack", id: null }), {}, others);
+    press(mounted.container.querySelector<HTMLElement>('button[aria-label^="Actions for session"]')!, "mouse");
+    await act(async () => {});
+    return mounted;
+  };
+  const menuLabels = () => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].map((el) => el.textContent ?? "");
+  const openBind = async () => {
+    await act(async () => {
+      const item = [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((el) => el.textContent?.startsWith("Bind to"))!;
+      item.focus();
+      item.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+    });
+  };
+
+  it("is offered to an independent project session, listing the sessions that can own it", async () => {
+    const handlers = (await openMenu(free, [hub, coordinator])).handlers;
+    expect(menuLabels().some((label) => label.startsWith("Bind to"))).toBe(true);
+    await openBind();
+    const groups = [...document.querySelectorAll("[role=group]")].map((group) => [...group.querySelectorAll("[role=menuitem]")].map((el) => el.textContent));
+    expect(groups).toEqual([["Hub"], ["Coordinator"]]);
+    await act(async () => [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((el) => el.textContent === "Coordinator")!.click());
+    expect(handlers.onBindSession).toHaveBeenCalledExactlyOnceWith(free, coordinator);
+  });
+
+  it("lists no project session while a session, archived too, is bound to this one", async () => {
+    const archivedChild = sessionOf("child", "console", "project", "Child", "archived", { bound_to: "free" });
+    await openMenu(free, [hub, coordinator, archivedChild]);
+    await openBind();
+    const groups = [...document.querySelectorAll("[role=group]")].map((group) => [...group.querySelectorAll("[role=menuitem]")].map((el) => el.textContent));
+    expect(groups).toEqual([["Hub"]]);
+  });
+
+  it.each<[string, Session, string[]]>([
+    ["a console session", hub, []],
+    ["an archived session", { ...free, status: "archived" }, []],
+    ["a bound session, which offers Unbind", { ...free, bound_to: "hub" }, ["Unbind"]],
+  ])("is not offered to %s", async (_name, session, expected) => {
+    await openMenu(session, [hub, coordinator]);
+    const labels = menuLabels();
+    expect(labels.some((label) => label.startsWith("Bind to"))).toBe(false);
+    for (const label of expected) expect(labels.some((entry) => entry.startsWith(label))).toBe(true);
+  });
 });

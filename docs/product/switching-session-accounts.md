@@ -116,8 +116,8 @@ While a session is shown as switching:
   place, and this one comes back once the process is reached again with the switch still under way;
 - selecting it does not resume it, though it reads *interrupted* while its process is down;
 - archiving it asks for confirmation first;
-- its row's menu disables the other accounts of **Switch account**, **Hand off** and **Unbind** (see "Session rows" in
-  `docs/product/sidebar-session-rows.md`).
+- its row's menu disables the other accounts of **Switch account**, and **Hand off**, **Bind to** and **Unbind** (see
+  "Session rows" in `docs/product/sidebar-session-rows.md`).
 
 ## Switching from an owner's tool
 

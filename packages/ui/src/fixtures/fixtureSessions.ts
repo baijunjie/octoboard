@@ -247,6 +247,29 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
       store.setState((state) => ({ sessions: new Map(state.sessions).set(session.id, { ...session, bound_to: null, role: "coordinator" }) }));
       return { type: "ack", id: null };
     },
+    bind_session: (body) => {
+      const { sessions } = store.getState();
+      const session = sessions.get(body.session);
+      if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: `unknown session ${body.session}` });
+      // Refused with the daemon's codes and English messages, in the order it checks them.
+      if (session.kind === "console") return fail({ code: "console_session_never_bound", params: { session: session.id }, message: "a console session cannot be bound to another session" });
+      if (session.status === "archived") return fail({ code: "session_archived", params: { session: session.id }, message: `\`${session.id}\` is archived, so it cannot be bound to an owner` });
+      if (session.bound_to) return fail({ code: "session_already_bound", params: { session: session.id }, message: `\`${session.id}\` is already bound to \`${session.bound_to}\`: only an unbound session can be bound to an owner` });
+      const owner = sessions.get(body.owner);
+      if (!owner) return fail({ code: "unknown_session", params: { session: body.owner }, message: `unknown session ${body.owner}` });
+      const cannotOwn = (reason: string) => fail({ code: "owner_cannot_own", params: { session: session.id, owner: owner.id }, message: reason });
+      if (owner.id === session.id) return cannotOwn(`\`${session.id}\` cannot be its own owner`);
+      if (owner.console_id !== session.console_id) return cannotOwn(`\`${owner.id}\` belongs to another console, and an owner must be in the console of the session it owns`);
+      if (owner.kind === "project") {
+        if (owner.project_id !== session.project_id) return cannotOwn(`\`${owner.id}\` is a session of another project, and a project session owns only sessions of its own project`);
+        if (owner.role === "worker") return cannotOwn(`\`${owner.id}\` reports to a session and cannot own sessions of its own: orchestration is at most two levels deep`);
+        if ([...sessions.values()].some((owned) => owned.bound_to === session.id)) return cannotOwn(`\`${session.id}\` has sessions of its own, and a session bound to a project session cannot own any: only a console session can own it`);
+      }
+      if (owner.status === "interrupted" || owner.status === "archived" || owner.status === "starting") return cannotOwn(`\`${owner.id}\` is not running`);
+      // Under a console session it stays the coordinator it is; under a project session it becomes a worker.
+      store.setState((state) => ({ sessions: new Map(state.sessions).set(session.id, { ...session, bound_to: owner.id, role: owner.kind === "console" ? session.role : "worker" }) }));
+      return { type: "ack", id: null };
+    },
     set_session_pinned: (body) => {
       const session = store.getState().sessions.get(body.session);
       if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: `unknown session ${body.session}` });

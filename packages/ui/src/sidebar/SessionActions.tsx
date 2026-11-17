@@ -19,7 +19,7 @@ import { useAccountSwitchHeld, useChildCanReport, useDaemon, useDaemonStore, use
 import { useOpenSessionInApp } from "../components/host/useOpenSessionInApp";
 import { nativeAppLabel } from "../agents/providers";
 import { type MenuPlacement, offersDelete, sessionMenu } from "./menus";
-import { archiveNeedsConfirmation, isUnusedSession } from "../sessions/order";
+import { archiveNeedsConfirmation, bindableOwners, isUnusedSession } from "../sessions/order";
 import { RowIconButton } from "../components/rows/RowIconButton";
 import type { SidebarHandlers } from "./types";
 
@@ -88,7 +88,7 @@ export function SessionActions({
           />
         </div>
       )}
-      <ActionMenu label={t("sidebar.session.actions", { title: isolate(title) })} items={() => sessionMenu(t, handlers, session, accounts, defaultNames, { host, placement, focusTarget, focusShortcut: ariaBinding(focusBinding, host), hasBoundSessions, canHandoff, switching, childActive, nativeApp: nativeAppInstalled && nativeAppLabelOf ? { label: nativeAppLabelOf, seen: !nativeAppUnseen, onOpen: () => openInApp(session) } : undefined, quota: { quotas: store.getState().accountQuotas, now: Date.now() }, providers: store.getState().providers, sharing: store.getState().accountSharing, disabledDefaults: store.getState().settings.disabled_default_accounts, accountOrder: store.getState().settings.account_order })} contextTargetRef={rowRef} onOpened={() => refreshNativeApps([session.id])} />
+      <ActionMenu label={t("sidebar.session.actions", { title: isolate(title) })} items={() => sessionMenu(t, handlers, session, accounts, defaultNames, { host, placement, focusTarget, focusShortcut: ariaBinding(focusBinding, host), hasBoundSessions, canHandoff, switching, childActive, nativeApp: nativeAppInstalled && nativeAppLabelOf ? { label: nativeAppLabelOf, seen: !nativeAppUnseen, onOpen: () => openInApp(session) } : undefined, quota: { quotas: store.getState().accountQuotas, now: Date.now() }, providers: store.getState().providers, sharing: store.getState().accountSharing, disabledDefaults: store.getState().settings.disabled_default_accounts, accountOrder: store.getState().settings.account_order, bindOwners: bindableOwners(store.getState().sessions.values(), session) })} contextTargetRef={rowRef} onOpened={() => refreshNativeApps([session.id])} />
     </>
   );
 }

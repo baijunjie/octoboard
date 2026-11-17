@@ -108,7 +108,7 @@ use accounts::{
     reorder_accounts, reorder_agents, set_account_disabled, set_default_account_name,
     start_account_login, update_account_requested,
 };
-use bindings::release_requested;
+use bindings::{bind_requested, release_requested};
 use consoles::{
     check_new_console, check_new_console_launch, delete_console, store_new_console,
     update_console_checked, ConsoleChanges, NewConsole,
@@ -946,6 +946,11 @@ async fn handle_inner(
 
         RequestBody::ReleaseSession { session: id } => {
             release_requested(state, id).await?;
+            Ok(None)
+        }
+
+        RequestBody::BindSession { session: id, owner } => {
+            bind_requested(state, id, owner).await?;
             Ok(None)
         }
 

@@ -287,26 +287,34 @@ pub(crate) fn role_after_owner_change(session: &Session, was_worker: bool) -> St
 pub(crate) fn duties_under_new_parent(agent: AgentId, coordinator: bool) -> String {
     let tool = |name: &str| catalogue::qualified_tool_name(agent, name);
     let report = tool("report");
+    let rounds = round_endings(coordinator);
     let ending = if coordinator {
         format!(
-            "`done` with no open items archives you, and is refused while a session you started \
-             is not archived; `needs_decision` or open items leave you running. {OWNER_ITEMS} You \
-             keep your child sessions and go on driving them with `{}` and the tools that go \
-             with it.",
+            "{rounds} You keep your child sessions and go on driving them with `{}` and the tools \
+             that go with it.",
             tool("open_session"),
         )
     } else {
-        format!(
-            "`done` with no open items archives you; `needs_decision` or open items leave you \
-             running. {OWNER_ITEMS} {}",
-            lost_tools(agent)
-        )
+        format!("{rounds} {}", lost_tools(agent))
     };
     format!(
         "take work only from it, or from the user typing in this terminal, and report to it with \
          `{report}` once per round of work. This replaces anything your role description says \
          about being independent and not calling `{report}`. {ending}"
     )
+}
+
+/// What ending a round does for a session under a parent, a `coordinator` or a worker, and where
+/// it puts what is the parent's to carry out. A session that had no parent when it was launched
+/// is told this, since its role description says it reports to nobody.
+fn round_endings(coordinator: bool) -> String {
+    let done = if coordinator {
+        "`done` with no open items archives you, and is refused while a session you started is \
+         not archived"
+    } else {
+        "`done` with no open items archives you"
+    };
+    format!("{done}; `needs_decision` or open items leave you running. {OWNER_ITEMS}")
 }
 
 /// Where a session under a parent puts what is the parent's to carry out, said after what ending
@@ -399,11 +407,7 @@ pub(crate) fn transferred_to_owner(
     moved: &Session,
     note: &str,
 ) -> String {
-    let role_note = if moved.role == Role::Coordinator {
-        " Its role is coordinator. It keeps its child sessions, which you can read but not drive."
-    } else {
-        " Its role is worker and it cannot manage child sessions."
-    };
+    let role_note = role_for_new_owner(moved);
     new_owner_notice(
         owner.agent,
         &format!(
@@ -416,6 +420,60 @@ pub(crate) fn transferred_to_owner(
         &format!(
             "{role_note} The transfer note:\n\n{}\n— end of the transfer note —",
             quote(note)
+        ),
+    )
+}
+
+/// The role sentence a new owner is told of `moved`, the session it has from now on.
+fn role_for_new_owner(moved: &Session) -> &'static str {
+    if moved.role == Role::Coordinator {
+        " Its role is coordinator. It keeps its child sessions, which you can read but not drive."
+    } else {
+        " Its role is worker and it cannot manage child sessions."
+    }
+}
+
+/// The notice to `bound`, an independent project session the user has just bound to `owner`:
+/// whose it is now and, since its role description says it is independent, what that asks of it.
+pub(crate) fn bound_by_user(bound: &Session, owner: &Session) -> String {
+    format!(
+        "{NOTICE_PREFIX}: your role is {role}, and the user set {owner} as your parent session: \
+         {duties}",
+        role = if bound.is_worker() {
+            "worker"
+        } else {
+            "coordinator"
+        },
+        owner = named_session(owner),
+        duties = duties_under_new_parent(bound.agent, !bound.is_worker()),
+    )
+}
+
+/// The notice to `owner`, the session the user has just bound the independent project session
+/// `bound` to; `running` is whether `bound` has a process to be told in now, else it is told when
+/// it next starts.
+pub(crate) fn bound_to_owner_by_user(
+    state: &Arc<AppState>,
+    owner: &Session,
+    bound: &Session,
+    running: bool,
+) -> String {
+    let told = if running {
+        "It is being told so."
+    } else {
+        "It is not running, and will be told so when it next starts."
+    };
+    new_owner_notice(
+        owner.agent,
+        &format!(
+            "the user bound the project session {bound}{place} to you. It is yours from now on: \
+             it reports to you, and",
+            bound = label(bound),
+            place = place_of(state, bound),
+        ),
+        &format!(
+            "{} It had no parent session before. {told}",
+            role_for_new_owner(bound)
         ),
     )
 }
@@ -500,9 +558,10 @@ pub(crate) async fn tell_now_or_leave(
 
 /// What a session that was not running when its owner changed is told when it next starts, built
 /// from its binding as it stands then, so a later change cannot leave it stale: who its owner is,
-/// or that it has none, and, for one bound to a project session, the tools it has left. A session
-/// is told at launch because Claude Code and Grok replay what they were first told of their owner
-/// on every resume.
+/// or that it has none, and, for one bound to a project session, the tools it has left. A bound
+/// session is also told what ending a round does under a parent, which one bound while it had none
+/// was never told. A session is told at launch because Claude Code and Grok replay what they were
+/// first told of their owner on every resume.
 pub(crate) fn owner_notice(state: &Arc<AppState>, session: &Session) -> Result<String> {
     let Some(owner_id) = &session.bound_to else {
         // The note of the release is told only while the release is the latest change of owner.
@@ -526,7 +585,11 @@ pub(crate) fn owner_notice(state: &Arc<AppState>, session: &Session) -> Result<S
         " while you were not running.",
         session.agent,
         &owner,
-        &format!(". {}", role_after_owner_change(session, false)),
+        &format!(
+            ". {} {}",
+            role_after_owner_change(session, false),
+            round_endings(!session.is_worker())
+        ),
     ))
 }
 
@@ -1008,9 +1071,25 @@ mod tests {
     async fn a_session_told_of_a_new_parent_or_a_release_is_told_its_role_word_for_word() {
         let (state, _dir, _hub) = team_state(
             "owner-notice-role-words",
-            &[("coordinator", "hub", true, SessionStatus::Interrupted)],
+            &[
+                ("coordinator", "hub", true, SessionStatus::Interrupted),
+                ("worker", "hub", false, SessionStatus::Interrupted),
+            ],
         );
         let coordinator = state.session_record("coordinator").unwrap();
+        let worker_notice = owner_notice(&state, &state.session_record("worker").unwrap()).unwrap();
+        assert!(
+            worker_notice.contains(
+                "`done` with no open items archives you; `needs_decision` or open items leave \
+                 you running. Items that are your parent session's to carry out rather than \
+                 yours go in `owner_items`, not `open_items`."
+            ),
+            "{worker_notice}"
+        );
+        assert!(
+            !worker_notice.contains("is refused while"),
+            "{worker_notice}"
+        );
         assert_eq!(
             owner_notice(&state, &coordinator).unwrap(),
             "Message from Octoboard: your parent session has changed while you were not running. \
@@ -1018,7 +1097,10 @@ mod tests {
              only from it, or from the user typing in this terminal, and report to it with \
              `mcp__octoboard__report`. This replaces what you were told of your parent session \
              when you were started. Your role remains coordinator: you can create and manage \
-             child sessions."
+             child sessions. `done` with no open items archives you, and is refused while a \
+             session you started is not archived; `needs_decision` or open items leave you \
+             running. Items that are your parent session's to carry out rather than yours go in \
+             `owner_items`, not `open_items`."
         );
         let released = Session {
             bound_to: None,
@@ -1178,6 +1260,76 @@ mod tests {
             first_report_on_bind(false),
             "This project session is now a worker reporting to you: it is yours to drive from now \
              on, and reports to you. Its summary of what it is doing and needs follows."
+        );
+    }
+
+    /// The notices of a bind by the user are worded as fixed: the session is told its role and the
+    /// duties its new parent gives it, and the new owner is told the session is its own, with the
+    /// role sentence a transfer gives, in its own agent's tool names.
+    #[test]
+    fn the_notices_of_a_bind_by_the_user_are_worded_as_fixed() {
+        let (state, _dir, _hub) = team_state("owner-notice-bind-words", &[]);
+        let hub = state.session_record("hub").unwrap();
+        let coordinator = Session {
+            title: "Fix\nthe build".to_string(),
+            role: Role::Coordinator,
+            bound_to: Some("hub".to_string()),
+            ..project_session("S")
+        };
+        let worker = Session {
+            role: Role::Worker,
+            ..coordinator.clone()
+        };
+
+        let told = bound_by_user(&coordinator, &hub);
+        assert_eq!(
+            told,
+            format!(
+                "Message from Octoboard: your role is coordinator, and the user set {} as your \
+                 parent session: {}",
+                named_session(&hub),
+                duties_under_new_parent(coordinator.agent, true),
+            )
+        );
+        assert!(
+            told.starts_with(
+                "Message from Octoboard: your role is coordinator, and the user set the console \
+                 session `hub` (\"hub\") as your parent session: take work only from it, or \
+                 from the user typing in this terminal, and report to it with \
+                 `mcp__octoboard__report` once per round of work."
+            ),
+            "{told}"
+        );
+        assert!(told.contains("You keep your child sessions"), "{told}");
+        let told = bound_by_user(&worker, &project_session("peer"));
+        assert!(
+            told.starts_with("Message from Octoboard: your role is worker, and the user set "),
+            "{told}"
+        );
+        assert!(!told.contains("You keep your child sessions"), "{told}");
+
+        assert_eq!(
+            bound_to_owner_by_user(&state, &hub, &worker, true),
+            "Message from Octoboard: the user bound the project session `session-7` (\"Fix the \
+             build\") in the console \"Console\" to you. It is yours from now on: it reports to \
+             you, and you drive it like any session of yours, with \
+             `mcp__octoboard__instruct_session`, `mcp__octoboard__archive_session` and \
+             `mcp__octoboard__resume_session`. Its role is worker and it cannot manage child \
+             sessions. It had no parent session before. It is being told so."
+        );
+        let grok_owner = Session {
+            agent: AgentId::GROK,
+            ..hub
+        };
+        let told = bound_to_owner_by_user(&state, &grok_owner, &coordinator, false);
+        assert!(told.contains("`octoboard__instruct_session`"), "{told}");
+        assert!(
+            told.contains(
+                "Its role is coordinator. It keeps its child sessions, which you can read but not \
+                 drive. It had no parent session before. It is not running, and will be told so \
+                 when it next starts."
+            ),
+            "{told}"
         );
     }
 }

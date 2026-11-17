@@ -32,7 +32,7 @@ export function UnbindSessionDialog({ sessionId, onClose }: { sessionId: string;
     <ConfirmDialog
       title={t("dialog.unbindSession.title")}
       subject={<Message id="dialog.unbindSession.subject" params={{ title: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineReference>, owner: ownerName }} />}
-      message={t("dialog.unbindSession.answersToYou")}
+      message={t("dialog.unbindSession.answersToYouUntilBound")}
       consequences={<ConfirmConsequences lines={[{ key: "owner", text: t("dialog.unbindSession.consequence") }]} />}
       confirmLabel={t("dialog.unbindSession.confirm")}
       errorTitle={t("dialog.unbindSession.error")}

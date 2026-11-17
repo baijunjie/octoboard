@@ -1389,7 +1389,10 @@ as well, since the row is one button and nothing inside it is announced.
 
 One gap is left open on purpose: the agent icon beside each session in the archive submenu carries no tooltip, so it
 says which agent it is to nobody, its `svg` being `aria-hidden` as well. The agent is read from the archive view's own
-rows instead, where that icon carries its tooltip and the agent is in the row's accessible name. The relative time at
+rows instead, where that icon carries its tooltip and the agent is in the row's accessible name. The Bind to submenu of
+a session's menu has no such other place, and two of the owners it lists can share a title, so each of its items names
+the agent (with the account, as a session row does) in its accessible name after the title, though its icon carries no
+tooltip either. The relative time at
 the end of those archive items is the one indicator on a menu's transient surface with a tooltip of its own (the
 session's archive and creation dates, `SessionRelativeTime`); a clipped label in a menu item, whether or not the item
 can be chosen, carries its own through the anchored shape, as in the Switch account submenu. The time keeps its
@@ -2175,6 +2178,10 @@ The converse holds as well: a heading element still has to be drawn as one. A he
 style sets the secondary text size and colour inherits both, and weight alone is too little to read as a heading — so
 it carries its own size and colour instead. `EmptyPanel`'s full panel is the case: HeroUI's `.empty-state` puts
 `text-sm text-muted` on the whole panel, and the heading overrides both so it leads the line under it.
+
+A menu's group heading is the exception the menu pattern forces: a menu holds only items, groups and separators, so a
+heading over a run of a menu's items (`ActionMenuHeading`, drawn by `MenuSection` as small secondary text) is the
+`<header>` that names its `group`, not an `<h1>`-`<h6>`, and it takes no focus; the arrow keys pass over it.
 
 A heading also never outranks the one above it. `EmptyPanel` takes `headingLevel` for that: its heading stands at the
 level of the heading naming whatever it fills, so the two read as one thing. The default `<h2>` is the level of a

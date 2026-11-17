@@ -244,8 +244,8 @@ pub mod error_code {
     pub const ICON_NOT_AN_IMAGE: Code = Code("icon_not_an_image");
     pub const ICON_TOO_LARGE: Code = Code("icon_too_large");
     pub const SESSION_NOT_RUNNING: Code = Code("session_not_running");
-    /// A `release_session` for a console session, which is never bound. `params` names the
-    /// `session`.
+    /// A `release_session` or a bind for a console session, which is never bound. `params` names
+    /// the `session`.
     pub const CONSOLE_SESSION_NEVER_BOUND: Code = Code("console_session_never_bound");
     /// A `release_session` for a session that is not bound to any owner. `params` names the
     /// `session`.
@@ -253,6 +253,13 @@ pub mod error_code {
     /// A `release_session` by an owner for a session bound to another owner. `params` names the
     /// `session` and the `owner` that asked.
     pub const SESSION_NOT_BOUND_TO_OWNER: Code = Code("session_not_bound_to_owner");
+    /// A bind of a session that is already bound to an owner. `params` names the `session`.
+    pub const SESSION_ALREADY_BOUND: Code = Code("session_already_bound");
+    /// A bind to an owner that cannot own the session: it is the session itself, is not running,
+    /// cannot have sessions of its own, is in another console or project, or is a project session
+    /// while the session has sessions of its own; or it stopped being able to own the session while
+    /// the binding was being made. `params` names the `session` and the `owner`.
+    pub const OWNER_CANNOT_OWN: Code = Code("owner_cannot_own");
     /// A `release_session` found the session's binding changed between checking it and writing the
     /// release, so nothing was released. `params` names the `session`.
     pub const SESSION_BINDING_CHANGED: Code = Code("session_binding_changed");
@@ -452,8 +459,8 @@ pub mod error_code {
     pub const SHARING_SESSION_DID_NOT_STOP: Code = Code("sharing_session_did_not_stop");
     /// A switch was asked to move a session to the account it is on already.
     pub const SESSION_ALREADY_ON_ACCOUNT: Code = Code("session_already_on_account");
-    /// A switch was asked for an archived session. Reopening one is a resume's job, and a switch
-    /// must not do it as a side effect.
+    /// A switch, or a bind, was asked for an archived session. Reopening one is a resume's job, and
+    /// neither must do it as a side effect.
     pub const SESSION_ARCHIVED: Code = Code("session_archived");
     /// A handoff, or a transfer of a session's branches, was asked for a session in the middle of a
     /// turn, still starting, waiting for the user, showing its background agents or running work in
