@@ -313,6 +313,13 @@ export function directoryFold(items: readonly ChangeItem[], collapsed: ReadonlyS
   return { keys, anyOpen, outermost };
 }
 
+/** The key of the node of `nodes` that holds the row `key` somewhere beneath it, not counting the
+ * nodes themselves: the row that stays on screen when all of `nodes` fold. */
+export function holderOf(nodes: readonly ChangeNode[], key: string): string | undefined {
+  const holds = (node: ChangeNode): boolean => node.type !== "change" && node.children.some((child) => child.key === key || holds(child));
+  return nodes.find(holds)?.key;
+}
+
 /** `collapsed` with every row of `keys` folded away (`fold`) or unfolded, the rest as they were. */
 export function foldRows(collapsed: ReadonlySet<string>, keys: Iterable<string>, fold: boolean): Set<string> {
   const next = new Set(collapsed);

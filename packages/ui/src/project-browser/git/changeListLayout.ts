@@ -1,6 +1,6 @@
 // Where the Git mode's change list puts a row: its offset, which follows from every row and heading
 // being one height, as the tree's sectioned layout lays them out.
-import { ROW_HEIGHT } from "../treeRow";
+import { ROW_HEIGHT, scrollRowIntoView } from "../treeRow";
 import { changeGroups, sectionKey, visibleNodes, type ChangeItem } from "./changes";
 import type { ChangeLayout } from "./changeLayout";
 import { HEADING_HEIGHT } from "./changeSectionHeading";
@@ -21,4 +21,22 @@ export function changeRowOffset(items: readonly ChangeItem[], key: string, layou
     top += rows.length * ROW_HEIGHT;
   }
   return undefined;
+}
+
+/** Scrolls `list` the least that brings the row of `key` among `items` (a change's, a commit's or a
+ * directory's) into view, as the rows stand with `collapsed` folded away, whether or not the
+ * virtualizer has rendered it; false when there is no such row on screen. Rows and headings are
+ * each one height, so where a row is follows from its place (`changeRowOffset`). */
+export function scrollToChange(
+  list: HTMLElement | null,
+  items: readonly ChangeItem[],
+  key: string | undefined,
+  layout: ChangeLayout,
+  collapsed: ReadonlySet<string>,
+): boolean {
+  if (key === undefined || !list) return false;
+  const top = changeRowOffset(items, key, layout, collapsed);
+  if (top === undefined) return false;
+  scrollRowIntoView(list, top, { stickyTop: HEADING_HEIGHT });
+  return true;
 }

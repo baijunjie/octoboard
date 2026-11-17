@@ -1,18 +1,20 @@
 // @vitest-environment jsdom
 import React, { act, useState } from "react";
-import { expect, it, vi } from "vitest";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { FIRST_WRITE_DELAY_MS } from "../../components/announce/StatusAnnouncer";
 import { isolate } from "../../i18n/isolate";
 import { ChangeList } from "./ChangeList";
 import { changeRowOffset } from "./changeListLayout";
-import { change, changeViewFixture, committedChange, mountRows } from "../browserTestSupport";
+import { change, changeViewFixture, committedChange, mountRows, sizedElements } from "../browserTestSupport";
 import type { ChangeLayout } from "./changeLayout";
 import type { ChangeViewState } from "./changeView";
 import { changeItems, commitItems, commitKey, commitScope, directoryKey, sectionKey } from "./changes";
 import { HEADING_HEIGHT } from "./changeSectionHeading";
 import { ROW_HEIGHT } from "../treeRow";
-import { fakeTimers } from "../../test/clock";
+import { fakeTimers, runOutTimers } from "../../test/clock";
+import { focusAtRemoval } from "../../test/focusAtRemoval";
+import { useFocusHandoff } from "../../components/focus/useFocusHandoff";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -256,4 +258,172 @@ it("groups from the Committed heading and folds its commits together without cha
   act(() => button("Show commits together").click());
   expect(button("Expand all commits")).toBeNull();
   expect(button("Collapse all commits")).toBeNull();
+});
+
+describe("Collapse all commits and focus", () => {
+  const commits = commitItems([
+    { commit: "3333333333", parent: "2222222222", subject: "Parser", changes: [committedChange("src/nested/deep/parse.ts"), committedChange("src/top.ts"), committedChange("root.ts")] },
+    { commit: "2222222222", parent: "1111111111", subject: "Lexer", changes: [committedChange("src/lex.ts")] },
+  ]);
+  const listed = [...changeItems([change("staged", "src/staged.ts")]), ...commits];
+  const keyOf = (path: string) => listed.find((item) => item.path === path)!.key;
+
+  /** With `handoff`, the list sits in a region that hands focus on to a control beside it when the element that held it
+   * is removed, as the git view does with its branch selector (`useFocusHandoff`). `changes` replaces the changes listed. */
+  function mountGrouped(layout: ChangeLayout, { handoff = false, changes = listed } = {}) {
+    const view = changeViewFixture();
+    function Host() {
+      const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+      const selector = React.useRef<HTMLButtonElement>(null);
+      const region = useFocusHandoff(() => selector.current?.focus());
+      const list = <ChangeList items={changes} selected={undefined} label="Changes" onOpen={() => {}} listRef={() => {}} changeView={{ ...view, layout, collapsed, onCollapsedChange: setCollapsed, byCommit: { value: true, onChange: () => {} } }} />;
+      if (!handoff) return list;
+      return (
+        <>
+          <button ref={selector} data-testid="selector">Branch</button>
+          <div onFocus={region.onFocus} onBlur={region.onBlur}>{list}</div>
+        </>
+      );
+    }
+    const container = mountRows(<Host />);
+    const row = (key: string) => container.querySelector<HTMLElement>(`[data-key="${CSS.escape(key)}"]`);
+    const button = (label: string) => container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+    // The press of the pointer, which takes no focus, with the frames the fold's focus move needs.
+    const fold = async () => {
+      act(() => button("Collapse all commits")!.click());
+      await settle();
+    };
+    const unfold = async () => {
+      act(() => button("Expand all commits")!.click());
+      await settle();
+    };
+    return { container, row, button, fold, unfold };
+  }
+
+  it.each(["tree", "flat"] as const)("hands focus to the commit row when the fold takes a focused row away, in the %s layout", async (layout) => {
+    const { row, button, fold, unfold } = mountGrouped(layout);
+    const parser = commitKey("3333333333");
+    const lexer = commitKey("2222222222");
+
+    // A change under a commit goes with the fold: focus moves to that commit's row.
+    act(() => row(keyOf("src/nested/deep/parse.ts"))!.focus());
+    await fold();
+    expect(row(keyOf("src/nested/deep/parse.ts"))).toBeNull();
+    expect(document.activeElement).toBe(row(parser));
+    // Expanding never moves focus.
+    await unfold();
+    expect(document.activeElement).toBe(row(parser));
+
+    // The commit's other change moves it to the same commit, the other commit's to its own.
+    act(() => row(keyOf(layout === "tree" ? "src/top.ts" : "root.ts"))!.focus());
+    await fold();
+    expect(document.activeElement).toBe(row(parser));
+    await unfold();
+    act(() => row(keyOf("src/lex.ts"))!.focus());
+    await fold();
+    expect(document.activeElement).toBe(row(lexer));
+    await unfold();
+
+    // A commit row itself stays where it is.
+    act(() => row(lexer)!.focus());
+    await fold();
+    expect(document.activeElement).toBe(row(lexer));
+    await unfold();
+
+    // A row of another section is not under a commit, and stays on screen with focus on it.
+    act(() => row(keyOf("src/staged.ts"))!.focus());
+    await fold();
+    expect(document.activeElement).toBe(row(keyOf("src/staged.ts")));
+    await unfold();
+
+    // Focus on the button that folds, outside the rows, is not taken.
+    act(() => button("Collapse all commits")!.focus());
+    await fold();
+    expect(document.activeElement).toBe(button("Expand all commits"));
+  });
+
+  it.each(["tree", "flat"] as const)("has focus on the commit row before the fold removes the focused row, in the %s layout", async (layout) => {
+    const { container, row, button } = mountGrouped(layout);
+    const target = row(keyOf(layout === "tree" ? "src/nested/deep/parse.ts" : "root.ts"))!;
+    act(() => target.focus());
+    const focusWhenRemoved = focusAtRemoval(target);
+    // The press takes no focus; what matters is where focus is as the row goes, with no frame or timer in between.
+    act(() => button("Collapse all commits")!.click());
+    expect(focusWhenRemoved()).toBe(container.querySelector(`[data-key="${CSS.escape(commitKey("3333333333"))}"]`));
+    await settle();
+    expect(document.activeElement).toBe(row(commitKey("3333333333")));
+  });
+
+  it.each(["tree", "flat"] as const)("keeps focus in the list when a region around it hands focus on from a removed element, in the %s layout", async (layout) => {
+    const { container, row, fold } = mountGrouped(layout, { handoff: true });
+    const selector = container.querySelector<HTMLElement>("[data-testid=selector]")!;
+    // Removing the focused row blurs nothing here, as in WebKit: focus falls to `<body>` unannounced.
+    act(() => row(keyOf("src/lex.ts"))!.focus());
+    await fold();
+    expect(row(keyOf("src/lex.ts"))).toBeNull();
+    expect(document.activeElement).toBe(row(commitKey("2222222222")));
+    expect(document.activeElement).not.toBe(selector);
+  });
+
+  it.each(["tree", "flat"] as const)("brings a commit row the list has not rendered into view and focuses it before the fold, in the %s layout", (layout) => {
+    fakeTimers();
+    // Two commits of thirty changes each, in a list a hundred pixels tall: scrolled to the end, the second commit's row
+    // is far above what the virtualizer renders.
+    const many = (hash: string, name: string) => ({ commit: hash.repeat(10), parent: null, subject: name, changes: Array.from({ length: 30 }, (_, i) => committedChange(`${name}/f${i}.ts`)) });
+    const long = commitItems([many("4", "first"), many("5", "second")]);
+    sizedElements({ width: 300, height: 100 });
+    const { container, row, button } = mountGrouped(layout, { handoff: true, changes: long });
+    const list = container.querySelector<HTMLElement>("[role=treegrid]")!;
+    const second = commitKey("5555555555");
+    const last = long.at(-1)!.key;
+    // jsdom lays nothing out, so the scroll goes past the end and the virtualizer keeps it to its content.
+    act(() => {
+      list.scrollTop = 100 * ROW_HEIGHT;
+      list.dispatchEvent(new Event("scroll"));
+    });
+    act(() => row(last)!.focus());
+    expect(row(second)).toBeNull();
+    act(() => button("Collapse all commits")!.click());
+    // Focus is on the commit row as the fold renders, with no frame or timer in between.
+    expect(document.activeElement).toBe(row(second));
+    runOutTimers();
+    expect(document.activeElement).toBe(row(second));
+    // Folded, the commit's row is the list's third line: scrolled back up into view, clear of the sticky heading.
+    expect(changeRowOffset(long, second, layout, new Set([commitKey("4444444444"), second]))).toBe(HEADING_HEIGHT + ROW_HEIGHT);
+    expect(list.scrollTop).toBeLessThanOrEqual(ROW_HEIGHT);
+  });
+
+  it("hands focus from a folder row under a commit, at any depth, to that commit's row in the tree layout", async () => {
+    const { row, fold, unfold } = mountGrouped("tree");
+    for (const path of ["src", "src/nested/deep"]) {
+      const folder = row(directoryKey(commitScope("3333333333"), path));
+      expect(folder).not.toBeNull();
+      act(() => folder!.focus());
+      await fold();
+      expect(document.activeElement).toBe(row(commitKey("3333333333")));
+      await unfold();
+    }
+  });
+
+  it("leaves focus outside the list where it is", async () => {
+    const { row, fold } = mountGrouped("tree");
+    const outside = document.body.appendChild(document.createElement("button"));
+    onTestFinished(() => outside.remove());
+    act(() => outside.focus());
+    await fold();
+    expect(row(commitKey("3333333333"))!.getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(outside);
+  });
+
+  it("folds and unfolds every commit and nothing else, whatever focus does", async () => {
+    const { row, fold, unfold } = mountGrouped("tree");
+    act(() => row(keyOf("src/lex.ts"))!.focus());
+    await fold();
+    for (const hash of ["3333333333", "2222222222"]) expect(row(commitKey(hash))!.getAttribute("aria-expanded")).toBe("false");
+    // The section and the other sections' rows are as they were.
+    expect(row(keyOf("src/staged.ts"))).not.toBeNull();
+    await unfold();
+    for (const hash of ["3333333333", "2222222222"]) expect(row(commitKey(hash))!.getAttribute("aria-expanded")).toBe("true");
+    expect(row(keyOf("src/lex.ts"))).not.toBeNull();
+  });
 });

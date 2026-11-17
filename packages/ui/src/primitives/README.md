@@ -50,9 +50,10 @@ draws it (`StaticTag`, `GroupFieldError`), marks and all.
   in one place: `onFocusScopeRestore` (a one-shot capture listener for the cancelable focus-scope restore, to place
   focus when a dialog or popover closes), `MenuItem`'s `shortcut` (renders `aria-keyshortcuts`, which react-aria
   filters out of item props), `activateMenuItem` (runs an item as its keyboard activation does), `useTabPanelLink`
-  (makes an element of the caller's own the panel of a tab, under the ids react-aria gave the tab) and
-  `settleUnknownModality` (reads react-aria's private interaction modality to settle an unknown one). Application code
-  never listens for a react-aria event, sets its attributes on a wrapper's node or synthesises its key events.
+  (makes an element of the caller's own the panel of a tab, under the ids react-aria gave the tab),
+  `settleUnknownModality` (reads react-aria's private interaction modality to settle an unknown one) and
+  `scrollTreeAndRender` (scrolls a `Tree` by script and has its virtualizer render the rows in view at once).
+  Application code never listens for a react-aria event, sets its attributes on a wrapper's node or synthesises its key events.
 - **The library's DOM markers and states are read through the layer.** `itemKeyOf` / `itemKeySelector` (a collection
   item's key), `topLayerProps` / `closestTopLayer` / `clearTopLayer` and `liveAnnouncerProps` (what a modal's hiding of
   the page leaves out), `menuOfTrigger` (the open menu a trigger's button labels), `disabledGroupProps` (marks a group

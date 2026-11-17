@@ -15,6 +15,7 @@ import {
   directoryKey,
   filterChanges,
   foldRows,
+  holderOf,
   sectionKey,
   sections,
   visibleChanges,
@@ -391,4 +392,40 @@ it("returns the folded rows with the keys added or removed and every other row a
   const same = foldRows(collapsed, [], true);
   expect(same).not.toBe(collapsed);
   expect([...same].sort()).toEqual([...collapsed].sort());
+});
+
+it("names the node that holds a row at any depth beneath it, and nothing for a row that no node holds", () => {
+  const commit = (path: string, id: string): ChangeEntry => ({ group: "committed", old: at(path, "o"), new: at(path, id) });
+  const items = [
+    ...changeItems([entries[1]]),
+    ...commitItems([
+      { commit: "c3", parent: "c2", subject: "second", changes: [commit("src/nested/deep/b.ts", "c3"), commit("src/top.ts", "c3"), commit("z.ts", "c3")] },
+      { commit: "c2", parent: "c1", subject: "first", changes: [commit("src/a.ts", "c2")] },
+    ]),
+  ];
+  const [unstaged, committed] = changeGroups(items, "tree");
+  const keyOf = (path: string, scope: "c3" | "c2") => items.find((item) => item.path === path && item.commit?.commit === scope)!.key;
+  const c3Directory = directoryKey(commitScope("c3"), "src/nested/deep");
+  const c3Src = directoryKey(commitScope("c3"), "src");
+  // A change, and a directory, at any depth under a commit are held by that commit.
+  expect(holderOf(committed.nodes, keyOf("src/nested/deep/b.ts", "c3"))).toBe(commitKey("c3"));
+  expect(holderOf(committed.nodes, keyOf("z.ts", "c3"))).toBe(commitKey("c3"));
+  expect(holderOf(committed.nodes, keyOf("src/a.ts", "c2"))).toBe(commitKey("c2"));
+  expect(holderOf(committed.nodes, c3Src)).toBe(commitKey("c3"));
+  expect(holderOf(committed.nodes, c3Directory)).toBe(commitKey("c3"));
+  // The flat layout holds the changes one level beneath the commit.
+  expect(holderOf(changeGroups(items, "flat")[1].nodes, keyOf("src/a.ts", "c2"))).toBe(commitKey("c2"));
+  // The nodes themselves are not counted: a node is not held by itself, nor by a sibling.
+  expect(holderOf(committed.nodes, commitKey("c3"))).toBeUndefined();
+  expect(holderOf(committed.nodes, commitKey("c2"))).toBeUndefined();
+  // A row of another section, a key that names nothing, and no nodes at all have no holder.
+  expect(holderOf(committed.nodes, unstaged.items[0].key)).toBeUndefined();
+  expect(holderOf(committed.nodes, "row:commit:nope")).toBeUndefined();
+  expect(holderOf([], keyOf("z.ts", "c3"))).toBeUndefined();
+  // Directories of a tree that is not by commit hold their own rows the same way.
+  const tree = changeTree("unstaged", changeItems(treeEntries));
+  const deep = changeItems(treeEntries).find((item) => item.path === "src/utils/kickback/x.ts")!;
+  expect(holderOf(tree, deep.key)).toBe(directoryKey("unstaged", "src"));
+  expect(holderOf(tree, directoryKey("unstaged", "src/utils/kickback"))).toBe(directoryKey("unstaged", "src"));
+  expect(holderOf(tree, directoryKey("unstaged", "src"))).toBeUndefined();
 });

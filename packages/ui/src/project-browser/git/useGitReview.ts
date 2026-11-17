@@ -5,15 +5,11 @@ import type { ViewerSubject } from "../../viewer/content";
 import type { ViewerNavigation } from "../../viewer/viewerNavigation";
 import type { ProjectBrowserState } from "../browserState";
 import type { FileFilterState } from "../FileFilterField";
-import { itemKeyOf, itemKeySelector } from "../../primitives";
-import { focusFirst, focusRow } from "../focusRow";
-import { scrollRowIntoView } from "../treeRow";
-import { type ChangeLayout } from "./changeLayout";
-import { changeRowOffset } from "./changeListLayout";
-import { directoryFold, filterChanges, foldRows, type ChangeItem } from "./changes";
+import { focusedRowKey, focusFirst, focusRowBeforeFold } from "../focusRow";
+import { scrollToChange } from "./changeListLayout";
+import { directoryFold, filterChanges, foldRows } from "./changes";
 import { changesScope } from "./changesScope";
 import { branchGone } from "./changesStatus";
-import { HEADING_HEIGHT } from "./changeSectionHeading";
 import type { GitView } from "./GitView";
 import { committedState, uncommittedState } from "./gitViewModel";
 import { useBranchList } from "./useBranchList";
@@ -184,12 +180,17 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
     collapse: fold.anyOpen,
     disabled: fold.keys.length === 0,
     // A focused row that folds away hands focus to the outermost folder it was under, the nearest
-    // row that stays, as the Files tree's Collapse all does.
+    // row that stays, as the Files tree's Collapse all does; here the folder is also scrolled into view.
     onPress: () => {
-      const focused = fold.anyOpen && document.activeElement instanceof Element ? document.activeElement.closest<HTMLElement>(`[role=row]${itemKeySelector()}`) : null;
-      const stays = focused && listRef.current?.contains(focused) ? fold.outermost.get(itemKeyOf(focused) ?? "") : undefined;
-      setCollapsedChangeRows(foldRows(collapsed, fold.keys, fold.anyOpen));
-      if (stays !== undefined) focusRow(listRef.current, stays);
+      const list = listRef.current;
+      const focused = fold.anyOpen ? focusedRowKey(list) : undefined;
+      const stays = focused !== undefined ? fold.outermost.get(focused) : undefined;
+      const next = foldRows(collapsed, fold.keys, fold.anyOpen);
+      if (stays !== undefined) {
+        const shown = filterChanges(items, filter);
+        focusRowBeforeFold(list, stays, (afterFold) => scrollToChange(list, shown, stays, layout, afterFold ? next : collapsed));
+      }
+      setCollapsedChangeRows(next);
     },
   };
 
@@ -214,21 +215,4 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
     dismissViewer,
     foldDirectories,
   };
-}
-
-/** Scrolls `list` so the row of change `key` among `items` is in view; false when there is no
- * such row on screen yet. Rows and headings are each one height, so where a row is follows from
- * its place (`changeRowOffset`). */
-function scrollToChange(
-  list: HTMLElement | null,
-  items: readonly ChangeItem[],
-  key: string | undefined,
-  layout: ChangeLayout,
-  collapsed: ReadonlySet<string>,
-): boolean {
-  if (key === undefined || !list) return false;
-  const top = changeRowOffset(items, key, layout, collapsed);
-  if (top === undefined) return false;
-  scrollRowIntoView(list, top, { stickyTop: HEADING_HEIGHT });
-  return true;
 }

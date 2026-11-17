@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 import { act, useState } from "react";
-import { expect, it, onTestFinished, vi } from "vitest";
+import { expect, it, vi } from "vitest";
 
 import { isolate } from "../../i18n/isolate";
 import { ChangeTree } from "./ChangeTree";
 import { HEADING_HEIGHT } from "./changeSectionHeading";
 import { ROW_HEIGHT } from "../treeRow";
-import { change, committedChange, mountRows, pressTab } from "../browserTestSupport";
+import { change, committedChange, mountRows, pressTab, sizedElements } from "../browserTestSupport";
 import type { ChangeLayout } from "./changeLayout";
 import { changeItems, commitItems, commitKey, commitScope, directoryKey, sectionKey, type ChangeItem } from "./changes";
 
@@ -188,18 +188,6 @@ const longHistory = commitItems(
     changes: [committedChange(`src/a${index}.ts`), committedChange(`src/b${index}.ts`)],
   })),
 );
-
-/** Gives every element the size `size` holds, as react-aria reads it, so the list virtualizes as it
- * does in a browser rather than rendering every row as it does under test by default. */
-function sizedElements(size: { width: number; height: number }) {
-  for (const [name, read] of [["clientWidth", () => size.width], ["clientHeight", () => size.height]] as const) {
-    Object.defineProperty(HTMLElement.prototype, name, { configurable: true, get: read });
-  }
-  onTestFinished(() => {
-    delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
-    delete (HTMLElement.prototype as { clientHeight?: number }).clientHeight;
-  });
-}
 
 const scroller = (container: HTMLElement) => container.querySelector<HTMLElement>("[role=treegrid]")!;
 const contentHeight = (container: HTMLElement) => parseFloat(scroller(container).querySelector<HTMLElement>(":scope > [role=presentation]")!.style.height);

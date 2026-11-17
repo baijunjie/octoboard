@@ -7,6 +7,7 @@ import { isolate } from "../../i18n/isolate";
 import { useCurrentLanguage, useT } from "../../i18n/react";
 import type { ChangeLayout } from "./changeLayout";
 import { ChangeRowBody, changeRowText } from "./changeRow";
+import { scrollToChange } from "./changeListLayout";
 import { changeGroups, sectionKey, type ChangeItem, type ChangeNode, type ChangeSection, type CommitRef } from "./changes";
 import { collectionIndex, emptyCollectionIndex } from "../collectionIndex";
 import { ChangeSectionHeading, ChangeSectionHeadingStops, HEADING_CLASS, HEADING_HEIGHT } from "./changeSectionHeading";
@@ -100,6 +101,7 @@ export function ChangeTree({
     for (const key of foldable) if (!keys.has(key)) next.add(key);
     onCollapsedChange(next);
   };
+  const scrollToRow = (list: HTMLElement, key: string, rowsCollapsed: ReadonlySet<string>) => void scrollToChange(list, items, key, layout, rowsCollapsed);
   const onAction = (key: string) => {
     const node = byKey.get(key);
     if (node?.type === "change") onOpen(node.item);
@@ -154,9 +156,10 @@ export function ChangeTree({
                     count={group.items.length}
                     mark={headingMarks?.get(group.section)}
                     byCommit={group.section === "committed" ? byCommit : undefined}
-                    commitKeys={group.nodes.filter((node) => node.type === "commit").map((node) => node.key)}
+                    commits={group.nodes.filter((node) => node.type === "commit")}
                     collapsed={collapsed}
                     onCollapsedChange={onCollapsedChange}
+                    scrollToRow={scrollToRow}
                     topDivider={group.previousSection !== undefined && !collapsed.has(sectionKey(group.previousSection))}
                   />
                 </TreeHeader>

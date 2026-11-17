@@ -84,6 +84,18 @@ export function TreeCollection<T extends object>({ items, dependencies, children
   );
 }
 
+/**
+ * Runs `scroll`, which moves `tree` (a `Tree`'s scrolling element) by script, and renders the rows that brings into
+ * view at once rather than on the browser's next frame, so a row scrolled to can take focus in the same task. The
+ * browser fires the scroll event a script's scroll causes only on its next frame; firing one now has the virtualizer
+ * render from it straight away, as its scroll listener (a capturing one on the document, in react-aria 3.52) renders
+ * inside `flushSync`. Where a later version stops doing so, the rows come with the browser's own event as before.
+ */
+export function scrollTreeAndRender(tree: HTMLElement, scroll: () => void): void {
+  scroll();
+  tree.dispatchEvent(new Event("scroll"));
+}
+
 /** One row of a `Tree`, keyed `id`: `textValue` is what type-ahead matches, `label` replaces the accessible name its
  * content gives it. `content` is what the row shows, or a function of whether the row is open; `children` are its
  * child rows (a `TreeCollection`), and a row that can hold rows says so with `expandable`. `expandable` reaches only the

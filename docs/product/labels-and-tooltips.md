@@ -124,7 +124,9 @@ application buttons and the Keyboard shortcuts section's Cancel and Reset button
   Connectors and MCP dialog" in `docs/product/account-mcp-servers-and-connectors.md`);
 - the project pane's Refresh button, the Files tab's Collapse all folders button (see `docs/product/project-pane.md`)
   and the Changes tab's button that is named Expand all folders or Collapse all folders by what pressing it will do
-  (see "Flat or grouped by folder" in `docs/product/project-pane-git-change-list.md`), and the file
+  (see "Flat or grouped by folder" in `docs/product/project-pane-git-change-list.md`), the Committed section heading's
+  button that is named Expand all commits or Collapse all commits by what pressing it will do (see "Grouped by commit"
+  in the same doc), and the file
   viewer's Previous file and Next file buttons (see `docs/product/file-viewer.md`);
 - the copy buttons — the file viewer's Copy path, the Git mode's Copy worktree path on the change list's line naming
   the worktree, and a diagnostic block's Copy — whose tooltip, and the name announced with it, turns to the copied

@@ -208,7 +208,9 @@ project keeps its own choice across reloads and restarts (see "What is remembere
   accessible name say whether it will collapse or expand all commits. A filter limits this action to the commits it
   leaves in the list; the other commits keep their folds. Section and folder folds are kept, so using it while the
   Committed section is folded does not unfold the section. With no commit rows listed, the button is disabled. Both
-  controls stay with the section heading while it is pinned above the scrolling rows.
+  controls stay with the section heading while it is pinned above the scrolling rows. A mouse press on the bulk fold
+  button leaves keyboard focus where it was; when collapsing takes away the row keyboard focus is on — a change or
+  folder under a commit, at any depth — focus moves to that commit's row.
 - **Each commit's changes are against its first parent**: a merge commit's are what it took in, and a commit with no
   parent — the first commit of a branch listed with its whole history, or one where the branch merged in an unrelated
   history — is compared with the empty tree. A file several

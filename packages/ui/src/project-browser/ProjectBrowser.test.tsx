@@ -17,6 +17,9 @@ import { MIN_SPIN_MS, ProjectBrowser } from "./ProjectBrowser";
 import { SEARCH_DEBOUNCE_MS } from "./files/useFileSearch";
 import { BROWSER_HOST } from "../test/hosts";
 import { fakeTimers } from "../test/clock";
+import { focusAtRemoval } from "../test/focusAtRemoval";
+import { sizedElements } from "./browserTestSupport";
+import { ROW_HEIGHT } from "./treeRow";
 
 // These checks exercise the browser's reads and navigation; the viewer's rendering has its own suite.
 vi.mock("../viewer/FileViewer", () => ({ FileViewer: () => null }));
@@ -709,6 +712,46 @@ it("hands focus to the outermost folder when the header folds a focused row away
   await fold();
   expect(document.activeElement).toBe(labelled("Expand all folders"));
   expect(document.activeElement?.closest('[role="row"]')).toBeNull();
+});
+
+it("has focus on the outermost folder before the header's fold removes the focused row, so the git view's handoff never sees focus fall", async () => {
+  await mountChangeTree("fold-focus-early", ["src/a.ts", "src/nested/deep/b.ts", "z.ts"]);
+  const src = document.querySelector<HTMLElement>('[data-key="dir:unstaged:src"]')!;
+  const focused = changeRow("src/nested/deep/b.ts");
+  await act(async () => focused.focus());
+  const focusWhenRemoved = focusAtRemoval(focused);
+  // No timer or frame runs between the press and the checks: focus is already on the folder that stays, and
+  // the removal of the row (which fires no blur here, as in WebKit) found it there.
+  await act(async () => labelled("Collapse all folders").click());
+  expect(focusWhenRemoved()).toBe(src);
+  expect(document.activeElement).toBe(src);
+  await act(async () => void vi.runOnlyPendingTimers());
+  expect(document.activeElement).toBe(src);
+});
+
+it("brings an outermost folder the list has not rendered into view and focuses it before the header's fold, so the git view's handoff never takes focus", async () => {
+  // Forty changes in a folder inside another, in a list a hundred pixels tall: scrolled to the end, the folder's row is far above
+  // what the virtualizer renders.
+  sizedElements({ width: 300, height: 100 });
+  const paths = ["src/a.ts", ...Array.from({ length: 40 }, (_, i) => `src/deep/f${String(i).padStart(2, "0")}.ts`)];
+  await mountChangeTree("fold-focus-far", paths);
+  const list = changeRow("src/deep/f00.ts").closest<HTMLElement>("[role=treegrid]")!;
+  const src = '[data-key="dir:unstaged:src"]';
+  // jsdom lays nothing out, so the scroll goes past the end and the virtualizer keeps it to its content.
+  await act(async () => {
+    list.scrollTop = 100 * ROW_HEIGHT;
+    list.dispatchEvent(new Event("scroll"));
+  });
+  await act(async () => changeRow("src/deep/f39.ts").focus());
+  expect(document.querySelector(src)).toBeNull();
+  // No timer or frame runs between the press and the check.
+  await act(async () => labelled("Collapse all folders").click());
+  expect(document.activeElement).toBe(document.querySelector(src));
+  await act(async () => void vi.runOnlyPendingTimers());
+  await act(async () => void vi.runOnlyPendingTimers());
+  expect(document.activeElement).toBe(document.querySelector(src));
+  // Folded, the folder's row is the list's second line, below the heading: scrolled back up into view.
+  expect(list.scrollTop).toBeLessThanOrEqual(ROW_HEIGHT);
 });
 
 it("leaves ignored files out of the search until the toggle beside the field includes them", async () => {

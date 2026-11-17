@@ -4,10 +4,9 @@ import { useStableHandler } from "../../components/hooks/useLatest";
 import type { ErrorPresentation } from "../../errors/errorPresentation";
 import type { ViewerNavigation } from "../../viewer/viewerNavigation";
 import type { ViewerSubject } from "../../viewer/content";
-import { itemKeyOf, itemKeySelector } from "../../primitives";
 import type { ProjectBrowserState } from "../browserState";
 import type { FileFilterState } from "../FileFilterField";
-import { focusRow } from "../focusRow";
+import { focusedRowKey, focusRow } from "../focusRow";
 import { buildTree, compareFilePaths, fileEvidence, hasOpenFolder, listingSaysDirectory, parentPath, parseRowKey, rowKey, type DirListing } from "../tree";
 import { neighboursIn, rereadFor, type Evidence } from "../viewedItem";
 import { ROW_HEIGHT, scrollRowIntoView } from "../treeRow";
@@ -124,8 +123,8 @@ export function useFilesMode(project: string, browser: ProjectBrowserState, filt
   // focused row that goes with them hands focus to the top-level folder it was under, the nearest
   // row that stays.
   const collapseAll = () => {
-    const focused = document.activeElement instanceof Element ? document.activeElement.closest<HTMLElement>(`[role=row]${itemKeySelector()}`) : null;
-    const stays = focused && treeRef.current?.contains(focused) ? topLevelFolderKey(itemKeyOf(focused) ?? "") : undefined;
+    const focused = focusedRowKey(treeRef.current);
+    const stays = focused !== undefined ? topLevelFolderKey(focused) : undefined;
     onExpandedChange(new Set());
     if (stays !== undefined) focusRow(treeRef.current, stays);
   };

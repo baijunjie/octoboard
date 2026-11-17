@@ -9,7 +9,8 @@ import { ROW_ICON_BUTTON_CLASS, RowIconGroup } from "../../components/controls/R
 import { TitledControl } from "../../components/hint/TitledControl";
 import { handFocusOff } from "../../components/focus/handFocusOff";
 import { useCurrentLanguage, useT } from "../../i18n/react";
-import { SECTION_LABELS, foldRows, sectionKey, type ChangeSection } from "./changes";
+import { SECTION_LABELS, foldRows, holderOf, sectionKey, type ChangeNode, type ChangeSection } from "./changes";
+import { focusedRowKey, focusRowBeforeFold } from "../focusRow";
 import { BareButton, Button } from "../../primitives";
 
 /** Every section heading is one line of this height, which, with the rows' (`ROW_HEIGHT`), is what
@@ -89,7 +90,8 @@ export function ChangeSectionHeading({
   topDivider,
   mark,
   byCommit,
-  commitKeys = [],
+  commits = [],
+  scrollToRow,
 }: {
   section: ChangeSection;
   count: number;
@@ -102,12 +104,18 @@ export function ChangeSectionHeading({
    * trailing end, outside the button that folds the section: a control cannot sit inside one. */
   mark?: React.ReactNode;
   byCommit?: { value: boolean; onChange: (byCommit: boolean) => void };
-  commitKeys?: readonly string[];
+  /** The committed section's commit rows, while it is grouped by commit. */
+  commits?: readonly ChangeNode[];
+  /** With `commits`: scrolls `list` the least that brings the row of `key` into view as the list's
+   * rows stand with `collapsed` folded away, whether or not the virtualizer has rendered it
+   * (`scrollToChange`). */
+  scrollToRow?: (list: HTMLElement, key: string, collapsed: ReadonlySet<string>) => void;
 }): React.ReactElement {
   const t = useT();
   const button = useRef<HTMLButtonElement>(null);
   const key = sectionKey(section);
   const isCollapsed = collapsed.has(key);
+  const commitKeys = commits.map((commit) => commit.key);
   const toggle = () => {
     const next = new Set(collapsed);
     if (isCollapsed) next.delete(key);
@@ -147,6 +155,16 @@ export function ChangeSectionHeading({
   if (!mark && !byCommit) return band;
   const hasOpenCommit = commitKeys.some((key) => !collapsed.has(key));
   const foldLabel = t(hasOpenCommit ? "git.commits.collapseAll" : "git.commits.expandAll");
+  // A focused row that folds away with its commit hands focus to that commit's row, the nearest
+  // row that stays, scrolled into view, as the header's Collapse all folders does with a folder.
+  const foldCommits = () => {
+    const list = button.current?.closest<HTMLElement>("[role=treegrid]") ?? null;
+    const focused = hasOpenCommit ? focusedRowKey(list) : undefined;
+    const stays = focused !== undefined ? holderOf(commits, focused) : undefined;
+    const next = foldRows(collapsed, commitKeys, hasOpenCommit);
+    if (stays !== undefined && list) focusRowBeforeFold(list, stays, scrollToRow && ((afterFold) => scrollToRow(list, stays, afterFold ? next : collapsed)));
+    onCollapsedChange(next);
+  };
   return (
     <div className="flex h-full w-full min-w-0 items-center pe-(--pane-inset)">
       {band}
@@ -157,7 +175,7 @@ export function ChangeSectionHeading({
               iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS}
               label={foldLabel} tabStop={false} data-section-heading-control=""
               disabled={commitKeys.length === 0} focusOnPress={false}
-              onPress={() => onCollapsedChange(foldRows(collapsed, commitKeys, hasOpenCommit))}
+              onPress={foldCommits}
             >
               {hasOpenCommit ? <ChevronsDownUp aria-hidden="true" className="size-4" /> : <ChevronsUpDown aria-hidden="true" className="size-4" />}
             </Button>

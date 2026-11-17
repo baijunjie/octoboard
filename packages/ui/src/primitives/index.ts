@@ -46,4 +46,4 @@ export { closeToast, showToast, Toast, ToastCloseButton, ToastContent, ToastDesc
 export { useTheme } from "./theme";
 export { ToggleButton, ToggleButtonGroup } from "./ToggleButton";
 export { Tooltip, TooltipContent, tooltipSurfaceClassName, TooltipTrigger, useTooltipState } from "./Tooltip";
-export { Tree, TreeCollection, TreeExpandButton, TreeHeader, TreeItem, TreeSection } from "./Tree";
+export { scrollTreeAndRender, Tree, TreeCollection, TreeExpandButton, TreeHeader, TreeItem, TreeSection } from "./Tree";

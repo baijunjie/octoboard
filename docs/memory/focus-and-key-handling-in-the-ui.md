@@ -362,14 +362,31 @@ go away while keyboard focus is inside the list: a section folded away, a filter
 change. Focus does not simply fall to `<body>` there. `useListState`'s focused-key reset (react-stately 3.50.0)
 notices in an effect that the focused key has gone and re-points it at the nearest surviving row — it walks items
 alone, so a section header is never a candidate — and `useSelectableItem`'s own effect then pulls DOM focus onto that
-row. A handoff written into the handler that takes the rows away is therefore undone a moment later: focus ends up on
-a row of some other section, and the list scrolls to it.
+row. A handoff to anything but a row that stays (a section heading), written into the handler that takes the rows
+away, is therefore undone a moment later: focus ends up on a row of some other section, and the list scrolls to it.
 
-So a control that has to keep focus across such a change takes it back only once both of those renders have gone by —
-from a `requestAnimationFrame` nested in a `requestAnimationFrame`, guarded on focus still being inside the list so
-that a Tab or a press in between stands, the way `packages/ui/src/project-browser/focusRow.ts` does it. The library's pull
-runs only while the collection itself holds focus, so a control outside the list, such as a filter field above it,
-needs none of this.
+So where focus is to go to a row that stays, move it there in the handler, before the state change that takes the
+rows away, through `focusRowBeforeFold` in `packages/ui/src/project-browser/focusRow.ts`: the collection's focused key
+is then a row that stays, and it re-aims nothing. Do not put that move off, nor fall back to a later move because the
+virtualized list has not rendered the row (scrolled away from it): in WebKit the removal drops focus to `<body>` with
+no blur, and a `useFocusHandoff` around the list (the Git view's, onto its branch selector) acts right after that
+render and takes focus out of the list, so a later move finds focus elsewhere and stands down. Pass the helper a
+`scrollIntoView` that works from the rows' layout offsets rather than the DOM (the Git list's comes from
+`packages/ui/src/project-browser/git/changeListLayout.ts`): it scrolls to the row, has the virtualizer render it at
+once, focuses it before the fold, and scrolls it into view again once the fold has settled. A move after both of the
+collection's renders — a `requestAnimationFrame` nested in a `requestAnimationFrame`, guarded on focus still being on
+`<body>` or inside the list so that a Tab or a press in between stands, as `focusRow` in the same file does — is only
+the last fallback, and the way for a destination that is not a row, such as a section heading. The library's pull runs
+only while the collection itself holds focus, so a control outside the list, such as a filter field above it, needs
+none of this.
+
+jsdom fires no blur on that removal either, but a test of the list alone has nothing to take focus away early and
+passes against the delayed move. Mount the list inside a `useFocusHandoff` host, as the "Collapse all commits" cases
+with `handoff: true` in `packages/ui/src/project-browser/git/ChangeList.test.tsx` do, or assert where focus was as the
+row went (`focusAtRemoval` from `packages/ui/src/test/focusAtRemoval.ts`) or right after the press. For a row scrolled
+out of a virtualized list, mount the real virtualizer with `sizedElements`
+(`packages/ui/src/project-browser/browserTestSupport.tsx`), as the "has not rendered" cases there and in
+`packages/ui/src/project-browser/ProjectBrowser.test.tsx` do.
 
 The same pull follows a popup opened from a control inside a row — a row's `⋯` menu — closing, and it comes later
 than the close looks: a HeroUI popover keeps its content mounted, with focus still on the menu item, through its exit

@@ -112,3 +112,15 @@ export function mountRows(children: React.ReactNode, { request, clipboard, notif
   act(() => root.render(<TestHost daemon={daemon} platform={{ kind: "browser", host: BROWSER_HOST, clipboard }}>{children}</TestHost>));
   return container;
 }
+
+/** Gives every element the size `size` holds, as react-aria reads it, so the list virtualizes as it
+ * does in a browser rather than rendering every row as it does under test by default. */
+export function sizedElements(size: { width: number; height: number }) {
+  for (const [name, read] of [["clientWidth", () => size.width], ["clientHeight", () => size.height]] as const) {
+    Object.defineProperty(HTMLElement.prototype, name, { configurable: true, get: read });
+  }
+  onTestFinished(() => {
+    delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
+    delete (HTMLElement.prototype as { clientHeight?: number }).clientHeight;
+  });
+}
