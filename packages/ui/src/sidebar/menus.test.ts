@@ -339,6 +339,12 @@ describe("the Open in the app entry", () => {
     expect(nativeApp.onOpen).toHaveBeenCalledOnce();
   });
 
+  it("sits with Reopen in the first group, before Copy session ID and Delete, in an archived session's menu", () => {
+    const menu = sessionMenu(t, {} as SidebarHandlers, asleep("archived"), [account("w", "claude")], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false, nativeApp: app(), focusTarget: { consoleSession: sessionOf("owner", "c", undefined, "Owner", "idle") } });
+    const labels = menu.map((entry) => entry === "separator" ? entry : entry.label);
+    expect(labels).toEqual(["Reopen", "Open in Claude app", "separator", "Copy session ID", "separator", "Delete"]);
+  });
+
   it("takes a letter no other entry of the menu has", () => {
     for (const status of ["interrupted", "archived"] as const) {
       const menu = sessionMenu(t, {} as SidebarHandlers, asleep(status), [account("w", "claude")], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false, nativeApp: app() });
@@ -780,6 +786,8 @@ describe("the Copy session ID entry", () => {
     const menu = sessionMenu(t, handlers, session, [], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false, placement });
     const labels = menu.map((entry) => entry === "separator" ? entry : entry.label);
     const copyIndex = labels.indexOf("Copy session ID");
+    // An archived session's menu leads with Reopen, so Copy session ID sits alone between two separators there too.
+    if (status === "archived") expect(labels[0]).toBe("Reopen");
     expect(labels[copyIndex - 1]).toBe("separator");
     expect(labels[copyIndex + 1]).toBe("separator");
     const entry = menu.find((item) => typeof item === "object" && item.label === "Copy session ID");

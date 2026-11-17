@@ -385,7 +385,7 @@ function ArchiveRow({
             {/* Only this wrapper, padding-free, keeps a press from reaching the row. */}
             <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
               {openInApp && (
-                <TitledControl title={openInAppAside ? <HeadedTooltip heading={openInApp}><div>{openInAppAside}</div></HeadedTooltip> : openInApp}>
+                <TitledControl title={openInAppAside ? <HeadedTooltip heading={openInApp} emphasized={false}><div>{openInAppAside}</div></HeadedTooltip> : openInApp}>
                   <Button iconOnly size="sm" variant="tertiary" label={t("sidebar.session.openInAppItem", { label: openInApp, title: isolate(sessionDisplayTitle(t, session)) })} describedBy={openInAppNoteId ?? ""} unavailable={openInAppBlock?.detail} onPress={pressOpenInApp}>
                     <AppWindow aria-hidden="true" className="size-4" />
                     {openInAppNoteId && <span id={openInAppNoteId} className="sr-only">{openInAppAside}</span>}

@@ -24,8 +24,8 @@ applications included. On any other host no application is ever installed, so th
 The action is labelled for the agent's application — **Open in Claude app**, **Open in Codex app** — and is offered
 only for a session whose agent has an application that is installed. It appears:
 
-- in a session's action menu, right after Hand off on a session that is not archived, and in a group of its own
-  between Copy session ID and Delete on an archived one, with the letter shortcut `W` (see "Session rows" and "Session
+- in a session's action menu, right after Hand off on a session that is not archived, and right after Reopen, in the
+  same group, on an archived one, with the letter shortcut `W` (see "Session rows" and "Session
   menu keyboard shortcuts" in `docs/product/sidebar-session-rows.md`);
 - on each row of the archive view, as the first of the row's icon buttons (see `docs/product/archive-view.md`).
 

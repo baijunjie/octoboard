@@ -86,10 +86,10 @@ archive preview described in "The archive view" in `docs/product/archive-view.md
 its title on one compact line, with the relative archive time and its tooltip of the archive and creation dates at the
 trailing end as described there; the row's accessible description carries both dates. The heading counts every archived
 session in the view's scope, including those the preview leaves out. Clicking a row selects it while leaving it
-archived. Its action menu offers **Reopen**, which selects and resumes the session, **Copy session ID** (see "Session
-rows" in `docs/product/sidebar-session-rows.md`), the action that opens it in its agent's app where that app is
-installed (see `docs/product/opening-a-session-in-its-agents-app.md`) and **Delete**, disabled while locked, each in its
-own group separated from the others. A Delete shortcut immediately before the action-menu button appears for an unlocked unused session that
+archived. Its action menu offers **Reopen**, which selects and resumes the session, the action that opens it in its
+agent's app where that app is installed (see `docs/product/opening-a-session-in-its-agents-app.md`), **Copy session ID**
+and **Delete**, disabled while locked, in the order and groups of an archived session's menu in "Session rows" in
+`docs/product/sidebar-session-rows.md`. A Delete shortcut immediately before the action-menu button appears for an unlocked unused session that
 is not still starting, under the same rules as "Session rows" in `docs/product/sidebar-session-rows.md`. It takes the
 same deletion action as the menu (see "Deleting archived sessions" in `docs/product/deleting-sessions.md` for the
 confirmation rules). The menu and an available shortcut show with the row's other controls as described in "Rows, names

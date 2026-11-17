@@ -402,6 +402,9 @@ function headedTooltip(): { heading: string | null | undefined; body: string | n
   return { heading: line?.previousElementSibling?.textContent, body: line?.nextElementSibling?.textContent };
 }
 
+/** The open headed tooltip's heading element. */
+const headingElement = () => openTooltip()?.querySelector("hr")?.previousElementSibling;
+
 /** What the control's `aria-describedby` names, as its description. */
 const descriptionOf = (control: HTMLElement) => document.getElementById(control.getAttribute("aria-describedby") ?? "")?.textContent;
 
@@ -415,6 +418,8 @@ it("says why Open in the app does nothing in its tooltip, after its name", () =>
 
   expect(headedTooltip()).toEqual({ heading: "Open in Claude app", body: "The session has no conversation yet, so there is nothing to open." });
   expect(descriptionOf(open)).toBe("The session has no conversation yet, so there is nothing to open.");
+  // An action's name keeps the regular weight, as in the tooltip it shows with nothing to add.
+  expect(headingElement()?.classList.contains("font-medium")).toBe(false);
 });
 
 it("keeps Open in the app enabled where the app may not see the conversation, and says so in its tooltip, after its name", () => {
@@ -429,6 +434,7 @@ it("keeps Open in the app enabled where the app may not see the conversation, an
   runOutTimers();
   const sentence = "The agent's app may not see this conversation: its latest record is kept in this account's own directory, not the default one.";
   expect(headedTooltip()).toEqual({ heading: "Open in Claude app", body: sentence });
+  expect(headingElement()?.classList.contains("font-medium")).toBe(false);
   expect(descriptionOf(open)).toBe(sentence);
 
   act(() => open.click());

@@ -42,8 +42,8 @@ ID alone; Change model, Switch account, Hand off, Open in the agent's app, and B
 own; then Archive or Delete. A live
 console session inserts Colour as its own group between the first of these and Copy session ID. Rename sits above
 Archive, or above Delete when Delete is offered instead, with a divider between them, and Archive or Delete stays
-last. Items appear only where available as described below. An archived session's menu offers Reopen, Copy
-session ID, Open in the agent's app and Delete, each in a group of its own.
+last. Items appear only where available as described below. An archived session's menu separates these groups, in
+order: Reopen and Open in the agent's app; Copy session ID alone; then Delete.
 
 A session row's action menu offers:
 
@@ -65,8 +65,8 @@ A session row's action menu offers:
   left to right in every language; an ID that fits shows none, and keyboard focus shows none (see "Names too long for
   their space" in `docs/product/labels-and-tooltips.md`). Pressing the ID line is pressing the item. Selecting the item
   copies the full ID exactly to the clipboard. Available for project and console sessions wherever their action menus
-  are offered, including right-click menus, focus mode and nested sessions. An archived session's menu offers it after
-  Reopen. Where the platform has no clipboard, or it refuses, the ID is copied through the browser's selection copy
+  are offered, including right-click menus, focus mode and nested sessions.
+  Where the platform has no clipboard, or it refuses, the ID is copied through the browser's selection copy
   instead. Success raises a notice; a copy neither way allows raises an error alert.
 - **Change model** — opens the dialog described in "Changing a session's model and effort" in
   `docs/product/model-and-reasoning-effort.md`.

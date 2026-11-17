@@ -93,6 +93,8 @@ it.each(COUNTS)("counts the console's shown statuses for %j", (statuses, words) 
   runOutTimers();
   expect(tooltipRows()).toEqual(words);
   expect(openTooltip()!.querySelector("svg")).toBeNull();
+  // The console's name is the subject of the tooltip, so its heading stays emphasized.
+  expect(openTooltip()!.querySelector("hr")!.previousElementSibling!.classList.contains("font-medium")).toBe(true);
   expect(avatar.getAttribute("aria-label")).toBe(`${isolate("Main")}, ${joinPhrases("en", words)}`);
   expect(avatar.getAttribute("aria-describedby")).toBeFalsy();
   leave(avatar);

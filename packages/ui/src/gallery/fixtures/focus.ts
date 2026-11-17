@@ -166,7 +166,7 @@ const scrollingFocusState = {
 // Archive-only views keep the preview boundary and heading counts visible together. The
 // ten-root boundary has no hidden children; the eleven-root overflow also has two hidden children.
 const previewHub = sessionOf("s-preview-hub", console_.id, undefined, "Hub", "idle", { colour: "teal" });
-const previewCoordinator = sessionOf("s-preview-coordinator", console_.id, emptyProject.id, "Archived bound coordinator", "archived", { bound_to: previewHub.id, ended_at: minutesAgo(8), context: { tokens: 200_704 } });
+const previewCoordinator = sessionOf("s-preview-coordinator", console_.id, emptyProject.id, "Archived bound coordinator", "archived", { bound_to: previewHub.id, agent_session_id: "0b1f6c7e-5d1a-4c52-9a77-3f0d2f9a1c10", ended_at: minutesAgo(8), context: { tokens: 200_704 } });
 function archivePreviewState(count: 10 | 11, includeUnused = false) {
   return snapshotState({
     consoles: [console_],
@@ -609,7 +609,8 @@ export const focusScenarios: Scenario[] = [
     title: "Archived session actions",
     state: archivePreviewTen,
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${previewHub.id}` },
-    description: "The headings count zero live sessions and ten directly bound archived parents, all shown without View all. The menu offers Reopen, Copy session ID and a destructive Delete, each in its own group; there is no Hand off. Processes is a right-panel toggle rather than a session-menu entry. Copy session ID shows the ID beneath its label inside the same item, in its own group after Reopen. Used archived rows have no Delete shortcut, because deleting needs confirmation. Archived rows have no lock controls. Reopen selects the session and moves it from Archived to Sessions.",
+    nativeApps: ["claude"],
+    description: "The headings count zero live sessions and ten directly bound archived parents, all shown without View all. The menu opens with Reopen and Open in Claude app together in one group, then Copy session ID, whose ID shows beneath its label inside the same item, alone in its group, and a destructive Delete closes the menu in a group of its own; there is no Hand off. Processes is a right-panel toggle rather than a session-menu entry. Used archived rows have no Delete shortcut, because deleting needs confirmation. Archived rows have no lock controls. Reopen selects the session and moves it from Archived to Sessions.",
     steps: [(ui) => ui.press(ui.t("sidebar.session.actions", { title: previewCoordinator.title }))],
   },
   {

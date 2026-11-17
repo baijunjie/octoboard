@@ -1146,7 +1146,10 @@ Git tree chevron, whose whole row does what it does (see "Buttons").
 
 When an icon-only control's tooltip has to say more than the action — why it is unavailable, or a warning that does not
 block it — the tooltip is a `HeadedTooltip` (`packages/ui/src/components/hint/`): the action's name as a heading on its
-own line, a divider, and the sentence below, as the rail's console avatar shows its name above its status rows. The
+own line, a divider, and the sentence below. The action's name keeps the tooltip's regular weight
+(`emphasized={false}`), so it reads as the same tooltip the control shows when it has nothing to add; only a heading
+that names a subject rather than an action is set in medium weight (`emphasized`, the default), as the rail's console
+avatar shows its console's name above its status rows. The
 tooltip is never the action name and the sentence joined on one line. The sentence also reaches assistive technology
 without the tooltip open: as the `unavailable` reason's description, or, for a warning, as a visually hidden
 description of the control.

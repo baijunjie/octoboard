@@ -354,7 +354,8 @@ function bindEntry(t: Translate, handlers: SidebarHandlers, session: Session, ow
  * session's), both disabled while it is still starting or switching account, which the daemon refuses, and archive;
  * an archived session (listed in focus mode) and one never used offer deleting instead.
  * `hasBoundSessions` says whether any session is bound to this one, which makes it used. Resuming
- * an interrupted session happens on selection; an archived session offers Reopen and Delete. Shared by a
+ * an interrupted session happens on selection; an archived session offers Reopen and Open in the agent's app
+ * together, then Copy session ID, then Delete. Shared by a
  * project session's row and a console session's row (`ConsoleSessionsSection` in `ConsoleView.tsx`) —
  * this is also where the user switches a console session's account. `focusTarget` offers Focus mode only for the
  * selected live session outside focus mode, resolving to its console owner or project. A console session's own card
@@ -392,47 +393,65 @@ export function sessionMenu(
 ): ActionMenuEntry[] {
   const focused = placement === "focused";
   const archived = session.status === "archived";
-  // The daemon refuses to switch the account of a session that is still starting.
-  const switchAccount = archived || session.status === "starting" ? undefined : switchAccountSubmenu(t, handlers, session, accounts, defaultNames, quota, providers, sharing, disabledDefaults, accountOrder, switching);
-  const focusable = focusTarget && !archived && !focused;
   const openInApp = nativeApp && openInAppItem(t, session, nativeApp);
-  return [
-    ...(!archived ? [{ label: t(session.locked ? "sidebar.session.unlock" : "sidebar.session.lock"), icon: session.locked ? LockOpen : Lock, shortcut: "L", onClick: () => handlers.onSetLocked(session, !session.locked) }] : []),
-    ...(archived ? [{ label: t("sidebar.session.reopen"), shortcut: "O", icon: RotateCcw, onClick: () => handlers.onReopenSession(session) }] : []),
-    ...(archived || focused ? [] : [{ ...pinItem(t, session.pinned, () => handlers.onSetPinned({ session }, !session.pinned)), shortcut: "P" }]),
-    ...(focusable ? [{ label: t("sidebar.focus.enter"), icon: Focus, end: <ShortcutKbd command="focusMode" />, commandShortcut: { label: focusShortcut ?? ariaBinding(bindingFor("focusMode"), host), matches: (event: KeyboardEvent) => matchesCommand("focusMode", event, host) }, onClick: () => handlers.onFocus(focusTarget) }] : []),
-    ...(session.kind === "console" && !archived ? ["separator" as const, colourSubmenu(t, handlers, session)] : []),
-    "separator",
-    {
-      label: t("sidebar.session.copyId"),
-      ariaLabel: t("sidebar.session.copyId"),
-      content: (
-        <span className="flex min-w-0 max-w-full flex-col">
-          <span>{t("sidebar.session.copyId")}</span>
-          {/* The ID runs as a marquee under the pointer on it alone, not on the whole item. An ID is known by
-              its beginning, so it is cut at its end. */}
-          <span aria-hidden="true" data-marquee-scope className="min-w-0">
-            <FadeOverflow as="span" dir="ltr" className="block font-mono text-xs text-app-muted" titleWhenClipped={session.id}>{session.id}</FadeOverflow>
-          </span>
+  const copyId: ActionMenuItem = {
+    label: t("sidebar.session.copyId"),
+    ariaLabel: t("sidebar.session.copyId"),
+    content: (
+      <span className="flex min-w-0 max-w-full flex-col">
+        <span>{t("sidebar.session.copyId")}</span>
+        {/* The ID runs as a marquee under the pointer on it alone, not on the whole item. An ID is known by
+            its beginning, so it is cut at its end. */}
+        <span aria-hidden="true" data-marquee-scope className="min-w-0">
+          <FadeOverflow as="span" dir="ltr" className="block font-mono text-xs text-app-muted" titleWhenClipped={session.id}>{session.id}</FadeOverflow>
         </span>
-      ),
-      description: session.id,
-      icon: Copy,
-      shortcut: "C",
-      onClick: () => handlers.onCopySessionId(session),
-    },
+      </span>
+    ),
+    description: session.id,
+    icon: Copy,
+    shortcut: "C",
+    onClick: () => handlers.onCopySessionId(session),
+  };
+  // An archived session's menu leads with the two ways of opening it (in Octoboard, in the agent's app), so a menu
+  // opened from the keyboard lands on Reopen.
+  if (archived) {
+    return [
+      { label: t("sidebar.session.reopen"), shortcut: "O", icon: RotateCcw, onClick: () => handlers.onReopenSession(session) },
+      ...(openInApp ? [openInApp] : []),
+      "separator",
+      copyId,
+      "separator",
+      deleteOrArchiveItem(t, handlers, session, hasBoundSessions),
+    ];
+  }
+  // The daemon refuses to switch the account of a session that is still starting.
+  const switchAccount = session.status === "starting" ? undefined : switchAccountSubmenu(t, handlers, session, accounts, defaultNames, quota, providers, sharing, disabledDefaults, accountOrder, switching);
+  const focusable = focusTarget && !focused;
+  return [
+    { label: t(session.locked ? "sidebar.session.unlock" : "sidebar.session.lock"), icon: session.locked ? LockOpen : Lock, shortcut: "L", onClick: () => handlers.onSetLocked(session, !session.locked) },
+    ...(focused ? [] : [{ ...pinItem(t, session.pinned, () => handlers.onSetPinned({ session }, !session.pinned)), shortcut: "P" }]),
+    ...(focusable ? [{ label: t("sidebar.focus.enter"), icon: Focus, end: <ShortcutKbd command="focusMode" />, commandShortcut: { label: focusShortcut ?? ariaBinding(bindingFor("focusMode"), host), matches: (event: KeyboardEvent) => matchesCommand("focusMode", event, host) }, onClick: () => handlers.onFocus(focusTarget) }] : []),
+    ...(session.kind === "console" ? ["separator" as const, colourSubmenu(t, handlers, session)] : []),
+    "separator",
+    copyId,
     "separator",
     // A session still starting, or being switched to another account, is refused by the daemon; both end on their own.
-    ...(archived ? [] : [{ label: t("sidebar.session.changeModel"), shortcut: "M", icon: Cpu, disabled: session.status === "starting" || switching, onClick: () => handlers.onOpenDialog({ kind: "session-model", session }) }]),
+    { label: t("sidebar.session.changeModel"), shortcut: "M", icon: Cpu, disabled: session.status === "starting" || switching, onClick: () => handlers.onOpenDialog({ kind: "session-model", session }) },
     ...(switchAccount ? [switchAccount] : []),
-    ...(archived ? [] : [{ ...handoffItem(t, handlers, session, canHandoff, { switching, childActive, ownChanging: sharing?.get(session.account_id ?? "")?.progress !== undefined }), shortcut: "H" }]),
+    { ...handoffItem(t, handlers, session, canHandoff, { switching, childActive, ownChanging: sharing?.get(session.account_id ?? "")?.progress !== undefined }), shortcut: "H" },
     ...(openInApp ? [openInApp] : []),
     ...(bindOwners ? [bindEntry(t, handlers, session, bindOwners, session.status === "starting" || switching, (owner) => sessionAgentLabel(t, providers, owner, accounts, defaultNames))] : []),
-    ...(session.bound_to && !archived ? [{ label: t("sidebar.session.unbind"), shortcut: "U", icon: Unlink, disabled: session.status === "starting" || switching, onClick: () => handlers.onOpenDialog({ kind: "unbind-session", session }) }] : []),
+    ...(session.bound_to ? [{ label: t("sidebar.session.unbind"), shortcut: "U", icon: Unlink, disabled: session.status === "starting" || switching, onClick: () => handlers.onOpenDialog({ kind: "unbind-session", session }) }] : []),
     "separator",
-    ...(!archived ? [{ label: t("sidebar.session.rename"), shortcut: "R", icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-session", session }) }, "separator" as const] : []),
-    offersDelete(session, hasBoundSessions)
-      ? { label: t("sidebar.session.delete"), shortcut: "D", icon: Trash2, onClick: () => handlers.onOpenDialog({ kind: "delete-session", session }), destructive: true, ...lockedItemState(t, session, "sidebar.session.deleteLocked") }
-      : { label: t("sidebar.session.archive"), icon: Archive, shortcut: "A", onClick: () => handlers.onArchiveSession(session), ...lockedItemState(t, session, "sidebar.session.archiveLocked") },
+    { label: t("sidebar.session.rename"), shortcut: "R", icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-session", session }) },
+    "separator",
+    deleteOrArchiveItem(t, handlers, session, hasBoundSessions),
   ];
+}
+
+/** Delete for a session that is archived or was never used (`offersDelete`), Archive otherwise. */
+function deleteOrArchiveItem(t: Translate, handlers: SidebarHandlers, session: Session, hasBoundSessions: boolean): ActionMenuItem {
+  return offersDelete(session, hasBoundSessions)
+    ? { label: t("sidebar.session.delete"), shortcut: "D", icon: Trash2, onClick: () => handlers.onOpenDialog({ kind: "delete-session", session }), destructive: true, ...lockedItemState(t, session, "sidebar.session.deleteLocked") }
+    : { label: t("sidebar.session.archive"), icon: Archive, shortcut: "A", onClick: () => handlers.onArchiveSession(session), ...lockedItemState(t, session, "sidebar.session.archiveLocked") };
 }
