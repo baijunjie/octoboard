@@ -12,7 +12,7 @@ use std::sync::Arc;
 use anyhow::Result;
 
 use crate::messaging::delivery::{
-    self, is_archived_refusal, rebound_owner, write_notice_to_owner, Delivery, WhenBlocked,
+    self, is_archived_refusal, rebound_owner, Delivery, Ownership, WhenBlocked,
 };
 use crate::messaging::naming::{label, named_session, one_line, place_of, quote};
 use crate::messaging::texts::{capitalised, session_notice_opening, NOTICE_PREFIX, WAITING_PHRASE};
@@ -232,16 +232,64 @@ pub(crate) fn tell_owner(
         Ok(Some(owner)) => owner,
         _ => return,
     };
-    let mut told = write_notice_to_owner(state, &owner, session, &text(&owner));
-    // As a report is: the owner waited for may have been handed off and archived meanwhile.
-    if is_archived_refusal(&told) {
-        if let Ok(Some(new)) = rebound_owner(state, &session.id, &owner.id) {
-            told = write_notice_to_owner(state, &new, session, &text(&new));
-        }
-    }
-    if let Err(err) = told {
+    if let Err(err) = write_notice_rerouted(state, &owner, session, Ownership::Any, &text) {
         tracing::debug!(session = %session.id, owner = %owner.id, %err, "telling the owner failed");
     }
+}
+
+/// Writes the notice `text` builds, for the owner it is given, into `owner` about `about`, or
+/// keeps it for an owner that is interrupted (see [`delivery::write_to_owner`]). As a report is:
+/// an owner handed off, and archived, while the write waited on its claim refuses it, so the
+/// notice goes to the owner `about` is bound to now. With [`Ownership::Required`] — a notice that
+/// `owner` now has `about` — it is sent only while `about` is still bound to the owner written to:
+/// released, or given to another owner, meanwhile, it is refused rather than tell the owner a
+/// session is its own that no longer is. Returns the owner that was written to with what became
+/// of it.
+///
+/// **Blocks** on writing into the owner.
+fn write_notice_rerouted(
+    state: &Arc<AppState>,
+    owner: &Session,
+    about: &Session,
+    ownership: Ownership,
+    text: impl Fn(&Session) -> String,
+) -> Result<(Delivery, Session)> {
+    let write = |owner: &Session| {
+        let text = text(owner);
+        delivery::write_to_owner(state, owner, about, &text, ownership, |kept| {
+            format!("{text}\n\n{kept}")
+        })
+    };
+    let told = write(owner);
+    if is_archived_refusal(&told) {
+        if let Ok(Some(now)) = rebound_owner(state, &about.id, &owner.id) {
+            return write(&now).map(|told| (told, now));
+        }
+        // Handed off with nobody to pass it to, or archived after the session left it: a notice
+        // that the owner has the session is then dropped for the second reason, not the first.
+        if ownership == Ownership::Required
+            && state.session_record(&about.id)?.bound_to.as_deref() != Some(owner.id.as_str())
+        {
+            return Err(delivery::no_longer_owned(&about.id, &owner.id));
+        }
+    }
+    told.map(|told| (told, owner.clone()))
+}
+
+/// [`write_notice_rerouted`] off the runtime, for the notice to `owner`, a session's new owner
+/// after a change of its binding: returns the owner told, which is the one `about` is bound to
+/// now should `owner` have been handed off while the write waited.
+pub(crate) async fn tell_new_owner(
+    state: &Arc<AppState>,
+    owner: &Session,
+    about: &Session,
+    text: impl Fn(&Session) -> String + Send + 'static,
+) -> Result<(Delivery, Session)> {
+    let (state, owner, about) = (state.clone(), owner.clone(), about.clone());
+    tokio::task::spawn_blocking(move || {
+        write_notice_rerouted(&state, &owner, &about, Ownership::Required, text)
+    })
+    .await?
 }
 
 /// The tools a project session has, as a worker or not, by the names its agent shows them, for
@@ -449,19 +497,44 @@ pub(crate) fn bound_by_user(bound: &Session, owner: &Session) -> String {
     )
 }
 
+/// What became of the notice to a session whose owner changed, for telling its new owner whether
+/// the session knows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum SessionTold {
+    /// It had no process, and is told when it next starts.
+    NotRunning,
+    /// Its notice was written into it, or its agent may have taken it without confirming it,
+    /// which is not sent again.
+    Now,
+    /// Writing its notice failed, and it is told when it next starts — or, should even leaving it
+    /// owed have failed, not at all.
+    Later,
+}
+
+impl SessionTold {
+    /// What [`tell_now_or_leave`] returned for a session that `running` said had a process.
+    pub(crate) fn of(running: bool, told: &Result<Option<Delivery>>) -> Self {
+        match told {
+            _ if !running => Self::NotRunning,
+            Ok(Some(_)) => Self::Now,
+            Err(err) if delivery::acceptance_uncertain(err) => Self::Now,
+            _ => Self::Later,
+        }
+    }
+}
+
 /// The notice to `owner`, the session the user has just bound the independent project session
-/// `bound` to; `running` is whether `bound` has a process to be told in now, else it is told when
-/// it next starts.
+/// `bound` to, ending with what became of the notice to `bound` itself.
 pub(crate) fn bound_to_owner_by_user(
     state: &Arc<AppState>,
     owner: &Session,
     bound: &Session,
-    running: bool,
+    session_told: SessionTold,
 ) -> String {
-    let told = if running {
-        "It is being told so."
-    } else {
-        "It is not running, and will be told so when it next starts."
+    let told = match session_told {
+        SessionTold::NotRunning => "It is not running, and will be told so when it next starts.",
+        SessionTold::Now => "It is being told so.",
+        SessionTold::Later => "It could not be told now, and will be told so when it next starts.",
     };
     new_owner_notice(
         owner.agent,
@@ -1309,7 +1382,7 @@ mod tests {
         assert!(!told.contains("You keep your child sessions"), "{told}");
 
         assert_eq!(
-            bound_to_owner_by_user(&state, &hub, &worker, true),
+            bound_to_owner_by_user(&state, &hub, &worker, SessionTold::Now),
             "Message from Octoboard: the user bound the project session `session-7` (\"Fix the \
              build\") in the console \"Console\" to you. It is yours from now on: it reports to \
              you, and you drive it like any session of yours, with \
@@ -1317,11 +1390,21 @@ mod tests {
              `mcp__octoboard__resume_session`. Its role is worker and it cannot manage child \
              sessions. It had no parent session before. It is being told so."
         );
+        let told = bound_to_owner_by_user(&state, &hub, &worker, SessionTold::Later);
+        assert!(
+            told.ends_with(
+                "It had no parent session before. It could not be told now, and will be told so \
+                 when it next starts."
+            ),
+            "{told}"
+        );
+        assert!(!told.contains("It is being told so."), "{told}");
         let grok_owner = Session {
             agent: AgentId::GROK,
             ..hub
         };
-        let told = bound_to_owner_by_user(&state, &grok_owner, &coordinator, false);
+        let told =
+            bound_to_owner_by_user(&state, &grok_owner, &coordinator, SessionTold::NotRunning);
         assert!(told.contains("`octoboard__instruct_session`"), "{told}");
         assert!(
             told.contains(
@@ -1331,5 +1414,116 @@ mod tests {
             ),
             "{told}"
         );
+    }
+
+    /// What became of a session's notice, as its new owner is told it: a session with no process
+    /// is told when it next starts whatever came back; a running one is told now when its notice
+    /// was written, or its agent may have taken it without confirming it (not sent again), and
+    /// later when the write failed, even where leaving the notice owed failed too.
+    #[test]
+    fn what_became_of_a_sessions_notice_is_told_as_now_later_or_not_running() {
+        use crate::protocol::error_code;
+        let uncertain = || {
+            Err(crate::protocol::CodedError::raised(
+                error_code::MESSAGE_ACCEPTANCE_UNCONFIRMED,
+                "the agent did not confirm it",
+                &[],
+            ))
+        };
+
+        for running_told in [Ok(Some(Delivery::Written)), Ok(Some(Delivery::Queued))] {
+            assert_eq!(SessionTold::of(true, &running_told), SessionTold::Now);
+        }
+        assert_eq!(SessionTold::of(true, &uncertain()), SessionTold::Now);
+        assert_eq!(SessionTold::of(true, &Ok(None)), SessionTold::Later);
+        assert_eq!(
+            SessionTold::of(true, &Err(anyhow::anyhow!("the marker was not stored"))),
+            SessionTold::Later
+        );
+        for told in [
+            Ok(None),
+            Ok(Some(Delivery::Written)),
+            uncertain(),
+            Err(anyhow::anyhow!("anything")),
+        ] {
+            assert_eq!(SessionTold::of(false, &told), SessionTold::NotRunning);
+        }
+    }
+
+    /// A new owner handed off, and archived, while the write waited on its claim refuses the
+    /// notice as archived: it goes to the owner the session is bound to now, with the text built
+    /// for that owner. With no such owner the refusal is the answer.
+    #[tokio::test]
+    async fn a_notice_to_a_new_owner_that_was_archived_goes_to_the_owner_the_session_has_now() {
+        use SessionStatus::{Archived, Idle};
+        let (state, _dir, hub) = team_state(
+            "owner-notice-new-owner-archived",
+            &[
+                ("old-owner", "hub", true, Archived),
+                ("moved", "hub", false, Idle),
+                ("stranded", "old-owner", false, Idle),
+            ],
+        );
+        let old_owner = state.session_record("old-owner").unwrap();
+        let moved = state.session_record("moved").unwrap();
+        let text = |owner: &Session| format!("notice-for-{}", owner.id);
+
+        let (delivery, told) = tell_new_owner(&state, &old_owner, &moved, text)
+            .await
+            .expect("told the owner it is bound to now");
+        assert_eq!(delivery, Delivery::Written);
+        // The owner that was told is the one the session is bound to now, not the one asked for.
+        assert_eq!(told.id, "hub");
+        let heard = hub_heard_of(&hub, "notice-for-hub").await;
+        assert!(heard.contains("notice-for-hub"), "{heard}");
+        assert!(!heard.contains("notice-for-old-owner"), "{heard}");
+
+        // Still bound to the archived owner: nowhere to re-route, so it is refused.
+        let stranded = state.session_record("stranded").unwrap();
+        let err = tell_new_owner(&state, &old_owner, &stranded, text)
+            .await
+            .expect_err("refused as archived");
+        assert_eq!(
+            crate::test_support::code_of(&err),
+            crate::protocol::error_code::SESSION_ARCHIVED,
+            "{err}"
+        );
+        let heard = hub_heard(&state, &hub).await;
+        assert!(!heard.contains("notice-for-old-owner"), "{heard}");
+    }
+
+    /// A new owner archived with nobody to pass the notice to, and the session released from it
+    /// meanwhile, is refused as no longer owned rather than as archived: the notice would have been
+    /// dropped for the session leaving first, which is what a caller words it by.
+    #[tokio::test]
+    async fn a_notice_to_an_archived_new_owner_the_session_left_is_refused_as_no_longer_owned() {
+        use SessionStatus::{Archived, Idle};
+        let (state, _dir, _hub) = team_state(
+            "owner-notice-new-owner-archived-and-left",
+            &[
+                ("old-owner", "hub", true, Archived),
+                ("released", "old-owner", false, Idle),
+            ],
+        );
+        let old_owner = state.session_record("old-owner").unwrap();
+        let released = state.session_record("released").unwrap();
+        state
+            .store
+            .clear_binding("released", "old-owner", false, None)
+            .unwrap()
+            .expect("released");
+
+        let told = tell_new_owner(&state, &old_owner, &released, |owner| {
+            format!("for-{}", owner.id)
+        })
+        .await;
+
+        assert!(delivery::is_no_longer_owned(&told), "{told:?}");
+        let err = told.expect_err("refused");
+        let refused = err
+            .downcast_ref::<delivery::NoLongerOwned>()
+            .expect("no longer owned");
+        assert_eq!(refused.session, "released");
+        assert_eq!(refused.owner, "old-owner");
     }
 }

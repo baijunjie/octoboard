@@ -14,8 +14,8 @@ use crate::coordinator::{self, bindings::Released};
 use crate::messaging::delivery::{self, Delivery, SentBy};
 use crate::messaging::naming::named_session;
 use crate::messaging::owner_notices::{
-    duties_under_new_parent, first_report_on_bind, tell_now_or_leave, tell_released,
-    transferred_to_owner, transferred_to_you,
+    duties_under_new_parent, first_report_on_bind, tell_new_owner, tell_now_or_leave,
+    tell_released, transferred_to_owner, transferred_to_you,
 };
 use crate::messaging::reporting::{self, ReportStatus};
 use crate::messaging::texts::capitalised;
@@ -28,13 +28,18 @@ use crate::mcp::lookup::{optional_string, required_str, resolve_owned_session};
 /// The most characters of the parting note of a `release_session`.
 const MAX_NOTE_CHARS: usize = 4000;
 
-/// What became of `what`, a notice to `to`, for the sender's result. `None` is a session with no
-/// process, which is told when it next starts.
-fn told(delivery: &Result<Option<Delivery>>, what: &str, to: &str) -> String {
+/// What became of `what`, a notice to `to`, for the sender's result. `None` is a session left to
+/// be told when it next starts: one with no process (`running` false), or one whose notice could
+/// not be written now.
+fn told(delivery: &Result<Option<Delivery>>, running: bool, what: &str, to: &str) -> String {
     match delivery {
         Ok(Some(delivery)) => delivery.note(what, to, SentBy::Octoboard),
-        Ok(None) => format!(
+        Ok(None) if !running => format!(
             "{} is not running, and will be told when it next starts.",
+            capitalised(to)
+        ),
+        Ok(None) => format!(
+            "{} could not be told now, and will be told when it next starts.",
             capitalised(to)
         ),
         Err(err) => format!("{} could not be told ({err:#}).", capitalised(to)),
@@ -56,26 +61,48 @@ pub(in crate::mcp) async fn transfer_session(
         coordinator::bindings::transfer_session(state, &session.id, &caller.id, to)?;
 
     let to_session = transferred_to_you(caller, &owner, &moved, session.is_worker());
-    let to_owner = transferred_to_owner(state, caller, &owner, &moved, &note);
     // Neither message credits the turn it starts: if the moved session or its new owner carries on
     // and stops without reporting, the report Octoboard synthesises is the safety net, and it is
     // wanted there.
     let child = tell_now_or_leave(state, &moved.id, to_session, running, None).await;
-    let told_owner = delivery::write_notice_to_owner_off_runtime(state, &owner, &moved, to_owner)
-        .await
-        .map(Some);
-    let mut result_note = format!(
-        "Transferred: `{id}` now reports to {to} and is no longer yours. {child} {owner}",
-        id = moved.id,
-        to = named_session(&owner),
-        child = told(&child, "The notice of the transfer", "the session"),
-        owner = told(
+    let text = {
+        let (state, caller, moved, note) =
+            (state.clone(), caller.clone(), moved.clone(), note.clone());
+        move |owner: &Session| transferred_to_owner(&state, &caller, owner, &moved, &note)
+    };
+    // Named in the result as the owner that was told: one handed off while the notice waited
+    // passes it to the owner the session is bound to now.
+    let (told_owner, owner) = match tell_new_owner(state, &owner, &moved, text).await {
+        Ok((delivery, told)) => (Ok(Some(delivery)), told),
+        Err(err) => (Err(err), owner),
+    };
+    // Released, or given to another owner, while the notice waited: the transfer stood, but the
+    // session has left that owner since, so the notice was dropped and is not for the caller to
+    // send.
+    let moved_on = delivery::is_no_longer_owned(&told_owner);
+    let owner_told = if moved_on {
+        "The notice of the transfer was not sent to its new parent session: the session was no \
+         longer bound to it by the time it could be written."
+            .to_string()
+    } else {
+        told(
             &told_owner,
+            true,
             "The notice of the transfer",
-            "its new parent session"
-        ),
+            "its new parent session",
+        )
+    };
+    let mut result_note = format!(
+        "Transferred: `{id}` {went} and is no longer yours. {child} {owner_told}",
+        id = moved.id,
+        went = if moved_on {
+            format!("went to {}, but has left it since,", named_session(&owner))
+        } else {
+            format!("now reports to {}", named_session(&owner))
+        },
+        child = told(&child, running, "The notice of the transfer", "the session"),
     );
-    if told_owner.is_err() {
+    if told_owner.is_err() && !moved_on {
         result_note.push_str(&format!(
             " Tell the new parent session of the transfer yourself with `{}`.",
             qualified_tool_name(caller.agent, "inform_session")
@@ -127,7 +154,7 @@ pub(in crate::mcp) async fn release_session(
              you, though `{inform_session}` can still tell it something. {told}",
             id = released.id,
             inform_session = qualified_tool_name(caller.agent, "inform_session"),
-            told = told(&delivery, "The notice of the release", "the session"),
+            told = told(&delivery, running, "The notice of the release", "the session"),
         ),
     }))
 }
@@ -270,6 +297,148 @@ mod tests {
                 .contains("bound to another console session, `b`"),
             "{err}"
         );
+    }
+
+    /// A new owner that is handed off, and archived, while the notice of the transfer waits for it
+    /// is not the one told: the result names the owner the session is bound to now, which is the one
+    /// that received the note.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_transfer_names_the_owner_it_told_when_the_new_owner_was_handed_off() {
+        use crate::mcp::test_support::{console_session, with_status};
+        let (state, _dir) = peer_state("transfer-owner-handed-off");
+        state.store.insert_session(&console_session("c")).unwrap();
+        let _a = running(&state, "a");
+        let _of_a = running(&state, "of-a");
+        let _b = running(&state, "b");
+        let c = running(&state, "c");
+
+        let transfer = {
+            let state = state.clone();
+            tokio::spawn(async move {
+                call(
+                    &state,
+                    "a",
+                    "transfer_session",
+                    &arguments(json!({
+                        "session": "of-a",
+                        "to": "b",
+                        "note": "Half of the endpoints are done.",
+                    })),
+                )
+                .await
+            })
+        };
+        // The transfer is written, and the notice to the session is under way: the task is away
+        // from the runtime's one thread, which the test now has to itself. `b` is handed off to
+        // `c` before the notice to `b` is written, as a handoff of it leaves things.
+        let bound_to_b = || {
+            state
+                .store
+                .get_session("of-a")
+                .unwrap()
+                .unwrap()
+                .bound_to
+                .as_deref()
+                == Some("b")
+        };
+        while !bound_to_b() {
+            tokio::task::yield_now().await;
+        }
+        with_status(&state, "b", crate::protocol::SessionStatus::Archived);
+        state
+            .store
+            .set_binding(
+                "of-a",
+                Some("b"),
+                "c",
+                crate::protocol::Role::Worker,
+                false,
+                false,
+            )
+            .unwrap()
+            .expect("rebound to the successor");
+
+        let result = transfer.await.unwrap().unwrap();
+        assert_eq!(result["owner"], "c", "{result}");
+        assert_eq!(result["owner_kind"], "console", "{result}");
+        let note = result["note"].as_str().unwrap();
+        assert!(note.contains("`c`"), "{note}");
+        assert!(!note.contains("`b`"), "{note}");
+        let handed = output_containing(&c, "Half of the endpoints");
+        assert!(
+            handed.contains("> Half of the endpoints are done."),
+            "{handed}"
+        );
+    }
+
+    /// A session that leaves its new owner while the notice of the transfer is on its way is not
+    /// told to the owner it left: the result says the notice was not sent and why, and does not
+    /// send the caller to tell that owner itself.
+    #[tokio::test(flavor = "current_thread")]
+    async fn a_transfer_says_the_notice_was_not_sent_when_the_session_left_the_new_owner() {
+        let (state, _dir) = peer_state("transfer-left-new-owner");
+        let _a = running(&state, "a");
+        let _of_a = running(&state, "of-a");
+        let b = running(&state, "b");
+
+        let transfer = {
+            let state = state.clone();
+            tokio::spawn(async move {
+                call(
+                    &state,
+                    "a",
+                    "transfer_session",
+                    &arguments(json!({
+                        "session": "of-a",
+                        "to": "b",
+                        "note": "Half of the endpoints are done.",
+                    })),
+                )
+                .await
+            })
+        };
+        // Written, with the notice to the session under way: the user releases it from `b` before
+        // `b`'s notice is written (see
+        // `a_transfer_names_the_owner_it_told_when_the_new_owner_was_handed_off`).
+        let bound_to_b = || {
+            state
+                .store
+                .get_session("of-a")
+                .unwrap()
+                .unwrap()
+                .bound_to
+                .as_deref()
+                == Some("b")
+        };
+        while !bound_to_b() {
+            tokio::task::yield_now().await;
+        }
+        state
+            .store
+            .clear_binding("of-a", "b", false, None)
+            .unwrap()
+            .expect("released");
+
+        let result = transfer.await.unwrap().unwrap();
+        assert_eq!(result["owner"], "b", "{result}");
+        let note = result["note"].as_str().unwrap();
+        assert!(
+            note.contains(
+                "The notice of the transfer was not sent to its new parent session: the session \
+                 was no longer bound to it by the time it could be written."
+            ),
+            "{note}"
+        );
+        assert!(note.starts_with("Transferred: `of-a` went to "), "{note}");
+        assert!(
+            note.contains(", but has left it since, and is no longer yours."),
+            "{note}"
+        );
+        assert!(!note.contains("now reports to"), "{note}");
+        assert!(!note.contains("yourself"), "{note}");
+        assert!(!note.contains("inform_session"), "{note}");
+        let heard = crate::test_support::heard_after_marker(&state, &b);
+        assert!(!heard.contains("Half of the endpoints"), "{heard}");
     }
 
     #[tokio::test]
@@ -651,7 +820,14 @@ mod tests {
     /// sent as its first report, word for word.
     #[test]
     fn the_caller_is_told_what_became_of_each_notice_word_for_word() {
-        let notice = |delivery| told(&delivery, "The notice of the transfer", "the session");
+        let notice = |delivery| {
+            told(
+                &delivery,
+                false,
+                "The notice of the transfer",
+                "the session",
+            )
+        };
         assert_eq!(
             notice(Ok(Some(Delivery::Written))),
             "The notice of the transfer was delivered to the session."
@@ -676,6 +852,12 @@ mod tests {
         assert_eq!(
             notice(Ok(None)),
             "The session is not running, and will be told when it next starts."
+        );
+        // A session that had a process but whose notice could not be written is told at its next
+        // start, which is not the same as having none.
+        assert_eq!(
+            told(&Ok(None), true, "The notice of the transfer", "the session"),
+            "The session could not be told now, and will be told when it next starts."
         );
         assert_eq!(
             notice(Err(anyhow::anyhow!("the pipe broke"))),

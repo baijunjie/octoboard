@@ -450,9 +450,58 @@ pub(crate) fn write_notice_to_owner(
     about: &Session,
     notice: &str,
 ) -> Result<Delivery> {
-    write_to_owner(state, owner, about, notice, |kept| {
+    write_to_owner(state, owner, about, notice, Ownership::Any, |kept| {
         format!("{notice}\n\n{kept}")
     })
+}
+
+/// Whether a write into an owner about a session needs the session to be bound to it still.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Ownership {
+    /// Written whoever the session reports to by then.
+    Any,
+    /// Refused ([`NoLongerOwned`]), neither written nor kept, once the session is no longer bound
+    /// to the owner: for a notice that the owner now has it. It is looked at up to the write or
+    /// the keep; a notice kept, or queued, before the session left is not withdrawn.
+    Required,
+}
+
+/// The refusal of a write with [`Ownership::Required`]: `session` is no longer bound to `owner`,
+/// the owner written to. Internal to the daemon, never a coded error a client sees: the callers
+/// log it, or word it themselves.
+#[derive(Debug)]
+pub(crate) struct NoLongerOwned {
+    pub(crate) session: String,
+    pub(crate) owner: String,
+}
+
+impl std::fmt::Display for NoLongerOwned {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "`{}` is no longer bound to `{}`, so the notice that it is bound to it is not sent",
+            self.session, self.owner
+        )
+    }
+}
+
+impl std::error::Error for NoLongerOwned {}
+
+/// [`NoLongerOwned`] for `session` and `owner`, as an error.
+pub(crate) fn no_longer_owned(session: &str, owner: &str) -> anyhow::Error {
+    anyhow::Error::new(NoLongerOwned {
+        session: session.to_string(),
+        owner: owner.to_string(),
+    })
+}
+
+/// Whether `delivered` is the refusal of a write with [`Ownership::Required`] for a session no
+/// longer bound to the owner.
+pub(crate) fn is_no_longer_owned<T>(delivered: &Result<T>) -> bool {
+    delivered
+        .as_ref()
+        .err()
+        .is_some_and(|err| err.downcast_ref::<NoLongerOwned>().is_some())
 }
 
 /// [`write_notice_to_owner`] for a caller on the runtime, whose notice is not one of the
@@ -565,6 +614,7 @@ pub(crate) fn write_to_owner(
     owner: &Session,
     about: &Session,
     text: &str,
+    ownership: Ownership,
     kept: impl Fn(&str) -> String,
 ) -> Result<Delivery> {
     let kept_text = || {
@@ -582,7 +632,7 @@ pub(crate) fn write_to_owner(
         text,
         "this session is archived, so it takes nothing until it is reopened",
         kept_text,
-        Some(about),
+        Some((about, ownership)),
     )
 }
 
@@ -593,7 +643,9 @@ pub(crate) fn write_to_owner(
 /// `about` is the session an owner is told about, for the write into an owner: such a write waits
 /// out a claim on the owner (see [`write_to_owner`]), and what it keeps drops the notices that
 /// `about` waits for the user, or stayed idle after its last report, which were kept before it. A
-/// write with none does neither.
+/// write with none does neither. With [`Ownership::Required`] it is refused ([`NoLongerOwned`]),
+/// neither written nor kept, once `about` is not bound to the owner — looked at each time round,
+/// so after the wait too.
 ///
 /// **Blocks** like [`write_message`], and on the claim when `about` is given.
 pub(crate) fn write_or_keep(
@@ -602,7 +654,7 @@ pub(crate) fn write_or_keep(
     text: &str,
     archived: &str,
     kept_text: impl Fn() -> String,
-    about: Option<&Session>,
+    about: Option<(&Session, Ownership)>,
 ) -> Result<Delivery> {
     let mut waited = false;
     loop {
@@ -615,6 +667,12 @@ pub(crate) fn write_or_keep(
                 &[("session", id)],
             ));
         }
+        if let Some((about, Ownership::Required)) = about {
+            if state.session_record(&about.id)?.bound_to.as_deref() != Some(id) {
+                return Err(no_longer_owned(&about.id, id));
+            }
+        }
+        let about = about.map(|(about, _)| about);
         if status == SessionStatus::Interrupted {
             if let Some(row) = state.keep_message_if_not_running(id, &kept_text())? {
                 if let Some(about) = about {
@@ -783,12 +841,104 @@ mod tests {
         state.store.update_session(&archived).unwrap();
         let worker = state.session_record("worker").unwrap();
 
-        let err = write_to_owner(&state, &stale, &worker, "text", |kept| kept.to_string())
-            .expect_err("refused");
+        let err = write_to_owner(&state, &stale, &worker, "text", Ownership::Any, |kept| {
+            kept.to_string()
+        })
+        .expect_err("refused");
 
         let coded = err.downcast_ref::<CodedError>().expect("coded");
         assert_eq!(coded.code, error_code::SESSION_ARCHIVED, "{err}");
         assert!(kept_texts(&state).is_empty());
+    }
+
+    /// A notice to a session's new owner is written, or kept for an owner that is interrupted, only
+    /// while the session is bound to it: one that has left since the notice was built has none
+    /// kept, where a write with no such requirement keeps it as before.
+    #[test]
+    fn a_notice_to_an_interrupted_new_owner_is_kept_only_while_the_session_is_bound_to_it() {
+        let (state, _dir) = interrupted_hub_state("delivery-required-ownership");
+        let hub = state.session_record("hub").unwrap();
+        let worker = state.session_record("worker").unwrap();
+        let kept_as = |text: &'static str| move |kept: &str| format!("{text}\n\n{kept}");
+
+        // Still bound to it: kept, as an owner that cannot take it now has it kept.
+        let delivery = write_to_owner(
+            &state,
+            &hub,
+            &worker,
+            "required-while-bound",
+            Ownership::Required,
+            kept_as("required-while-bound"),
+        )
+        .expect("kept");
+        assert_eq!(delivery, Delivery::Kept);
+        assert_eq!(kept_texts(&state).len(), 1);
+
+        // Released from it since: nothing more is kept for it.
+        state
+            .store
+            .clear_binding("worker", "hub", false, None)
+            .unwrap()
+            .expect("released");
+        let err = write_to_owner(
+            &state,
+            &hub,
+            &worker,
+            "required-after-release",
+            Ownership::Required,
+            kept_as("required-after-release"),
+        )
+        .expect_err("refused");
+        assert!(is_no_longer_owned::<Delivery>(&Err(err)));
+        assert_eq!(kept_texts(&state).len(), 1);
+
+        // A write that does not require it is kept as before.
+        let delivery = write_to_owner(
+            &state,
+            &hub,
+            &worker,
+            "any-after-release",
+            Ownership::Any,
+            kept_as("any-after-release"),
+        )
+        .expect("kept");
+        assert_eq!(delivery, Delivery::Kept);
+        let kept = kept_texts(&state);
+        assert_eq!(kept.len(), 2, "{kept:?}");
+        assert!(kept[1].contains("any-after-release"), "{kept:?}");
+        assert!(!kept
+            .iter()
+            .any(|text| text.contains("required-after-release")));
+    }
+
+    /// The refusal for a session that is not bound to the owner names both, as the private error
+    /// the daemon's callers recognise, and is not a coded error a client could see.
+    #[test]
+    fn a_notice_refused_for_ownership_names_the_session_and_the_owner() {
+        let (state, _dir) = interrupted_hub_state("delivery-required-ownership-params");
+        let hub = state.session_record("hub").unwrap();
+        let worker = state.session_record("worker").unwrap();
+        state
+            .store
+            .clear_binding("worker", "hub", false, None)
+            .unwrap()
+            .expect("released");
+
+        let err = write_to_owner(&state, &hub, &worker, "text", Ownership::Required, |kept| {
+            kept.to_string()
+        })
+        .expect_err("refused");
+
+        let refused = err
+            .downcast_ref::<NoLongerOwned>()
+            .expect("no longer owned");
+        assert_eq!(refused.session, "worker");
+        assert_eq!(refused.owner, "hub");
+        assert_eq!(
+            err.to_string(),
+            "`worker` is no longer bound to `hub`, so the notice that it is bound to it is not sent"
+        );
+        assert!(err.downcast_ref::<CodedError>().is_none(), "{err}");
     }
 
     /// A held session of the usage limit: a Claude Code session `s` with a process whose own server

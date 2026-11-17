@@ -75,16 +75,31 @@ take a message; see "Messages held until a session can take them" in `docs/produ
 - **The new owner** is told which session transferred which session to it, by id, title and project, that the session is
   its own from now on and is driven with `instruct_session`, `archive_session` and `resume_session`, and, for a
   coordinator with a parent, that it keeps its own sessions, which the new owner can read but not drive; then the
-  caller's `note`, every line quoted, followed by a closing line.
+  caller's `note`, every line quoted, followed by a closing line. Should a handoff archive the new owner while its
+  message waits for it, the message goes, worded for it, to the session that took the new owner's place, which the
+  moved session is then bound to (see "Reports and notices for an interrupted owner" in
+  `docs/product/reporting-to-owners.md`).
+
+**The new owner's message is sent only while the session is still bound to it.** This is looked at right before the
+message is written, queued or kept for an interrupted owner, after any wait for an operation on the owner too (see
+"Reports and notices for an interrupted owner" in `docs/product/reporting-to-owners.md`). Should the session have been
+released, or bound to another owner, by then — or should the owner have been archived, with no session taking its
+place, after the session left it — the message is dropped, neither written nor kept, so an owner is never told that a
+session is its own when it no longer is. A message already written, queued or kept before the session left is not
+withdrawn; a kept one carries the line saying that what it says may no longer hold (see "Each kept report and notice is
+dated" under "Reports and notices for an interrupted owner" in `docs/product/reporting-to-owners.md`). The same holds
+for the owner's message after the user binds a session from the window (see "Binding a session from the window" below).
 
 Neither message spares the turn it starts a synthesised report: a session that carries on and stops without reporting is
 reported on to its owner as usual (see "When a session does not report" in
 `docs/product/reporting-to-owners.md`).
 
 The call returns `session`, `owner` (the new parent's id), `owner_kind` (`console` or `project`), `role` (`coordinator`
-or `worker`) and a `note` saying the session now reports to the new owner and is no longer the caller's, and whether
+or `worker`) and a `note` saying the session now reports to the new owner (or has left it since, below) and is no
+longer the caller's, and whether
 each of the two was told, will be told as soon as it can take a message, is not running and will be told when it next
-starts (the session only), is not running and will be told once resumed (the new owner, should it have been interrupted
+starts (the session only), could not be told now and will be told when it next starts (the session only: it had a
+process, but its message could not be written, and it is owed a notice), is not running and will be told once resumed (the new owner, should it have been interrupted
 by then: the message is kept for it, see "Reports and notices for an interrupted owner" in
 `docs/product/reporting-to-owners.md`), could not be told, with the reason, or was not told because the message was
 written into its input but its agent did not send it to the conversation — it is in the input box, or went to a view of
@@ -93,8 +108,13 @@ the agent's background agents — the user having been told to check the session
 taken its message without confirming it: the reason says the message may already be queued or running and will not be
 sent again, so it is not to be sent again before the conversation is checked, and no notice is left owed for its next
 launch (see "A message whose acceptance is uncertain" in `docs/product/message-delivery.md`). When the new owner could
-not be told, the note says to tell it of the transfer with `inform_session`. Once the binding has changed the transfer
-stands, whatever became of the messages.
+not be told, the note says to tell it of the transfer with `inform_session`. When the new owner's message was dropped
+because the session had left it, as above, the note says instead that the session went to that owner but has left it
+since, and is no longer the caller's, and that the notice was not sent to its new parent because the session was no
+longer bound to it by the time it could be written — without the hint to use `inform_session`; `owner` and
+`owner_kind` still name the owner it was transferred to. When the new owner's message went to the
+session that took its place after a handoff, as above, `owner`, `owner_kind` and the `note` name that session, the one
+told and the session's parent now. Once the binding has changed the transfer stands, whatever became of the messages.
 
 ## Releasing a session from its owner
 
@@ -164,7 +184,8 @@ it to drive the session is refused as for any session that is not its own.
 The call returns `session`, `role: "coordinator"` and a `note` saying that the session has no parent now, is no longer
 the caller's, is the user's own session, is no longer instructed or driven by the caller and no longer reports to it,
 though `inform_session` can still tell it something, and whether it was told, will be told as soon as it can take a
-message, is not running and will be told when it next starts, was not told because the message was written into its
+message, is not running and will be told when it next starts, could not be told now and will be told when it next starts
+(it had a process, but its message could not be written), was not told because the message was written into its
 input but its agent did not send it to the conversation, the user having been told to check the session (see "A message
 written but not sent" in `docs/product/message-delivery.md`), or could not be told, with the reason: the case of a
 message Codex's own queue may have taken without confirming it, as for `transfer_session` above. Once the binding is
@@ -231,7 +252,8 @@ could not be bound (see "The error alert" in `docs/product/error-alerts.md`); fo
 and says it cannot own the session now — it is no longer running or can no longer have sessions of its own, or the
 session now has sessions of its own.
 
-**Both are told**, by messages written through the delivery every message takes (queued while one cannot take a
+The request is answered as soon as the binding is written; the messages below follow it, so neither holds up the
+answer. **Both are told**, by messages written through the delivery every message takes (queued while one cannot take a
 message; see "Messages held until a session can take them" in `docs/product/message-delivery.md`): the session first,
 then the owner, so the owner does not hear of a session it may drive before that session knows whose it is.
 
@@ -249,8 +271,20 @@ then the owner, so the owner does not hear of a session it may drive before that
 - **The owner** is told that the user bound the project session — by id, title and where it runs — to it; that the
   session is its own from now on, reports to it and is driven with `instruct_session`, `archive_session` and
   `resume_session`; the session's role — a coordinator, which keeps its child sessions, which the owner can read but
-  not drive, or a worker, which cannot manage child sessions; that it had no parent session before; and either that it
-  is being told so, or that it is not running and will be told when it next starts.
+  not drive, or a worker, which cannot manage child sessions; that it had no parent session before; and what became of
+  the session's own message:
+  - that it is being told so — its message was written or queued, or its agent's own queue may have taken it without
+    confirming it, in which case it is not sent again;
+  - that it is not running, and will be told when it next starts;
+  - or that it could not be told now, and will be told when it next starts — it had a process, but its message could
+    not be written, and it is owed a notice.
+
+  Should a handoff archive the owner while its message waits for it, the message goes, worded for it, to the session
+  that took the owner's place, which the bound session is then bound to (see "Reports and notices for an interrupted
+  owner" in `docs/product/reporting-to-owners.md`). Like the new owner's message after a transfer, it is sent only
+  while the session is still bound to the owner, and dropped should the user have released it, or it have been bound
+  to another owner, before it could be written or kept (see "Handing a session to another owner" above). Nobody is
+  told that it was dropped.
 
 Once the binding is made it stands, whatever became of the messages.
 

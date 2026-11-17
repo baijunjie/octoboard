@@ -260,37 +260,43 @@ pub fn bind_session(
 
 /// Binds the unbound project session `id` to `owner_id` at the user's request (see
 /// [`bind_session`]), then tells it and, once it is told, its new owner, so the owner cannot drive
-/// it before it knows whose it is. Nobody asked for the notices: the binding stands whatever
-/// becomes of them, and each failure is logged on its own.
+/// it before it knows whose it is. The binding is answered as soon as it is written: telling the
+/// owner can wait on a claim another change holds on it, and the window would show its request
+/// pending all that while. Nobody asked for the notices: the binding stands whatever becomes of
+/// them, and each failure is logged on its own.
 pub(super) async fn bind_requested(
     state: &Arc<AppState>,
     id: String,
     owner_id: String,
 ) -> Result<()> {
     let (bound, owner, running) = bind_session(state, &id, &owner_id)?;
-    let told = owner_notices::tell_now_or_leave(
-        state,
-        &bound.id,
-        owner_notices::bound_by_user(&bound, &owner),
-        running,
-        None,
-    )
-    .await;
-    if let Err(err) = told {
-        tracing::warn!(session = %id, %err, "telling a session the user bound failed");
-    }
-    let told_owner = crate::messaging::delivery::write_notice_to_owner_off_runtime(
-        state,
-        &owner,
-        &bound,
-        owner_notices::bound_to_owner_by_user(state, &owner, &bound, running),
-    )
-    .await;
-    if let Err(err) = told_owner {
-        tracing::warn!(
-            session = %owner_id, %err, "telling the owner of a session the user bound failed"
-        );
-    }
+    let state = state.clone();
+    tokio::spawn(async move {
+        let told = owner_notices::tell_now_or_leave(
+            &state,
+            &bound.id,
+            owner_notices::bound_by_user(&bound, &owner),
+            running,
+            None,
+        )
+        .await;
+        let session_told = owner_notices::SessionTold::of(running, &told);
+        if let Err(err) = &told {
+            tracing::warn!(session = %bound.id, %err, "telling a session the user bound failed");
+        }
+        let text = {
+            let (state, bound) = (state.clone(), bound.clone());
+            move |owner: &Session| {
+                owner_notices::bound_to_owner_by_user(&state, owner, &bound, session_told)
+            }
+        };
+        let told_owner = owner_notices::tell_new_owner(&state, &owner, &bound, text).await;
+        if let Err(err) = told_owner {
+            tracing::warn!(
+                session = %owner.id, %err, "telling the owner of a session the user bound failed"
+            );
+        }
+    });
     Ok(())
 }
 

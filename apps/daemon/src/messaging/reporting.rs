@@ -26,8 +26,8 @@ use crate::branch_cleanup;
 use crate::coordinator::lifecycle::{self, Finish, Finished, Unfinished};
 use crate::hooks;
 use crate::messaging::delivery::{
-    is_archived_refusal, is_held_fragment, rebound_owner, write_to_owner, Delivery, SentBy,
-    HELD_FRAGMENT_PARAM,
+    is_archived_refusal, is_held_fragment, rebound_owner, write_to_owner, Delivery, Ownership,
+    SentBy, HELD_FRAGMENT_PARAM,
 };
 use crate::messaging::idle_children;
 use crate::messaging::naming::{named_session, one_line, place, quote, session_labels, Place};
@@ -214,9 +214,14 @@ fn deliver_and_archive(
     // A lost message propagates rather than being treated as delivered: the session must not be
     // archived on the strength of a report its owner never got.
     let deliver_to = |owner: &Session| {
-        write_to_owner(state, owner, &session, &render(owner, None), |kept| {
-            render(owner, Some(kept))
-        })
+        write_to_owner(
+            state,
+            owner,
+            &session,
+            &render(owner, None),
+            Ownership::Any,
+            |kept| render(owner, Some(kept)),
+        )
         .map_err(|err| from_reporters_side(err, owner))
     };
     let mut delivered = deliver_to(&owner);

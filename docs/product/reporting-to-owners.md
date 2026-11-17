@@ -206,9 +206,12 @@ sessions **kept** for its resume, rather than refused or dropped:
   independent session" in `docs/product/changing-session-owners.md`);
 - a synthesised report (see "When a session does not report" above);
 - every notice in "Notices to an owner" above;
-- the notice of a handoff of one of its sessions (see "Who is told" in `docs/product/handing-off-sessions.md`) and the
+- the notice of a handoff of one of its sessions (see "Who is told" in `docs/product/handing-off-sessions.md`), the
   notice to the new owner of a session handed to it with `transfer_session` (see "Handing a session to another owner"
-  in `docs/product/changing-session-owners.md`).
+  in `docs/product/changing-session-owners.md`), and that of a session the user bound to it (see "Binding a session
+  from the window" in `docs/product/changing-session-owners.md`) — these two only while the session is still bound to
+  that owner, as it stands when the notice would be kept (see "Handing a session to another owner" in
+  `docs/product/changing-session-owners.md`).
 
 The notice that the user released a session from its owner is the exception: an owner with no process running is not
 told it, then or later (see "Releasing a session from its owner" in `docs/product/changing-session-owners.md`).
@@ -238,8 +241,10 @@ session" in `docs/product/information-between-sessions.md`).
   and then goes by how the owner stands: written into it once it is running, kept while it is interrupted. One still
   without a process after the wait is refused, for a report (see the refusals at the top of this document), and not
   told, for a notice.
-- **A report, or a notice in "Notices to an owner" above, that waited for an owner which a handoff archived
-  meanwhile** goes to the session that took the owner's place (see `docs/product/handing-off-sessions.md`).
+- **A report, a notice in "Notices to an owner" above, or the notice to the new owner of a session the user bound to it
+  or handed to it with `transfer_session`, that waited for an owner which a handoff archived meanwhile** goes to the
+  session that took the owner's place (see `docs/product/handing-off-sessions.md`), a notice worded for that session.
+  The notice to a new owner goes there only while the session is bound to that session, and is dropped otherwise.
 
 An owner is told this in its role description — a console session in its instruction file, a project coordinator in its
 own text: reports and Octoboard's notices about its sessions that come while it is interrupted are kept and arrive once
