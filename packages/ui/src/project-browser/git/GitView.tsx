@@ -186,15 +186,17 @@ function Notice({ notice, projectRoots, goneBranches }: { notice: ChangesNotice;
           />
           {/* A line holds one mark: changes cut short and an unreadable folder are both said in it. */}
           {markLabel && (
-            <StatusMark tone="warning" inline label={t(markLabel)}>
-              {notice.cut && (
-                <>
-                  <p>{t("git.changes.cut.uncommittedReason")}</p>
-                  <p><Message id="git.changes.cut.uncommittedRemedy" params={{ gitignore: code(".gitignore") }} /></p>
-                </>
-              )}
-              {notice.scope && SCOPE_MARK[notice.scope].map((id) => <p key={id}><Message id={id} /></p>)}
-            </StatusMark>
+            <span className="ms-1 inline-flex align-top">
+              <StatusMark tone="warning" inline label={t(markLabel)}>
+                {notice.cut && (
+                  <>
+                    <p>{t("git.changes.cut.uncommittedReason")}</p>
+                    <p><Message id="git.changes.cut.uncommittedRemedy" params={{ gitignore: code(".gitignore") }} /></p>
+                  </>
+                )}
+                {notice.scope && SCOPE_MARK[notice.scope].map((id) => <p key={id}><Message id={id} /></p>)}
+              </StatusMark>
+            </span>
           )}
         </>
       );

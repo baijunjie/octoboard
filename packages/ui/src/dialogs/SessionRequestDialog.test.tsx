@@ -254,6 +254,17 @@ it("shows a dash for a session the store does not know", () => {
 // and for the one that holds a record, and not otherwise.
 const incompleteMark = () => document.body.querySelector<HTMLElement>('[role=alertdialog] button[aria-label="Sharing may be incomplete"]');
 
+function expectMarkAfterAccount(mark: HTMLElement, name: string) {
+  const paragraph = mark.closest("p")!;
+  const account = [...paragraph.querySelectorAll("[data-inline-reference]")].find((reference) => reference.textContent === name)!;
+  expect(account).toBeDefined();
+  expect(account.compareDocumentPosition(mark) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
+  const between = document.createRange();
+  between.setStartAfter(account);
+  between.setEndBefore(mark);
+  expect(between.toString().trim()).toBe("");
+}
+
 it.each([
   { name: "a session's account", asked: reopening },
   { name: "a record's account", asked: { ...request, action: "resume_record" as const, account: "a-half", conversation: "x" } },
@@ -271,7 +282,7 @@ it.each([
   // In the question's paragraph, right after the account's reference, and nothing of it written beside.
   expect(mark.closest("p")?.textContent).toContain("Half");
   expect(mark.previousElementSibling).toBeNull();
-  expect(mark.parentElement?.previousElementSibling?.textContent).toBe("Half");
+  expectMarkAfterAccount(mark, "Half");
   expect(document.body.querySelector('[data-slot="alert-root"]')).toBeNull();
   expect(dialogText()).not.toContain("The last sharing change");
   // The popover holds the sentence and the consequence.
@@ -306,7 +317,7 @@ it.each([
   const mark = incompleteMark()!;
   expect(mark).not.toBeNull();
   expect(mark.closest("p")?.textContent).toContain("Half");
-  expect(mark.parentElement?.previousElementSibling?.textContent).toBe("Half");
+  expectMarkAfterAccount(mark, "Half");
   expect(document.body.querySelectorAll('[role=alertdialog] button[aria-label="Sharing may be incomplete"]')).toHaveLength(1);
 });
 

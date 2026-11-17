@@ -23,7 +23,7 @@ interface StatusMarkProps {
   tone?: MarkTone;
   /** What the mark is about, its accessible name. */
   label: string;
-  /** The glyph takes the text's size and baseline. */
+  /** The compact glyph is centred within the surrounding text's line height. */
   inline?: boolean;
   /** A visible word after the glyph; the accessible name stays `label`. */
   text?: string;
@@ -100,19 +100,21 @@ function MarkButton({
     );
   }
   if (inline) {
-    // A square box around the glyph (22px for the 14px glyph), so that its round shape is a circle as
-    // everywhere else; the negative block margins keep the line's height as it was, not the box's size.
+    // Keep the text's line box and centre the square target inside it. `vertical-align: middle` alone
+    // centres on the font's x-height, which leaves the glyph below the centre of the line.
     return (
-      <Button
-        {...wiring}
-        data-status-mark=""
-        iconOnly
-        variant="ghost"
-        label={label}
-        className="mx-[-0.1875rem] my-[-0.25rem] size-[1.375rem] min-h-0 min-w-0 shrink-0 rounded-full p-0 align-middle leading-none [&_svg]:m-0"
-      >
-        {glyph}
-      </Button>
+      <span className="inline-flex h-lh items-center align-top">
+        <Button
+          {...wiring}
+          data-status-mark=""
+          iconOnly
+          variant="ghost"
+          label={label}
+          className="my-[-0.25rem] size-[1.375rem] min-h-0 min-w-0 shrink-0 rounded-full p-0 leading-none [&_svg]:m-0"
+        >
+          {glyph}
+        </Button>
+      </span>
     );
   }
   return (

@@ -2008,8 +2008,9 @@ take rows or the mark away, so focus that fell to the page or the tree goes to t
 
 **The inline form** is the mark inside running text (a Markdown image that could not load, a formula that could not be
 drawn): the glyph takes the text's size, the trigger is a button whose box is square (sized from the glyph, so its round
-shape is a circle as everywhere else) with negative block margins that leave the line's height as it was, and a button
-is phrasing content, so valid inside a paragraph. It is a tab stop like any other mark, so a sighted keyboard user
+shape is a circle as everywhere else). A wrapper keeps the surrounding text's line height and centres the button
+within it; its full width stays in the layout, so the target and hover background do not overlap neighbouring controls.
+The button is phrasing content, so valid inside a paragraph. It is a tab stop like any other mark, so a sighted keyboard user
 reaches the reason, which the tooltip it replaced never gave them; the document's links and text are untouched, the mark
 is one more stop, named by the sentence, and its popover is named by its tone's word. Inside a link (a linked image that
 failed) the mark is drawn right after the anchor, not in it, so no button nests in a link and a press on the mark is not

@@ -426,7 +426,7 @@ it("marks uncommitted changes cut short at the end of the worktree's line, namin
   expect(marks).toHaveLength(1);
   const line = marks[0].closest("p")!;
   expect(line.textContent).toContain("Worktree r");
-  expect(line.lastElementChild).toBe(marks[0]);
+  expect(line.lastElementChild?.contains(marks[0])).toBe(true);
   press(marks[0]);
   expect(document.querySelector('[role="dialog"]')!.textContent).toBe(
     "This worktree has more uncommitted changes than the list can show, often because generated files are not ignored."
@@ -557,7 +557,7 @@ it("marks a worktree whose copy of the project's folder is a link at the end of 
   expect(marks).toHaveLength(1);
   const line = marks[0].closest("p")!;
   expect(line.textContent).toContain("Worktree r-2");
-  expect(line.lastElementChild).toBe(marks[0]);
+  expect(line.lastElementChild?.contains(marks[0])).toBe(true);
   expect(container.textContent).not.toContain("symbolic link");
   press(marks[0]);
   expect(document.querySelector('[role="dialog"]')!.textContent).toBe(
