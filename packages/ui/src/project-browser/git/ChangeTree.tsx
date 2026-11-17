@@ -70,7 +70,8 @@ export function ChangeTree({
   byCommit?: { value: boolean; onChange: (byCommit: boolean) => void };
 }): React.ReactElement {
   const language = useCurrentLanguage();
-  const groups = useMemo(() => changeGroups(items, layout, [...(headingMarks?.keys() ?? []), ...(byCommit ? ["committed" as const] : [])]).map((group, index, all) => ({ id: group.section, previousSection: all[index - 1]?.section, ...group })), [items, layout, headingMarks, byCommit]);
+  const kept = useMemo((): ChangeSection[] => [...(headingMarks?.keys() ?? []), ...(byCommit ? ["committed" as const] : [])], [headingMarks, byCommit]);
+  const groups = useMemo(() => changeGroups(items, layout, kept).map((group, index, all) => ({ id: group.section, previousSection: all[index - 1]?.section, ...group })), [items, layout, kept]);
   // Only the commits and directories of the sections on screen: a folded section renders none of
   // its rows, so whether a row inside one is folded is not this list's to decide. react-aria hands
   // an expanded key it knows nothing of back unchanged, so those keys would survive either way;
@@ -101,7 +102,7 @@ export function ChangeTree({
     for (const key of foldable) if (!keys.has(key)) next.add(key);
     onCollapsedChange(next);
   };
-  const scrollToRow = (list: HTMLElement, key: string, rowsCollapsed: ReadonlySet<string>) => void scrollToChange(list, items, key, layout, rowsCollapsed);
+  const scrollToRow = (list: HTMLElement, key: string, rowsCollapsed: ReadonlySet<string>) => void scrollToChange(list, items, key, layout, rowsCollapsed, kept);
   const onAction = (key: string) => {
     const node = byKey.get(key);
     if (node?.type === "change") onOpen(node.item);

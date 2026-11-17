@@ -127,7 +127,9 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
 
   // The selection is kept in view, while the viewer moves through the changes. The layout and the
   // filter are part of what was scrolled to: another layout, or the same list narrowed or widened,
-  // is a list with its own scroll.
+  // is a list with its own scroll. The sections the list heads with no rows are not passed: only
+  // Committed is ever headed that way (failed, cut short, or listed by commit), and it is the last
+  // section, so its empty heading is below every row and moves none.
   const scrolledToChange = useRef<string | undefined>(undefined);
   useLayoutEffect(() => {
     const scrolled = selectedChange && `${layout}:${filter}:${selectedChange}`;
@@ -180,7 +182,8 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
     collapse: fold.anyOpen,
     disabled: fold.keys.length === 0,
     // A focused row that folds away hands focus to the outermost folder it was under, the nearest
-    // row that stays, as the Files tree's Collapse all does; here the folder is also scrolled into view.
+    // row that stays, as the Files tree's Collapse all does; here the folder is also scrolled into view,
+    // passing no kept sections, as the selection's scroll does.
     onPress: () => {
       const list = listRef.current;
       const focused = fold.anyOpen ? focusedRowKey(list) : undefined;

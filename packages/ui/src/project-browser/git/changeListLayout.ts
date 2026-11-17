@@ -1,7 +1,7 @@
 // Where the Git mode's change list puts a row: its offset, which follows from every row and heading
 // being one height, as the tree's sectioned layout lays them out.
 import { ROW_HEIGHT, scrollRowIntoView } from "../treeRow";
-import { changeGroups, sectionKey, visibleNodes, type ChangeItem } from "./changes";
+import { changeGroups, sectionKey, visibleNodes, type ChangeItem, type ChangeSection } from "./changes";
 import type { ChangeLayout } from "./changeLayout";
 import { HEADING_HEIGHT } from "./changeSectionHeading";
 
@@ -9,10 +9,16 @@ import { HEADING_HEIGHT } from "./changeSectionHeading";
  * no such row on screen (a change in a folded-away section or under a collapsed commit or
  * directory has none). Rows and headings are each one height and laid out one after another, so
  * where a row is follows from what comes before it — a folded section contributing its heading
- * alone. */
-export function changeRowOffset(items: readonly ChangeItem[], key: string, layout: ChangeLayout, collapsed: ReadonlySet<string>): number | undefined {
+ * alone, as does a section in `kept` that the list shows with no rows (`changeGroups`). */
+export function changeRowOffset(
+  items: readonly ChangeItem[],
+  key: string,
+  layout: ChangeLayout,
+  collapsed: ReadonlySet<string>,
+  kept: Iterable<ChangeSection> = [],
+): number | undefined {
   let top = 0;
-  for (const group of changeGroups(items, layout)) {
+  for (const group of changeGroups(items, layout, kept)) {
     top += HEADING_HEIGHT;
     if (collapsed.has(sectionKey(group.section))) continue;
     const rows = visibleNodes(group.nodes, collapsed);
@@ -33,9 +39,10 @@ export function scrollToChange(
   key: string | undefined,
   layout: ChangeLayout,
   collapsed: ReadonlySet<string>,
+  kept: Iterable<ChangeSection> = [],
 ): boolean {
   if (key === undefined || !list) return false;
-  const top = changeRowOffset(items, key, layout, collapsed);
+  const top = changeRowOffset(items, key, layout, collapsed, kept);
   if (top === undefined) return false;
   scrollRowIntoView(list, top, { stickyTop: HEADING_HEIGHT });
   return true;
