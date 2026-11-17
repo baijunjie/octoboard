@@ -1267,6 +1267,7 @@ export const zhHans: Translation<"other"> = {
   "browser.filter.excludeIgnored": "排除已忽略的文件",
   "browser.refresh": "刷新",
   "browser.collapseAll": "收起全部文件夹",
+  "browser.expandAll": "展开全部文件夹",
   "browser.loading": "文件加载中…",
   "browser.loadFailed": "无法加载项目面板",
   "browser.loadFailed.reload": "重新载入此页面即可加载项目面板。",

@@ -49,9 +49,10 @@ buttons. The tabs are compact, with a pill behind the selected tab and muted lab
 behind them. The tabs and Close panel have priority over the project title and other icon buttons; their behavior in a
 narrow header is in "A panel's header" in `docs/product/right-pane-panels.md`. Files offers the file-name filter toggle
 (see "Filtering by file name" below) and then **Collapse all folders** (see "Collapse all folders" below); Changes
-offers its filter toggle and Group by folder (see "The Changes view" in
-`docs/product/project-pane-git-mode.md`). The buttons keep that place in loading, empty and error states too. Pressing
-Refresh or Collapse all folders with the mouse leaves keyboard focus where it was.
+offers its filter toggle, then, while its list is grouped by folder, Expand all folders or Collapse all folders, then
+Group by folder (see "The Changes view" in `docs/product/project-pane-git-mode.md`). The buttons keep that place in
+loading, empty and error states too. Pressing Refresh or either tab's button that folds the folders with the mouse
+leaves keyboard focus where it was.
 
 ## Files and Git
 
@@ -213,10 +214,11 @@ tree. The viewer navigates only through the displayed file rows, skipping folded
 
 ### Collapse all folders
 
-**Collapse all folders**, the header's icon button after the filter toggle in Files, folds every folder at once. In the
-unfiltered tree it closes every expanded folder, including those inside folders already closed, so each opens again with
-its subfolders closed, and each counts as folded for filter results as folding it by hand would. With a nonempty filter
-it folds every folder of the results instead. It is disabled while no folder is drawn open; a folder that could not be
+**Collapse all folders**, the header's icon button after the filter toggle in Files, folds every folder at once (the
+Changes tab's own, which also expands, is in "Flat or grouped by folder" in
+`docs/product/project-pane-git-change-list.md`). In the unfiltered tree it closes every expanded folder, including
+those inside folders already closed, so each opens again with its subfolders closed, and each counts as folded for
+filter results as folding it by hand would. With a nonempty filter it folds every folder of the results instead. It is disabled while no folder is drawn open; a folder that could not be
 listed is drawn closed and does not count. When keyboard focus was on a row that the folding takes away, it moves to the
 top-level folder that row was under; when it was on the button itself, which is then disabled, it moves to Refresh.
 

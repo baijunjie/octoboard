@@ -8,7 +8,7 @@ import { press as pressMark } from "../components/alerts/detailsTestSupport";
 import { isolate } from "../i18n/isolate";
 import { CodedError } from "../errors/codedError";
 import { PlatformProvider } from "../platform/react";
-import type { Event, GitStatus, Project, ClientRequestBody } from "../protocol";
+import type { ChangeEntry, Event, GitStatus, Project, ClientRequestBody } from "../protocol";
 import { DaemonProvider } from "../store";
 import { testDaemon } from "../test/testDaemon";
 import { AUTO_REFRESH_MS } from "./autoRefresh";
@@ -599,6 +599,116 @@ it("keeps Collapse all disabled over the filter's results when only a folder und
   await act(async () => document.querySelector<HTMLElement>('[data-key="path:src"]')!.click());
   expect(rowKeys()).toEqual(["path:src"]);
   expect(labelled("Collapse all folders").disabled).toBe(true);
+});
+
+it("puts a fold button for the changes' folders left of the layout toggle in the tree layout only, and folds or unfolds them all", async () => {
+  await mount("fold-changes", "files");
+  await answer("list_project_dir", dir("fold-changes"));
+  // The Files tab has its own Collapse all button and no Expand all.
+  expect(labelled("Collapse all folders")).not.toBeNull();
+  expect(labelled("Expand all folders")).toBeNull();
+  await act(async () => document.querySelector<HTMLElement>('[role="tab"][data-key="changes"]')!.click());
+  await answer("get_project_source", source("fold-changes"));
+  const entry = (path: string): ChangeEntry => ({
+    group: "unstaged",
+    old: { state: "present", path, kind: "file", source: { kind: "index", worktree: "w", blob: "b" } },
+    new: { state: "present", path, kind: "file", source: { kind: "live", root_id: "r", version: "1" } },
+  });
+  await answer("list_project_changes", { ...changes("fold-changes"), changes: [entry("src/a.ts"), entry("src/nested/b.ts")] } as Event);
+  // The flat list has no folders to fold.
+  expect(labelled("Collapse all folders")).toBeNull();
+  expect(labelled("Expand all folders")).toBeNull();
+  await act(async () => labelled("Group by folder").click());
+  const headerLabels = () => [...document.querySelectorAll<HTMLButtonElement>("button[aria-label]")].map((button) => button.getAttribute("aria-label"));
+  const order = (fold: string) => {
+    const labels = headerLabels();
+    return [labels.indexOf("Hide the filter") === -1 ? labels.indexOf("Filter by file name") : labels.indexOf("Hide the filter"), labels.indexOf(fold), labels.indexOf("Show as flat list"), labels.indexOf("Refresh")];
+  };
+  expect(labelled("Collapse all folders").disabled).toBe(false);
+  expect(labelled("Collapse all folders").querySelector(".lucide-chevrons-down-up")).not.toBeNull();
+  const positions = order("Collapse all folders");
+  expect(positions.every((position) => position !== -1)).toBe(true);
+  expect(positions).toEqual([...positions].sort((a, b) => a - b));
+
+  await act(async () => labelled("Collapse all folders").click());
+  expect(labelled("Collapse all folders")).toBeNull();
+  expect(labelled("Expand all folders").disabled).toBe(false);
+  expect(labelled("Expand all folders").querySelector(".lucide-chevrons-up-down")).not.toBeNull();
+  const unfolded = order("Expand all folders");
+  expect(unfolded.every((position) => position !== -1)).toBe(true);
+  expect(unfolded).toEqual([...unfolded].sort((a, b) => a - b));
+
+  await act(async () => labelled("Expand all folders").click());
+  expect(labelled("Collapse all folders")).not.toBeNull();
+  expect(labelled("Expand all folders")).toBeNull();
+
+  // Back to the flat list, the button goes.
+  await act(async () => labelled("Show as flat list").click());
+  expect(labelled("Collapse all folders")).toBeNull();
+  expect(labelled("Expand all folders")).toBeNull();
+});
+
+const changeEntry = (path: string): ChangeEntry => ({
+  group: "unstaged",
+  old: { state: "present", path, kind: "file", source: { kind: "index", worktree: "w", blob: "b" } },
+  new: { state: "present", path, kind: "file", source: { kind: "live", root_id: "r", version: "1" } },
+});
+
+/** Mounts the Changes tab of project `id` in the tree layout, listing `paths`. */
+async function mountChangeTree(id: string, paths: string[]): Promise<void> {
+  await mount(id, "files");
+  await answer("list_project_dir", dir(id));
+  await act(async () => document.querySelector<HTMLElement>('[role="tab"][data-key="changes"]')!.click());
+  await answer("get_project_source", source(id));
+  await answer("list_project_changes", { ...changes(id), changes: paths.map(changeEntry) } as Event);
+  await act(async () => labelled("Group by folder").click());
+}
+const changeRow = (needle: string) => [...document.querySelectorAll<HTMLElement>('[role="row"][data-key]')].find((row) => row.getAttribute("data-key")!.includes(needle))!;
+
+it("hands focus to the outermost folder when the header folds a focused row away, and leaves focus that stays or sits outside the list alone", async () => {
+  await mountChangeTree("fold-focus", ["src/a.ts", "src/nested/deep/b.ts", "z.ts"]);
+  const src = "dir:unstaged:src";
+  const fold = async () => {
+    await act(async () => labelled("Collapse all folders").click());
+    await act(async () => void vi.runOnlyPendingTimers());
+  };
+  const unfold = async () => {
+    await act(async () => labelled("Expand all folders").click());
+    await act(async () => void vi.runOnlyPendingTimers());
+  };
+
+  // A change deep inside goes with the folding: focus moves to the top-level folder it was under.
+  await act(async () => changeRow("src/nested/deep/b.ts").focus());
+  await fold();
+  expect(document.activeElement).toBe(document.querySelector(`[data-key="${src}"]`));
+  // Unfolding never moves focus.
+  await unfold();
+  expect(document.activeElement).toBe(document.querySelector(`[data-key="${src}"]`));
+
+  // A nested folder row moves focus the same way.
+  await act(async () => document.querySelector<HTMLElement>('[data-key="dir:unstaged:src/nested/deep"]')!.focus());
+  await fold();
+  expect(document.activeElement).toBe(document.querySelector(`[data-key="${src}"]`));
+  await unfold();
+
+  // A top-level folder row stays where it is.
+  await act(async () => document.querySelector<HTMLElement>(`[data-key="${src}"]`)!.focus());
+  await fold();
+  expect(document.activeElement).toBe(document.querySelector(`[data-key="${src}"]`));
+  await unfold();
+
+  // A change at the root stays on screen, and focus with it.
+  await act(async () => changeRow("z.ts").focus());
+  await fold();
+  expect(document.activeElement).toBe(changeRow("z.ts"));
+  await unfold();
+
+  // Focus outside the list, on the header button itself, is not taken.
+  const button = labelled("Collapse all folders");
+  await act(async () => button.focus());
+  await fold();
+  expect(document.activeElement).toBe(labelled("Expand all folders"));
+  expect(document.activeElement?.closest('[role="row"]')).toBeNull();
 });
 
 it("leaves ignored files out of the search until the toggle beside the field includes them", async () => {

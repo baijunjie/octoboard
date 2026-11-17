@@ -1240,6 +1240,7 @@ export const tr: Translation<"one" | "other"> = {
   "browser.filter.excludeIgnored": "Yok sayılan dosyaları hariç tut",
   "browser.refresh": "Yenile",
   "browser.collapseAll": "Tüm klasörleri daralt",
+  "browser.expandAll": "Tüm klasörleri genişlet",
   "browser.loading": "Dosyalar yükleniyor…",
   "browser.loadFailed": "Proje paneli yüklenemedi",
   "browser.loadFailed.reload": "Proje panelini yüklemek için bu sayfayı yeniden yükleyin.",

@@ -1182,6 +1182,7 @@ export const hi: Translation<"one" | "other"> = {
   "browser.filter.excludeIgnored": "अनदेखी की गई फ़ाइलें छोड़ें",
   "browser.refresh": "रिफ़्रेश करें",
   "browser.collapseAll": "सभी फ़ोल्डर समेटें",
+  "browser.expandAll": "सभी फ़ोल्डर फैलाएँ",
   "browser.loading": "फ़ाइलें लोड हो रही हैं…",
   "browser.loadFailed": "प्रोजेक्ट पैनल लोड नहीं हो सका",
   "browser.loadFailed.reload": "प्रोजेक्ट पैनल लोड करने के लिए यह पेज रीलोड करें।",

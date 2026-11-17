@@ -542,6 +542,115 @@ it("moves the viewer through the rows on screen, skipping a collapsed directory,
   }
 });
 
+const stagedLive = (path: string): ChangeEntry => ({
+  group: "staged",
+  old: { state: "present", path, kind: "file", source: { kind: "index", worktree: "w", blob: "b" } },
+  new: { state: "present", path, kind: "file", source: { kind: "live", root_id: "r", version: "1" } },
+});
+
+it("offers the fold button only in the tree layout, collapsing every directory while one is open and expanding them once none is", async () => {
+  const h = harness("p-fold");
+  h.mount();
+  try {
+    await h.settle(source("p-fold", [MAIN]), branchList("p-fold", []), changeList("p-fold", ["a/x.ts", "a/b/y.ts", "z.ts"].map((path) => live(path))));
+    act(() => h.latest.browser.setLayout("flat"));
+    expect(h.latest.git.foldDirectories).toBeUndefined();
+    act(() => h.latest.browser.setLayout("tree"));
+    expect(h.latest.git.foldDirectories).toMatchObject({ collapse: true, disabled: false });
+
+    // Every directory at every depth folds, nested ones included.
+    act(() => h.latest.git.foldDirectories!.onPress());
+    expect([...h.latest.browser.collapsedChangeRows].sort()).toEqual([directoryKey("unstaged", "a"), directoryKey("unstaged", "a/b")]);
+    expect(h.latest.git.foldDirectories).toMatchObject({ collapse: false, disabled: false });
+
+    // None is open now, so the button opens them all, nested ones included.
+    act(() => h.latest.git.foldDirectories!.onPress());
+    expect([...h.latest.browser.collapsedChangeRows]).toEqual([]);
+    expect(h.latest.git.foldDirectories).toMatchObject({ collapse: true, disabled: false });
+
+    // A directory left open under a folded one is not open on screen: the button opens, and opens it too.
+    act(() => h.latest.browser.setCollapsedChangeRows(new Set([directoryKey("unstaged", "a")])));
+    expect(h.latest.git.foldDirectories?.collapse).toBe(false);
+    act(() => h.latest.git.foldDirectories!.onPress());
+    expect([...h.latest.browser.collapsedChangeRows]).toEqual([]);
+
+    // One folded directory under an open one leaves the open one on screen: the button folds.
+    act(() => h.latest.browser.setCollapsedChangeRows(new Set([directoryKey("unstaged", "a/b")])));
+    expect(h.latest.git.foldDirectories?.collapse).toBe(true);
+  } finally {
+    act(() => {
+      h.latest.browser.setLayout("flat");
+      h.latest.browser.setCollapsedChangeRows(new Set());
+    });
+  }
+});
+
+it("disables the fold button while every change is at the root", async () => {
+  const h = harness("p-fold-root");
+  h.mount();
+  act(() => h.latest.browser.setLayout("tree"));
+  try {
+    await h.settle(source("p-fold-root", [MAIN]), branchList("p-fold-root", []), changeList("p-fold-root", ["a.ts", "z.ts"].map((path) => live(path))));
+    expect(h.latest.git.foldDirectories?.disabled).toBe(true);
+  } finally {
+    act(() => h.latest.browser.setLayout("flat"));
+  }
+});
+
+it("disables the fold button once the only section with directories is folded away", async () => {
+  const h = harness("p-fold-hidden");
+  h.mount();
+  act(() => h.latest.browser.setLayout("tree"));
+  try {
+    await h.settle(source("p-fold-hidden", [MAIN]), branchList("p-fold-hidden", []), changeList("p-fold-hidden", [live("src/a.ts")]));
+    expect(h.latest.git.foldDirectories?.disabled).toBe(false);
+    act(() => h.latest.browser.setCollapsedChangeRows(new Set([sectionKey("unstaged")])));
+    expect(h.latest.git.foldDirectories?.disabled).toBe(true);
+  } finally {
+    act(() => {
+      h.latest.browser.setLayout("flat");
+      h.latest.browser.setCollapsedChangeRows(new Set());
+    });
+  }
+});
+
+it("folds and unfolds only the directories of sections not folded away, and of what the filter leaves, keeping every other row's state", async () => {
+  const h = harness("p-fold-scope");
+  h.mount();
+  act(() => h.latest.browser.setLayout("tree"));
+  try {
+    await h.settle(
+      source("p-fold-scope", [MAIN]),
+      branchList("p-fold-scope", []),
+      changeList("p-fold-scope", [live("src/a.ts"), live("tests/b.ts"), stagedLive("lib/c.ts")]),
+    );
+    const lib = directoryKey("staged", "lib");
+    const staged = sectionKey("staged");
+    // The staged section is folded away with its directory left folded: neither is touched.
+    act(() => h.latest.browser.setCollapsedChangeRows(new Set([staged, lib])));
+    act(() => h.latest.git.foldDirectories!.onPress());
+    expect([...h.latest.browser.collapsedChangeRows].sort()).toEqual([staged, lib, directoryKey("unstaged", "src"), directoryKey("unstaged", "tests")].sort());
+    act(() => h.latest.git.foldDirectories!.onPress());
+    expect([...h.latest.browser.collapsedChangeRows].sort()).toEqual([staged, lib].sort());
+
+    // Behind the filter, only the directories that lead to a match are acted on.
+    act(() => h.latest.git.view.changeView.onFilterOpenChange(true));
+    act(() => h.latest.git.view.changeView.onFilterChange("b.ts"));
+    act(() => h.latest.git.foldDirectories!.onPress());
+    expect([...h.latest.browser.collapsedChangeRows].sort()).toEqual([staged, lib, directoryKey("unstaged", "tests")].sort());
+    // With nothing left of the list in the filter's way, the one folded directory leaves none open there.
+    expect(h.latest.git.foldDirectories).toMatchObject({ collapse: false, disabled: false });
+    act(() => h.latest.git.view.changeView.onFilterChange("zzz"));
+    expect(h.latest.git.foldDirectories?.disabled).toBe(true);
+  } finally {
+    act(() => {
+      h.latest.git.view.changeView.onFilterOpenChange(false);
+      h.latest.browser.setLayout("flat");
+      h.latest.browser.setCollapsedChangeRows(new Set());
+    });
+  }
+});
+
 it("drops the filter text with the field, so no filter out of sight narrows a list", () => {
   const h = harness("p8");
   h.mount();

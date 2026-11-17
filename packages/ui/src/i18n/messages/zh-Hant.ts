@@ -1223,6 +1223,7 @@ export const zhHant: Translation<"other"> = {
   "browser.filter.excludeIgnored": "排除已忽略的檔案",
   "browser.refresh": "重新整理",
   "browser.collapseAll": "收起全部資料夾",
+  "browser.expandAll": "展開全部資料夾",
   "browser.loading": "檔案載入中…",
   "browser.loadFailed": "無法載入專案面板",
   "browser.loadFailed.reload": "重新載入此頁面即可載入專案面板。",

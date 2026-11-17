@@ -1183,6 +1183,7 @@ export const ar: Translation<"zero" | "one" | "two" | "few" | "many" | "other"> 
   "browser.filter.excludeIgnored": "استبعاد الملفات المتجاهلة",
   "browser.refresh": "تحديث",
   "browser.collapseAll": "طي جميع المجلدات",
+  "browser.expandAll": "توسيع جميع المجلدات",
   "browser.loading": "جارٍ تحميل الملفات…",
   "browser.loadFailed": "تعذر تحميل لوحة المشروع",
   "browser.loadFailed.reload": "أعد تحميل هذه الصفحة لتحميل لوحة المشروع.",

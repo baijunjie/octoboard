@@ -1221,6 +1221,7 @@ export const th: Translation<"other"> = {
   "browser.filter.excludeIgnored": "ไม่รวมไฟล์ที่ละเว้น",
   "browser.refresh": "รีเฟรช",
   "browser.collapseAll": "ยุบโฟลเดอร์ทั้งหมด",
+  "browser.expandAll": "ขยายโฟลเดอร์ทั้งหมด",
   "browser.loading": "กำลังโหลดไฟล์…",
   "browser.loadFailed": "โหลดแผงโปรเจ็กต์ไม่ได้",
   "browser.loadFailed.reload": "โหลดหน้านี้ใหม่เพื่อโหลดแผงโปรเจ็กต์",

@@ -5,11 +5,12 @@ import type { ViewerSubject } from "../../viewer/content";
 import type { ViewerNavigation } from "../../viewer/viewerNavigation";
 import type { ProjectBrowserState } from "../browserState";
 import type { FileFilterState } from "../FileFilterField";
-import { focusFirst } from "../focusRow";
+import { itemKeyOf, itemKeySelector } from "../../primitives";
+import { focusFirst, focusRow } from "../focusRow";
 import { scrollRowIntoView } from "../treeRow";
 import { type ChangeLayout } from "./changeLayout";
 import { changeRowOffset } from "./changeListLayout";
-import { filterChanges, type ChangeItem } from "./changes";
+import { directoryFold, filterChanges, foldRows, type ChangeItem } from "./changes";
 import { changesScope } from "./changesScope";
 import { branchGone } from "./changesStatus";
 import { HEADING_HEIGHT } from "./changeSectionHeading";
@@ -37,6 +38,9 @@ export interface GitReview {
   viewer?: { subject: ViewerSubject; onClose: () => void; navigation?: ViewerNavigation };
   /** Closes the change viewer without moving focus to its row. */
   dismissViewer: () => void;
+  /** The header's button that folds every folder of the changes on screen, or unfolds them all when
+   * none is open; only in the tree layout. Disabled while no folder is listed. */
+  foldDirectories?: { collapse: boolean; disabled: boolean; onPress: () => void };
 }
 
 /**
@@ -175,6 +179,20 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
     ...filterState,
   };
 
+  const fold = useMemo(() => (layout === "tree" ? directoryFold(filterChanges(items, filter), collapsed) : undefined), [layout, items, filter, collapsed]);
+  const foldDirectories = fold && {
+    collapse: fold.anyOpen,
+    disabled: fold.keys.length === 0,
+    // A focused row that folds away hands focus to the outermost folder it was under, the nearest
+    // row that stays, as the Files tree's Collapse all does.
+    onPress: () => {
+      const focused = fold.anyOpen && document.activeElement instanceof Element ? document.activeElement.closest<HTMLElement>(`[role=row]${itemKeySelector()}`) : null;
+      const stays = focused && listRef.current?.contains(focused) ? fold.outermost.get(itemKeyOf(focused) ?? "") : undefined;
+      setCollapsedChangeRows(foldRows(collapsed, fold.keys, fold.anyOpen));
+      if (stays !== undefined) focusRow(listRef.current, stays);
+    },
+  };
+
   return {
     view: {
       source: source.source,
@@ -194,6 +212,7 @@ export function useGitReview(project: string, browser: ProjectBrowserState, acti
     refresh,
     viewer: changeReader.subject && { subject: changeReader.subject, onClose: closeChange, navigation },
     dismissViewer,
+    foldDirectories,
   };
 }
 

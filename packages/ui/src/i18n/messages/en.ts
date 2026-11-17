@@ -1396,6 +1396,7 @@ export const en = {
   "browser.filter.excludeIgnored": "Exclude ignored files",
   "browser.refresh": "Refresh",
   "browser.collapseAll": "Collapse all folders",
+  "browser.expandAll": "Expand all folders",
   "browser.loading": "Loading files…",
   "browser.loadFailed": "Could not load the project pane",
   "browser.loadFailed.reload": "Reload this page to load the project pane.",

@@ -1183,6 +1183,7 @@ export const id: Translation<"other"> = {
   "browser.filter.excludeIgnored": "Kecualikan file yang diabaikan",
   "browser.refresh": "Segarkan",
   "browser.collapseAll": "Ciutkan semua folder",
+  "browser.expandAll": "Perluas semua folder",
   "browser.loading": "Memuat file…",
   "browser.loadFailed": "Tidak dapat memuat panel proyek",
   "browser.loadFailed.reload": "Muat ulang halaman ini untuk memuat panel proyek.",

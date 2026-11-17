@@ -1182,6 +1182,7 @@ export const vi: Translation<"other"> = {
   "browser.filter.excludeIgnored": "Loại trừ tệp bị bỏ qua",
   "browser.refresh": "Làm mới",
   "browser.collapseAll": "Thu gọn tất cả thư mục",
+  "browser.expandAll": "Mở rộng tất cả thư mục",
   "browser.loading": "Đang tải tệp…",
   "browser.loadFailed": "Không tải được bảng dự án",
   "browser.loadFailed.reload": "Tải lại trang này để tải bảng dự án.",

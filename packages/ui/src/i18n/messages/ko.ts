@@ -1223,6 +1223,7 @@ export const ko: Translation<"other"> = {
   "browser.filter.excludeIgnored": "무시된 파일 제외",
   "browser.refresh": "새로 고침",
   "browser.collapseAll": "모든 폴더 접기",
+  "browser.expandAll": "모든 폴더 펼치기",
   "browser.loading": "파일 로드 중…",
   "browser.loadFailed": "프로젝트 패널을 로드하지 못했습니다",
   "browser.loadFailed.reload": "이 페이지를 다시 로드하면 프로젝트 패널을 로드할 수 있습니다.",

@@ -11,8 +11,10 @@ import {
   commitKey,
   commitScope,
   compareChanges,
+  directoryFold,
   directoryKey,
   filterChanges,
+  foldRows,
   sectionKey,
   sections,
   visibleChanges,
@@ -239,4 +241,154 @@ it("lays a filtered list out as sections that count what is left, flat or as a t
   // around it.
   const hidden = items.find((item) => item.path === "src/b.ts")!;
   expect(changeNeighbours(shown, hidden)).toMatchObject({ previous: { path: "src/a.ts" } });
+});
+
+const sorted = (keys: readonly string[]) => [...keys].sort();
+
+it("names every directory of the tree at every depth for the header's fold button, and says whether any is open", () => {
+  const items = changeItems(treeEntries);
+  const all = sorted([directoryKey("unstaged", "src"), directoryKey("unstaged", "src/utils/kickback"), directoryKey("unstaged", "tools/release")]);
+  const fold = directoryFold(items, new Set());
+  expect(sorted(fold.keys)).toEqual(all);
+  expect(fold.anyOpen).toBe(true);
+  // Every directory folded: they are all still named, and none is open.
+  const folded = directoryFold(items, new Set(all));
+  expect(sorted(folded.keys)).toEqual(all);
+  expect(folded.anyOpen).toBe(false);
+});
+
+it("counts a directory as open only when its own row is on screen, not one left open under a folded directory", () => {
+  const items = changeItems(treeEntries);
+  const src = directoryKey("unstaged", "src");
+  const kickback = directoryKey("unstaged", "src/utils/kickback");
+  const release = directoryKey("unstaged", "tools/release");
+  // `kickback` is still open, but its row is hidden under the folded `src`.
+  expect(directoryFold(items, new Set([src, release])).anyOpen).toBe(false);
+  // `src` shows open, though the directory inside it is folded.
+  expect(directoryFold(items, new Set([kickback, release])).anyOpen).toBe(true);
+  // One open directory is enough.
+  expect(directoryFold(items, new Set([src, kickback])).anyOpen).toBe(true);
+});
+
+it("has no directory to fold when every change is at the root", () => {
+  expect(directoryFold(changeItems(["README.md", "z.ts"].map(unstaged)), new Set())).toMatchObject({ keys: [], anyOpen: false });
+  expect(directoryFold([], new Set())).toMatchObject({ keys: [], anyOpen: false });
+});
+
+it("keeps the directories of a folded section out of the fold, whatever state they were left in", () => {
+  const items = changeItems([...treeEntries, { group: "staged", old: at("lib/a.ts", "head"), new: at("lib/a.ts") }]);
+  const staged = directoryKey("staged", "lib");
+  const unstagedKeys = [directoryKey("unstaged", "src"), directoryKey("unstaged", "src/utils/kickback"), directoryKey("unstaged", "tools/release")];
+  const fold = directoryFold(items, new Set([sectionKey("unstaged")]));
+  expect(fold.keys).toEqual([staged]);
+  expect(fold.anyOpen).toBe(true);
+  // The staged directory folded: nothing on screen is open, though the unstaged ones, hidden, are.
+  expect(directoryFold(items, new Set([sectionKey("unstaged"), staged])).anyOpen).toBe(false);
+  // Both sections folded: nothing to act on.
+  expect(directoryFold(items, new Set([sectionKey("unstaged"), sectionKey("staged")]))).toMatchObject({ keys: [], anyOpen: false });
+  expect(sorted(directoryFold(items, new Set()).keys)).toEqual(sorted([staged, ...unstagedKeys]));
+});
+
+it("folds the directories of each commit that is not folded away, a commit's directories being its own", () => {
+  const commit = (path: string, id: string): ChangeEntry => ({ group: "committed", old: at(path, "o"), new: at(path, id) });
+  const items = commitItems([
+    { commit: "c3", parent: "c2", subject: "second", changes: [commit("src/a.ts", "c3")] },
+    { commit: "c2", parent: "c1", subject: "first", changes: [commit("z.ts", "c2"), commit("src/b.ts", "c2")] },
+  ]);
+  const c3 = directoryKey(commitScope("c3"), "src");
+  const c2 = directoryKey(commitScope("c2"), "src");
+  expect(sorted(directoryFold(items, new Set()).keys)).toEqual(sorted([c3, c2]));
+  // A folded commit keeps its directories out, and what it hides does not count as open.
+  const withoutC3 = directoryFold(items, new Set([commitKey("c3")]));
+  expect(withoutC3).toMatchObject({ keys: [c2], anyOpen: true });
+  expect(directoryFold(items, new Set([commitKey("c3"), c2])).anyOpen).toBe(false);
+  // The commits' own rows are not directories: nothing of the commits' or the section's keys is named.
+  expect(directoryFold(items, new Set()).keys.every((key) => key.startsWith("dir:"))).toBe(true);
+  expect(directoryFold(items, new Set([sectionKey("committed")]))).toMatchObject({ keys: [], anyOpen: false });
+  expect(directoryFold(items, new Set([commitKey("c3"), commitKey("c2")]))).toMatchObject({ keys: [], anyOpen: false });
+});
+
+it("folds only the directories the filter leaves, and ignores one it hides", () => {
+  const items = changeItems(treeEntries);
+  const fold = directoryFold(filterChanges(items, "notes"), new Set());
+  expect(fold).toMatchObject({ keys: [directoryKey("unstaged", "tools/release")], anyOpen: true });
+  // A hidden directory's state does not count: `src` is folded, but it is not in the list.
+  expect(directoryFold(filterChanges(items, "notes"), new Set([directoryKey("unstaged", "src")])).anyOpen).toBe(true);
+  expect(directoryFold(filterChanges(items, "zzz"), new Set())).toMatchObject({ keys: [], anyOpen: false });
+});
+
+const outermostOf = (items: readonly ChangeItem[], collapsed: ReadonlySet<string> = new Set()) => {
+  const { outermost } = directoryFold(items, collapsed);
+  const keyOf = (path: string) => items.find((item) => item.path === path)!.key;
+  return { outermost, keyOf };
+};
+
+it("maps every row under a directory to the outermost directory it sits in, never to the nearer one, and leaves the top-level rows out", () => {
+  const items = changeItems(["README.md", "a/x.ts", "a/b/y.ts", "a/b/c/z.ts", "tools/release/notes.md"].map(unstaged));
+  const { outermost, keyOf } = outermostOf(items);
+  const a = directoryKey("unstaged", "a");
+  const release = directoryKey("unstaged", "tools/release");
+  expect(Object.fromEntries(outermost)).toEqual({
+    [directoryKey("unstaged", "a/b")]: a,
+    [directoryKey("unstaged", "a/b/c")]: a,
+    [keyOf("a/x.ts")]: a,
+    [keyOf("a/b/y.ts")]: a,
+    [keyOf("a/b/c/z.ts")]: a,
+    [keyOf("tools/release/notes.md")]: release,
+  });
+  // A top-level directory is its own outermost one, and a change at the root has none.
+  expect(outermost.has(a)).toBe(false);
+  expect(outermost.has(release)).toBe(false);
+  expect(outermost.has(keyOf("README.md"))).toBe(false);
+  // A compacted chain is one directory, so the rows under it map to it.
+  const compact = outermostOf(changeItems(["x/y/z/f.ts", "x/y/z/g.ts"].map(unstaged)));
+  expect(Object.fromEntries(compact.outermost)).toEqual({
+    [compact.keyOf("x/y/z/f.ts")]: directoryKey("unstaged", "x/y/z"),
+    [compact.keyOf("x/y/z/g.ts")]: directoryKey("unstaged", "x/y/z"),
+  });
+});
+
+it("keeps the outermost directory of each section and each commit separate, and maps nothing in a folded section or commit", () => {
+  const commit = (path: string, id: string): ChangeEntry => ({ group: "committed", old: at(path, "o"), new: at(path, id) });
+  const items = [
+    ...changeItems([unstaged("src/a/x.ts"), { group: "staged", old: at("src/a/x.ts", "head"), new: at("src/a/x.ts") }]),
+    ...commitItems([
+      { commit: "c3", parent: "c2", subject: "second", changes: [commit("src/a/y.ts", "c3")] },
+      { commit: "c2", parent: "c1", subject: "first", changes: [commit("src/b.ts", "c2")] },
+    ]),
+  ];
+  const byKey = (section: string, commitId?: string) => items.find((item) => item.section === section && (commitId === undefined || item.commit?.commit === commitId))!.key;
+  const all = directoryFold(items, new Set()).outermost;
+  expect(all.get(byKey("unstaged"))).toBe(directoryKey("unstaged", "src/a"));
+  expect(all.get(byKey("staged"))).toBe(directoryKey("staged", "src/a"));
+  expect(all.get(byKey("committed", "c3"))).toBe(directoryKey(commitScope("c3"), "src/a"));
+  expect(all.get(byKey("committed", "c2"))).toBe(directoryKey(commitScope("c2"), "src"));
+
+  const folded = directoryFold(items, new Set([sectionKey("unstaged"), commitKey("c3")])).outermost;
+  expect(folded.has(byKey("unstaged"))).toBe(false);
+  expect(folded.has(byKey("committed", "c3"))).toBe(false);
+  expect(folded.get(byKey("staged"))).toBe(directoryKey("staged", "src/a"));
+  expect(folded.get(byKey("committed", "c2"))).toBe(directoryKey(commitScope("c2"), "src"));
+  expect(directoryFold(items, new Set([sectionKey("committed")])).outermost.has(byKey("committed", "c2"))).toBe(false);
+});
+
+it("maps only the rows of what the filter leaves", () => {
+  const items = changeItems(treeEntries);
+  const shown = filterChanges(items, "notes");
+  const { outermost } = directoryFold(shown, new Set());
+  expect([...outermost]).toEqual([[shown[0].key, directoryKey("unstaged", "tools/release")]]);
+  expect(directoryFold([], new Set()).outermost.size).toBe(0);
+});
+
+it("returns the folded rows with the keys added or removed and every other row as it was, leaving its input alone", () => {
+  const collapsed: ReadonlySet<string> = new Set(["section:staged", "dir:unstaged:a"]);
+  const folded = foldRows(collapsed, ["dir:unstaged:a", "dir:unstaged:b", "row:commit:c1"], true);
+  expect([...folded].sort()).toEqual(["dir:unstaged:a", "dir:unstaged:b", "row:commit:c1", "section:staged"]);
+  const unfolded = foldRows(collapsed, new Set(["dir:unstaged:a", "dir:unstaged:never-folded"]), false);
+  expect([...unfolded]).toEqual(["section:staged"]);
+  expect([...collapsed].sort()).toEqual(["dir:unstaged:a", "section:staged"]);
+  // A new set each time, even where nothing changes.
+  const same = foldRows(collapsed, [], true);
+  expect(same).not.toBe(collapsed);
+  expect([...same].sort()).toEqual([...collapsed].sort());
 });

@@ -1182,6 +1182,7 @@ export const pt: Translation<"one" | "many" | "other"> = {
   "browser.filter.excludeIgnored": "Excluir arquivos ignorados",
   "browser.refresh": "Atualizar",
   "browser.collapseAll": "Recolher todas as pastas",
+  "browser.expandAll": "Expandir todas as pastas",
   "browser.loading": "Carregando arquivos…",
   "browser.loadFailed": "Não foi possível carregar o painel do projeto",
   "browser.loadFailed.reload": "Recarregue esta página para carregar o painel do projeto.",

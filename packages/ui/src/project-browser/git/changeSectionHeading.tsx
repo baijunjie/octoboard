@@ -9,7 +9,7 @@ import { ROW_ICON_BUTTON_CLASS, RowIconGroup } from "../../components/controls/R
 import { TitledControl } from "../../components/hint/TitledControl";
 import { handFocusOff } from "../../components/focus/handFocusOff";
 import { useCurrentLanguage, useT } from "../../i18n/react";
-import { SECTION_LABELS, sectionKey, type ChangeSection } from "./changes";
+import { SECTION_LABELS, foldRows, sectionKey, type ChangeSection } from "./changes";
 import { BareButton, Button } from "../../primitives";
 
 /** Every section heading is one line of this height, which, with the rows' (`ROW_HEIGHT`), is what
@@ -157,14 +157,7 @@ export function ChangeSectionHeading({
               iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS}
               label={foldLabel} tabStop={false} data-section-heading-control=""
               disabled={commitKeys.length === 0} focusOnPress={false}
-              onPress={() => {
-                const next = new Set(collapsed);
-                for (const key of commitKeys) {
-                  if (hasOpenCommit) next.add(key);
-                  else next.delete(key);
-                }
-                onCollapsedChange(next);
-              }}
+              onPress={() => onCollapsedChange(foldRows(collapsed, commitKeys, hasOpenCommit))}
             >
               {hasOpenCommit ? <ChevronsDownUp aria-hidden="true" className="size-4" /> : <ChevronsUpDown aria-hidden="true" className="size-4" />}
             </Button>

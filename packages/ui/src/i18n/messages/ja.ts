@@ -1222,6 +1222,7 @@ export const ja: Translation<"other"> = {
   "browser.filter.excludeIgnored": "無視対象のファイルを除外",
   "browser.refresh": "更新",
   "browser.collapseAll": "すべてのフォルダを折りたたむ",
+  "browser.expandAll": "すべてのフォルダを展開",
   "browser.loading": "ファイルを読み込み中…",
   "browser.loadFailed": "プロジェクトのパネルを読み込めませんでした",
   "browser.loadFailed.reload": "このページを再読み込みすると、プロジェクトのパネルを読み込めます。",

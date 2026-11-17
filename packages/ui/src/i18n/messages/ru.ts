@@ -1183,6 +1183,7 @@ export const ru: Translation<"one" | "few" | "many" | "other"> = {
   "browser.filter.excludeIgnored": "Исключить игнорируемые файлы",
   "browser.refresh": "Обновить",
   "browser.collapseAll": "Свернуть все папки",
+  "browser.expandAll": "Развернуть все папки",
   "browser.loading": "Загрузка файлов…",
   "browser.loadFailed": "Не удалось загрузить панель проекта",
   "browser.loadFailed.reload": "Перезагрузите страницу, чтобы загрузить панель проекта.",

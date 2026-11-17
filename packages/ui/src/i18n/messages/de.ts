@@ -1210,6 +1210,7 @@ export const de: Translation<"one" | "other"> = {
   "browser.filter.excludeIgnored": "Ignorierte Dateien ausschließen",
   "browser.refresh": "Aktualisieren",
   "browser.collapseAll": "Alle Ordner einklappen",
+  "browser.expandAll": "Alle Ordner aufklappen",
   "browser.loading": "Dateien werden geladen…",
   "browser.loadFailed": "Projektbereich konnte nicht geladen werden",
   "browser.loadFailed.reload": "Lade diese Seite neu, um den Projektbereich zu laden.",

@@ -1183,6 +1183,7 @@ export const es: Translation<"one" | "many" | "other"> = {
   "browser.filter.excludeIgnored": "Excluir archivos ignorados",
   "browser.refresh": "Actualizar",
   "browser.collapseAll": "Contraer todas las carpetas",
+  "browser.expandAll": "Expandir todas las carpetas",
   "browser.loading": "Cargando archivos…",
   "browser.loadFailed": "No se pudo cargar el panel del proyecto",
   "browser.loadFailed.reload": "Recarga esta página para cargar el panel del proyecto.",

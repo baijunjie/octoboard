@@ -381,6 +381,15 @@ folders — with Group by commit on, the committed changes under the folders ins
 - Folders start open, and which ones the user folded away is kept per project for as long as the window is open: a
   reload or a restart opens them all again. A fold survives switching to Files and back, and belongs to the section,
   or the commit, it was made in, so the same folder under another section or another commit stays open.
+- **A button folding or unfolding every folder** sits in the pane's header immediately before Group by folder, only
+  while the list is grouped by folder. It reaches the folders of the list as the filter leaves it, at every depth, in
+  the sections and commit rows not folded away; the folders inside a folded section or a folded commit keep their
+  state, and no section or commit row is folded or unfolded by it. While any of those folders is open on screen — its
+  row shows and is unfolded — it is **Collapse all folders** and folds every one of them, those inside folders already
+  folded included; otherwise it is **Expand all folders** and unfolds every one of them, nested ones included. Its
+  icon, tooltip and accessible name say which it will do, as the Committed heading's bulk fold button does (see
+  "Grouped by commit" above). With no folder in its reach it is disabled. A mouse press leaves keyboard focus where it
+  was; when collapsing takes away the row keyboard focus is on, focus moves to the outermost folder that row was under.
 
 The rows take the keyboard as the Files mode's tree does (see "Rows and the keyboard" in
 `docs/product/project-pane.md`): Up and Down move through them and the section headings between them, Home and End

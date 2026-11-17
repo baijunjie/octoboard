@@ -281,6 +281,48 @@ export function visibleChanges(items: readonly ChangeItem[], layout: ChangeLayou
   );
 }
 
+/** What the header's button that folds the folders acts on, in the tree layout: every directory
+ * of the sections and commits not folded away, at every depth (`keys`), and whether any of them is
+ * open on screen (`anyOpen`): one whose own row shows and is unfolded. A section or commit folded
+ * away keeps its directories as they are, since nothing of them is on screen; a directory folded
+ * inside an open one shows its row closed, and so does not count as open. `outermost` maps the key
+ * of every row under one of those directories to the outermost directory it sits in, the nearest
+ * row that stays when they all fold. */
+export function directoryFold(items: readonly ChangeItem[], collapsed: ReadonlySet<string>): { keys: string[]; anyOpen: boolean; outermost: Map<string, string> } {
+  const keys: string[] = [];
+  const outermost = new Map<string, string>();
+  let anyOpen = false;
+  const walk = (nodes: readonly ChangeNode[], onScreen: boolean, top: string | undefined) => {
+    for (const node of nodes) {
+      if (top !== undefined) outermost.set(node.key, top);
+      if (node.type !== "directory") continue;
+      keys.push(node.key);
+      const open = !collapsed.has(node.key);
+      if (onScreen && open) anyOpen = true;
+      walk(node.children, onScreen && open, top ?? node.key);
+    }
+  };
+  for (const group of changeGroups(items, "tree")) {
+    if (collapsed.has(sectionKey(group.section))) continue;
+    for (const node of group.nodes) {
+      if (node.type === "commit") {
+        if (!collapsed.has(node.key)) walk(node.children, true, undefined);
+      } else walk([node], true, undefined);
+    }
+  }
+  return { keys, anyOpen, outermost };
+}
+
+/** `collapsed` with every row of `keys` folded away (`fold`) or unfolded, the rest as they were. */
+export function foldRows(collapsed: ReadonlySet<string>, keys: Iterable<string>, fold: boolean): Set<string> {
+  const next = new Set(collapsed);
+  for (const key of keys) {
+    if (fold) next.add(key);
+    else next.delete(key);
+  }
+  return next;
+}
+
 /** What the change list says of the change with `key`: listed, at `versions`; gone from a complete
  * list; or nothing yet (no list, a list being refreshed or one cut short before it). */
 export function changeEvidence(

@@ -1,4 +1,4 @@
-import { ChevronsDownUp, FolderTree, Funnel, FunnelX, List } from "lucide-react";
+import { ChevronsDownUp, ChevronsUpDown, FolderTree, Funnel, FunnelX, List } from "lucide-react";
 import React from "react";
 
 import { IconToggle } from "../components/controls/IconToggle";
@@ -11,18 +11,22 @@ import { Button } from "../primitives";
 
 /** The header's controls for the tab on screen: the filter field's toggle, then, for the Files tree
  * alone, the button that folds every folder (`collapseAll`) and, for the Git mode's changes
- * alone, the folder grouping (`layout`; the Files tree is always by folder). */
+ * alone, the button that folds every folder or, with none open, unfolds them all (`foldDirectories`,
+ * in the tree layout only) and the folder grouping (`layout`; the Files tree is always by folder). */
 export function BrowserViewControls({
   filter,
   collapseAll,
+  foldDirectories,
   layout,
 }: {
   filter: FileFilterState;
   collapseAll?: { disabled: boolean; onPress: () => void };
+  foldDirectories?: { collapse: boolean; disabled: boolean; onPress: () => void };
   layout?: { value: ChangeLayout; onChange: (layout: ChangeLayout) => void };
 }): React.ReactElement {
   const t = useT();
   const { filterToggleRef, filterOpen, onFilterOpenChange } = filter;
+  const foldLabel = foldDirectories && t(foldDirectories.collapse ? "browser.collapseAll" : "browser.expandAll");
   return (
     <>
       <IconToggle ref={filterToggleRef} label={t(filterOpen ? "browser.filter.hide" : "browser.filter.show")} isSelected={filterOpen} expanded={filterOpen} onChange={onFilterOpenChange}>
@@ -32,6 +36,17 @@ export function BrowserViewControls({
         <TitledControl title={t("browser.collapseAll")}>
           <Button iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={t("browser.collapseAll")} disabled={collapseAll.disabled} focusOnPress={false} onPress={collapseAll.onPress}>
             <ChevronsDownUp aria-hidden="true" className="size-4" />
+          </Button>
+        </TitledControl>
+      )}
+      {foldDirectories && (
+        <TitledControl title={foldLabel}>
+          <Button
+            iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS}
+            label={foldLabel}
+            disabled={foldDirectories.disabled} focusOnPress={false} onPress={foldDirectories.onPress}
+          >
+            {foldDirectories.collapse ? <ChevronsDownUp aria-hidden="true" className="size-4" /> : <ChevronsUpDown aria-hidden="true" className="size-4" />}
           </Button>
         </TitledControl>
       )}

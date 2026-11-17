@@ -137,6 +137,7 @@ export function ProjectBrowser({
                 <BrowserViewControls
                   filter={activeFilter}
                   collapseAll={mode === "files" ? { disabled: !files.canCollapseAll, onPress: files.collapseAll } : undefined}
+                  foldDirectories={mode === "git" ? git.foldDirectories : undefined}
                   layout={mode === "git" ? { value: browser.layout, onChange: browser.setLayout } : undefined}
                 />
                 <TitledControl title={t("browser.refresh")}>
