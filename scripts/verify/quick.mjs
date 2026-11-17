@@ -34,6 +34,7 @@ export const UI_DISK_TESTS = [
   "src/errorModulesCycle.test.ts",
   "src/cssDependencies.test.ts",
   "src/layout/paneWidth.test.tsx",
+  "src/primitives/Button.test.tsx",
   "src/components/text/InlineReference.test.tsx",
   "src/components/form/AdvancedSection.test.tsx",
   "scripts/gallery-sweep.test.mjs",
