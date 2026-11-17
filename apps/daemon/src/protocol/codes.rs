@@ -456,8 +456,14 @@ pub mod error_code {
     /// must not do it as a side effect.
     pub const SESSION_ARCHIVED: Code = Code("session_archived");
     /// A handoff, or a transfer of a session's branches, was asked for a session in the middle of a
-    /// turn, or still starting. `params` names the `session`.
+    /// turn, still starting, waiting for the user, showing its background agents or running work in
+    /// the background (a handoff only; a transfer's `from` is judged by its own rule). `params`
+    /// names the `session`.
     pub const SESSION_WORKING: Code = Code("session_working");
+    /// A handoff was asked for a session that owns a session which can still send it something: it
+    /// is at work, waiting for the user, running work in the background or has a message on its way.
+    /// `params` names the `session` and the `child`.
+    pub const SESSION_CHILD_ACTIVE: Code = Code("session_child_active");
     /// A handoff was asked to the agent the session already runs on. `params` names the `session`
     /// and the `agent`.
     pub const HANDOFF_TO_SAME_AGENT: Code = Code("handoff_to_same_agent");
@@ -584,6 +590,10 @@ pub mod error_code {
     /// The system file manager could not open a project directory, or show a path for `reveal_path_link`. `params` names `detail`.
     pub const DIRECTORY_UNAVAILABLE: Code = Code("directory_unavailable");
     pub const PATH_OPEN_FAILED: Code = Code("path_open_failed");
+    /// A session's conversation could not be opened in its agent's desktop application: the
+    /// application is not installed, the agent has none, the session has no conversation to open
+    /// or one whose id the agent would not take, or the launch failed. `params` names `detail`.
+    pub const NATIVE_APP_UNAVAILABLE: Code = Code("native_app_unavailable");
     /// A push was asked for while `HEAD` is detached. Nothing was pushed.
     pub const NOT_ON_A_BRANCH: Code = Code("not_on_a_branch");
     /// A push was asked for on a branch that has no commit yet. Nothing was pushed.

@@ -84,6 +84,7 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         hook_script: true,
         status_line: false,
         reset_credits: false,
+        native_app_scheme: None,
         per_session_trust: true,
         config_sharing: true,
         mcp_inventory: true,

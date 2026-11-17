@@ -7,6 +7,7 @@ import { isAgentAdded, isAgentUnavailable, projectSessionAgent } from "../agents
 import { servedLabel } from "./fixtureProviders";
 import { type Agent, type ConsoleSessionColour, type Session, type SessionRecordPresence, type SubmittedValue } from "../protocol";
 import { CONSOLE_SESSION_COLOURS } from "../sessions/sessionColours";
+import { childCanReport, hasNoProcess, sessionIsBusy } from "../sessions/sessionStatus";
 import { applyDaemonEvent } from "../store";
 import type { AccountGuards } from "./fixtureAccounts";
 import type { ProcessLedger } from "./fixtureProcesses";
@@ -172,7 +173,11 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
       if (staged === "pending") return neverReplied();
       if (staged) return fail(staged);
       if (session.status === "archived") return fail({ code: "session_archived", params: { session: session.id }, message: "An archived session cannot be handed off" });
-      if (session.status === "working" || session.status === "starting") return fail({ code: "session_working", params: { session: session.id }, message: "The session is in the middle of a turn" });
+      // As the daemon's `refuse_unless_it_can_be_handed_off`: a session still starting or busy, or with a session under it
+      // that can still report to it, is not handed off.
+      if (session.status === "starting" || sessionIsBusy(session)) return fail({ code: "session_working", params: { session: session.id }, message: "The session is in the middle of a turn" });
+      const child = Array.from(current.sessions.values()).find((candidate) => candidate.bound_to === session.id && childCanReport(candidate));
+      if (child) return fail({ code: "session_child_active", params: { session: session.id, child: child.id }, message: `${child.id} is still at work under ${session.id} and may report to it` });
       refuseLocked([session]);
       refuseIfSharingChanges(session.account_id);
       if (body.agent === session.agent) return fail({ code: "handoff_to_same_agent", params: { session: session.id, agent: servedLabel(session.agent) }, message: "The session already runs on that agent" });
@@ -249,6 +254,19 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
       store.setState((state) => ({ sessions: new Map(state.sessions).set(body.session, updated) }));
       return { type: "ack", id: null };
     },
+    open_session_in_app: (body) => {
+      const session = store.getState().sessions.get(body.session);
+      if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: `unknown session ${body.session}` });
+      // A refusal the scenario stages: one the window could not have seen coming.
+      if (scenario.sessionAppOpenError) return fail(scenario.sessionAppOpenError);
+      // As the daemon: nothing is stopped for it, so a session with a process (or one being started or switched) is
+      // refused, and so is one with no conversation to open. The window blocks both first.
+      if (session.status === "starting" || session.switching_account) return fail({ code: "session_already_starting", params: { session: body.session }, message: "this session is already being started" });
+      if (!hasNoProcess(session.status)) return fail({ code: "session_already_running", params: { session: body.session }, message: "this session still has a process" });
+      if (!session.has_conversation || !session.agent_session_id) return fail({ code: "native_app_unavailable", params: { detail: "the session has no conversation yet" }, message: "The application could not be opened: the session has no conversation yet" });
+      return { type: "ack", id: null };
+    },
+    probe_native_apps: (body) => ({ type: "native_apps", id: null, agents: scenario.nativeApps ?? [], sessions_seen: (body.sessions ?? []).filter((id) => !scenario.nativeAppsUnseen?.includes(id)), sessions_unseen: (body.sessions ?? []).filter((id) => scenario.nativeAppsUnseen?.includes(id)) }),
     set_session_locked: (body) => {
       const session = store.getState().sessions.get(body.session);
       if (!session) return fail({ code: "unknown_session", params: { session: body.session }, message: `unknown session ${body.session}` });

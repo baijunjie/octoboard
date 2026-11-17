@@ -542,6 +542,92 @@ describe("a disabled item", () => {
   });
 });
 
+describe("a menu item's description", () => {
+  /** Opens a menu of `items` and returns what renders it again with other `items` while it stays open. */
+  async function openChanging(items: ActionMenuEntry[]): Promise<(next: ActionMenuEntry[]) => Promise<void>> {
+    const container = document.body.appendChild(document.createElement("div"));
+    const root = createRoot(container);
+    unmount = () => {
+      closeOpenTooltip();
+      act(() => root.unmount());
+      container.remove();
+    };
+    act(() => root.render(<ActionMenu label="Actions of X" items={items} />));
+    const trigger = container.querySelector("button")!;
+    await act(async () => {
+      trigger.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, pointerType: "mouse", button: 0 }));
+      trigger.dispatchEvent(new PointerEvent("pointerup", { bubbles: true, pointerType: "mouse", button: 0 }));
+      trigger.click();
+    });
+    return async (next) => {
+      await act(async () => root.render(<ActionMenu label="Actions of X" items={next} />));
+    };
+  }
+  const item = () => document.querySelector<HTMLElement>("[role=menuitem]")!;
+  const described = (el: HTMLElement) => (el.getAttribute("aria-describedby") ?? "").split(" ").filter(Boolean);
+  const descriptionTexts = (el: HTMLElement) => described(el).map((id) => document.getElementById(id)?.textContent);
+
+  it("that arrives after the item mounted is linked to it, and the description gets an id", async () => {
+    const rerender = await openChanging([{ label: "Open", icon: Trash2, onClick: () => {} }]);
+    expect(item().getAttribute("aria-describedby")).toBeNull();
+
+    await rerender([{ label: "Open", icon: Trash2, description: "Late note", onClick: () => {} }]);
+
+    const description = item().querySelector<HTMLElement>('[data-slot="description"]')!;
+    expect(description.textContent).toBe("Late note");
+    expect(description.id).not.toBe("");
+    expect(described(item())).toContain(description.id);
+    expect(descriptionTexts(item())).toContain("Late note");
+  });
+
+  it("that arrives late on two items gives each its own id, so neither is described by the other's", async () => {
+    const rerender = await openChanging([
+      { label: "First", icon: Trash2, onClick: () => {} },
+      { label: "Second", icon: Trash2, onClick: () => {} },
+    ]);
+
+    await rerender([
+      { label: "First", icon: Trash2, description: "First note", onClick: () => {} },
+      { label: "Second", icon: Trash2, description: "Second note", onClick: () => {} },
+    ]);
+
+    const [first, second] = [...document.querySelectorAll<HTMLElement>("[role=menuitem]")];
+    const ids = [first, second].map((el) => el.querySelector<HTMLElement>('[data-slot="description"]')!.id);
+    expect(ids[0]).not.toBe("");
+    expect(ids[0]).not.toBe(ids[1]);
+    expect(descriptionTexts(first)).toEqual(["First note"]);
+    expect(descriptionTexts(second)).toEqual(["Second note"]);
+  });
+
+  it("that arrives late keeps the ids the item already names, such as its keyboard shortcut's", async () => {
+    const rerender = await openChanging([{ label: "Open", icon: Trash2, shortcut: "W", onClick: () => {} }]);
+    const before = described(item()).filter((id) => document.getElementById(id));
+
+    await rerender([{ label: "Open", icon: Trash2, shortcut: "W", description: "Late note", onClick: () => {} }]);
+
+    const description = item().querySelector<HTMLElement>('[data-slot="description"]')!;
+    const after = described(item());
+    for (const id of before) expect(after).toContain(id);
+    expect(after).toContain(description.id);
+    expect(new Set(after).size).toBe(after.length);
+  });
+
+  it("that react-aria linked already is left as it was, named once", async () => {
+    const rerender = await openChanging([{ label: "Open", icon: Trash2, description: "Known note", onClick: () => {} }]);
+    const description = item().querySelector<HTMLElement>('[data-slot="description"]')!;
+    const linked = item().getAttribute("aria-describedby");
+    expect(linked).toContain(description.id);
+    const id = description.id;
+
+    await rerender([{ label: "Open it", icon: Trash2, description: "Known note", onClick: () => {} }]);
+
+    const again = item().querySelector<HTMLElement>('[data-slot="description"]')!;
+    expect(again.id).toBe(id);
+    expect(described(item()).filter((named) => named === id)).toHaveLength(1);
+    expect(item().getAttribute("aria-describedby")).toBe(linked);
+  });
+});
+
 describe("the Menu key and Shift+F10 on the context target", () => {
   function mountTarget(
     leavesContextToBrowser?: (event: MouseEvent) => boolean,

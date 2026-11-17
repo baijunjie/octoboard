@@ -42,6 +42,7 @@ const en = {
   "provider.claude.setting.approval_mode.choice.plan.summary": "Create a plan before making changes",
   "provider.claude.setting.approval_mode.choice.bypass.summary": "Accepts all permissions",
   "provider.claude.setting.approval_mode.helpCustom": "When no mode is specified, the permission mode follows native configuration and resume rules. Selecting a specific mode takes precedence over the saved mode.",
+  "provider.claude.openInApp": "Open in Claude app",
 } as const;
 
 const arMessages = {
@@ -72,6 +73,7 @@ const arMessages = {
   "provider.claude.setting.approval_mode.choice.plan.summary": "إنشاء خطة قبل إجراء تغييرات",
   "provider.claude.setting.approval_mode.choice.bypass.summary": "قبول جميع الأذونات",
   "provider.claude.setting.approval_mode.helpCustom": "عند عدم تحديد وضع، يتبع وضع الأذونات الإعدادات وقواعد الاستئناف الأصلية. اختيار وضع محدد له الأولوية على الوضع المحفوظ.",
+  "provider.claude.openInApp": "فتح في تطبيق Claude",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const deMessages = {
@@ -102,6 +104,7 @@ const deMessages = {
   "provider.claude.setting.approval_mode.choice.plan.summary": "Vor Änderungen einen Plan erstellen",
   "provider.claude.setting.approval_mode.choice.bypass.summary": "Akzeptiert alle Berechtigungen",
   "provider.claude.setting.approval_mode.helpCustom": "Wenn kein Modus angegeben ist, folgt der Berechtigungsmodus der nativen Konfiguration und den Fortsetzungsregeln. Ein ausdrücklich gewählter Modus hat Vorrang vor dem gespeicherten Modus.",
+  "provider.claude.openInApp": "In der Claude-App öffnen",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const esMessages = {
@@ -132,6 +135,7 @@ const esMessages = {
   "provider.claude.setting.approval_mode.choice.plan.summary": "Crear un plan antes de hacer cambios",
   "provider.claude.setting.approval_mode.choice.bypass.summary": "Acepta todos los permisos",
   "provider.claude.setting.approval_mode.helpCustom": "Si no se especifica un modo, el modo de permisos sigue la configuración y las reglas de reanudación nativas. Elegir un modo concreto tiene prioridad sobre el modo guardado.",
+  "provider.claude.openInApp": "Abrir en la app de Claude",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const frMessages = {
@@ -162,6 +166,7 @@ const frMessages = {
   "provider.claude.setting.approval_mode.choice.plan.summary": "Créer un plan avant de faire des modifications",
   "provider.claude.setting.approval_mode.choice.bypass.summary": "Accepte toutes les autorisations",
   "provider.claude.setting.approval_mode.helpCustom": "Si aucun mode n’est indiqué, le mode d’autorisation suit la configuration et les règles de reprise natives. Le choix d’un mode précis prime sur le mode enregistré.",
+  "provider.claude.openInApp": "Ouvrir dans l’app Claude",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const hiMessages = {
@@ -192,6 +197,7 @@ const hiMessages = {
   "provider.claude.setting.approval_mode.choice.plan.summary": "बदलाव करने से पहले योजना बनाएँ",
   "provider.claude.setting.approval_mode.choice.bypass.summary": "सभी अनुमतियाँ स्वीकार करता है",
   "provider.claude.setting.approval_mode.helpCustom": "कोई मोड तय न होने पर अनुमति मोड मूल कॉन्फ़िगरेशन और फिर से शुरू करने के नियमों के अनुसार तय होता है। कोई खास मोड चुनने पर उसे सेव किए गए मोड से प्राथमिकता मिलती है।",
+  "provider.claude.openInApp": "Claude ऐप में खोलें",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const idMessages = {
@@ -222,6 +228,7 @@ const idMessages = {
   "provider.claude.setting.approval_mode.choice.plan.summary": "Buat rencana sebelum membuat perubahan",
   "provider.claude.setting.approval_mode.choice.bypass.summary": "Menerima semua izin",
   "provider.claude.setting.approval_mode.helpCustom": "Jika mode tidak ditentukan, mode izin mengikuti konfigurasi dan aturan pelanjutan bawaan. Memilih mode tertentu akan mengesampingkan mode tersimpan.",
+  "provider.claude.openInApp": "Buka di aplikasi Claude",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const itMessages = {
@@ -252,6 +259,7 @@ const itMessages = {
   "provider.claude.setting.approval_mode.choice.plan.summary": "Crea un piano prima di apportare modifiche",
   "provider.claude.setting.approval_mode.choice.bypass.summary": "Accetta tutti i permessi",
   "provider.claude.setting.approval_mode.helpCustom": "Se non è specificata una modalità, la modalità dei permessi segue la configurazione e le regole di ripresa native. La scelta di una modalità specifica ha la precedenza su quella salvata.",
+  "provider.claude.openInApp": "Apri nell’app Claude",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const jaMessages = {
@@ -282,6 +290,7 @@ const jaMessages = {
   "provider.claude.setting.approval_mode.choice.plan.summary": "変更前に計画を作成",
   "provider.claude.setting.approval_mode.choice.bypass.summary": "すべての権限を受け入れる",
   "provider.claude.setting.approval_mode.helpCustom": "モードを指定しない場合、ネイティブの設定と再開ルールに従って権限モードが決まります。特定のモードを選ぶと、保存済みのモードより優先されます。",
+  "provider.claude.openInApp": "Claudeアプリで開く",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const koMessages = {
@@ -312,6 +321,7 @@ const koMessages = {
   "provider.claude.setting.approval_mode.choice.plan.summary": "변경하기 전에 계획 수립",
   "provider.claude.setting.approval_mode.choice.bypass.summary": "모든 권한 수락",
   "provider.claude.setting.approval_mode.helpCustom": "모드를 지정하지 않으면 기본 설정과 재개 규칙에 따라 권한 모드가 결정됩니다. 특정 모드를 선택하면 저장된 모드보다 우선합니다.",
+  "provider.claude.openInApp": "Claude 앱에서 열기",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const ptMessages = {
@@ -342,6 +352,7 @@ const ptMessages = {
   "provider.claude.setting.approval_mode.choice.plan.summary": "Criar um plano antes de fazer alterações",
   "provider.claude.setting.approval_mode.choice.bypass.summary": "Aceita todas as permissões",
   "provider.claude.setting.approval_mode.helpCustom": "Quando nenhum modo é especificado, o modo de permissões segue a configuração e as regras de retomada nativas. Selecionar um modo específico tem prioridade sobre o modo salvo.",
+  "provider.claude.openInApp": "Abrir no app do Claude",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const ruMessages = {
@@ -372,6 +383,7 @@ const ruMessages = {
   "provider.claude.setting.approval_mode.choice.plan.summary": "Создать план перед внесением изменений",
   "provider.claude.setting.approval_mode.choice.bypass.summary": "Принимает все разрешения",
   "provider.claude.setting.approval_mode.helpCustom": "Если режим не указан, режим разрешений определяется собственной конфигурацией и правилами возобновления. Явно выбранный режим имеет приоритет над сохранённым.",
+  "provider.claude.openInApp": "Открыть в приложении Claude",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const thMessages = {
@@ -402,6 +414,7 @@ const thMessages = {
   "provider.claude.setting.approval_mode.choice.plan.summary": "สร้างแผนก่อนทำการเปลี่ยนแปลง",
   "provider.claude.setting.approval_mode.choice.bypass.summary": "ยอมรับสิทธิ์ทั้งหมด",
   "provider.claude.setting.approval_mode.helpCustom": "เมื่อไม่ระบุโหมด โหมดสิทธิ์จะเป็นไปตามการกำหนดค่าและกฎการกลับมาทำงานต่อของระบบเดิม การเลือกโหมดเฉพาะจะมีผลเหนือโหมดที่บันทึกไว้",
+  "provider.claude.openInApp": "เปิดในแอป Claude",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const trMessages = {
@@ -432,6 +445,7 @@ const trMessages = {
   "provider.claude.setting.approval_mode.choice.plan.summary": "Değişiklik yapmadan önce bir plan oluştur",
   "provider.claude.setting.approval_mode.choice.bypass.summary": "Tüm izinleri kabul eder",
   "provider.claude.setting.approval_mode.helpCustom": "Mod belirtilmediğinde izin modu, yerel yapılandırmaya ve sürdürme kurallarına göre belirlenir. Belirli bir mod seçmek, kaydedilmiş moddan önceliklidir.",
+  "provider.claude.openInApp": "Claude uygulamasında aç",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const viMessages = {
@@ -462,6 +476,7 @@ const viMessages = {
   "provider.claude.setting.approval_mode.choice.plan.summary": "Lập kế hoạch trước khi thực hiện thay đổi",
   "provider.claude.setting.approval_mode.choice.bypass.summary": "Chấp nhận mọi quyền",
   "provider.claude.setting.approval_mode.helpCustom": "Khi không chỉ định chế độ, chế độ quyền tuân theo cấu hình và quy tắc tiếp tục gốc. Chọn một chế độ cụ thể sẽ được ưu tiên hơn chế độ đã lưu.",
+  "provider.claude.openInApp": "Mở trong ứng dụng Claude",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const zhHans = {
@@ -495,6 +510,7 @@ const zhHans = {
   "provider.claude.setting.approval_mode.choice.plan.summary": "在进行更改前制定计划",
   "provider.claude.setting.approval_mode.choice.bypass.summary": "接受所有权限",
   "provider.claude.setting.approval_mode.helpCustom": "未指定模式时，按原生配置及恢复规则决定权限模式。选择具体模式将优先于已保存的模式。",
+  "provider.claude.openInApp": "在 Claude 应用中打开",
 } as const;
 
 const zhHantMessages = {
@@ -525,6 +541,7 @@ const zhHantMessages = {
   "provider.claude.setting.approval_mode.choice.plan.summary": "在進行變更前制定計畫",
   "provider.claude.setting.approval_mode.choice.bypass.summary": "接受所有權限",
   "provider.claude.setting.approval_mode.helpCustom": "未指定模式時，按原生設定及恢復規則決定權限模式。選擇明確的模式將優先於已儲存的模式。",
+  "provider.claude.openInApp": "在 Claude 應用程式中開啟",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 /** Claude Code. The mark is taken from LobeHub's icon set (`@lobehub/icons-static-svg`, MIT), in the provider colour. The

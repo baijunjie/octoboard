@@ -61,6 +61,7 @@ pub mod launch;
 pub mod lifecycle;
 mod messages;
 pub mod model_change;
+pub mod native_app;
 pub mod open;
 pub mod pages;
 pub mod planned_stop;
@@ -1126,6 +1127,23 @@ async fn handle_inner(
             })
             .await??;
             Ok(None)
+        }
+
+        RequestBody::OpenSessionInApp { session } => {
+            native_app::open_session_in_app(state, &session).await?;
+            Ok(None)
+        }
+
+        RequestBody::ProbeNativeApps { sessions } => {
+            let state = Arc::clone(state);
+            let probe =
+                tokio::task::spawn_blocking(move || native_app::probe(&state, &sessions)).await??;
+            Ok(Some(Event::NativeApps {
+                id: request_id,
+                agents: probe.agents,
+                sessions_seen: probe.seen,
+                sessions_unseen: probe.unseen,
+            }))
         }
 
         RequestBody::OpenProjectDirectory { project } => {

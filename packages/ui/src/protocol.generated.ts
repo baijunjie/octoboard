@@ -644,6 +644,12 @@ export type Capabilities = {
    */
   reset_credits: boolean,
   /**
+   * The URL scheme its desktop application registers, which is how the host is asked whether the
+   * application is installed; `Some` exactly when the provider can open a conversation in it
+   * (`AgentProvider::native_app`).
+   */
+  native_app_scheme: string | null,
+  /**
    * Keeps the trust its confirmation grants in a per-session home, from where Octoboard carries
    * it to the user's own configuration.
    */
@@ -2197,6 +2203,20 @@ export type Event = {
   "type": "pasted_image_saved",
   id: string | null,
   path: string,
+}
+| {
+  "type": "native_apps",
+  id: string | null,
+  agents: Array<Agent>,
+  /**
+   * The asked `sessions` whose conversation the applications can see.
+   */
+  sessions_seen: Array<string>,
+  /**
+   * The asked `sessions` judged not to be seen, which the application may not show, though
+   * it is still opened. One asked about and in neither list was not judged.
+   */
+  sessions_unseen?: Array<string>,
 }
 | {
   "type": "path_links",
@@ -4446,6 +4466,14 @@ export type Request = {
   project: string,
 }
   | {
+  "type": "open_session_in_app",
+  session: string,
+}
+  | {
+  "type": "probe_native_apps",
+  sessions?: Array<string>,
+}
+  | {
   "type": "open_project_directory",
   project: string,
 }
@@ -5329,6 +5357,14 @@ export type RequestBody = {
   project: string,
 }
 | {
+  "type": "open_session_in_app",
+  session: string,
+}
+| {
+  "type": "probe_native_apps",
+  sessions?: Array<string>,
+}
+| {
   "type": "open_project_directory",
   project: string,
 }
@@ -5489,7 +5525,9 @@ export type Session = {
    * session is then waiting for instructions and, at the same time, not finished. Never stored:
    * it is filled in on the record a client receives (`AppState::wire_session`) from what the
    * agent's last `Stop` listed, trimmed by completion notifications and cleared by a
-   * `StopFailure`, and is empty for every other status.
+   * `StopFailure`, and is empty for every other status, but for a session shown `waiting_user`
+   * only for a usage-limit dialog over an idle turn (`at_usage_limit`), which carries the idle
+   * turn's.
    */
   background_tasks?: Array<BackgroundTask>,
   /**
@@ -5499,6 +5537,14 @@ export type Session = {
    * receives (`AppState::wire_session`), and absent otherwise.
    */
   switching_account?: boolean,
+  /**
+   * Whether the session is shown `waiting_user` only for a usage-limit dialog on its screen over
+   * an idle turn (an agent whose usage-limit screen shows as waiting for the user). Such a
+   * session is at rest as far as a handoff or a switch of its account is concerned: nothing it
+   * does on its own follows. Never stored: it is filled in on the record a client receives
+   * (`AppState::wire_session`), and absent otherwise.
+   */
+  at_usage_limit?: boolean,
   /**
    * Whether the session is at its prompt (`idle`) after a turn that ended abnormally: cancelled
    * by the user or an owner's interrupt, a declined permission prompt or question that ended

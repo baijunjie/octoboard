@@ -359,6 +359,15 @@ export interface Fixture {
   /** A refused request to open a project's directory in the host's system terminal (`open_project_terminal`), acknowledged
    * otherwise without opening any host application. */
   projectTerminalOpenError?: FixtureError;
+  /** The agents whose desktop application is installed on the host (`probe_native_apps`); none when absent. */
+  nativeApps?: Agent[];
+  /** The sessions whose conversation the installed applications cannot see (`probe_native_apps` lists them in
+   * `sessions_unseen`, not `sessions_seen`): the default directory does not hold their latest record. Every other
+   * session asked about is seen; the window marks a session unseen only when it is listed. */
+  nativeAppsUnseen?: readonly string[];
+  /** A refused request to open a session in its agent's desktop application (`open_session_in_app`), acknowledged
+   * otherwise without opening any host application. */
+  sessionAppOpenError?: FixtureError;
   /** A refused push of a project's current branch (`push_project_branch`), acknowledged otherwise. */
   projectPushError?: FixtureError;
   /** A refusal of `open_project_path` and `reveal_project_path`, which a row of the project pane and the file viewer's

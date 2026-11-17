@@ -34,16 +34,16 @@ export function DiagnosticBlock({ children, labelledBy, dir = "ltr", wrap = fals
   const labelId = labelledBy ?? disclosure;
   const region = useFadeRegion(labelId ? { labelledBy: labelId } : { label: t("error.diagnostics") });
   return (
-    <Surface variant="secondary" className={`${CODE_SURFACE_CLASS} relative shrink-0 ${region.ring}`}>
+    <Surface variant="secondary" className={`${CODE_SURFACE_CLASS} diagnostic-block relative shrink-0 ${region.ring}`}>
       <FadedScroller
         dir={dir}
         ref={scrollRef}
         region={region}
-        className="min-w-0 max-w-full max-h-[40vh] overflow-auto rounded-md [&>.app-code-block]:pr-7"
+        className="min-w-0 max-w-full max-h-[40vh] overflow-auto rounded-md [&>.app-code-block]:pr-[calc(var(--diagnostic-copy-gap)+var(--diagnostic-copy-size))]"
       >
         <CodeBlock dir={dir} wrap={wrap} flush>{children}</CodeBlock>
       </FadedScroller>
-      <div className="absolute top-[calc(var(--spacing)*3+0.5lh)] z-10 -translate-y-1/2 rounded-md bg-surface-secondary" style={{ right: `calc(${scrollbarWidth}px + var(--spacing))` }}>
+      <div className="absolute top-[calc(var(--spacing)*3+0.5lh)] z-10 -translate-y-1/2 rounded-md bg-surface-secondary" style={{ right: `calc(${scrollbarWidth}px + var(--diagnostic-copy-gap))` }}>
         <CopyButton text={children} failedText={failedText ?? t("error.copyDetailsFailed")} size="xs" variant="tertiary" className="diagnostic-copy-button rounded-md" />
       </div>
     </Surface>

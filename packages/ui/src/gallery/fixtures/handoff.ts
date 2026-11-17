@@ -11,15 +11,16 @@ const { console: console_, web, api, consoleSession: hub } = SAMPLE;
 // one of them archived, and is responsible for two branches, one of them checked out in a worktree.
 const coordinator = sessionOf("s-handoff-coordinator", console_.id, web.id, "Rework the result ranking", "idle", { bound_to: hub.id, started_at: minutesAgo(50) });
 const owned = [
-  sessionOf("s-handoff-owned-1", console_.id, web.id, "Tidy the changelog", "waiting_user", { bound_to: coordinator.id, started_at: minutesAgo(40) }),
+  sessionOf("s-handoff-owned-1", console_.id, web.id, "Tidy the changelog", "idle", { bound_to: coordinator.id, started_at: minutesAgo(40) }),
   sessionOf("s-handoff-owned-2", console_.id, api.id, "Update the search fixtures", "idle", { bound_to: coordinator.id, started_at: minutesAgo(35) }),
   sessionOf("s-handoff-owned-old", console_.id, web.id, "Earlier ranking experiment", "archived", { bound_to: coordinator.id, started_at: minutesAgo(120) }),
 ];
 // A project session bound to no one that owns none and is responsible for no branch: nothing moves.
-const bare = sessionOf("s-handoff-bare", console_.id, api.id, "Add idempotency keys", "waiting_user", { started_at: minutesAgo(30) });
+const bare = sessionOf("s-handoff-bare", console_.id, api.id, "Add idempotency keys", "idle", { started_at: minutesAgo(30) });
 // What the hub owns besides the coordinator: a live session and an archived one.
 const sibling = sessionOf("s-handoff-sibling", console_.id, web.id, "Update the dependencies", "idle", { bound_to: hub.id, started_at: minutesAgo(45) });
-// A bound session the menu cannot hand off now, though it can still be unbound.
+// A bound session at work, which keeps its owner (`sibling`) from being handed off while it can still report to it; it
+// can itself still be unbound.
 const working = sessionOf("s-handoff-working", console_.id, web.id, "Fix the summary layout", "working", { bound_to: sibling.id, started_at: minutesAgo(20) });
 // A bound session whose launch has not finished: the menu cannot hand it off or unbind it yet, though it can be archived.
 const starting = sessionOf("s-handoff-starting", console_.id, web.id, "Set up the search index", "starting", { bound_to: sibling.id, started_at: minutesAgo(1) });
@@ -46,8 +47,9 @@ const state = snapshotState({
   settings,
 });
 
-// The session a handoff of `bare` created before archiving the original failed, which the failure names.
-const received = sessionOf("s-handoff-received", console_.id, api.id, "Add idempotency keys", "idle", { agent: "codex", started_at: minutesAgo(1) });
+// The session a handoff of `bare` created before archiving the original failed, which the failure names. It carries the
+// original's title and, both being idle, is listed after it (newest first), so the original's menu is the first one named so.
+const received = sessionOf("s-handoff-received", console_.id, api.id, "Add idempotency keys", "idle", { agent: "codex", started_at: minutesAgo(31) });
 const receivedState = snapshotState({
   consoles: [console_],
   projects: [web, api],
@@ -89,6 +91,19 @@ const longHub = {
     "Release coordinator for the search overhaul that keeps the ranking and indexing and autocomplete work in step and hands the finished branches to review one at a time and reports anything that blocks the Friday cut",
 };
 const longTitleState = snapshotState({ consoles: [console_], projects: [web, api], sessions: [longHub, longCoordinator], settings });
+
+// A project session that has stopped (interrupted) with its conversation on record, which its agent's desktop
+// application can open; kept out of `state` so it does not appear in the other scenarios.
+const stopped = sessionOf("s-handoff-stopped", console_.id, api.id, "Migrate the search index", "interrupted", {
+  agent_session_id: "0b1f6c7e-5d1a-4c52-9a77-3f0d2f9a1c10",
+  started_at: minutesAgo(70),
+});
+const stoppedState = snapshotState({
+  consoles: [console_],
+  projects: [web, api],
+  sessions: [hub, coordinator, ...owned, ...hubOwned, bare, working, stopped],
+  settings,
+});
 
 const GROUP = "Sidebar sessions";
 
@@ -152,16 +167,37 @@ export const handoffScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Menu of a bound session that is still starting, Hand off and Unbind disabled",
-    description: "Change model, Hand off and Unbind are all greyed out with no reason under their names, since the session is only briefly unavailable, where a session in the middle of a turn would say \"Session busy\" under Hand off; Archive stays available.",
+    description: "Change model, Hand off and Unbind are all greyed out with no reason under their names, since the session is only briefly unavailable, where a busy session would say \"Session busy\" under Hand off; Archive stays available.",
     state: startingState,
     steps: [openMenu(starting.title)],
+  },
+  {
+    id: "sidebar-session-menu-open-in-app",
+    group: GROUP,
+    category: "normal",
+    title: "Menu of a stopped session, Open in the agent's app with a note",
+    description: "The menu of an interrupted session offers Open in Claude app, with the window icon and the W shortcut, directly after Hand off. The item is enabled, and under its label a short muted line, \"The agent's app may not see this conversation\", warns that the default directory the app reads lacks the conversation's latest record; the line only warns, and the item still opens the app. Without the line the item is a single row like its neighbours.",
+    state: stoppedState,
+    nativeApps: ["claude", "codex"],
+    nativeAppsUnseen: [stopped.id],
+    steps: [openMenu(stopped.title)],
+  },
+  {
+    id: "sidebar-session-menu-hand-off-blocked",
+    group: GROUP,
+    category: "normal",
+    title: "Menu of a session with a child at work, Hand off and Open in the agent's app disabled",
+    description: "Both items are greyed out with their reason on a short line under the label, in place of a description: Hand off says \"Child sessions working\" because a session under this one can still report to it (a session that is itself busy, waiting for the user or running work in the background says \"Session busy\"), and Open in Claude app says \"Session running\" because the session still has a process. Look at how much room the two reason lines take in the menu. A session with no conversation yet reads \"No conversation yet\" under Open in Claude app the same way.",
+    state,
+    nativeApps: ["claude", "codex"],
+    steps: [openMenu(sibling.title)],
   },
   {
     id: "sidebar-session-menu-handoff-locked",
     group: GROUP,
     category: "normal",
     title: "Menu of a locked session, Hand off disabled",
-    description: "Hand off and Archive are both greyed out with \"Session locked\" under their names although the session is idle; Archive shows the reason in place of its menu shortcut. Unlock stays available. A session in the middle of a turn (\"Session busy\") or with no other agent to hand off to (\"No other agent\") greys Hand off the same way, with its own reason.",
+    description: "Hand off and Archive are both greyed out with \"Session locked\" under their names although the session is idle; Archive shows the reason in place of its menu shortcut. Unlock stays available. A session that is busy (\"Session busy\"), has a child at work (\"Child sessions working\", see the menu of a session with a child at work) or has no other agent to hand off to (\"No other agent\") greys Hand off the same way, with its own reason.",
     state: lockedState,
     steps: [openMenu(locked.title)],
   },
@@ -257,6 +293,21 @@ export const handoffScenarios: Scenario[] = [
     steps: [...openUnbind(coordinator.title), (ui) => ui.confirm()],
   },
   {
+    id: "sidebar-session-open-in-app-failed",
+    group: GROUP,
+    category: "exceptional",
+    title: "Open in the agent's app refused",
+    description: "Open in Claude app was chosen from the menu of a stopped session and the daemon could not open the agent's app. An error alert titled \"Could not open the agent's app\", with OK alone, names the session and its project, says that the app may not be installed, may not have started, or has no conversation to open, then, on the line after it, to see the details for the cause and try again; the daemon's own reason (here that the application is not installed) is only under Error details, open here.",
+    state: stoppedState,
+    nativeApps: ["claude"],
+    sessionAppOpenError: {
+      code: "native_app_unavailable",
+      params: { detail: "the Claude application is not installed" },
+      message: "The application could not be opened: the Claude application is not installed",
+    },
+    steps: [openMenu(stopped.title), (ui) => ui.press(ui.t("provider.claude.openInApp")), (ui) => ui.press(ui.t("error.diagnostics"))],
+  },
+  {
     id: "dialog-handoff-pending",
     group: GROUP,
     category: "normal",
@@ -271,7 +322,7 @@ export const handoffScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Hand off refused, the session is mid-turn",
-    description: "The daemon found the session in the middle of a turn after the window listed it as waiting. The alert says the session cannot be handed off yet, and the dialog stays behind it for another try. A session archived meanwhile is refused in the same alert.",
+    description: "The daemon found the session in the middle of a turn after the window listed it as idle. The alert says the session cannot be handed off yet, and the dialog stays behind it for another try. A session archived meanwhile is refused in the same alert.",
     state,
     sessionHandoffs: {
       [bare.id]: { code: "session_working", params: { session: bare.id }, message: "The session is in the middle of a turn" },

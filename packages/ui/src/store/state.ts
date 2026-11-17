@@ -81,6 +81,14 @@ export interface State {
    * `agent_availability_updated` said. Holds every registered agent, in the registry's order, each `not_determined`
    * until the daemon's one-time determination for this run lands; empty until the first snapshot. */
   agentAvailability: Map<Agent, AgentAvailability>;
+  /** The agents whose own desktop application is installed on the daemon's host, as the last `probe_native_apps` said
+   * (`useNativeAppsSync`); empty until one is answered. Not part of the snapshot: an application can be installed or
+   * removed while the daemon runs, so it is asked again as a menu opens. */
+  nativeApps: readonly Agent[];
+  /** The sessions whose conversation the applications cannot see (the default directory does not hold its latest
+   * record), as the last `probe_native_apps` that asked about each said. A session never asked about, or found seen, is
+   * not in it. */
+  nativeAppsUnseen: ReadonlySet<string>;
   /** What the daemon last found out about each agent's installed CLI (version, install method, latest version, the
    * update that ran), keyed by agent, as the last `snapshot` or `agent_cli_status_updated` said. Runtime state of the
    * daemon, empty until a check (`check_agent_clis`) has ended for an agent: an agent with no entry is one not checked
@@ -163,6 +171,8 @@ const initialState: State = {
   settings: DEFAULT_SETTINGS,
   providers: [],
   agentAvailability: new Map(),
+  nativeApps: [],
+  nativeAppsUnseen: new Set(),
   agentCliStatuses: new Map(),
   cliUpdatesStartedHere: new Map(),
   accountQuotas: [],

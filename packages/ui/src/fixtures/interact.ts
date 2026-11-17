@@ -202,6 +202,10 @@ export interface Ui {
    * on the sidebar's heading row (earlier in the DOM) and in the filter picker, so pressing it
    * again to unpick it would hit the sidebar row. */
   press: (matcher: Matcher) => Promise<void>;
+  /** Presses the control named `matcher` inside the first row `row` names that holds one (as `press` finds a row), for a
+   * control that every row of a list names alike, such as the icon-only Delete of an archived session's row; a row of the
+   * same name elsewhere that holds none (the session's row in the sidebar) is passed over. */
+  pressInRow: (row: Matcher, matcher: Matcher) => Promise<void>;
   /** Presses the first control named `matcher` that is unavailable (`aria-disabled`, yet focusable and pressable, with its
    * reason as a tooltip): the press the control answers by explaining, which `press` does not reach, since it waits for a
    * control that can act. Fails for a natively disabled control, or one that is not unavailable. */
@@ -1370,6 +1374,17 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
     },
     async press(matcher) {
       await clickWhenFound(() => find(matcher), `Nothing to press matching ${String(matcher)}`);
+    },
+    async pressInRow(row, matcher) {
+      await clickWhenFound(() => {
+        // A session can be named twice (its row in the sidebar and its row in the archive view), so the row is the first
+        // one that holds the control.
+        for (const found of findAll(row)) {
+          const control = findAll(matcher, found)[0];
+          if (control) return control;
+        }
+        return undefined;
+      }, `Nothing to press matching ${String(matcher)} in a row matching ${String(row)}`);
     },
     async pressUnavailable(matcher) {
       await clickWhenFound(() => findUnavailable(matcher), `Nothing unavailable to press matching ${String(matcher)}`);

@@ -1957,7 +1957,7 @@
             "session",
             "agent"
           ],
-          "description": "Hands a session off to a new session of another agent, which takes its whole place: kind,\nproject or console, role, owner, the branches it is responsible for and the sessions it\nowns. `agent` is required and must differ from the session's own (moving to another account\nof the same agent is `switch_session_account`). `account`, `model` and `effort` are as in\n`open_session`. The session must exist, not be archived, locked or starting, and not be in\nthe middle of a turn. Answered with `session_opened` for the receiving session once it is\nrunning and the place has moved. See `crate::coordinator::handoff`."
+          "description": "Hands a session off to a new session of another agent, which takes its whole place: kind,\nproject or console, role, owner, the branches it is responsible for and the sessions it\nowns. `agent` is required and must differ from the session's own (moving to another account\nof the same agent is `switch_session_account`). `account`, `model` and `effort` are as in\n`open_session`. The session must exist, not be archived, locked or starting, and not be busy:\nin the middle of a turn, waiting for the user (a usage-limit dialog is not a wait), showing\nits background agents or running work in the background (`session_working`); nor may a\nsession it owns still be able to report to it (`session_child_active`). Answered with\n`session_opened` for the receiving session once it is running and the place has moved. See\n`crate::coordinator::handoff`."
         },
         {
           "type": "object",
@@ -3304,6 +3304,42 @@
             "project"
           ],
           "description": "Opens the system terminal at the project's directory, on the daemon's host. Answered with\n`ack` once the terminal has been asked to open, not when its window closes. Refused with\n`terminal_unavailable` when the directory is missing, the operating system has none, or the\nlaunch fails."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "session": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "open_session_in_app"
+            }
+          },
+          "required": [
+            "type",
+            "session"
+          ],
+          "description": "Opens a session's conversation in its agent's own desktop application (the Claude app for\nClaude Code, the Codex app for Codex) on the daemon's host. Answered with `ack` once the\napplication has been asked to open. Nothing is stopped for it: refused with\n`session_already_running` while the session has a process, with `session_already_starting`\nwhile a launch or another operation holds it, with `account_sharing_in_progress` while a\nchange of its account's sharing moves the account's directory, and with\n`native_app_unavailable` for an agent with no such application, one that is not installed, a\nsession with no conversation yet, a conversation id the agent would not take, and a failed\nlaunch. Where the application may not see the conversation (the default account's directory,\nthe only one it reads, does not hold its latest record, which `probe_native_apps` tells) it\nis opened all the same. An unknown session is `unknown_session`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "sessions": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "probe_native_apps"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "description": "Asks which agents' desktop applications are installed on the daemon's host, and, for the\n`sessions` named (at most 200 are judged), which ones' conversations the applications can\nsee: those whose latest record the default account's directory holds. Absent means none.\nAnswered with `native_apps`."
         },
         {
           "type": "object",

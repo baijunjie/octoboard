@@ -7,6 +7,7 @@ import { CodedError } from "../errors/codedError";
 import { setLanguage } from "../i18n/language";
 import { accountOf, consoleOf, projectOf, sessionOf, snapshotState } from "../fixtures/builders";
 import { CODE } from "../errors/codes";
+import type { Session } from "../protocol";
 import type { SessionRequest, TrustPrompt } from "../store";
 import { press } from "../components/alerts/detailsTestSupport";
 import { findButton, mountPendingQuestionDialog, pressButton } from "./pendingQuestionTestSupport";
@@ -420,8 +421,73 @@ it("a handoff of a session that is working cannot be confirmed", () => {
     settings: { ...snapshotState({}).settings!, accounts: claudeAccounts },
     sessionRequests: [{ ...request, action: "handoff", agent: "codex", target: "s-held", account: null }],
   }, ack);
-  expect(dialogText()).toContain("in the middle of a turn");
+  expect(dialogText()).toContain("still working or waiting for you");
   expect(findButton("Hand off session")?.disabled).toBe(true);
+});
+
+/** The handoff request dialog for `target` (a session of the project `p-1`) among `others`. */
+function mountHandoffOf(target: ReturnType<typeof sessionOf>, ...others: ReturnType<typeof sessionOf>[]) {
+  mountPendingQuestionDialog({
+    ...snapshotState({ sessions: [target, ...others] }),
+    ...names,
+    settings: { ...snapshotState({}).settings!, accounts: claudeAccounts },
+    sessionRequests: [{ ...request, action: "handoff", agent: "codex", target: target.id, account: null }],
+  }, ack);
+}
+
+it.each<[string, Session["status"], Partial<Session>]>([
+  ["waiting for the user", "waiting_user", {}],
+  ["showing its background agents", "dormant", {}],
+  ["running work in the background", "idle", { background_tasks: [{ id: "t" }] }],
+  ["stopped at its usage limit with work in the background", "waiting_user", { at_usage_limit: true, background_tasks: [{ id: "t" }] }],
+])("a handoff of a session that is %s cannot be confirmed", (_name, status, extra) => {
+  mountHandoffOf(sessionOf("s-held", "c-1", "p-1", "Old work", status, { account_id: "a-one", ...extra }));
+  expect(dialogText()).toContain("still working or waiting for you");
+  expect(findButton("Hand off session")?.disabled).toBe(true);
+});
+
+it("a handoff of a session stopped at its usage limit, which shows as waiting for the user, can be confirmed", () => {
+  mountHandoffOf(sessionOf("s-held", "c-1", "p-1", "Old work", "waiting_user", { account_id: "a-one", at_usage_limit: true }));
+  expect(dialogText()).not.toContain("still working or waiting for you");
+  expect(findButton("Hand off session")?.disabled).toBe(false);
+});
+
+it.each<[string, Session["status"], Partial<Session>]>([
+  ["starting", "starting", {}],
+  ["working", "working", {}],
+  ["waiting for the user", "waiting_user", {}],
+  ["dormant", "dormant", {}],
+  ["running work in the background", "idle", { background_tasks: [{ id: "t" }] }],
+  ["stopped at its usage limit with work in the background", "waiting_user", { at_usage_limit: true, background_tasks: [{ id: "t" }] }],
+])("a handoff of a session with a child that is %s cannot be confirmed, and says a session under it may report", (_name, status, extra) => {
+  mountHandoffOf(
+    sessionOf("s-held", "c-1", "p-1", "Old work", "idle", { account_id: "a-one" }),
+    sessionOf("s-child", "c-1", "p-1", "Child work", status, { bound_to: "s-held", ...extra }),
+  );
+  expect(dialogText()).toContain("A session under this one is still at work and may report to it");
+  expect(findButton("Hand off session")?.disabled).toBe(true);
+});
+
+it.each([
+  ["idle with nothing running", "idle", {}],
+  ["interrupted", "interrupted", {}],
+  ["archived", "archived", {}],
+  ["stopped at its usage limit", "waiting_user", { at_usage_limit: true }],
+] as const)("a handoff of a session whose child is %s can be confirmed", (_name, status, extra) => {
+  mountHandoffOf(
+    sessionOf("s-held", "c-1", "p-1", "Old work", "idle", { account_id: "a-one" }),
+    sessionOf("s-child", "c-1", "p-1", "Child work", status, { bound_to: "s-held", ...extra }),
+  );
+  expect(dialogText()).not.toContain("A session under this one is still at work");
+  expect(findButton("Hand off session")?.disabled).toBe(false);
+});
+
+it("a handoff is not held back by a busy session that is bound to another session", () => {
+  mountHandoffOf(
+    sessionOf("s-held", "c-1", "p-1", "Old work", "idle", { account_id: "a-one" }),
+    sessionOf("s-other", "c-1", "p-1", "Other work", "working", { bound_to: "s-elsewhere" }),
+  );
+  expect(findButton("Hand off session")?.disabled).toBe(false);
 });
 
 it("a switch to an account that no longer exists says so and cannot be confirmed", () => {

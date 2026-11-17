@@ -50,14 +50,17 @@ submenu. Focus mode's preview rows are described in "What both views show" in `d
   then the creation date, each identified by its meaning. These are absolute dates with year, month, day, hour and
   minute, formatted in the current language and the client's local time zone. An unknown archive date is omitted; the
   creation date never stands in for it. The date block sits flush at the row's end in the reading direction, on the
-  right in a left-to-right language. The row's **Reopen** and **Delete** buttons show only while the row is hovered or
-  holds keyboard focus, and are still reached with Tab. Hidden, they take no room, so a resting row's title runs up to
+  right in a left-to-right language. The row's action buttons — **Open in the agent's app** (only where offered, see
+  below), **Reopen** and **Delete**, in that order — show only while the row is hovered or holds keyboard focus, and
+  are still reached with Tab. Hidden, they take no room, so a resting row's title runs up to
   the date block; shown, they appear just before the date block (to its left in a left-to-right language), which stays
   at the row's end, and the title gives up room for them, cut off if it must be. On a pane too narrow for one line, the
   date block moves onto a line of its own, still at the row's end; while the row is hovered or focused the buttons join
   it there, so such a row grows by a line when its buttons appear. On a device whose primary input cannot hover — a
-  phone, or a tablet's touch screen — they always show. Reopen and Delete have filled backgrounds distinct from the
-  hovered row; Delete uses a soft danger fill.
+  phone, or a tablet's touch screen — they always show. They are icon-only buttons with filled backgrounds distinct
+  from the hovered row; Delete uses a soft danger fill. Each one's tooltip is the action's short name, while the name
+  announced for it also names the session (see "Tooltips on icon-only controls" in
+  `docs/product/labels-and-tooltips.md`).
 - A session whose owner is **a project session listed here too** — an archived session of an archived coordinator, or
   of any archived project session that had started sessions — is **inset under that owner**, with rounded connectors
   as in "Project rows" in `docs/product/sidebar-project-rows.md`, and follows it instead of being ranked against the
@@ -67,8 +70,16 @@ submenu. Focus mode's preview rows are described in "What both views show" in `d
 - **Selecting a row** — clicking it, or `Enter` or `Space` on it — selects its session, which closes the view (see
   "Selecting a session" in `docs/product/sidebar.md`): the session is shown still archived, its history in place of its
   terminal and the card that offers Reopen over it, just as when it is selected from a preview. Selecting it does not
-  reopen it. Pressing the row's Reopen or Delete does not select the row. The row of the selected session is marked as
-  selected.
+  reopen it. Pressing one of the row's action buttons does not select the row. The row of the selected session is
+  marked as selected.
+- **Open in the agent's app** — labelled for the application, as "Open in Claude app" — opens the session's
+  conversation in its agent's desktop application (see `docs/product/opening-a-session-in-its-agents-app.md`). It is
+  offered on a row only while that agent's application is installed on the daemon's host; a Grok Build row has none.
+  For a session with no conversation yet it is shown unavailable: it can still be focused, and pressing it raises the
+  alert that explains why instead of opening anything. Where there is such a reason, or a warning that the application
+  may not see the conversation, its tooltip carries the sentence under the action's name. Opening the view asks the daemon
+  afresh which applications are installed, and each row with a conversation is asked about once, as it is listed,
+  whether the application can see that conversation.
 - **Reopen** resumes the session and selects it, which closes the view (see "Selecting a session" in
   `docs/product/sidebar.md`).
 - **Delete** deletes that session, with the confirmation rules in "Deleting archived sessions" in

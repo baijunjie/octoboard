@@ -8,9 +8,11 @@ use crate::branch_origin::repo_key;
 use crate::git::repo_files::repository_of;
 use crate::protocol::{Account, Availability, Role, SessionKind};
 use crate::session_tools::Owner;
+use crate::test_support::screens::{CODEX_CREDIT_LIMIT, GROK_USAGE_LIMIT};
 use crate::test_support::{
-    app_state, branch_made_by, branch_made_from, console, heard_after_marker, insert_project,
-    output_containing, repo_with, running, stand_in_launch_echoing, Launched, ScratchDir, StandIn,
+    app_state, branch_made_by, branch_made_from, console, heard_after_marker, idle_stand_in_of,
+    insert_project, output_containing, repo_with, running, stand_in_launch_echoing, Launched,
+    ScratchDir, StandIn, SUBAGENT_VIEW,
 };
 
 /// A stored session of console `console-1`: a project session of project `p1` when `project`, else
@@ -638,7 +640,7 @@ async fn an_unbound_project_session_hands_its_branches_and_sessions_to_the_recei
 async fn a_bound_coordinator_is_replaced_by_a_bound_coordinator_of_the_same_console_session() {
     let fixture = Fixture::new("coordinator");
     let hub = fixture.run(session("hub", false, "idle", None, false));
-    fixture.run(session("original", true, "waiting_user", Some("hub"), true));
+    fixture.run(session("original", true, "idle", Some("hub"), true));
     fixture.run(session("worker", true, "idle", Some("original"), false));
     branch_made_by(&fixture.state, &fixture.repo, "one", "original");
 
@@ -1506,5 +1508,307 @@ async fn a_moved_session_without_a_process_is_left_owed_the_notice_of_its_owner(
 
     for id in ["asleep", "archived"] {
         assert_eq!(state.store.owner_notice_pending(id).unwrap(), 1, "{id}");
+    }
+}
+
+impl Fixture {
+    /// Stores `session` and gives it a stand-in process of its own agent whose screen shows
+    /// `screen`, which is nothing the stand-in itself draws.
+    fn run_showing(&self, session: Session, screen: &str) -> StandIn {
+        self.state.store.insert_session(&session).unwrap();
+        let live = idle_stand_in_of(&session.id, session.agent);
+        self.state.register_live(live.clone());
+        live.on_output(screen.as_bytes());
+        // The dialog the screen shows is recognised when the screen is looked at, as the watcher does.
+        assert!(
+            live.look_for_dialog().current.is_some(),
+            "the screen shows a dialog"
+        );
+        live
+    }
+
+    /// What the check that a session can be handed off to another agent says of the stored `id`: the code
+    /// and params of its refusal, or `None` when it passes.
+    fn refusal_of(&self, id: &str) -> Option<(String, std::collections::BTreeMap<String, String>)> {
+        let original = self.stored(id);
+        let receiving = if original.agent == AgentId::CODEX {
+            AgentId::CLAUDE
+        } else {
+            AgentId::CODEX
+        };
+        refuse_unless_it_can_be_handed_off(&self.state, &original, receiving)
+            .err()
+            .map(|err| {
+                let coded = CodedError::of(&err);
+                (coded.code.to_string(), coded.params)
+            })
+    }
+
+    /// Whether session `id` is refused for what it is itself doing.
+    fn refused_as_working(&self, id: &str) -> bool {
+        self.refusal_of(id)
+            .is_some_and(|(code, _)| code == error_code::SESSION_WORKING)
+    }
+}
+
+/// A session is handed off only while it is not busy itself: not starting, mid-turn, waiting for
+/// the user, showing its background agents or running work in the background. At rest, with
+/// nothing running, it passes.
+#[tokio::test]
+async fn a_session_that_is_busy_itself_is_not_handed_off() {
+    let fixture = Fixture::new("busy-itself");
+    let mut keep = Vec::new();
+    for status in ["starting", "working", "waiting_user"] {
+        keep.push(fixture.run(session(status, true, status, None, false)));
+        assert!(fixture.refused_as_working(status), "{status}");
+    }
+    keep.push(fixture.run_showing(session("dormant", true, "idle", None, false), SUBAGENT_VIEW));
+    assert!(fixture.refused_as_working("dormant"));
+
+    keep.push(fixture.run(session("background", true, "idle", None, false)));
+    fixture.state.apply_background_tasks_change(
+        "background",
+        crate::hooks::BackgroundTasksChange::Replace(vec![crate::protocol::BackgroundTask {
+            id: "dev-server".to_string(),
+            kind: Some("shell".to_string()),
+            description: None,
+        }]),
+    );
+    assert!(fixture.refused_as_working("background"));
+    fixture.state.apply_background_tasks_change(
+        "background",
+        crate::hooks::BackgroundTasksChange::Replace(Vec::new()),
+    );
+    assert_eq!(fixture.refusal_of("background"), None);
+
+    keep.push(fixture.run(session("idle", true, "idle", None, false)));
+    assert_eq!(fixture.refusal_of("idle"), None);
+    keep.push(fixture.run(session("interrupted", true, "interrupted", None, false)));
+    assert_eq!(fixture.refusal_of("interrupted"), None);
+}
+
+/// A session whose turn stopped on its account's usage limit is at rest, though the dialog it
+/// shows makes it read as waiting for the user: Codex's prompt and Grok's screen alike.
+#[tokio::test]
+async fn a_session_stopped_at_its_usage_limit_is_handed_off() {
+    let fixture = Fixture::new("usage-limit");
+    let codex = Session {
+        agent: AgentId::CODEX,
+        ..session("codex", true, "idle", None, false)
+    };
+    let grok = Session {
+        agent: AgentId::GROK,
+        ..session("grok", true, "idle", None, false)
+    };
+    let _codex = fixture.run_showing(codex, CODEX_CREDIT_LIMIT);
+    let _grok = fixture.run_showing(grok, GROK_USAGE_LIMIT);
+
+    for id in ["codex", "grok"] {
+        assert_eq!(
+            fixture.state.wire_session(fixture.stored(id)).status,
+            SessionStatus::WaitingUser,
+            "{id} is shown waiting for the user"
+        );
+        assert_eq!(fixture.refusal_of(id), None, "{id}");
+    }
+}
+
+/// A session that owns one which can still send it something is refused with `session_child_active`
+/// naming the child: one starting, mid-turn, waiting for the user, dormant, running background
+/// work or with a message on its way. A child at rest, or only held back, does not stop it.
+#[tokio::test]
+async fn a_session_with_a_child_that_can_still_report_to_it_is_not_handed_off() {
+    let fixture = Fixture::new("child-active");
+    let mut keep = Vec::new();
+    // An idle session `name` owning a child at `status`; the child's id.
+    let mut with_child = |name: &str, status: &str| {
+        keep.push(fixture.run(session(name, true, "idle", None, false)));
+        let child = format!("{name}-child");
+        keep.push(fixture.run(session(&child, true, status, Some(name), false)));
+        child
+    };
+    let child_active = |id: &str| {
+        let (code, params) = fixture.refusal_of(id)?;
+        assert_eq!(code, error_code::SESSION_CHILD_ACTIVE.to_string(), "{id}");
+        assert_eq!(params.get("session").map(String::as_str), Some(id));
+        params.get("child").cloned()
+    };
+
+    for status in ["starting", "working", "waiting_user"] {
+        let child = with_child(status, status);
+        assert_eq!(child_active(status), Some(child), "{status}");
+    }
+
+    // Idle children: what makes one able to report is not its status alone.
+    let child = with_child("background", "idle");
+    assert_eq!(fixture.refusal_of("background"), None);
+    fixture.state.apply_background_tasks_change(
+        &child,
+        crate::hooks::BackgroundTasksChange::Replace(vec![crate::protocol::BackgroundTask {
+            id: "dev-server".to_string(),
+            kind: Some("shell".to_string()),
+            description: None,
+        }]),
+    );
+    assert_eq!(child_active("background"), Some(child));
+
+    let child = with_child("queued", "idle");
+    assert_eq!(fixture.refusal_of("queued"), None);
+    fixture.state.queue_message(&child, "a report is due");
+    assert_eq!(child_active("queued"), Some(child.clone()));
+    // A message queued behind a hold is not on its way.
+    let _hold = fixture.state.hold_outbox(&child);
+    assert_eq!(fixture.refusal_of("queued"), None);
+
+    // At rest: nothing pending, interrupted or archived.
+    for status in ["idle", "interrupted", "archived"] {
+        let name = format!("rest-{status}");
+        with_child(&name, status);
+        assert_eq!(fixture.refusal_of(&name), None, "{status}");
+    }
+    // A busy session that is bound to another one is no child of this.
+    keep.push(fixture.run(session("elsewhere", true, "idle", None, false)));
+    keep.push(fixture.run(session(
+        "stranger",
+        true,
+        "working",
+        Some("elsewhere"),
+        false,
+    )));
+    keep.push(fixture.run(session("alone", true, "idle", None, false)));
+    assert_eq!(fixture.refusal_of("alone"), None);
+}
+
+/// A child showing a view of its background agents is dormant, which is busy.
+#[tokio::test]
+async fn a_dormant_child_stops_a_handoff() {
+    let fixture = Fixture::new("child-dormant");
+    let _owner = fixture.run(session("owner", true, "idle", None, false));
+    let _child = fixture.run_showing(
+        session("child", true, "idle", Some("owner"), false),
+        SUBAGENT_VIEW,
+    );
+    let (code, params) = fixture.refusal_of("owner").expect("refused");
+    assert_eq!(code, error_code::SESSION_CHILD_ACTIVE.to_string());
+    assert_eq!(params.get("child").map(String::as_str), Some("child"));
+}
+
+/// A child stopped at its usage limit shows as waiting for the user but cannot report on its own,
+/// so it does not stop a handoff, as for the session itself.
+#[tokio::test]
+async fn a_child_stopped_at_its_usage_limit_does_not_stop_a_handoff() {
+    let fixture = Fixture::new("child-usage-limit");
+    let _owner = fixture.run(session("owner", true, "idle", None, false));
+    let _child = fixture.run_showing(
+        Session {
+            agent: AgentId::CODEX,
+            ..session("child", true, "idle", Some("owner"), false)
+        },
+        CODEX_CREDIT_LIMIT,
+    );
+    assert_eq!(fixture.refusal_of("owner"), None);
+}
+
+/// A handoff refused for a session or for a child changes nothing, whichever way it was asked,
+/// and names what is refused.
+#[tokio::test]
+async fn a_handoff_refused_for_a_busy_child_or_session_changes_nothing() {
+    let fixture = Fixture::new("child-active-refused");
+    let _owner = fixture.run(session("owner", true, "idle", None, false));
+    let _child = fixture.run(session("child", true, "working", Some("owner"), false));
+    let _waiting = fixture.run(session("waiting", true, "waiting_user", None, false));
+    let before = fixture.snapshot();
+
+    let code = |result: Result<Session>| {
+        CodedError::of(&result.expect_err("refused"))
+            .code
+            .to_string()
+    };
+    assert_eq!(
+        code(fixture.handoff("owner").await),
+        error_code::SESSION_CHILD_ACTIVE.to_string()
+    );
+    assert_eq!(
+        code(fixture.handoff("waiting").await),
+        error_code::SESSION_WORKING.to_string()
+    );
+    assert!(fixture.launches.lock().unwrap().is_empty());
+    assert_eq!(fixture.snapshot(), before);
+}
+
+/// A session stopped at its usage limit that still has work running in the background is busy, for
+/// itself and as a child, though its dialog shows it waiting for the user.
+#[tokio::test]
+async fn work_in_the_background_under_a_usage_limit_dialog_still_stops_a_handoff() {
+    let fixture = Fixture::new("usage-limit-background");
+    let shell = || {
+        crate::hooks::BackgroundTasksChange::Replace(vec![crate::protocol::BackgroundTask {
+            id: "dev-server".to_string(),
+            kind: Some("shell".to_string()),
+            description: None,
+        }])
+    };
+    let _stopped = fixture.run_showing(
+        Session {
+            agent: AgentId::CODEX,
+            ..session("stopped", true, "idle", None, false)
+        },
+        CODEX_CREDIT_LIMIT,
+    );
+    assert_eq!(fixture.refusal_of("stopped"), None);
+    fixture
+        .state
+        .apply_background_tasks_change("stopped", shell());
+    assert!(fixture.refused_as_working("stopped"));
+
+    let _owner = fixture.run(session("owner", true, "idle", None, false));
+    let _child = fixture.run_showing(
+        Session {
+            agent: AgentId::GROK,
+            ..session("child", true, "idle", Some("owner"), false)
+        },
+        GROK_USAGE_LIMIT,
+    );
+    assert_eq!(fixture.refusal_of("owner"), None);
+    fixture
+        .state
+        .apply_background_tasks_change("child", shell());
+    let (code, params) = fixture.refusal_of("owner").expect("refused");
+    assert_eq!(code, error_code::SESSION_CHILD_ACTIVE.to_string());
+    assert_eq!(params.get("child").map(String::as_str), Some("child"));
+}
+
+/// A message queued for an idle child is on its way unless its queue is held from being written: a
+/// hold that blocks writes (a handoff, a sharing change, a restart) leaves it waiting, while one
+/// kept after a relaunch has started a process writes it as it would for any session.
+#[tokio::test]
+async fn a_child_whose_queue_is_written_despite_a_hold_can_still_report() {
+    use crate::messaging::outbox::HoldKind;
+
+    let fixture = Fixture::new("child-queue-holds");
+    let mut keep = Vec::new();
+    for (kind, reports) in [
+        (HoldKind::Relaunched, true),
+        (HoldKind::Restart, false),
+        (HoldKind::Sharing, false),
+        (HoldKind::Handoff, false),
+    ] {
+        let owner = format!("owner-{kind:?}");
+        let child = format!("child-{kind:?}");
+        keep.push(fixture.run(session(&owner, true, "idle", None, false)));
+        keep.push(fixture.run(session(&child, true, "idle", Some(&owner), false)));
+        fixture.state.queue_message(&child, "a report is due");
+        fixture.state.outbox.hold(&child, kind);
+
+        let refusal = fixture.refusal_of(&owner);
+        assert_eq!(refusal.is_some(), reports, "{kind:?}");
+        if let Some((code, params)) = refusal {
+            assert_eq!(
+                code,
+                error_code::SESSION_CHILD_ACTIVE.to_string(),
+                "{kind:?}"
+            );
+            assert_eq!(params.get("child"), Some(&child), "{kind:?}");
+        }
     }
 }

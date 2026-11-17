@@ -305,6 +305,30 @@ describe("the fixture daemon's session reopening", () => {
   });
 });
 
+describe("the fixture daemon's native application requests", () => {
+  const ready = sessionOf("ready", "c", "p", "Ready", "interrupted", { agent_session_id: "a-1" });
+  const unseen = sessionOf("unseen", "c", "p", "Unseen", "archived", { agent_session_id: "a-2" });
+  const running = sessionOf("running", "c", "p", "Running", "idle", { agent_session_id: "a-3" });
+  const starting = sessionOf("starting", "c", "p", "Starting", "starting", { agent_session_id: "a-4" });
+  const empty = sessionOf("empty", "c", "p", "Empty", "archived", { has_conversation: false });
+  const daemon = () => createFixtureDaemon({ state: snapshotState({ sessions: [ready, unseen, running, starting, empty] }), nativeApps: ["claude"], nativeAppsUnseen: [unseen.id] });
+
+  it("lists the sessions it judges unseen apart from the seen ones", async () => {
+    await expect(daemon().request({ type: "probe_native_apps", sessions: [ready.id, unseen.id] })).resolves.toEqual({ type: "native_apps", id: null, agents: ["claude"], sessions_seen: [ready.id], sessions_unseen: [unseen.id] });
+  });
+
+  it("opens a session without a process that has a conversation", async () => {
+    await expect(daemon().request({ type: "open_session_in_app", session: unseen.id })).resolves.toEqual({ type: "ack", id: null });
+  });
+
+  it("refuses as the daemon does a session with a process, one being started and one without a conversation", async () => {
+    await expect(daemon().request({ type: "open_session_in_app", session: running.id })).rejects.toMatchObject({ code: "session_already_running" });
+    await expect(daemon().request({ type: "open_session_in_app", session: starting.id })).rejects.toMatchObject({ code: "session_already_starting" });
+    await expect(daemon().request({ type: "open_session_in_app", session: empty.id })).rejects.toMatchObject({ code: "native_app_unavailable" });
+    await expect(daemon().request({ type: "open_session_in_app", session: "missing" })).rejects.toMatchObject({ code: "unknown_session" });
+  });
+});
+
 describe("the fixture daemon's session handoff", () => {
   const hub = sessionOf("hub", "c", undefined, "Hub", "idle", { colour: "pink", ordinal: 1 });
   const coordinator = sessionOf("coordinator", "c", "p", "Coordinator", "idle", { bound_to: hub.id, pinned: true });

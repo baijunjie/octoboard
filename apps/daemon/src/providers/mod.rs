@@ -450,6 +450,10 @@ pub struct Capabilities {
     pub status_line: bool,
     /// Offers credits that reset its usage limits early.
     pub reset_credits: bool,
+    /// The URL scheme its desktop application registers, which is how the host is asked whether the
+    /// application is installed; `Some` exactly when the provider can open a conversation in it
+    /// (`AgentProvider::native_app`).
+    pub native_app_scheme: Option<&'static str>,
     /// Keeps the trust its confirmation grants in a per-session home, from where Octoboard carries
     /// it to the user's own configuration.
     pub per_session_trust: bool,
@@ -575,6 +579,20 @@ mod tests {
             assert_eq!(
                 crate::adapter::provider(agent).status_line().is_some(),
                 agent.descriptor().capabilities.status_line,
+                "{}",
+                agent.descriptor().id
+            );
+        }
+    }
+
+    /// A provider opens conversations in a desktop application exactly when its descriptor declares
+    /// the scheme the application registers.
+    #[test]
+    fn the_native_app_capability_agrees_with_the_provider() {
+        for agent in AgentId::ALL {
+            assert_eq!(
+                crate::adapter::provider(agent).native_app().is_some(),
+                agent.descriptor().capabilities.native_app_scheme.is_some(),
                 "{}",
                 agent.descriptor().id
             );

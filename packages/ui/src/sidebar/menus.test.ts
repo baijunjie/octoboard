@@ -185,7 +185,7 @@ describe("the Hand off entry", () => {
 
   it.each([
     ["idle", false, undefined],
-    ["waiting_user", false, undefined],
+    ["waiting_user", false, "Session busy"],
     ["interrupted", false, undefined],
     ["working", false, "Session busy"],
     ["starting", false, undefined],
@@ -194,6 +194,12 @@ describe("the Hand off entry", () => {
     const handoff = item(sessionOf("s", "c", "p", "Title", status, { locked }));
     expect(handoff?.disabled ?? false).toBe(reason !== undefined || status === "starting");
     expect(handoff?.reason?.state).toBe(reason);
+  });
+
+  it("leaves a session shown waiting only for a usage-limit dialog handable, as the daemon does", () => {
+    const handoff = item(sessionOf("s", "c", "p", "Title", "waiting_user", { at_usage_limit: true }));
+    expect(handoff?.disabled ?? false).toBe(false);
+    expect(handoff?.reason).toBeUndefined();
   });
 
   it("still says the session is locked while an account switch holds it", () => {
@@ -241,6 +247,103 @@ describe("the Hand off entry", () => {
     const handlers = { onOpenDialog: vi.fn() } as unknown as SidebarHandlers;
     item(hub, handlers)!.onClick();
     expect(handlers.onOpenDialog).toHaveBeenCalledWith({ kind: "handoff", session: hub });
+  });
+});
+
+describe("the Hand off entry and the sessions under the session", () => {
+  const handoff = (session: Session, childActive: boolean) =>
+    sessionMenu(t, {} as SidebarHandlers, session, [], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false, childActive }).find((entry) => typeof entry === "object" && "onClick" in entry && entry.label === "Hand off") as { disabled?: boolean; reason?: { state: string }; description?: string };
+
+  it("is disabled, saying why, while a session under it can still report to it", () => {
+    const entry = handoff(sessionOf("s", "c", "p", "Title", "idle"), true);
+    expect(entry.disabled).toBe(true);
+    expect(entry.reason).toEqual({ state: "Child sessions working" });
+    expect(entry.description).toBe("A session under this one is still at work and may report to it, so it cannot be handed off yet.");
+  });
+
+  it("is not held back by sessions under it when none can report", () => {
+    const entry = handoff(sessionOf("s", "c", "p", "Title", "idle"), false);
+    expect(entry.disabled ?? false).toBe(false);
+    expect(entry.reason).toBeUndefined();
+  });
+
+  it("says the session itself is busy before it says a child is", () => {
+    expect(handoff(sessionOf("s", "c", "p", "Title", "working"), true).reason).toEqual({ state: "Session busy" });
+    expect(handoff(sessionOf("s", "c", "p", "Title", "idle", { locked: true }), true).reason).toEqual({ state: "Session locked" });
+  });
+
+  it("treats a session stopped at its usage limit with work in the background as busy, and one without as at rest", () => {
+    const stopped = { status: "waiting_user", at_usage_limit: true } as const;
+    expect(handoff(sessionOf("s", "c", "p", "Title", stopped.status, { at_usage_limit: true, background_tasks: [{ id: "t" }] }), false).reason).toEqual({ state: "Session busy" });
+    expect(handoff(sessionOf("s", "c", "p", "Title", stopped.status, { at_usage_limit: true }), false).reason).toBeUndefined();
+  });
+
+  it("treats a session idle with work in the background as busy", () => {
+    expect(handoff(sessionOf("s", "c", "p", "Title", "idle", { background_tasks: [{ id: "t" }] }), false).reason).toEqual({ state: "Session busy" });
+    expect(handoff(sessionOf("s", "c", "p", "Title", "dormant"), false).reason).toEqual({ state: "Session busy" });
+  });
+});
+
+describe("the Open in the app entry", () => {
+  const conversation = "0b8f1c52-3d1e-4a7b-9c41-5e6d7f8091a2";
+  const app = (extra: Partial<{ label: string; seen: boolean; onOpen: () => void }> = {}) => ({ label: "Open in Claude app", seen: true, onOpen: vi.fn(), ...extra });
+  const entryOf = (session: Session, nativeApp: ReturnType<typeof app> | undefined) =>
+    sessionMenu(t, {} as SidebarHandlers, session, [], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false, nativeApp }).find((entry) => typeof entry === "object" && "onClick" in entry && entry.label === "Open in Claude app") as ActionMenuItem | undefined;
+  const asleep = (status: "interrupted" | "archived" = "interrupted", extra: Partial<Session> = {}) => sessionOf("s", "c", "p", "Title", status, { agent_session_id: conversation, ...extra });
+
+  it("is not in the menu unless the caller offers it, as where the app is not installed", () => {
+    expect(entryOf(asleep(), undefined)).toBeUndefined();
+  });
+
+  it.each(["interrupted", "archived"] as const)("is offered, enabled, with the letter W, for a %s session with a conversation the app can see; pressing it opens", (status) => {
+    const nativeApp = app();
+    const entry = entryOf(asleep(status), nativeApp)!;
+    expect(entry.shortcut).toBe("W");
+    expect(entry.disabled).toBeFalsy();
+    expect(entry.reason).toBeUndefined();
+    entry.onClick();
+    expect(nativeApp.onOpen).toHaveBeenCalledOnce();
+  });
+
+  it("is labelled as the caller words it", () => {
+    const menu = sessionMenu(t, {} as SidebarHandlers, asleep(), [], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false, nativeApp: app({ label: "Open in Codex app" }) });
+    expect(menu.some((entry) => typeof entry === "object" && "onClick" in entry && entry.label === "Open in Codex app")).toBe(true);
+  });
+
+  it.each(["starting", "working", "waiting_user", "dormant", "idle"] as const)("is disabled, saying to stop the session first, for a %s session, which has a process", (status) => {
+    const entry = entryOf(asleep(status as never), app())!;
+    expect(entry.disabled).toBe(true);
+    expect(entry.reason).toEqual({ state: "Session running" });
+    expect(entry.description).toBe("Stop the session first: the agent's app and Octoboard would both write to this conversation.");
+  });
+
+  it("is disabled for a session with no conversation yet", () => {
+    for (const extra of [{ has_conversation: false }, { agent_session_id: null }]) {
+      const entry = entryOf(asleep("interrupted", extra), app())!;
+      expect(entry.disabled).toBe(true);
+      expect(entry.reason).toEqual({ state: "No conversation yet" });
+    }
+  });
+
+  it("stays enabled, with a note under its label, where the default directory does not hold the conversation's latest record", () => {
+    const nativeApp = app({ seen: false });
+    const entry = entryOf(asleep(), nativeApp)!;
+    expect(entry.disabled).toBeFalsy();
+    expect(entry.reason).toBeUndefined();
+    expect(entry.ariaLabel).toBe("Open in Claude app");
+    expect(entry.description).toBe("The agent's app may not see this conversation: its latest record is kept in this account's own directory, not the default one.");
+    expect(JSON.stringify(entry.content)).toContain("The agent's app may not see this conversation");
+    entry.onClick();
+    expect(nativeApp.onOpen).toHaveBeenCalledOnce();
+  });
+
+  it("takes a letter no other entry of the menu has", () => {
+    for (const status of ["interrupted", "archived"] as const) {
+      const menu = sessionMenu(t, {} as SidebarHandlers, asleep(status), [account("w", "claude")], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false, nativeApp: app() });
+      const keys = menu.filter((entry): entry is ActionMenuItem => typeof entry === "object" && "onClick" in entry && typeof entry.shortcut === "string").map((entry) => entry.shortcut);
+      expect(keys.filter((key) => key === "W")).toEqual(["W"]);
+      expect(new Set(keys).size).toBe(keys.length);
+    }
   });
 });
 

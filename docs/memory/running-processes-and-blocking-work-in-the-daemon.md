@@ -45,7 +45,10 @@ cannot go through there (it runs on a PTY, or a flow reads it while it runs), bu
 `Reach::Session` sweeps the session when the CLI ends by itself too. Where the CLI can start something the user goes
 on using — a login that opens a browser, which `xdg-open` on a Linux desktop starts straight into the CLI's session —
 sweep only when the daemon ends the CLI (cancel, timeout, daemon exit) and just reap one that exits by itself, as the
-account login flows in `apps/daemon/src/accounts/login/flows.rs` do.
+account login flows in `apps/daemon/src/accounts/login/flows.rs` do. A short account-CLI run whose whole job is to
+hand work to an application that must outlive it (`claude --desktop` opening a session in the desktop app) never goes
+through `Bounds::agent_query`, which would end the application with the CLI: run it with
+`AdmittedCommand::run_leaving_descendants` (`apps/daemon/src/adapter/account_cli.rs`).
 
 ## On Windows a process is gone only once its handle is signalled, not once its exit code reads exited
 

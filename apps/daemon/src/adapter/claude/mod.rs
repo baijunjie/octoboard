@@ -50,6 +50,7 @@ mod hooks;
 mod login;
 mod mcp_inventory;
 pub(crate) mod models;
+mod native_app;
 pub(crate) mod quota;
 pub(crate) mod records;
 pub(crate) mod screen;
@@ -311,6 +312,10 @@ impl AgentProvider for ClaudeProvider {
 
     fn status_line(&self) -> Option<&'static dyn super::StatusLine> {
         Some(&status_line::ClaudeStatusLine)
+    }
+
+    fn native_app(&self) -> Option<&'static dyn super::NativeApp> {
+        Some(&native_app::ClaudeApp)
     }
 
     /// A native install keeps each release under `versions` (also `claude.exe` itself in

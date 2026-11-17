@@ -68,7 +68,8 @@ use crate::agents::models::{ModelCatalogue, NoCatalogue};
 use crate::hooks::{HookInterpreter, NoHooks};
 use crate::platform::shell::ResolvedBinary;
 use crate::protocol::{
-    error_code, AgentId, CodedError, GitWorkflowSettings, Notice, SessionKind, TerminalAppearance,
+    error_code, AgentId, CodedError, GitWorkflowSettings, Notice, Session, SessionKind,
+    TerminalAppearance,
 };
 use crate::providers::{ProviderDescriptor, ProviderSettings};
 use crate::records::{NoRecords, RecordStore};
@@ -394,6 +395,40 @@ pub trait StatusLine: Send + Sync {
     fn run(&self, session: &str, port: u16, key_file: &Path, args: &[String]) -> i32;
 }
 
+/// What opening a conversation in a provider's desktop application needs to know.
+pub struct NativeAppOpen<'a> {
+    /// The session whose conversation is opened, which has no process.
+    pub session: &'a Session,
+    /// The agent's id of that conversation, a canonical UUID.
+    pub conversation: &'a str,
+    /// The directory the session works in.
+    pub cwd: &'a Path,
+    /// The login-shell environment agent programs run in.
+    pub shell: &'a HashMap<String, String>,
+    /// A directory of the daemon's own the provider may keep a scratch file in: the session's
+    /// scratch directory, which may not exist yet.
+    pub scratch: &'a Path,
+}
+
+/// A provider's desktop application, which opens a conversation by itself or at the provider's
+/// request (`Capabilities::native_app_scheme`). Core checks the session and that the application is
+/// installed; the provider only asks the application to show the conversation.
+pub trait NativeApp: Send + Sync {
+    /// Asks the application to open the conversation, answering once it has accepted it. A refusal
+    /// is [`native_app_unavailable`], with the reason; any other error is the failure it is.
+    fn open(&self, open: &NativeAppOpen<'_>) -> anyhow::Result<()>;
+}
+
+/// The refusal for a desktop application that could not be opened, whichever way it was tried:
+/// `native_app_unavailable`, naming the reason as `detail`.
+pub fn native_app_unavailable(detail: &str) -> anyhow::Error {
+    CodedError::raised(
+        error_code::NATIVE_APP_UNAVAILABLE,
+        format!("The application could not be opened: {detail}"),
+        &[("detail", detail)],
+    )
+}
+
 /// How one provider behaves: launching it and reading what it shows and writes, beside the static
 /// facts of its [`ProviderDescriptor`]. Every method but the core has a default, so a provider
 /// implements only what it has.
@@ -439,6 +474,12 @@ pub trait AgentProvider: Send + Sync {
     /// The provider's status line, when it shows one Octoboard can feed
     /// (`Capabilities::status_line`).
     fn status_line(&self) -> Option<&'static dyn StatusLine> {
+        None
+    }
+
+    /// The provider's desktop application, when it has one a conversation can be opened in
+    /// (`Capabilities::native_app_scheme`).
+    fn native_app(&self) -> Option<&'static dyn NativeApp> {
         None
     }
 

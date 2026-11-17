@@ -49,7 +49,8 @@ draws it (`StaticTag`, `GroupFieldError`), marks and all.
 - **Behaviour that rests on react-aria internals lives here too**, under a project name, so the version note stays
   in one place: `onFocusScopeRestore` (a one-shot capture listener for the cancelable focus-scope restore, to place
   focus when a dialog or popover closes), `MenuItem`'s `shortcut` (renders `aria-keyshortcuts`, which react-aria
-  filters out of item props), `activateMenuItem` (runs an item as its keyboard activation does), `useTabPanelLink`
+  filters out of item props) and its description link (`patchItemAria` links a description that arrives after the item
+  mounted), `activateMenuItem` (runs an item as its keyboard activation does), `useTabPanelLink`
   (makes an element of the caller's own the panel of a tab, under the ids react-aria gave the tab),
   `settleUnknownModality` (reads react-aria's private interaction modality to settle an unknown one) and
   `scrollTreeAndRender` (scrolls a `Tree` by script and has its virtualizer render the rows in view at once).

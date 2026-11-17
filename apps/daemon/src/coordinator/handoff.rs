@@ -66,7 +66,8 @@ pub struct Handoff {
 
 /// Hands `request.session` off and returns what moved: the receiving session, running in the
 /// original's place, with the original archived, and what it took over. Refused, with nothing
-/// changed, for a session that is missing, archived, locked or not at rest, a receiving agent that
+/// changed, for a session that is missing, archived, locked or not at rest (`session_working`), one
+/// that owns a session that can still report to it (`session_child_active`), a receiving agent that
 /// is the session's own, and what opening the receiving session would refuse (an agent that is not
 /// available or not added, an account of another agent, a disabled account, an account whose plan
 /// quota is used up, an account the last quota reading found not logged in, a model or effort the
@@ -90,7 +91,7 @@ pub(crate) async fn handoff_session_with(
     let hold = state.hold_outbox(&request.session);
     let original = state.session_record(&request.session)?;
     super::bindings::refuse_unless_still_askers(&original, request.asked_by.as_deref())?;
-    refuse_unless_it_can_be_handed_off(&original, request.agent)?;
+    refuse_unless_it_can_be_handed_off(state, &original, request.agent)?;
     // Its conversation is read from its account's directory, which a change of sharing moves.
     crate::accounts::shared_config::refuse_if_changing(state, original.account_id.as_deref())?;
 
@@ -231,38 +232,60 @@ pub(crate) fn receiving_request(
     }
 }
 
-pub(crate) fn refuse_unless_it_can_be_handed_off(original: &Session, agent: AgentId) -> Result<()> {
+/// Refuses, with nothing changed, a session that cannot be handed off now: archived, still
+/// starting, mid-turn, waiting for the user or running work in the background, or owning a session
+/// that can still send it something ([`child_can_still_send`]); then one locked, and a receiving
+/// agent that is its own. A session whose turn stopped on its account's usage limit is at rest:
+/// the dialog it shows is no wait.
+pub(crate) fn refuse_unless_it_can_be_handed_off(
+    state: &AppState,
+    original: &Session,
+    agent: AgentId,
+) -> Result<()> {
     let named = label(original);
-    match original.status {
-        SessionStatus::Archived => {
-            return Err(CodedError::raised(
-                error_code::SESSION_ARCHIVED,
-                format!(
-                    "{named} is archived, so there is no work running to hand off; reopen it first"
-                ),
-                &[("session", &original.id)],
-            ));
+    if original.status == SessionStatus::Archived {
+        return Err(CodedError::raised(
+            error_code::SESSION_ARCHIVED,
+            format!(
+                "{named} is archived, so there is no work running to hand off; reopen it first"
+            ),
+            &[("session", &original.id)],
+        ));
+    }
+    let shown = state.status_for_switch(original);
+    let doing = match shown {
+        SessionStatus::Starting => Some("still starting"),
+        SessionStatus::Working => Some("in the middle of a turn"),
+        SessionStatus::WaitingUser => Some("waiting for the user"),
+        SessionStatus::Dormant => Some("showing its background agents"),
+        SessionStatus::Idle if !state.shown_background_tasks(&original.id, shown).is_empty() => {
+            Some("running work in the background")
         }
-        SessionStatus::Working | SessionStatus::Starting => {
-            return Err(CodedError::raised(
-                error_code::SESSION_WORKING,
-                format!(
-                    "{named} is {}: a session still working goes on writing to its worktree while \
-                     the new session starts on it. Hand it off once it is waiting for instructions \
-                     or for the user, or has been interrupted",
-                    if original.status == SessionStatus::Working {
-                        "in the middle of a turn"
-                    } else {
-                        "still starting"
-                    }
-                ),
-                &[("session", &original.id)],
-            ));
-        }
-        SessionStatus::WaitingUser
-        | SessionStatus::Dormant
-        | SessionStatus::Idle
-        | SessionStatus::Interrupted => {}
+        SessionStatus::Idle | SessionStatus::Interrupted | SessionStatus::Archived => None,
+    };
+    if let Some(doing) = doing {
+        return Err(CodedError::raised(
+            error_code::SESSION_WORKING,
+            format!(
+                "{named} is {doing}: a session still at work goes on writing to its worktree while \
+                 the new session starts on it. Hand it off once it is waiting for instructions or \
+                 has been interrupted"
+            ),
+            &[("session", &original.id)],
+        ));
+    }
+    if let Some(child) = state.store.list_sessions()?.into_iter().find(|child| {
+        child.bound_to.as_deref() == Some(&original.id) && child_can_still_send(state, child)
+    }) {
+        return Err(CodedError::raised(
+            error_code::SESSION_CHILD_ACTIVE,
+            format!(
+                "{} is still at work under {named} and may report to it: the report would reach a \
+                 session that is being replaced. Hand it off once its sessions are at rest",
+                label(&child)
+            ),
+            &[("session", &original.id), ("child", &child.id)],
+        ));
     }
     ensure_unlocked([original.clone()])?;
     if agent == original.agent {
@@ -616,6 +639,29 @@ async fn start_work(
             )
             .about(&id),
         );
+    }
+}
+
+/// Whether `child`, a session bound to the session being handed off, can still send it something
+/// (a report, information, a notice) without the session or the user acting first: it is starting,
+/// at work, waiting for the user (whose answer lets it go on; a usage-limit dialog is no such wait,
+/// as for the session itself), showing its background agents or running work in the background, or
+/// has a message queued. A queue held while the child is handed off, restarted for a change of its
+/// account's sharing or restarted for a switch or a change of model is not one a report is waiting
+/// in: nothing is written into it until the hold ends (`HoldKind::blocks_writes`). One at rest
+/// (idle with nothing pending, interrupted or archived) cannot.
+fn child_can_still_send(state: &AppState, child: &Session) -> bool {
+    let shown = state.status_for_switch(child);
+    match shown {
+        SessionStatus::Starting
+        | SessionStatus::Working
+        | SessionStatus::WaitingUser
+        | SessionStatus::Dormant => true,
+        SessionStatus::Idle => {
+            !state.shown_background_tasks(&child.id, shown).is_empty()
+                || (state.outbox.is_pending(&child.id) && !state.outbox.blocks_writes(&child.id))
+        }
+        SessionStatus::Interrupted | SessionStatus::Archived => false,
     }
 }
 

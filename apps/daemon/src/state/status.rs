@@ -62,8 +62,20 @@ impl AppState {
     /// The session as a client receives it, with its resolved title and live user interactions.
     /// These leave the stored agent status intact so answering restores it even before a hook.
     pub(crate) fn wire_session(&self, mut session: Session) -> Session {
-        session.status = self.shown_status(&session);
-        session.background_tasks = self.shown_background_tasks(&session.id, session.status);
+        let shown = self.shown_status(&session);
+        // Judged on the record as stored, before the shown status replaces it: a session shown
+        // waiting only for a usage-limit dialog over an idle turn is at rest for a handoff or a
+        // switch, and a client is told so (a dialog over a turn still working is not at rest).
+        session.at_usage_limit = shown == SessionStatus::WaitingUser
+            && self.status_for_switch(&session) == SessionStatus::Idle;
+        session.status = shown;
+        // The work left in the background is the idle turn's, which the dialog hides from the shown
+        // status but a handoff still counts.
+        session.background_tasks = if session.at_usage_limit {
+            self.background_tasks_of(&session.id)
+        } else {
+            self.shown_background_tasks(&session.id, shown)
+        };
         session.paused = self.shown_paused(&session, session.status);
         session.switching_account = self.is_switching_account(&session.id);
         session.prompt_on_launch = self.is_prompted_on_launch(&session.id);
@@ -245,6 +257,7 @@ mod tests {
     use super::*;
     use crate::protocol::{AgentId, Event, SessionStatus};
     use crate::state::test_support::insert_record;
+    use crate::test_support::screens::{CODEX_CREDIT_LIMIT, GROK_USAGE_LIMIT};
     use crate::test_support::{app_state, fake_live_session, SUBAGENT_VIEW};
 
     #[test]
@@ -509,5 +522,136 @@ mod tests {
             .apply_reported_status_if("s", SessionStatus::Idle, SessionStatus::Working)
             .unwrap());
         assert!(!state.last_turn_abnormal("s"));
+    }
+
+    /// A session stored at `stored` whose process of `agent` shows `screen`, as a client receives it.
+    fn received(
+        label: &str,
+        agent: AgentId,
+        stored: SessionStatus,
+        screen: &str,
+    ) -> (
+        Session,
+        std::sync::Arc<AppState>,
+        crate::test_support::ScratchDir,
+    ) {
+        let (state, dir) = app_state(label);
+        insert_record(&state, &dir, "s", stored);
+        let mut record = state.session_record("s").unwrap();
+        record.agent = agent;
+        state.save_session(&record).unwrap();
+        let live = fake_live_session("s", agent, 80, 24, "sleep 30");
+        state.register_live(live.clone());
+        live.on_output(screen.as_bytes());
+        // The dialog the screen shows is recognised when the screen is looked at, as the watcher does.
+        assert_eq!(live.look_for_dialog().current.is_some(), !screen.is_empty());
+        let wire = state.wire_session(state.session_record("s").unwrap());
+        (wire, state, dir)
+    }
+
+    /// A session shown waiting for the user only for the usage-limit screen of its agent (Codex's
+    /// prompt, Grok's weekly-limit screen) carries `at_usage_limit`; one waiting for any other reason
+    /// or not waiting does not, and the flag is not stored.
+    #[test]
+    fn a_wait_for_the_users_answer_to_a_usage_limit_is_flagged_on_the_wire() {
+        for (agent, screen) in [
+            (AgentId::CODEX, CODEX_CREDIT_LIMIT),
+            (AgentId::GROK, GROK_USAGE_LIMIT),
+        ] {
+            let (wire, state, _dir) =
+                received("status-usage-limit", agent, SessionStatus::Idle, screen);
+            assert_eq!(wire.status, SessionStatus::WaitingUser, "{agent:?}");
+            assert!(wire.at_usage_limit, "{agent:?}");
+            assert!(!state.session_record("s").unwrap().at_usage_limit);
+        }
+
+        // Another dialog is a wait that only the user ends.
+        let (wire, _state, _dir) = received(
+            "status-other-dialog-flag",
+            AgentId::CLAUDE,
+            SessionStatus::Idle,
+            RESUME_IDLE,
+        );
+        assert_eq!(wire.status, SessionStatus::WaitingUser);
+        assert!(!wire.at_usage_limit);
+
+        // A wait a hook reported, with a usage-limit screen not shown.
+        let (wire, _state, _dir) = received(
+            "status-hook-wait-flag",
+            AgentId::CODEX,
+            SessionStatus::WaitingUser,
+            "",
+        );
+        assert_eq!(wire.status, SessionStatus::WaitingUser);
+        assert!(!wire.at_usage_limit);
+
+        // Not waiting at all.
+        let (wire, _state, _dir) =
+            received("status-idle-flag", AgentId::CODEX, SessionStatus::Idle, "");
+        assert_eq!(wire.status, SessionStatus::Idle);
+        assert!(!wire.at_usage_limit);
+    }
+
+    /// A usage-limit dialog over a turn still stored as working is no rest: the flag marks only a
+    /// turn that has stopped, whatever the dialog says.
+    #[test]
+    fn a_usage_limit_dialog_over_a_working_turn_is_not_flagged() {
+        for (stored, flagged) in [
+            (SessionStatus::Working, false),
+            (SessionStatus::Idle, true),
+            (SessionStatus::WaitingUser, false),
+        ] {
+            let (wire, _state, _dir) = received(
+                "status-usage-limit-working",
+                AgentId::CODEX,
+                stored,
+                CODEX_CREDIT_LIMIT,
+            );
+            assert_eq!(wire.status, SessionStatus::WaitingUser, "{stored:?}");
+            assert_eq!(wire.at_usage_limit, flagged, "{stored:?}");
+        }
+    }
+
+    /// Work left running in the background under a usage-limit dialog is still told to the client,
+    /// though the status shown is not idle, since a handoff counts it.
+    #[test]
+    fn work_in_the_background_under_a_usage_limit_dialog_is_served() {
+        let (_, state, _dir) = received(
+            "status-usage-limit-background",
+            AgentId::CODEX,
+            SessionStatus::Idle,
+            CODEX_CREDIT_LIMIT,
+        );
+        state.apply_background_tasks_change(
+            "s",
+            crate::hooks::BackgroundTasksChange::Replace(vec![crate::protocol::BackgroundTask {
+                id: "dev-server".to_string(),
+                kind: Some("shell".to_string()),
+                description: None,
+            }]),
+        );
+        let wire = state.wire_session(state.session_record("s").unwrap());
+        assert!(wire.at_usage_limit);
+        assert_eq!(wire.background_tasks.len(), 1);
+
+        // Without a dialog an idle turn shows its tasks, a working one none.
+        let (_, state, _dir) = received(
+            "status-background-no-dialog",
+            AgentId::CODEX,
+            SessionStatus::Working,
+            "",
+        );
+        state.apply_background_tasks_change(
+            "s",
+            crate::hooks::BackgroundTasksChange::Replace(vec![crate::protocol::BackgroundTask {
+                id: "dev-server".to_string(),
+                kind: Some("shell".to_string()),
+                description: None,
+            }]),
+        );
+        assert!(state
+            .wire_session(state.session_record("s").unwrap())
+            .background_tasks
+            .is_empty());
     }
 }

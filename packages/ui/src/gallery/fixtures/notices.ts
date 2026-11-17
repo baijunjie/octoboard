@@ -442,7 +442,7 @@ export const noticeScenarios: Scenario[] = [
     group: TRUST,
     category: "exceptional",
     title: "Request to hand off a session that has started working",
-    description: "The session to hand off started a turn while the request waited. An error above the picker says the session is in the middle of a turn and cannot be handed off yet. Confirm is disabled, and Refuse is the way out. A session that is still starting is refused in the same place.",
+    description: "The session to hand off started a turn while the request waited. An error above the picker says the session is in the middle of a turn and cannot be handed off yet. Confirm is disabled, and Refuse is the way out. A session that is still starting, is waiting for the user, or has a session under it at work is refused in the same place.",
     state: moveState(handoffRequest),
   },
   {

@@ -34,6 +34,7 @@
 //! - [`programs`]: the small programs a test starts (sleep, echo, hold stdin, ignore the hang-up,
 //!   print a variable), spelled for each host; named as `programs::sleep`, not re-exported.
 //! - [`sessions`]: session records, Codex rollout chains and report pages.
+//! - [`screens`]: what an agent's terminal shows at a usage limit.
 //! - [`owner_team`]: an owner with sessions bound to it, for the tests of what is written into
 //!   an owner.
 
@@ -55,6 +56,7 @@ pub(crate) mod programs;
 #[cfg(unix)]
 pub(crate) mod resize;
 pub(crate) mod scratch;
+pub(crate) mod screens;
 pub(crate) mod sessions;
 pub(crate) mod stand_in;
 

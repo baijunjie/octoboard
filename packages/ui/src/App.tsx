@@ -34,6 +34,7 @@ import { ExitConfirmDialog } from "./lifecycle/ExitConfirmDialog";
 import { useAppExit } from "./lifecycle/useAppExit";
 import { useGitStatusSchedule } from "./lifecycle/useGitStatusSchedule";
 import { useAgentLanguageSeed } from "./lifecycle/useAgentLanguageSeed";
+import { useNativeAppsSync } from "./lifecycle/useNativeAppsSync";
 import { useStatusItemMenu } from "./statusItem/useStatusItemMenu";
 import { useWaitingNotifications } from "./lifecycle/useWaitingNotifications";
 import { sessionDisplayTitle } from "./sessions/sessionLabel";
@@ -62,7 +63,8 @@ import { useWaitingCount } from "./store";
 import { indexSessions, NO_SESSIONS, sessionsOf } from "./sessions/sessionIndex";
 import { Sidebar } from "./sidebar/Sidebar";
 import { useSidebarView } from "./sidebar/sidebarView";
-import { useDaemon, useDaemonStore, useDaemonStoreEqual, useProviders } from "./store";
+import { useDaemon, useDaemonStore, useDaemonStoreEqual, useNativeAppsRefresh, useProviders } from "./store";
+import { useOpenSessionInApp } from "./components/host/useOpenSessionInApp";
 import { terminalEmptyState } from "./app/emptyState";
 import { TerminalPane } from "./terminal/TerminalPane";
 import { useTerminalFontShortcuts } from "./terminal/terminalFontShortcut";
@@ -120,6 +122,7 @@ export function App(): React.ReactElement {
   const sidebarView = useSidebarView(consoleList);
   useGitStatusSchedule();
   useAgentLanguageSeed();
+  useNativeAppsSync();
 
   const currentConsole = sidebarView.currentConsole;
   const {
@@ -461,6 +464,10 @@ export function App(): React.ReactElement {
   // Handed to the memoised rows (the sidebar's, the rail's and the archive view's) and the top bar as
   // one function for good, so the rows are rendered again only for their own records.
   const stableQuickCreateSession = useStableHandler(quickCreateSession);
+  const nativeApps = useDaemonStore((s) => s.nativeApps);
+  const nativeAppsUnseen = useDaemonStore((s) => s.nativeAppsUnseen);
+  const stableOpenSessionInApp = useStableHandler(useOpenSessionInApp());
+  const stableRefreshNativeApps = useStableHandler(useNativeAppsRefresh());
   const {
     stableSetSessionColour,
     stableOpenProjectDirectory,
@@ -683,6 +690,10 @@ export function App(): React.ReactElement {
                       selectedSessionId,
                       onSelect: stableSelectSession,
                       onReopen: stableReopenSession,
+                      nativeApps,
+                      nativeAppsUnseen,
+                      onOpenInApp: stableOpenSessionInApp,
+                      onRefreshNativeApps: stableRefreshNativeApps,
                       onOpenDialog: stableOpenDialog,
                       dialogOpen: dialogRequest !== undefined,
                       onClose: closeArchive,

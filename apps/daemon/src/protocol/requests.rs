@@ -551,9 +551,12 @@ pub enum RequestBody {
     /// project or console, role, owner, the branches it is responsible for and the sessions it
     /// owns. `agent` is required and must differ from the session's own (moving to another account
     /// of the same agent is `switch_session_account`). `account`, `model` and `effort` are as in
-    /// `open_session`. The session must exist, not be archived, locked or starting, and not be in
-    /// the middle of a turn. Answered with `session_opened` for the receiving session once it is
-    /// running and the place has moved. See `crate::coordinator::handoff`.
+    /// `open_session`. The session must exist, not be archived, locked or starting, and not be busy:
+    /// in the middle of a turn, waiting for the user (a usage-limit dialog is not a wait), showing
+    /// its background agents or running work in the background (`session_working`); nor may a
+    /// session it owns still be able to report to it (`session_child_active`). Answered with
+    /// `session_opened` for the receiving session once it is running and the place has moved. See
+    /// `crate::coordinator::handoff`.
     HandoffSession {
         session: String,
         agent: AgentId,
@@ -1264,6 +1267,29 @@ pub enum RequestBody {
     OpenProjectTerminal {
         project: String,
     },
+    /// Opens a session's conversation in its agent's own desktop application (the Claude app for
+    /// Claude Code, the Codex app for Codex) on the daemon's host. Answered with `ack` once the
+    /// application has been asked to open. Nothing is stopped for it: refused with
+    /// `session_already_running` while the session has a process, with `session_already_starting`
+    /// while a launch or another operation holds it, with `account_sharing_in_progress` while a
+    /// change of its account's sharing moves the account's directory, and with
+    /// `native_app_unavailable` for an agent with no such application, one that is not installed, a
+    /// session with no conversation yet, a conversation id the agent would not take, and a failed
+    /// launch. Where the application may not see the conversation (the default account's directory,
+    /// the only one it reads, does not hold its latest record, which `probe_native_apps` tells) it
+    /// is opened all the same. An unknown session is `unknown_session`.
+    OpenSessionInApp {
+        session: String,
+    },
+    /// Asks which agents' desktop applications are installed on the daemon's host, and, for the
+    /// `sessions` named (at most 200 are judged), which ones' conversations the applications can
+    /// see: those whose latest record the default account's directory holds. Absent means none.
+    /// Answered with `native_apps`.
+    ProbeNativeApps {
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
+        sessions: Vec<String>,
+    },
     /// Opens the project's directory in the system file manager on the daemon's host. Answered
     /// with `ack` once `open` succeeds on macOS, or once `xdg-open` is spawned on Linux (later
     /// failures are not observed). Refused with `directory_unavailable` if validation or launch fails.
@@ -1445,6 +1471,8 @@ impl RequestBody {
             | Self::CloseShellTerminal { .. }
             | Self::OpenProjectTerminal { .. }
             | Self::OpenProjectDirectory { .. }
+            | Self::OpenSessionInApp { .. }
+            | Self::ProbeNativeApps { .. }
             | Self::RevealProjectPath { .. }
             | Self::OpenProjectPath { .. }
             | Self::ProbePathLinks { .. }

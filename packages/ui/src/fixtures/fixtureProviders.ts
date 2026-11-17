@@ -10,13 +10,14 @@ const CAPABILITIES: Record<Agent, Capabilities> = {
     hook_script: false,
     status_line: true,
     reset_credits: false,
+    native_app_scheme: "claude",
     per_session_trust: false,
     config_sharing: true,
     mcp_inventory: true,
     delivery: { confirms_by_reported_prompt: true, holds_report_for_completion_notice: true, resume_instruction_as_launch_prompt: true },
   },
-  codex: { preallocates_session_id: false, hook_script: true, status_line: false, reset_credits: true, per_session_trust: false, config_sharing: true, mcp_inventory: true, delivery: NO_QUIRKS },
-  grok: { preallocates_session_id: true, hook_script: true, status_line: false, reset_credits: false, per_session_trust: true, config_sharing: true, mcp_inventory: true, delivery: NO_QUIRKS },
+  codex: { preallocates_session_id: false, hook_script: true, status_line: false, reset_credits: true, native_app_scheme: "codex", per_session_trust: false, config_sharing: true, mcp_inventory: true, delivery: NO_QUIRKS },
+  grok: { preallocates_session_id: true, hook_script: true, status_line: false, reset_credits: false, native_app_scheme: null, per_session_trust: true, config_sharing: true, mcp_inventory: true, delivery: NO_QUIRKS },
 };
 
 const PLAIN_MODELS: ModelDisplay = { family_version: false, id_prefix: null, aliases: [], retired: [] };
@@ -74,7 +75,7 @@ export const UNPRESENTED_PROVIDER: ProviderInfo = {
   install_url: "https://example.com/acme-agent/install",
   default_config_dir: ".acme",
   detection_markers: [".acme"],
-  capabilities: { preallocates_session_id: true, hook_script: false, status_line: false, reset_credits: false, per_session_trust: false, config_sharing: false, mcp_inventory: false, delivery: NO_QUIRKS },
+  capabilities: { preallocates_session_id: true, hook_script: false, status_line: false, reset_credits: false, native_app_scheme: null, per_session_trust: false, config_sharing: false, mcp_inventory: false, delivery: NO_QUIRKS },
   quota_windows: { kinds: ["session", "weekly"], session_window: "session", weekly_all_models: false },
   model_display: PLAIN_MODELS,
   settings: [{ id: "review_mode", kind: { type: "choice", choices: [{ value: "careful", confirm: false }, { value: "fast", confirm: false }] }, exported: true, shown_to_agents: false, compatibility_with: null }],

@@ -805,7 +805,7 @@ pub(super) async fn came_up(live: &Arc<LiveSession>, settle: Duration) -> bool {
     !poll_exit_off_runtime(live).await
 }
 
-fn session_cwd(state: &Arc<AppState>, session: &Session) -> Result<PathBuf> {
+pub(super) fn session_cwd(state: &Arc<AppState>, session: &Session) -> Result<PathBuf> {
     match &session.project_id {
         Some(project_id) => {
             let project = state.store.require_project(project_id)?;

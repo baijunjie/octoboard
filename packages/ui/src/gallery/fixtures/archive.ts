@@ -1,5 +1,6 @@
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import { FIXTURE_AGENTS } from "../../fixtures/fixtureProviders";
+import type { Ui } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";
 import { archiveProject as project, archivedCoordinator, boundArchived, boundConsoleSession, console_, otherConsoleSession, otherOwnerArchived, unboundArchived, underArchivedCoordinator } from "../../fixtures/archiveSessions";
 import { accountOf, branchItemOf, contextOf, minutesAgo, projectOf, sessionOf, snapshotState, worktreeItemOf } from "../../fixtures/builders";
@@ -45,6 +46,26 @@ const state = snapshotState({
   projects: [project],
   sessions: [sessionOf("s-live", console_.id, project.id, "Live session", "idle"), ...archived, ...consoleSessions],
 });
+
+// Archived sessions of the three agents in a project, for the row's Open in the agent's app button: Codex's and Claude
+// Code's conversations are on record, Grok Build has no desktop application, and Claude Code's second has no
+// conversation yet.
+const appLive = sessionOf("s-app-live", console_.id, project.id, "Live session", "idle");
+const appCodex = sessionOf("s-app-codex", console_.id, project.id, "Tune the ranking weights", "archived", { agent: "codex", agent_session_id: "019a2c5e-7b43-7d10-9c1e-4f6a8d2b0e31", started_at: minutesAgo(180), ended_at: minutesAgo(20) });
+const appClaude = sessionOf("s-app-claude", console_.id, project.id, "Review the release checklist", "archived", { agent_session_id: "0b1f6c7e-5d1a-4c52-9a77-3f0d2f9a1c10", started_at: minutesAgo(240), ended_at: minutesAgo(60) });
+const appGrok = sessionOf("s-app-grok", console_.id, project.id, "Probe the cache layer", "archived", { agent: "grok", agent_session_id: "grok-session-17", started_at: minutesAgo(300), ended_at: minutesAgo(100) });
+const appEmpty = sessionOf("s-app-empty", console_.id, project.id, "Plan the search rollout", "archived", { has_conversation: false, started_at: minutesAgo(30), ended_at: minutesAgo(10) });
+const appState = snapshotState({ consoles: [console_], projects: [project], sessions: [appLive, appCodex, appClaude, appGrok] });
+const appEmptyState = snapshotState({ consoles: [console_], projects: [project], sessions: [appLive, appEmpty, appGrok] });
+/** The names of an archived row's icon buttons, which carry the session's title. */
+const deleteButton = (ui: Ui, session: { title: string }) => ui.t("sidebar.session.deleteItem", { title: session.title });
+const openInAppButton = (ui: Ui, agent: "claude" | "codex", session: { title: string }) => ui.t("sidebar.session.openInAppItem", { label: ui.t(`provider.${agent}.openInApp`), title: session.title });
+
+const openProjectArchive = (name: string) => [
+  (ui: Ui) => ui.press(ui.t("sidebar.project.actions", { name })),
+  (ui: Ui) => ui.press(ui.t("sidebar.project.archive")),
+  (ui: Ui) => ui.press(ui.t("sidebar.archive.viewAll")),
+];
 
 const liveCoordinator = sessionOf("s-live-coordinator", console_.id, project.id, "Active bound coordinator", "idle", { bound_to: boundConsoleSession.id });
 const underLiveCoordinator = sessionOf("s-under-live-coordinator", console_.id, project.id, "Archived child of active coordinator", "archived", { bound_to: liveCoordinator.id, ended_at: minutesAgo(1) });
@@ -155,7 +176,7 @@ const deleteBoundSessions: Scenario = {
   ],
   steps: [
     (ui) => ui.press(ui.t("sidebar.archive.viewAll")),
-    (ui) => ui.press((name) => name === ui.t("archive.delete", { title: archivedCoordinator.title })),
+    (ui) => ui.pressInRow((name) => name.startsWith(archivedCoordinator.title), deleteButton(ui, archivedCoordinator)),
   ],
 };
 
@@ -215,12 +236,33 @@ export const archiveScenarios: Scenario[] = [
     category: "normal",
     title: "Project archive, many entries",
     state: archiveState,
-    description: "Seventy entries are loaded thirty at a time; the newest keep their last active task titles (one of them long) and the first shows a compact-size badge (430K, led by a small accent ring as the agent reported a window; hover it for the card with the meter at 43%, accent) and the second, whose size is zero, no mark. The line under each title names the account, the model and the effort, the model worded by its provider's display rule: Claude Code's ids as \"Opus 5.5\" and \"Haiku 4.5\" and its alias as \"Sonnet\", while Codex's gpt-6.1-sol and Grok Build's grok-4.7 stay as they are. Rows offer Reopen and Delete, without lock controls. Delete an entry: it fades out to the right by a quarter of its own width over 300ms while the remaining rows slide into place, and the reduced-motion preference keeps the change immediate.",
+    description: "Seventy entries are loaded thirty at a time; the newest keep their last active task titles (one of them long) and the first shows a compact-size badge (430K, led by a small accent ring as the agent reported a window; hover it for the card with the meter at 43%, accent) and the second, whose size is zero, no mark. The line under each title names the account, the model and the effort, the model worded by its provider's display rule: Claude Code's ids as \"Opus 5.5\" and \"Haiku 4.5\" and its alias as \"Sonnet\", while Codex's gpt-6.1-sol and Grok Build's grok-4.7 stay as they are. Rows offer Reopen and Delete as icon buttons, without lock controls. Delete an entry: it fades out to the right by a quarter of its own width over 300ms while the remaining rows slide into place, and the reduced-motion preference keeps the change immediate.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.project.actions", { name: project.name })),
       (ui) => ui.press(ui.t("sidebar.project.archive")),
       (ui) => ui.press(ui.t("sidebar.archive.viewAll")),
     ],
+  },
+  {
+    id: "archive-open-in-app",
+    group: GROUP,
+    category: "normal",
+    title: "Archived rows, Open in the agent's app",
+    description: "A row's actions are three icon-only buttons, which show while the row is hovered or holds focus, in the order Open in the agent's app (the window icon, leftmost), Reopen and Delete. Each button's accessible name carries the session's title, while its tooltip stays short. Focus is on the Codex row's Open in Codex app, whose tooltip is headed: the action name as its heading, a divider, and under it the sentence that the agent's app may not see this conversation; the button is still enabled. Hover the Claude Code row's for the plain tooltip, the action name alone, and the Grok Build row, whose agent has no desktop application, for a pair of buttons, Reopen then Delete, with no Open in app.",
+    state: appState,
+    nativeApps: ["claude", "codex"],
+    nativeAppsUnseen: [appCodex.id],
+    steps: [...openProjectArchive(project.name), (ui) => ui.focusControl(openInAppButton(ui, "codex", appCodex))],
+  },
+  {
+    id: "archive-open-in-app-unavailable",
+    group: GROUP,
+    category: "normal",
+    title: "Archived row with no conversation, Open in the agent's app unavailable",
+    description: "The Claude Code row has no conversation yet, so its Open in Claude app button is dimmed but still focusable. Focus is on it, so the row's actions show, with Open in app leftmost and Reopen and Delete after it as usual, and its tooltip is headed: the action name as its heading, a divider, and under it the reason, that the session has no conversation so there is nothing to open. Pressing the dimmed button raises an alert titled \"Could not open the agent's app\" with that same sentence.",
+    state: appEmptyState,
+    nativeApps: ["claude"],
+    steps: [...openProjectArchive(project.name), (ui) => ui.focusControl(openInAppButton(ui, "claude", appEmpty))],
   },
   {
     id: "archive-console-menu",
@@ -295,7 +337,7 @@ export const archiveScenarios: Scenario[] = [
     description: "The used archived coordinator still requires confirmation: under the sentence naming it, the plain line \"2 archived sessions under it are deleted with it\" heads the list of its two archived children. No native files exist for any of them, so the Trash checkbox and hint are absent.",
     steps: [
       (ui) => ui.press(ui.t("sidebar.archive.viewAll")),
-      (ui) => ui.press((name) => name === ui.t("archive.delete", { title: archivedCoordinator.title })),
+      (ui) => ui.pressInRow((name) => name.startsWith(archivedCoordinator.title), deleteButton(ui, archivedCoordinator)),
     ],
   },
   {
@@ -309,7 +351,7 @@ export const archiveScenarios: Scenario[] = [
     ],
     steps: [
       (ui) => ui.press(ui.t("sidebar.archive.viewAll")),
-      (ui) => ui.press((name) => name === ui.t("archive.delete", { title: underArchivedCoordinator[0].title })),
+      (ui) => ui.pressInRow((name) => name.startsWith(underArchivedCoordinator[0].title), deleteButton(ui, underArchivedCoordinator[0])),
       (ui) => ui.press(ui.t("dialog.sessionBranches.force", { count: 2 })),
       (ui) => ui.press(ui.t("dialog.deleteSession.trashRecords")),
     ],

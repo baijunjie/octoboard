@@ -8,6 +8,8 @@
 //! use it.
 
 pub(crate) mod build_files;
+#[cfg(target_os = "macos")]
+pub(crate) mod cf;
 #[cfg(unix)]
 pub(crate) mod descriptors;
 pub(crate) mod fs;

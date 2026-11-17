@@ -78,6 +78,8 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         hook_script: false,
         status_line: true,
         reset_credits: false,
+        // The Claude app, which registers `claude:`.
+        native_app_scheme: Some("claude"),
         per_session_trust: false,
         config_sharing: true,
         mcp_inventory: true,

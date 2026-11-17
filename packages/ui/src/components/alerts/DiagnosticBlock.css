@@ -1,3 +1,11 @@
+/* The floating copy control's gap from the surface's right edge is the gap it has above and below in a block
+   of one line: the code's padding (`p-3`) and half a line, less half the button (the xs icon button's size,
+   `--app-button-xs-size` in `Button.css`). */
+.diagnostic-block {
+  --diagnostic-copy-size: var(--app-button-xs-size);
+  --diagnostic-copy-gap: calc(var(--spacing) * 3 + 0.5lh - var(--diagnostic-copy-size) / 2);
+}
+
 /* The floating copy control sits above the recessed code surface in both themes. */
 .diagnostic-copy-button {
   --button-bg: light-dark(var(--surface), var(--default));

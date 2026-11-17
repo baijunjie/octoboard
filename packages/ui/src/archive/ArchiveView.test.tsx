@@ -16,12 +16,14 @@ import {
   underArchivedCoordinator,
 } from "../fixtures/archiveSessions";
 import { expectIndependentMarquees, stubMarquee } from "../components/motion/marqueeTestSupport";
+import { errorAlerts } from "../components/alerts/errorAlerts";
 import { isolate } from "../i18n/isolate";
 import type { DialogRequest } from "../dialogs/dialogRequest";
 import type { Session } from "../protocol";
+import { closeOpenTooltip, enter, openTooltip } from "../components/hint/tooltipTestSupport";
 import { TEST_PROVIDERS } from "../test/testProviders";
 import { ArchiveView, FOCUS_DELAY_MS, FOCUS_FALLBACK_DELAY_MS } from "./ArchiveView";
-import { fakeTimers } from "../test/clock";
+import { fakeTimers, runOutTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -156,7 +158,7 @@ it("selects a row's session when the row is pressed or given Enter, but not when
     row.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
   });
   expect(onSelect).toHaveBeenCalledTimes(2);
-  const reopen = Array.from(row.querySelectorAll("button")).find((b) => b.textContent === "Reopen")!;
+  const reopen = Array.from(row.querySelectorAll("button")).find((b) => b.getAttribute("aria-label")?.startsWith("Reopen"))!;
   act(() => reopen.click());
   expect(onReopen).toHaveBeenCalledWith(boundArchived[0]);
   const remove = row.querySelector<HTMLElement>("button[aria-label^='Delete']")!;
@@ -277,9 +279,220 @@ it("offers no lock or unlock control in the archive", () => {
 it("always shows a row's Reopen and Delete on a device that cannot hover, and reveals them on hover or focus otherwise", () => {
   const { container } = renderArchiveView();
   const row = container.querySelector<HTMLElement>("ul > li [role=button]")!;
-  const reopen = Array.from(row.querySelectorAll("button")).find((b) => b.textContent === "Reopen")!;
+  const reopen = Array.from(row.querySelectorAll("button")).find((b) => b.getAttribute("aria-label")?.startsWith("Reopen"))!;
   const clip = reopen.closest<HTMLElement>(".max-w-0")!;
   expect(clip.className).toContain("[@media(hover:none)]:max-w-none [@media(hover:none)]:overflow-visible [@media(hover:none)]:opacity-100");
   expect(clip.className).toContain("group-hover:max-w-none");
   expect(clip.className).toContain("group-focus-within:max-w-none");
+});
+
+// A row's actions are three icon-only buttons, each named by its tooltip; Open in the agent's app is offered where the
+// daemon found the agent's app installed.
+const CONVERSATION = "0b8f1c52-3d1e-4a7b-9c41-5e6d7f8091a2";
+const resumable = (session: Session, extra: Partial<Session> = {}): Session => ({ ...session, agent_session_id: CONVERSATION, has_conversation: true, ...extra });
+const rowButtons = (container: HTMLElement) => Array.from(container.querySelector<HTMLElement>("ul > li [role=button]")!.querySelectorAll<HTMLButtonElement>(".sidebar-fills button"));
+/** The row button for the action `name`, whose accessible name goes on to say which session it is for. */
+const buttonNamed = (container: HTMLElement, name: string) => rowButtons(container).find((button) => button.getAttribute("aria-label")?.startsWith(name));
+/** Which action a row button is, by what its accessible name starts with. */
+const actionOf = (button: HTMLElement) => ["Open in Claude app", "Open in Codex app", "Reopen", "Delete"].find((action) => button.getAttribute("aria-label")?.startsWith(action));
+
+/** The text of the tooltip a keyboard user opens by focusing `button`. */
+function tooltipOnFocus(button: HTMLElement): string | null | undefined {
+  act(() => {
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    button.focus();
+  });
+  onTestFinished(closeOpenTooltip);
+  return document.querySelector("[role=tooltip]")?.textContent;
+}
+
+it("gives a row three icon-only buttons, Open in the agent's app, Reopen and Delete, in that order, named for the session, with tooltips that are the action alone", () => {
+  const session = resumable(boundArchived[0]);
+  const { container } = renderArchiveView(undefined, undefined, [session], { nativeApps: ["claude"], onOpenInApp: () => {} });
+
+  const buttons = rowButtons(container);
+  const title = isolate(boundArchived[0].title);
+  expect(buttons.map((button) => button.getAttribute("aria-label"))).toEqual([`Open in Claude app: ${title}`, `Reopen session ${title}`, `Delete session ${title}`]);
+  expect(buttons.map((button) => button.textContent)).toEqual(["", "", ""]);
+  expect(buttons.every((button) => button.querySelector("svg"))).toBe(true);
+  expect(buttons.map((button) => button.disabled)).toEqual([false, false, false]);
+  buttons.forEach((button, index) => expect(tooltipOnFocus(button)).toBe(["Open in Claude app", "Reopen", "Delete"][index]));
+});
+
+it("opens the row's conversation in its agent's app when Open in the app is pressed, without selecting the row or reopening it", () => {
+  const session = resumable(boundArchived[0]);
+  const onSelect = vi.fn();
+  const onReopen = vi.fn();
+  const onOpenInApp = vi.fn();
+  const { container } = renderArchiveView(undefined, undefined, [session], { nativeApps: ["claude"], onOpenInApp, onSelect, onReopen });
+
+  act(() => buttonNamed(container, "Open in Claude app")!.click());
+
+  expect(onOpenInApp).toHaveBeenCalledExactlyOnceWith(session);
+  expect(onSelect).not.toHaveBeenCalled();
+  expect(onReopen).not.toHaveBeenCalled();
+});
+
+it("offers Open in the app only where the agent has an app that is installed, and the view can open one", () => {
+  const session = resumable(boundArchived[0]);
+  const names = (overrides: Partial<React.ComponentProps<typeof ArchiveView>>, row: Session = session) =>
+    rowButtons(renderArchiveView(undefined, undefined, [row], overrides).container).map(actionOf);
+  const onOpenInApp = () => {};
+
+  expect(names({ nativeApps: ["claude"], onOpenInApp })).toEqual(["Open in Claude app", "Reopen", "Delete"]);
+  expect(names({ nativeApps: [], onOpenInApp })).toEqual(["Reopen", "Delete"]);
+  expect(names({ onOpenInApp })).toEqual(["Reopen", "Delete"]);
+  expect(names({ nativeApps: ["codex"], onOpenInApp })).toEqual(["Reopen", "Delete"]);
+  expect(names({ nativeApps: ["claude"] })).toEqual(["Reopen", "Delete"]);
+  // An agent that declares no app is offered none, whatever the probe says.
+  expect(names({ nativeApps: ["grok"], onOpenInApp }, { ...session, agent: "grok" })).toEqual(["Reopen", "Delete"]);
+  expect(names({ nativeApps: ["codex"], onOpenInApp }, { ...session, agent: "codex" })).toEqual(["Open in Codex app", "Reopen", "Delete"]);
+});
+
+it.each([
+  ["it has no conversation yet", {}, { has_conversation: false }],
+  ["it recorded no conversation id", {}, { agent_session_id: null }],
+])("makes Open in the app unavailable, which does nothing when pressed, when %s", (_name, overrides, sessionChanges) => {
+  const onOpenInApp = vi.fn();
+  const { container } = renderArchiveView(undefined, undefined, [resumable(boundArchived[0], sessionChanges)], { nativeApps: ["claude"], onOpenInApp, ...overrides });
+
+  const open = buttonNamed(container, "Open in Claude app")!;
+  expect(open.getAttribute("aria-disabled")).toBe("true");
+  expect(open.disabled).toBe(false);
+  // Unavailable, not disabled: it keeps keyboard focus, which is where its tooltip comes from.
+  act(() => {
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    open.focus();
+  });
+  expect(document.activeElement).toBe(open);
+  onTestFinished(closeOpenTooltip);
+  act(() => open.click());
+  expect(onOpenInApp).not.toHaveBeenCalled();
+  // Reopen and Delete are not held back by it.
+  expect(buttonNamed(container, "Reopen")!.disabled).toBe(false);
+  expect(buttonNamed(container, "Delete")!.disabled).toBe(false);
+});
+
+it("presses Open in the app unavailable to explain, raising the refusal's reason as an alert", () => {
+  const onOpenInApp = vi.fn();
+  const { container } = renderArchiveView(undefined, undefined, [resumable(boundArchived[0], { has_conversation: false })], { nativeApps: ["claude"], onOpenInApp });
+  onTestFinished(() => void act(() => errorAlerts.acknowledge()));
+
+  act(() => buttonNamed(container, "Open in Claude app")!.click());
+
+  expect(onOpenInApp).not.toHaveBeenCalled();
+  expect(errorAlerts.getSnapshot().map((alert) => [alert.title, alert.message])).toEqual([["Could not open the agent's app", "The session has no conversation yet, so there is nothing to open."]]);
+});
+
+it("gives Open in the app, where nothing needs saying, no description of its own, and not the tooltip's either", () => {
+  fakeTimers();
+  const { container } = renderArchiveView(undefined, undefined, [resumable(boundArchived[0])], { nativeApps: ["claude"], onOpenInApp: () => {} });
+  const open = buttonNamed(container, "Open in Claude app")!;
+
+  enter(open);
+  runOutTimers();
+
+  expect(openTooltip()?.textContent).toBe("Open in Claude app");
+  expect(open.getAttribute("aria-describedby") ?? "").toBe("");
+});
+
+/** The open tooltip as the rail avatar's is laid out: a heading, a groove line, the text under it. */
+function headedTooltip(): { heading: string | null | undefined; body: string | null | undefined } {
+  const line = openTooltip()?.querySelector("hr");
+  return { heading: line?.previousElementSibling?.textContent, body: line?.nextElementSibling?.textContent };
+}
+
+/** What the control's `aria-describedby` names, as its description. */
+const descriptionOf = (control: HTMLElement) => document.getElementById(control.getAttribute("aria-describedby") ?? "")?.textContent;
+
+it("says why Open in the app does nothing in its tooltip, after its name", () => {
+  fakeTimers();
+  const { container } = renderArchiveView(undefined, undefined, [resumable(boundArchived[0], { has_conversation: false })], { nativeApps: ["claude"], onOpenInApp: () => {} });
+  const open = buttonNamed(container, "Open in Claude app")!;
+
+  enter(open);
+  runOutTimers();
+
+  expect(headedTooltip()).toEqual({ heading: "Open in Claude app", body: "The session has no conversation yet, so there is nothing to open." });
+  expect(descriptionOf(open)).toBe("The session has no conversation yet, so there is nothing to open.");
+});
+
+it("keeps Open in the app enabled where the app may not see the conversation, and says so in its tooltip, after its name", () => {
+  fakeTimers();
+  const onOpenInApp = vi.fn();
+  const { container } = renderArchiveView(undefined, undefined, [resumable(boundArchived[0])], { nativeApps: ["claude"], onOpenInApp, nativeAppsUnseen: new Set([boundArchived[0].id]) });
+  const open = buttonNamed(container, "Open in Claude app")!;
+  expect(open.disabled).toBe(false);
+  expect(open.getAttribute("aria-disabled")).toBeNull();
+
+  enter(open);
+  runOutTimers();
+  const sentence = "The agent's app may not see this conversation: its latest record is kept in this account's own directory, not the default one.";
+  expect(headedTooltip()).toEqual({ heading: "Open in Claude app", body: sentence });
+  expect(descriptionOf(open)).toBe(sentence);
+
+  act(() => open.click());
+  expect(onOpenInApp).toHaveBeenCalledWith(expect.objectContaining({ id: boundArchived[0].id }));
+});
+
+const listed = boundArchived.map((session) => resumable(session));
+
+it("asks to probe the apps for the rows it lists as it opens, and again for only the rows it lists as more load", () => {
+  let loadMore!: () => void;
+  vi.stubGlobal("IntersectionObserver", class {
+    constructor(callback: IntersectionObserverCallback) { loadMore = () => callback([{ isIntersecting: true } as IntersectionObserverEntry], this as unknown as IntersectionObserver); }
+    observe() {}
+    disconnect() {}
+  });
+  onTestFinished(() => void vi.unstubAllGlobals());
+  const onRefreshNativeApps = vi.fn();
+  renderArchiveView(undefined, undefined, listed, { restore: { shown: 1, scrollTop: 0 }, onRefreshNativeApps });
+
+  expect(onRefreshNativeApps).toHaveBeenCalledExactlyOnceWith([listed[0].id]);
+
+  act(() => loadMore());
+
+  expect(onRefreshNativeApps).toHaveBeenCalledTimes(2);
+  expect(onRefreshNativeApps).toHaveBeenLastCalledWith(listed.slice(1).map((session) => session.id));
+});
+
+it("asks only about rows that have a conversation of an agent with an app, still refreshing which apps are installed as it opens", () => {
+  const onRefreshNativeApps = vi.fn();
+  const rows = [listed[0], { ...listed[1], has_conversation: false }, { ...listed[2], agent: "grok" }];
+  renderArchiveView(undefined, undefined, rows, { onRefreshNativeApps });
+
+  expect(onRefreshNativeApps).toHaveBeenCalledExactlyOnceWith([listed[0].id]);
+
+  const none = vi.fn();
+  renderArchiveView(undefined, undefined, [rows[1], rows[2]], { onRefreshNativeApps: none });
+  expect(none).toHaveBeenCalledExactlyOnceWith([]);
+});
+
+it("asks in requests of at most two hundred rows", () => {
+  const rows = Array.from({ length: 250 }, (_, i) => resumable({ ...boundArchived[0], id: `s-many-${i}`, title: `Many ${i}` }));
+  const onRefreshNativeApps = vi.fn();
+  renderArchiveView(undefined, undefined, rows, { restore: { shown: 250, scrollTop: 0 }, onRefreshNativeApps });
+
+  expect(onRefreshNativeApps.mock.calls.map(([ids]) => ids.length)).toEqual([200, 50]);
+});
+
+it("asks about a row archived while the view is open, and about no row twice", () => {
+  const onRefreshNativeApps = vi.fn();
+  const { rerender } = renderArchiveView(undefined, undefined, [listed[0]], { onRefreshNativeApps });
+  expect(onRefreshNativeApps).toHaveBeenCalledExactlyOnceWith([listed[0].id]);
+
+  rerender({ sessions: [listed[0], listed[1]] });
+
+  expect(onRefreshNativeApps).toHaveBeenCalledTimes(2);
+  expect(onRefreshNativeApps).toHaveBeenLastCalledWith([listed[1].id]);
+});
+
+it("renders the same on a rerender that lists no more rows, asking nothing again", () => {
+  const onRefreshNativeApps = vi.fn();
+  const { rerender } = renderArchiveView(undefined, undefined, listed, { onRefreshNativeApps });
+  expect(onRefreshNativeApps).toHaveBeenCalledExactlyOnceWith(listed.map((session) => session.id));
+
+  rerender({ nativeApps: ["claude"] });
+
+  expect(onRefreshNativeApps).toHaveBeenCalledTimes(1);
 });

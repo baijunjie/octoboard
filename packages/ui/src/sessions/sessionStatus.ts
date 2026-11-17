@@ -25,6 +25,34 @@ export function sessionIsWorking(session: Session): boolean {
   return WORKING_STATUSES.has(session.status) || runsInBackground(session);
 }
 
+/** Whether `session` is still at its turn or may go on without anyone acting: working, waiting for the user (whose
+ * answer lets it go on), showing its background agents, or idle with work left running in the background. A session
+ * still starting is not counted here, as it has no process yet; and one shown waiting only for a usage-limit dialog
+ * (`Session.at_usage_limit`) is at rest, its turn having stopped on the account's limit, which is what a handoff is
+ * for, unless it also has work left running in the background (the daemon serves its `background_tasks` then, though
+ * its status is not `idle`). What a handoff waits out, as the daemon's `refuse_unless_it_can_be_handed_off` does, over
+ * the same notion of the status (`status_for_switch`). */
+export function sessionIsBusy(session: Pick<Session, "status" | "background_tasks" | "at_usage_limit">): boolean {
+  if (session.status === "waiting_user") return !session.at_usage_limit || !!session.background_tasks?.length;
+  return session.status === "working" || session.status === "dormant" || runsInBackground(session);
+}
+
+/** Whether any session bound to `ownerId` can still send it something without the owner or the user acting first: it
+ * is starting or busy (`sessionIsBusy`). A child at rest (idle with nothing left in the background, interrupted or
+ * archived) cannot. Messages queued for a child, which the records do not show, are the daemon's to judge. */
+export function hasChildThatCanReport(sessions: Iterable<Session>, ownerId: string): boolean {
+  for (const child of sessions) {
+    if (child.bound_to === ownerId && childCanReport(child)) return true;
+  }
+  return false;
+}
+
+/** Whether `child`, a session bound to an owner, can still send the owner something without anyone acting first: it is
+ * starting or busy (`sessionIsBusy`). */
+export function childCanReport(child: Pick<Session, "status" | "background_tasks" | "at_usage_limit">): boolean {
+  return child.status === "starting" || sessionIsBusy(child);
+}
+
 /** The ids of the sessions with delegated work in progress: those some session in `sessions` that is
  * starting, working, dormant, waiting for the user or idle with work left running in the background
  * (`runsInBackground`) is bound to, directly or through the sessions between (`bound_to`), whatever their own

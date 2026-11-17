@@ -12,6 +12,7 @@ export type { SessionRequest } from "./sessionRequests";
 export { createStateStore } from "./state";
 export { createSettingsWriter } from "./settingsWrite";
 export type { SettingsChanges } from "./settingsWrite";
+export { useNativeAppInstalled, useNativeAppUnseen, useNativeAppsRefresh } from "./nativeApps";
 export { whenState } from "./whenState";
 export type { State, TrustPrompt } from "./state";
 export { errorNotification } from "./notifications";
@@ -19,6 +20,7 @@ export type { AlertOptions, NoticeWithdrawal, NotificationRequest, WindowNotific
 export {
   useAccountSwitchHeld,
   useArchivedOwnerSessions,
+  useChildCanReport,
   useConsoleSessions,
   useConsoleStatus,
   useConsoleStatusCounts,

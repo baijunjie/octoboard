@@ -803,6 +803,13 @@
           "type": "boolean",
           "description": "Offers credits that reset its usage limits early."
         },
+        "native_app_scheme": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The URL scheme its desktop application registers, which is how the host is asked whether the\napplication is installed; `Some` exactly when the provider can open a conversation in it\n(`AgentProvider::native_app`)."
+        },
         "per_session_trust": {
           "type": "boolean",
           "description": "Keeps the trust its confirmation grants in a per-session home, from where Octoboard carries\nit to the user's own configuration."
@@ -824,6 +831,7 @@
         "hook_script",
         "status_line",
         "reset_credits",
+        "native_app_scheme",
         "per_session_trust",
         "config_sharing",
         "mcp_inventory",
@@ -4997,6 +5005,48 @@
                 "null"
               ]
             },
+            "agents": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/Agent"
+              }
+            },
+            "sessions_seen": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "The asked `sessions` whose conversation the applications can see."
+            },
+            "sessions_unseen": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "The asked `sessions` judged not to be seen, which the application may not show, though\nit is still opened. One asked about and in neither list was not judged."
+            },
+            "type": {
+              "type": "string",
+              "const": "native_apps"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "agents",
+            "sessions_seen"
+          ],
+          "description": "The reply to `probe_native_apps`: the agents whose desktop application is installed on the\ndaemon's host."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "links": {
               "type": "array",
               "items": {
@@ -8622,11 +8672,15 @@
           "items": {
             "$ref": "#/$defs/BackgroundTask"
           },
-          "description": "The work the agent has left running in the background while the session is `Idle`: the\nsession is then waiting for instructions and, at the same time, not finished. Never stored:\nit is filled in on the record a client receives (`AppState::wire_session`) from what the\nagent's last `Stop` listed, trimmed by completion notifications and cleared by a\n`StopFailure`, and is empty for every other status."
+          "description": "The work the agent has left running in the background while the session is `Idle`: the\nsession is then waiting for instructions and, at the same time, not finished. Never stored:\nit is filled in on the record a client receives (`AppState::wire_session`) from what the\nagent's last `Stop` listed, trimmed by completion notifications and cleared by a\n`StopFailure`, and is empty for every other status, but for a session shown `waiting_user`\nonly for a usage-limit dialog over an idle turn (`at_usage_limit`), which carries the idle\nturn's."
         },
         "switching_account": {
           "type": "boolean",
           "description": "Whether an account switch (`switch_session_account`) holds the session right now, from the\nmoment it takes its claim until it lets it go: the process is being ended, the conversation\ncopied and the process relaunched. Never stored: it is filled in on the record a client\nreceives (`AppState::wire_session`), and absent otherwise."
+        },
+        "at_usage_limit": {
+          "type": "boolean",
+          "description": "Whether the session is shown `waiting_user` only for a usage-limit dialog on its screen over\nan idle turn (an agent whose usage-limit screen shows as waiting for the user). Such a\nsession is at rest as far as a handoff or a switch of its account is concerned: nothing it\ndoes on its own follows. Never stored: it is filled in on the record a client receives\n(`AppState::wire_session`), and absent otherwise."
         },
         "paused": {
           "type": "boolean",

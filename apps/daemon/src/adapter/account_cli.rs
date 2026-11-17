@@ -6,13 +6,14 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::{Command, ExitStatus, Output};
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
 use crate::accounts::shared_config;
+use crate::platform::proc::Reach;
 use crate::platform::shell::ResolvedBinary;
-use crate::processes::subprocess::{run_bounded, BoundedFailure, Bounds};
+use crate::processes::subprocess::{run_bounded, run_to_file, BoundedFailure, Bounds};
 use crate::protocol::{AgentId, CodedError};
 use crate::providers::layout::layout;
 use crate::text::truncate;
@@ -157,6 +158,24 @@ impl AdmittedCommand {
         cancel: Option<&AtomicBool>,
     ) -> Result<Output, BoundedFailure> {
         run_query(&mut self.command, timeout, limit, cancel)
+    }
+
+    /// Runs the command to its end with its output in the file `output`, held to `timeout`, and
+    /// leaves alone what it started when it ends ([`Reach::Group`], and no pipe for a descendant to
+    /// hold open): for a CLI that hands its work to an application that must outlive it, which
+    /// [`Self::run`], reaching the CLI's whole session, would end along with it.
+    pub(crate) fn run_leaving_descendants(
+        &mut self,
+        output: &Path,
+        timeout: Duration,
+    ) -> Result<ExitStatus, BoundedFailure> {
+        run_to_file(
+            &mut self.command,
+            output,
+            timeout,
+            Reach::Group,
+            Duration::ZERO,
+        )
     }
 }
 

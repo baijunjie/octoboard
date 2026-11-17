@@ -114,6 +114,8 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         hook_script: true,
         status_line: false,
         reset_credits: true,
+        // The ChatGPT app, which hosts Codex and registers `codex:`.
+        native_app_scheme: Some("codex"),
         per_session_trust: false,
         config_sharing: true,
         mcp_inventory: true,

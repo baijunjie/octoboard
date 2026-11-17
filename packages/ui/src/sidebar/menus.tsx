@@ -1,4 +1,4 @@
-import { Archive, ArrowLeftRight, Copy, Cpu, Download, Focus, Forward, Folder, FolderPlus, GitBranch, KeyRound, List, Lock, LockOpen, Palette, PanelRight, Pencil, Pin, PinOff, RotateCcw, Settings2, Terminal, Trash2, Undo2, Unlink, Upload, SquareArrowOutUpRight } from "lucide-react";
+import { AppWindow, Archive, ArrowLeftRight, Copy, Cpu, Download, Focus, Forward, Folder, FolderPlus, GitBranch, KeyRound, List, Lock, LockOpen, Palette, PanelRight, Pencil, Pin, PinOff, RotateCcw, Settings2, Terminal, Trash2, Undo2, Unlink, Upload, SquareArrowOutUpRight } from "lucide-react";
 
 import { handoffBlock, switchEntries, switchEntryBlock } from "../accounts/switchEntries";
 import type { QuotaReadings } from "../accounts/choiceEntries";
@@ -19,6 +19,7 @@ import { ShortcutKbd } from "../shortcuts/ShortcutKbd";
 import { ariaBinding, type ModifierHost } from "../shortcuts/binding";
 import { bindingFor, matchesCommand } from "../shortcuts/store";
 import { archivePreviewSessions, isUnusedSession } from "../sessions/order";
+import { openInAppBlock, openInAppNote } from "../sessions/nativeApp";
 import { SessionColourSwatches } from "./SessionColourSwatches";
 import type { ArchiveScope, FocusTarget, ProjectPanelKind, SidebarHandlers } from "./types";
 
@@ -238,13 +239,15 @@ function switchAccountSubmenu(
   };
 }
 
-/** "Hand off": offered for a session that is not archived. Disabled while the session is in the middle of a turn
- * or still starting, which the daemon refuses (`session_working`), while it is locked, as Archive is, while the
- * session's own account is changing its sharing (`ownChanging`), which the daemon refuses, and while an account
- * switch holds the session (`switching`, see `handoffBlock`); and while no other agent could take it over (`hasTarget`). A
- * lasting hold (locked, in a turn, no other agent) shows its reason and wins over one that ends on its own (a
- * switch, a sharing change, starting), which shows none. */
-function handoffItem(t: Translate, handlers: SidebarHandlers, session: Session, hasTarget: boolean, holds: { switching: boolean; ownChanging: boolean }): ActionMenuItem {
+/** "Hand off": offered for a session that is not archived. Disabled while the session is busy (in the middle of a
+ * turn, waiting for the user, showing its background agents or running work in the background) or still starting,
+ * which the daemon refuses (`session_working`), while a session under it can still report to it (`childActive`,
+ * `session_child_active`), while it is locked, as Archive is, while the session's own account is changing its
+ * sharing (`ownChanging`), which the daemon refuses, and while an account switch holds the session (`switching`, see
+ * `handoffBlock`); and while no other agent could take it over (`hasTarget`). A lasting hold (locked, busy, a child at
+ * work, no other agent) shows its reason and wins over one that ends on its own (a switch, a sharing change,
+ * starting), which shows none. */
+function handoffItem(t: Translate, handlers: SidebarHandlers, session: Session, hasTarget: boolean, holds: { switching: boolean; ownChanging: boolean; childActive: boolean }): ActionMenuItem {
   const block = handoffBlock(t, session, holds);
   const lasting = block?.reason ? block : hasTarget ? undefined : { detail: t("sidebar.session.handoffNoTarget"), reason: { state: t("sidebar.session.handoffNoTarget.reason") } };
   return {
@@ -254,6 +257,35 @@ function handoffItem(t: Translate, handlers: SidebarHandlers, session: Session, 
     iconClassName: "rtl:-scale-x-100",
     onClick: () => handlers.onOpenDialog({ kind: "handoff", session }),
     disabled: block !== undefined || lasting !== undefined,
+  };
+}
+
+/** "Open in <the agent's app>": offered for a session whose agent declares a desktop application, which the caller has
+ * found installed on the daemon's host (`label` is the provider's wording). Disabled, with the reason, while the session
+ * has a process or has no conversation yet (`openInAppBlock`). Where the application may not see the conversation (`seen`
+ * false, `openInAppNote`) it stays enabled and says so in a muted line under its label, which assistive technology reads
+ * in full as the item's description. */
+function openInAppItem(t: Translate, session: Session, { label, seen, onOpen }: { label: string; seen: boolean; onOpen: () => void }): ActionMenuItem {
+  const block = openInAppBlock(t, session);
+  const note = block ? undefined : openInAppNote(t, seen);
+  return {
+    label,
+    icon: AppWindow,
+    shortcut: "W",
+    onClick: onOpen,
+    ...(block ? { disabled: true, description: block.detail, reason: { state: block.state } } : {}),
+    ...(note
+      ? {
+        ariaLabel: label,
+        description: note.detail,
+        content: (
+          <span className="flex min-w-0 max-w-full flex-col">
+            <FadeOverflow as="span" className="block" dir="auto" titleWhenClipped={label}>{label}</FadeOverflow>
+            <span aria-hidden="true" className="text-xs text-app-muted">{note.note}</span>
+          </span>
+        ),
+      }
+      : {}),
   };
 }
 
@@ -302,14 +334,16 @@ function colourSubmenu(t: Translate, handlers: SidebarHandlers, session: Session
  * `quota` is what the Switch account entries are judged against, for the accounts used up, and `sharing` for the
  * accounts whose sharing change runs, and `disabledDefaults` the agents whose default account is turned off.
  * `switching` is whether an account switch holds the session (`holdsAccountSwitch`), the daemon's or one this window
- * has queued, which the session's own record does not say. */
+ * has queued, which the session's own record does not say. `childActive` is whether a session under it can still
+ * report to it (`hasChildThatCanReport`). `nativeApp` is the open-in-app action, offered only where the agent's
+ * application is installed: the menu has no such item without it. */
 export function sessionMenu(
   t: Translate,
   handlers: SidebarHandlers,
   session: Session,
   accounts: Account[],
   defaultNames: Settings["default_account_names"],
-  { host, placement = "list", focusTarget, focusShortcut, hasBoundSessions = false, canHandoff = true, switching, quota, providers, sharing, disabledDefaults, accountOrder }: {
+  { host, placement = "list", focusTarget, focusShortcut, hasBoundSessions = false, canHandoff = true, switching, childActive = false, nativeApp, quota, providers, sharing, disabledDefaults, accountOrder }: {
     host: ModifierHost;
     placement?: MenuPlacement;
     focusTarget?: FocusTarget;
@@ -317,6 +351,8 @@ export function sessionMenu(
     hasBoundSessions?: boolean;
     canHandoff?: boolean;
     switching: boolean;
+    childActive?: boolean;
+    nativeApp?: { label: string; seen: boolean; onOpen: () => void };
     quota?: QuotaReadings;
     providers: readonly ProviderInfo[];
     sharing?: Map<string, AccountSharing>;
@@ -329,6 +365,7 @@ export function sessionMenu(
   // The daemon refuses to switch the account of a session that is still starting.
   const switchAccount = archived || session.status === "starting" ? undefined : switchAccountSubmenu(t, handlers, session, accounts, defaultNames, quota, providers, sharing, disabledDefaults, accountOrder, switching);
   const focusable = focusTarget && !archived && !focused;
+  const openInApp = nativeApp && openInAppItem(t, session, nativeApp);
   return [
     ...(!archived ? [{ label: t(session.locked ? "sidebar.session.unlock" : "sidebar.session.lock"), icon: session.locked ? LockOpen : Lock, shortcut: "L", onClick: () => handlers.onSetLocked(session, !session.locked) }] : []),
     ...(archived ? [{ label: t("sidebar.session.reopen"), shortcut: "O", icon: RotateCcw, onClick: () => handlers.onReopenSession(session) }] : []),
@@ -358,7 +395,8 @@ export function sessionMenu(
     // A session still starting, or being switched to another account, is refused by the daemon; both end on their own.
     ...(archived ? [] : [{ label: t("sidebar.session.changeModel"), shortcut: "M", icon: Cpu, disabled: session.status === "starting" || switching, onClick: () => handlers.onOpenDialog({ kind: "session-model", session }) }]),
     ...(switchAccount ? [switchAccount] : []),
-    ...(archived ? [] : [{ ...handoffItem(t, handlers, session, canHandoff, { switching, ownChanging: sharing?.get(session.account_id ?? "")?.progress !== undefined }), shortcut: "H" }]),
+    ...(archived ? [] : [{ ...handoffItem(t, handlers, session, canHandoff, { switching, childActive, ownChanging: sharing?.get(session.account_id ?? "")?.progress !== undefined }), shortcut: "H" }]),
+    ...(openInApp ? [openInApp] : []),
     ...(session.bound_to && !archived ? [{ label: t("sidebar.session.unbind"), shortcut: "U", icon: Unlink, disabled: session.status === "starting" || switching, onClick: () => handlers.onOpenDialog({ kind: "unbind-session", session }) }] : []),
     "separator",
     ...(!archived ? [{ label: t("sidebar.session.rename"), shortcut: "R", icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-session", session }) }, "separator" as const] : []),

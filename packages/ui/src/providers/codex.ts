@@ -46,6 +46,7 @@ const en = {
   "provider.codex.setting.approval_reviewer.choice.user.summary": "Always ask to edit external files and use the internet",
   "provider.codex.setting.approval_reviewer.choice.auto_review.summary": "Only ask for actions detected as potentially unsafe",
   "provider.codex.setting.approval_reviewer.choice.full_access.summary": "Unrestricted access to the internet and any file on your computer",
+  "provider.codex.openInApp": "Open in Codex app",
 } as const;
 
 const arMessages = {
@@ -82,6 +83,7 @@ const arMessages = {
   "provider.codex.setting.approval_reviewer.choice.user.summary": "السؤال دائماً لتعديل الملفات الخارجية واستخدام الإنترنت",
   "provider.codex.setting.approval_reviewer.choice.auto_review.summary": "السؤال فقط عن الإجراءات التي يُكتشف أنها قد تكون غير آمنة",
   "provider.codex.setting.approval_reviewer.choice.full_access.summary": "وصول غير مقيد إلى الإنترنت وأي ملف على جهاز الكمبيوتر الخاص بك",
+  "provider.codex.openInApp": "فتح في تطبيق Codex",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const deMessages = {
@@ -118,6 +120,7 @@ const deMessages = {
   "provider.codex.setting.approval_reviewer.choice.user.summary": "Zum Bearbeiten externer Dateien und zur Internetnutzung immer nachfragen",
   "provider.codex.setting.approval_reviewer.choice.auto_review.summary": "Nur bei als potenziell unsicher erkannten Aktionen nachfragen",
   "provider.codex.setting.approval_reviewer.choice.full_access.summary": "Uneingeschränkter Zugriff auf das Internet und jede Datei auf deinem Computer",
+  "provider.codex.openInApp": "In der Codex-App öffnen",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const esMessages = {
@@ -154,6 +157,7 @@ const esMessages = {
   "provider.codex.setting.approval_reviewer.choice.user.summary": "Preguntar siempre para editar archivos externos y usar internet",
   "provider.codex.setting.approval_reviewer.choice.auto_review.summary": "Preguntar solo por acciones detectadas como potencialmente inseguras",
   "provider.codex.setting.approval_reviewer.choice.full_access.summary": "Acceso sin restricciones a internet y a cualquier archivo de tu ordenador",
+  "provider.codex.openInApp": "Abrir en la app de Codex",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const frMessages = {
@@ -190,6 +194,7 @@ const frMessages = {
   "provider.codex.setting.approval_reviewer.choice.user.summary": "Toujours demander pour modifier des fichiers externes et utiliser Internet",
   "provider.codex.setting.approval_reviewer.choice.auto_review.summary": "Demander uniquement pour les actions détectées comme potentiellement dangereuses",
   "provider.codex.setting.approval_reviewer.choice.full_access.summary": "Accès illimité à Internet et à tous les fichiers de votre ordinateur",
+  "provider.codex.openInApp": "Ouvrir dans l’app Codex",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const hiMessages = {
@@ -226,6 +231,7 @@ const hiMessages = {
   "provider.codex.setting.approval_reviewer.choice.user.summary": "बाहरी फ़ाइलें संपादित करने और इंटरनेट का उपयोग करने के लिए हमेशा पूछें",
   "provider.codex.setting.approval_reviewer.choice.auto_review.summary": "केवल संभावित रूप से असुरक्षित पाई गई कार्रवाइयों के लिए पूछें",
   "provider.codex.setting.approval_reviewer.choice.full_access.summary": "इंटरनेट और आपके कंप्यूटर की किसी भी फ़ाइल तक अप्रतिबंधित पहुँच",
+  "provider.codex.openInApp": "Codex ऐप में खोलें",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const idMessages = {
@@ -262,6 +268,7 @@ const idMessages = {
   "provider.codex.setting.approval_reviewer.choice.user.summary": "Selalu bertanya untuk mengedit file eksternal dan menggunakan internet",
   "provider.codex.setting.approval_reviewer.choice.auto_review.summary": "Hanya bertanya untuk tindakan yang terdeteksi berpotensi tidak aman",
   "provider.codex.setting.approval_reviewer.choice.full_access.summary": "Akses tanpa batas ke internet dan file apa pun di komputer Anda",
+  "provider.codex.openInApp": "Buka di aplikasi Codex",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const itMessages = {
@@ -298,6 +305,7 @@ const itMessages = {
   "provider.codex.setting.approval_reviewer.choice.user.summary": "Chiedi sempre per modificare file esterni e usare Internet",
   "provider.codex.setting.approval_reviewer.choice.auto_review.summary": "Chiedi solo per le azioni rilevate come potenzialmente non sicure",
   "provider.codex.setting.approval_reviewer.choice.full_access.summary": "Accesso illimitato a Internet e a qualsiasi file sul tuo computer",
+  "provider.codex.openInApp": "Apri nell’app Codex",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const jaMessages = {
@@ -334,6 +342,7 @@ const jaMessages = {
   "provider.codex.setting.approval_reviewer.choice.user.summary": "外部ファイルの編集とインターネットの利用時に常に確認",
   "provider.codex.setting.approval_reviewer.choice.auto_review.summary": "安全でない可能性があると検出された操作のみ確認",
   "provider.codex.setting.approval_reviewer.choice.full_access.summary": "インターネットとコンピューター上のあらゆるファイルに制限なくアクセス",
+  "provider.codex.openInApp": "Codexアプリで開く",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const koMessages = {
@@ -370,6 +379,7 @@ const koMessages = {
   "provider.codex.setting.approval_reviewer.choice.user.summary": "외부 파일을 편집하고 인터넷을 사용하기 전에 항상 확인",
   "provider.codex.setting.approval_reviewer.choice.auto_review.summary": "잠재적으로 안전하지 않다고 감지된 작업에 대해서만 확인",
   "provider.codex.setting.approval_reviewer.choice.full_access.summary": "인터넷과 컴퓨터의 모든 파일에 제한 없이 접근",
+  "provider.codex.openInApp": "Codex 앱에서 열기",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const ptMessages = {
@@ -406,6 +416,7 @@ const ptMessages = {
   "provider.codex.setting.approval_reviewer.choice.user.summary": "Sempre perguntar para editar arquivos externos e usar a internet",
   "provider.codex.setting.approval_reviewer.choice.auto_review.summary": "Perguntar apenas sobre ações detectadas como potencialmente inseguras",
   "provider.codex.setting.approval_reviewer.choice.full_access.summary": "Acesso irrestrito à internet e a qualquer arquivo no seu computador",
+  "provider.codex.openInApp": "Abrir no app do Codex",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const ruMessages = {
@@ -442,6 +453,7 @@ const ruMessages = {
   "provider.codex.setting.approval_reviewer.choice.user.summary": "Всегда спрашивать для редактирования внешних файлов и использования интернета",
   "provider.codex.setting.approval_reviewer.choice.auto_review.summary": "Спрашивать только о действиях, обнаруженных как потенциально небезопасные",
   "provider.codex.setting.approval_reviewer.choice.full_access.summary": "Неограниченный доступ к интернету и любому файлу на вашем компьютере",
+  "provider.codex.openInApp": "Открыть в приложении Codex",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const thMessages = {
@@ -478,6 +490,7 @@ const thMessages = {
   "provider.codex.setting.approval_reviewer.choice.user.summary": "ถามทุกครั้งเพื่อแก้ไขไฟล์ภายนอกและใช้อินเทอร์เน็ต",
   "provider.codex.setting.approval_reviewer.choice.auto_review.summary": "ถามเฉพาะการดำเนินการที่ตรวจพบว่าอาจไม่ปลอดภัย",
   "provider.codex.setting.approval_reviewer.choice.full_access.summary": "เข้าถึงอินเทอร์เน็ตและไฟล์ใดก็ได้บนคอมพิวเตอร์ของคุณโดยไม่มีข้อจำกัด",
+  "provider.codex.openInApp": "เปิดในแอป Codex",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const trMessages = {
@@ -514,6 +527,7 @@ const trMessages = {
   "provider.codex.setting.approval_reviewer.choice.user.summary": "Harici dosyaları düzenlemek ve interneti kullanmak için her zaman sor",
   "provider.codex.setting.approval_reviewer.choice.auto_review.summary": "Yalnızca potansiyel olarak güvensiz olduğu tespit edilen işlemler için sor",
   "provider.codex.setting.approval_reviewer.choice.full_access.summary": "İnternete ve bilgisayarınızdaki herhangi bir dosyaya sınırsız erişim",
+  "provider.codex.openInApp": "Codex uygulamasında aç",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const viMessages = {
@@ -550,6 +564,7 @@ const viMessages = {
   "provider.codex.setting.approval_reviewer.choice.user.summary": "Luôn hỏi để chỉnh sửa tệp bên ngoài và sử dụng internet",
   "provider.codex.setting.approval_reviewer.choice.auto_review.summary": "Chỉ hỏi với các hành động được phát hiện là có thể không an toàn",
   "provider.codex.setting.approval_reviewer.choice.full_access.summary": "Truy cập không hạn chế vào internet và mọi tệp trên máy tính của bạn",
+  "provider.codex.openInApp": "Mở trong ứng dụng Codex",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const zhHans = {
@@ -588,6 +603,7 @@ const zhHans = {
   "provider.codex.setting.approval_reviewer.choice.user.summary": "编辑外部文件和使用互联网前始终询问",
   "provider.codex.setting.approval_reviewer.choice.auto_review.summary": "仅对检测到可能不安全的操作询问",
   "provider.codex.setting.approval_reviewer.choice.full_access.summary": "不受限制地访问互联网和电脑上的任何文件",
+  "provider.codex.openInApp": "在 Codex 应用中打开",
 } as const;
 
 const zhHantMessages = {
@@ -624,6 +640,7 @@ const zhHantMessages = {
   "provider.codex.setting.approval_reviewer.choice.user.summary": "編輯外部檔案和使用網際網路前一律詢問",
   "provider.codex.setting.approval_reviewer.choice.auto_review.summary": "僅對偵測到可能不安全的操作詢問",
   "provider.codex.setting.approval_reviewer.choice.full_access.summary": "不受限制地存取網際網路和電腦上的任何檔案",
+  "provider.codex.openInApp": "在 Codex 應用程式中開啟",
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 /** Codex. The mark is taken from LobeHub's icon set (`@lobehub/icons-static-svg`, MIT), monochrome in the text colour as

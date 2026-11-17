@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { consoleOf, projectOf } from "../fixtures/builders";
-import { detectionMarkers, providerModelDisplay } from "./providers";
+import { detectionMarkers, nativeAppLabel, providerModelDisplay } from "./providers";
 import { TEST_AGENTS, TEST_PROVIDERS } from "../test/testProviders";
 import { agentChoiceBadge, agentPickerOptions, defaultAccountName, inheritedSessionLaunch, listedPickerAgents, noAgentState, projectSessionAgent, projectSessionLaunch, selectableAgent } from "./agents";
 import { format } from "../i18n/catalog";
@@ -183,5 +183,27 @@ describe("detectionMarkers", () => {
 
   it("is empty while the daemon has not served the providers", () => {
     expect(detectionMarkers([])).toEqual([]);
+  });
+});
+
+describe("nativeAppLabel", () => {
+  it("words the action in the provider's own copy for a provider that declares a desktop application", () => {
+    expect(nativeAppLabel(t, TEST_PROVIDERS, "claude")).toBe("Open in Claude app");
+    expect(nativeAppLabel(t, TEST_PROVIDERS, "codex")).toBe("Open in Codex app");
+  });
+
+  it("is none for a provider that declares no application, however its copy reads", () => {
+    expect(nativeAppLabel(t, TEST_PROVIDERS, "grok")).toBeUndefined();
+  });
+
+  it("is none for a provider the daemon has not served, and while it has served none", () => {
+    expect(nativeAppLabel(t, TEST_PROVIDERS, "no-such-agent")).toBeUndefined();
+    expect(nativeAppLabel(t, [], "claude")).toBeUndefined();
+  });
+
+  it("is none for a provider whose presentation module has no copy for it, though it declares an application", () => {
+    const grok = TEST_PROVIDERS.find((provider) => provider.id === "grok")!;
+    const acme = { ...grok, id: "acme", capabilities: { ...grok.capabilities, native_app_scheme: "acme" } };
+    expect(nativeAppLabel(t, [...TEST_PROVIDERS, acme], "acme")).toBeUndefined();
   });
 });

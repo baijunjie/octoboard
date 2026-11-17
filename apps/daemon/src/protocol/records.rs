@@ -494,7 +494,9 @@ pub struct Session {
     /// session is then waiting for instructions and, at the same time, not finished. Never stored:
     /// it is filled in on the record a client receives (`AppState::wire_session`) from what the
     /// agent's last `Stop` listed, trimmed by completion notifications and cleared by a
-    /// `StopFailure`, and is empty for every other status.
+    /// `StopFailure`, and is empty for every other status, but for a session shown `waiting_user`
+    /// only for a usage-limit dialog over an idle turn (`at_usage_limit`), which carries the idle
+    /// turn's.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub background_tasks: Vec<BackgroundTask>,
     /// Whether an account switch (`switch_session_account`) holds the session right now, from the
@@ -503,6 +505,13 @@ pub struct Session {
     /// receives (`AppState::wire_session`), and absent otherwise.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub switching_account: bool,
+    /// Whether the session is shown `waiting_user` only for a usage-limit dialog on its screen over
+    /// an idle turn (an agent whose usage-limit screen shows as waiting for the user). Such a
+    /// session is at rest as far as a handoff or a switch of its account is concerned: nothing it
+    /// does on its own follows. Never stored: it is filled in on the record a client receives
+    /// (`AppState::wire_session`), and absent otherwise.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub at_usage_limit: bool,
     /// Whether the session is at its prompt (`idle`) after a turn that ended abnormally: cancelled
     /// by the user or an owner's interrupt, a declined permission prompt or question that ended
     /// the turn, a usage-limit stop, a failure, or the process ending while the turn was in

@@ -1,7 +1,9 @@
 //! The host's launchers: revealing a path in the file manager, opening it with its default
-//! application and opening a terminal at a directory. What each starts is chosen here; whether a
-//! path may be opened and the running of the command are `host_open`'s.
+//! application, opening a terminal at a directory and opening an agent's desktop application by
+//! its URL scheme. What each starts is chosen here; whether a path may be opened and the running
+//! of the command are `host_open`'s.
 
+pub mod native_app;
 pub mod paths;
 pub mod terminal;
 

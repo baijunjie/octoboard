@@ -1,5 +1,5 @@
 import { Dropdown, Separator } from "@heroui/react";
-import React from "react";
+import React, { useId } from "react";
 import { Header, MenuContext, useSlottedContext } from "react-aria-components";
 
 import { useDisabled } from "./busy";
@@ -122,11 +122,13 @@ export function MenuItem({ ref, id, textValue, label, shortcut, expanded, danger
   children: React.ReactNode;
 }): React.ReactElement {
   const filtered = useMenuFiltered();
+  const descriptionId = useId();
   const classes = joinClasses(filtered ? FILTERED_ITEM_CLASS : undefined, className);
   // react-aria filters `aria-keyshortcuts` and `aria-expanded` out of a menu item's props, so they are set on the
   // element.
-  const announceShortcut = (node: HTMLDivElement | null) => {
+  const patchItemAria = (node: HTMLDivElement | null) => {
     if (!node) return;
+    linkDescription(node, descriptionId);
     if (shortcut && !filtered) node.setAttribute("aria-keyshortcuts", shortcut);
     else node.removeAttribute("aria-keyshortcuts");
     if (expanded === undefined) node.removeAttribute("aria-expanded");
@@ -135,7 +137,7 @@ export function MenuItem({ ref, id, textValue, label, shortcut, expanded, danger
   return (
     <Dropdown.Item
       {...data}
-      ref={mergeRefs(ref, announceShortcut)}
+      ref={mergeRefs(ref, patchItemAria)}
       id={id}
       textValue={textValue}
       {...definedProps({ "aria-label": label, className: classes, isDisabled: disabled, shouldCloseOnSelect: closeOnSelect })}
@@ -144,6 +146,18 @@ export function MenuItem({ ref, id, textValue, label, shortcut, expanded, danger
       {children as React.ReactElement}
     </Dropdown.Item>
   );
+}
+
+/** Links a menu item to its description (`slot="description"`) when react-aria has not: it settles the link when the item
+ * mounts, so a description that arrives later (a note that comes with a probe's answer) is drawn but never described. The
+ * description keeps the id it has, else takes one from the item's, and joins the ids the item already names. */
+function linkDescription(node: HTMLElement, fallbackId: string): void {
+  const description = node.querySelector<HTMLElement>('[data-slot="description"]');
+  if (!description) return;
+  const named = node.getAttribute("aria-describedby")?.split(" ").filter(Boolean) ?? [];
+  if (named.some((id) => document.getElementById(id) === description)) return;
+  description.id ||= fallbackId;
+  node.setAttribute("aria-describedby", [...named.filter((id) => document.getElementById(id)), description.id].join(" "));
 }
 
 /** Runs `item`, the element of a `MenuItem`, as its own keyboard activation does, for a key the caller handles itself:

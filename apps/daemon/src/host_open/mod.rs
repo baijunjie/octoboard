@@ -1,9 +1,9 @@
 //! Starting the host's own launchers: the system file manager and default applications
-//! (`paths`) and the system terminal (`terminal`). A launcher is either waited on, for one that
-//! exits once the host has accepted the request, or started in its own session and reaped in the
-//! background, for one that lives as long as the application it opens. What each launcher is
-//! asked is the caller's; this module owns the start, the bound on a waited one and the reading of
-//! a failed launch.
+//! (`paths`), the system terminal (`terminal`) and an agent's desktop application (`native_app`).
+//! A launcher is either waited on, for one that exits once the host has accepted the request, or
+//! started in its own session and reaped in the background, for one that lives as long as the
+//! application it opens. What each launcher is asked is the caller's; this module owns the start,
+//! the bound on a waited one and the reading of a failed launch.
 
 use std::process::Command;
 use std::sync::atomic::AtomicBool;
@@ -12,6 +12,7 @@ use std::time::Duration;
 use crate::platform::proc::Reach;
 use crate::processes::subprocess::{run_bounded, Bounds};
 
+pub mod native_app;
 pub mod paths;
 pub mod terminal;
 

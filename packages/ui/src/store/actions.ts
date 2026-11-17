@@ -39,6 +39,12 @@ export function dismissAccountLogin(store: StoreApi<State>, login: AccountLogin)
   store.setState((state) => reducer(state, { kind: "dismiss_account_login", login }));
 }
 
+/** Records which agents' desktop applications the daemon's host has installed, and, for the sessions `asked` about,
+ * which of them (`seen`) the applications can see, as `probe_native_apps` answered. */
+export function setNativeApps(store: StoreApi<State>, agents: readonly Agent[], asked: readonly string[], seen: readonly string[]): void {
+  store.setState((state) => reducer(state, { kind: "native_apps", agents, asked, seen }));
+}
+
 /** Marks that this window asked the daemon to restart, or that the daemon refused it; the next `hello` ends it. */
 export function setRestartAwaited(store: StoreApi<State>, awaited: boolean): void {
   store.setState((state) => reducer(state, { kind: "await_restart", awaited }));

@@ -159,7 +159,12 @@ and only these seven.
   the user* for as long as the session's rendered screen shows it, whatever the agent's hook reports say meanwhile; once
   it is gone the session shows the agent's last reported status again. Claude Code's views of its background agents are
   recognised the same way but show the session *dormant* instead (see "Dormant" above). Which screens are recognised is
-  in "Messages held until a session can take them" in `docs/product/message-delivery.md`.
+  in "Messages held until a session can take them" in `docs/product/message-delivery.md`. Where that screen is the
+  agent's usage-limit screen (Codex's usage-limit prompt, Grok Build's usage-limit screen) over a turn that has
+  stopped, the session record also carries `at_usage_limit: true`, absent otherwise and never stored, and keeps the
+  stopped turn's `background_tasks` (see "Working in background" below): the session is waiting for the user only on
+  its account's limit, and is at rest for a handoff (see "What can be handed off" in
+  `docs/product/handing-off-sessions.md`).
 - A session request — a `request_session` or `request_resume_session` call, or an owner's `switch_session_account` or
   `handoff_session` call the user is asked to approve — waiting for the user's answer holds its session at *waiting for
   the user* for the whole wait, whatever the agent's own events say meanwhile; when the request ends the session goes
@@ -277,8 +282,9 @@ Grok Build lists it only as the session's own turns end:
   and what was last listed shows again if it comes back to its prompt without a new turn end.
 
 **In every other respect it is like any other session at its prompt.** It takes a message straight away (see "Messages held
-until a session can take them" in `docs/product/message-delivery.md`), and it can be handed off (see "What can be handed
-off" in `docs/product/handing-off-sessions.md`). The session it is bound to reads as *child sessions working* (see "Done,
+until a session can take them" in `docs/product/message-delivery.md`). Unlike one *done*, it cannot be handed off until
+its background work is over (see "What can be handed off" in `docs/product/handing-off-sessions.md`). The session it
+is bound to reads as *child sessions working* (see "Done,
 awaiting instructions and child sessions working" below). Unlike one *done* or *awaiting instructions* with no session under it,
 archiving it asks for confirmation first (see "Archiving, interruption and resuming" in
 `docs/product/archiving-and-resuming-sessions.md`), quitting the application asks too (see "Quitting" in
@@ -317,8 +323,10 @@ background, *interrupted* or *archived* do not count. It takes precedence over *
 
 **Done and child sessions working are sessions at their prompt in every respect but their glyph and name.** Each
 takes a message straight away (see
-"Messages held until a session can take them" in `docs/product/message-delivery.md`) and can be handed off (see "What
-can be handed off" in `docs/product/handing-off-sessions.md`). Neither *done* nor *child sessions working* holds up a
+"Messages held until a session can take them" in `docs/product/message-delivery.md`). A *done* session can be handed off;
+one with *child sessions working* only once no session under it can still send it something — one under it waiting
+only at its usage-limit screen does not hold it (see "What can be handed off" in
+`docs/product/handing-off-sessions.md`). Neither *done* nor *child sessions working* holds up a
 quit by itself; for *child sessions working*, the busy sessions under it do (see "Quitting" in
 `docs/product/application-lifecycle.md`). Archiving one with an unarchived session under it asks for confirmation, as
 for any owner (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`).
@@ -402,8 +410,8 @@ session can take them" in `docs/product/message-delivery.md`), can be handed off
 `docs/product/handing-off-sessions.md`), is archived at once when nothing else asks for a confirmation (see "Archiving,
 interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`), and holds up no quit by itself (see
 "Quitting" in `docs/product/application-lifecycle.md`). A paused session that still has work running in the background is
-the exception: quitting asks for confirmation for it, as for *working in background*, and its owner reads as *child
-sessions working*.
+the exception: quitting asks for confirmation for it, as for *working in background*, it cannot be handed off, and its
+owner reads as *child sessions working*.
 
 ## Dormant
 
@@ -435,7 +443,8 @@ shows again the moment the view is gone.
   bar icon's orange dot does light for it (see "The icon's look" in `docs/product/menu-bar-icon.md`).
 - **It counts as busy**: quitting asks for confirmation while one is dormant (see "Quitting" in
   `docs/product/application-lifecycle.md`), archiving it asks first (see "Archiving, interruption and resuming" in
-  `docs/product/archiving-and-resuming-sessions.md`), and the session it is bound to reads as *child sessions working*.
+  `docs/product/archiving-and-resuming-sessions.md`), it cannot be handed off (see "What can be handed off" in
+  `docs/product/handing-off-sessions.md`), and the session it is bound to reads as *child sessions working*.
 
 ## The top status
 

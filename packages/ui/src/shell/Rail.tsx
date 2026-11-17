@@ -22,6 +22,7 @@ import { CHROME_BUTTON_FILLS, CHROME_CURRENT_FILLS, ChromeButton } from "./Chrom
 import { ConsoleAvatar } from "./ConsoleAvatar";
 import { NotificationsBell } from "./NotificationsBell";
 import { useListMotion } from "../components/motion/useListMotion";
+import { HeadedTooltip } from "../components/hint/HeadedTooltip";
 import { TitledControl } from "../components/hint/TitledControl";
 import { FadedScroller } from "../components/scroll/scrollFade";
 import { BadgeAnchor, Button } from "../primitives";
@@ -87,9 +88,7 @@ const ConsoleTile = memo(function ConsoleTile({
   }));
   const label = entries.length ? t("session.status.named", { name: isolate(thisConsole.name), status: joinPhrases(language, entries.map((entry) => entry.text)) }) : thisConsole.name;
   const tooltip = entries.length ? (
-    <div className="flex min-w-0 flex-col gap-1.5">
-      <div dir="auto" className="min-w-0 font-medium [overflow-wrap:anywhere]">{thisConsole.name}</div>
-      <hr className="groove-t" />
+    <HeadedTooltip heading={thisConsole.name}>
       <dl className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-0.5">
         {entries.map(({ kind, count }) => (
           <React.Fragment key={kind}>
@@ -98,7 +97,7 @@ const ConsoleTile = memo(function ConsoleTile({
           </React.Fragment>
         ))}
       </dl>
-    </div>
+    </HeadedTooltip>
   ) : thisConsole.name;
   return (
     <div ref={tileRef} data-list-motion={thisConsole.id} className="flex px-1 pb-1">

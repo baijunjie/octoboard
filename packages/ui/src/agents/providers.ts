@@ -74,6 +74,15 @@ export function providerMessageKey(id: string, name: ProviderMessageName): Messa
   return isMessageKey(key) ? key : undefined;
 }
 
+/** The label of the action that opens provider `id`'s sessions in its own desktop application
+ * (`provider.<id>.openInApp`), or `undefined` for a provider that declares no such application
+ * (`capabilities.native_app_scheme`) or whose presentation module has no copy for it. */
+export function nativeAppLabel(t: Translate, providers: readonly ProviderInfo[], id: string): string | undefined {
+  if (!servedProvider(providers, id)?.capabilities.native_app_scheme) return undefined;
+  const key = providerMessageKey(id, "openInApp");
+  return key && t(key as PlainMessageKey);
+}
+
 /** An id in words, for a setting or choice a provider's module has no copy for: its separators as spaces, capitalised
  * (`bypass_permissions` as "Bypass permissions"). */
 export function idWords(id: string): string {

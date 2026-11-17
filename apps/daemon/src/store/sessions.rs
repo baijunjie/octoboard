@@ -1060,6 +1060,7 @@ pub(super) fn read_session(row: &Row<'_>) -> rusqlite::Result<Option<Session>> {
         status: enum_from_row::<SessionStatus>(row, 9)?,
         background_tasks: Vec::new(),
         switching_account: false,
+        at_usage_limit: false,
         paused: row.get(31)?,
         prompt_on_launch: false,
         screen_inexact: false,

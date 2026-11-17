@@ -1,6 +1,10 @@
-/* Unlayered sizing extends HeroUI's scale without changing its variants or focus treatment. */
+/* Unlayered sizing extends HeroUI's scale without changing its variants or focus treatment. The extra-small button's
+   size is a variable for what is laid out around one (the diagnostic block's floating copy button). */
+:root {
+  --app-button-xs-size: 24px;
+}
 .app-button--xs {
-  height: 24px;
+  height: var(--app-button-xs-size);
   min-width: 0;
   gap: 4px;
   padding-inline: 8px;
@@ -8,7 +12,7 @@
   line-height: 16px;
 }
 .app-button--xs.button--icon-only {
-  width: 24px;
+  width: var(--app-button-xs-size);
   padding: 0;
 }
 .app-button--xs.button--full-width {

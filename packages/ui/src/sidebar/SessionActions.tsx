@@ -15,7 +15,9 @@ import { useHost } from "../platform/react";
 import type { Account, Session } from "../protocol";
 import { sessionDisplayTitle } from "../sessions/sessionLabel";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
-import { useAccountSwitchHeld, useDaemon, useDaemonStore } from "../store";
+import { useAccountSwitchHeld, useChildCanReport, useDaemon, useDaemonStore, useNativeAppInstalled, useNativeAppUnseen, useNativeAppsRefresh } from "../store";
+import { useOpenSessionInApp } from "../components/host/useOpenSessionInApp";
+import { nativeAppLabel } from "../agents/providers";
 import { type MenuPlacement, offersDelete, sessionMenu } from "./menus";
 import { archiveNeedsConfirmation, isUnusedSession } from "../sessions/order";
 import { RowIconButton } from "../components/rows/RowIconButton";
@@ -61,6 +63,13 @@ export function SessionActions({
   const canHandoff = useDaemonStore((s) => pickableAgents(s.agentAvailability, s.settings.added_agents, s.providers).some((agent) => agent !== session.agent));
   // The menu's switch-account holds follow it while open, so it is read here rather than when the menu opens.
   const switching = useAccountSwitchHeld(session);
+  const childActive = useChildCanReport(session.id);
+  // Asked again as the menu opens, so an application installed or removed since is found.
+  const refreshNativeApps = useNativeAppsRefresh();
+  const nativeAppInstalled = useNativeAppInstalled(session.agent);
+  const nativeAppUnseen = useNativeAppUnseen(session.id);
+  const openInApp = useOpenSessionInApp();
+  const nativeAppLabelOf = nativeAppLabel(t, useDaemonStore((s) => s.providers), session.agent);
   const handoff = useFocusHandoff(() => rowRef.current?.focus());
   const title = sessionDisplayTitle(t, session);
   const deletable = isUnusedSession(session, hasBoundSessions);
@@ -79,7 +88,7 @@ export function SessionActions({
           />
         </div>
       )}
-      <ActionMenu label={t("sidebar.session.actions", { title: isolate(title) })} items={() => sessionMenu(t, handlers, session, accounts, defaultNames, { host, placement, focusTarget, focusShortcut: ariaBinding(focusBinding, host), hasBoundSessions, canHandoff, switching, quota: { quotas: store.getState().accountQuotas, now: Date.now() }, providers: store.getState().providers, sharing: store.getState().accountSharing, disabledDefaults: store.getState().settings.disabled_default_accounts, accountOrder: store.getState().settings.account_order })} contextTargetRef={rowRef} />
+      <ActionMenu label={t("sidebar.session.actions", { title: isolate(title) })} items={() => sessionMenu(t, handlers, session, accounts, defaultNames, { host, placement, focusTarget, focusShortcut: ariaBinding(focusBinding, host), hasBoundSessions, canHandoff, switching, childActive, nativeApp: nativeAppInstalled && nativeAppLabelOf ? { label: nativeAppLabelOf, seen: !nativeAppUnseen, onOpen: () => openInApp(session) } : undefined, quota: { quotas: store.getState().accountQuotas, now: Date.now() }, providers: store.getState().providers, sharing: store.getState().accountSharing, disabledDefaults: store.getState().settings.disabled_default_accounts, accountOrder: store.getState().settings.account_order })} contextTargetRef={rowRef} onOpened={() => refreshNativeApps([session.id])} />
     </>
   );
 }

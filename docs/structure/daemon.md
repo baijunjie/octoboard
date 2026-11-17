@@ -237,7 +237,9 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   `mod.rs` the dispatcher, then one file per request family (`consoles`, `projects`, `open`, `resume`, `launch`,
   `restart` (what the restarts of a session's process share: `run` drives the stop and relaunch of an account switch and
   a model change, the other helpers also serve a sharing change), `bindings`, `lifecycle` (archiving, deleting, and a
-  session's own archive when its work is finished: `lifecycle/finished.rs`), `handoff`, `account_switch`,
+  session's own archive when its work is finished: `lifecycle/finished.rs`), `handoff`, `native_app` (opening a stopped session's conversation in its agent's desktop
+  application, `open_session_in_app`, and the `probe_native_apps` answer: which agents' applications are installed and
+  which sessions' conversations they can see), `account_switch`,
   `model_change`, `account_sharing`, `accounts`, `settings`, `pages` (a session's page list and a form's submission),
   `processes` (listing, stopping and keeping the process trees a client sees), `messages`, `auto_switch` (moving a
   session off an account whose usage limit stopped a turn; lower layers reach it through `AppState`'s hooks), `validate`
@@ -278,7 +280,8 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   quoted body),
   `owner_notices.rs` (every notice to an owner), `texts.rs` (fixed texts in Octoboard's own name).
 - `src/handoff/` — the handoff package built for a session another takes over: build, render and file. The
-  `handoff_session` operation is `coordinator/handoff.rs`.
+  `handoff_session` operation is `coordinator/handoff.rs`, which also judges when a session may be handed off
+  (`refuse_unless_it_can_be_handed_off`).
 - `src/branch_origin/` — which session is responsible for a git branch: the record (`record.rs`, `target.rs`), the
   reconcile against the repository's branches (`reconcile.rs`), forks (`forks.rs`), transfer (`transfer.rs`), the
   listing, and `gate.rs` with `KeyedGates`, the keyed mutex branch cleanup shares.
@@ -388,7 +391,8 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   place a path is resolved against the disk (`canonical`, over `platform::names::canonical`) and compared as written
   (`lexical_key`, `lexically_within`, over `platform::names::lexical_key`).
 - `src/host_open/`, `src/path_links/` — opening the file manager, default application or terminal (every launcher runs
-  through one bounded runner, and what each host's launcher is comes from `platform::open`); probing and opening the paths a terminal shows, where `path_links/resolve.rs` is the one
+  through one bounded runner, and what each host's launcher is comes from `platform::open`; `host_open/native_app.rs`
+  opens an agent's desktop application at a URL its scheme names); probing and opening the paths a terminal shows, where `path_links/resolve.rs` is the one
   place that decides what a link may reach and what is only shown rather than launched.
 - `src/env_shell/` — the user's real shell environment agents are launched with (the host's login-shell snapshot from
   `platform::shell`, less the variables that mark an agent session, kept under the freshness rules of `cache.rs`), and
@@ -527,7 +531,8 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   marks (`bound`, and `open_bound`, taken from the listing of open descriptors), the close of every descriptor from one
   up that the child may run (`close_from`, shared by `proc/server/parent.rs` and the PTY start in `term/unix/start.rs`)
   and the marking of them close-on-exec instead (`mark_close_on_exec_from`, which `spawn_in_background` on Unix uses);
-  `sleep/` holding the host awake (`Hold`, `available`; macOS IOKit assertions, a Windows power request, Linux's logind
+  `cf.rs` the CoreFoundation calls the macOS parts share (a retained `Object`, strings and URLs made from text; used by
+  `sleep/macos.rs` and `open/native_app.rs`); `sleep/` holding the host awake (`Hold`, `available`; macOS IOKit assertions, a Windows power request, Linux's logind
   inhibitor lock and the session bus's screen saver inhibition over `zbus`), whose answer is `HostFacts::keep_awake`;
   `proc_table/` the native reads of the system's process table (list, every pid, start time, parent and children, a
   descriptor's path, sockets, working directory), one reader per OS, shared by the ledger's `table.rs`, `platform::proc`
@@ -535,7 +540,8 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   system terminal), chosen by an OS name so every OS's choice is tested anywhere (`terminal.rs`'s `host_launch` decides
   whether the host looks its terminal up on a shell snapshot, so business code compares no OS name), and
   `LAUNCHED_FILE_EXTENSIONS`, the file types the host's shell launches when opened (Windows only), which `path_links`
-  refuses; `local_socket/` the owner-only listening socket with a path (a Unix-domain socket on macOS and Linux, refused
+  refuses, and `open/native_app.rs`, whether the host has an application registered for a URL scheme (macOS Launch
+  Services, Windows' protocol association lookup) and the launch that opens a URL with it; `local_socket/` the owner-only listening socket with a path (a Unix-domain socket on macOS and Linux, refused
   on Windows, `AVAILABLE`): `Listener::bind_replacing_stale`, `connect` (the connect itself and every read and write
   bounded by a timeout), and `check_private_tree`, the judgement that a directory and its ancestors let nobody else
   enter or rename what is in it, which `browser::socket::bind` relies on; `owner_pipe/` the owner endpoint on Windows in
@@ -653,7 +659,8 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   deserialized; `AgentId::ALL` lists them in registry order and each provider's file declares its own constant),
   `ProviderDescriptor` (id, names, install page, binary,
   layout, the markers that detect a project set up for it, instruction file, tool-name prefix, ask-question tool,
-  `Capabilities` (status line, reset credits, per-session trust, configuration sharing, the delivery quirks),
+  `Capabilities` (status line, reset credits, per-session trust, configuration sharing, the URL scheme of its desktop
+  application `native_app_scheme`, the delivery quirks),
   `quota_windows` (`QuotaWindowNaming`, which windows the provider has and what its own interface calls them),
   `model_display` (`ModelDisplay`, how its model ids are shown), whether other providers can be made compatible
   with it, its `settings` schema and its error and notice `codes`) and `descriptors()`
@@ -696,7 +703,9 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   interpreter, its record store, its screen reader, its accounts (`accounts()`, `AccountOps`), its model catalogue
   (`catalogue()`, `ModelCatalogue`), how its CLI is installed and updated (`cli_packaging()`, `CliPackaging`, defined in
   `mod.rs`, read by `agents/cli/`), whether its hooks and signals give its sessions their status
-  (`has_status_integration()`; where not, `session/program_status.rs` takes it from the program's own reports), its status line (`status_line()`, `StatusLine`, defined in `mod.rs`) and what it
+  (`has_status_integration()`; where not, `session/program_status.rs` takes it from the program's own reports), its status line (`status_line()`, `StatusLine`, defined in `mod.rs`), how its desktop application is asked to show a conversation
+  (`native_app()`, `NativeApp`, defined in `mod.rs`, with `native_app_unavailable`, the refusal it raises; implemented by
+  `claude/native_app.rs` and `codex/native_app.rs`) and what it
   offers a provider made compatible with it (`compatibility_source()`, `CompatibilitySource`, defined in `mod.rs`: the
   MCP servers, skill directories and prompt files it has and the instructions to read the rest of its configuration;
   `LaunchSpec::compatibility_sources` holds one source per compatibility switch that is on, looked up with
@@ -735,7 +744,7 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   permission preset), `mcp_auth.rs` (its `McpServerAuth`: `codex mcp login` and `codex mcp logout`); Codex, Claude
   Code and Grok also have `mcp_inventory.rs` (their `McpInventoryReader`: Codex's over the app server, Claude Code's over
   `claude auth status` and `claude mcp list`, Grok's over `grok mcp list` and `grok mcp doctor`, servers only), and Grok `trust.rs` (its `TrustCarrier`)); `mod.rs` holds the shared launch/resume flow, `hooks.rs` the hook URL, command and script (the command and script name the session's key file, not the key) and the cross-project guard's command, script and `PreToolUse` group (`guard_command`, `write_guard_script`, `add_guard_group`; Claude Code registers the command in its JSON hooks, Grok Build the script in its JSON hooks, Codex the script in its launch overrides), and `account_cli.rs` the account
-  directories, commands and short queries (running an agent CLI as an account), and `files.rs` the bounded reads of the
+  directories, commands and short queries (running an agent CLI as an account, also one that leaves what it started running), and `files.rs` the bounded reads of the
   files an adapter reads, with `project_dirs` (the directories whose project configuration is layered) (`codex/claude_mcp.rs`
   only translates a compatibility source's MCP servers into Codex's launch overrides). The instruction file, tool-name prefix, ask-question tool and detection markers are read from the
   descriptors by `session_tools/`, `coordinator/console_workdir.rs` and `agents/detect.rs`.
@@ -933,8 +942,8 @@ names the sanctioned place for what it bans and has no allow-list of sites; a vi
   for any provider reads the descriptor's fields and branches on the capabilities it declares, or calls the
   provider's interface, never on which provider it is.
 - Tests sit beside the code they test (`tests.rs`, `*_tests.rs`); shared fixtures come from `src/test_support/`
-  (`mod.rs` re-exports `scratch.rs`, `app.rs`, `stand_in.rs`, `processes.rs`, `git.rs` for repositories, `sessions.rs`
-  and `owner_team.rs`, and holds `code_of` and `param_of`, the code and a param of a coded error). A test that depends on time goes through `src/test_support/clock.rs` (`tasks_idle` and `runtime_settled`/`runtime_advanced` on a paused tokio clock, `next_millisecond` for the named wait on the wall clock).
+  (`mod.rs` re-exports `scratch.rs`, `app.rs`, `stand_in.rs`, `processes.rs`, `git.rs` for repositories, `sessions.rs`,
+  `owner_team.rs` and `screens.rs` for the terminal screens of a usage limit, and holds `code_of` and `param_of`, the code and a param of a coded error). A test that depends on time goes through `src/test_support/clock.rs` (`tasks_idle` and `runtime_settled`/`runtime_advanced` on a paused tokio clock, `next_millisecond` for the named wait on the wall clock).
 
 ## Shared entry points
 
@@ -959,7 +968,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Give a helper process the launch key | never in its arguments: a file for the `octoboardd` helpers that take `--key-file` (`src/key_file.rs`: `write` makes it owner-only, `read` reads it), the same file for the git hook helpers, whose path the `OCTOBOARD_DAEMON_CREDENTIAL_PATH` variable carries (`src/session_git_hooks/`; no variable the git hooks need has `KEY`, `SECRET` or `TOKEN` in its name, which an agent's filter strips where its default excludes are on); the key itself is never in an environment, which agents write into files; Claude Code's own HTTP hook URL carries it inside the owner-only settings file (`src/adapter/claude/`) |
 | Read a request's body before any answer goes out, the body limit and its `413` | `src/request_body.rs` (`drain_unread`, outermost; `buffer`, inside the guard); the daemon's router and a holder's listener layer them |
 | Check a request's Origin and Host, compare a key, make a key | `src/request_guard.rs` (`headers_allowed`, `key_matches`, `same_secret`, `generate_key`); the daemon's guard is `src/server/access.rs`, and a holder's helper routes use it too |
-| Run an agent's CLI as an account for a short query | `src/adapter/account_cli.rs`: `query` (admits the run, held to `Bounds::agent_query`), `AdmittedCommand::run`, and `run_query` only where the account's directory is already held (a sign-in); `failure_detail` words a failure |
+| Run an agent's CLI as an account for a short query | `src/adapter/account_cli.rs`: `query` (admits the run, held to `Bounds::agent_query`), `AdmittedCommand::run`, `run_leaving_descendants` for a CLI that hands its work to an application that must outlive it, and `run_query` only where the account's directory is already held (a sign-in); `failure_detail` words a failure |
 | An account's directory | `adapter::account_dir` (the pinned directory, else the agent's default; `src/adapter/account_cli.rs`) |
 | A provider's fact (names, install page, binary, instruction file, tool-name prefix, detection markers, declared capabilities) | its descriptor: `AgentId::descriptor` and `providers::descriptors` (`src/providers/mod.rs`) |
 | Where an agent keeps its files | the descriptor's `layout` (`AgentLayout`, `src/providers/layout.rs`; each provider's value is its `LAYOUT` in `src/providers/<id>.rs`) |
@@ -971,6 +980,9 @@ New code uses these rather than a second implementation. None is enforced by a c
 | A consumer's use of a compatibility source (translating its MCP servers, keeping secrets off argv, linking skills and prompts) | `src/adapter/compatibility_offer.rs`; each consumer's own part is its `compatibility_consumer.rs` |
 | A value for every provider (a setting per provider, a model and effort per provider) | `protocol::PerAgent<T>` (`src/protocol/agents.rs`), indexed by `AgentId` and serialised in registry order |
 | A provider's behavior (launch plan, installed version, titles, terminal screens and dialogs, accounts, model catalogue, status line) | `adapter::provider(agent)` giving the `AgentProvider` (`src/adapter/mod.rs`); its accounts through `AccountOps` (`src/accounts/ops.rs`), its models through `ModelCatalogue` (`src/agents/models.rs`) |
+| Open a session's conversation in its agent's desktop application | `coordinator::native_app::open_session_in_app` (`src/coordinator/native_app.rs`) checks the session and the host; what each agent's application is asked is `AgentProvider::native_app` giving a `NativeApp` (`src/adapter/mod.rs`), which an agent declares through `Capabilities::native_app_scheme` (`src/providers/mod.rs`), and a refusal is `adapter::native_app_unavailable`; whether the application is installed comes from `platform::open::native_app`, the URL is opened by `host_open::native_app::open_url` |
+| Call CoreFoundation on macOS | `src/platform/cf.rs` (`Object`, `string`, `url`), not a second set of declarations |
+| Whether a session may be handed off now | `refuse_unless_it_can_be_handed_off` and `child_can_still_send` (`src/coordinator/handoff.rs`); the `handoff_session` request and the MCP tool of the same name (`src/mcp/tools/handoff.rs`) both go through it |
 | Codex's app-server handshake; reading a JSON-RPC reply | `src/adapter/codex/app_server.rs`; `src/agents/json_rpc.rs` |
 | Deliver a session's message through a provider's own server instead of its terminal | `MessageTransport` and `PrivateServer` (`src/session/term/mod.rs`); `send_message_with_id` tries the transport first and, while the session's conversation is not yet known, falls back to the terminal write, and returns the `Route` taken; starting its queue gives a `QueueStart`; a message the agent's queue refuses is `RefusedByAgent` and one the server holds is `HeldByServer`; Codex's is `src/adapter/codex/transport/` |
 | Whether a delivery error may still have reached the agent's own queue | `acceptance_uncertain` (`src/messaging/delivery.rs`; the coded error `message_acceptance_unconfirmed`) |

@@ -38,11 +38,12 @@ no badge for a removed account that recorded no directory; it shows the same acc
 Confirmations provide the agent and account as hidden accessible text beside the icon.
 
 A live session's action menu separates these groups, in order: Lock / Unlock, Pin / Unpin and Focus mode; Copy session
-ID alone; Change model, Switch account, Hand off and Unbind; then Rename on its own; then Archive or Delete. A live
+ID alone; Change model, Switch account, Hand off, Open in the agent's app and Unbind; then Rename on its own; then
+Archive or Delete. A live
 console session inserts Colour as its own group between the first of these and Copy session ID. Rename sits above
 Archive, or above Delete when Delete is offered instead, with a divider between them, and Archive or Delete stays
 last. Items appear only where available as described below. An archived session's menu offers Reopen, Copy
-session ID and Delete, each in a group of its own.
+session ID, Open in the agent's app and Delete, each in a group of its own.
 
 A session row's action menu offers:
 
@@ -95,12 +96,21 @@ A session row's action menu offers:
   with the bars, and is never marked used up.
 - **Hand off** — opens the handoff dialog, which moves the session's place to a new session of another agent (see
   "Handing off from the window" in `docs/product/handing-off-sessions.md`). Present for a project session's and a
-  console session's row; an archived session has no such entry. Disabled while the session is locked, while it is
-  *working*, while no agent other than its own can be picked, while the session is shown as switching its account,
-  while its own account is having its sharing changed, and while it is *starting*. The first three show a reason under
-  its name, "Session locked", "Session busy" and "No other agent", with a full sentence as its description for
-  assistive technology; the others show none. When several hold, the first in that order is the one shown, so one that
-  shows a reason always wins over one that does not.
+  console session's row; an archived session has no such entry. Disabled while the session is locked, while it is not
+  at rest (see "What can be handed off" in `docs/product/handing-off-sessions.md`), while a session bound to it can
+  still send it something, while no agent other than its own can be picked, while the session is shown as switching
+  its account, while its own account is having its sharing changed, and while it is *starting*. The first four show a
+  reason under its name, "Session locked", "Session busy", "Child sessions working" and "No other agent", with a full
+  sentence as its description for assistive technology; the others show none. When several hold, the first in that
+  order is the one shown, so one that shows a reason always wins over one that does not; a session still starting with
+  a session under it that can still send it something shows "Session busy".
+- **Open in Claude app** / **Open in Codex app** — opens the session's conversation in its agent's desktop
+  application (see `docs/product/opening-a-session-in-its-agents-app.md`), with a window icon. Present, on a live or an
+  archived session's row, only while the agent's application is installed on the daemon's host; Grok Build has none.
+  Disabled while the session has a process, with "Session running" under its name, and while it has no conversation
+  yet, with "No conversation yet", each with a full sentence as its description. Where the application may not see the
+  conversation, it stays enabled and shows a muted line under its name saying so, the full sentence being its
+  description.
 - **Unbind** — asks for confirmation, then releases the session from its owner, making it an independent project
   coordinator (see "Unbinding a session from the window" in `docs/product/changing-session-owners.md`); its row then
   shows it without a parent (see "Project rows" in `docs/product/sidebar-project-rows.md` and "The binding badge"
@@ -163,6 +173,7 @@ the session the menu belongs to under "Menu keyboard shortcuts" in `docs/product
 | Copy session ID | C |
 | Change model | M |
 | Hand off | H |
+| Open in the agent's app | W |
 | Unbind | U |
 | Archive | A |
 | Delete | D |

@@ -1164,3 +1164,16 @@ it("no longer says that an unconfirmed draft save may have sent the message with
   expect(text).toContain("did not write its message");
   expect(text).not.toMatch(/may have been sent|may include|with the draft|unfinished/i);
 });
+
+it("splits an agent app that could not be opened into its sentence, what to do, and the daemon's reason behind Details", () => {
+  const params = { detail: "the Codex application is not installed" };
+  const part = (name: "summary" | "remedy" | "details") => mount(<DaemonErrorMessage error={new CodedError("fallback", "native_app_unavailable", params)} part={name} />).textContent;
+
+  expect(part("summary")).toBe("It may not be installed, may not have started, or has no conversation to open.");
+  expect(part("remedy")).toBe("See the details for the cause, then try again.");
+  expect(part("details")).toContain("the Codex application is not installed");
+  expect((part("summary") ?? "") + (part("remedy") ?? "")).not.toContain("Codex application");
+  // Plain text (a toast, a notification) joins the sentence and the step, and carries none of the raw reason.
+  const plain = daemonMessage("en", "native_app_unavailable", params, "fallback", createStateStore({}).getState());
+  expect(plain).toBe("The agent's app may not be installed, may not have started, or has no conversation to open. See the details for the cause, then try again.");
+});

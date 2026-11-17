@@ -80,7 +80,8 @@ collapsed lines" in `docs/product/project-pane-git-change-viewer.md`).
 
 A control shown only as an icon has a tooltip naming it, shown both when the mouse rests on it and when it receives
 keyboard focus. The tooltip's text is the same name assistive technology announces for the control, except on the ⋮
-buttons, the pin buttons, the session Delete or Archive shortcuts, the file viewer's File manager and Default
+buttons, the pin buttons, the session Delete or Archive shortcuts, the archive view rows' action buttons, the file
+viewer's File manager and Default
 application buttons and the Keyboard shortcuts section's Cancel and Reset buttons below. These are:
 
 - the top bar's controls — Back, Forward, the sidebar toggle at its start and the panel toggles at its end; each
@@ -108,7 +109,9 @@ application buttons and the Keyboard shortcuts section's Cancel and Reset button
 - the Delete or Archive shortcut of a session row, a focus mode's session card or its archive preview row, whose tooltip
   is a short "Delete" or "Archive", while the name announced for it also names the session it acts on (see "Session
   rows" in `docs/product/sidebar-session-rows.md`);
-- the archive view's Close button and each of its rows' Delete button, whose tooltip names the session;
+- the archive view's Close button, and each of its rows' action buttons — Open in the agent's app where offered,
+  Reopen and Delete — whose tooltip is the action's short name ("Open in Claude app", "Reopen", "Delete"), while the
+  name announced for each also names the session it acts on (see `docs/product/archive-view.md`);
 - the three options of Settings' Theme row — Light, Dark and System (see "Theme" in `docs/product/settings.md`);
 - the Terminal font size row's **Reset font size** button (see "Terminal font size" in `docs/product/settings.md`);
 - the Reset button at the end of a row in Settings' Keyboard shortcuts section, whose tooltip is a short "Reset", while
@@ -149,6 +152,14 @@ application buttons and the Keyboard shortcuts section's Cancel and Reset button
 - the console dialog's Manage accounts button, beside the title of its Agent default accounts section (see "Agent config
   directories" in `docs/product/consoles.md`);
 - the close button of every dismissable dialog, of Settings and of each toast ("Close").
+
+**An icon-only control that carries a reason or a warning has a headed tooltip**: the control's name on a line of its
+own, a divider line, and the sentence under it — why it does nothing, or what to know before pressing it. The archive
+view rows' Open in the agent's app button has one while the session has no conversation yet, and while the
+application may not see the conversation (see "Where it is offered" and "Whether the app can see the conversation" in
+`docs/product/opening-a-session-in-its-agents-app.md`); otherwise its tooltip is its name alone. A warning's sentence
+is also the control's description for assistive technology. The console avatar's tooltip on the rail is laid out the
+same way, with its status counts under the console's name.
 
 The rail's **Account usage** button is an exception: it has **no tooltip**, on hover or on keyboard focus. Resting the
 mouse on it floats its panel in instead (see "Opening the panel" in `docs/product/account-quota-panel.md`), and its

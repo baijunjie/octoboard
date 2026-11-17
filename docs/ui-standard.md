@@ -487,8 +487,8 @@ keyboard removes a tag with Delete or Backspace on the tag, which react-aria des
 A control revealed only on hover or focus has to be reachable by touch too. `RowControls`
 (`packages/ui/src/components/controls/RowControls.tsx`), which holds the hover-revealed actions of sidebar and Files
 rows, shows them at all times on a device whose primary input cannot hover (`CANNOT_HOVER` in
-`packages/ui/src/input/touchInput.ts`, written `[@media(hover:none)]:` in classes); the archive rows' Reopen and Delete and
-the avatar field's remove button carry the same rule, and so does any new hover-revealed control.
+`packages/ui/src/input/touchInput.ts`, written `[@media(hover:none)]:` in classes); the archive rows' Open in the agent's app, Reopen and
+Delete and the avatar field's remove button carry the same rule, and so does any new hover-revealed control.
 
 **A table of fields is tabbed down its columns when a column is one unit.** In the console dialog's Advanced table each
 column is one session kind's pair, and its reasoning effort depends on its model, so Tab runs down a column before
@@ -572,7 +572,8 @@ gives the reason as its tooltip and as an `aria-describedby` description while i
 explains instead of acting. HeroUI's disabled style turns off pointer events on `aria-disabled`, so such a button puts
 them back (`pointer-events-auto`), or its tooltip never opens on hover. `Button`'s `unavailable`, given the reason, does
 all of it but the tooltip and a hover tint drawn by the caller's own classes, which the caller leaves off; its press
-reaches `onPress`, which explains (the Processes panel's Keep raises the refusal the daemon would answer with).
+reaches `onPress`, which explains (the Processes panel's Keep raises the refusal the daemon would answer with, and an
+archive row's Open in the agent's app raises the alert its refusal would bring).
 
 A switch unavailable for a reason shown under it (the account's sharing switch while its sessions run) follows the
 same rule: it keeps focus and is marked `aria-disabled`, a press or Space does nothing, and the reason is its
@@ -1142,6 +1143,17 @@ shorter of the two is settled per control in the "Tooltips on icon-only controls
 a button whose hover opens a floating panel that shows what its tooltip would say — the rail's Account usage and
 Processes buttons (above), a status mark, the help tip's "?": it carries only its accessible name. So does a Files or
 Git tree chevron, whose whole row does what it does (see "Buttons").
+
+When an icon-only control's tooltip has to say more than the action — why it is unavailable, or a warning that does not
+block it — the tooltip is a `HeadedTooltip` (`packages/ui/src/components/hint/`): the action's name as a heading on its
+own line, a divider, and the sentence below, as the rail's console avatar shows its name above its status rows. The
+tooltip is never the action name and the sentence joined on one line. The sentence also reaches assistive technology
+without the tooltip open: as the `unavailable` reason's description, or, for a warning, as a visually hidden
+description of the control.
+
+A menu item that stays available with a warning (Open in the agent's app when the app may not see the conversation)
+shows a short muted note under its label, in the place a disabled item's reason takes, and carries the full sentence as
+its description; the note does not disable it.
 
 A number field's − and + buttons are a second exception: they are not tab stops, the arrow keys doing the same from the
 field, and the glyphs are the stepper's own convention, so they carry only an accessible name, a whole phrase from the
@@ -2058,11 +2070,14 @@ block wraps long lines (`wrap`), takes its direction from the text (`dir="auto"`
 not error details (`failedText`); copying still yields the original text. Overflow on either axis makes the block a named, keyboard-reachable region; content that fits adds no
 scrolling tab stop. The vertical edges fade while they hide content. A floating, extra-small `tertiary` `CopyButton`
 stays at the surface's top-right corner outside the scroller and its fade, without a reserved row or column. It is
-centred vertically on the first code line, so it is centred in a single-line block, and has no added shadow. As an
+centred vertically on the first code line, so it is centred in a single-line block, and has no added shadow. Its gap
+from the surface's end edge (beyond any vertical scrollbar) equals the gap above and below it in a single-line block —
+the code's padding plus half a line, less half the button — computed from those quantities rather than fixed. As an
 approved local exception, its light-theme fill uses `--surface` at rest and `--background` when hovered or pressed,
 so the button is lighter than the recessed code surface in both appearances. Dark keeps the tertiary fills. Its opaque
-backing matches the diagnostic surface so text cannot show through the control. Extra horizontal scroll room at
-the end lets the first line clear the button; the button stays clear of a vertical scrollbar. It copies the complete
+backing matches the diagnostic surface so text cannot show through the control. The code's end padding is that gap
+plus the button's width, so the first line ends where the button begins; the button stays clear of a vertical
+scrollbar. It copies the complete
 original text including whitespace and line breaks, and remains available before a daemon connection exists. Keep
 structured error metadata separate from the plain error message, so notifications and unknown-error fallbacks retain
 usable text.

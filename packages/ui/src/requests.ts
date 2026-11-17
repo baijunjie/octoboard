@@ -72,6 +72,8 @@ export const REPLY_TYPES = {
   close_shell_terminal: "ack",
   open_project_terminal: "ack",
   open_project_directory: "ack",
+  open_session_in_app: "ack",
+  probe_native_apps: "native_apps",
   reveal_project_path: "ack",
   open_project_path: "ack",
   probe_path_links: "path_links",

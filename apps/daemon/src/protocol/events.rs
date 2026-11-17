@@ -541,6 +541,19 @@ pub enum Event {
         id: Option<String>,
         path: String,
     },
+    /// The reply to `probe_native_apps`: the agents whose desktop application is installed on the
+    /// daemon's host.
+    NativeApps {
+        id: Option<String>,
+        agents: Vec<AgentId>,
+        /// The asked `sessions` whose conversation the applications can see.
+        sessions_seen: Vec<String>,
+        /// The asked `sessions` judged not to be seen, which the application may not show, though
+        /// it is still opened. One asked about and in neither list was not judged.
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        #[cfg_attr(test, ts(optional = nullable))]
+        sessions_unseen: Vec<String>,
+    },
     /// The reply to `probe_path_links`: one entry per asked path, in the order asked.
     PathLinks {
         id: Option<String>,

@@ -124,14 +124,18 @@ pub(super) const HANDOFF_SESSION: ToolDef = ToolDef {
                   unless the user has chosen to have handoffs approved automatically, in which \
                   case the call does not wait. A refusal, or no answer in time, comes back as an \
                   error and changes nothing. Refused, changing nothing, while the session is in \
-                  the middle of a turn, and for the agent the session already runs on (switching \
-                  it to another account of that agent keeps the conversation). An account whose \
-                  quota is used up, or that is not logged in, is refused only once the user has \
-                  approved (they can pick another in the form), or at once when handoffs are \
-                  approved without asking. Returns the new session's id, its agent, account and, \
-                  where set, model, effort and held `compatibility` switches, the branches that \
-                  moved and the sessions it now owns. Pass `account` only when the user asked for \
-                  a particular one.",
+                  the middle of a turn, waiting for the user, showing its background agents or \
+                  running work in the background (a session whose turn stopped on its account's \
+                  usage limit is not busy), while a session it owns can still report to it (it \
+                  is working, waiting for the user or running work in the background, or has a \
+                  message coming: `session_child_active`), and for the agent the session already \
+                  runs on (switching it to another account of that agent keeps the \
+                  conversation). An account whose quota is used up, or that is not logged in, is \
+                  refused only once the user has approved (they can pick another in the form), or \
+                  at once when handoffs are approved without asking. Returns the new session's \
+                  id, its agent, account and, where set, model, effort and held `compatibility` \
+                  switches, the branches that moved and the sessions it now owns. Pass `account` \
+                  only when the user asked for a particular one.",
     schema: || {
         object_schema(
             json!({

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { handoffBlock, switchEntries } from "./switchEntries";
 import { sessionOf } from "../fixtures/builders";
 import type { Translate } from "../i18n/catalog";
-import type { AccountSharing } from "../protocol";
+import type { AccountSharing, Session } from "../protocol";
 import { accounts, NOW, usedUp, t } from "./accountChoicesTestSupport";
 
 describe("switchEntries and a running sharing change", () => {
@@ -45,5 +45,44 @@ describe("handoffBlock", () => {
     expect(handoffBlock(t, { ...base, status: "starting" }, free)).toEqual({ detail: "accountChoice.handoff.starting" });
     expect(handoffBlock(t, { ...base, status: "working" }, free)?.detail).toBe("accountChoice.handoff.working");
     expect(handoffBlock(t, base, free)).toBeUndefined();
+  });
+
+  const busy = { detail: "accountChoice.handoff.working", reason: { state: "accountChoice.handoff.working.reason" } };
+  const childActive = { detail: "accountChoice.handoff.childActive", reason: { state: "accountChoice.handoff.childActive.reason" } };
+
+  it.each<[string, Partial<Session>]>([
+    ["working", { status: "working" }],
+    ["waiting for the user", { status: "waiting_user" }],
+    ["showing its background agents", { status: "dormant" }],
+    ["idle with work in the background", { background_tasks: [{ id: "t" }] }],
+    ["waiting at a usage limit with work in the background", { status: "waiting_user", at_usage_limit: true, background_tasks: [{ id: "t" }] }],
+  ])("is blocked, with a reason, by a session that is %s", (_name, extra) => {
+    expect(handoffBlock(t, { ...base, ...extra }, free)).toEqual(busy);
+  });
+
+  it("does not block a session waiting only for a usage-limit dialog, or one idle with nothing running", () => {
+    expect(handoffBlock(t, { ...base, status: "waiting_user", at_usage_limit: true }, free)).toBeUndefined();
+    expect(handoffBlock(t, { ...base, background_tasks: [] }, free)).toBeUndefined();
+  });
+
+  it("is blocked, with a reason, by a child that can still report, unless none can", () => {
+    expect(handoffBlock(t, base, { ...free, childActive: true })).toEqual(childActive);
+    expect(handoffBlock(t, base, { ...free, childActive: false })).toBeUndefined();
+  });
+
+  it("says a starting session with a session at work under it is busy, as the daemon refuses it, not that the child is", () => {
+    const starting = { ...base, status: "starting" as const };
+    expect(handoffBlock(t, starting, { ...free, childActive: true })).toEqual(busy);
+    expect(handoffBlock(t, starting, { switching: true, ownChanging: true, childActive: true })).toEqual(busy);
+  });
+
+  it("puts the lasting holds first: locked, then busy, then a child at work, ahead of the brief ones", () => {
+    const everything = { switching: true, ownChanging: true, childActive: true };
+    expect(handoffBlock(t, { ...base, locked: true, status: "working" }, everything)?.reason?.state).toBe("accountChoice.sessionLocked.reason");
+    expect(handoffBlock(t, { ...base, status: "working" }, everything)).toEqual(busy);
+    expect(handoffBlock(t, base, everything)).toEqual(childActive);
+    expect(handoffBlock(t, base, { ...everything, childActive: false })).toEqual({ detail: "accountChoice.switching.detail" });
+    expect(handoffBlock(t, base, { switching: false, ownChanging: true, childActive: false })).toEqual({ detail: "accountChoice.ownSharingChange.detail" });
+    expect(handoffBlock(t, { ...base, status: "starting" }, { ...everything, switching: false, ownChanging: false, childActive: false })).toEqual({ detail: "accountChoice.handoff.starting" });
   });
 });

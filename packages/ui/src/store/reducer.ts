@@ -16,7 +16,8 @@ export type Action =
   | { kind: "track_pages_listing"; session: string; listing: boolean }
   | { kind: "dismiss_account_login"; login: AccountLogin }
   | { kind: "queue_account_switches"; ids: readonly string[]; queued: boolean }
-  | { kind: "await_restart"; awaited: boolean };
+  | { kind: "await_restart"; awaited: boolean }
+  | { kind: "native_apps"; agents: readonly Agent[]; asked: readonly string[]; seen: readonly string[] };
 
 /** The map of `records` by `idOf`, each one the record `previous` already holds for its id when that
  * is the same data. A snapshot (the first, or a lag recovery) names everything again, and what it
@@ -161,6 +162,17 @@ export function reducer(state: State, action: Action): State {
       // (`holdsAccountSwitch`).
       const queuedAccountSwitches = action.ids.reduce((held, id) => withMember(held, id, action.queued), state.queuedAccountSwitches);
       return queuedAccountSwitches === state.queuedAccountSwitches ? state : { ...state, queuedAccountSwitches };
+    }
+    case "native_apps": {
+      const seen = new Set(action.seen);
+      const unseen = new Set(state.nativeAppsUnseen);
+      for (const id of action.asked) {
+        if (seen.has(id)) unseen.delete(id);
+        else unseen.add(id);
+      }
+      const apps = sameValue(state.nativeApps, action.agents) ? state.nativeApps : action.agents;
+      const held = unseen.size === state.nativeAppsUnseen.size && [...unseen].every((id) => state.nativeAppsUnseen.has(id)) ? state.nativeAppsUnseen : unseen;
+      return apps === state.nativeApps && held === state.nativeAppsUnseen ? state : { ...state, nativeApps: apps, nativeAppsUnseen: held };
     }
     case "await_restart":
       return state.restartAwaited === action.awaited ? state : { ...state, restartAwaited: action.awaited };

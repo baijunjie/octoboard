@@ -79,6 +79,7 @@ mod login;
 mod mcp_auth;
 mod mcp_inventory;
 pub(crate) mod models;
+mod native_app;
 mod native_binary;
 mod private_server;
 pub(crate) mod quota;
@@ -249,6 +250,10 @@ impl AgentProvider for CodexProvider {
 
     fn catalogue(&self) -> &'static dyn crate::agents::models::ModelCatalogue {
         &models::CodexCatalogue
+    }
+
+    fn native_app(&self) -> Option<&'static dyn super::NativeApp> {
+        Some(&native_app::CodexApp)
     }
 
     fn compatibility_source(&self) -> Option<&'static dyn super::CompatibilitySource> {

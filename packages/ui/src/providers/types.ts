@@ -20,7 +20,10 @@ export type ProviderMessageName =
   /** What a shared account configuration never shares, beyond the login credentials. */
   | "sharingNeverShared"
   /** What an account's configuration directory needs besides existing, when it needs more. */
-  | "dirHint";
+  | "dirHint"
+  /** The action that opens a session's conversation in the provider's own desktop application, for a provider that
+   * declares one (`capabilities.native_app_scheme`). */
+  | "openInApp";
 
 /** What the UI presents of one provider, apart from the facts the daemon serves about it (`ProviderInfo`): its mark, its
  * colour, its brand-name placeholders, its messages and its error codes. `messages` holds the provider's catalog entries

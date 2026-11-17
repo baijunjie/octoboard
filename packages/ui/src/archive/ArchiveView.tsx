@@ -1,10 +1,13 @@
-import { Archive, RotateCcw, Trash2, X } from "lucide-react";
+import { AppWindow, Archive, RotateCcw, Trash2, X } from "lucide-react";
 import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 import { SessionAgentIcon } from "../components/icons/SessionAgentIcon";
 import { EmptyPanel } from "../components/panel/EmptyPanel";
 import { PANE_HEADER_FRAME_CLASS } from "../components/panel/paneHeaderFrame";
 import { FadeOverflow } from "../components/text/FadeOverflow";
+import { raiseError } from "../components/alerts/raiseError";
+import { ActionableError } from "../errors/actionableError";
+import { HeadedTooltip } from "../components/hint/HeadedTooltip";
 import { InlineReference } from "../i18n/InlineReference";
 import { PaneTitle } from "../components/panel/PaneTitle";
 import { ArchivedSessionMetadata, hasVisibleContext, SessionContextLabel } from "../components/status/SessionMetadata";
@@ -15,9 +18,10 @@ import type { DialogRequest } from "../dialogs/dialogRequest";
 import { useEscapeWhileTooltipOpen } from "../components/dialog/useEscapeWhileTooltipOpen";
 import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
-import type { Account, Console, Project, ProviderInfo, Session, Settings } from "../protocol";
+import { openInAppBlock as openInAppBlockOf, openInAppNote } from "../sessions/nativeApp";
+import type { Account, Agent, Console, Project, ProviderInfo, Session, Settings } from "../protocol";
 import { sessionAccountModelLine, sessionDisplayTitle } from "../sessions/sessionLabel";
-import { providerModelDisplay } from "../agents/providers";
+import { nativeAppLabel, providerModelDisplay, servedProvider } from "../agents/providers";
 import { inheritedLaunch, sessionModelEffort } from "../sessions/sessionModel";
 import { archivedSessionRows, boundArchivedSessions } from "../sessions/order";
 import { HOVER_ACTIONS_CLASS } from "../components/rows/hoverActions";
@@ -29,6 +33,9 @@ import { Button, Spinner } from "../primitives";
 
 /** How many rows the list adds each time its end scrolls into view. */
 const PAGE = 30;
+
+/** The most sessions asked about in one `probe_native_apps` (the daemon judges no more). */
+const NATIVE_APP_PROBE_LIMIT = 200;
 
 /** How long after it opens the view waits to take focus: the menu item that opened it hands focus back a task after its
  * menu closes, and that must not win. */
@@ -67,6 +74,10 @@ export function ArchiveView({
   selectedSessionId,
   onSelect,
   onReopen,
+  nativeApps = [],
+  nativeAppsUnseen,
+  onOpenInApp,
+  onRefreshNativeApps,
   onOpenDialog,
   dialogOpen,
   onClose,
@@ -98,6 +109,16 @@ export function ArchiveView({
    * view is closed by that, as by any selection. */
   onSelect: (session: Session) => void;
   onReopen: (session: Session) => void;
+  /** The agents whose own desktop application is installed on the daemon's host, which a row of such an agent offers to
+   * open its conversation in. */
+  nativeApps?: readonly Agent[];
+  /** The sessions whose conversation the applications cannot see (see `State.nativeAppsUnseen`). */
+  nativeAppsUnseen?: ReadonlySet<string>;
+  /** Opens a row's conversation in its agent's desktop application. */
+  onOpenInApp?: (session: Session) => void;
+  /** Asked as the view opens and as it lists more rows, to find out afresh which agents' applications are installed and
+   * whether they can see the conversations of the rows `sessions` names. */
+  onRefreshNativeApps?: (sessions: readonly string[]) => void;
   onOpenDialog: (dialog: DialogRequest) => void;
   /** Whether a dialog is open, which a deletion's confirmation is. */
   dialogOpen: boolean;
@@ -120,6 +141,23 @@ export function ArchiveView({
   // The view's own Escape below is a React handler, which an open tooltip's takes the key from.
   useEscapeWhileTooltipOpen(() => active ? rootRef.current : null, onClose);
   const more = shown < archived.length;
+  // Asked as the view opens, so an application installed or removed since the window connected is found, and for each
+  // row as it is listed, whether the application can see its conversation: only rows that have one for an agent that
+  // has an application, each once, in requests of at most `NATIVE_APP_PROBE_LIMIT`. Keyed on the rows listed, so a row
+  // archived while the view is open is asked about too.
+  const probed = useRef(new Set<string>());
+  const askedOnce = useRef(false);
+  const listed = archived.slice(0, shown).map(({ session }) => session);
+  const listedKey = listed.map((session) => session.id).join(",");
+  useEffect(() => {
+    const fresh = listed
+      .filter((session) => !probed.current.has(session.id) && session.has_conversation && session.agent_session_id && servedProvider(providers, session.agent)?.capabilities.native_app_scheme)
+      .map((session) => session.id);
+    fresh.forEach((id) => probed.current.add(id));
+    if (fresh.length === 0 && askedOnce.current) return;
+    askedOnce.current = true;
+    for (let at = 0; at === 0 || at < fresh.length; at += NATIVE_APP_PROBE_LIMIT) onRefreshNativeApps?.(fresh.slice(at, at + NATIVE_APP_PROBE_LIMIT));
+  }, [listedKey]);
   const latestViewState = useLatest(onViewState);
   const reportViewState = () => {
     latestViewState.current?.({ shown, scrollTop: scrollerRef.current?.scrollTop ?? 0 });
@@ -239,6 +277,9 @@ export function ArchiveView({
                   selected={session.id === selectedSessionId}
                   onSelect={onSelect}
                   onReopen={onReopen}
+                  nativeApps={nativeApps}
+                  nativeAppSeen={!nativeAppsUnseen?.has(session.id)}
+                  onOpenInApp={onOpenInApp}
                   onOpenDialog={onOpenDialog}
                 />
               </li>
@@ -255,10 +296,10 @@ export function ArchiveView({
   );
 }
 
-/** One row of the list: selects the session (`onSelect`), and holds the Reopen and Delete actions,
- * whose presses must not also select it. Its accessible name is the session's own
- * (`sessionRowName`, which also says which bound coordinator it was archived under, the inset alone
- * being no words), then its model and effort, which the agent line shows only visually; the
+/** One row of the list: selects the session (`onSelect`), and holds the Open in the agent's app (where the agent
+ * has one), Reopen and Delete actions, in that order, whose presses must not also select it. Its accessible
+ * name is the session's own (`sessionRowName`, which also says which bound coordinator it was archived under,
+ * the inset alone being no words), then its model and effort, which the agent line shows only visually; the
  * account is already in the first part. Its context size and dates are its description. */
 function ArchiveRow({
   session,
@@ -271,6 +312,9 @@ function ArchiveRow({
   selected,
   onSelect,
   onReopen,
+  nativeApps,
+  nativeAppSeen,
+  onOpenInApp,
   onOpenDialog,
 }: {
   session: Session;
@@ -283,17 +327,34 @@ function ArchiveRow({
   selected: boolean;
   onSelect: (session: Session) => void;
   onReopen: (session: Session) => void;
+  nativeApps: readonly Agent[];
+  nativeAppSeen: boolean;
+  onOpenInApp?: (session: Session) => void;
   onOpenDialog: (dialog: DialogRequest) => void;
 }): React.ReactElement {
   const t = useT();
   const language = useCurrentLanguage();
   const contextId = useId();
   const datesId = useId();
+  const noteId = useId();
   const context = hasVisibleContext(session.context);
   const display = providerModelDisplay(providers, session.agent);
   const launch = sessionModelEffort(session, inheritedLaunch(session, consoles, projects, providers), display);
   const { modelLabel, name } = sessionRowModel(t, language, session, [under], "archived", { accounts, defaultNames, launch, providers });
   const agentLine = sessionAccountModelLine(t, session, accounts, defaultNames, modelLabel);
+  // Offered for an agent that has a desktop application, where the daemon found it installed; archived, so it has no
+  // process, and it is disabled only for what the conversation cannot be opened with (`openInAppBlock`).
+  const openInApp = onOpenInApp && nativeApps.includes(session.agent) ? nativeAppLabel(t, providers, session.agent) : undefined;
+  const openInAppBlock = openInApp ? openInAppBlockOf(t, session) : undefined;
+  // What the tooltip adds after the name: why the button does nothing, or that the app may not see the conversation.
+  const openInAppAside = openInAppBlock?.detail ?? (openInApp ? openInAppNote(t, nativeAppSeen)?.detail : undefined);
+  // A warning is the button's description (a block is, as `unavailable`), the tooltip being open only while it is looked at.
+  const openInAppNoteId = openInAppAside && !openInAppBlock ? noteId : undefined;
+  // A press on the unavailable button explains rather than acts: it raises the refusal the daemon would answer with.
+  const pressOpenInApp = () => {
+    if (openInAppBlock) raiseError(new ActionableError(openInAppBlock.detail, "none"), { title: t("sidebar.session.openInAppFailedTitle") });
+    else onOpenInApp?.(session);
+  };
   return (
     <TreeRow
       ariaLabel={name}
@@ -323,17 +384,26 @@ function ArchiveRow({
           <div className="sidebar-fills flex shrink-0 items-center pe-3">
             {/* Only this wrapper, padding-free, keeps a press from reaching the row. */}
             <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-              <Button size="sm" variant="tertiary" onPress={() => onReopen(session)}>
-                <RotateCcw aria-hidden="true" className="size-4" />
-                {t("sidebar.session.reopen")}
-              </Button>
-              <TitledControl title={<Message id="archive.delete" params={{ title: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, session)}</InlineReference> }} />}>
+              {openInApp && (
+                <TitledControl title={openInAppAside ? <HeadedTooltip heading={openInApp}><div>{openInAppAside}</div></HeadedTooltip> : openInApp}>
+                  <Button iconOnly size="sm" variant="tertiary" label={t("sidebar.session.openInAppItem", { label: openInApp, title: isolate(sessionDisplayTitle(t, session)) })} describedBy={openInAppNoteId ?? ""} unavailable={openInAppBlock?.detail} onPress={pressOpenInApp}>
+                    <AppWindow aria-hidden="true" className="size-4" />
+                    {openInAppNoteId && <span id={openInAppNoteId} className="sr-only">{openInAppAside}</span>}
+                  </Button>
+                </TitledControl>
+              )}
+              <TitledControl title={t("sidebar.session.reopen")}>
+                <Button iconOnly size="sm" variant="tertiary" label={t("sidebar.session.reopenItem", { title: isolate(sessionDisplayTitle(t, session)) })} describedBy="" onPress={() => onReopen(session)}>
+                  <RotateCcw aria-hidden="true" className="size-4" />
+                </Button>
+              </TitledControl>
+              <TitledControl title={t("common.delete")}>
                 <Button
                   iconOnly
                   size="sm"
                   variant="danger-soft"
                   disabled={session.locked}
-                  label={t("archive.delete", { title: isolate(sessionDisplayTitle(t, session)) })}
+                  label={t("sidebar.session.deleteItem", { title: isolate(sessionDisplayTitle(t, session)) })}
                   describedBy=""
                   onPress={() => onOpenDialog({ kind: "delete-session", session })}
                 >

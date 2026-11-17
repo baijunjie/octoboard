@@ -81,7 +81,7 @@ pub(in crate::mcp) async fn handoff_session(
         .await;
     }
     // Where nothing the user changes in the dialog could help.
-    handoff::refuse_unless_it_can_be_handed_off(&target, agent)?;
+    handoff::refuse_unless_it_can_be_handed_off(state, &target, agent)?;
     let open = handoff::receiving_request(state, &target, &asked.handoff(&target), None);
     let account = coordinator::open::check_open_asking(state, &open).await?;
     let change = Change::Handoff {

@@ -40,6 +40,7 @@ function capabilitiesOf(source: string): ProviderInfo["capabilities"] {
     hook_script: flag("hook_script"),
     status_line: flag("status_line"),
     reset_credits: flag("reset_credits"),
+    native_app_scheme: required(body, /\bnative_app_scheme: (Some\("[a-z]+"\)|None)/, "native_app_scheme").replace(/^Some\("([a-z]+)"\)$/, "$1").replace(/^None$/, "") || null,
     per_session_trust: flag("per_session_trust"),
     config_sharing: flag("config_sharing"),
     mcp_inventory: flag("mcp_inventory"),
