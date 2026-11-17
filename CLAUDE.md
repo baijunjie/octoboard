@@ -64,6 +64,22 @@ call for are dispatched as the workflow, their skills and the rules below say, a
 
 <!-- setup-agent:subagents:end -->
 
+## Provider-neutral core
+
+- Anything that differs between agents (Claude Code, Codex, Grok Build) lives in that agent's provider: in the daemon,
+  its descriptor (`apps/daemon/src/providers/<id>.rs`) for facts and declared capabilities and its adapter
+  (`apps/daemon/src/adapter/<id>/`) for behavior; in the UI, its presentation module
+  (`packages/ui/src/providers/<id>.ts`) for names, marks and `provider.<id>.*` copy, and a code only one provider
+  raises is that provider's code. Generic code never branches on which agent it is (`AgentId::CLAUDE`,
+  `agent === "codex"`) and never hard-codes an agent's CLI flags, URL schemes, files, directories or environment
+  variables: it reads the descriptor and branches on declared capabilities, or calls the provider's interface. When
+  the difference has no capability or interface method yet, add one. The full rule is in `docs/structure/daemon.md`
+  and `docs/structure/ui.md`, "Where new code goes".
+- Check this before designing a feature that behaves differently per agent, not only at review.
+- A brief to a subagent or a session whose work touches agent differences states this rule and says where each
+  agent-specific piece goes; a brief that prescribes per-agent behavior without saying where it lives invites the
+  branch in generic code.
+
 ## Repository checks
 
 - Do not add `--no-verify`, set skip environment variables (such as `REVERT_GATE_SKIP`), or change the hook
