@@ -5,6 +5,9 @@ import { afterEach, expect, it, onTestFinished, vi } from "vitest";
 import { tap } from "../components/hint/tooltipTestSupport";
 import { AFTER_FOCUS_MOVE_DELAY_MS, FIRST_WRITE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 
+import { CATALOGS, translatorFor } from "../i18n/catalog";
+import { currentLanguage, setLanguage } from "../i18n/language";
+import type { Language } from "../i18n/languages";
 import { LanguageProvider } from "../i18n/react";
 import type { PlatformAdapter } from "../platform";
 import { mountHost } from "../test/mountHost";
@@ -67,8 +70,9 @@ it("edits through the displayed shortcut itself, which gives way to a prompt tha
   expect(describedBy(change)).toBe("Ctrl+Shift+F");
   expect([...container.querySelectorAll("button")].some((control) => control.textContent === "Change")).toBe(false);
   act(() => change.click());
-  const prompt = [...container.querySelectorAll("kbd")].find((cap) => cap.textContent === "Press the new keys…")!;
+  const prompt = [...container.querySelectorAll("span[id]")].find((node) => node.textContent === "Press the new keys…")!;
   expect(prompt).toBeDefined();
+  expect(prompt.closest("kbd, .kbd")).toBeNull();
   expect(prompt.closest("button")).toBeNull();
   expect(button(container, "Change the shortcut for Toggle focus mode")).toBeNull();
   const cancel = button(container, "Cancel changing the shortcut for Toggle focus mode")!;
@@ -81,6 +85,25 @@ it("edits through the displayed shortcut itself, which gives way to a prompt tha
   const reset = button(container, "Reset the shortcut for Toggle focus mode to its default")!;
   expect(reset.textContent).toBe("");
   expect(reset.querySelector("svg[aria-hidden=true]")).not.toBeNull();
+});
+
+it.each(Object.keys(CATALOGS) as Language[])("keeps the recording instruction outside key caps in %s, including after a conflict", (language) => {
+  const previous = currentLanguage();
+  act(() => setLanguage(language));
+  onTestFinished(() => { act(() => setLanguage(previous)); });
+  const t = translatorFor(language);
+  const container = mount();
+  act(() => button(container, t("settings.shortcuts.changeLabel", { command: t("settings.shortcuts.command.focusMode") }))!.click());
+  const cancel = button(container, t("settings.shortcuts.cancelLabel", { command: t("settings.shortcuts.command.focusMode") }))!;
+  const prompt = document.getElementById(cancel.getAttribute("aria-describedby")!.split(/\s+/)[0]!)!;
+  expect(prompt).not.toBeNull();
+  expect(prompt.textContent).toBe(t("settings.shortcuts.recording"));
+  expect(prompt.closest("kbd, .kbd, button")).toBeNull();
+  press({ code: "Comma", primary: true });
+  expect(withoutIsolates(describedBy(cancel))).toContain(withoutIsolates(t("settings.shortcuts.problem.conflict", { command: t("settings.shortcuts.command.openSettings") })));
+  expect(prompt.isConnected).toBe(true);
+  expect(describedBy(cancel)).toContain(t("settings.shortcuts.recording"));
+  expect(prompt.closest("kbd, .kbd")).toBeNull();
 });
 
 it("cancels recording with the separate Cancel button and returns focus to the shortcut", () => {

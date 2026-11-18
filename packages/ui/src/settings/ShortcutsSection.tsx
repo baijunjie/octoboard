@@ -19,7 +19,7 @@ import type { ShortcutProblem } from "../shortcuts/validate";
 import { SettingRow } from "./SettingRow";
 import { SettingsGroup } from "./SettingsGroup";
 import { SettingsFocusContext } from "./useSectionRefocus";
-import { Button, Kbd } from "../primitives";
+import { Button } from "../primitives";
 
 /**
  * The keyboard shortcuts: every key the app has, grouped, with the app's own commands rebindable. A
@@ -242,9 +242,9 @@ function ShortcutRow({
     >
       <div className="grid grid-cols-[minmax(0,1fr)_1.5rem] items-center gap-2">
         {command.rebindable && recording ? (
-          // The prompt takes the key caps' place as an accent key cap, so the row reads as waiting for keys. It is not
-          // a control: only the Cancel in the trailing slot, or Escape, stops the recording.
-          <span className="justify-self-end"><Kbd className="bg-accent-soft text-accent-soft-foreground"><span id={promptId}>{t("settings.shortcuts.recording")}</span></Kbd></span>
+          // Keep the key-cap appearance, but render prose outside Kbd, whose negative word spacing is for key symbols.
+          // Only the Cancel in the trailing slot, or Escape, stops the recording.
+          <span id={promptId} className="inline-flex h-6 items-center justify-self-end rounded-lg bg-accent-soft px-2 text-center font-sans text-sm font-medium whitespace-nowrap text-accent-soft-foreground">{t("settings.shortcuts.recording")}</span>
         ) : command.rebindable ? (
           <>
             <span id={bindingDescriptionId} hidden>{describeBinding(binding, t, host)}</span>
