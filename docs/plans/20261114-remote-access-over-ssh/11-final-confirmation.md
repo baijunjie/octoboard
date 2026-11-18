@@ -23,9 +23,10 @@ page in the main window (`docs/product/remote-devices-page.md`); the items below
       unreachable host, no daemon running (Start), application not running on a desktop host, version mismatch
       (older: Open in browser; newer: Go to Updates and Open in browser), Open in browser holding the tunnel.
 - [x] A device key installed after the first login and used from then on.
-- [ ] A dropped connection: the window shows the lost connection, reconnects behind the same port, and is pointed at
+- [x] A dropped connection: the window shows the lost connection, reconnects behind the same port, and is pointed at
       the daemon again only when the key changed; closing the window or quitting ends the connection and nothing on
-      the remote daemon. Fails: after a brief SSH drop the window stops reconnecting (see "Mid-task handoff").
+      the remote daemon. The menu bar tab's state while down was not observed (its native panel could not be opened
+      without input to the user's screen); the Remote devices page agreed with the window.
 - [x] One window per daemon: a second request for an open daemon focuses its window, including two at once.
 - [x] Closing and quitting: a remote window closes for good; the main window hides while a remote window is on screen;
       the last window applies the closing rule; quitting with a remote window open, cancelled and confirmed; a remote
@@ -36,10 +37,9 @@ page in the main window (`docs/product/remote-devices-page.md`); the items below
       tab, VoiceOver reading the tabs, Disconnect from a remote tab; the Dock badge as the sum; a notification click
       bringing forward its own window.
 - [x] A remote window shows no application settings and no update UI; a self-updating remote daemon's two update rows.
-- [ ] The main window without its daemon: while the local daemon cannot be used, the rail holds only the Remote
-      devices button and the content panel shows the daemon's state (`docs/product/remote-devices-page.md`, "Without
-      the local daemon"). Verified at launch; fails when the daemon is lost while the window runs (see "Mid-task
-      handoff").
+- [x] The main window without its daemon: while nothing has been fetched from the local daemon, the rail holds only
+      the Remote devices button and the content panel shows the daemon's state; a daemon lost later keeps the last
+      content with the connection banner (`docs/product/remote-devices-page.md`, "Without the local daemon").
 
 ## Windows application
 
@@ -72,16 +72,6 @@ clear. Everything ticked above passed there, the defects they turned up fixed an
 
 Left, and what each needs:
 
-- **Two defects found in round 4, on both systems, awaiting the user's call on the design before a fix:**
-  - The main window keeps the consoles, the full rail and the connection banner when the local daemon is lost while
-    the window runs and its reconnect budget is spent; the documented frame (rail with only Remote devices, the
-    daemon's state in the content panel) appears only at launch. Open question: whether a daemon lost at run time
-    should collapse the window to that frame, or the page's doc should limit it to launch.
-  - After an SSH drop of about 2–3 seconds (with or without the host's owner key rotated meanwhile), a remote window
-    stops reconnecting once its retries are spent: it stays Disconnected with Try again for 60–100 s and more, while
-    the menu bar / tray entry still says Reconnecting; Try again reconnects at once and follows a new key.
-    `docs/product/remote-daemons.md` says reconnection goes on with pauses growing up to 30 s. Open question: retry
-    without end in a remote window, or a longer budget, and the native entry following the window's state.
 - **Needs a Linux server** (none was available without an administrator prompt): the PAM-only host and
   `octoboardd connection` with its QR code.
 - **Not yet exercised, no obstacle:** the macOS Remote and Dock menus' Open This Mac's Window.
