@@ -1,3 +1,4 @@
+import { remoteAppLabels, remoteCode } from "./remote-references.ts";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
@@ -22,6 +23,8 @@ import {
   homeSteps,
   plannedPlatforms,
   privacySections,
+  remoteGuides,
+  remoteTopics,
   workflowNodes,
 } from "./page-outline.ts";
 import {
@@ -118,20 +121,22 @@ type Text = (key: string, values?: Record<string, string>) => string;
 
 // The Linux server's part of the download page: the install command, how to reach and keep the server, how to
 // upgrade and the archives.
-function linuxParts(copy: AgentCopy, text: Text, headings: boolean): Array<string | false> {
+function linuxParts(copy: AgentCopy, text: Text, onDownloadPage: boolean, localeCode = "en"): Array<string | false> {
   const code = (value: string) => `\`${value}\``;
   const commands = Object.fromEntries(
     Object.entries(linuxCommandParts).map(([name, command]) => [name, code(command)]),
   );
   return [
-    headings && heading(2, text("downloadLinuxTitle")),
+    onDownloadPage && heading(2, text("downloadLinuxTitle")),
     text("downloadLinuxDescription"),
     text("downloadLinuxRange"),
+    onDownloadPage && remoteGuideLink(copy, text, localeCode),
     heading(3, text("downloadInstallStep")),
     `\`\`\`sh\n${installCommand(copy.siteUrl)}\n\`\`\``,
     heading(3, text("downloadStartStep")),
     `\`\`\`sh\n${linuxCommandParts.start}\n${linuxCommandParts.address}\n\`\`\``,
     heading(3, text("downloadOpenStep")),
+    text("remoteBrowserServer", commands),
     text("downloadBrowserSteps"),
     heading(3, text("downloadOptionsLabel")),
     text("downloadPortNote", commands),
@@ -141,8 +146,11 @@ function linuxParts(copy: AgentCopy, text: Text, headings: boolean): Array<strin
     [
       text("downloadArchivesLabel"),
       ...serverDownloads.map(
-        (target) =>
-          `- ${link(text("downloadArchive", { architecture: target.architecture }), copy.downloads[target.id])}`,
+        (target) => {
+          const label = text("downloadArchive", { architecture: target.architecture });
+          const href = copy.downloads[target.id];
+          return `- ${onDownloadPage || href !== releasesUrl(copy.repositoryUrl) ? link(label, href) : label}`;
+        },
       ),
     ].join("\n"),
   ];
@@ -151,8 +159,11 @@ function linuxParts(copy: AgentCopy, text: Text, headings: boolean): Array<strin
 function appLinks(copy: AgentCopy, text: Text): string {
   return appDownloads
     .map(
-      (target) =>
-        `- ${link(text("downloadButton", { platform: target.name }), copy.downloads[target.id])}`,
+      (target) => {
+        const label = text("downloadButton", { platform: target.name });
+        const href = copy.downloads[target.id];
+        return `- ${href === releasesUrl(copy.repositoryUrl) ? label : link(label, href)}`;
+      },
     )
     .join("\n");
 }
@@ -171,8 +182,47 @@ function downloadMarkdown(copy: AgentCopy, locale: SiteLocale): string {
       link(text("downloadButton", { platform: target.name }), copy.downloads[target.id]),
       ...appPanelKeys[target.id].map((key) => text(key)),
     ]),
-    ...linuxParts(copy, text, true),
+    ...linuxParts(copy, text, true, locale.code),
     link(text("downloadAllReleases"), releasesUrl(copy.repositoryUrl)),
+  ]);
+}
+
+function remoteGuideLink(copy: AgentCopy, text: Text, code: string): string {
+  return link(text("remoteGuideLink"), markdownUrl(copy.siteUrl, `/${localizedPath(code, "remote/")}`));
+}
+
+function remoteMarkdown(copy: AgentCopy, locale: SiteLocale): string {
+  const messages = catalog(copy, locale.code);
+  const params = valuesFor(copy);
+  const labels = Object.fromEntries(
+    Object.keys(remoteAppLabels).map((key) => [key, `**${message(messages, key, params)}**`]),
+  );
+  const references = {
+    ...params,
+    ...labels,
+    settingsPath: `${labels.remoteLabelSettings} › ${labels.remoteLabelAccess}`,
+    ...Object.fromEntries(Object.entries(remoteCode).map(([key, command]) => [key, `\`${command}\``])),
+  };
+  const text = (key: string) => message(messages, key, references);
+  const canonical = copy.siteUrl + localizedPath(locale.code, "remote/");
+  return document([
+    heading(1, text("remoteEyebrow")),
+    `Canonical: ${canonical}`,
+    text("remoteIntro"),
+    ...remoteGuides(copy.siteUrl).flatMap((guide) => [
+      heading(2, text(guide.key)),
+      ...guide.steps.map((step, index) => {
+        const body = [`${index + 1}. ${text(step.key)}`];
+        if ("command" in step) body.push(`   \`\`\`sh\n   ${step.command}\n   \`\`\``);
+        if ("notes" in step) body.push(...step.notes.map((note) => `   ${text(note)}`));
+        return body.join("\n\n");
+      }),
+      "note" in guide && text(guide.note),
+    ]),
+    ...remoteTopics.flatMap(({ key, items }) => [
+      heading(2, text(key)),
+      items.map((item) => `- **${text(`${item}Lead`)}** ${text(item)}`).join("\n"),
+    ]),
   ]);
 }
 
@@ -236,6 +286,9 @@ function homeMarkdown(copy: AgentCopy, locale: SiteLocale): string {
       heading(3, text(`step${step}Title`)),
       text(`step${step}Description`),
     ]),
+    heading(2, text("remoteTitle")),
+    text("remoteIntro"),
+    remoteGuideLink(copy, text, locale.code),
     heading(2, text("developerTitle")),
     text("developerIntro"),
     ...developerSections.flatMap((section) => [
@@ -311,6 +364,7 @@ const pageMarkdown = {
   "": homeMarkdown,
   "privacy/": privacyMarkdown,
   "download/": downloadMarkdown,
+  "remote/": remoteMarkdown,
 } as const;
 
 function truncate(value: string, max: number): string {
@@ -336,6 +390,7 @@ function llmsTxt(copy: AgentCopy): string {
     link(text("downloadAllReleases"), releasesUrl(copy.repositoryUrl)),
     text("proofFreeCaption"),
     text("localDescription"),
+    text("remoteIntro"),
     ...homeFeatures.map((feature) => text(`${feature.key}FeatureDescription`)),
     ...homeQuestions.map(
       (question) =>
@@ -361,7 +416,8 @@ function llmsTxt(copy: AgentCopy): string {
       `/${localizedPath(locale.code, "")}`,
     );
     const full = link("full content", `${copy.siteUrl}llms-full-${locale.code}.txt`);
-    return `- ${link(`${locale.name} (${locale.code})`, href)}: ${pagePaths.length} pages; ${full}.`;
+    const name = `${locale.name} (${locale.code})`;
+    return `- ${locale.code === "en" ? name : link(name, href)}: ${pagePaths.length} pages; ${full}.`;
   });
   return document([
     heading(1, copy.appName),
@@ -373,7 +429,7 @@ function llmsTxt(copy: AgentCopy): string {
     [
       "## Full content",
       "",
-      `Read ${link("English full content", `${copy.siteUrl}llms-full-en.txt`)} or choose a language above to read only that language's pages.`,
+      "Choose a language above to read only that language's pages.",
       `Read ${link("all languages", `${copy.siteUrl}llms-full.txt`)} only when you need the complete multilingual content.`,
     ].join("\n"),
     [

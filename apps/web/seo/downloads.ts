@@ -38,6 +38,7 @@ export const linuxCommandParts = {
   // address` prints this command with the real path and user.
   forward: `ssh -o ExitOnForwardFailure=yes -L 127.0.0.1:${defaultServerPort}:/home/<you>/.octoboard/browser.sock <you>@<server>`,
   address: "octoboardd address",
+  server: "<server>",
   plain: "sh",
   option: "sh -s -- --service",
   port: "--port <port>",

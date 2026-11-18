@@ -1,70 +1,43 @@
-import React, { Suspense, useEffect, useRef } from "react";
+import { ArrowUpRight, Globe, Play } from "lucide-react";
+import React, { Suspense, useEffect } from "react";
 
 import { trackSuspenseFallback } from "../../components/hooks/lazyReadiness";
 import { AgentIcon } from "../../components/icons/AgentIcon";
-import { PanelHeader } from "../../components/panel/PanelHeader";
-import { SessionAgentIcon } from "../../components/icons/SessionAgentIcon";
+import { PasteButton } from "../../components/controls/PasteButton";
+import { TextInput } from "../../components/form/TextInput";
+import { ExternalLink } from "../../components/text/ExternalLink";
 import { StatusIcon } from "../../components/status/StatusIcon";
-import { FileTree } from "../../project-browser/files/FileTree";
-import { buildTree, rowKey, type DirListing } from "../../project-browser/tree";
 import { createFixtureDaemon } from "../../fixtures/fixtureDaemon";
-import { consoleOf, sessionOf, snapshotState } from "../../fixtures/builders";
+import { snapshotState } from "../../fixtures/builders";
 import { quotaOf, quotaWindow } from "../../fixtures/quotas";
 import { useCurrentLanguage, useT } from "../../i18n/react";
-import { AccountNameLine, AccountQuotaSummary, LoginStateBadge } from "../../quota/AccountQuotaSummary";
-import { AccountUsageBar } from "../../quota/AccountUsageBar";
-import { statusLabel } from "../../sessions/sessionLabel";
-import { delegatingSessionIds, sessionShownStatusKind } from "../../sessions/sessionStatus";
-import { liveSessions } from "../../sessions/order";
+import { AccountQuotaSummary, LoginStateBadge } from "../../quota/AccountQuotaSummary";
+import { Button } from "../../primitives";
 import { DaemonProvider } from "../../store";
-import { useNow } from "../../format/useNow";
 import { RenderedDiff, useRendererScope } from "../../viewer/code/codeRenderer";
-import { ChangeStatusBadge } from "../../viewer/ChangeStatusBadge";
-import { previewCopy as english } from "../locales/en";
-import { previewCopy as chinese } from "../locales/zh-Hans";
 import { ready } from "./main";
 
 const noop = () => {};
-const workspace = consoleOf("feature-workspace", "Bistro");
-const daemon = createFixtureDaemon({
-  state: snapshotState({ consoles: [workspace] }),
-});
-const readings = [
-  quotaOf("claude", "work", "max", [quotaWindow("session", 38, 117), quotaWindow("weekly", 56, 3900)]),
-  quotaOf("codex", "personal", "plus", [quotaWindow("session", 24, 221), quotaWindow("weekly", 43, 6600)]),
-  quotaOf("grok", "build", "SuperGrok", [quotaWindow("credit_period", 16, 3400)]),
+const daemon = createFixtureDaemon({ state: snapshotState({}) });
+const accounts = [
+  { name: "Claude Code", quota: quotaOf("claude", "work", "max", [quotaWindow("session", 38, 117)]) },
+  { name: "Codex", quota: quotaOf("codex", "personal", "plus", []) },
 ];
-
-const listing = (entries: [string, "file" | "directory"][]): DirListing => ({
-  state: "loaded", complete: true, refreshing: false,
-  entries: entries.map(([name, kind]) => ({ name, kind, size: kind === "file" ? 128 : null, target: null, version: null })),
-});
-const expanded = new Set([rowKey(".claude"), rowKey(".claude/skills")]);
-const files = buildTree(new Map([
-  ["", listing([[".claude", "directory"], ["CLAUDE.md", "file"], [".mcp.json", "file"]])],
-  [".claude", listing([["skills", "directory"]])],
-  [".claude/skills", listing([["code-review", "directory"], ["testing", "directory"]])],
-]), new Set([".claude", ".claude/skills"]), undefined);
+const processPort = 3000;
 
 const patch = `diff --git a/src/orders.ts b/src/orders.ts
 --- a/src/orders.ts
 +++ b/src/orders.ts
-@@ -1,5 +1,7 @@
- export async function submit(order) {
--  return await create(order);
-+  const previous = await find(order.key);
-+  if (previous) return previous;
-+  return await createOnce(order);
+@@ -1,3 +1,3 @@
+ function submit(order) {
+-  return create(order);
++  return createOnce(order);
  }
-\u0020
- export const retrySafe = true;
 `;
 
 export function FeatureView({ feature }: { feature: string }): React.ReactElement {
   const language = useCurrentLanguage();
   const t = useT();
-  const now = useNow();
-  const copy = language === "zh-Hans" ? chinese : english;
   useEffect(() => {
     if (feature === "reviewChanges") return;
     const first = requestAnimationFrame(() => requestAnimationFrame(ready));
@@ -73,47 +46,90 @@ export function FeatureView({ feature }: { feature: string }): React.ReactElemen
   let content: React.ReactNode;
   switch (feature) {
     case "managedAccounts":
-      content = <section className="feature-surface accounts-view">
-        <PanelHeader title={t("rail.quota.accounts")} />
-        <div className="account-list">{readings.map((quota, index) => <div key={quota.agent} className="account-item">
-          <AgentIcon agent={quota.agent} className="size-5" />
-          <div className="account-details"><AccountNameLine name={["Claude Code", "Codex", "Grok Build"][index]} quota={quota} showUpdated={false} /><div className="account-subline"><LoginStateBadge quota={quota} /><AccountUsageBar agent={quota.agent} quota={quota} now={now} className="w-20" /></div></div>
-        </div>)}</div>
-      </section>;
+      content = <ul className="feature-surface preview-list">{accounts.map(({ name, quota }) => (
+        <li key={name} className="preview-row">
+          <AgentIcon agent={quota.agent} className="size-5 shrink-0" />
+          <strong>{name}</strong>
+          <LoginStateBadge quota={quota} />
+        </li>
+      ))}</ul>;
       break;
     case "usageMonitor":
-      content = <section className="feature-surface usage-view"><PanelHeader title={t("rail.quota")} /><div className="usage-list">{readings.slice(0, 2).map((quota, index) => <div className="usage-item" key={quota.agent}><AccountNameLine name={["Claude Code", "Codex"][index]} quota={quota} showUpdated={false} /><AccountQuotaSummary quota={quota} single /></div>)}</div></section>;
+      content = <section className="feature-surface compact-view">
+        <strong>Claude Code</strong>
+        <AccountQuotaSummary quota={accounts[0].quota} single />
+      </section>;
       break;
-    case "sessionStatus": {
-      const all = [
-        sessionOf("build", workspace.id, "server", copy.serverTask, "working", { agent: "codex" }),
-        sessionOf("review", workspace.id, "server", copy.review, "idle"),
-        sessionOf("checks", workspace.id, "server", copy.orderChecks, "waiting_user", { agent: "grok" }),
-      ];
-      const delegating = delegatingSessionIds(all);
-      const noSwitches = new Set<string>();
-      const sessions = liveSessions(all, delegating, noSwitches);
-      content = <section className="feature-surface status-view">{sessions.map((session) => {
-        const status = sessionShownStatusKind(session, delegating, noSwitches);
-        return <div className="session-item" key={session.id}><SessionAgentIcon providers={[]} session={session} accounts={[]} defaultNames={{}} touchPopover={false} /><div className="session-copy"><div className="session-title">{session.title}</div><div className="session-state"><StatusIcon status={status} decorative /><span>{statusLabel(t, status)}</span></div></div></div>;
-      })}</section>;
+    case "sessionIntervention":
+      content = <ul className="feature-surface preview-list">
+        <li className="preview-row waiting-row">
+          <StatusIcon status="waiting_user" decorative />
+          <span>{t("session.status.waitingUser")}</span>
+          <ArrowUpRight size={19} className="end-glyph" aria-hidden="true" />
+        </li>
+        <li className="preview-row">
+          <StatusIcon status="working" decorative />
+          <span>{t("session.status.working")}</span>
+        </li>
+      </ul>;
+      break;
+    case "processMonitoring": {
+      const memory = new Intl.NumberFormat(language, {
+        style: "unit", unit: "megabyte", unitDisplay: "short",
+      }).format(146);
+      content = <section className="feature-surface compact-view process-view">
+        <div className="preview-line">
+          <Play size={17} className="process-running" aria-hidden="true" /><code dir="ltr">pnpm dev</code>
+        </div>
+        <div className="preview-line process-facts"><bdi>{memory}</bdi><span>·</span><bdi>:{processPort}</bdi></div>
+        <div className="preview-line">
+          <Globe size={17} aria-hidden="true" />
+          <ExternalLink href={`http://localhost:${processPort}/`} dir="ltr"><code>localhost:{processPort}</code></ExternalLink>
+        </div>
+        <div className="preview-line process-actions">
+          <Button size="sm" variant="secondary">{t("processes.keep")}</Button>
+          <Button size="sm" variant="danger-soft">{t("processes.stop")}</Button>
+        </div>
+      </section>;
       break;
     }
-    case "existingWorkflow": content = <WorkflowFiles />; break;
+    case "openAgentApp":
+      content = <section className="feature-surface compact-view">
+        <div className="preview-line preview-muted">
+          <StatusIcon status="interrupted" decorative />{t("session.status.interrupted")}
+        </div>
+        <div className="preview-line">
+          <AgentIcon agent="codex" className="size-5 shrink-0" />
+          <strong>{t("provider.codex.openInApp")}</strong>
+          <ArrowUpRight size={19} className="end-glyph" aria-hidden="true" />
+        </div>
+      </section>;
+      break;
+    case "remoteDevices":
+      content = <div className="remote-details-view card-fills">
+        <TextInput
+          label={t("remoteDaemons.form.details")}
+          value="octoboard+ssh://alex@server:22"
+          dir="ltr"
+          onChange={noop}
+          trailing={<PasteButton variant="secondary" focusOnPress={false} failedText={t("remoteDaemons.form.details.pasteFailedTitle")} onPaste={noop} />}
+        />
+      </div>;
+      break;
+    case "nativeProjectSessions":
+      content = <ul className="feature-surface preview-list">
+        <li className="preview-row"><AgentIcon agent="claude" className="size-5 shrink-0" /><code dir="ltr">web/CLAUDE.md</code></li>
+        <li className="preview-row"><AgentIcon agent="codex" className="size-5 shrink-0" /><code dir="ltr">api/AGENTS.md</code></li>
+      </ul>;
+      break;
     case "reviewChanges": content = <Changes />; break;
     default: throw new Error(`Unknown feature view: ${feature}`);
   }
   return <DaemonProvider value={daemon}><main className="feature-canvas" data-feature={feature}>{content}</main></DaemonProvider>;
 }
 
-function WorkflowFiles(): React.ReactElement {
-  const t = useT();
-  const tree = useRef<HTMLDivElement>(null);
-  return <section className="feature-surface files-view"><PanelHeader title={t("panel.files.name")} /><FileTree nodes={files.nodes} expanded={expanded} label={t("panel.files.name")} onExpandedChange={noop} onOpenFile={noop} onRetry={noop} treeRef={tree} /></section>;
-}
-
 function Changes(): React.ReactElement {
   const t = useT();
   useRendererScope();
-  return <section className="feature-surface changes-view"><header className="changes-heading"><code dir="ltr">src/orders.ts</code><ChangeStatusBadge status="modified">{t("viewer.change.modified")}</ChangeStatusBadge></header><div className="diff-body" dir="ltr"><Suspense fallback={trackSuspenseFallback(null)}><RenderedDiff name="orders.ts" patch={patch} layout="unified" theme="dark" wrap={false} onDrawn={ready} labels={{ unmodified: (count) => t("viewer.expand.unmodified", { count }), unknown: t("viewer.expand.unknown"), above: t("viewer.expand.above"), below: t("viewer.expand.below"), between: t("viewer.expand.between"), hiddenAll: (count) => t("viewer.expand.hiddenAll", { count }), all: t("viewer.expand.all"), loading: t("viewer.expand.loading"), failedHere: t("viewer.expand.failedHere") }} /></Suspense></div></section>;
+  return <section className="feature-surface changes-view"><header className="changes-heading"><code dir="ltr">src/orders.ts</code></header><div className="diff-body" dir="ltr"><Suspense fallback={trackSuspenseFallback(null)}><RenderedDiff name="orders.ts" patch={patch} layout="unified" theme="dark" wrap={false} onDrawn={ready} labels={{ unmodified: (count) => t("viewer.expand.unmodified", { count }), unknown: t("viewer.expand.unknown"), above: t("viewer.expand.above"), below: t("viewer.expand.below"), between: t("viewer.expand.between"), hiddenAll: (count) => t("viewer.expand.hiddenAll", { count }), all: t("viewer.expand.all"), loading: t("viewer.expand.loading"), failedHere: t("viewer.expand.failedHere") }} /></Suspense></div></section>;
 }

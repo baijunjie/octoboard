@@ -1,16 +1,17 @@
 <script setup lang="ts">
 import { installCommand } from "../../seo/downloads";
 
+const props = defineProps<{ command?: string; label?: string }>();
 const { t } = useSiteCopy();
 const config = useRuntimeConfig();
-const command = installCommand(config.public.siteUrl);
+const command = computed(() => props.command ?? installCommand(config.public.siteUrl));
 const commandId = `${useId()}-command`;
 const announcement = ref("");
 const copied = ref(false);
 let timer: ReturnType<typeof setTimeout> | undefined;
 async function copy() {
   try {
-    await navigator.clipboard.writeText(command);
+    await navigator.clipboard.writeText(command.value);
   } catch {
     // The command stays selectable in the block, so a refused copy needs no message.
     return;
@@ -31,7 +32,7 @@ onBeforeUnmount(() => clearTimeout(timer));
 
 <template>
   <div class="install-command">
-    <div class="install-command-scroll" role="region" :aria-label="t('downloadInstallLabel')" tabindex="0">
+    <div class="install-command-scroll" dir="ltr" role="region" :aria-label="label ?? t('downloadInstallLabel')" tabindex="0">
       <!-- The command reads left to right in every language. -->
       <code :id="commandId" dir="ltr">{{ command }}</code>
     </div>

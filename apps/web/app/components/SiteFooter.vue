@@ -34,6 +34,7 @@ const { open, reopen } = useAnalyticsConsent();
         ><NuxtLink :to="`${localePath('/')}#developer-intent`">{{
           t("developerEyebrow")
         }}</NuxtLink
+        ><NuxtLink :to="localePath('/remote/')">{{ t("remoteEyebrow") }}</NuxtLink
         ><NuxtLink :to="localePath('/privacy/')">{{
           t("footerPrivacy")
         }}</NuxtLink

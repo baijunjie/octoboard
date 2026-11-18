@@ -14,7 +14,7 @@ const { t } = useSiteCopy();
         <h3 :id="`${group.id}-heading`">{{ t(group.key) }}</h3>
       </div>
       <div class="feature-grid">
-        <article v-for="key in group.features" :key="key" class="feature-card" :class="{ 'feature-card-wide': key === 'reviewChanges' }">
+        <article v-for="key in group.features" :key="key" class="feature-card">
           <FeatureIllustration :feature="key" />
           <div class="feature-copy">
             <span class="feature-card-mark" aria-hidden="true" />
@@ -40,9 +40,12 @@ const { t } = useSiteCopy();
 .feature-card-mark { display: block; width: 20px; height: 2px; background: var(--red); margin-bottom: 24px; }
 .feature-card h4 { font-size: 19px; font-weight: 500; line-height: 1.5; }
 .feature-card p { color: var(--muted); font-size: 14px; line-height: 1.9; margin-top: 16px; }
-.feature-card-wide { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); }
-.feature-card-wide .feature-copy { display: grid; align-content: center; }
-.feature-card-wide :deep(.feature-illustration) { height: 100%; min-height: 272px; border-bottom: 0; border-inline-end: 1px solid var(--edge); }
-@media (max-width: 1050px) { .feature-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 600px) { .feature-card-wide { display: block; } .feature-card-wide :deep(.feature-illustration) { height: 272px; border-inline-end: 0; border-bottom: 1px solid var(--edge); } .feature-grid { grid-template-columns: minmax(0, 1fr); } .feature-copy { padding: 24px; } .feature-wall { gap: 40px; } }
+@media (max-width: 1050px) {
+  .feature-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  .feature-grid { grid-template-columns: minmax(0, 1fr); }
+  .feature-copy { padding: 24px; }
+  .feature-wall { gap: 40px; }
+}
 </style>

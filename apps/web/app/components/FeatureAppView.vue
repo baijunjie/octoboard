@@ -4,7 +4,7 @@ import {
   readFeatureMessage,
 } from "@octoboard/ui/preview-messages";
 import { localeByCode } from "../../seo/site-seo";
-const props = defineProps<{ feature: string }>();
+const props = defineProps<{ feature: string; title?: string }>();
 const { locale } = useI18n();
 const { t } = useSiteCopy();
 const config = useRuntimeConfig();
@@ -24,15 +24,15 @@ const { width, height, visible, ready, failed, markReady, markFailed } = usePrev
   initialSize: { width: 320, height: 240 },
   onMessage: receive,
 });
-const canvasWidth = computed(() => width.value < 350 ? 320 : 400);
-const canvasHeight = computed(() => width.value < 350 ? 300 : 260);
+const canvasWidth = computed(() => Math.max(304, width.value));
+const canvasHeight = computed(() => props.feature === "remoteDevices" ? 100 : 220);
 const scale = computed(() => Math.min(1, width.value / canvasWidth.value, height.value / canvasHeight.value));
 </script>
 
 <template>
   <div ref="host" class="feature-app-view" :class="{ 'is-ready': ready }" aria-hidden="true" inert>
     <div v-if="!ready" class="app-view-placeholder"><FeatureGlyph name="file" :size="24" /><span>{{ t(failed ? 'featurePreviewError' : 'previewLoading') }}</span></div>
-    <iframe v-if="visible" :key="source" ref="frame" :src="source" :title="t(`${feature}FeatureTitle`)" :width="canvasWidth" :height="canvasHeight" tabindex="-1" aria-hidden="true" inert sandbox="allow-scripts allow-same-origin" :style="{ width: `${canvasWidth}px`, height: `${canvasHeight}px`, transform: `translate(-50%, -50%) scale(${scale})` }" />
+    <iframe v-if="visible" :key="source" ref="frame" :src="source" :title="title ?? t(`${feature}FeatureTitle`)" :width="canvasWidth" :height="canvasHeight" tabindex="-1" aria-hidden="true" inert sandbox="allow-scripts allow-same-origin" :style="{ width: `${canvasWidth}px`, height: `${canvasHeight}px`, transform: `translate(-50%, -50%) scale(${scale})` }" />
   </div>
 </template>
 

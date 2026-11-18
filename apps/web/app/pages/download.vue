@@ -14,6 +14,7 @@ import {
 const { t } = useSiteCopy();
 const config = useRuntimeConfig();
 const route = useRoute();
+const localePath = useLocalePath();
 const downloads = config.public.downloads as Downloads;
 const allReleasesUrl = releasesUrl(config.public.repositoryUrl);
 useSeoMeta({
@@ -122,6 +123,9 @@ onBeforeUnmount(() => window.removeEventListener("hashchange", onHashChange));
         <template v-else>
           <p>{{ t("downloadLinuxDescription") }}</p>
           <p>{{ t("downloadLinuxRange") }}</p>
+          <NuxtLink :to="localePath('/remote/')" class="text-link">
+            {{ t("remoteGuideLink") }}<span class="link-arrow" aria-hidden="true" />
+          </NuxtLink>
           <ol class="download-steps">
             <li>
               <h3>{{ t("downloadInstallStep") }}</h3>
@@ -134,6 +138,7 @@ onBeforeUnmount(() => window.removeEventListener("hashchange", onHashChange));
             </li>
             <li>
               <h3>{{ t("downloadOpenStep") }}</h3>
+              <CommandMessage keypath="remoteBrowserServer" />
               <p>{{ t("downloadBrowserSteps") }}</p>
             </li>
           </ol>

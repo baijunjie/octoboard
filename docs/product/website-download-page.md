@@ -32,8 +32,9 @@ code-signed yet, so Microsoft Defender SmartScreen may show "Windows protected y
 anyway" passes; and that later versions arrive through the app's own updates.
 
 **Linux panel**: an introduction says that it installs `octoboardd`, the Octoboard daemon, on a Linux server without
-root, opened in a browser on the visitor's own machine, and that it is for x86_64 and aarch64, on any distribution.
-Three numbered steps follow:
+root and supports x86_64 and aarch64 on any distribution. The daemon is reachable over SSH from the macOS or Windows
+app or from a browser. A link opens the localized remote connections guide. Three numbered steps show the browser
+path:
 
 1. **Install on the server.** The command, `curl --proto '=https' --tlsv1.2 -fsSL <site origin>/install.sh | sh` (see
    "The install script" in `docs/product/installing-the-server-form.md`), is in a horizontally scrollable, focusable
@@ -41,8 +42,9 @@ Three numbered steps follow:
    screen readers; a copy the browser refuses changes nothing, the command staying selectable.
 2. **Start on the server.** A two-line command block shows `octoboardd start`, then `octoboardd address` to print the
    address and the SSH command that forwards it.
-3. **Open on the visitor's own machine.** Run the printed SSH command there, keep that connection open, then open the
-   printed address in a browser.
+3. **Open on the visitor's own machine.** Replace `<server>` in the printed SSH command with the address the
+   visitor's machine uses to reach the server, run the command there, keep that connection open and open the printed
+   address in a browser.
 
 A collapsed options and troubleshooting disclosure follows, available without JavaScript too. It holds:
 

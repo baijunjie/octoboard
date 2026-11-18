@@ -1,15 +1,17 @@
+import { installCommand, linuxCommandParts } from "./downloads.ts";
+
 // Sections the homepage, the privacy page, and the agent Markdown all walk.
 // Adding a visible section means adding it here; the pages iterate these lists.
 
 export const featureGroups = [
   { id: "feature-accounts", key: "featureAccountsTitle", icon: "terminal-window", features: [
-    "managedAccounts", "switchAccount", "smartAccount", "usageMonitor", "autoSwitch", "quotaRecovery",
+    "managedAccounts", "accountContinuity", "quotaScheduling", "usageMonitor", "sharedConfiguration",
   ] },
   { id: "feature-context", key: "featureContextTitle", icon: "chat-circle-dots", features: [
-    "contextWindow", "conversationRelay", "agentHandoff",
+    "freshSession", "agentHandoff", "openAgentApp",
   ] },
   { id: "feature-collaboration", key: "featureCollaborationTitle", icon: "tree-structure", features: [
-    "teamCoordination", "projectCoordination", "separateProjectContext", "existingWorkflow", "directParticipation", "sessionStatus", "reviewChanges",
+    "crossProjectWork", "nativeProjectSessions", "sessionIntervention", "processMonitoring", "reviewChanges",
   ] },
 ] as const;
 
@@ -20,6 +22,7 @@ export const homeSections = [
   { id: "benefits", key: "navFeatures" },
   { id: "product-preview", key: "previewEyebrow" },
   { id: "how-it-works", key: "navHow" },
+  { id: "remote-connections", key: "remoteEyebrow" },
   { id: "developer-intent", key: "developerEyebrow" },
   { id: "local-workspace", key: "localEyebrow" },
   { id: "platforms", key: "platformsTitle" },
@@ -28,6 +31,33 @@ export const homeSections = [
 ] as const;
 
 export const homeSteps = ["One", "Two", "Three"] as const;
+
+export function remoteGuides(siteUrl: string) {
+  return [
+    { id: "linux", key: "remoteSetupTitle", steps: [
+      { key: "remoteStepInstallBody", command: installCommand(siteUrl), notes: ["downloadPathNote"] },
+      { key: "remoteStepStartBody", command: linuxCommandParts.start },
+      { key: "remoteStepDetailsBody", command: "octoboardd connection", notes: ["remoteAddressOverride", "remoteQr"] },
+      { key: "remoteStepConnectBody", preview: true, notes: ["remoteWindowsMenu", "remoteFingerprint"] },
+    ] },
+    { id: "host", key: "remoteHostTitle", steps: [
+      { key: "remoteHostSsh" },
+      { key: "remoteHostAllow" },
+      { key: "remoteHostDetails" },
+      { key: "remoteHostConnect" },
+    ] },
+    { id: "browser", key: "remoteBrowserTitle", steps: [
+      { key: "remoteBrowserCommand", command: linuxCommandParts.address, notes: ["remoteBrowserServer"] },
+      { key: "remoteBrowserRun" },
+      { key: "remoteBrowserOpen" },
+    ], note: "remoteBrowserKey" },
+  ] as const;
+}
+
+export const remoteTopics = [
+  { id: "security", key: "remoteSecurityTitle", items: ["remoteSecuritySsh", "remoteSecurityHost", "remoteSecurityDevice", "remoteSecurityRevoke"] },
+  { id: "remote-window", key: "remoteWindowTitle", items: ["remoteWindowWork", "remoteWindowMenu", "remoteWindowWeb", "remoteWindowFiles", "remoteWindowReconnect"] },
+] as const;
 
 export const developerSections = ["Shift", "Context", "Quality"] as const;
 

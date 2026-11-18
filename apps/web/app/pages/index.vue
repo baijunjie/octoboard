@@ -142,9 +142,11 @@ useSeoMeta({
       </div>
     </section>
 
+    <RemoteConnections />
+
     <section id="developer-intent" class="developer-section wrap section-space">
       <SectionHeading
-        number="04"
+        number="05"
         :label="t('developerEyebrow')"
         :title="t('developerTitle')"
       />
@@ -162,7 +164,7 @@ useSeoMeta({
 
     <section id="local-workspace" class="trust-section wrap section-space" data-reveal>
       <SectionHeading
-        number="05"
+        number="06"
         :label="t('localEyebrow')"
         :title="t('localTitle')"
         :description="t('localDescription')"
@@ -220,7 +222,7 @@ useSeoMeta({
     </section>
 
     <section id="questions" class="faq-section wrap section-space" data-reveal>
-      <SectionHeading number="06" :label="t('faqEyebrow')" :title="t('faqTitle')" />
+      <SectionHeading number="07" :label="t('faqEyebrow')" :title="t('faqTitle')" />
       <div class="faq-list">
         <details
           v-for="(question, index) in homeQuestions"

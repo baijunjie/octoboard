@@ -20,6 +20,7 @@ useLiquidGlassPointer(glass);
       <nav class="desktop-nav" :aria-label="t('navMenu')">
         <NuxtLink :to="`${localePath('/')}#benefits`">{{ t("navFeatures") }}</NuxtLink>
         <NuxtLink :to="`${localePath('/')}#product-preview`">{{ t("previewEyebrow") }}</NuxtLink>
+        <NuxtLink :to="localePath('/remote/')">{{ t("remoteEyebrow") }}</NuxtLink>
       </nav>
       <div class="nav-actions">
         <SectionNavigation v-if="isHome" />

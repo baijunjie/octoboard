@@ -1,6 +1,7 @@
 <script setup lang="ts">
 defineProps<{
   number: string;
+  headingId?: string;
   label: string;
   title: string;
   description?: string;
@@ -19,7 +20,7 @@ defineProps<{
       <span class="section-rule" aria-hidden="true" />
     </div>
     <div class="section-heading-copy">
-      <h2 class="preserve-lines">{{ title }}</h2>
+      <h2 :id="headingId" class="preserve-lines">{{ title }}</h2>
       <p v-if="description">{{ description }}</p>
     </div>
   </header>

@@ -50,8 +50,8 @@ export const locales: readonly SiteLocale[] = LANGUAGES.map((language) => ({
   ...(textDirection(language) === "rtl" ? { dir: "rtl" as const } : {}),
 }));
 
-export const pagePaths = ["", "privacy/", "download/"] as const;
-export type PageKind = "home" | "privacy" | "download" | "other";
+export const pagePaths = ["", "privacy/", "download/", "remote/"] as const;
+export type PageKind = "home" | "privacy" | "download" | "remote" | "other";
 
 export type ContentPageKind = Exclude<PageKind, "other">;
 
@@ -59,6 +59,7 @@ export type ContentPageKind = Exclude<PageKind, "other">;
 export const pageSeoKeys: Record<ContentPageKind, { title: string; description: string }> = {
   home: { title: "codingAgentsSeoTitle", description: "workspaceSeoSummary" },
   privacy: { title: "privacySeoTitle", description: "privacySeoDescription" },
+  remote: { title: "remoteSeoTitle", description: "remoteIntro" },
   download: { title: "downloadSeoTitle", description: "downloadSeoDescription" },
 };
 
@@ -88,6 +89,7 @@ export function pageKind(path: string): PageKind {
   const rest = code ? normalized.slice(code.length + 1) : normalized;
   if (rest === "/privacy/") return "privacy";
   if (rest === "/download/") return "download";
+  if (rest === "/remote/") return "remote";
   if (rest === "/") return "home";
   return "other";
 }
@@ -112,7 +114,7 @@ export function markdownFile(routePath: string): string {
     throw new Error(`No Markdown version for ${routePath}`);
   const htmlPath = localizedPath(
     localeCodeFromPath(routePath),
-    kind === "privacy" ? "privacy/" : kind === "download" ? "download/" : "",
+    kind === "home" ? "" : `${kind}/`,
   );
   const trimmed = htmlPath.replace(/\/$/, "");
   return trimmed === "" ? "index.md" : `${trimmed}.md`;
@@ -153,7 +155,7 @@ export function robotsTxt(siteUrl: string): string {
 export type JsonLdQuestion = { question: string; answer: string };
 
 export type JsonLdInput = {
-  page: "home" | "privacy" | "download";
+  page: ContentPageKind;
   canonical: string;
   websiteUrl: string;
   language: string;
@@ -210,7 +212,7 @@ export function buildJsonLd(input: JsonLdInput): Record<string, unknown> {
   ];
   // The download addresses are the site's own redirects, which never change. An Offer would state a
   // price and an installUrl an installation the site does not run, and there is no real rating to report.
-  // The application is described on the homepage and the download page. FAQ rich results are marked on the
+  // The application is described on the homepage, the download page and the remote guide. FAQ rich results are marked on the
   // homepage only; the other pages repeat none of these questions.
   if (input.page !== "privacy") {
     page.about = { "@id": app };

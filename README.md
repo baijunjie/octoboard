@@ -86,14 +86,13 @@ or billing terms of the providers you choose. If your agent supports a self-host
 |---|---|
 | macOS app (Apple silicon and Intel, macOS 11 or later) | Beta, still in development |
 | Windows app (x64, Windows 10 21H2 or later) | Beta, still in development |
-| Linux server (x86_64 and aarch64, any distribution) — the daemon on a headless server, the interface in a browser over SSH | Beta, still in development |
+| Linux server (x86_64 and aarch64, any distribution) — the daemon on a headless server, the interface in a desktop app or browser over SSH | Beta, still in development |
 | iOS app | Planned |
 | Android app | Planned |
 
-The desktop app runs its window, daemon, and projects on one machine. On Linux, Octoboard runs as a server for one
-person reaching their own daemon from a browser on another machine; there is no Linux desktop app planned. Running
-project agents on remote hosts from the desktop app is not available yet. Multiple users sharing one daemon are outside
-this design.
+The desktop app can open its local daemon and remote daemons in separate windows. Connect over SSH to a Linux
+server or to another Mac or Windows PC running Octoboard. You can also reach a remote daemon from a browser over
+an SSH forward. Projects and agents run on the machine hosting their daemon. Each daemon is for its owner.
 
 ### Installing on Windows
 
@@ -128,8 +127,12 @@ octoboardd start      # Listens on port 3369; add --port <port> for another one.
 octoboardd address
 ```
 
+If the installer says `~/.local/bin` is not on your `PATH`, use the full path it prints or add that directory
+to your `PATH`, for example in `~/.profile`.
+
 `octoboardd address` also prints the `ssh -L` command that forwards the daemon's owner-only socket
-(`~/.octoboard/browser.sock`) to port 3369 on your own machine; run it there and open that address in a browser.
+(`~/.octoboard/browser.sock`) to port 3369 on your own machine. Replace `<server>` in that command with the address
+your machine uses to reach the server, run it on your machine and open the printed browser address.
 To have the daemon start at boot as a systemd user service instead, install with `--service`, which needs systemd:
 
 ```sh
@@ -164,7 +167,7 @@ beyond the server's SSH: whoever can log in over SSH as the daemon's user can us
    Run over SSH, it takes the address that session reached the server at; otherwise the server's own name, which other
    machines may not know. When your devices reach the server at another name or port, say so:
    `octoboardd connection --host server.example.com --ssh-port 2222`. `--text` prints the line alone. The QR code holds
-   the same line, for a mobile app to come; nothing scans it yet.
+   the same line. No client scans it yet.
 2. In the app, open the **Remote devices** page: the Remote devices button in the main window's rail, or **Remote
    Devices** (macOS: the **Remote** menu or the Dock menu; Windows: the window's system menu, opened from its title bar
    icon or with Alt+Space, or the taskbar icon's jump list). Press **Add remote daemon** and paste the line into

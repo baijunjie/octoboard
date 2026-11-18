@@ -4,9 +4,10 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { LANGUAGES } from "@octoboard/ui/languages";
 import { formatPrivacyDate } from "../seo/privacy-date.ts";
-import { featureGroups, homeFeatures } from "../seo/page-outline.ts";
-import { readLocaleMessages, renderAgentFiles } from "../seo/agent-documents.ts";
-import type { Downloads } from "../seo/downloads.ts";
+import { featureGroups, homeFeatures, remoteGuides, remoteTopics } from "../seo/page-outline.ts";
+import { formatMessage, readLocaleMessages, renderAgentFiles } from "../seo/agent-documents.ts";
+import { remoteAppLabels, remoteCode } from "../seo/remote-references.ts";
+import { fallbackDownloads, type Downloads } from "../seo/downloads.ts";
 import {
   buildJsonLd,
   localeCodeFromPath,
@@ -36,6 +37,8 @@ test("page paths keep the English home unprefixed and the other pages as sibling
   assert.equal(pageKind("/zh-Hant/privacy/"), "privacy");
   assert.equal(pageKind("/download/"), "download");
   assert.equal(pageKind("/zh/download/"), "download");
+  assert.equal(pageKind("/remote/"), "remote");
+  assert.equal(pageKind("/ar/remote/"), "remote");
   assert.equal(pageKind("/download/macos/"), "other");
   assert.equal(pageKind("/404/"), "other");
   assert.equal(pageKind("/pr/"), "other");
@@ -48,6 +51,36 @@ test("page paths keep the English home unprefixed and the other pages as sibling
   assert.equal(markdownFile("/zh-Hant/privacy/"), "zh-Hant/privacy.md");
   assert.equal(markdownFile("/download/"), "download.md");
   assert.equal(markdownFile("/zh/download/"), "zh/download.md");
+  assert.equal(markdownFile("/remote/"), "remote.md");
+  assert.equal(markdownFile("/ar/remote/"), "ar/remote.md");
+});
+
+test("the feature wall groups keep distinct capabilities in reading order", () => {
+  assert.deepEqual(featureGroups.map(({ features }) => features), [
+    ["managedAccounts", "accountContinuity", "quotaScheduling", "usageMonitor", "sharedConfiguration"],
+    ["freshSession", "agentHandoff", "openAgentApp"],
+    ["crossProjectWork", "nativeProjectSessions", "sessionIntervention", "processMonitoring", "reviewChanges"],
+  ]);
+});
+
+test("remote guide references use the application labels in every locale", async () => {
+  const messages = await readLocaleMessages(fileURLToPath(new URL("../i18n/locales/", import.meta.url)));
+  for (const locale of locales) {
+    const source = readFileSync(new URL(`../../../packages/ui/src/i18n/messages/${locale.language}.ts`, import.meta.url), "utf8");
+    for (const [key, appKey] of Object.entries(remoteAppLabels)) {
+      const prefix = `"${appKey}":`;
+      const value = source.slice(source.indexOf(prefix) + prefix.length).match(/^\s*("(?:[^"\\]|\\.)*")/);
+      assert.ok(source.includes(prefix) && value, `${locale.language}: missing application label ${appKey}`);
+      assert.equal(messages[locale.code][key], JSON.parse(value[1]), `${locale.language}: ${key}`);
+    }
+    if (["zh-Hans", "zh-Hant", "ja"].includes(locale.language)) {
+      const reference = String.raw`\{(?:remoteLabel\w+|settingsPath)\}`;
+      const padded = new RegExp(` ${reference}|${reference} `);
+      for (const key of ["remoteStepConnectBody", "remoteWindowsMenu", "remoteHostSsh", "remoteHostAllow", "remoteHostDetails", "remoteBrowserCommand"]) {
+        assert.doesNotMatch(messages[locale.code][key], padded, `${locale.language}: ${key}`);
+      }
+    }
+  }
 });
 
 test("robots allows search, retrieval, and training", () => {
@@ -80,6 +113,8 @@ test(
     assert.equal(sitemap.includes("/404"), false);
     assert.match(sitemap, /<loc>https:\/\/octoboard\.dev\/download\/<\/loc>/);
     assert.match(sitemap, /<loc>https:\/\/octoboard\.dev\/zh\/download\/<\/loc>/);
+    assert.ok(sitemap.includes("<loc>https://octoboard.dev/remote/</loc>"));
+    assert.ok(sitemap.includes("<loc>https://octoboard.dev/zh/remote/</loc>"));
     for (const target of ["macos", "windows", "linux-x86_64", "linux-aarch64"]) {
       assert.equal(sitemap.includes(`/download/${target}/`), false);
     }
@@ -262,7 +297,6 @@ test("agent documents follow the pages and carry the download and install inform
   assert.doesNotMatch(page, /Install the coding-agent CLIs you want to use yourself/);
   assert.match(home, /The app is free and open source under the MIT License\./);
   assert.equal(home.includes("Awaiting instructions"), false);
-  assert.match(home, /Switch accounts\. Continue the task\./);
   assert.match(home, /Do I need to set up my projects and CLI configuration again\?/);
   assert.equal(home.includes("What is Octoboard useful for?"), false);
   for (const locale of locales) {
@@ -285,6 +319,7 @@ test("agent documents follow the pages and carry the download and install inform
       `### ${catalog.downloadStartStep}`,
       "```sh\noctoboardd start\noctoboardd address\n```",
       `### ${catalog.downloadOpenStep}`,
+      formatMessage(catalog.remoteBrowserServer, { server: "`<server>`" }),
       catalog.downloadBrowserSteps,
       `### ${catalog.downloadOptionsLabel}`,
     ];
@@ -314,11 +349,66 @@ test("agent documents follow the pages and carry the download and install inform
     const privacy = files[markdownFile(locale.code === "en" ? "/privacy/" : `/${locale.code}/privacy/`)];
     assert.ok(privacy.includes(formatPrivacyDate(locale.language)));
     assert.ok(privacy.includes(catalog.privacyWebsiteConsentBody));
+    assert.ok(privacy.includes(catalog.privacyRemoteHostsBody));
+    const remoteRoute = locale.code === "en" ? "/remote/" : `/${locale.code}/remote/`;
+    const remoteFile = markdownFile(remoteRoute);
+    const remotePage = files[remoteFile];
+    assert.ok(remotePage.startsWith(`# ${catalog.remoteEyebrow}\n`), locale.code);
+    assert.ok(remotePage.includes(`Canonical: ${siteUrl}${remoteRoute.slice(1)}`), locale.code);
+    const guideLink = `[${catalog.remoteGuideLink}](${siteUrl}${remoteFile})`;
+    assert.ok(body.includes(guideLink), locale.code);
+    assert.ok(download.includes(guideLink), locale.code);
+    const labels = Object.fromEntries(Object.keys(remoteAppLabels).map((key) => [
+      key,
+      `**${catalog[key].replaceAll("{appName}", "Octoboard")}**`,
+    ]));
+    const referenceValues = {
+      ...labels,
+      ...Object.fromEntries(Object.entries(remoteCode).map(([key, command]) => [key, `\`${command}\``])),
+      settingsPath: `${labels.remoteLabelSettings} › ${labels.remoteLabelAccess}`,
+      appName: "Octoboard",
+    };
+    const remoteText = (key: string) => formatMessage(catalog[key], referenceValues);
+    assert.ok(remotePage.includes(labels.remoteLabelPaste), locale.code);
+    assert.ok(remotePage.includes(labels.remoteLabelSave), locale.code);
+    let remotePosition = -1;
+    for (const guide of remoteGuides(siteUrl)) {
+      const section = remotePage.indexOf(`## ${catalog[guide.key]}`);
+      assert.ok(section > remotePosition, `${locale.code}: ${guide.key}`);
+      remotePosition = section;
+      for (const [index, step] of guide.steps.entries()) {
+        const position = remotePage.indexOf(`${index + 1}. ${remoteText(step.key)}`, remotePosition);
+        assert.ok(position > remotePosition, `${locale.code}: ${step.key}`);
+        assert.ok(!body.includes(remoteText(step.key)), `${locale.code}: guide instructions moved off the homepage`);
+        remotePosition = position;
+        if ("command" in step) assert.ok(remotePage.includes(`   ${step.command}`), locale.code);
+        if ("notes" in step) {
+          for (const note of step.notes) {
+            const notePosition = remotePage.indexOf(`   ${remoteText(note)}`, remotePosition);
+            assert.ok(notePosition > remotePosition, `${locale.code}: ${note}`);
+            remotePosition = notePosition;
+          }
+        }
+      }
+    }
+    for (const { key, items } of remoteTopics) {
+      const section = remotePage.indexOf(`## ${catalog[key]}`);
+      assert.ok(section > remotePosition, `${locale.code}: ${key}`);
+      remotePosition = section;
+      for (const item of items) {
+        const lead = remoteText(`${item}Lead`);
+        assert.match(lead, /[:：]$/u, `${locale.code}: ${item} lead`);
+        const position = remotePage.indexOf(`- **${lead}** ${remoteText(item)}`, remotePosition);
+        assert.ok(position > remotePosition, `${locale.code}: ${item}`);
+        remotePosition = position;
+      }
+    }
     const headings = [
       "featureWallTitle",
       ...featureGroups.flatMap((group) => [group.key, ...group.features.map((key) => `${key}FeatureTitle`)]),
       "previewTitle",
       "coordinationGoalTitle",
+      "remoteTitle",
       "developerTitle",
       "developerShiftTitle",
       "developerContextTitle",
@@ -326,7 +416,7 @@ test("agent documents follow the pages and carry the download and install inform
       "localTitle",
       "platformsTitle",
       "faqTitle",
-    ].map((key) => catalog[key].replaceAll("\n", " "));
+    ].map((key) => catalog[key].replaceAll("\n", " ").replace("{appName}", "Octoboard"));
     let previous = -1;
     for (const title of headings) {
       const position = body.indexOf(title);
@@ -344,8 +434,15 @@ test("agent documents follow the pages and carry the download and install inform
       assert.equal(body.split(text).length - 1, 1, `${locale.code}: ${key} must appear once`);
     }
   }
+  for (const { key } of homeFeatures) {
+    const feature = messages.en[`${key}FeatureDescription`].replaceAll("{appName}", "Octoboard");
+    assert.equal(llms.split(feature).length - 1, 1, `${key} appears once in llms.txt`);
+  }
   assert.equal(home.includes("Replay workflow"), false);
   assert.match(files["privacy.md"], /GitHub privacy statement/);
+  assert.match(files["privacy.md"], /“Analytics settings” in the site footer/);
+  assert.match(files["remote.md"], /On Windows, you can also choose \*\*Remote devices\*\* from the window’s system menu or the taskbar icon’s jump list/);
+  assert.match(files["remote.md"], /`ssh-keygen -lf \/etc\/ssh\/ssh_host_ed25519_key\.pub`/);
   assert.match(files["ja.md"], /Canonical: https:\/\/octoboard\.dev\/ja\//);
   assert.match(llms, /Support: support@octoboard\.dev/);
   assert.match(llms, /https:\/\/octoboard\.dev\/index\.md/);
@@ -363,6 +460,8 @@ test("agent documents follow the pages and carry the download and install inform
   assert.match(llms, /\[All releases\]\(https:\/\/github\.com\/baijunjie\/octoboard\/releases\)/);
   assert.match(llms, /\[all languages\]\(https:\/\/octoboard\.dev\/llms-full\.txt\)/);
   assert.match(files["sitemap.md"], /https:\/\/octoboard\.dev\/zh\/privacy\.md/);
+  assert.ok(files["sitemap.md"].includes("https://octoboard.dev/zh/remote.md"));
+  assert.match(llms, /\]\(https:\/\/octoboard\.dev\/remote\.md\)/);
   const sections = files["sitemap.md"].match(/^## .+$/gm) ?? [];
   assert.deepEqual(sections, ["## Root", ...locales.filter((locale) => locale.code !== "en").map((locale) => `## ${locale.code}`).sort()]);
   assert.match(files["sitemap.md"], /## Root\n- \[[^\n]+\]\(https:\/\/octoboard\.dev\/index\.md\)\n- \[[^\n]+\]\(https:\/\/octoboard\.dev\/download\.md\)\n- \[[^\n]+\]\(https:\/\/octoboard\.dev\/privacy\.md\)/);
@@ -386,17 +485,19 @@ test("agent entry links resolve and language bundles contain only their own page
       operatorName: appConfig.author.name,
       contactEmail: "support@octoboard.dev",
       repositoryUrl,
-      downloads,
+      downloads: siteUrl === "https://octoboard.dev/" ? downloads : fallbackDownloads(repositoryUrl),
       messages,
     });
-    assert.equal((files["llms-full.txt"].match(/\*\*Source:\*\*/g) ?? []).length, locales.length * 3);
+    const linkTargets = Array.from(files["llms.txt"].matchAll(/\]\((https?:\/\/[^)\s]+)\)/g), ([, href]) => href);
+    assert.equal(new Set(linkTargets).size, linkTargets.length, `${siteUrl}: unique llms.txt links, including release fallbacks`);
+    assert.equal((files["llms-full.txt"].match(/\*\*Source:\*\*/g) ?? []).length, locales.length * pagePaths.length);
     for (const locale of locales) {
       const file = `llms-full-${locale.code}.txt`;
       assert.ok(files["llms.txt"].includes(`${siteUrl}${file}`), file);
       const bundle = files[file];
-      assert.equal((bundle.match(/\*\*Source:\*\*/g) ?? []).length, 3, file);
+      assert.equal((bundle.match(/\*\*Source:\*\*/g) ?? []).length, pagePaths.length, file);
       const prefix = locale.code === "en" ? "" : `${locale.code}/`;
-      for (const path of ["", "privacy/", "download/"]) {
+      for (const path of pagePaths) {
         assert.ok(bundle.includes(`**Source:** ${siteUrl}${prefix}${path}\n`), file);
         assert.ok(bundle.includes(files[markdownFile(`/${prefix}${path}`)].trim()), file);
       }
@@ -420,13 +521,13 @@ test("agent entry links resolve and language bundles contain only their own page
   }
 });
 
-test("the policy revision date stays on November 13 across time zones", () => {
+test("the policy revision date stays on November 18 across time zones", () => {
   const previous = process.env.TZ;
   try {
     for (const zone of ["Pacific/Honolulu", "Asia/Tokyo", "UTC"]) {
       process.env.TZ = zone;
-      assert.equal(formatPrivacyDate("en"), "November 13, 2026");
-      assert.equal(formatPrivacyDate("zh-Hans"), "2026年11月13日");
+      assert.equal(formatPrivacyDate("en"), "November 18, 2026");
+      assert.equal(formatPrivacyDate("zh-Hans"), "2026年11月18日");
     }
   } finally {
     if (previous === undefined) delete process.env.TZ;

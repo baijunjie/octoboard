@@ -1,6 +1,6 @@
 # Website
 
-The official website presents Octoboard, its developer's motivation, its downloads, and its privacy policy. It is a static public
+The official website presents Octoboard, its developer's motivation, its downloads, its remote connections guide, and its privacy policy. It is a static public
 site, separate from the application: visiting it does not connect to a local daemon, open a real agent session, or
 require an account.
 
@@ -32,16 +32,16 @@ both names exist, GitHub Pages redirects `www.octoboard.dev` to `octoboard.dev`.
 
 ## Pages and languages
 
-The site has a homepage, a download page and a privacy page. Paths below are relative to the site's deployment root:
+The site has a homepage, a download page, a privacy page and a remote connections guide. Paths below are relative to the site's deployment root:
 
-- English: `/`, `/download/` and `/privacy/`, without an `en` prefix.
-- Other languages: `/<locale>/`, `/<locale>/download/` and `/<locale>/privacy/`.
+- English: `/`, `/download/`, `/privacy/` and `/remote/`, without an `en` prefix.
+- Other languages: `/<locale>/`, `/<locale>/download/`, `/<locale>/privacy/` and `/<locale>/remote/`.
 - Simplified Chinese uses the route prefix `zh`, with the language identified as `zh-Hans` in page metadata.
   Traditional Chinese uses `zh-Hant` for both.
 - Portuguese uses `pt` for both its route prefix and page language.
 
-All 17 languages have complete website translations, including navigation, all 16 feature cards, preview
-controls, the illustrative workflow, the developer's motivation, questions and answers, the download page, privacy
+All 17 languages have complete website translations, including navigation, all 13 feature cards, preview
+controls, the illustrative workflow, the remote connections guide, the developer's motivation, questions and answers, the download page, privacy
 text, client error messages, and page metadata: Arabic, German, English, Spanish, French, Hindi, Indonesian, Italian,
 Japanese, Korean, Portuguese, Russian, Thai, Turkish, Vietnamese, Simplified Chinese, and Traditional
 Chinese. This coverage is specific to the website; the application's translation coverage is described in
@@ -53,8 +53,7 @@ English is the default. On a normal site page that opens in English, the site ch
 the app mounts. If there is no remembered language, it matches the browser's preferred languages to the supported
 languages and opens the matching version of the same page. Unknown language tags and English leave the page on its
 default route. A page opened with a language prefix is not redirected. The language selector names each language in
-that language and opens the corresponding version of the current page: switching from a privacy or download page
-stays on that page. Arabic uses a right-to-left layout. Page URLs remain usable directly, including after a reload. The
+that language and opens the corresponding version of the current page: switching from an inner page stays on that page. Arabic uses a right-to-left layout. Page URLs remain usable directly, including after a reload. The
 site remembers language changes for one year in a same-site cookie.
 The unlocalized static 404 page does not perform language matching.
 
@@ -72,34 +71,32 @@ tasks across projects. The coordinator is a role taken by the chosen agent. The 
 download page, its GitHub repository, and the preview section.
 
 The page continues through the grouped feature wall, the product preview, one cross-project coordination
-example, the developer's motivation, local data and open-source information with platform availability, and questions.
-These six sections share a numbered heading, a short label marked by a red square, and a title. Section and
+example, an overview of remote connections, the developer's motivation, local data and open-source information with
+platform availability, and questions. These seven sections share a numbered heading, a short label marked by a red square, and a title. Section and
 workflow-step numbers are prominent visual markers.
 
-The first numbered section presents 16 feature cards in three groups, in this order:
+The first numbered section presents 13 feature cards in three groups, in this order:
 
-- Accounts and usage (six cards): managing accounts across agents; retaining the conversation when switching
-  accounts of the same agent; optional automatic selection of an available account when starting a session,
-  considering account status and usage reset times; usage readings and reset countdowns; optional automatic
-  switching after a usage limit; and waiting when no account of the same agent is available, then resuming limited
-  work when a fresh reading confirms an account's usage recovery.
-- Context and continuity (three cards): monitoring context size and agent-reported window usage to see how close
-  the conversation is to the length the agent can process, and moving later work to a fresh session before a long
-  conversation risks losing details through summary compression; passing work to a new session while the original
-  agent retains its conversation record for reviewing or resuming to ask about earlier decisions and implementation
-  details; and an agent from another provider taking over from a handoff record of the task, progress and remaining work.
-- Agents and projects (seven cards): coordinating different agents' strengths; organizing work across projects;
-  separate native project contexts; retaining existing CLI instructions, Skills, Hooks and MCP configuration;
-  entering a delegated project's session to guide its executing agent directly, without relaying every detail
-  through the coordinator; monitoring session statuses and requests for decisions; and reviewing files and Git diffs.
+- Accounts and usage (five cards): managing accounts and sign-in status; keeping a conversation while changing
+  accounts manually or automatically at a usage limit; choosing available accounts for new sessions and waiting
+  for confirmed recovery when no account can continue a limited task; checking usage and reset countdowns; and
+  sharing skills, plugins and MCP servers across accounts of one agent, with the Claude Code user-level MCP and
+  Windows Developer Mode qualifications.
+- Context and continuity (three cards): checking context usage and starting the next stage in a fresh session
+  while the earlier conversation remains available; handing work to another agent with a record of the task,
+  progress and remaining work; and opening a stopped session in the Claude or Codex app on its macOS or Windows host.
+- Agents and projects (five cards): coordinating one request across projects and their agents; running independent
+  native CLI sessions with each project's own setup; finding which sessions need attention and stepping in directly;
+  tracking agent-started processes with best-effort, time-limited cleanup for tracked processes at session end; and
+  reviewing files and Git diffs beside the session.
 
 Every card has a title, description and a focused visual, identified as illustrative sample data.
-Five visuals show application interface fragments: accounts, usage readings, session statuses, existing workflow
-files, and a Git diff. The status example puts a session waiting for the user first, a session that is done
-second, and a working session last, following the application's ordering. The other eleven visuals illustrate the
-capability with account choices, conversation and handoff records, context usage, task continuity or coordination
-relationships. The quota-recovery example shows waiting, confirmation that quota is available, and continuing work;
-it does not treat a reset time alone as proof of recovery or imply that the task is finished.
+Seven visuals show focused application details: account sign-in status, a quota reading, two session statuses,
+project configuration files, a Git diff, a single process entry with Keep and Stop, and the action to open a
+stopped Codex session. The waiting session appears before the working one, following the application's ordering.
+Six other visuals show account switching, quota
+recovery, shared account configuration, fresh and earlier sessions, agent handoff, and coordination across
+projects. The quota example shows waiting, confirmation of availability, and continuing work.
 
 These visuals are static presentations: they accept no pointer or keyboard interaction and are hidden from
 assistive technology, which reads each card's title and description instead. Their accounts, tasks, files and
@@ -110,10 +107,10 @@ page to retry that illustration. They require JavaScript; the card titles, descr
 remain readable without it. The separately embedded product preview retains
 the interactions described in `docs/product/website-product-preview.md`, "Product preview".
 
-Cards form three columns on wide screens, two at widths of 1050 pixels or less, and one at 600 pixels or less. The
-last card, reviewing files and Git diffs, spans the full row with its visual beside its text, stacking them on
-phones. Each group has a numbered heading and decorative icon. The feature wall, the homepage Markdown and the
-homepage structured-data list present the same features in the same order.
+Cards have the same width within each layout, with three columns on wide screens, two at widths of 1050 pixels or
+less, and one at 600 pixels or less. Each card stacks its visual above its text.
+Each group has a numbered heading and decorative icon. The feature wall, homepage Markdown and homepage structured
+data present the same features in the same order.
 
 The coordination introduction identifies the restaurant promotion as a cross-project example. The HTML page also
 invites visitors to select a project in the illustration to inspect its assigned task and example report; the
@@ -144,7 +141,7 @@ within their own native project context, and following or intervening in their c
 uses its native support for instructions, Skills, hooks, tools and permissions. The illustration is fixed sample
 content: it does not show live activity, run agents, or submit work.
 
-Section 04 explains why the developer created Octoboard, as a signed personal statement. Its opening expresses the
+Section 05 explains why the developer created Octoboard, as a signed personal statement. Its opening expresses the
 belief that people no longer need to write code themselves and can focus on the product they want to deliver.
 Three subsections develop that position:
 
@@ -163,12 +160,12 @@ the project's shared author name in every language; the author name is not trans
 used for the footer copyright and the privacy policy's operator. These are the developer's convictions and motivation,
 not verified claims about AI performance or promises of fully autonomous development or guaranteed software quality.
 
-Section 05 combines local data handling, the source repository and MIT License, and platform availability.
+Section 06 combines local data handling, the source repository and MIT License, and platform availability.
 Its data-handling summary describes local application storage, no upload of code or conversations to Octoboard's
 own servers, and configured agents and tools connecting to their providers. The open-source panel states that
 Octoboard is free and open source under the MIT License.
 
-The nine questions in section 06 cover setup, data handling, independent project sessions and subagents, providers,
+The nine questions in section 07 cover setup, data handling, independent project sessions and subagents, providers,
 direct participation, requirements and cost, remote hosts, concurrent edits, and returning to the original CLI, in
 that order. The section's introductory label is separate from its questions heading. Each question can be expanded
 or collapsed independently, with the first expanded initially; several answers can remain open at once. The plus
@@ -196,8 +193,8 @@ receive a hover background; an expanded question and its answer share a uniform 
 - Requirements and cost: visitors install and configure the agent CLIs themselves. Octoboard is free and open
   source under the MIT License; agents and model services follow the chosen providers' subscriptions or billing
   terms. Self-hosted model configurations remain usable when the chosen agent supports them.
-- Remote hosts: partly. On Linux, Octoboard runs on a server, agents included, and is used from a browser on the
-  visitor's own machine; driving agents on other hosts from one desktop workspace is planned and unavailable.
+- Remote hosts: agents run on a Linux server or another Mac or Windows PC, reached over SSH from a desktop app or
+  browser.
 - Parallel work: sessions share the project directory by default, so simultaneous edits to the same files can
   conflict. Users can ask agents to work in separate Git worktrees, giving changes separate working directories,
   and review those changes before merging.
@@ -224,18 +221,17 @@ The closing section displays the mascot beside the wordmark, with the localized 
 wordmark, centered on the wordmark. Under that group, centered, is the sentence that states the slogan's two
 meanings (see "Brand slogan"). Decorative graphics do not act as slide or pagination controls.
 
-The floating header stays visible while scrolling. Its inline navigation contains only the feature wall
-(`#benefits`) and product preview (`#product-preview`), alongside language selection and the Download action.
-The inline links are hidden at widths of 1200 pixels or less. These links also lead from the privacy and download pages
-to the localized homepage. The header has a glass surface with edge refraction where supported and a sheen that follows
+The floating header stays visible while scrolling. Its inline navigation links to the feature wall
+(`#benefits`), product preview (`#product-preview`) and the remote connections guide, alongside language selection and
+the Download action. The inline links are hidden at widths of 1200 pixels or less. The footer also links to the guide. The header has a glass surface with edge refraction where supported and a sheen that follows
 the pointer. Browsers without refraction support use blurred glass; those without backdrop blur use a more opaque
 surface.
 
 On the homepage, a separate page directory links to the overview (`#overview`), feature wall (`#benefits`), product
-preview (`#product-preview`), coordination explanation (`#how-it-works`), developer motivation (`#developer-intent`),
-local data and open source (`#local-workspace`), platform availability (`#platforms`), questions (`#questions`), and
-closing download section (`#download`), in that order. Platform availability remains within the fifth numbered
-section; its separate directory entry does not change the six section numbers. Links leave space for the floating
+preview (`#product-preview`), coordination explanation (`#how-it-works`), remote connections (`#remote-connections`),
+developer motivation (`#developer-intent`), local data and open source (`#local-workspace`), platform availability (`#platforms`), questions (`#questions`), and
+closing download section (`#download`), in that order. Platform availability remains within the sixth numbered
+section; its separate directory entry does not change the seven section numbers. Links leave space for the floating
 header above their destination. Scroll position identifies the active destination, and reaching the page bottom
 identifies the closing section.
 
@@ -275,14 +271,41 @@ wordmark in the closing section, follows the slogan on the share image, and is i
 Markdown. The image's alt text includes both the slogan and the meaning sentence. On the website the slogan
 remains localized text rather than part of the wordmark artwork.
 
+## Remote connections
+
+The fourth numbered homepage section gives a short overview, an SSH diagram and a link to the localized setup guide.
+The guide is at `/remote/` in English and `/<locale>/remote/` in other languages. It repeats the diagram and uses one
+reading column, with a sticky contents list on wide screens and a collapsible contents list before the instructions
+on phones.
+
+Each of the three ways to connect is a vertical list of numbered steps:
+
+- Connect to Linux from the desktop app. Install and start the daemon, including the installer's PATH advice, copy
+  its connection details, then add and connect to it. The guide gives the Windows system menu and jump list entry.
+  Pasting a fingerprint saves it automatically, and a manually entered host's fingerprint is checked against the
+  server's before it is confirmed. A framed snapshot shows the Connection details field and its Paste button.
+- Use another desktop computer as the host. Enable the system SSH server and the app's remote access, copy the app's
+  connection details and use them on the other computer.
+- Connect from a browser. Get the SSH forward command, replace its `<server>` placeholder for a Linux server, run
+  it on your computer and keep it running while using the browser address. The key works only for someone who can
+  reach Octoboard and can travel with history, bookmarks and sync.
+
+Commands share the download page's copyable command block. The instructions quote the app's localized controls
+using inline references, including the Save and Paste buttons and the path to Remote access. The Markdown guide
+emphasizes the same labels and uses inline code for commands, flags and paths. The connection steps explain what each
+command or setting does. Each item under Security and In a remote window starts with a bold benefit followed by one
+sentence explaining how it works, including that windows are per SSH destination, identified by user, host and
+SSH port. The application behavior is described in
+`docs/product/remote-daemons.md`.
+
 ## Platform availability
 
 Platform availability appears within the local-data and open-source section, before the questions. Its five entries have
 equal visual weight in a desktop row and become a compact list of icons and text on small screens, in the order macOS,
 Windows, Linux, iOS, Android. The macOS, Windows and Linux entries use brighter text: macOS and Windows identify those
 apps as beta, and Linux identifies a server in beta. The section introduction describes the macOS and Windows apps and
-the Linux server as betas still in development, the Linux server as accessed from another machine's browser, and the
-iOS and Android apps as planned.
+the Linux server as betas, describes reaching the Linux server over SSH from a desktop app or browser, and
+identifies the iOS and Android apps as planned.
 Linux is the server form (see `docs/product/server-form.md`), not a Linux desktop app. The site does not give an
 availability date.
 
