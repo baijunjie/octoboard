@@ -16,7 +16,11 @@ The doc directories all live inside the project they belong to.
 The locations in the table are the default; when the project already has its own convention for doc directories, follow the project's.
 
 - Development memory is a loose collection of smallest units and **cannot be referenced by code comments or other docs**; wherever it is needed, write that sentence straight in.
-- Other docs under `docs/` are maintained by the agent responsible for the corresponding task, and this skill does not touch them. Long-lived ones among them (such as topic docs — a focused writeup kept as the record of one task, e.g. research conclusions, measured baselines) are registered in the documentation index; temporary docs that are deleted once done (development plans, tickets, etc.) are not registered.
+- Other docs under `docs/` are maintained by the agent responsible for the corresponding task, and this skill does not
+  touch them. Long-lived ones among them (such as topic docs — a focused writeup kept as the record of one task, e.g.
+  research conclusions, measured baselines) are registered in the documentation index; temporary docs that are deleted
+  once done may also be registered while they exist, with the entry marked `TODO`, and the entry is removed or updated
+  when the doc is deleted or renamed.
 - Content that only holds on this machine (local paths, environment values, etc.) goes into none of these categories: docs are committed with the repo, so it breaks on another machine or with multiple people.
 
 When unsure, report back: stop, spell out what needs deciding (with the options) or what information is missing, together with what you have already found out, and let the recipient of the report (the user, or the dispatcher passing it on to the user) decide before going on; do not decide for yourself.
@@ -55,7 +59,9 @@ Handle what a subagent hands back according to where it belongs; for a destinati
 
 Subagents do not touch the documentation index; you update `docs/README.md` from the added, deleted, and renamed files they report, creating it if it does not exist:
 
-- List the long-lived docs under `docs/` **flat and recursively** (excluding the documentation index itself), grouped by category or directory, one entry per line, written as a pointer someone can use to judge which doc to open.
+- List the long-lived docs and the registered temporary docs under `docs/` **flat and recursively** (excluding the
+  documentation index itself), grouped by category or directory, one entry per line, written as a pointer someone can
+  use to judge which doc to open.
 - Subdirectories of `docs/` get no `README.md` acting as a directory index; the list lives only in the documentation index, in that one place. Temporary docs that are deleted once done are organized by their own structure and are not bound by this rule. A module's nearby `README.md` is not under `docs/`, is carried by the project map, and does not go into the documentation index.
 - Entries are registered by whoever owns the doc: for the three categories above you register them from the subagents' reports; other long-lived docs are registered by the agent that wrote them — when you dispatch an agent to write such a doc, tell it to register its own files. If you find someone else's long-lived doc missing from the index, or an entry that has gone stale, state it clearly in your final reply; do not fix it for them.
 
@@ -68,7 +74,10 @@ When the user asks whether the docs have drifted but there is no new change, dis
 When a subagent has changed a referenced section, it lists in its report, one by one, the code comments and other docs that reference it:
 
 - Look at every code comment: if what it says no longer matches the revised doc, fix the comment; if code behavior does not match the doc, first judge whether the code has a bug or the doc is wrong, then decide which side to change — do not default to changing the code.
-- References in other docs go to that doc's owner: for the project map, product docs, or development memory, dispatch the corresponding subagent again carrying these items; for other long-lived docs, fix it yourself if it is this round's responsibility, otherwise state it clearly in your final reply and do not fix it for them.
+- References in other docs go to that doc's owner: for the project map, product docs, or development memory, dispatch
+  the corresponding subagent again carrying these items; temporary docs have no dedicated maintainer, so you update the
+  references in them in the same change; for other long-lived docs, fix it yourself if it is this round's
+  responsibility, otherwise state it clearly in your final reply and do not fix it for them.
 - Never finish leaving the state "the doc has already changed, the code is still as it was".
 
 ## Comment conventions
@@ -98,16 +107,21 @@ A comment explains only the level it sits at: a function comment explains that f
 ### Referencing docs
 
 - **Reference only systematic, formal docs**: docs that are maintained long-term, committed with the codebase, stable in location, plus external standards and third-party official documentation.
-- **Do not reference loose entries or temporary docs**: loose records such as lesson entries or caveat lists need their content written straight in when needed; process by-products deleted once done — development plans, design discussions, tasks / tickets / issues, chat logs — are never referenced.
+- **Reference temporary docs only while they still exist**: a temporary doc that is committed with the codebase and
+  deleted once done may be referenced in the form below, and the reference must be marked `TODO`; this does not count as
+  the process information forbidden above. The change that makes a reference stop pointing at the original content
+  (delete, rename, split, move a section, retitle, etc.) deletes or updates every reference in the same change.
+- **Do not reference loose entries or process by-products outside the repo**: loose records such as lesson entries or
+  caveat lists need their content written straight in when needed; design discussions, tasks / issues, chat logs and
+  other process by-products that are not committed with the codebase are never referenced.
 - A reference only points the way, **it does not restate the referenced doc's content**; "why it is written this way here" is still spelled out in the comment, the doc only fills in the cross-file whole picture.
-- A doc inside the repo is written as **path + section heading text**, the path relative to the repo root, no line numbers, no anchors, so that the reference can still be found by search after the doc changes, e.g. `// For the full state transition rules see docs/product/order.md's "Order state machine" section`.
+- A doc inside the repo is written as its **path**, plus the **exact section heading** when pointing at a section; the path is relative to the repo root, with no code names or abbreviations, no line numbers, no anchors, so that the reference can still be found by search after the doc changes, e.g. `// For the full state transition rules see docs/product/order.md's "Order state machine" section`.
 - An external doc is written as **name + version / number + section**, URL optional: `RFC 7231 §6.5.1`.
 
 ## This project
 
-- Memory may also reference a long-lived doc under `docs/` that is registered in the documentation index (such as `docs/conventions/ui-standard.md`), written as "path + exact section heading", and memory-writer hands such a doc's content back as belonging to it; a development plan or a ticket is still never referenced. Supplements `.claude/agents/memory-writer.md`'s "Judging whether it is worth recording" (what is already spelled out elsewhere), "How to write it" (which docs memory may reference) and "Report" (what is handed back). (Source: user instruction)
+- Memory may also reference a long-lived doc under `docs/` that is registered in the documentation index (such as `docs/conventions/ui-standard.md`), written as "path + exact section heading", and memory-writer hands such a doc's content back as belonging to it; a temporary doc (a development plan, a ticket) is referenced only as the "Referencing docs" rules above allow. Supplements `.claude/agents/memory-writer.md`'s "Judging whether it is worth recording" (what is already spelled out elsewhere), "How to write it" (which docs memory may reference) and "Report" (what is handed back). (Source: user instruction)
 - Agent-queryability comes first, sensible module splitting second: `docs/` alone must answer what the technology stack and frameworks are, what the directory map is, and which doc to open for which question. `docs/project-map.md` is a short top-level map (stack, workspace layout, one line per end) that points into `docs/structure/`; the documentation index lists every structure doc. (Source: user instruction)
 - Each end has one structure doc, `docs/structure/<end>.md`, merging that end's directory map with its structure rules: layering and dependency direction, where new code goes, and the shared entry points new code must go through. The ends are `daemon` (`apps/daemon/`), `ui` (`packages/ui/`), `desktop` (`apps/desktop/`), `web` (`apps/web/`) and `tooling` (`scripts/`, `.githooks/`, `.github/`, repository configuration). They are part of the project map and `map-writer` maintains them; this supplements `.claude/agents/map-writer.md`'s "What you own", lets it link `docs/project-map.md` and the structure docs to each other, and lets structure docs state structure rules, which "What not to write" otherwise excludes as conventions. A rule enforced by a check (lint, a test) names that check. (Source: user instruction)
 - The root `README.md` and each end's root `README.md` (`apps/daemon/`, `apps/desktop/`, `apps/web/`, `packages/ui/`) are user-facing entry docs: what the end is, the first-time develop, build and launch flow a developer needs, and links into `docs/`. They hold no development internals, no directory layout and no product details: an end's directory layout and structure go into its `docs/structure/<end>.md` (`map-writer`), its product details into `docs/product/` (`product-writer`). You (the main agent) maintain these READMEs; `map-writer` only links to them. (Source: user instruction)
 - A module `README.md` in the code tree exists only for a single-function module that is not a product on its own (such as `apps/daemon/src/processes/ledger/`): it holds how the module works and the technical details needed when actually modifying it — for a developer tool (the release scripts, the gallery, `pnpm verify`), also the procedure for running it — stays short, and is the one place those details live — `docs/structure/` links to it and does not restate it. Below that bar, the module gets one line in its end's structure doc. This supplements `.claude/agents/map-writer.md`'s "Module docs" (how it works is allowed besides the overview and interfaces). (Source: user instruction)
-- A code comment may reference a temporary doc (a development plan, a bug ticket) while that doc exists, in the usual "path + exact section heading" form; the change that deletes or renames the doc removes or updates every such reference, and commit messages and PR descriptions never reference one. A deliberately left transitional layer's `TODO` names the plan topic and milestone that removes it. This overrides "Referencing docs" ("Do not reference loose entries or temporary docs") for temporary docs only; the project's comment rules are in `docs/conventions/comments.md`. (Source: user instruction)

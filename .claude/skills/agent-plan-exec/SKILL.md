@@ -46,5 +46,16 @@ Matters that need the user's help are reported back the same way.
 - A closed milestone leaves a trace only in that one list line — it is not mentioned in any "Handoff" section, project doc, or code comment
 - Hand things over only within this topic; a finding that belongs to another topic, or to no topic at all, gets reported back
 - Never shrink the scope on your own, never drop an item on your own
-- A deliberately left transitional layer is marked `TODO` in the code, stating which topic's which milestone removes it, updated when handed over to a different milestone; do not casually delete one that does not belong to this milestone
-- A transitional layer does not go into the project docs; if it causes a user-visible difference in behavior, describe the current state as it truly is and mark it as transitional — do not write it as a plan, and give it no number
+- When a change makes a reference stop pointing at the original content (delete, rename, split or merge docs or
+  directories, move a section or change a heading, including a single-milestone `README.md` splitting out `01-…`),
+  search the whole repo for the references to it in the same change and delete or update them: a reference must point to
+  a doc and section that still exist; where the referencing doc has its own maintenance owner (for example the project's
+  documentation conventions name a writer subagent), handle it per that owner
+- A deliberately left transitional layer is marked `TODO` in the code, naming the milestone doc that removes it, written
+  as that doc's path relative to the repo root (plus the exact section heading when pointing at a section), with no code
+  names such as a topic name or number, updated when handed over to a different milestone; do not casually delete one
+  that does not belong to this milestone
+- A transitional layer does not go into the project docs; if it causes a user-visible difference in behavior, describe
+  the current state as it truly is and mark it as transitional, without restating the plan; where the milestone that
+  ends the transitional state has to be named, give that milestone doc's path relative to the repo root (plus the exact
+  section heading when pointing at a section) and mark it `TODO`

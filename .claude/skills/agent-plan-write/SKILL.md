@@ -49,11 +49,18 @@ The development plan doc directory defaults to `docs/plans/`; if the project alr
 
 - **Implementation code**: never write the logic inside a function body. Examples go only as far as call relationships between methods and the execution flow ("call A once validation passes, then call B"), never implementation branches, algorithms, or third-party library calls. A business rule or constraint from the inputs (e.g. "a paid order cannot be cancelled") is a design decision — write it in plain language as given.
 - **Where the code goes and the coding steps**: do not list which files to change, do not assign a code path, do not write out coding steps — leave that to be investigated at implementation time.
-- **Repetition**: no repeating between docs — reference an earlier one briefly instead.
+- **Repetition**: no repeating between docs — reference an earlier one by its path instead.
 
 ## Relationship to everything else
 
 A development plan doc is a temporary doc:
 
-- It does not go into the documentation index; adding or deleting a topic directory requires no change to that index.
-- Referencing is one-way: nowhere outside its own topic directory (including code comments, commit messages, PR descriptions) may reference it; docs inside the same topic directory referencing each other is fine. If somewhere else needs what is in it, write that straight into that doc.
+- Outside its topic directory (including the project docs' documentation index) it may be referenced, written as a path
+  relative to the repo root (plus the exact section heading when pointing at a section) and marked `TODO`; reference
+  only docs and sections that still exist.
+- References within the same topic directory need no `TODO` and may use relative links within the directory, but the
+  link must spell out the full file name.
+- Inside or outside the directory, never reference it by a code name alone, such as the topic name or a milestone
+  number: nobody can find the source from a code name, and a whole-repo search cannot find it when docs are changed or
+  deleted.
+- Commit messages and PR descriptions do not reference it: they outlive the plan and cannot be amended afterwards.

@@ -10,7 +10,12 @@ When unsure, report back: stop, spell out what needs deciding (with the options)
 
 - **Facts only**: the fact sections hold only what the user said and what you verified yourself; anything inferred goes under "Leads" and is marked as such; report back what is missing.
 - **Once the ticket is filed, stop — do not fix it**; if you filed it mid-development, go back to the task you were on.
-- A ticket is a one-off document, **delete it once it's fixed**: nothing may ever reference it, it never enters the documentation index, and neither filing nor deleting one touches that index.
+- A ticket is a one-off document, **delete it once it's fixed**: elsewhere (the documentation index of the project docs
+  included) it may be referenced only while it exists, written as a path relative to the repo root (plus the exact
+  section heading when pointing at a section) and marked `TODO`; commit messages and PR descriptions do not reference
+  it; when a change alters the ticket's path (for example a single file becoming a directory), search the whole repo for
+  references in the same change and update them, and where the referencing doc has its own maintenance owner (for
+  example the project's documentation conventions name a writer subagent), handle it per that owner.
 
 ## Directory and naming
 

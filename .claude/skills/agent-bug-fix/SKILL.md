@@ -23,6 +23,8 @@ A ticket is a file `YYYYMMDD-{short-description}.md` in that directory, or a dir
 ## Before touching anything
 
 - Read the project's own documentation conventions first if it has them — the doc directory and any extra rules follow those; then read the product docs for the module you're touching to confirm the current behavior.
+- First search the whole repo for references to this ticket: where a temporary workaround `TODO` exists, undo or avoid
+  it before reproducing, and delete the workaround once the bug is truly fixed.
 - **You must reproduce it first** — if you can't, report back what you tried and what's missing, rather than guessing a fix from the ticket description. When the ticket points at a suspended reproduction case (commented out, marked as a known failure, shimmed around, etc.), restore it per the ticket's restore action and reproduce with that, rather than writing a separate one: it asserts the expected behavior, so report back if restoring it doesn't fail, or can't be restored.
 - **Do not touch product code until the root cause is located** (restoring a reproduction case aside); if you can't locate it, report back where you're stuck instead of changing things speculatively to see what happens.
 - Confirm the expected behavior against the product docs or the basis stated in the ticket. If neither exists, or the docs describe exactly the current behavior, this isn't an implementation deviation — report back to settle which behavior is wanted, and don't change anything until it's decided.
@@ -40,7 +42,14 @@ If the root cause is in the product design itself and a code-only fix can't addr
 - Change only what's related to this bug; note anything else you notice along the way in your final reply instead of fixing it in passing.
 - This reproduction path needs regression test coverage — who writes it and how follows the project's rules; when handing it to someone else, spell out the reproduction path and the acceptance criteria as the expectation. Where you reproduced with a restored suspended case, that restored case is the regression test. Build the test data yourself where the project keeps test data, not from data captured in a real run.
 - **Never go back and edit the ticket**: no checking off progress, no status transitions, no fix log.
-- The ticket is deleted with the fix: code, tests, comments, commit messages, and PR descriptions neither reference nor depend on the ticket or the files in it — anything needed from it goes in directly.
+- Until the ticket is deleted, comments and the like may reference it as a path relative to the repo root (plus the
+  exact section heading when pointing at a section), and the reference must be marked `TODO` (for example a workaround
+  `TODO` pointing at a ticket that is still there); the change that deletes the ticket searches the whole repo for every
+  reference and deletes it or writes the needed information in directly; where the referencing doc has its own
+  maintenance owner (for example the project's documentation conventions name a writer subagent), handle it per that
+  owner.
+- Code and tests do not depend on the ticket or the files in it; commit messages and PR descriptions do not reference
+  the ticket: they outlive it and cannot be amended afterwards.
 
 ## Verification and wrap-up
 
