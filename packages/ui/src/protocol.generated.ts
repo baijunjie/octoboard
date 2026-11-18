@@ -1962,6 +1962,11 @@ export type Event = {
   status: GitStatus | null,
 }
 | {
+  "type": "project_branch_pulled",
+  id: string | null,
+  outcome: PullOutcome,
+}
+| {
   "type": "project_git_status",
   status: GitStatus,
 }
@@ -3510,6 +3515,24 @@ export type ProviderInfo = {
 };
 
 /**
+ * What a `pull_project_branch` did to the project's current branch (`Event::ProjectBranchPulled`).
+ */
+export type PullOutcome = {
+  "kind": "up_to_date"
+}
+| {
+  "kind": "fast_forwarded"
+}
+| {
+  "kind": "needs_merge",
+  ahead: number,
+  behind: number,
+}
+| {
+  "kind": "merged"
+};
+
+/**
  * Why an account's quota has no windows, as a coded message of the same shape as an `error`. It
  * is part of the reading rather than a failure of anything else.
  */
@@ -4496,6 +4519,7 @@ export type Request = {
   | {
   "type": "pull_project_branch",
   project: string,
+  merge?: boolean,
 }
   | {
   "type": "refresh_project_git_status",
@@ -5392,6 +5416,7 @@ export type RequestBody = {
 | {
   "type": "pull_project_branch",
   project: string,
+  merge?: boolean,
 }
 | {
   "type": "refresh_project_git_status",

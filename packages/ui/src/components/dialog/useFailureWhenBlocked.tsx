@@ -1,10 +1,9 @@
 import { useState } from "react";
 
-import { errorAlertParts } from "../alerts/errorAlertParts";
+import { acknowledgementViewOf } from "../alerts/acknowledgementView";
 import { useT } from "../../i18n/react";
 import { ActionableError } from "../../errors/actionableError";
-import { errorAlerts, type AcknowledgementView } from "../alerts/errorAlerts";
-import { errorNotification } from "../../store";
+import type { AcknowledgementView } from "../alerts/errorAlerts";
 
 /** A dialog that cannot be used as it stands (what it would choose from has gone while it was open) turns into a
  * failure modal titled `title` that says why, with only acknowledgement (see `Dialog`'s `failure`): an
@@ -17,11 +16,9 @@ export function useFailureWhenBlocked(blocked: boolean, message: string | Action
   const [held, setHeld] = useState<{ key: string | undefined; failure: AcknowledgementView }>();
   let current = held?.key === resetKey ? held : undefined;
   if (blocked && !current) {
-    const request = errorNotification(typeof message === "string" ? new ActionableError(message, "none") : message, { title: undefined });
-    const { body, details, remedyInBody, attached } = errorAlertParts(t, request);
-    const view = errorAlerts.view({ message: request.message, error: request.error, title, content: body, attached, details, remedyInBody });
-    if (view.classification.kind !== "actionable") throw new Error("An ActionableError classified as unexpected");
-    current = { key: resetKey, failure: { ...view, classification: view.classification } };
+    const failure = acknowledgementViewOf(t, typeof message === "string" ? new ActionableError(message, "none") : message, title);
+    if (!failure) throw new Error("An ActionableError classified as unexpected");
+    current = { key: resetKey, failure };
     setHeld(current);
   }
   return current?.failure;

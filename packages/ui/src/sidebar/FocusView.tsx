@@ -164,7 +164,7 @@ export function ProjectFocusView({
           <NewSessionButton shortcut label={t("sidebar.project.openSession")} quickLabel={t("sidebar.project.openSessionQuick")} target={newSession} onOpen={handlers.onOpenDialog} onQuickCreate={handlers.onQuickCreateSession} />
           <ActionMenu
             label={t("sidebar.project.actions", { name: isolate(project.name) })}
-            items={projectMenu(t, handlers, project, archived, { placement: "focused", gitRepository: gitStatus?.repository, pushing: gitStatus?.activity === "pushing" })}
+            items={projectMenu(t, handlers, project, archived, { placement: "focused", gitStatus })}
             contextTargetRef={headerRef}
           />
         </RowIconGroup>
@@ -483,7 +483,7 @@ const FocusProjectGroup = memo(function FocusProjectGroup({
           />
           <ActionMenu
             label={t("sidebar.project.actions", { name: isolate(project.name) })}
-            items={projectMenu(t, handlers, project, archived, { placement: "nested", gitRepository: gitStatus?.repository, pushing: gitStatus?.activity === "pushing", archiveScope: { console: parentConsole.id, consoleSession: consoleSessionId } })}
+            items={projectMenu(t, handlers, project, archived, { placement: "nested", gitStatus, archiveScope: { console: parentConsole.id, consoleSession: consoleSessionId } })}
             contextTargetRef={headerRef}
           />
         </RowControls>

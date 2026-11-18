@@ -8,7 +8,7 @@ use crate::git::run::WorkDir;
 use crate::host_tools::Pace;
 use crate::platform::names;
 use crate::project_git::header;
-use crate::project_git::{no_git_or, project_git};
+use crate::project_git::{no_git_or, not_a_repository, project_git};
 use crate::protocol::{error_code, CodedError, Project};
 use crate::state::AppState;
 use crate::wire_path::RelPath;
@@ -16,11 +16,7 @@ use crate::wire_path::RelPath;
 pub fn switch_branch(state: &AppState, project: &Project, branch: &str) -> anyhow::Result<()> {
     let path = Path::new(&project.path);
     if !is_git_repo(path) {
-        return Err(CodedError::raised(
-            error_code::NOT_A_GIT_REPOSITORY,
-            format!("{} is not in a Git repository.", project.name),
-            &[("project", &project.id)],
-        ));
+        return Err(not_a_repository(project));
     }
     let git = project_git(state, Pace::Person).map_err(|err| no_git_or(err, failed))?;
     // A switch can fetch from the promisor remote of a partial clone, so it runs the user's ssh

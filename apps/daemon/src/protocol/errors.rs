@@ -22,7 +22,7 @@ pub(super) fn params(pairs: &[(&str, &str)]) -> Params {
 /// An error that carries a code and its params, so a client can word it in its own language and
 /// branch on it without matching prose. Travels inside `anyhow::Error` and is recovered by
 /// downcasting where the reply is built.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CodedError {
     pub code: Code,
     pub message: String,

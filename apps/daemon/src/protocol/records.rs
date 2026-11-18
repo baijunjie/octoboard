@@ -664,6 +664,25 @@ pub enum GitActivity {
     Pushing,
 }
 
+/// What a `pull_project_branch` did to the project's current branch (`Event::ProjectBranchPulled`).
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum PullOutcome {
+    /// Nothing is behind the upstream after the fetch, whether or not the branch is ahead of it.
+    /// Nothing was changed.
+    UpToDate,
+    /// The branch had no commits of its own and now sits on its upstream.
+    FastForwarded,
+    /// The branch has commits the upstream lacks and the upstream has commits the branch lacks, and
+    /// the request did not allow a merge. Nothing was changed; `ahead` and `behind` are the counts
+    /// after the fetch, for the client to ask the person with.
+    NeedsMerge { ahead: u32, behind: u32 },
+    /// The request allowed a merge, the branch had diverged, and the upstream was merged in with a
+    /// merge commit.
+    Merged,
+}
+
 /// One project's live git state: its branch and how far it is from its upstream, and whether a
 /// check, a fast-forward pull, or a push is in flight right now. Derived from the project's working
 /// directory on disk, never stored in SQLite; held in memory by `AppState` and (re)built only when
@@ -976,6 +995,42 @@ mod tests {
             assert!(
                 serde_json::from_str::<ConsoleSessionColour>(text).is_err(),
                 "{text}"
+            );
+        }
+    }
+
+    /// The reply to a pull names its outcome by `kind`, and a merge to confirm carries the counts.
+    #[test]
+    fn a_branch_pulled_reply_serializes_its_outcome() {
+        let reply = |outcome| {
+            serde_json::to_value(crate::protocol::Event::ProjectBranchPulled {
+                id: Some("request-1".to_owned()),
+                outcome,
+            })
+            .unwrap()
+        };
+        assert_eq!(
+            reply(crate::protocol::PullOutcome::NeedsMerge {
+                ahead: 2,
+                behind: 3
+            }),
+            serde_json::json!({
+                "type": "project_branch_pulled",
+                "id": "request-1",
+                "outcome": { "kind": "needs_merge", "ahead": 2, "behind": 3 },
+            })
+        );
+        for (outcome, kind) in [
+            (crate::protocol::PullOutcome::UpToDate, "up_to_date"),
+            (
+                crate::protocol::PullOutcome::FastForwarded,
+                "fast_forwarded",
+            ),
+            (crate::protocol::PullOutcome::Merged, "merged"),
+        ] {
+            assert_eq!(
+                reply(outcome)["outcome"],
+                serde_json::json!({ "kind": kind })
             );
         }
     }

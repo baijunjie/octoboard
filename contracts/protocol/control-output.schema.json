@@ -4189,6 +4189,30 @@
         {
           "type": "object",
           "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "outcome": {
+              "$ref": "#/$defs/PullOutcome"
+            },
+            "type": {
+              "type": "string",
+              "const": "project_branch_pulled"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "outcome"
+          ],
+          "description": "The reply to `pull_project_branch`: what the pull did. The statuses it went through are\nbroadcast as `project_git_status`; a pull that could not be done is an `error` reply\ninstead."
+        },
+        {
+          "type": "object",
+          "properties": {
             "status": {
               "$ref": "#/$defs/GitStatus"
             },
@@ -8315,6 +8339,75 @@
         "settings"
       ],
       "description": "One registered provider, as `snapshot` carries it."
+    },
+    "PullOutcome": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "up_to_date"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "description": "Nothing is behind the upstream after the fetch, whether or not the branch is ahead of it.\nNothing was changed."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "fast_forwarded"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "description": "The branch had no commits of its own and now sits on its upstream."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ahead": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "behind": {
+              "type": "integer",
+              "format": "uint32",
+              "minimum": 0
+            },
+            "kind": {
+              "type": "string",
+              "const": "needs_merge"
+            }
+          },
+          "required": [
+            "kind",
+            "ahead",
+            "behind"
+          ],
+          "description": "The branch has commits the upstream lacks and the upstream has commits the branch lacks, and\nthe request did not allow a merge. Nothing was changed; `ahead` and `behind` are the counts\nafter the fetch, for the client to ask the person with."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "merged"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "description": "The request allowed a merge, the branch had diverged, and the upstream was merged in with a\nmerge commit."
+        }
+      ],
+      "description": "What a `pull_project_branch` did to the project's current branch (`Event::ProjectBranchPulled`)."
     },
     "QuotaUnavailable": {
       "type": "object",

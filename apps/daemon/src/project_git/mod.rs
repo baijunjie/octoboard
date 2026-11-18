@@ -1,15 +1,16 @@
 //! The git work the daemon does on a project's own repository: the status checks and their branch
-//! header ([`status`], [`header`]), fetching and fast-forwarding, pushing ([`push`]), switching
-//! branches ([`switch`]), restoring ([`restore`]), the project's remotes ([`remote`],
-//! [`remote_url`]), re-reading its refs when the platform reports them changed ([`watch`]) or a
-//! session's git reports moving them ([`ref_moves`]) through one debounced scheduler
-//! ([`debounced`]), and cloning ([`clone`]). The `git` the others share for a project's
+//! header ([`status`], [`header`]), fetching and fast-forwarding, pulling on request ([`pull`]),
+//! pushing ([`push`]), switching branches ([`switch`]), restoring ([`restore`]), the project's
+//! remotes ([`remote`], [`remote_url`]), re-reading its refs when the platform reports them changed
+//! ([`watch`]) or a session's git reports moving them ([`ref_moves`]) through one debounced
+//! scheduler ([`debounced`]), and cloning ([`clone`]). The `git` the others share for a project's
 //! repository ([`project_git`]) is here, and so is the lookup of the stored projects in one
 //! repository ([`projects_in_repository`]).
 
 pub mod clone;
 pub mod debounced;
 pub mod header;
+pub mod pull;
 pub mod push;
 pub mod ref_moves;
 pub mod remote;
@@ -25,7 +26,7 @@ use std::time::Duration;
 use crate::git::repo_files::repository_of;
 use crate::git::run::{Limits, Policy, Runner};
 use crate::host_tools::{is_git_not_found, Pace};
-use crate::protocol::{error_code, Code, GitStatus, Project};
+use crate::protocol::{error_code, Code, CodedError, GitStatus, Project};
 use crate::state::AppState;
 
 /// Upper bound on one `git` subprocess other than a push (`fetch`, `status`, `merge`).
@@ -77,6 +78,15 @@ pub(crate) fn no_git_or(
     } else {
         failed(&format!("{err:#}"))
     }
+}
+
+/// The refusal of an action asked of a project whose directory is not in a Git repository.
+pub(crate) fn not_a_repository(project: &Project) -> anyhow::Error {
+    CodedError::raised(
+        error_code::NOT_A_GIT_REPOSITORY,
+        format!("{} is not in a Git repository.", project.name),
+        &[("project", &project.id)],
+    )
 }
 
 /// Why a step of a project's git work failed, as a `GitStatus` records it: the text, and the code
@@ -329,5 +339,34 @@ mod tests {
             .to_string();
         assert_eq!(err, "git did not finish within 100ms");
         slow(PATIENCE).expect("the long bound is not");
+    }
+
+    /// An action asked of a directory outside any Git repository is refused the same way whichever
+    /// action it is: the code, the project's id as `project`, and its name in the message.
+    #[tokio::test]
+    async fn a_pull_push_and_switch_of_a_directory_outside_a_repository_are_refused_alike() {
+        let (state, scratch) = crate::test_support::app_state("project-git-not-a-repository");
+        let plain = scratch.join("plain");
+        std::fs::create_dir(&plain).unwrap();
+        let project = crate::test_support::checked_project(&state, &scratch, &plain);
+        let pull = |merge| {
+            let (state, project) = (state.clone(), project.clone());
+            async move {
+                pull::pull_project_now(&state, project, merge)
+                    .await
+                    .expect_err("the pull is refused")
+            }
+        };
+        let refusals = [
+            pull(false).await,
+            pull(true).await,
+            CodedError::of(&push::push_current_branch(&state, &project).unwrap_err()),
+            CodedError::of(&switch::switch_branch(&state, &project, "main").unwrap_err()),
+        ];
+        for refusal in refusals {
+            assert_eq!(refusal.code, error_code::NOT_A_GIT_REPOSITORY);
+            assert_eq!(refusal.message, "Project is not in a Git repository.");
+            assert_eq!(refusal.params.get("project"), Some(&project.id));
+        }
     }
 }

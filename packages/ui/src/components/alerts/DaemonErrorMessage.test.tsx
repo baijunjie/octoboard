@@ -437,6 +437,37 @@ it("raises git_switch_failed as an alert titled for what failed, its body starti
 });
 
 it.each([
+  ["no_upstream_to_pull", {}, "This branch has no upstream to pull from.", "error.recovery.noUpstream"],
+  ["not_on_a_branch", {}, "This project is not on a branch.", "error.recovery.branch"],
+] as const)("raises %s as an alert titled for the failed pull, worded for a push and a pull alike, with its remedy", (code, codeParams, sentence, remedy) => {
+  // A code with no parameters of its own has no structured layout: the alert shows the error's message, which the
+  // connection words with `daemonMessage` as the failure arrives (`store/connection.ts`), so it is raised as it is there.
+  const worded = daemonMessage("en", code, codeParams, "fallback", createStateStore({}).getState());
+  expect(worded).toBe(sentence);
+  raiseError(new CodedError(worded, code, codeParams), { title: "Could not pull the branch" });
+  mount(<DaemonProvider value={testDaemon()}><ErrorAlerts /></DaemonProvider>);
+  const alert = document.querySelector('[role="alertdialog"]')!;
+  expect(alert.querySelector("h2")?.textContent).toBe("Could not pull the branch");
+  expect(alert.textContent).toContain(sentence);
+  expect(alert.textContent).not.toContain("fallback");
+  expect(alert.textContent).toContain(format("en", remedy, { terminal: "Terminal", git: "Git" }));
+});
+
+it("raises pull_merge_conflict with its sentence first, the remedy after it and the conflicted paths one per line under Error details", () => {
+  const detail = "src/a.ts\nsrc/b.ts";
+  raiseError(new CodedError("fallback", "pull_merge_conflict", { detail }), { title: "Could not pull the branch" });
+  mount(<DaemonProvider value={testDaemon()}><ErrorAlerts /></DaemonProvider>);
+  const alert = document.querySelector('[role="alertdialog"]')!;
+  expect(alert.querySelector("h2")?.textContent).toBe("Could not pull the branch");
+  expect(alert.textContent).toContain("Merging the upstream into this branch causes conflicts, so the merge was cancelled and nothing changed.");
+  expect(alert.textContent).not.toContain("fallback");
+  const remedy = format("en", "error.recovery.mergeConflict", { terminal: "Terminal", git: "Git" });
+  expect(alert.textContent).toContain(remedy);
+  expect(alert.textContent!.indexOf("nothing changed.")).toBeLessThan(alert.textContent!.indexOf(remedy));
+  expect(alert.querySelector("pre")?.textContent).toBe(detail);
+});
+
+it.each([
   { case: "a launch whose failure is internal", error: new CodedError("fallback", "launch_failed", { title: "Draft", reason_code: "internal_error", reason: "spawn failed: os error 2", detail: "spawn failed: os error 2" }), sentence: "Could not start Draft: Something unexpected went wrong.", rawText: "spawn failed: os error 2" },
   { case: "a launch whose failure the catalog lacks", error: new CodedError("fallback", "launch_failed", { title: "Draft", reason_code: "future_code", reason: "a newer daemon's reason" }), sentence: "Could not start Draft: Something unexpected went wrong.", rawText: "a newer daemon's reason" },
   { case: "a launch whose uncatalogued failure the system's text names", error: new CodedError("fallback", "launch_failed", { title: "Draft", reason_code: "future_code", reason: "No space left on device (os error 28)" }), sentence: "Could not start Draft: The disk is full.", rawText: "No space left on device (os error 28)" },
@@ -702,7 +733,7 @@ it.each([
   ["sessionBranches", ["Terminal", "Git"]],
   ["repository", ["Git", "Git", "Terminal"]],
   ["noCommits", ["Terminal"]], ["shell", ["Terminal"]],
-  ["gitFailure", ["Terminal", "Git", "Git"]], ["gitSwitchFailure", ["Terminal", "Git", "Git"]], ["gitRestoreFailure", ["Terminal", "Git"]], ["gitHistory", ["Terminal"]],
+  ["gitFailure", ["Terminal", "Git", "Git"]], ["gitSwitchFailure", ["Terminal", "Git", "Git"]], ["gitRestoreFailure", ["Terminal", "Git"]], ["gitHistory", ["Terminal"]], ["noUpstream", ["Terminal"]], ["mergeConflict", ["Terminal"]],
   ["unsentMessage", ["Enter"]],
 ] as const)("marks %s recovery references while preserving a matching plain companion", (recovery, englishValues) => {
   const container = mount(<RecoveryGuidance recovery={recovery} />);

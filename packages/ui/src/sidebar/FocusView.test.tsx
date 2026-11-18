@@ -8,8 +8,8 @@ import { expect, it, onTestFinished, vi } from "vitest";
 import { TEST_AGENTS } from "../test/testProviders";
 import { expectIndependentMarquees, stubMarquee } from "../components/motion/marqueeTestSupport";
 import { isolate } from "../i18n/isolate";
-import { accountOf, consoleOf, projectOf, sessionOf } from "../fixtures/builders";
-import type { Agent, AgentAvailability, Session } from "../protocol";
+import { accountOf, consoleOf, gitStatusOf, projectOf, sessionOf } from "../fixtures/builders";
+import type { Agent, AgentAvailability, GitStatus, Session } from "../protocol";
 import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
 import { sessionColourHex } from "../sessions/sessionColours";
 import { TestHost } from "../test/TestHost";
@@ -56,11 +56,11 @@ const withTeams = [...sessions, coordinator, underCoordinator, underFree];
 
 /** `stored` is what the store holds of the console's sessions, which a console session's focus mode's
  * project groups read themselves. */
-function mount(render: (handlers: SidebarHandlers) => React.ReactElement, stored: Session[] = [], agentAvailability?: Map<Agent, AgentAvailability>): { text: () => string; container: HTMLElement; handlers: SidebarHandlers; unmount: () => void } {
+function mount(render: (handlers: SidebarHandlers) => React.ReactElement, stored: Session[] = [], agentAvailability?: Map<Agent, AgentAvailability>, gitStatuses: GitStatus[] = []): { text: () => string; container: HTMLElement; handlers: SidebarHandlers; unmount: () => void } {
   const daemon = testDaemon({
-    state: { ...(agentAvailability && { agentAvailability }), sessions: new Map(stored.map((session) => [session.id, session])), settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/p", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [accountOf("work", "claude", "Work", "/w")] } },
+    state: { ...(agentAvailability && { agentAvailability }), gitStatuses: new Map(gitStatuses.map((status) => [status.project, status])), sessions: new Map(stored.map((session) => [session.id, session])), settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/p", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [accountOf("work", "claude", "Work", "/w")] } },
   });
-  const handlers = { onFocus: vi.fn(), onOpenDialog: vi.fn(), onQuickCreateSession: vi.fn(), onOpenArchive: vi.fn(), onSelectSession: vi.fn(), onSetPinned: vi.fn(), onSetLocked: vi.fn(), onSwitchConsoleSession: vi.fn() } as unknown as SidebarHandlers;
+  const handlers = { onFocus: vi.fn(), onOpenDialog: vi.fn(), onQuickCreateSession: vi.fn(), onOpenArchive: vi.fn(), onSelectSession: vi.fn(), onSetPinned: vi.fn(), onSetLocked: vi.fn(), onSwitchConsoleSession: vi.fn(), onPullProjectBranch: vi.fn() } as unknown as SidebarHandlers;
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   act(() => root.render(<TestHost daemon={daemon}>{render(handlers)}</TestHost>));
@@ -629,4 +629,40 @@ it("unlocks a locked card without selecting it or changing its position", () => 
   act(() => button.click());
   expect(handlers.onSetLocked).toHaveBeenCalledWith(locked, false);
   expect(handlers.onSelectSession).not.toHaveBeenCalled();
+});
+
+/** Opens the first project's actions menu and its Git submenu, and returns the Pull item. */
+async function pullItemOf(container: HTMLElement): Promise<HTMLElement> {
+  await act(async () => container.querySelector<HTMLElement>('button[aria-label^="Actions for project"]')!.click());
+  const git = [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((item) => item.textContent?.startsWith("Git"))!;
+  await act(async () => {
+    git.focus();
+    git.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+  });
+  return [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((item) => item.textContent?.startsWith("Pull current branch"))!;
+}
+
+const focusPlacements = [
+  ["a project's focus mode header", (h: SidebarHandlers) => <ProjectFocusView handlers={h} console={main} project={web} sessions={[]} owners={owners} />],
+  ["a project group in a console session's focus mode", (h: SidebarHandlers) => <ConsoleSessionFocusView handlers={h} console={main} consoleSession={hub1} projects={[web]} sessions={sessions} />],
+] as const;
+
+it.each(focusPlacements.flatMap(([placement, render]) => [
+  [placement, { branch: "main", upstream: null }, "No upstream", render],
+  [placement, { branch: "abc1234", detached: true, upstream: null }, "Not on a branch", render],
+] as const))("disables Pull current branch in %s when the git status is %j, with the reason %s", async (_placement, status, reason, render) => {
+  const { container, handlers } = mount(render, sessions, undefined, [gitStatusOf(web.id, status)]);
+  const pull = await pullItemOf(container);
+  expect(pull.getAttribute("aria-disabled")).toBe("true");
+  expect(pull.textContent).toContain(reason);
+  await act(async () => pull.click());
+  expect(handlers.onPullProjectBranch).not.toHaveBeenCalled();
+});
+
+it.each(focusPlacements)("offers Pull current branch in %s when the branch has an upstream", async (_placement, render) => {
+  const { container, handlers } = mount(render, sessions, undefined, [gitStatusOf(web.id)]);
+  const pull = await pullItemOf(container);
+  expect(pull.getAttribute("aria-disabled")).not.toBe("true");
+  await act(async () => pull.click());
+  expect(handlers.onPullProjectBranch).toHaveBeenCalledExactlyOnceWith(web);
 });

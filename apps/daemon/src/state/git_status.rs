@@ -11,10 +11,10 @@ use anyhow::Result;
 use tokio::sync::oneshot;
 
 use super::AppState;
-use crate::protocol::{Event, GitActivity, GitStatus};
+use crate::protocol::{CodedError, Event, GitActivity, GitStatus, PullOutcome};
 use crate::time::now_millis;
 
-fn blank_git_status(project_id: &str) -> GitStatus {
+pub(crate) fn blank_git_status(project_id: &str) -> GitStatus {
     GitStatus {
         project: project_id.to_string(),
         repository: true,
@@ -80,9 +80,14 @@ impl Drop for GitPushActivity<'_> {
     }
 }
 
+/// What a check run for a `pull_project_branch` answers it with: the outcome, or the refusal.
+pub type PullAnswer = Result<PullOutcome, CodedError>;
+
 /// What the in-flight map holds for one project's claim.
 pub(super) struct GitCheck {
-    /// Still waiting for a place to run, as a sweep's check does; false once it runs.
+    /// Waiting for a place to run behind a sweep: true only for a claim made by
+    /// `AppState::claim_git_check_queued` and not yet started ([`GitCheckClaim::start`]); every
+    /// other claim runs from the start. Only a request that finds it true has anyone to wake.
     queued: bool,
     /// The check a request that arrived while the check was queued or running is owed: a queued
     /// check then starts at once as that check, a running one runs it once more before letting go.
@@ -90,13 +95,17 @@ pub(super) struct GitCheck {
     /// The re-check requests (`refresh_project_git_status`) waiting for the end of the owed check,
     /// each answered with the status it ends with.
     waiting: Vec<oneshot::Sender<GitStatus>>,
-    /// Woken when a manual pull or a re-check finds the check queued.
+    /// The pull requests (`pull_project_branch`) waiting for the end of the owed check, each
+    /// answered with what that check's pull did.
+    pulls: Vec<oneshot::Sender<PullAnswer>>,
+    /// Woken when a pull or a re-check finds the check queued.
     promote: Arc<tokio::sync::Notify>,
 }
 
 /// The check a request owes the holder of a project's claim, once its current check ends (or at
 /// once, if it is still waiting for a place). Both look for a `git` that cannot be found once more;
-/// a pull, which also fast-forwards, covers a re-check, hence the order.
+/// a pull, which also pulls the branch and answers its own requests, covers a re-check, hence the
+/// order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum OwedCheck {
     /// A re-check (`refresh_project_git_status`).
@@ -105,10 +114,10 @@ pub enum OwedCheck {
     Pull,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum GitCheckRequest {
-    Queued,
-    Forced,
+/// Who waits for the check a request owes, and how it is answered.
+enum Waiter {
+    Recheck(oneshot::Sender<GitStatus>),
+    Pull(oneshot::Sender<PullAnswer>),
 }
 
 /// The right to check one project's git status right now, released by `release_unless_rerun_owed`
@@ -122,6 +131,9 @@ pub struct GitCheckClaim {
     /// The re-check requests the holder's next check answers ([`Self::answer`]); dropped
     /// unanswered with the claim, which ends their wait without a status.
     answering: Vec<oneshot::Sender<GitStatus>>,
+    /// The pull requests the holder's next check answers ([`Self::answer_pull`]); dropped
+    /// unanswered with the claim, like `answering`.
+    answering_pulls: Vec<oneshot::Sender<PullAnswer>>,
     released: bool,
 }
 
@@ -134,8 +146,8 @@ impl GitCheckClaim {
 
     /// Marks a queued claim as running, for the holder that has stopped waiting, and returns the
     /// check a request that arrived meanwhile is owed, which the check then runs as, owing no rerun
-    /// for it; the re-checks waiting for it are answered by this check. Done under the lock
-    /// requests are marked under, so one arriving after this is owed a rerun instead.
+    /// for it; the re-checks and pulls waiting for it are answered by this check. Done under the
+    /// lock requests are marked under, so one arriving after this is owed a rerun instead.
     pub fn start(&mut self) -> Option<OwedCheck> {
         let mut checks = self
             .state
@@ -145,13 +157,14 @@ impl GitCheckClaim {
         let check = checks.get_mut(&self.project_id)?;
         check.queued = false;
         self.answering.append(&mut check.waiting);
+        self.answering_pulls.append(&mut check.pulls);
         check.owed.take()
     }
 
     /// Releases the claim, unless a request arrived while it was held: then the claim is kept and
     /// the check that request is owed is returned, for the holder to run once more, and the
-    /// re-checks waiting for it are answered by that run. Done under the lock requests are marked
-    /// under, so a request is either seen here or finds the project unclaimed.
+    /// re-checks and pulls waiting for it are answered by that run. Done under the lock requests
+    /// are marked under, so a request is either seen here or finds the project unclaimed.
     pub fn release_unless_rerun_owed(&mut self) -> Option<OwedCheck> {
         let mut checks = self
             .state
@@ -161,6 +174,7 @@ impl GitCheckClaim {
         if let Some(check) = checks.get_mut(&self.project_id) {
             if let Some(owed) = check.owed.take() {
                 self.answering.append(&mut check.waiting);
+                self.answering_pulls.append(&mut check.pulls);
                 return Some(owed);
             }
         }
@@ -175,6 +189,14 @@ impl GitCheckClaim {
         for waiting in self.answering.drain(..) {
             // A request that stopped waiting has nothing left to answer.
             let _ = waiting.send(status.clone());
+        }
+    }
+
+    /// Answers the pull requests this check was run for with `answer`, what its pull did.
+    pub fn answer_pull(&mut self, answer: &PullAnswer) {
+        for waiting in self.answering_pulls.drain(..) {
+            // A request that stopped waiting has nothing left to answer.
+            let _ = waiting.send(answer.clone());
         }
     }
 }
@@ -193,22 +215,20 @@ impl AppState {
     /// Released by [`GitCheckClaim::release_unless_rerun_owed`] or, if the check panics, when the
     /// returned guard is dropped, so a wedged step cannot leave its project excluded from every
     /// later sweep for the rest of the daemon's life. `None` means a check for it is already
-    /// running and the caller must not start another. The claim is held from the moment it is
-    /// queued, so another sweep does not queue the project twice, and a manual pull or a re-check
+    /// queued or running and the caller must not start another. The claim is held from the moment
+    /// it is queued, so another sweep does not queue the project twice, and a pull or a re-check
     /// that finds it still waiting takes it over instead of waiting behind the sweep (see
     /// [`GitCheckClaim::start`]).
     pub fn claim_git_check_queued(self: &Arc<Self>, project_id: &str) -> Option<GitCheckClaim> {
-        self.claim_git_check_with(project_id, GitCheckRequest::Queued)
+        self.claim_git_check(project_id, true)
     }
 
-    /// As [`Self::claim_git_check_queued`], for a manual pull. When a check is already running, nothing
-    /// is claimed, but the running check's claim is marked as owing a forced rerun, which
-    /// [`GitCheckClaim::release_unless_rerun_owed`] hands back to it. When the check is still
-    /// queued, nothing is claimed either: the queued claim is marked and woken, and runs forced
-    /// at once. The marking and the claim share one lock, so a request cannot slip in between the
-    /// owner's last look and its release.
-    pub fn claim_git_check_forced(self: &Arc<Self>, project_id: &str) -> Option<GitCheckClaim> {
-        self.claim_git_check_with(project_id, GitCheckRequest::Forced)
+    /// As [`Self::claim_git_check_queued`], for work that starts at once and waits for no place,
+    /// such as the confirmed merge of `pull_project_branch`: the claim is not queued, so a request
+    /// that arrives meanwhile is owed a check, handed back by
+    /// [`GitCheckClaim::release_unless_rerun_owed`], and wakes no one.
+    pub fn claim_git_check_now(self: &Arc<Self>, project_id: &str) -> Option<GitCheckClaim> {
+        self.claim_git_check(project_id, false)
     }
 
     /// The re-check of `refresh_project_git_status`: a claim for a check that starts at once, when
@@ -223,36 +243,62 @@ impl AppState {
         project_id: &str,
     ) -> (Option<GitCheckClaim>, oneshot::Receiver<GitStatus>) {
         let (answer, answered) = oneshot::channel();
-        let mut checks = self.git_checks.lock().expect("git check lock poisoned");
-        if let Some(check) = checks.get_mut(project_id) {
-            check.owed = check.owed.max(Some(OwedCheck::Recheck));
-            check.waiting.push(answer);
-            if check.queued {
-                check.promote.notify_one();
-            }
-            return (None, answered);
-        }
-        let mut claim = self.insert_git_check(&mut checks, project_id, false);
-        claim.answering.push(answer);
-        (Some(claim), answered)
+        let claim = self.claim_git_owing(project_id, OwedCheck::Recheck, Waiter::Recheck(answer));
+        (claim, answered)
     }
 
-    fn claim_git_check_with(
+    /// The pull of `pull_project_branch` without `merge`: as [`Self::claim_git_recheck`], for a
+    /// check that pulls the branch, and the receiver of what that pull did. The holder owes the
+    /// pull a check of its own that starts after the request, so the answer always comes from a
+    /// fetch made after it. The receiver gets nothing (its sender dropped) when the check is
+    /// abandoned.
+    pub fn claim_git_pull(
         self: &Arc<Self>,
         project_id: &str,
-        request: GitCheckRequest,
+    ) -> (Option<GitCheckClaim>, oneshot::Receiver<PullAnswer>) {
+        let (answer, answered) = oneshot::channel();
+        let claim = self.claim_git_owing(project_id, OwedCheck::Pull, Waiter::Pull(answer));
+        (claim, answered)
+    }
+
+    /// What a request for the check `owed` does: claims the project for a check that starts at
+    /// once when it has none, with `waiter` answered by that check, and otherwise claims nothing
+    /// but marks the holder's claim as owing that check (never a lesser one than it already owes)
+    /// with `waiter` waiting for it, and wakes a queued holder to run it at once. The marking and
+    /// the claim share one lock, so a request cannot slip in between the owner's last look and its
+    /// release.
+    fn claim_git_owing(
+        self: &Arc<Self>,
+        project_id: &str,
+        owed: OwedCheck,
+        waiter: Waiter,
     ) -> Option<GitCheckClaim> {
         let mut checks = self.git_checks.lock().expect("git check lock poisoned");
         if let Some(check) = checks.get_mut(project_id) {
-            if request == GitCheckRequest::Forced {
-                check.owed = Some(OwedCheck::Pull);
-                if check.queued {
-                    check.promote.notify_one();
-                }
+            check.owed = check.owed.max(Some(owed));
+            match waiter {
+                Waiter::Recheck(answer) => check.waiting.push(answer),
+                Waiter::Pull(answer) => check.pulls.push(answer),
+            }
+            if check.queued {
+                check.promote.notify_one();
             }
             return None;
         }
-        Some(self.insert_git_check(&mut checks, project_id, request == GitCheckRequest::Queued))
+        let mut claim = self.insert_git_check(&mut checks, project_id, false);
+        match waiter {
+            Waiter::Recheck(answer) => claim.answering.push(answer),
+            Waiter::Pull(answer) => claim.answering_pulls.push(answer),
+        }
+        Some(claim)
+    }
+
+    fn claim_git_check(self: &Arc<Self>, project_id: &str, queued: bool) -> Option<GitCheckClaim> {
+        let mut checks = self.git_checks.lock().expect("git check lock poisoned");
+        if checks.contains_key(project_id) {
+            return None;
+        }
+        Some(self.insert_git_check(&mut checks, project_id, queued))
     }
 
     /// Enters `project_id` in the in-flight map `checks`, which the caller holds locked and has
@@ -270,6 +316,7 @@ impl AppState {
                 queued,
                 owed: None,
                 waiting: Vec::new(),
+                pulls: Vec::new(),
                 promote: promote.clone(),
             },
         );
@@ -278,6 +325,7 @@ impl AppState {
             project_id: project_id.to_string(),
             promote,
             answering: Vec::new(),
+            answering_pulls: Vec::new(),
             released: false,
         }
     }
@@ -492,7 +540,9 @@ impl AppState {
 #[cfg(test)]
 mod tests {
     use super::blank_git_status;
-    use crate::protocol::{Event, GitActivity, GitStatus, SessionStatus};
+    use crate::protocol::{
+        error_code, CodedError, Event, GitActivity, GitStatus, PullOutcome, SessionStatus,
+    };
     use crate::state::test_support::insert_record;
     use crate::state::{AppState, OwedCheck};
     use crate::test_support::app_state;
@@ -523,8 +573,8 @@ mod tests {
     fn a_manual_pull_during_a_check_is_owed_one_rerun() {
         let (state, _dir) = app_state("state-git-claim-rerun");
         let mut claim = state.claim_git_check_queued("p1").expect("the first claim");
-        assert!(state.claim_git_check_forced("p1").is_none());
-        assert!(state.claim_git_check_forced("p1").is_none());
+        assert!(state.claim_git_pull("p1").0.is_none());
+        assert!(state.claim_git_pull("p1").0.is_none());
 
         assert_eq!(
             claim.release_unless_rerun_owed(),
@@ -547,18 +597,18 @@ mod tests {
     }
 
     /// A manual pull that finds a sweep's check still waiting for a place takes it over: the
-    /// waiting claim is woken and starts forced, and nothing more is owed afterwards.
+    /// waiting claim is woken and starts as the pull, and nothing more is owed afterwards.
     #[tokio::test]
     async fn a_manual_pull_promotes_a_queued_check() {
         let (state, _dir) = app_state("state-git-claim-queued");
         let mut claim = state.claim_git_check_queued("p1").expect("the first claim");
         assert!(state.claim_git_check_queued("p1").is_none());
-        assert!(state.claim_git_check_forced("p1").is_none());
+        assert!(state.claim_git_pull("p1").0.is_none());
 
         tokio::time::timeout(crate::test_support::PATIENCE, claim.promoted())
             .await
             .expect("the queued claim is woken");
-        assert_eq!(claim.start(), Some(OwedCheck::Pull), "it runs forced");
+        assert_eq!(claim.start(), Some(OwedCheck::Pull), "it runs as the pull");
         assert_eq!(
             claim.release_unless_rerun_owed(),
             None,
@@ -574,7 +624,7 @@ mod tests {
         let (state, _dir) = app_state("state-git-claim-started");
         let mut claim = state.claim_git_check_queued("p1").expect("the first claim");
         assert_eq!(claim.start(), None, "nothing asked yet");
-        assert!(state.claim_git_check_forced("p1").is_none());
+        assert!(state.claim_git_pull("p1").0.is_none());
         assert_eq!(claim.release_unless_rerun_owed(), Some(OwedCheck::Pull));
     }
 
@@ -641,7 +691,7 @@ mod tests {
         let mut claim = state.claim_git_check_queued("p1").expect("the first claim");
         assert_eq!(claim.start(), None);
         let (_, mut answered) = state.claim_git_recheck("p1");
-        assert!(state.claim_git_check_forced("p1").is_none());
+        assert!(state.claim_git_pull("p1").0.is_none());
         let (_, mut later) = state.claim_git_recheck("p1");
         assert_eq!(claim.release_unless_rerun_owed(), Some(OwedCheck::Pull));
         claim.answer(&blank_git_status("p1"));
@@ -663,6 +713,192 @@ mod tests {
                 Err(tokio::sync::oneshot::error::TryRecvError::Closed)
             ));
         }
+    }
+
+    /// A pull of a project nobody is checking claims it, to run at once, and is answered by that
+    /// check with what its pull did.
+    #[test]
+    fn a_pull_of_an_unclaimed_project_runs_it_and_is_answered_by_it() {
+        let (state, _dir) = app_state("state-git-pull-unclaimed");
+        let (claim, mut answered) = state.claim_git_pull("p1");
+        let mut claim = claim.expect("the project was free");
+        assert!(state.claim_git_check_queued("p1").is_none(), "it runs");
+        assert_eq!(claim.start(), None, "already running, nothing owed");
+        assert!(answered.try_recv().is_err(), "not before the check ends");
+        claim.answer_pull(&Ok(PullOutcome::FastForwarded));
+        assert_eq!(answered.try_recv().unwrap(), Ok(PullOutcome::FastForwarded));
+        assert_eq!(claim.release_unless_rerun_owed(), None);
+        assert!(state.claim_git_check_queued("p1").is_some());
+    }
+
+    /// A pull that finds a check running is owed a pull of its own, which answers it, not the check
+    /// it found: the answer comes from a fetch that started after the request.
+    #[test]
+    fn a_pull_during_a_running_check_is_answered_by_the_rerun_it_is_owed() {
+        let (state, _dir) = app_state("state-git-pull-running");
+        let mut claim = state.claim_git_check_queued("p1").expect("the first claim");
+        assert_eq!(claim.start(), None);
+        let (none, mut first) = state.claim_git_pull("p1");
+        assert!(none.is_none());
+        let (_, mut second) = state.claim_git_pull("p1");
+
+        claim.answer_pull(&Ok(PullOutcome::UpToDate));
+        assert!(first.try_recv().is_err(), "not by the check it found");
+        assert_eq!(claim.release_unless_rerun_owed(), Some(OwedCheck::Pull));
+        claim.answer_pull(&Ok(PullOutcome::FastForwarded));
+        for answered in [&mut first, &mut second] {
+            assert_eq!(answered.try_recv().unwrap(), Ok(PullOutcome::FastForwarded));
+        }
+        assert_eq!(claim.release_unless_rerun_owed(), None, "owed once");
+    }
+
+    /// A pull that finds a sweep's check still waiting for a place takes it over, as a re-check
+    /// does, and is answered by it.
+    #[tokio::test]
+    async fn a_pull_promotes_a_queued_check_and_is_answered_by_it() {
+        let (state, _dir) = app_state("state-git-pull-queued");
+        let mut claim = state.claim_git_check_queued("p1").expect("the first claim");
+        let (_, mut answered) = state.claim_git_pull("p1");
+        tokio::time::timeout(crate::test_support::PATIENCE, claim.promoted())
+            .await
+            .expect("the queued claim is woken");
+        assert_eq!(claim.start(), Some(OwedCheck::Pull));
+        claim.answer_pull(&Ok(PullOutcome::UpToDate));
+        assert_eq!(answered.try_recv().unwrap(), Ok(PullOutcome::UpToDate));
+        assert_eq!(claim.release_unless_rerun_owed(), None);
+    }
+
+    /// A refusal reaches every pull the check answers, as the outcome does, and a re-check waiting
+    /// on the same check is answered with its status.
+    #[test]
+    fn a_check_answers_a_refusal_to_every_pull_and_a_recheck_alike() {
+        let (state, _dir) = app_state("state-git-pull-refusal");
+        let mut claim = state.claim_git_check_queued("p1").expect("the first claim");
+        assert_eq!(claim.start(), None);
+        let (_, mut pull) = state.claim_git_pull("p1");
+        let (_, mut recheck) = state.claim_git_recheck("p1");
+        assert_eq!(claim.release_unless_rerun_owed(), Some(OwedCheck::Pull));
+        let refusal = CodedError::of(&CodedError::raised(
+            error_code::NO_UPSTREAM_TO_PULL,
+            "no upstream",
+            &[],
+        ));
+        claim.answer(&blank_git_status("p1"));
+        claim.answer_pull(&Err(refusal.clone()));
+        assert_eq!(pull.try_recv().unwrap(), Err(refusal));
+        assert_eq!(recheck.try_recv().unwrap().project, "p1");
+    }
+
+    /// A check abandoned with pulls waiting on it (its project removed, a panic) ends their wait
+    /// without an answer rather than leaving them waiting.
+    #[test]
+    fn a_dropped_claim_ends_the_wait_of_the_pulls_it_owed() {
+        let (state, _dir) = app_state("state-git-pull-dropped");
+        let (claim, mut own) = state.claim_git_pull("p1");
+        let (_, mut owed) = state.claim_git_pull("p1");
+        drop(claim);
+        for answered in [&mut own, &mut owed] {
+            assert!(matches!(
+                answered.try_recv(),
+                Err(tokio::sync::oneshot::error::TryRecvError::Closed)
+            ));
+        }
+    }
+
+    /// A claim for work that starts at once is exclusive with every other claim, the queued kind
+    /// included, in both directions, and is released like any other.
+    #[test]
+    fn a_claim_for_work_that_starts_at_once_excludes_and_is_excluded_by_every_other() {
+        let (state, _dir) = app_state("state-git-claim-now-exclusive");
+        let mut now = state
+            .claim_git_check_now("p1")
+            .expect("the project was free");
+        assert!(state.claim_git_check_now("p1").is_none());
+        assert!(state.claim_git_check_queued("p1").is_none());
+        assert!(state.claim_git_pull("p1").0.is_none());
+        assert_eq!(now.release_unless_rerun_owed(), Some(OwedCheck::Pull));
+        assert_eq!(now.release_unless_rerun_owed(), None);
+        assert!(state.claim_git_check_now("p1").is_some(), "released");
+
+        let queued = state.claim_git_check_queued("p1").expect("free again");
+        assert!(
+            state.claim_git_check_now("p1").is_none(),
+            "a queued check holds it"
+        );
+        drop(queued);
+        let claim = state.claim_git_check_now("p1").expect("free once more");
+        drop(claim);
+        assert!(state.claim_git_check_queued("p1").is_some());
+    }
+
+    /// A claim made for work that starts at once is not woken by the requests that arrive during
+    /// it, which have no place to take over: they are owed a check, handed back at the release.
+    #[tokio::test(start_paused = true)]
+    async fn a_claim_for_work_that_starts_at_once_is_never_woken_and_hands_back_what_is_owed() {
+        let (state, _dir) = app_state("state-git-claim-now-not-queued");
+        let mut claim = state
+            .claim_git_check_now("p1")
+            .expect("the project was free");
+        assert_eq!(claim.start(), None, "nothing is owed yet");
+        let (_, mut recheck) = state.claim_git_recheck("p1");
+        let (_, mut pull) = state.claim_git_pull("p1");
+        // Nothing else is pending, so the paused clock runs the wait out.
+        assert!(
+            tokio::time::timeout(crate::test_support::PATIENCE, claim.promoted())
+                .await
+                .is_err(),
+            "no one waits for a place behind it"
+        );
+        assert!(recheck.try_recv().is_err() && pull.try_recv().is_err());
+        assert_eq!(claim.release_unless_rerun_owed(), Some(OwedCheck::Pull));
+        claim.answer(&blank_git_status("p1"));
+        claim.answer_pull(&Ok(PullOutcome::UpToDate));
+        assert_eq!(recheck.try_recv().unwrap().project, "p1");
+        assert_eq!(pull.try_recv().unwrap(), Ok(PullOutcome::UpToDate));
+        assert_eq!(claim.release_unless_rerun_owed(), None);
+    }
+
+    /// A queued claim is woken by a request only while it still waits for its place: once it has
+    /// started, a request is owed a rerun instead and wakes no one.
+    #[tokio::test(start_paused = true)]
+    async fn a_queued_claim_that_has_started_is_no_longer_woken() {
+        let (state, _dir) = app_state("state-git-claim-started-not-woken");
+        let mut claim = state.claim_git_check_queued("p1").expect("the first claim");
+        assert_eq!(claim.start(), None);
+        assert!(state.claim_git_pull("p1").0.is_none());
+        assert!(
+            tokio::time::timeout(crate::test_support::PATIENCE, claim.promoted())
+                .await
+                .is_err(),
+            "it runs, so it is not waiting for a place"
+        );
+        assert_eq!(claim.release_unless_rerun_owed(), Some(OwedCheck::Pull));
+    }
+
+    /// The claims a pull or a re-check takes for itself start at once, so they are not queued
+    /// either.
+    #[tokio::test(start_paused = true)]
+    async fn the_claim_a_request_takes_for_itself_is_not_woken_by_the_next() {
+        let (state, _dir) = app_state("state-git-claim-own-not-woken");
+        let (claim, _answered) = state.claim_git_pull("p1");
+        let claim = claim.expect("the project was free");
+        let (_, _later) = state.claim_git_recheck("p1");
+        assert!(
+            tokio::time::timeout(crate::test_support::PATIENCE, claim.promoted())
+                .await
+                .is_err()
+        );
+    }
+
+    /// A request that stopped waiting leaves the check nothing to fail on when it answers.
+    #[test]
+    fn answering_a_pull_nobody_waits_for_any_more_is_harmless() {
+        let (state, _dir) = app_state("state-git-pull-gave-up");
+        let (claim, answered) = state.claim_git_pull("p1");
+        let mut claim = claim.expect("the project was free");
+        drop(answered);
+        claim.answer_pull(&Ok(PullOutcome::UpToDate));
+        assert_eq!(claim.release_unless_rerun_owed(), None);
     }
 
     #[test]

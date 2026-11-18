@@ -6,7 +6,7 @@ import { Copy } from "lucide-react";
 
 import type { ActionMenuItem } from "../components/menus/menuEntries";
 import { ActionMenu } from "../components/menus/ActionMenu";
-import { consoleOf, projectOf } from "../fixtures/builders";
+import { consoleOf, gitStatusOf, projectOf } from "../fixtures/builders";
 import { translatorFor } from "../i18n/catalog";
 import { partSelector } from "../primitives";
 import { mountHost } from "../test/mountHost";
@@ -20,7 +20,7 @@ const project = projectOf("project", console.id, "Website");
 function mountMenus() {
   const handlers = { onOpenDialog: vi.fn(), onSetPinned: vi.fn(), onFocus: vi.fn(), onSelectSession: vi.fn(), onOpenArchive: vi.fn(), onOpenProjectDirectory: vi.fn(), onOpenSystemTerminal: vi.fn() } as unknown as SidebarHandlers;
   const host = mountHost(<>
-    <ActionMenu label="Project actions" items={() => projectMenu(t, handlers, project, [], { gitRepository: true })} />
+    <ActionMenu label="Project actions" items={() => projectMenu(t, handlers, project, [], { gitStatus: gitStatusOf(project.id) })} />
     <ActionMenu label="Console actions" items={() => consoleMenu(t, console, handlers, [])} />
   </>);
   const open = async (label: string) => {

@@ -5,12 +5,12 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuSubmenu } from "../components/menus/menuEntries";
 import { SessionRelativeTime } from "../components/status/SessionMetadata";
-import { accountOf, consoleOf, sessionOf } from "../fixtures/builders";
+import { accountOf, consoleOf, gitStatusOf, sessionOf } from "../fixtures/builders";
 import { DEFAULT_ACCOUNT_NAME } from "../accounts/defaultAccount";
 import { format } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import type { Translate } from "../i18n/catalog";
-import type { Account, Project, Session } from "../protocol";
+import type { Account, GitStatus, Project, Session } from "../protocol";
 import { archiveSubmenu, consoleMenu, type MenuPlacement, projectMenu, sessionMenu } from "./menus";
 import { BROWSER_HOST } from "../test/hosts";
 import { TEST_PROVIDERS } from "../test/testProviders";
@@ -572,7 +572,7 @@ function local(more: Partial<SidebarHandlers> = {}): SidebarHandlers {
 
 describe("a project's menu", () => {
   const labels = (placement: MenuPlacement, gitRepository = false) =>
-    projectMenu(t, local(), { id: "p" } as Project, [], { placement, gitRepository }).flatMap((entry) =>
+    projectMenu(t, local(), { id: "p" } as Project, [], { placement, gitStatus: gitRepository ? gitStatusOf("p") : undefined }).flatMap((entry) =>
       typeof entry === "object" ? [entry.label] : [],
     );
 
@@ -584,7 +584,7 @@ describe("a project's menu", () => {
 
   it("puts Pin first, then groups viewing, copying and opening, managing the project, and removing it", () => {
     const handlers = local();
-    const menu = projectMenu(t, handlers, { id: "p", pinned: false } as Project, [], { gitRepository: true });
+    const menu = projectMenu(t, handlers, { id: "p", pinned: false } as Project, [], { gitStatus: gitStatusOf("p") });
     expect(menu.map((entry) => (entry === "separator" ? entry : entry.label))).toEqual([
       "Pin", "Focus mode", "View archive", "separator",
       "Copy project name", "Copy absolute path", "separator",
@@ -661,7 +661,7 @@ describe("a project's menu", () => {
 
   it("puts pull and push under Git only for a git repository", () => {
     const git = (repository: boolean) => {
-      const entry = projectMenu(t, local(), { id: "p" } as Project, [], { gitRepository: repository }).find(
+      const entry = projectMenu(t, local(), { id: "p" } as Project, [], { gitStatus: repository ? gitStatusOf("p") : undefined }).find(
         (candidate) => typeof candidate === "object" && candidate.label === "Git",
       );
       return entry && typeof entry === "object" && "items" in entry ? entry.items.flatMap((item) => (typeof item === "object" ? [item.label] : [])) : undefined;
@@ -673,7 +673,7 @@ describe("a project's menu", () => {
   it("opens the system terminal and pushes the current branch", () => {
     const handlers = { onOpenSystemTerminal: vi.fn(), onPushProjectBranch: vi.fn() } as unknown as SidebarHandlers;
     const project = { id: "p" } as Project;
-    const menu = projectMenu(t, handlers, project, [], { gitRepository: true });
+    const menu = projectMenu(t, handlers, project, [], { gitStatus: gitStatusOf("p") });
     const terminal = openIn(menu).items.find((entry) => typeof entry === "object" && entry.label === "System terminal");
     expect(terminal).toMatchObject({ icon: Terminal });
     (terminal as { onClick: () => void }).onClick();
@@ -758,7 +758,7 @@ describe("archive previews in menus", () => {
 
 it.each([[false, false], [true, true]])("with pushing %s, the project's Push item is disabled: %s", (pushing, disabled) => {
   const handlers = {} as unknown as SidebarHandlers;
-  const git = projectMenu(t, handlers, { id: "p" } as Project, [], { gitRepository: true, pushing }).find((entry) => typeof entry === "object" && "items" in entry && entry.label === "Git");
+  const git = projectMenu(t, handlers, { id: "p" } as Project, [], { gitStatus: gitStatusOf("p", { activity: pushing ? "pushing" : "idle" }) }).find((entry) => typeof entry === "object" && "items" in entry && entry.label === "Git");
   const items = (git as { items: { label: string; disabled?: boolean }[] }).items;
   expect(items.find((item) => item.label === "Push current branch")?.disabled ?? false).toBe(disabled);
   expect(items.find((item) => item.label === "Pull current branch")?.disabled ?? false).toBe(false);
@@ -767,7 +767,7 @@ it.each([[false, false], [true, true]])("with pushing %s, the project's Push ite
 it("asks for confirmation before restoring project changes", () => {
   const project = { id: "p" } as Project;
   const handlers = { onOpenDialog: vi.fn() } as unknown as SidebarHandlers;
-  const git = projectMenu(t, handlers, project, [], { gitRepository: true }).find((entry) => typeof entry === "object" && "items" in entry && entry.label === "Git");
+  const git = projectMenu(t, handlers, project, [], { gitStatus: gitStatusOf("p") }).find((entry) => typeof entry === "object" && "items" in entry && entry.label === "Git");
   const entry = (git as { items: { label: string; onClick: () => void }[] }).items.find((item) => item.label === "Restore file changes");
   entry!.onClick();
   expect(handlers.onOpenDialog).toHaveBeenCalledExactlyOnceWith({ kind: "restore-project-changes", project });
@@ -953,7 +953,7 @@ describe("menu-only letters on direct actions", () => {
   it.each(["list", "focused", "nested"] as const)("keeps project letters unique in the %s menu, pinned or not", (placement) => {
     for (const pinned of [false, true]) {
       const project = { id: "p", pinned } as Project;
-      const menu = projectMenu(t, local(), project, [], { placement, gitRepository: true });
+      const menu = projectMenu(t, local(), project, [], { placement, gitStatus: gitStatusOf("p") });
       expect(letters(menu)).toEqual([
         ...(placement !== "focused" ? [[pinned ? "Unpin" : "Pin", "P"]] : []),
         ...(placement === "list" ? [["Focus mode", "F"]] : []),
@@ -979,4 +979,32 @@ describe("menu-only letters on direct actions", () => {
     noNestedLetters(menu);
     uniqueLetters(menu);
   });
+});
+
+const gitItems = (status: GitStatus | undefined) => {
+  const git = projectMenu(t, {} as unknown as SidebarHandlers, { id: "p" } as Project, [], { gitStatus: status }).find((entry) => typeof entry === "object" && "items" in entry && entry.label === "Git") as { items: ActionMenuItem[] } | undefined;
+  return git?.items;
+};
+
+it.each([
+  [{ branch: "main", detached: false, upstream: null }, "No upstream"],
+  [{ branch: "abc1234", detached: true, upstream: null }, "Not on a branch"],
+] as const)("disables the project's Pull item with its reason for the git status %j", (extra, state) => {
+  const items = gitItems(gitStatusOf("p", extra))!;
+  const pull = items.find((item) => item.label === "Pull current branch")!;
+  expect(pull).toMatchObject({ disabled: true, reason: { state } });
+  expect(pull.description).toBeTruthy();
+  expect(items.find((item) => item.label === "Push current branch")!.disabled ?? false).toBe(false);
+});
+
+it.each([
+  ["a branch with an upstream", gitStatusOf("p")],
+  ["a status that has not read the branch", gitStatusOf("p", { branch: null, upstream: null })],
+])("leaves the project's Pull item enabled for %s", (_, status) => {
+  expect(gitItems(status)!.find((item) => item.label === "Pull current branch")!.disabled ?? false).toBe(false);
+});
+
+it("offers no Git submenu without a git status, or for a project that is not a repository", () => {
+  expect(gitItems(undefined)).toBeUndefined();
+  expect(gitItems(gitStatusOf("p", { repository: false, branch: null, upstream: null }))).toBeUndefined();
 });

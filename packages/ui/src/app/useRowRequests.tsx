@@ -12,16 +12,19 @@ import { usePlatform } from "../platform/react";
 import type { ConsoleSessionColour, Project, Session } from "../protocol";
 import { useDaemon } from "../store";
 import { displayWirePath } from "../format/wirePath";
+import type { DialogRequest } from "../dialogs/dialogRequest";
+import { pullNotice } from "../git/pullNotice";
 import { alertFailure } from "../components/alerts/raiseError";
 
 /**
  * The project and session rows' requests that only ask the daemon or the host for something and
  * say how it went: Git pulls, pushes and branch switches, revealing and copying, the terminal app,
- * the repository's page, and a session's colour, lock, pin and binding to an owner. Each is one
- * function for good (`useStableHandler`), as every row of the sidebar takes it. The repository
- * opener is there only where the platform can open links.
+ * the repository's page, and a session's colour, lock, pin and binding to an owner. A pull that
+ * needs a merge asks for the person's confirmation through `openDialogWhenFree`, which waits for
+ * any dialog already open. Each is one function for good (`useStableHandler`), as every row of the
+ * sidebar takes it. The repository opener is there only where the platform can open links.
  */
-export function useRowRequests() {
+export function useRowRequests(openDialogWhenFree: (dialog: DialogRequest) => void) {
   const t = useT();
   const { links } = usePlatform();
   const { request, showNotice } = useDaemon();
@@ -29,7 +32,12 @@ export function useRowRequests() {
   const resolveAbsolutePath = useResolveAbsolutePath();
 
   const pullProjectBranch = (project: Project) => {
-    request({ type: "pull_project_branch", project: project.id }).catch(alertFailure({ title: t("sidebar.project.pullFailedTitle") }));
+    request({ type: "pull_project_branch", project: project.id })
+      .then(({ outcome }) => {
+        if (outcome.kind === "needs_merge") openDialogWhenFree({ kind: "pull-merge-project-branch", project, ahead: outcome.ahead, behind: outcome.behind });
+        else showNotice(pullNotice(t, outcome));
+      })
+      .catch(alertFailure({ title: t("sidebar.project.pullFailedTitle") }));
   };
 
   const openRepository = (url: string) => {

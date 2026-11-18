@@ -1066,10 +1066,15 @@ async fn handle_inner(
             Ok(None)
         }
 
-        RequestBody::PullProjectBranch { project } => {
+        RequestBody::PullProjectBranch { project, merge } => {
             let project = state.store.require_project(&project)?;
-            project_git::status::pull_project_now(state, project);
-            Ok(None)
+            let outcome = project_git::pull::pull_project_now(state, project, merge)
+                .await
+                .map_err(anyhow::Error::new)?;
+            Ok(Some(Event::ProjectBranchPulled {
+                id: request_id,
+                outcome,
+            }))
         }
 
         RequestBody::RefreshProjectGitStatus { project } => {

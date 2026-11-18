@@ -380,7 +380,8 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
   // own launches (a resume, a quick create) go through it and render it at this level.
   const { confirmLaunch, confirmation: launchConfirmation } = useConfirmIncompleteLaunch();
 
-  const otherModalOpen = dialogRequest !== undefined || questionPending || exit.exitConfirmOpen || launchConfirmation !== undefined;
+  const ownModalOpen = questionPending || exit.exitConfirmOpen || launchConfirmation !== undefined;
+  const otherModalOpen = dialogRequest !== undefined || ownModalOpen;
   // Settings opened from a control of the open drawer (the rail's, on a phone) hands focus back to it
   // as it closes, as any dialog opened there does (`focusDrawerTrigger`).
   const settingsFromDrawer = useRef(false);
@@ -428,7 +429,9 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
 
   const quickCreateSession = useQuickCreateSession(showOpenedSession, sidebarView.currentConsole?.id, confirmLaunch);
 
-  const { openDialog, closeDialog, openConsoleSession, focusDrawerTrigger, stableOpenDialog, stableOpenConsoleSession } = useDialogRouting({
+  const { openDialog, closeDialog, openConsoleSession, focusDrawerTrigger, stableOpenDialog, stableOpenDialogWhenFree, stableOpenConsoleSession } = useDialogRouting({
+    dialogRequest,
+    windowModalOpen: ownModalOpen || settingsOpen,
     consoles,
     consoleList,
     sidebarOpen: panes.sidebarOpen,
@@ -551,7 +554,7 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
     stableSetLocked,
     stableBindSession,
     stableSetPinned,
-  } = useRowRequests();
+  } = useRowRequests(stableOpenDialogWhenFree);
   usePaneSwipe({
     asideFloats,
     noSidebar,
@@ -917,7 +920,7 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
       {dialogRequest && !offline && (
         <RequestedDialog
           dialog={dialogRequest}
-          onClose={closeDialog}
+          onClose={() => closeDialog(dialogRequest)}
           onSessionOpened={showOpenedSession}
           onSwitchAccounts={switchAccounts}
           onChangeSessionModel={changeSessionModel}

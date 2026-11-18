@@ -1,13 +1,13 @@
 # Project git status
 
 A project whose directory is a git repository carries its **current branch and how far that branch is from its
-upstream** in the sidebar. Octoboard checks those projects against their remotes by itself, on an interval, across
-all consoles, and checks one project at once when asked to with **Pull current branch**. What a check does beyond
-reporting depends on one setting, **Automatically pull repositories**, described in "Automatically pulling
-repositories" below, and on whether the check was asked for by hand. Pushing the current branch is not a check
-(see "Pushing the current branch" in `docs/product/project-git-actions.md`). Between checks, the branch and the
-counts follow changes made in the repository itself, without going to the remote (see "Following changes to the
-repository's refs" below).
+upstream** in the sidebar. Octoboard checks those projects against their remotes by itself, on an interval, across all
+consoles, and checks one project at once when asked to with **Pull current branch**. What a check does beyond reporting
+depends on one setting, **Automatically pull repositories**, described in "Automatically pulling repositories" below,
+and on whether the check was asked for by hand (see "Pulling the current branch" in
+`docs/product/project-git-actions.md`). Pushing the current branch is not a check (see "Pushing the current branch" in
+`docs/product/project-git-actions.md`). Between checks, the branch and the counts follow changes made in the repository
+itself, without going to the remote (see "Following changes to the repository's refs" below).
 
 A project's uncommitted changes are inspected in the project pane's Git mode (see
 `docs/product/project-pane-git-mode.md`), which only reads the repository and has no part in these checks. The
@@ -131,7 +131,8 @@ about another project than the placement now shows, as when focus mode moves to 
 - again when the daemon sends a fresh snapshot, since a restarted daemon may have lost the statuses it held;
 - when a console is added, or a project appears in a console — added, or moved in from another one — which checks
   that console's projects without waiting for the next round;
-- and when the user chooses **Pull current branch** for one project (see "Pulling one project by hand" below).
+- and when the user chooses **Pull current branch** for one project (see "Pulling the current branch" in
+  `docs/product/project-git-actions.md`).
 
 Switching or previewing consoles does not change which projects are checked or restart the five-minute clock.
 Adding, moving or removing a project does not restart that clock either. A removed console is left out of later
@@ -145,9 +146,9 @@ switch on" below.
 turn, so a console with many projects is worked through four at a time. The daemon will not start a second check of
 a project while one is already running or waiting its turn, and skips a project whose last check finished less than a
 minute ago — so several open windows, each on its own interval, cannot multiply the work. A project skipped that way
-simply keeps the status it already had. Pull current branch is the exception to all three (see "Pulling one project
-by hand" below). **The five-minute interval, the one-minute floor and the four at once are
-fixed**, not settings.
+simply keeps the status it already had. Pull current branch is the exception to all three (see "Pulling the current
+branch" in `docs/product/project-git-actions.md`). **The five-minute interval, the one-minute floor and the four at once
+are fixed**, not settings.
 
 A status is never stored: after a daemon restart there is none for any project, and a project's badge shows nothing
 again until its next check, or until its refs change (see "Following changes to the repository's refs" below).
@@ -173,8 +174,8 @@ again until its next check, or until its refs change (see "Following changes to 
 - Then the branch, its upstream and the ahead/behind counts are read from the repository. A fetch that failed —
   offline, authentication, a host key that has never been accepted — records its message for the badge but does not
   stop this read, so the branch and the counts still show.
-- Finally the branch may be pulled; see "Automatically pulling repositories" and "Pulling one project by hand"
-  below.
+- Finally the branch may be pulled; see "Automatically pulling repositories" below and "Pulling the current branch"
+  in `docs/product/project-git-actions.md`.
 
 A check that finds no `git` to run (see "Where `git` is found" below) runs none of these steps: it records that failure
 for the badge, with no branch and no counts read, so the badge shows the failure mark alone.
@@ -197,8 +198,9 @@ even when the running one also looked for `git` again, since it may have looked 
 later check is the one that answers. If a check of the project is only waiting its turn, in a round or in the pass
 that turning **Automatically pull repositories** on starts (see "Turning the switch on" below), that check starts at
 once in its place and looks for `git` again, fast-forwarding only as the round or the pass would have. Try again and
-Pull current branch requests arriving while one check runs share the one check that follows it, which fast-forwards
-if a Pull current branch was among them.
+Pull current branch requests arriving while one check runs share the one check that follows it, which pulls as Pull
+current branch does if one was among them, answering each Try again with its status and each Pull current branch with
+what its pull did.
 
 Try again is answered once the check that answers it has ended, with the status it ended with; that answer is what
 the announcement in "What assistive technology hears" above goes by. An answer that does not come — the check was
@@ -298,9 +300,9 @@ restarted — gets its badge from the re-read.
 
 Every `git` run for a project's git status — the remotes read, the fetch, the branch read, and a fast-forward, whether
 it comes from a check, from Pull current branch, from the pass that turning the switch on starts or from a change to
-the repository's refs — is the `git` on the user's `PATH`, started from the user's own login shell environment, but
-with that environment **filtered**. Their git configuration files and their credential helpers are used as they
-stand.
+the repository's refs, and the merge Pull current branch makes once the user confirms it — is the `git` on the user's
+`PATH`, started from the user's own login shell environment, but with that environment **filtered**. Their git
+configuration files and their credential helpers are used as they stand.
 
 What the filter takes out are the `GIT_*` variables the user exports in their own shell configuration. Kept are only
 those that say which of the user's own material to use and how to reach a remote with it: where git's configuration
@@ -327,20 +329,21 @@ call that runs out reports only that it did not finish in time. A push's own bou
 branch" in `docs/product/project-git-actions.md`.
 
 **A command that reaches a remote uses the user's own ssh.** The fetch, the push, a git association's clone and the
-form's check of a git URL reach the remote, and so, in a partial clone, can the fast-forward and a branch switch, which
-fetch the objects they lack. Each runs the ssh program `git` itself would pick: the shell's `GIT_SSH_COMMAND`, else the
-`core.sshCommand` setting, else the shell's `GIT_SSH`, else `ssh`; the shell's `GIT_SSH_VARIANT` is kept for a
-`GIT_SSH` wrapper. Where that program is `ssh` itself, it is kept from prompting as above. Any other program — `plink`,
-a wrapper script — runs as the user configured it, and a prompt it opens is ended only by the command's time limit. A
-`core.sshCommand` that cannot be read leaves plain `ssh`. For the clone and the form's check, `core.sshCommand` comes
-from the user's system and global configuration only, so one that only a conditional include (`includeIf`) supplies
-for the new repository's directory is not used there; `GIT_SSH_COMMAND` or a global `core.sshCommand` is.
+form's check of a git URL reach the remote, and so, in a partial clone, can the fast-forward, the merge Pull current
+branch makes and a branch switch, which fetch the objects they lack. Each runs the ssh program `git` itself would pick:
+the shell's `GIT_SSH_COMMAND`, else the `core.sshCommand` setting, else the shell's `GIT_SSH`, else `ssh`; the shell's
+`GIT_SSH_VARIANT` is kept for a `GIT_SSH` wrapper. Where that program is `ssh` itself, it is kept from prompting as
+above. Any other program — `plink`, a wrapper script — runs as the user configured it, and a prompt it opens is ended
+only by the command's time limit. A `core.sshCommand` that cannot be read leaves plain `ssh`. For the clone and the
+form's check, `core.sshCommand` comes from the user's system and global configuration only, so one that only a
+conditional include (`includeIf`) supplies for the new repository's directory is not used there; `GIT_SSH_COMMAND` or a
+global `core.sshCommand` is.
 
 A `git` that only reads — the remotes read and the branch read, among others — never starts the file-system monitor the
 user's configuration may name (`core.fsmonitor`), and never rewrites the repository's index. A command that writes,
-the fetch, the fast-forward, the push and its hooks among them, keeps the user's monitor; only restoring file changes
-(see "Restoring file changes" in `docs/product/project-git-actions.md`) and the branch and worktree cleanup turn it off
-for their writes too.
+the fetch, the fast-forward, the merge, the push and their hooks among them, keeps the user's monitor; only restoring
+file changes (see "Restoring file changes" in `docs/product/project-git-actions.md`) and the branch and worktree cleanup
+turn it off for their writes too.
 
 ### Where `git` is found
 
@@ -385,10 +388,11 @@ Off and on alike, the check above runs and the branch and the counts stay accura
 beyond reporting: with it on, a branch that is **behind its upstream and has no commits of its own** is pulled —
 at the end of each check, and once immediately when the switch is turned on (see "Turning the switch on" below) —
 and the badge shows the pull in flight. **Pulling** a branch here always means fast-forwarding it to its upstream,
-nothing more. With the switch off, only Pull current branch pulls (see "Pulling one project by hand" below), under
-the same rules:
+nothing more, and a branch it does not fast-forward is passed over without a word. With the switch off, only **Pull
+current branch** pulls, which also tells the user what it did and can merge a diverged branch once the user confirms
+(see "Pulling the current branch" in `docs/product/project-git-actions.md`). The automatic pull:
 
-- It **never pushes**, and never merges anything that is not a fast-forward. A push happens only when the user
+- **never pushes**, and never merges anything that is not a fast-forward. A push happens only when the user
   chooses **Push current branch**, and it is never part of this pull (see "Pushing the current branch"
   in `docs/product/project-git-actions.md`).
 - A branch that is ahead of its upstream, whether or not it is also behind, is left alone. So are a branch with no
@@ -397,35 +401,15 @@ the same rules:
   is working in that project.
 - A fast-forward `git` refuses records its message for the badge, as a failed fetch does.
 
-Pulling a branch — with the switch on, or by Pull current branch — moves that branch's working tree. Pushing
-the current branch does not: it updates the remote and, in the repository, the remote-tracking refs `git` updates
-for that push, and when the branch had no upstream it records one. It does not edit the project's files (see
-"Pushing the current branch" in `docs/product/project-git-actions.md`). Switching to a local branch moves the
-project's own working tree (see "Switching the local branch" in `docs/product/project-git-actions.md`). Restoring
-file changes discards tracked changes without moving the branch (see "Restoring file changes" in
-`docs/product/project-git-actions.md`). A check's fetch still updates remote refs only and still does not move the
-working tree or push (see "What one check does" above). The guarantee these qualify is in "What Octoboard never
-modifies" in `docs/product/launching-agents.md`.
-
-### Pulling one project by hand
-
-A project's action menu offers **Pull current branch** under **Git** while the project's status says its directory is a
-git repository — so not before its first status has arrived (see "What one check does" above, and "Project rows" in
-`docs/product/sidebar-project-rows.md` for where the menu is). It does not push. Choosing it closes the menu and starts
-the check without waiting; a success raises no notice. It runs that project's check right away and then fast-forwards
-the branch under exactly the rules above, whether or not **Automatically pull repositories** is on; choosing it is the
-consent the switch would otherwise give. The one-minute floor does not apply.
-
-Pull current branch does not wait its turn behind the four at once (see "When a project is checked" above). If a
-check of the project is only waiting its turn — in a round of checks, or in the pass that turning **Automatically
-pull repositories** on starts (see "Turning the switch on" below) — that check starts at once as this request's
-check, with the fast-forward, in its place. If a check of the project is already running, or that pass is already
-fast-forwarding it, nothing starts alongside it: as soon as it ends, one more check runs, with the fast-forward, so
-the request ends in a fast-forward attempt either way. However many requests arrive meanwhile, they share that one
-extra check, and it does not run at all if the project has been removed in the meantime.
-
-The badge shows the check and the pull in flight as for any check, and a failed fetch or a fast-forward `git`
-refuses records its message for the badge the same way.
+Pulling a branch — with the switch on, or by Pull current branch — moves that branch's working tree, and a merge the
+user confirms after Pull current branch also adds a merge commit to the branch. Pushing the current branch does not: it
+updates the remote and, in the repository, the remote-tracking refs `git` updates for that push, and when the branch had
+no upstream it records one. It does not edit the project's files (see "Pushing the current branch" in
+`docs/product/project-git-actions.md`). Switching to a local branch moves the project's own working tree (see "Switching
+the local branch" in `docs/product/project-git-actions.md`). Restoring file changes discards tracked changes without
+moving the branch (see "Restoring file changes" in `docs/product/project-git-actions.md`). A check's fetch still updates
+remote refs only and still does not move the working tree or push (see "What one check does" above). The guarantee these
+qualify is in "What Octoboard never modifies" in `docs/product/launching-agents.md`.
 
 ### Turning the switch on
 

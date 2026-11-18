@@ -18,6 +18,9 @@ export type DialogRequest =
   | { kind: "edit-project"; project: Project }
   | { kind: "delete-project"; project: Project }
   | { kind: "restore-project-changes"; project: Project }
+  /** Confirms pulling the current branch of `project` with a merge commit: it has `ahead` commits of its own and
+   * `behind` new ones upstream. */
+  | { kind: "pull-merge-project-branch"; project: Project; ahead: number; behind: number }
   | { kind: "new-console-session"; console: Console }
   | { kind: "new-session"; console: Console; project: Project; binding: NewSessionBinding }
   | { kind: "rename-project"; project: Project }

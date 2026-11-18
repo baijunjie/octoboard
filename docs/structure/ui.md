@@ -110,7 +110,7 @@ their cascade order does not depend on which screen opened first.
   (`genericMark.ts` is the mark of a provider with no module), and `agentMarks.ts`, the `@octoboard/ui/agent-marks`
   entry. Imports nothing; the catalogs and the website import it.
 - `src/agents/` — agent rules (`agents.ts`: the pickable, listed and served agents, always taken from the providers the daemon serves in `snapshot`, in its registry order), provider names and facts read from the module or from the providers the daemon serves in `snapshot` (`providers.ts`, which also reads the served model display rule and capabilities; the store holds them as `State.providers`, read with `useProviders()`; `ProviderMessage.tsx` shows a provider's message with a generic fallback), model and effort picker rules, per-agent launch settings (`launchCompatibility.ts`: the compatibility switches an agent's served settings declare, and the helpers that set, diff and apply their held values); `providers.ts` also holds `settingMessageKey` (the copy key of a provider setting), `switchValue` (a switch's value in effect, with its declared default before settings arrive), `idWords` (an id read as words, for a setting or choice a module has no copy for) and re-exports the providers' code records as `PROVIDER_CODES`.
-- `src/git/` — git workflow settings and git-badge wording, repository host links.
+- `src/git/` — git workflow settings and git-badge wording, the wording of a manual pull's notice (`pullNotice.ts`), repository host links.
 - `src/sessions/` — pure session rules and wording (index, order — with the scope of an archive deletion, `archivedDeletionScope` — labels, the session-order wording `orderWording.ts` shared by Settings and the configuration import, status derivation — `sessionStatus.ts` holds the live and no-process status sets and `sessionIsWorking`, the predicate for a session that is doing or about to do work, `sessionIsBusy` and `childCanReport`, the rest a handoff waits for in a session and in the sessions it owns — `nativeApp.ts`, why a session cannot be opened in its agent's desktop application and what to say when the application may not show it — colours, filtering, waiting).
 - `src/accounts/` — pure account rules: order, quota of an account, quota formatting, the default account's name
   (`defaultAccount.ts`), how an account is found among the
@@ -132,7 +132,7 @@ their cascade order does not depend on which screen opened first.
 
 ### Leaf layer and window shell
 
-- `src/components/` — shared building blocks by kind: `alerts/` (error alerts and the error queue, with the failure of opening a file in the default application, `defaultApplicationFailure.tsx`), `card/` (`FlatCard`, the flat card of a dialog: header, band, and rows or blocks set apart by inset hairlines), `dialog/` (the
+- `src/components/` — shared building blocks by kind: `alerts/` (error alerts and the error queue, with the failure of opening a file in the default application, `defaultApplicationFailure.tsx`, and `acknowledgementViewOf` in `acknowledgementView.ts`, the failure-modal view of an error for a dialog a refusal has ended), `card/` (`FlatCard`, the flat card of a dialog: header, band, and rows or blocks set apart by inset hairlines), `dialog/` (the
   `Dialog` frame and toolkit), `form/`, `controls/` (including `CopyBox`, a block's box with its copy button, `CopyCommand`, a command line with its copy button, and `FeedbackButton`, the done-state icon button that `CopyButton` and `PasteButton` are built on), `menus/`, `hint/` (the one component behind tooltips and floating
   popovers, with `HeadedTooltip`, the heading, divider and body content shared by the rail and the archive view), `text/`, `status/`, `icons/`, `tabs/`, `qr/` (`QrCode`, a QR code drawn from the modules the daemon encodes), `motion/`, `scroll/` (the faded scroller, `ScrollBox`, a box that scrolls sideways, and the sticky section
   heading), `focus/`, `announce/`, `panel/` (including `ContentMain`, the content area's one `<main>`), `host/` (the host actions on a path: copying it, opening it in the default application, `openPathInDefaultApplication`, and revealing it in the file manager, `revealPathTarget`, and opening a session in its agent's desktop application, `useOpenSessionInApp`), `rows/` (the tree row, its icon and mark buttons, the
@@ -152,7 +152,8 @@ their cascade order does not depend on which screen opened first.
   ports forwarded to its daemon's machine, built on `RailPanelEntry`), `RailRemoteGap` and `RailSeparator` (the free space and
   the separator between the remote button and the rail's bottom group, and the separator and spacer items they are made of), and the page of the window that has no daemon: `TrayFlyout` with
   `TrayFlyoutLines.tsx` and `TrayFlyout.css` (the Windows notification-area flyout, drawing the model the shell sends).
-- `src/app/` — the hooks `App.tsx` is composed of, one concern each (dialog routing, console switching, session
+- `src/app/` — the hooks `App.tsx` is composed of, one concern each (dialog routing, in `useDialogRouting.ts`, which
+  also holds a dialog that arrives from the daemon until no modal or alert is open (`openDialogWhenFree`), console switching, session
   selection and actions, focus mode, archive view, pane layout and widths, project panels, jumps from the global process
   list to a Processes panel, announcements, and `useRemoteDevicesPage.ts`: whether the Remote devices page shows, which
   device it shows, and what leaves it).
@@ -188,7 +189,7 @@ their cascade order does not depend on which screen opened first.
 - `src/statusItem/` — the menu-bar menu: its builder, quota submenus, icons and the hook that pushes it to the platform.
 - `src/sidebar/` — one console's sessions and projects: `Sidebar` picks the view over `SidebarFrame`, `ConsoleView` and
   `FocusView` list them with `ProjectNode` and `SessionRow` (their pin and lock buttons in `MarkButtons.tsx`, the row's
-  derived state in `sessionRowModel.ts`), plus focus modes, menus and new-session controls.
+  derived state in `sessionRowModel.ts`), plus focus modes, menus (`menus.tsx`: the project menu derives its Git items from the project's git status) and new-session controls.
 - `src/archive/` — archived sessions over the terminal area, with deletion.
 - `src/terminal/` — the xterm.js terminal: controller and the surface it draws on, pane, reconnect, the reading of its
   output as text, the font size (`terminalFontSize.ts`: the client-held, persisted preference the controller applies to every
@@ -255,7 +256,7 @@ their cascade order does not depend on which screen opened first.
   alert of an update this window started that ended unfinished.
 - `src/dialogs/` — the feature dialogs (console, project, session, request, handoff, account switch, model, trust,
   archive and removal choices), on the `components/dialog/` toolkit. `RequestedDialog.tsx` only routes a requested
-  dialog to its component; the archive, removal and restore confirmations are in `confirmations/`. The dialogs' daemon
+  dialog to its component; the archive, removal, restore and pull-merge confirmations are in `confirmations/`. The dialogs' daemon
   lookups (detected agent, located conversation, agent models, session records, branch inspections) are built on
   `useLatestRequest`; `branchInspection.ts` holds the pure part of a branch inspection and `useBranchInspections.ts`
   its hooks. A launch level's compatibility switches (console, project, session, request, handoff and model dialogs) are

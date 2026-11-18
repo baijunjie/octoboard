@@ -3,7 +3,7 @@ import type { Translate } from "../i18n/catalog";
 import type { ReplyOf } from "../requests";
 import type { Imported } from "../configuration/ImportResult";
 import type { Inspection } from "../configuration/importPlan";
-import type { AccountMcpInventory, AccountTrashOutcome, McpServerAuthOutcome, Agent, AgentModel, ConversationLocation, DirEntry, GitStatus, HistoryMessage, ImportFailure, ImportItem, ModelsUnavailable, PathLinkKind, PathLinkView, ProcessTree, QuotaUnavailable, ResetCreditOutcome, SessionBranchItem, SessionRecordPresence, UnstoppedReason } from "../protocol";
+import type { AccountMcpInventory, AccountTrashOutcome, McpServerAuthOutcome, Agent, AgentModel, ConversationLocation, DirEntry, GitStatus, HistoryMessage, ImportFailure, ImportItem, ModelsUnavailable, PathLinkKind, PathLinkView, ProcessTree, PullOutcome, QuotaUnavailable, ResetCreditOutcome, SessionBranchItem, SessionRecordPresence, UnstoppedReason } from "../protocol";
 import type { MessageParams } from "../errors/codedError";
 import type { PathLinkRefusedCause } from "../errors/causes";
 import type { State } from "../store";
@@ -373,6 +373,13 @@ export interface Fixture {
   sessionAppOpenError?: FixtureError;
   /** A refused push of a project's current branch (`push_project_branch`), acknowledged otherwise. */
   projectPushError?: FixtureError;
+  /** A refusal of only the manual pull that asks to merge (`pull_project_branch` with `merge`), after the first request
+   * has been answered with the outcome: what a merge that meets conflicts looks like from the confirmation. */
+  projectPullMergeError?: FixtureError;
+  /** What a manual pull of a project's current branch (`pull_project_branch`) did: `fast_forwarded` when absent. A
+   * `needs_merge` outcome is the answer to a request that does not ask to merge, with the counts it carries; one that
+   * asks to merge is answered `merged`. */
+  projectPullOutcome?: PullOutcome;
   /** A refusal of `open_project_path` and `reveal_project_path`, which a row of the project pane and the file viewer's
    * header ask for to open a file or folder in the default application or the file manager; acknowledged otherwise. */
   projectPathActionError?: FixtureError;

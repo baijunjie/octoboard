@@ -382,9 +382,11 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   `pathspec.rs` how a path goes to `git` so that it names exactly that path on every host,
   `remote_branches.rs` the lookup of a branch's remote-tracking branch and of the remote default branch, and the small
   readings of git's text shared by several families (`object_id.rs`, `remote_branch.rs`, `tree_entries.rs`).
-- `src/project_git/` — git work on a project's own repository: header, status, push, switch, restore, remote, the ref
-  watch (`watch.rs`), the re-read after a session's git moves refs (`ref_moves.rs`), clone; `debounced.rs` is the
-  scheduler `watch.rs` and `ref_moves.rs` share.
+- `src/project_git/` — git work on a project's own repository: header, status, pull, push, switch, restore, remote, the
+  ref watch (`watch.rs`), the re-read after a session's git moves refs (`ref_moves.rs`), clone; `debounced.rs` is the
+  scheduler `watch.rs` and `ref_moves.rs` share. `status.rs` holds the checks; `pull.rs` is the manual pull
+  (`pull_project_branch`: its plan, the fast-forward, the confirmed merge, and the refusals), which `status.rs` calls
+  into, and `mod.rs` holds the helpers pull, push and switch share (`not_a_repository`, `no_git_or`).
 - `src/browse/` — project-browsing reads for the control socket and the MCP read tools; `mod.rs`'s `serve` is the entry,
   with `budget.rs` (including `ChangeBudget`, the one cut of a change listing) and `lane.rs` the limits every read is
   held to (the upstream-lookup budgets live in `git/remote_branches.rs`). `scope.rs` resolves the project, directory and

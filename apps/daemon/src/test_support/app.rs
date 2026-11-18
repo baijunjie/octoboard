@@ -187,6 +187,16 @@ pub(crate) fn insert_project(state: &AppState, path: &Path) -> crate::protocol::
     project
 }
 
+/// `repo` as project `p1` of a console on `state`'s store, whose workdir is under `dir`.
+pub(crate) fn checked_project(
+    state: &AppState,
+    dir: &Path,
+    repo: &Path,
+) -> crate::protocol::Project {
+    state.store.insert_console(&console(dir)).unwrap();
+    insert_project(state, repo)
+}
+
 /// Seeds the models `agent` offers under its default account as `(id, efforts)`, so that a test
 /// that gives a model or an effort is checked against this list and not against the agent
 /// installed on the machine, which running its catalogue command would make it depend on.

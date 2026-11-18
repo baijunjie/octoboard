@@ -330,6 +330,220 @@ it("restores only the confirmed project and reports success", async () => {
   expect(document.querySelector('[role="alertdialog"]')).toBeNull();
 });
 
+async function openPullCommand(outcome: unknown) {
+  const mounted = mountApp();
+  const { daemon, project } = mounted;
+  vi.mocked(daemon.request).mockImplementation((async (body: { type: string; merge?: boolean }) => {
+    if (body.type !== "pull_project_branch") return { type: "ack", id: null };
+    return { type: "project_branch_pulled", id: null, outcome: body.merge ? { kind: "merged" } : outcome };
+  }) as never);
+  await act(async () => daemon.store.setState((state) => ({
+    gitStatuses: new Map(state.gitStatuses).set(project.id, {
+      project: project.id, repository: true, branch: "main", detached: false, upstream: "origin/main",
+      ahead: 2, behind: 3, activity: "idle", error: null,
+    }),
+  })));
+  await openProjectMenu(project.name);
+  await press("Git");
+  await press("Pull current branch");
+  return mounted;
+}
+
+it("reports a manual pull that found nothing to pull", async () => {
+  const { daemon, project } = await openPullCommand({ kind: "up_to_date" });
+  expect(daemon.request).toHaveBeenCalledWith({ type: "pull_project_branch", project: project.id });
+  expect(daemon.showNotice).toHaveBeenCalledWith("The current branch is already up to date.");
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+});
+
+it("asks before a pull creates a merge commit, and merges only the confirmed project", async () => {
+  const { daemon, project } = await openPullCommand({ kind: "needs_merge", ahead: 2, behind: 3 });
+  const dialog = document.querySelector('[role="alertdialog"]')!;
+  expect(dialog.textContent).toContain("has diverged from its upstream: 2 commits ahead and 3 commits behind.");
+  expect(dialog.textContent).toContain("creates a merge commit");
+  expect(daemon.request).not.toHaveBeenCalledWith({ type: "pull_project_branch", project: project.id, merge: true });
+  expect(daemon.showNotice).not.toHaveBeenCalled();
+  await act(async () => dialog.querySelector("form")!.requestSubmit());
+  expect(daemon.request).toHaveBeenCalledWith({ type: "pull_project_branch", project: project.id, merge: true });
+  expect(daemon.showNotice).toHaveBeenCalledWith("Pulled the current branch.");
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+});
+
+it("pulls nothing when the merge is cancelled", async () => {
+  const { daemon, project } = await openPullCommand({ kind: "needs_merge", ahead: 2, behind: 3 });
+  await press("Cancel");
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+  expect(daemon.request).not.toHaveBeenCalledWith({ type: "pull_project_branch", project: project.id, merge: true });
+});
+
+it("turns the merge confirmation into a failure modal when the confirmed pull meets conflicts", async () => {
+  const { daemon } = await openPullCommand({ kind: "needs_merge", ahead: 2, behind: 3 });
+  vi.mocked(daemon.request).mockRejectedValueOnce(new CodedError("Merging the upstream into this branch causes conflicts, so the merge was cancelled and nothing changed: src/a.ts\nsrc/b.ts", "pull_merge_conflict", { detail: "src/a.ts\nsrc/b.ts" }));
+  await act(async () => document.querySelector<HTMLFormElement>('[role="alertdialog"] form')!.requestSubmit());
+  const dialogs = [...document.querySelectorAll('[role="alertdialog"]')];
+  expect(dialogs).toHaveLength(1);
+  expect(dialogs[0].textContent).toContain("the merge was cancelled and nothing changed");
+  expect(dialogs[0].textContent).not.toContain("Pull and merge");
+  expect(errorAlerts.getSnapshot()).toEqual([]);
+  expect(daemon.showNotice).not.toHaveBeenCalled();
+});
+
+it("keeps the merge confirmation open under an alert for any other refusal of the confirmed pull", async () => {
+  const { daemon } = await openPullCommand({ kind: "needs_merge", ahead: 2, behind: 3 });
+  vi.mocked(daemon.request).mockRejectedValueOnce(new CodedError("Git could not pull this branch: error: Your local changes would be overwritten", "git_pull_failed", { detail: "error: Your local changes would be overwritten" }));
+  await act(async () => document.querySelector<HTMLFormElement>('[role="alertdialog"] form')!.requestSubmit());
+  expect(errorAlerts.getSnapshot()).toEqual([expect.objectContaining({ title: "Could not pull the branch" })]);
+  expect(daemon.showNotice).not.toHaveBeenCalled();
+});
+
+/** A confirmation that closed itself because its project was removed still has its confirmed pull in flight: when that
+ * settles, it asks to close, which must not close the dialog that has been opened since. */
+it("keeps the dialog opened since open when a merge confirmation closed by its project's removal settles its pull", async () => {
+  const { daemon, project } = mountApp();
+  const other = projectOf("p-other", project.console_id, "API");
+  let release!: () => void;
+  vi.mocked(daemon.request).mockImplementation((async (body: { type: string; merge?: boolean }) => {
+    if (body.type !== "pull_project_branch") return { type: "ack", id: null };
+    if (!body.merge) return { type: "project_branch_pulled", id: null, outcome: { kind: "needs_merge", ahead: 2, behind: 3 } };
+    await new Promise<void>((done) => { release = done; });
+    return { type: "project_branch_pulled", id: null, outcome: { kind: "merged" } };
+  }) as never);
+  await setGitStatus(daemon, project);
+  await setGitStatus(daemon, other);
+  await openProjectMenu(project.name);
+  await press("Git");
+  await press("Pull current branch");
+  const first = document.querySelector('[role="alertdialog"]')!;
+  expect(first.textContent).toContain(project.name);
+  await act(async () => first.querySelector("form")!.requestSubmit());
+  expect(daemon.request).toHaveBeenCalledWith({ type: "pull_project_branch", project: project.id, merge: true });
+
+  await act(async () => daemon.store.setState((state) => ({ projects: new Map([...state.projects].filter(([id]) => id !== project.id)) })));
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+  await openProjectMenu(other.name);
+  await press("Git");
+  await press("Pull current branch");
+  const second = document.querySelector('[role="alertdialog"]')!;
+  expect(second.textContent).toContain(other.name);
+
+  await act(async () => release());
+  expect(second.isConnected).toBe(true);
+  expect(document.querySelector('[role="alertdialog"]')).toBe(second);
+  expect(second.textContent).toContain("Pull and merge");
+});
+
+/** Gives each project the git status `status` says, with its upstream unless the test names another. */
+const setGitStatus = (daemon: Daemon, project: Project, status: { branch?: string | null; detached?: boolean; upstream?: string | null } = {}) =>
+  act(async () => daemon.store.setState((state) => ({
+    gitStatuses: new Map(state.gitStatuses).set(project.id, {
+      project: project.id, repository: true, branch: "main", detached: false, upstream: "origin/main",
+      ahead: 0, behind: 0, activity: "idle", error: null, ...status,
+    }),
+  })));
+
+const menuItem = (label: string) => Array.from(document.querySelectorAll<HTMLElement>("[role=menuitem]")).find((item) => controlName(item) === label);
+
+it.each([
+  ["a branch with no upstream", { branch: "main", upstream: null }, "No upstream"],
+  ["a detached HEAD", { branch: "abc1234", detached: true, upstream: null }, "Not on a branch"],
+])("disables Pull current branch in the project's row menu with its reason for %s, and pulls nothing", async (_case, status, reason) => {
+  const { daemon, project } = mountApp();
+  await setGitStatus(daemon, project, status);
+  await openProjectMenu(project.name);
+  await press("Git");
+  const pull = menuItem("Pull current branch")!;
+  expect(pull.getAttribute("aria-disabled")).toBe("true");
+  expect(pull.textContent).toContain(reason);
+  await act(async () => pull.click());
+  expect(daemon.request).not.toHaveBeenCalledWith(expect.objectContaining({ type: "pull_project_branch" }));
+  // The other Git actions stay on offer.
+  expect(menuItem("Push current branch")?.getAttribute("aria-disabled")).not.toBe("true");
+});
+
+it("offers Pull current branch in the project's row menu while the git status names no branch yet", async () => {
+  const { daemon, project } = mountApp();
+  await setGitStatus(daemon, project, { branch: null, upstream: null });
+  await openProjectMenu(project.name);
+  await press("Git");
+  expect(menuItem("Pull current branch")?.getAttribute("aria-disabled")).not.toBe("true");
+  expect(daemon.request).not.toHaveBeenCalledWith(expect.objectContaining({ type: "pull_project_branch" }));
+});
+
+/** Asks Website and API to pull, each reply held until `resolve` is called with the project's name, then opens
+ * Website's project settings (or the app's Settings, with `appSettings`), so a modal is on screen when the replies
+ * come. */
+async function pullWithSettingsOpen(appSettings = false) {
+  const mounted = mountApp();
+  const { daemon, project } = mounted;
+  const other = projectOf("p-other", project.console_id, "API");
+  const replies = new Map<string, () => void>();
+  vi.mocked(daemon.request).mockImplementation((async (body: { type: string; project: string; merge?: boolean }) => {
+    if (body.type !== "pull_project_branch") return { type: "ack", id: null };
+    if (body.merge) return { type: "project_branch_pulled", id: null, outcome: { kind: "merged" } };
+    return new Promise((resolve) => replies.set(body.project, () => resolve({ type: "project_branch_pulled", id: null, outcome: { kind: "needs_merge", ahead: 2, behind: 3 } })));
+  }) as never);
+  await setGitStatus(daemon, project);
+  await setGitStatus(daemon, other);
+  await openProjectMenu(project.name);
+  await press("Git");
+  await press("Pull current branch");
+  await openProjectMenu(other.name);
+  await press("Git");
+  await press("Pull current branch");
+  if (appSettings) {
+    await press("Settings");
+  } else {
+    await openProjectMenu(project.name);
+    await press("Project settings");
+  }
+  expect(document.querySelector("[role=dialog]")).not.toBeNull();
+  const resolve = (id: string) => act(async () => replies.get(id)!());
+  return { ...mounted, other, resolve };
+}
+
+it("holds the merge confirmation behind the dialog that is open when the pull answers, and opens it once that closes", async () => {
+  const { project, resolve } = await pullWithSettingsOpen();
+  await resolve(project.id);
+  // The dialog the person is in stays, and no confirmation takes its place or lies over it.
+  expect(document.querySelector("[role=dialog]")).not.toBeNull();
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+  await press("Cancel");
+  expect(document.querySelector("[role=dialog]")).toBeNull();
+  const confirmation = document.querySelector('[role="alertdialog"]')!;
+  expect(confirmation.querySelector("h2")?.textContent).toBe("Pull and merge");
+  expect(confirmation.textContent).toContain(project.name);
+});
+
+it("holds the merge confirmation behind the app's Settings, and opens it once Settings closes", async () => {
+  const { project, resolve } = await pullWithSettingsOpen(true);
+  await resolve(project.id);
+  expect(document.querySelector("[role=dialog]")).not.toBeNull();
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+  await press("Close");
+  expect(document.querySelector("[role=dialog]")).toBeNull();
+  const confirmation = document.querySelector('[role="alertdialog"]')!;
+  expect(confirmation.querySelector("h2")?.textContent).toBe("Pull and merge");
+  expect(confirmation.textContent).toContain(project.name);
+});
+
+it("opens several held merge confirmations one after another in the order their pulls answered", async () => {
+  const { project, other, resolve } = await pullWithSettingsOpen();
+  await resolve(other.id);
+  await resolve(project.id);
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+  await press("Cancel");
+  const first = document.querySelector('[role="alertdialog"]')!;
+  expect(first.textContent).toContain(other.name);
+  expect(first.textContent).not.toContain(project.name);
+  await press("Cancel");
+  const second = document.querySelector('[role="alertdialog"]')!;
+  expect(second.textContent).toContain(project.name);
+  expect(first.isConnected).toBe(false);
+  await press("Cancel");
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+  expect(document.querySelector("[role=dialog]")).toBeNull();
+});
+
 it("says a truncated branch list is limited, as a muted note after the branches and not a failure", async () => {
   const { daemon, project } = mountApp();
   await act(async () => daemon.store.setState((state) => ({

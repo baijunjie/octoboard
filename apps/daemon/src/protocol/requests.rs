@@ -1220,13 +1220,26 @@ pub enum RequestBody {
     RefreshGitStatus {
         console: String,
     },
-    /// Checks one project against its remote and fast-forwards it right now, the same work
-    /// `refresh_git_status` does for a console, but ignoring the one-minute floor and whether
-    /// `auto_pull_repositories` is on. Answered with `ack` at once; the status follows as
-    /// `project_git_status` broadcasts. A project already being checked gets one more forced check
-    /// once that check ends.
+    /// Checks one project against its remote and pulls its current branch right now, ignoring the
+    /// one-minute floor and whether `auto_pull_repositories` is on. Without `merge`, the check
+    /// (a fetch) is the one a re-check would run, started after the request arrived, and the
+    /// branch is fast-forwarded when it is behind with no commits of its own. A branch that has
+    /// diverged is left alone and reported as `needs_merge` for the person to confirm; with `merge`
+    /// (absent is false) there is no fetch, the branch header is read again and a diverged branch
+    /// has its upstream merged in (a merge commit, whatever `pull.rebase`, `merge.ff` and
+    /// `branch.<name>.mergeOptions` say); a merge with conflicts is aborted, leaving the working
+    /// tree as it was. A branch whose upstream no longer exists is refused with
+    /// `no_upstream_to_pull`. Answered with `project_branch_pulled` once done, the statuses
+    /// broadcast as `project_git_status` meanwhile. A project already being checked gets one more
+    /// check once that check ends; a `merge` request waits, up to ten minutes, for the project's
+    /// check to end instead, since it takes the project's claim. Refused with `unknown_project`,
+    /// `not_a_git_repository`, `binary_not_found`, `not_on_a_branch`, `no_upstream_to_pull`,
+    /// `pull_merge_conflict` or `git_pull_failed`.
     PullProjectBranch {
         project: String,
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
+        merge: bool,
     },
     /// Checks one project's git status against its remote right now, as `refresh_git_status` does
     /// for each project of a console, but ignoring the one-minute floor, looking once more for a

@@ -37,7 +37,7 @@ one and keyboard focus starts on it (see "Unbinding a session from the window" i
 
 ## Where keyboard focus starts in a confirmation
 
-A confirmation opens with keyboard focus on its confirm button, so Enter confirms at once. Three kinds start elsewhere:
+A confirmation opens with keyboard focus on its confirm button, so Enter confirms at once. Four kinds start elsewhere:
 
 - **A destructive confirmation** — one whose confirm button is drawn in the danger colour, such as quitting with
   sessions running, removing a project, deleting a session or removing an account — opens with focus on the dialog
@@ -53,6 +53,9 @@ A confirmation opens with keyboard focus on its confirm button, so Enter confirm
   not while a dialog opened after it covers it (see "Where a question the user did not ask for stands among other
   dialogs" below). Its failure modal starts on the dialog too (see "The failure modal" in
   `docs/product/error-alerts.md`).
+- **A confirmation that comes up on its own once a request it follows has been answered** — the confirmation of a merge
+  after **Pull current branch** (see "Confirming a merge" in `docs/product/project-git-actions.md`) — opens with focus
+  on the dialog itself as well, since the user may be typing elsewhere by then, and so does its failure modal.
 
 ## Where a question the user did not ask for stands among other dialogs
 

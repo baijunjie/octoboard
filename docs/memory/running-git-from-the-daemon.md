@@ -28,3 +28,23 @@ index guard.
   control after it, is the worked pair.
 - A comparison of paths `git` prints with names read from disk: Linux never shows the mismatch, and on macOS only a
   fixture holding a name stored decomposed does.
+
+## A git write made for the user pins its outcome, not how their own git shapes it
+
+The user's configuration reaches every `git` the daemon writes with. Pin on the command line each option that config
+could turn into another outcome than the one the person asked for: for a merge commit `--commit --no-ff --no-squash`
+(against `merge.ff` and `branch.<name>.mergeOptions`) and `--no-log` where the message already holds `merge.log`'s
+shortlog. Leave alone what only shapes the result as their own run of that command would: `commit.cleanup` and the
+hooks. Never `--cleanup=strip` to drop lines of the daemon's own: it also strips what a `prepare-commit-msg` hook wrote
+(a hook prepending `#42 ` fails the merge with "Empty commit message"); filter the daemon's input instead. A commit the
+daemon makes is compared in a test with what the plain command writes in the same repository, as
+`apps/daemon/src/project_git/pull/tests.rs` does for the manual pull's merge.
+
+## Abort only a git operation the daemon can prove it started
+
+Agents and the user run `git` in the same working tree, so a merge (or rebase, cherry-pick) under way after a daemon
+write failed may be theirs. Abort only when the operation's state names exactly what the daemon started (`MERGE_HEAD`
+equal to the commit it merged), and leave the tree alone when that state cannot be read. Refuse to start when an
+operation is already under way. This needs the operation started on a resolved object id, not `@{upstream}` or a branch
+name; a merge of an object id is titled `Merge commit '<oid>'`, so take the message a plain merge of the branch would
+write from `git fmt-merge-msg`, as `apps/daemon/src/project_git/pull.rs` does, never hand-written.

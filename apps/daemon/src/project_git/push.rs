@@ -15,7 +15,7 @@ use crate::git::run::WorkDir;
 use crate::host_tools::Pace;
 use crate::project_git::header::{self, BranchHeader};
 use crate::project_git::remote::{self, Remote};
-use crate::project_git::{no_git_or, project_git, PUSH_LIMITS};
+use crate::project_git::{no_git_or, not_a_repository, project_git, PUSH_LIMITS};
 use crate::protocol::{error_code, CodedError, Project};
 use crate::state::AppState;
 
@@ -79,11 +79,7 @@ impl PushPlan {
 pub fn push_current_branch(state: &AppState, project: &Project) -> Result<(), anyhow::Error> {
     let path = Path::new(&project.path);
     if !is_git_repo(path) {
-        return Err(CodedError::raised(
-            error_code::NOT_A_GIT_REPOSITORY,
-            format!("{} is not in a Git repository.", project.name),
-            &[("project", &project.id)],
-        ));
+        return Err(not_a_repository(project));
     }
     let git = project_git(state, Pace::Person).map_err(|err| no_git_or(err, push_failed))?;
     let header = header::read_header(&git, path).map_err(|detail| push_failed(&detail))?;
@@ -219,6 +215,7 @@ mod tests {
             upstream: upstream.map(str::to_string),
             ahead: 0,
             behind: 0,
+            upstream_gone: false,
         }
     }
 

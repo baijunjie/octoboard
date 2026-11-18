@@ -34,8 +34,8 @@ use super::processes::{ProcessCount, ProcessTree, UnstoppedProcess};
 use super::providers::ProviderInfo;
 use super::quotas::{AccountQuota, ResetCreditOutcome};
 use super::records::{
-    AgentAvailability, Console, DirEntry, GitStatus, Host, Page, Project, Session, SessionKind,
-    SessionStatus, ShellTerminal,
+    AgentAvailability, Console, DirEntry, GitStatus, Host, Page, Project, PullOutcome, Session,
+    SessionKind, SessionStatus, ShellTerminal,
 };
 use super::remote_access::RemoteAccess;
 use super::session_branches::SessionBranchItem;
@@ -278,6 +278,13 @@ pub enum Event {
     ProjectGitRechecked {
         id: Option<String>,
         status: Option<GitStatus>,
+    },
+    /// The reply to `pull_project_branch`: what the pull did. The statuses it went through are
+    /// broadcast as `project_git_status`; a pull that could not be done is an `error` reply
+    /// instead.
+    ProjectBranchPulled {
+        id: Option<String>,
+        outcome: PullOutcome,
     },
     /// A project's `GitStatus` changed, including every transition of `activity` — the animated
     /// icon has something to follow. Nothing is sent when a project is removed; the client drops

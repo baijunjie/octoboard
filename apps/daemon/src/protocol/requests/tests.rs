@@ -295,7 +295,7 @@ fn an_envelope_id_never_shadows_what_a_request_acts_on() {
         (
             r#"{"type":"pull_project_branch","id":"request-1","project":"project-7"}"#,
             |body| match body {
-                RequestBody::PullProjectBranch { project } => Some(project),
+                RequestBody::PullProjectBranch { project, .. } => Some(project),
                 _ => None,
             },
         ),
@@ -442,6 +442,20 @@ fn reveal_path_link_parses_with_and_without_a_project() {
     assert!(matches!(
         request.body,
         RequestBody::RevealPathLink { project: None, path } if path == "/tmp/b.png"
+    ));
+}
+
+#[test]
+fn a_pull_asks_for_a_merge_only_when_it_says_so() {
+    let merges = |json: &str| match serde_json::from_str::<Request>(json).unwrap().body {
+        RequestBody::PullProjectBranch { merge, .. } => merge,
+        other => panic!("not a pull: {other:?}"),
+    };
+    assert!(!merges(
+        r#"{"type":"pull_project_branch","project":"project-7"}"#
+    ));
+    assert!(merges(
+        r#"{"type":"pull_project_branch","project":"project-7","merge":true}"#
     ));
 }
 

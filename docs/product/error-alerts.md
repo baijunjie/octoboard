@@ -180,11 +180,12 @@ until it is acknowledged, even if the state that caused it passes.
 mouse, the keyboard, or a press without a pointer such as one from assistive technology — whether the dialog opens
 already as a failure modal or turns into one while open. When it turns into one while open, the acknowledgement button
 shows its focus ring only when the last input was a key (see "The focus ring after a focus move the window makes on its
-own" in `docs/product/moving-focus-between-regions.md`). The failure modal of a question the user did not ask for (see
-"Where keyboard focus starts in a confirmation" in `docs/product/dialogs.md`) starts with focus on the dialog itself
-instead, so an Enter typed elsewhere does nothing: as it opens already failed, as it turns failed while open, and as it
-moves on to another waiting question that has failed too. Where focus is already on such a dialog as it turns into a
-failure modal, focus leaves the dialog and comes back to it, so the dialog takes focus anew under its failure.
+own" in `docs/product/moving-focus-between-regions.md`). The failure modal of a question the user did not ask for, and
+that of the confirmation of a merge after **Pull current branch** (see "Where keyboard focus starts in a confirmation"
+in `docs/product/dialogs.md`), starts with focus on the dialog itself instead, so an Enter typed elsewhere does nothing:
+as it opens already failed, as it turns failed while open, and as it moves on to another waiting question that has
+failed too. Where focus is already on such a dialog as it turns into a failure modal, focus leaves the dialog and comes
+back to it, so the dialog takes focus anew under its failure.
 
 When acknowledging a failure modal leaves keyboard focus with nowhere to return to — the control that opened the dialog
 gone with what the dialog was about, as a console session's focus mode, with its **New session**, goes when that console
@@ -196,6 +197,7 @@ session is archived — focus goes where it goes when the last error alert is ac
 | The session dialog | That a session cannot be opened | No agent can be picked any more, or the console session it was opened to report to is archived or gone (see "Opening a session" in `docs/product/sessions.md`) |
 | The handoff dialog | That the session cannot be handed off | No agent other than the session's own can be picked any more (see "Handing off from the window" in `docs/product/handing-off-sessions.md`) |
 | The confirmation of a request to switch a session's account | That the account cannot be switched | The session has been archived; acknowledging refuses the request (see "The user's approval of an owner's switch" in `docs/product/switching-session-accounts.md`) |
+| The confirmation of a merge after Pull current branch | That the branch could not be pulled | The merge met conflicts and was aborted, so nothing changed (see "Confirming a merge" in `docs/product/project-git-actions.md`) |
 
 ## Failures shown on the screen
 
@@ -621,8 +623,8 @@ For example:
     copy shortcut;
   - **the terminal's Paste**: allow clipboard access if prompted, then paste again or use the terminal's keyboard paste
     shortcut.
-- A failure of Git — Git could not read something (`git_failed`), or a clone or push failed — asks the user to open the
-  project's terminal from its action menu, resolve the Git error, including remote access or an unfinished Git
+- A failure of Git — Git could not read something (`git_failed`), or a clone, push or pull failed — asks the user to
+  open the project's terminal from its action menu, resolve the Git error, including remote access or an unfinished Git
   operation, then retry. A branch switch that failed is local, so its remedy is the same without remote access: it
   names uncommitted changes or an unfinished Git operation instead. A file restore that failed names what can really
   refuse it, such as a file or folder in the way of a tracked file (a restore discards uncommitted changes by design).

@@ -33,12 +33,13 @@ diff at a time rather than through the viewer (see "Reading a project's changes"
 `docs/product/what-every-session-reads.md`).
 
 The project's **branch badge** in the sidebar is separate (see `docs/product/project-git-status.md`): its check fetches
-the remote's refs and, with Automatically pull repositories on or on Pull current branch, may fast-forward the branch.
-Pushing the current branch is not that check and not this mode (see "Pushing the current branch" in
-`docs/product/project-git-actions.md`). The Git mode does none of these and refreshes none of them. A change of the
-reported branch or detached state refreshes the visible mode
-(see "Files and Git" in `docs/product/project-pane.md`); switching from the project action menu remains separate
-from this read-only mode.
+the remote's refs and, with Automatically pull repositories on or on Pull current branch, may fast-forward the branch;
+on Pull current branch a diverged branch may have its upstream merged in once the user confirms (see "Pulling the
+current branch" in `docs/product/project-git-actions.md`). Pushing the current branch is not that check and not this
+mode (see "Pushing the current branch" in `docs/product/project-git-actions.md`). The Git mode does none of these and
+refreshes none of them. A change of the reported branch or detached state refreshes the visible mode (see "Files and
+Git" in `docs/product/project-pane.md`); switching from the project action menu remains separate from this read-only
+mode.
 
 ## The Changes view
 

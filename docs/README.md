@@ -140,8 +140,8 @@ Where to start, by question:
 - [Removing a project](product/removing-projects.md) — what a removal takes with it and its confirmation.
 - [Project git status](product/project-git-status.md) — the branch badge, when a project is checked and automatic
   pulling.
-- [Project Git actions](product/project-git-actions.md) — pushing, switching branch and restoring changes from a
-  project's menu.
+- [Project Git actions](product/project-git-actions.md) — pulling (with the merge confirmation), pushing, switching
+  branch and restoring changes from a project's menu.
 - [Git workflow settings](product/git-workflow-settings.md) — where a project session develops and the development
   rule.
 - [The revert gate](product/revert-gate.md) — the guard against quietly undoing changes already on a branch.

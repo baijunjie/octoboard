@@ -66,7 +66,7 @@ export const REPLY_TYPES = {
   answer_session_request: ["session_opened", "ack"],
   update_settings: "ack",
   refresh_git_status: "ack",
-  pull_project_branch: "ack",
+  pull_project_branch: "project_branch_pulled",
   refresh_project_git_status: "project_git_rechecked",
   create_shell_terminal: "shell_terminal_created",
   rename_shell_terminal: "ack",

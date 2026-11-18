@@ -11,6 +11,7 @@ import { DeleteArchivedDialog } from "./confirmations/DeleteArchivedDialog";
 import { DeleteConsoleDialog } from "./confirmations/DeleteConsoleDialog";
 import { DeleteProjectDialog } from "./confirmations/DeleteProjectDialog";
 import { DeleteSessionDialog } from "./confirmations/DeleteSessionDialog";
+import { PullMergeProjectBranchDialog } from "./confirmations/PullMergeProjectBranchDialog";
 import { RestoreProjectChangesDialog } from "./confirmations/RestoreProjectChangesDialog";
 import { UnbindSessionDialog } from "./confirmations/UnbindSessionDialog";
 import { ConsoleDialog } from "./ConsoleDialog";
@@ -76,6 +77,8 @@ export function RequestedDialog({
       return <ProjectDialog consoleId={dialog.project.console_id} project={dialog.project} onClose={onClose} />;
     case "restore-project-changes":
       return <RestoreProjectChangesDialog project={dialog.project} onClose={onClose} />;
+    case "pull-merge-project-branch":
+      return <PullMergeProjectBranchDialog project={dialog.project} ahead={dialog.ahead} behind={dialog.behind} onClose={onClose} />;
     case "delete-project":
       return <DeleteProjectDialog project={dialog.project} onClose={onClose} />;
     case "new-console-session":

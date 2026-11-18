@@ -1733,7 +1733,9 @@ acknowledgement-only presentation retains structured error metadata and rich nam
 A confirmation whose subject has gone by the time it would be confirmed, with nothing left that the confirmation could
 change, is not such a state: nothing failed, so it closes without a word rather than turning into a failure modal. The
 archive's Delete all confirmation closes this way once another window or client has emptied that archive, as a release
-from an owner does once the binding is already gone.
+from an owner does once the binding is already gone. Such a close hands focus left on `<body>` to the window's fallback
+(`focusAfterModalCloses`), as closing a failure modal does, since the control that opened the confirmation has often
+gone with its subject.
 
 **A failure that ends a dialog's purpose** — the dialog can no longer do what it was opened for — turns the dialog
 itself into a failure modal in the error alert dialog's form, never an ordinary modal with a danger Alert inside it: the

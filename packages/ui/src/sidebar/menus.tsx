@@ -12,7 +12,7 @@ import { AgentIcon } from "../components/icons/AgentIcon";
 import { PathText } from "../components/text/PathText";
 import type { Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
-import type { Account, AccountSharing, Agent, Console, Project, ProviderInfo, Session, Settings } from "../protocol";
+import type { Account, AccountSharing, Agent, Console, GitStatus, Project, ProviderInfo, Session, Settings } from "../protocol";
 import { PANEL_META } from "../panels/panelMeta";
 import { accountUsage } from "../quota/accountUsage";
 import { sessionAgentLabel, sessionChoiceTitle, sessionDisplayTitle } from "../sessions/sessionLabel";
@@ -101,20 +101,6 @@ export function consoleMenu(
  * project focus mode to enter from there. */
 export type MenuPlacement = "list" | "focused" | "nested";
 
-/** The project's actions, in the project row and in a focus mode (the project's own header, and a
- * console session's project headings); `placement` says which. Pin / Unpin comes first, as in a
- * session's menu; then the actions are grouped as viewing the project inside the app (focus mode,
- * archive), copying it, opening it (Open in, Open panel, Git), managing the project itself,
- * and removing it.
- * "View archive" previews `archived` and its "View all" opens `archiveScope`. By default both are the
- * project's archive; a console session's focus mode passes the project's share of that console
- * session's archive and opens the whole of it.
- * Git is a submenu, offered only while the project is known to be a git repository
- * (`gitRepository`, from its git status): pull the current branch, push the current branch, switch
- * to a local branch through its own submenu, and restore tracked file changes after confirmation.
- * Push is disabled, with no reason, while a push of the project is in flight (`pushing`, from its git
- * status): the daemon refuses a second one, and the git badge, drawn beside the project's name in
- * every placement, already shows why. */
 /** Open in: the file manager and the system terminal where the daemon shares this machine, and the repository's web
  * page; nothing at all when none of them is offered. */
 function openInItems(
@@ -135,6 +121,36 @@ function openInItems(
   return items.length > 0 ? [{ label: t("common.openIn"), icon: SquareArrowOutUpRight, items }] : [];
 }
 
+/** Why a project's current branch cannot be pulled, by its git status: a detached `HEAD`, or a branch with no
+ * upstream. Neither is said of a status that has not been read (no branch), which may only be unread. */
+type PullBlock = "detached" | "noUpstream";
+
+function pullBlockOf(status: GitStatus | undefined): PullBlock | undefined {
+  if (!status?.repository) return undefined;
+  if (status.detached) return "detached";
+  return status.branch !== null && status.upstream === null ? "noUpstream" : undefined;
+}
+
+const PULL_BLOCK_COPY = {
+  detached: { detail: "sidebar.project.pullDetached", state: "sidebar.project.pullDetached.reason" },
+  noUpstream: { detail: "sidebar.project.pullNoUpstream", state: "sidebar.project.pullNoUpstream.reason" },
+} as const;
+
+/** The project's actions, in the project row and in a focus mode (the project's own header, and a
+ * console session's project headings); `placement` says which. Pin / Unpin comes first, as in a
+ * session's menu; then the actions are grouped as viewing the project inside the app (focus mode,
+ * archive), copying it, opening it (Open in, Open panel, Git), managing the project itself,
+ * and removing it.
+ * "View archive" previews `archived` and its "View all" opens `archiveScope`. By default both are the
+ * project's archive; a console session's focus mode passes the project's share of that console
+ * session's archive and opens the whole of it.
+ * Git is a submenu, offered only while the project is known to be a git repository (`gitStatus`'s `repository`): pull
+ * the current branch, push the current branch, switch to a local branch through its own submenu, and restore tracked
+ * file changes after confirmation. Push is disabled, with no reason, while a push of the project is in flight
+ * (`gitStatus`'s `activity`): the daemon refuses a second one, and the git badge, drawn beside the project's name in
+ * every placement, already shows why. Pull is disabled, with its reason under the label, while the status says the
+ * project has nothing to pull from (`pullBlockOf` its status); the daemon's refusal still answers a pull asked on
+ * a status that has gone stale. */
 export function projectMenu(
   t: Translate,
   handlers: SidebarHandlers,
@@ -142,11 +158,12 @@ export function projectMenu(
   archived: Session[],
   {
     placement = "list",
-    gitRepository = false,
-    pushing = false,
+    gitStatus,
     archiveScope = { console: project.console_id, project: project.id },
-  }: { placement?: MenuPlacement; gitRepository?: boolean; pushing?: boolean; archiveScope?: ArchiveScope } = {},
+  }: { placement?: MenuPlacement; gitStatus?: GitStatus; archiveScope?: ArchiveScope } = {},
 ): ActionMenuEntry[] {
+  const pushing = gitStatus?.activity === "pushing";
+  const pullBlock = pullBlockOf(gitStatus);
   const repository = repositoryLink(project.remote_url);
   const onScreen = handlers.visibleProjectPanels?.project === project.id ? handlers.visibleProjectPanels.kinds : [];
   const panels = PROJECT_PANELS.filter((kind) => !onScreen.includes(kind));
@@ -168,13 +185,16 @@ export function projectMenu(
       label: t("sidebar.project.openPanel"), icon: PanelRight, iconClassName: "rtl:-scale-x-100",
       items: panels.map((kind) => ({ label: t(PANEL_META[kind].name), icon: PANEL_META[kind].icon, onClick: () => handlers.onOpenProjectPanel(project, kind) })),
     }] : []),
-    ...(gitRepository
+    ...(gitStatus?.repository
       ? [
         {
           label: t("sidebar.project.git"),
           icon: GitBranch,
           items: [
-            { label: t("sidebar.project.pullBranch"), icon: Download, onClick: () => handlers.onPullProjectBranch(project) },
+            {
+              label: t("sidebar.project.pullBranch"), icon: Download, onClick: () => handlers.onPullProjectBranch(project),
+              ...(pullBlock ? { disabled: true, description: t(PULL_BLOCK_COPY[pullBlock].detail), reason: { state: t(PULL_BLOCK_COPY[pullBlock].state) } } : {}),
+            },
             { label: t("sidebar.project.pushBranch"), icon: Upload, disabled: pushing, onClick: () => handlers.onPushProjectBranch(project) },
             { label: t("sidebar.project.switchBranch"), icon: ArrowLeftRight, items: [], loadItems: () => handlers.onLoadProjectBranches(project) },
             "separator" as const,

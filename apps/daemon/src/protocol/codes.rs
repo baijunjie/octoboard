@@ -601,7 +601,7 @@ pub mod error_code {
     /// application is not installed, the agent has none, the session has no conversation to open
     /// or one whose id the agent would not take, or the launch failed. `params` names `detail`.
     pub const NATIVE_APP_UNAVAILABLE: Code = Code("native_app_unavailable");
-    /// A push was asked for while `HEAD` is detached. Nothing was pushed.
+    /// A push or a pull was asked for while `HEAD` is detached. Nothing was pushed or pulled.
     pub const NOT_ON_A_BRANCH: Code = Code("not_on_a_branch");
     /// A push was asked for on a branch that has no commit yet. Nothing was pushed.
     pub const NO_COMMITS_TO_PUSH: Code = Code("no_commits_to_push");
@@ -616,6 +616,18 @@ pub mod error_code {
     /// `git push` failed, or the branch name cannot be placed in a refspec. `params` names
     /// `detail`, `git`'s own message when it ran.
     pub const GIT_PUSH_FAILED: Code = Code("git_push_failed");
+    /// A pull was asked for on a branch that has no upstream, or whose upstream branch no longer
+    /// exists (deleted and pruned, or never fetched). Nothing was pulled.
+    pub const NO_UPSTREAM_TO_PULL: Code = Code("no_upstream_to_pull");
+    /// A pull failed: the fetch or a local read of the branch did, `git` refused the fast-forward
+    /// (local changes it would overwrite, say) or the merge failed for a reason other than
+    /// conflicts (no committer identity, a hook), a merge was already in progress, the check that
+    /// answers the pull was abandoned, or the wait for it or for the project ended. `params` names
+    /// `detail`, `git`'s own message when it ran.
+    pub const GIT_PULL_FAILED: Code = Code("git_pull_failed");
+    /// A pull that merged the upstream met conflicts, so the merge was aborted and the working tree
+    /// is as it was before the pull. `params` names `detail`, the conflicted paths one per line.
+    pub const PULL_MERGE_CONFLICT: Code = Code("pull_merge_conflict");
     /// Switching to a local branch failed. `params` names `detail`, Git's message when it ran.
     pub const GIT_SWITCH_FAILED: Code = Code("git_switch_failed");
     pub const RESTORE_NOT_ON_BRANCH: Code = Code("restore_not_on_branch");

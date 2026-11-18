@@ -491,6 +491,32 @@ describe("the fixture daemon's system terminal and push actions", () => {
   });
 });
 
+describe("the fixture daemon's manual pull", () => {
+  const project = projectOf("p", "c", "Website");
+  const scenario = { state: snapshotState({ projects: [project] }) };
+
+  it("answers a pull with a fast-forward unless the scenario says otherwise, and refuses an unknown project", async () => {
+    const daemon = createFixtureDaemon(scenario);
+    await expect(daemon.request({ type: "pull_project_branch", project: project.id })).resolves.toEqual({ type: "project_branch_pulled", id: null, outcome: { kind: "fast_forwarded" } });
+    await expect(daemon.request({ type: "pull_project_branch", project: "missing" })).rejects.toMatchObject({ code: "unknown_project" });
+  });
+
+  it("answers with the configured outcome, a diverged branch asking for a merge until the request confirms one", async () => {
+    const daemon = createFixtureDaemon({ ...scenario, projectPullOutcome: { kind: "needs_merge", ahead: 1, behind: 2 } });
+    await expect(daemon.request({ type: "pull_project_branch", project: project.id })).resolves.toEqual({ type: "project_branch_pulled", id: null, outcome: { kind: "needs_merge", ahead: 1, behind: 2 } });
+    await expect(daemon.request({ type: "pull_project_branch", project: project.id, merge: true })).resolves.toEqual({ type: "project_branch_pulled", id: null, outcome: { kind: "merged" } });
+    const upToDate = createFixtureDaemon({ ...scenario, projectPullOutcome: { kind: "up_to_date" } });
+    await expect(upToDate.request({ type: "pull_project_branch", project: project.id, merge: true })).resolves.toMatchObject({ outcome: { kind: "up_to_date" } });
+  });
+
+  it("refuses only the pull that asks to merge when the scenario sets the merge failure", async () => {
+    const error = { code: "pull_merge_conflict", params: { detail: "a.ts" }, message: "Merging the upstream into this branch causes conflicts, so the merge was cancelled and nothing changed: a.ts" };
+    const daemon = createFixtureDaemon({ ...scenario, projectPullOutcome: { kind: "needs_merge", ahead: 1, behind: 2 }, projectPullMergeError: error });
+    await expect(daemon.request({ type: "pull_project_branch", project: project.id })).resolves.toMatchObject({ outcome: { kind: "needs_merge" } });
+    await expect(daemon.request({ type: "pull_project_branch", project: project.id, merge: true })).rejects.toMatchObject({ code: error.code, params: error.params });
+  });
+});
+
 describe("the fixture daemon's Git re-check", () => {
   const project = projectOf("p", "c", "Website");
   const missing = gitStatusOf(project.id, { branch: null, upstream: null, error: "git was not found", error_code: "binary_not_found" });

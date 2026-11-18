@@ -1561,6 +1561,68 @@ async fn a_recheck_is_answered_with_the_status_its_check_ended_with() {
 }
 
 #[tokio::test]
+async fn a_pull_of_an_unknown_project_is_refused() {
+    let (state, _dir) = crate::test_support::app_state("coordinator-pull-unknown");
+    for merge in [false, true] {
+        let err = handle(
+            &state,
+            None,
+            RequestBody::PullProjectBranch {
+                project: "nowhere".to_string(),
+                merge,
+            },
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(
+            err.downcast_ref::<CodedError>().unwrap().code,
+            error_code::UNKNOWN_PROJECT
+        );
+    }
+}
+
+/// A pull is answered once it has ended, with its outcome under the request's id, and a pull that
+/// cannot be done is the request's error, with the code the client words it by.
+#[tokio::test]
+async fn a_pull_is_answered_with_its_outcome_or_refused_with_its_code() {
+    let (state, dir) = crate::test_support::app_state("coordinator-pull-answer");
+    let repo = crate::test_support::repo_with("coordinator-pull-answer-repo", &[(b"f", b"1")]);
+    crate::test_support::checked_project(&state, &dir, &repo);
+    let pull = |merge| RequestBody::PullProjectBranch {
+        project: "p1".to_string(),
+        merge,
+    };
+    for merge in [false, true] {
+        let err = handle(&state, Some("r1".to_string()), pull(merge))
+            .await
+            .unwrap_err();
+        assert_eq!(
+            err.downcast_ref::<CodedError>().unwrap().code,
+            error_code::NO_UPSTREAM_TO_PULL,
+            "merge: {merge}"
+        );
+    }
+    let remote = dir.join("remote.git");
+    let git = crate::test_support::git;
+    git(&dir, &["init", "-q", "--bare", remote.to_str().unwrap()]);
+    git(
+        &repo,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    git(&repo, &["push", "-q", "-u", "origin", "HEAD"]);
+    for merge in [false, true] {
+        let reply = handle(&state, Some("r1".to_string()), pull(merge))
+            .await
+            .unwrap();
+        let Some(Event::ProjectBranchPulled { id, outcome }) = reply else {
+            panic!("expected project_branch_pulled, got {reply:?}");
+        };
+        assert_eq!(id.as_deref(), Some("r1"));
+        assert_eq!(outcome, crate::protocol::PullOutcome::UpToDate);
+    }
+}
+
+#[tokio::test]
 async fn skipping_import_model_checks_still_checks_compatibility_switches() {
     let (state, dir) = crate::test_support::app_state("import-project-launch-check");
     let console = console(AgentId::CODEX, &dir);

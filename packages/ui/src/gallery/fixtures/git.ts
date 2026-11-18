@@ -166,6 +166,17 @@ const switchFixture = {
 const openSwitch = [...openGitSubmenu(restoreProject.name), (ui: Ui) => ui.press(ui.t("sidebar.project.switchBranch")), (ui: Ui) => ui.wait(300)];
 
 const hostState = snapshotState({ consoles: [console_], projects: [restoreProject], gitStatuses: [gitStatusOf(restoreProject.id, { ahead: 2 })] });
+const divergedState = snapshotState({ consoles: [console_], projects: [restoreProject], gitStatuses: [gitStatusOf(restoreProject.id, { ahead: 2, behind: 3 })] });
+const openPull = [...openGitSubmenu(restoreProject.name), (ui: Ui) => ui.press(ui.t("sidebar.project.pullBranch")), (ui: Ui) => ui.wait(300)];
+
+/** What a merge that met conflicts lists: one conflicted path per line, one of them far longer than the alert is wide. */
+const CONFLICTED_PATHS = [
+  "packages/api/src/handlers/searchIndexRebuildScheduler/rebuildSchedulerWithBackoffAndJitterAndShardRebalancing/configuration.ts",
+  "packages/api/src/routes.ts",
+  "docs/architecture/search-index.md",
+  "pnpm-lock.yaml",
+].join("\n");
+
 const openIn = (item: "sidebar.project.systemTerminal" | "common.fileManager") => [openProjectMenu(restoreProject.name), (ui: Ui) => ui.press(ui.t("common.openIn")), (ui: Ui) => ui.wait(300), (ui: Ui) => ui.press(ui.t(item)), (ui: Ui) => ui.wait(300)];
 
 /** What a repository's `pre-push` hook (`pnpm verify`) prints before it refuses the push: a run of check lines with
@@ -213,6 +224,15 @@ export const gitScenarios: Scenario[] = [
     title: "Push unavailable while a push is running",
     description: "The project's push is still running (its badge shows the spinning loader), and the Git submenu of its actions menu is open: Push current branch is dimmed and cannot be chosen, with no reason beside it, while the other Git items stay available.",
     state: snapshotState({ consoles: [console_], projects: [restoreProject], gitStatuses: [gitStatusOf(restoreProject.id, { activity: "pushing", ahead: 2 })] }),
+    steps: openGitSubmenu(restoreProject.name),
+  },
+  {
+    id: "project-pull-disabled-no-upstream",
+    group: "Projects",
+    category: "normal",
+    title: "Pull unavailable without an upstream",
+    description: "The project's branch has no upstream, and the Git submenu of its actions menu is open: Pull current branch is dimmed and cannot be chosen, with its reason, No upstream, in muted text under its label and the longer explanation as the item's description for assistive technology (not shown on screen), while the other Git items stay available. A project that is not on a branch (detached HEAD) disables the same item with Not on a branch.",
+    state: snapshotState({ consoles: [console_], projects: [restoreProject], gitStatuses: [gitStatusOf(restoreProject.id, { upstream: null })] }),
     steps: openGitSubmenu(restoreProject.name),
   },
   {
@@ -317,11 +337,21 @@ export const gitScenarios: Scenario[] = [
     steps: openRestore,
   },
   {
+    id: "git-pull-merge-confirm",
+    group: "Projects",
+    category: "normal",
+    title: "Pull and merge confirmation",
+    description: "Pull current branch on a branch that has diverged from its upstream opens a confirmation, titled Pull and merge, instead of pulling: its first sentence names the project as a chip, which wraps where the name is long, and gives the commits ahead and behind, and the message says a merge commit will be created. The buttons are Cancel and Pull and merge, which is not marked as destructive, and neither is focused when it opens: focus starts on the dialog itself. Confirming pulls, merges and shows a notice.",
+    state: divergedState,
+    projectPullOutcome: { kind: "needs_merge", ahead: 2, behind: 3 },
+    steps: openPull,
+  },
+  {
     id: "git-push-error",
     group: "Projects",
     category: "exceptional",
     title: "Push failed",
-    description: "A refused push is reported in the error alert dialog, which requires OK: its title says the branch could not be pushed and its body goes straight to what to do, with Git's own message only in the Error details disclosure, closed here. A refused branch switch and a failed restore use the same alert, each with its own title and wording.",
+    description: "A refused push is reported in the error alert dialog, which requires OK: its title says the branch could not be pushed and its body goes straight to what to do, with Git's own message only in the Error details disclosure, closed here. A refused pull (Git's message again behind Error details), a refused branch switch and a failed restore use the same alert, each with its own title and wording.",
     state: hostState,
     projectPushError: { code: "git_push_failed", params: { detail: "To https://github.com/octoboard/search-api.git\n ! [rejected]        main -> main (fetch first)\nerror: failed to push some refs to 'https://github.com/octoboard/search-api.git'" }, message: "Git push failed" },
     steps: [...openGitSubmenu(restoreProject.name), (ui) => ui.press(ui.t("sidebar.project.pushBranch")), (ui) => ui.wait(300)],
@@ -345,6 +375,17 @@ export const gitScenarios: Scenario[] = [
     state: hostState,
     projectPushError: { code: "push_in_progress", params: {}, message: "A push of this project is still running." },
     steps: [...openGitSubmenu(restoreProject.name), (ui) => ui.press(ui.t("sidebar.project.pushBranch")), (ui) => ui.wait(300)],
+  },
+  {
+    id: "git-pull-merge-conflict-error",
+    group: "Projects",
+    category: "exceptional",
+    title: "Pull and merge met conflicts",
+    description: "Pull and merge, confirmed, meets conflicts and the daemon cancels the merge: the confirmation itself turns into its failure form, titled \"Could not pull the branch\", with a single OK in place of Cancel and Pull and merge. It says the merge was cancelled and nothing changed and what to do next in the terminal, Terminal shown as a chip; the conflicted paths are in the Error details disclosure, open here, one per line, with the long one scrolling horizontally and the floating Copy button copying the whole list. A pull refused for any other reason raises the error alert over the open confirmation instead.",
+    state: divergedState,
+    projectPullOutcome: { kind: "needs_merge", ahead: 2, behind: 3 },
+    projectPullMergeError: { code: "pull_merge_conflict", params: { detail: CONFLICTED_PATHS }, message: `Merging the upstream into this branch causes conflicts, so the merge was cancelled and nothing changed: ${CONFLICTED_PATHS}` },
+    steps: [...openPull, (ui) => ui.press(ui.t("dialog.pullMerge.confirm")), (ui) => ui.wait(300), (ui) => ui.press(ui.t("error.diagnostics"))],
   },
   {
     id: "project-open-panel-menu",

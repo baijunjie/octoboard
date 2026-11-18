@@ -38,13 +38,26 @@ pub(crate) const BRANCH_HEADER_ARGS: &[&str] = &[
 /// need it. `--ignore-submodules=all` likewise stops `git` from running a status inside every
 /// checked-out submodule, which the header does not depend on either.
 pub(crate) fn read_branch_header(git: &Runner, path: &Path, status: &mut GitStatus) {
-    match read_header(git, path) {
-        Ok(header) => apply_header(status, header),
+    let _ = read_and_apply_header(git, path, status);
+}
+
+/// [`read_branch_header`], handing back what the read said, or why it failed (the message it also
+/// records on `status`), for the caller that must tell a failed read from the failures a check
+/// records before it, such as a failed fetch.
+pub(crate) fn read_and_apply_header(
+    git: &Runner,
+    path: &Path,
+    status: &mut GitStatus,
+) -> Result<BranchHeader, String> {
+    let read = read_header(git, path);
+    match &read {
+        Ok(header) => apply_header(status, header.clone()),
         Err(err) => {
             tracing::debug!(%err, "reading the local branch state failed");
-            StepFailure::from(err).record(status);
+            StepFailure::from(err.clone()).record(status);
         }
     }
+    read
 }
 
 /// Reads the local branch header with `git status`, without touching the remote.
@@ -72,6 +85,10 @@ pub(crate) struct BranchHeader {
     pub(crate) upstream: Option<String>,
     pub(crate) ahead: u32,
     pub(crate) behind: u32,
+    /// An upstream is configured but `git` printed no `branch.ab` line for it: the upstream branch
+    /// does not exist (deleted and pruned, or never fetched). Never set for a branch with no commit
+    /// yet, which `git` prints no `ab` line for whether or not its upstream exists.
+    pub(crate) upstream_gone: bool,
 }
 
 /// Parses the `# branch.*` header lines of the output of the read [`BRANCH_HEADER_ARGS`] names;
@@ -86,6 +103,7 @@ pub(crate) fn parse_branch_header(output: &str) -> BranchHeader {
     let mut upstream = None;
     let mut ahead = 0;
     let mut behind = 0;
+    let mut counted = false;
 
     for line in output.lines() {
         let Some(rest) = line.strip_prefix("# branch.") else {
@@ -107,6 +125,7 @@ pub(crate) fn parse_branch_header(output: &str) -> BranchHeader {
             upstream = Some(value.to_string());
         } else if let Some(value) = rest.strip_prefix("ab ") {
             (ahead, behind) = parse_ab(value);
+            counted = true;
         }
     }
 
@@ -126,12 +145,15 @@ pub(crate) fn parse_branch_header(output: &str) -> BranchHeader {
         behind = 0;
     }
 
+    let upstream_gone = upstream.is_some() && !counted && !initial;
+
     BranchHeader {
         branch,
         detached,
         upstream,
         ahead,
         behind,
+        upstream_gone,
     }
 }
 
@@ -187,7 +209,31 @@ mod tests {
                 upstream: Some("origin/main".to_string()),
                 ahead: 0,
                 behind: 0,
+                upstream_gone: false,
             }
+        );
+    }
+
+    #[test]
+    fn an_upstream_with_no_ab_line_is_gone_unless_the_branch_has_no_commit_yet() {
+        let gone = parse_branch_header(
+            "# branch.oid abcdef0123456789\n\
+             # branch.head main\n\
+             # branch.upstream origin/main\n",
+        );
+        assert!(gone.upstream_gone);
+        assert_eq!(gone.upstream.as_deref(), Some("origin/main"));
+        // `git` prints no `ab` line for a branch with no commit, whether or not its upstream
+        // exists.
+        let unborn = parse_branch_header(
+            "# branch.oid (initial)\n\
+             # branch.head main\n\
+             # branch.upstream origin/main\n",
+        );
+        assert!(!unborn.upstream_gone);
+        assert!(
+            !parse_branch_header("# branch.oid abcdef0123456789\n# branch.head main\n")
+                .upstream_gone
         );
     }
 
@@ -245,6 +291,7 @@ mod tests {
             upstream: Some("origin/main".to_string()),
             ahead: 1,
             behind: 0,
+            upstream_gone: false,
         }
     }
 

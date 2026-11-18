@@ -194,6 +194,7 @@ const CORE_CODES = {
   // add. `git_operation_in_progress` is only a restore refused before it starts, and says to finish or abort the
   // operation.
   git_operation_in_progress: { origin: "daemon", recovery: "none" },
+  git_pull_failed: { origin: "daemon", recovery: "gitFailure", detailBlock: true, noSummary: true, uiParams: { git: "Git" } },
   git_push_failed: { origin: "daemon", recovery: "gitFailure", detailBlock: true, noSummary: true, uiParams: { git: "Git" } },
   git_remote_unreachable: { origin: "daemon", recovery: "connection", detailBlock: true },
   git_restore_failed: { origin: "daemon", recovery: "gitRestoreFailure", detailBlock: true, noSummary: true, uiParams: { git: "Git" } },
@@ -260,6 +261,7 @@ const CORE_CODES = {
   no_merge_base_shallow: { origin: "daemon", recovery: "gitHistory", codeParams: ["left", "right"] },
   no_push_remote: { origin: "daemon", recovery: "gitFailure" },
   no_repositories_found: { origin: "daemon", recovery: "path", codeParams: ["path"] },
+  no_upstream_to_pull: { origin: "daemon", recovery: "noUpstream" },
   not_a_git_repository: { origin: "daemon", recovery: "repository", recordIds: ["project"], nameParams: ["project"] },
   not_on_a_branch: { origin: "daemon", recovery: "branch" },
   outside_scope: { origin: "daemon", recovery: "scope", codeParams: ["path"], variants: { open: { codeParams: ["path"] } }, variantOf: (params) => params.action === "open" ? "open" : undefined },
@@ -291,6 +293,9 @@ const CORE_CODES = {
   project_directory_trash_failed: { origin: "daemon", recovery: "trash", detailBlock: true, recoveryLine: true, variantOf: (params) => projectTrashFailedCause(params.cause) },
   project_has_running_sessions: { origin: "daemon", recovery: "stopSessions", recoveryLine: true },
   provider_unsupported: { origin: "daemon", recovery: "none", variants: UNSUPPORTED_OPERATIONS, variantOf: (params) => params.operation !== undefined && Object.hasOwn(UNSUPPORTED_OPERATIONS, params.operation) ? params.operation : undefined },
+  // A manual pull whose merge met conflicts; the daemon aborted it, so the sentence says nothing changed, and `detail`
+  // lists the conflicted paths.
+  pull_merge_conflict: { origin: "daemon", recovery: "mergeConflict", detailBlock: true },
   // A push refused because the project's previous one is still running, and says so.
   push_in_progress: { origin: "daemon", recovery: "none" },
   queued_messages_dropped: { origin: "daemon", recovery: "refreshMessages", failureNotice: true, alertTitle: true, recoveryLine: true },

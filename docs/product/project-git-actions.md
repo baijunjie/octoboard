@@ -1,9 +1,127 @@
 # Project Git actions
 
-Three of the actions under **Git** in a project's action menu (see "Project rows" in
-`docs/product/sidebar-project-rows.md`): **Push current branch**, **Switch branch** and **Restore file changes**. The
-menu's other action, **Pull current branch**, and the branch badge these actions update are in
+The actions under **Git** in a project's action menu (see "Project rows" in `docs/product/sidebar-project-rows.md`):
+**Pull current branch**, **Push current branch**, **Switch branch** and **Restore file changes**. The branch badge these
+actions update, the checks against the remote and the automatic pulling of repositories are in
 `docs/product/project-git-status.md`.
+
+## Pulling the current branch
+
+**Pull current branch**, under **Git** in the project's action menu, pulls that project's current branch right now and
+always tells the user what it did, or why it could not. It never pushes. It is offered only while the project's status
+says the directory is a git repository, so not before its first status has arrived (see "What one check does" in
+`docs/product/project-git-status.md`). In every placement of that menu it is disabled while the status says `HEAD` is
+detached, with "Not on a branch" under its name, or that the branch has no upstream, with "No upstream" under its name;
+assistive technology is given the full reason as its description: that the project is not on a branch, so there is
+nothing to pull, or that the branch has no upstream to pull from. A status with no branch read disables nothing. A
+status can be out of date, so the refusals below still answer a pull chosen on one.
+
+Choosing it closes the menu at once and runs that project's check right away (see "What one check does" in
+`docs/product/project-git-status.md`), whose fetch must succeed. Then, from what the check read:
+
+- a branch that is not behind its upstream, whether or not it is ahead, is left as it is, and the window that asked
+  shows a notice that the current branch is already up to date;
+- a branch that is behind and has no commits of its own is fast-forwarded to its upstream, and the window that asked
+  shows a notice that the current branch was pulled;
+- a branch with no commit yet is fast-forwarded to its upstream if `git` allows it, and refused if not;
+- a branch that is both ahead and behind has diverged: nothing changes, and the window that asked asks the user to
+  confirm a merge commit (see "Confirming a merge" below).
+
+It pulls whether or not **Automatically pull repositories** is on; choosing it is the consent the switch would otherwise
+give. Unlike the automatic pull, which only fast-forwards and passes over a branch it cannot fast-forward without a
+word (see "Automatically pulling repositories" in `docs/product/project-git-status.md`), it is never silent, and it
+merges a diverged branch once the user confirms.
+
+The one-minute floor between checks does not apply, and the check does not wait its turn behind the four at once (see
+"When a project is checked" in `docs/product/project-git-status.md`). If a check of the project is only waiting its turn
+— in a round of checks, or in the pass that turning **Automatically pull repositories** on starts (see "Turning the
+switch on" in `docs/product/project-git-status.md`) — that check starts at once as this request's check, with the pull,
+in its place. If a check of the project is already running, or that pass is already fast-forwarding it, nothing starts
+alongside it: as soon as it ends, one more check runs, with the pull, so the answer always comes from a fetch that
+started after the request. However many requests arrive meanwhile, they share that one extra check and its answer, and
+it does not run at all if the project has been removed in the meantime. A pull whose check has not ended within ten
+minutes, or was abandoned, is refused (`git_pull_failed`); a check still running then goes on and shows its result on
+the badge as any check does.
+
+The badge shows the check in flight at once, without the usual 0.4-second wait, and the pull in flight while the
+branch moves, as for any check (see "The branch badge" in `docs/product/project-git-status.md`). A fetch that fails
+pulls nothing: the pull is refused with the fetch's message, and, as in any check, that message is also recorded on the
+badge. No other refusal of a pull is recorded on the badge: the error alert is the report, as for a push, and the badge
+keeps what the last check found.
+
+### Confirming a merge
+
+A diverged branch opens a confirmation titled **Pull and merge**. Its first sentence names the project, as a name chip,
+and says that its current branch has diverged from its upstream, with the number of commits ahead and behind as the
+check's fetch left them ("3 commits ahead and 2 commits behind"); the next says that pulling merges the upstream
+changes into it and creates a merge commit. Its buttons are **Cancel** and **Pull and merge**. It is not a destructive
+confirmation, since merging loses nothing: no warning icon, and **Pull and merge** is a primary button. Keyboard focus
+starts on the dialog itself, not on **Pull and merge**, since it can come up while the user is typing elsewhere (see
+"Where keyboard focus starts in a confirmation" in `docs/product/dialogs.md`). **Cancel** changes nothing.
+
+**Pull and merge** fetches nothing again: the user confirmed the counts of the fetch just made. The branch is read again
+locally and the rules above apply to what it says now, so a branch that is no longer behind is up to date and one with
+no commits of its own left is fast-forwarded, each with its notice. A branch still diverged has its upstream — the
+commit the upstream points to as the merge starts — merged in as a merge commit, whatever the user's merge and pull
+configuration says: `merge.ff` (`only` included), a `branch.<name>.mergeOptions` of `--squash`, `--no-commit` or
+`--ff-only`, `pull.rebase` and `pull.ff` cannot turn it into a refusal, a squash, a rebase, a fast-forward or a merge
+left uncommitted. The commit message is the one a plain `git merge --no-edit` of the upstream branch writes: `git`'s own
+subject, such as `Merge remote-tracking branch 'origin/feature' into topic`, without the `into` where `git` leaves it
+out, as on `main` or `master`, and `Merge branch 'main' into topic` for an upstream that is a branch of the same
+repository; one shortlog when `merge.log` asks for it; and the repository's hooks and `commit.cleanup` acting on it as
+on any merge. The one difference is that a `--log` in `mergeOptions` alone adds no shortlog. The merge then counts as a
+change Octoboard makes to the project (see "What Octoboard never modifies" in `docs/product/launching-agents.md`). Once
+merged, the confirmation closes and the window shows the notice that the current branch was pulled. While the merge
+runs the confirmation is busy, as any confirmation is (see "A dialog cannot be left while its request runs" in
+`docs/product/dialogs.md`), and the badge shows the pull in flight.
+
+`git` merges what it can on its own. A merge that meets conflicts is aborted — only the merge this pull started — so
+the branch and the working tree are as they were, and the confirmation turns into a failure modal (see "The failure
+modal" in `docs/product/error-alerts.md`): titled that the branch could not be pulled, saying that merging the upstream
+into the branch causes conflicts, so the merge was cancelled and nothing changed, with the remedy to merge the upstream
+into the branch in the project's terminal, resolve the conflicts there and commit, and the conflicted paths, one per
+line, under **Error details**. Like the confirmation, it starts with focus on the dialog itself. A merge already in
+progress in the project, someone else's, is never touched: the pull is refused and that merge left as it is.
+
+Any other refusal after **Pull and merge** is an error alert over the confirmation, which stays open for another try.
+The merge never runs alongside a check of the same project: it waits up to ten minutes for a check that is running or
+waiting its turn, and is refused once that wait runs out.
+
+### When the confirmation opens
+
+The confirmation opens only in the window that chose **Pull current branch**, and comes up after the check, on its own,
+so it never replaces or covers what the user is doing there. While any other modal is open in that window — a dialog,
+Settings, a question the user did not ask for (a folder trust prompt or a session request), the confirmation the window
+asks before quitting or before a launch, or an error alert — it is held, and it opens once all of them have closed.
+Several held confirmations open one after another, in the order they came. A diverged pull of a project whose
+confirmation is already open changes nothing; one whose confirmation is held replaces it, with the newer counts. A held
+confirmation whose project has been removed meanwhile is dropped. An open one whose project is removed closes without a
+word; where keyboard focus then has nowhere to return to, it goes where it goes when the last error alert is
+acknowledged with nowhere to return to (see "The error alert" in `docs/product/error-alerts.md`).
+
+### When a pull is refused
+
+Nothing is pulled when the pull is refused, and a refusal is an error alert titled that the branch could not be
+pulled, worded from the code:
+
+- The project directory is not a git repository: `not_a_git_repository`, by the badge's rule (see "What one check does"
+  in `docs/product/project-git-status.md`).
+- The user's `git` cannot be found: `binary_not_found` (see "Where `git` is found" in
+  `docs/product/project-git-status.md`), with **Download Git**; the pull can be chosen again once Git is installed.
+- `HEAD` is detached: `not_on_a_branch`, saying that the project is not on a branch.
+- The branch has no upstream, or its upstream branch no longer exists (deleted on the remote and pruned, or never
+  fetched): `no_upstream_to_pull`. Its remedy is to push the branch from the project's action menu to record an
+  upstream, or to set one in the project's terminal, then retry.
+- Anything else `git` fails at: `git_pull_failed`, with `git`'s own message under **Error details** and the remedy of a
+  Git failure (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`). That covers the check's fetch
+  failing, a local read of the branch failing, `git` refusing the fast-forward (local changes it would overwrite, say)
+  or the merge for a reason other than conflicts (no committer identity, a hook), a merge already in progress in the
+  project or one whose state cannot be read, the check being abandoned, and the waits above running out.
+- A confirmed merge that meets conflicts: `pull_merge_conflict`, shown as the confirmation's failure modal above rather
+  than as an alert.
+
+The detached `HEAD` and the missing upstream are refused before a failed fetch is, since they are what the user has to
+fix first. A project that no longer exists is `unknown_project`.
 
 ## Pushing the current branch
 
@@ -14,9 +132,9 @@ in flight. No separate reason is shown on the disabled item: the branch badge be
 (see "The branch badge" in `docs/product/project-git-status.md`). Choosing it closes the menu at once. The push is
 waited on until `git push` has exited, including the repository's `pre-push` hook. When the push is accepted, the window
 that asked shows a notice saying the current branch was pushed. A refusal is an error alert worded from the code
-below. Pushing does not fetch and does not fast-forward, and a pull never pushes (see "Automatically pulling
-repositories" in `docs/product/project-git-status.md`). A local branch that is behind its upstream stays behind; if the
-remote rejects the update, the push fails and the branch stays where it was.
+below. Pushing does not fetch and does not fast-forward, and a pull never pushes (see "Pulling the current branch"
+above and "Automatically pulling repositories" in `docs/product/project-git-status.md`). A local branch that is behind
+its upstream stays behind; if the remote rejects the update, the push fails and the branch stays where it was.
 
 The push never uses `--force`, and it is never a bare `git push`, which would follow `push.default` and can publish
 every branch whose name exists on the remote. The one branch is named explicitly, so only that branch is published. The

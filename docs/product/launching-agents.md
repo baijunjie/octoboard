@@ -14,21 +14,22 @@ This is the guarantee the whole design rests on:
   whole thing and is not Octoboard's doing. Removing a project removes an association and leaves the directory
   alone, unless the user chooses to move the folder to the system Trash with it (see "Moving the project folder to
   the Trash" in `docs/product/removing-projects.md`).
-  Octoboard changes a project's files only through an authorized fast-forward, **Switch branch** or
-  **Restore file changes**, and does not push except at the user's word. A branch that is
-  behind its upstream and has no commits of its own is fast-forwarded, which moves its working tree — on its own
-  once **Automatically pull repositories** has been turned on, or for one project when the user chooses **Pull
-  current branch** (see "Automatically pulling repositories" and "Pulling one project by hand" in
-  `docs/product/project-git-status.md`). Separately, **Push current branch** pushes that one branch. That updates
+  Octoboard changes a project's files only through an authorized fast-forward, a merge the user confirmed, **Switch
+  branch** or **Restore file changes**, and does not push except at the user's word. A branch that is behind its
+  upstream and has no commits of its own is fast-forwarded, which moves its working tree — on its own once
+  **Automatically pull repositories** has been turned on (see "Automatically pulling repositories" in
+  `docs/product/project-git-status.md`), or for one project when the user chooses **Pull current branch**. A branch that
+  has diverged from its upstream is changed only by Pull current branch, and only once the user confirms: its upstream
+  is merged in, which creates a merge commit on the branch and moves its working tree (see "Pulling the current branch"
+  in `docs/product/project-git-actions.md`). Separately, **Push current branch** pushes that one branch. That updates
   the remote and, in the repository, the remote-tracking refs `git` updates for that push; when the branch had no
-  upstream, it records one. It does not edit the project's files and does not move the working tree (see "Pushing
-  the current branch" in `docs/product/project-git-actions.md`). **Restore file changes**, after confirmation,
-  discards staged and unstaged tracked changes in the project's own worktree, restoring files to `HEAD` without
-  moving the branch or changing commits (see "Restoring file changes" in `docs/product/project-git-actions.md`).
-  **Switch branch** moves the project's own worktree to an existing local branch when chosen, preserving local
-  changes Git can carry safely (see "Switching the local branch" in `docs/product/project-git-actions.md`).
-  A check's fetch of remote refs is separate:
-  it does not move the working tree and it does not push (see "What one check does" in
+  upstream, it records one. It does not edit the project's files and does not move the working tree (see "Pushing the
+  current branch" in `docs/product/project-git-actions.md`). **Restore file changes**, after confirmation, discards
+  staged and unstaged tracked changes in the project's own worktree, restoring files to `HEAD` without moving the branch
+  or changing commits (see "Restoring file changes" in `docs/product/project-git-actions.md`). **Switch branch** moves
+  the project's own worktree to an existing local branch when chosen, preserving local changes Git can carry safely (see
+  "Switching the local branch" in `docs/product/project-git-actions.md`). A check's fetch of remote refs is separate: it
+  does not move the working tree and it does not push (see "What one check does" in
   `docs/product/project-git-status.md`).
 - **The user's own agent configuration is never written to, with five narrow exceptions.** Octoboard does not edit
   `~/.claude.json`, `~/.codex/`, `~/.grok/`, an account's config directory, or anything else the agent reads as the

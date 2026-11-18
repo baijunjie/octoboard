@@ -85,9 +85,11 @@ without moving the others.
 - **Git** — a submenu, only while the project's status says its directory is a git repository, so not before the first
   status and not when the directory is not one (see "What one check does" in `docs/product/project-git-status.md`). It
   holds **Pull current branch**, then **Push current branch**, then **Switch branch**, then, after a separator, the
-  destructive **Restore file changes** action. Pull current branch checks the project against its remote and
-  fast-forwards it right now, is not waited on, and raises no notice when it succeeds (see "Pulling one project by hand"
-  in `docs/product/project-git-status.md`). Push current branch pushes that branch and is waited on until the push
+  destructive **Restore file changes** action. Pull current branch checks the project against its remote and pulls it
+  right now, then shows a notice of what it did, asks to confirm a merge commit for a diverged branch, or shows an error
+  alert if the pull was refused; it is disabled, with its reason under its name, while the project's status says `HEAD`
+  is detached or the branch has no upstream (see "Pulling the current branch" in
+  `docs/product/project-git-actions.md`). Push current branch pushes that branch and is waited on until the push
   finishes; the window then shows a notice that the current branch was pushed, or an error alert if the push was refused
   (see "Pushing the current branch" in `docs/product/project-git-actions.md`). Switch branch opens the third-level local
   branch menu; see "Switching the local branch" in `docs/product/project-git-actions.md`. Restore file changes asks for

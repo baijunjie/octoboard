@@ -6,7 +6,7 @@ import { expect, it, vi } from "vitest";
 import type { RequestHandler } from "../requests";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { enter, leave, mountForTooltip, openTooltip } from "../components/hint/tooltipTestSupport";
-import { accountOf, consoleOf, projectOf, sessionOf } from "../fixtures/builders";
+import { accountOf, consoleOf, projectOf, sessionOf, snapshotState } from "../fixtures/builders";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { isolate } from "../i18n/isolate";
 import type { Account, Project, Session, SessionBranchItem } from "../protocol";
@@ -18,6 +18,8 @@ import { RequestedDialog } from "./RequestedDialog";
 import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 import { fakeTimers, runOutTimers } from "../test/clock";
+import { withModality } from "../components/dialog/dialogTestSupport";
+import { mountHost } from "../test/mountHost";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -1599,4 +1601,32 @@ it("closes once its own deletion fails over an archive emptied meanwhile", async
   expect(onClose).toHaveBeenCalledOnce();
   // The failure is still told, though the confirmation it came from has closed.
   expect(errorAlerts.getSnapshot()).toHaveLength(1);
+});
+
+// A confirmation about another project, or with other figures, is a new question: it never shows the failure form the
+// merge confirmation before it turned into, and it is the same dialog that moves on (`resetKey`), not a remounted one.
+it.each([
+  ["the same project's other counts", { kind: "pull-merge-project-branch", project, ahead: 4, behind: 5 }],
+  ["another project", { kind: "pull-merge-project-branch", project: projectOf("p-2", console_.id, "Other API"), ahead: 2, behind: 3 }],
+] as const)("shows a merge confirmation for %s afresh, not as the failure form of the one before", async (_, next) => {
+  withModality("pointer");
+  fakeTimers();
+  const daemon = testDaemon({
+    state: snapshotState({ projects: [project, next.project] }),
+    request: (async () => {
+      throw new CodedError("Merging the upstream into this branch causes conflicts, so the merge was cancelled and nothing changed: src/a.ts", "pull_merge_conflict", { detail: "src/a.ts" });
+    }) as never,
+  });
+  const showing = (dialog: DialogRequest) => <RequestedDialog dialog={dialog} onClose={() => {}} onSessionOpened={() => {}} onResumeSession={async () => {}} onSwitchAccounts={() => {}} onChangeSessionModel={() => {}} />;
+  const host = mountHost(showing({ kind: "pull-merge-project-branch", project, ahead: 2, behind: 3 }), { daemon });
+  await act(async () => document.querySelector('[role="alertdialog"] form')!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+  const failed = [...document.querySelectorAll('[role="alertdialog"] button')].map((button) => button.textContent);
+  expect(failed).not.toContain("Pull and merge");
+  const before = document.querySelector('[role="alertdialog"]');
+  host.render(showing(next));
+  expect(document.querySelector('[role="alertdialog"]')).toBe(before);
+  const buttons = [...document.querySelectorAll('[role="alertdialog"] button')].map((button) => button.textContent);
+  expect(buttons).toContain("Pull and merge");
+  expect(buttons).toContain("Cancel");
+  expect(document.querySelector('[role="alertdialog"]')!.textContent).toContain(next.project.name);
 });

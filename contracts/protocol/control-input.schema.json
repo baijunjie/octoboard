@@ -3318,6 +3318,9 @@
             "project": {
               "type": "string"
             },
+            "merge": {
+              "type": "boolean"
+            },
             "type": {
               "type": "string",
               "const": "pull_project_branch"
@@ -3327,7 +3330,7 @@
             "type",
             "project"
           ],
-          "description": "Checks one project against its remote and fast-forwards it right now, the same work\n`refresh_git_status` does for a console, but ignoring the one-minute floor and whether\n`auto_pull_repositories` is on. Answered with `ack` at once; the status follows as\n`project_git_status` broadcasts. A project already being checked gets one more forced check\nonce that check ends."
+          "description": "Checks one project against its remote and pulls its current branch right now, ignoring the\none-minute floor and whether `auto_pull_repositories` is on. Without `merge`, the check\n(a fetch) is the one a re-check would run, started after the request arrived, and the\nbranch is fast-forwarded when it is behind with no commits of its own. A branch that has\ndiverged is left alone and reported as `needs_merge` for the person to confirm; with `merge`\n(absent is false) there is no fetch, the branch header is read again and a diverged branch\nhas its upstream merged in (a merge commit, whatever `pull.rebase`, `merge.ff` and\n`branch.<name>.mergeOptions` say); a merge with conflicts is aborted, leaving the working\ntree as it was. A branch whose upstream no longer exists is refused with\n`no_upstream_to_pull`. Answered with `project_branch_pulled` once done, the statuses\nbroadcast as `project_git_status` meanwhile. A project already being checked gets one more\ncheck once that check ends; a `merge` request waits, up to ten minutes, for the project's\ncheck to end instead, since it takes the project's claim. Refused with `unknown_project`,\n`not_a_git_repository`, `binary_not_found`, `not_on_a_branch`, `no_upstream_to_pull`,\n`pull_merge_conflict` or `git_pull_failed`."
         },
         {
           "type": "object",

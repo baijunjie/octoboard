@@ -188,6 +188,11 @@ export function createProjectReplies({ scenario, store, fail, git, restored, sta
     push_project_branch: (body) => {
       return projectAction(body.project, scenario.projectPushError);
     },
+    pull_project_branch: (body): ReplyOf<"pull_project_branch"> => {
+      projectAction(body.project, body.merge ? scenario.projectPullMergeError : undefined);
+      const outcome = scenario.projectPullOutcome ?? { kind: "fast_forwarded" };
+      return { type: "project_branch_pulled", id: null, outcome: outcome.kind === "needs_merge" && body.merge ? { kind: "merged" } : outcome };
+    },
     detect_directory_agent: detectAgent,
     probe_git_remote: detectAgent,
     create_shell_terminal: (body) => {
