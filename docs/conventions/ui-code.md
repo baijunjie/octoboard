@@ -195,6 +195,13 @@ a test that asserts only `document.activeElement` passes against a broken handof
   layout effect of a component rendering in that commit (`useHandoffAfterRemoval`).** Never `focus()` from a
   layout-effect cleanup (react-aria never hears of it, so no ring) and never `queueMicrotask` (passive effects of a
   synchronous commit run before it).
+- **Never move focus by script inside a mouse press's `pointerdown`; move it a frame later
+  (`requestAnimationFrame`).** react-aria selects on `pointerdown` (a `Tabs` tab, among others), so a layout effect keyed
+  on the selection runs inside that event, and the browser's `mousedown` default then focuses the pressed element and
+  takes focus back. The scripted `focus()` used up react-aria's input flag, so that browser focus counts as having no
+  input behind it: the modality turns virtual and the next focus draws a keyboard ring. No other path in the press's
+  commit (a handoff, a pending focus request) may move focus either (`terminal/shell/ShellTerminalPanel.tsx`'s tab
+  strip).
 - **A button disabled for the duration of its own action is `pending` (`isPending`), not `disabled`.** The native
   `disabled` blurs the pressed control, and the dialog's Escape and Tab go with it. Keep `disabled` for a control
   unavailable for an outside reason, and where such a change can land under focus use `useFocusLeavingWhenDisabled`

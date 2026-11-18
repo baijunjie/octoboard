@@ -136,13 +136,20 @@ export function ShellTerminalPanel({
   // after the reply that names it.
   const focusOnShown = useRef<string>(undefined);
   const previousActiveId = useRef(activeId);
+  // The tab a pointer press just chose, whose view `select` focuses a frame later.
+  const pressedTab = useRef<string>(undefined);
   // A tab that becomes the shown one while focus is in the one it replaces (a terminal arriving, or
   // the shown one chosen from elsewhere) takes the focus, which the replaced view's hiding would
   // otherwise drop to `<body>`; and so does the terminal a start from here made, or one a start from
-  // outside asked to have focused (`takeShellTerminalFocus`).
+  // outside asked to have focused (`takeShellTerminalFocus`). A tab pressed with the pointer is left
+  // to `select`: focused here, inside the press's `pointerdown`, the view would lose focus at once to
+  // the tab the `mousedown` focuses, which react-aria then reads as a focus with no input behind it
+  // (virtual modality), and the view `select` focuses next would draw a keyboard focus ring.
   useLayoutEffect(() => {
     const previous = previousActiveId.current;
     previousActiveId.current = activeId;
+    const pressed = pressedTab.current === activeId;
+    pressedTab.current = undefined;
     const view = activeId === undefined ? undefined : views.current.get(activeId);
     if (!view) return;
     const leavesFocus = previous !== undefined && previous !== activeId && document.getElementById(`shell-terminal-${previous}`)?.contains(document.activeElement);
@@ -150,15 +157,17 @@ export function ShellTerminalPanel({
     const requested = activeId !== undefined && takeShellTerminalFocus(activeId);
     if (leavesFocus || focusOnShown.current === activeId || requested) {
       focusOnShown.current = undefined;
-      view.focus();
+      if (!pressed) view.focus();
     }
   }, [activeId, terminals]);
 
   const select = (id: string) => {
+    const pointer = !latest.current.keyboard;
+    if (pointer) pressedTab.current = id;
     setActiveShellTerminal(project.id, id);
     // A tab pressed with the pointer is for typing into; one reached with the arrow keys keeps
     // focus in the strip.
-    if (!latest.current.keyboard) requestAnimationFrame(() => views.current.get(id)?.focus());
+    if (pointer) requestAnimationFrame(() => views.current.get(id)?.focus());
   };
 
   /** Starts a terminal from the panel's own controls and puts focus in it: a press that leaves

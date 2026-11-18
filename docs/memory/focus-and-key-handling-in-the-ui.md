@@ -17,6 +17,14 @@ defects in their own ways; what follows is where each one shows and how a test r
   `useFocusHandoff` with nothing failing, so a new handoff gets a test of its own.
 - jsdom runs no exit animation, so a component test passes against a row menu's focus return timed from the close;
   settle such a return in a browser on the gallery page, driven from the keyboard.
+- A test of a focus move that a mouse press sets off replays the press's `mousedown` default with the page's own
+  `HTMLElement.prototype.focus`, saved in `vi.hoisted` before react-aria patches it, called on the pressed element right
+  after `pointerdown`; and it reads `getInteractionModality()` before sending `pointerup`, since a real button is still
+  held when the next frame runs. A stand-in calling `element.focus()` goes through react-aria's patch, which counts as
+  an input event, and `pointerup` sets the modality back to `pointer`, so either one hides a scripted focus inside
+  `pointerdown` leaving the modality `virtual` (the next focus draws a keyboard ring); a test asserting only
+  `document.activeElement` passes against it too. Copy `mouseDown` in
+  `packages/ui/src/terminal/shell/ShellTerminalPanel.test.tsx`.
 
 ## Test a dialog's focus under each press that breaks it
 

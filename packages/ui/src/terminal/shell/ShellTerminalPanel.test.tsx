@@ -18,13 +18,18 @@ import type { Event, Project, ClientRequestBody, ShellTerminal } from "../../pro
 import { applyDaemonEvent, createStateStore, DaemonProvider, seedShellTerminal } from "../../store";
 import { testDaemon } from "../../test/testDaemon";
 import { ShellTerminalPanel } from "./ShellTerminalPanel";
-import { activePreference, startShellTerminal, takeShellTerminalFocus } from "./shellTerminals";
+import { activePreference, setActiveShellTerminal, startShellTerminal, takeShellTerminalFocus } from "./shellTerminals";
 import { BROWSER_HOST } from "../../test/hosts";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const focused = vi.hoisted(() => [] as string[]);
 const mountedViews = vi.hoisted(() => [] as string[]);
+// Whether a view's `focus()` also moves the page's focus into it, as the real view's does; off, it only records the call.
+const viewsTakeFocus = vi.hoisted(() => ({ on: false }));
+// `focus` as the page had it before react-aria patched it: the patched one counts as an input event before the focus,
+// which a focus the browser itself moves (the `mousedown` default on a tab) does not.
+const nativeFocus = vi.hoisted(() => HTMLElement.prototype.focus);
 
 // The view stands in for the terminal itself, which needs a real browser: it says which terminal
 // it is and whether its tab is the one shown, and records the focus it is given and each mount, where
@@ -32,7 +37,12 @@ const mountedViews = vi.hoisted(() => [] as string[]);
 vi.mock("./ShellTerminalView", () => ({
   ShellTerminalView: ({ terminal, shown, ref }: { terminal: ShellTerminal; shown: boolean; ref?: React.Ref<{ focus: () => void }> }) => {
     useEffect(() => void mountedViews.push(terminal.id), []);
-    useImperativeHandle(ref, () => ({ focus: () => focused.push(terminal.id) }), [terminal.id]);
+    useImperativeHandle(ref, () => ({
+      focus: () => {
+        focused.push(terminal.id);
+        if (viewsTakeFocus.on) document.getElementById(`shell-terminal-${terminal.id}`)?.focus();
+      },
+    }), [terminal.id]);
     return <div id={`shell-terminal-${terminal.id}`} tabIndex={-1} data-view={terminal.id} data-shown={String(shown)} />;
   },
 }));
@@ -51,6 +61,7 @@ afterEach(() => {
   cleanup = undefined;
   focused.length = 0;
   mountedViews.length = 0;
+  viewsTakeFocus.on = false;
   activePreference.set({});
   localStorage.clear();
   setGitModeWorktree("p", undefined);
@@ -617,4 +628,120 @@ it("draws no mark or state for a terminal whose process cannot be reached, which
   expect(panel.tabs().map((tab) => tab.textContent)).toEqual(["shell a", "shell b"]);
   expect(panel.container.querySelectorAll("[data-status-mark-id]")).toHaveLength(0);
   expect(panel.container.querySelectorAll("[data-view]")).toHaveLength(2);
+});
+
+/** The mouse going down on `tab` as a browser delivers it: `pointerdown` (which chooses the tab), then the `mousedown`
+ * default that focuses the tab. The default is the page's own `focus`, which react-aria sees no input event before, as
+ * it does of a focus the browser moves; a focus the app scripts goes through react-aria's patched one. Returns the
+ * release (`pointerup`), which a press lasting longer than a frame makes after the frame the choice asked for. */
+function mouseDown(tab: HTMLElement): () => void {
+  const init = { bubbles: true, cancelable: true, button: 0, pointerId: 1, isPrimary: true, pointerType: "mouse", width: 20, height: 20 };
+  act(() => void tab.dispatchEvent(new PointerEvent("pointerdown", init)));
+  act(() => nativeFocus.call(tab));
+  return () => act(() => void tab.dispatchEvent(new PointerEvent("pointerup", init)));
+}
+
+/** A quick press of `tab`: the mouse down and up with no frame between. */
+const pressWithMouse = (tab: HTMLElement) => mouseDown(tab)();
+
+/** Mounts the panel with `shown` the terminal it shows, and focus in that terminal's view. */
+function mountFocusedIn(shown: string, terminals: ShellTerminal[]) {
+  framesAsTimers("pointer");
+  viewsTakeFocus.on = true;
+  activePreference.set({ p: shown });
+  const panel = mount(terminals);
+  // The saved `focus` must be the page's own, or the press's native focus would count as an input event too.
+  expect(HTMLElement.prototype.focus).not.toBe(nativeFocus);
+  expect(panel.shown()).toBe(shown);
+  act(() => panel.container.querySelector<HTMLElement>(`[data-view=${shown}]`)!.focus());
+  focused.length = 0;
+  pointerModality();
+  return panel;
+}
+
+it("leaves the focus move for a tab pressed with the mouse to the next frame, and keeps the pointer's modality through it", async () => {
+  const panel = mountFocusedIn("a", [shell("a", 1), shell("b", 2)]);
+
+  const release = mouseDown(panel.tabs()[1]);
+
+  expect(panel.shown()).toBe("b");
+  // Focus moved into the new view inside the press's `pointerdown` would be taken away at once by the tab's own focus,
+  // which react-aria then reads as a focus with no input behind it: the ring of a keyboard focus on what comes next.
+  expect(focused).toEqual([]);
+  expect(document.activeElement).toBe(panel.tabs()[1]);
+  await settleFrames();
+  expect(focused).toEqual(["b"]);
+  expect(document.activeElement).toBe(document.getElementById("shell-terminal-b"));
+  // Read before the release, whose `pointerup` would set the pointer's modality itself.
+  expect(getInteractionModality()).toBe("pointer");
+  release();
+});
+
+it("still hands focus to a terminal chosen from elsewhere while focus is in the one it replaces", () => {
+  const panel = mountFocusedIn("a", [shell("a", 1), shell("b", 2)]);
+  act(() => setActiveShellTerminal("p", "b"));
+  expect(panel.shown()).toBe("b");
+  expect(focused).toEqual(["b"]);
+  expect(document.activeElement).toBe(document.getElementById("shell-terminal-b"));
+});
+
+it("does not let a mouse press of one tab stop the handoff for a terminal chosen from elsewhere afterwards", async () => {
+  const panel = mountFocusedIn("a", [shell("a", 1), shell("b", 2), shell("c", 3)]);
+  pressWithMouse(panel.tabs()[1]);
+  await settleFrames();
+  expect(panel.shown()).toBe("b");
+  focused.length = 0;
+  act(() => panel.container.querySelector<HTMLElement>("[data-view=b]")!.focus());
+  act(() => setActiveShellTerminal("p", "c"));
+  expect(panel.shown()).toBe("c");
+  expect(focused).toEqual(["c"]);
+});
+
+it("hands focus to a terminal that arrives as the shown one while focus is in the one it replaces", () => {
+  const panel = mountFocusedIn("a", [shell("a", 1)]);
+  act(() => {
+    applyDaemonEvent(panel.store, { type: "shell_terminal_upserted", shell_terminal: shell("c", 3) });
+    setActiveShellTerminal("p", "c");
+  });
+  expect(panel.shown()).toBe("c");
+  expect(focused).toEqual(["c"]);
+});
+
+it("focuses a pressed tab's view only at the next frame when a start had asked for it, and takes the request", async () => {
+  const panel = mountFocusedIn("a", [shell("a", 1), shell("b", 2)]);
+  panel.request.mockImplementation(async (body: ClientRequestBody): Promise<Event> =>
+    body.type === "create_shell_terminal" ? { type: "shell_terminal_created", id: null, shell_terminal: shell("b", 2) } : ({ type: "ack", id: null } as Event));
+  // Frames are held, to be run by the test: a press has the request still pending only in the instant between the
+  // start's reply, which asks for b's focus and chooses b, and the render of that choice. The press is made as the choice
+  // is announced, which is inside that instant.
+  const frames: FrameRequestCallback[] = [];
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => frames.push(callback));
+  let pressed = false;
+  onTestFinished(activePreference.subscribe(() => {
+    if (pressed || activePreference.get().p !== "b") return;
+    pressed = true;
+    pressWithMouse(panel.tabs()[1]);
+  }));
+  await act(async () => {
+    await startShellTerminal(panel.daemon, "p", { focus: true });
+  });
+  expect(pressed).toBe(true);
+  expect(panel.shown()).toBe("b");
+  expect(focused).toEqual([]);
+  act(() => frames.forEach((callback) => callback(0)));
+  expect(focused).toEqual(["b"]);
+  expect(takeShellTerminalFocus("b")).toBe(false);
+});
+
+it("keeps focus in the strip when a tab is chosen with the arrow keys", async () => {
+  framesAsTimers("keyboard");
+  activePreference.set({ p: "a" });
+  const panel = mount([shell("a", 1), shell("b", 2)]);
+  act(() => panel.tabs()[0].focus());
+  focused.length = 0;
+  act(() => void panel.tabs()[0].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true })));
+  await settleFrames();
+  expect(panel.shown()).toBe("b");
+  expect(document.activeElement).toBe(panel.tabs()[1]);
+  expect(focused).toEqual([]);
 });
