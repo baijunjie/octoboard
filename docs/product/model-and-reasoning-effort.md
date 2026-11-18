@@ -203,7 +203,7 @@ The levels follow the chosen model, and are each agent's own business rather tha
 ## While the list is being fetched, and when there is none
 
 While the dialog's first answer for the agent and the account it shows is outstanding, both Model and Reasoning
-effort pickers are locked, including their clear actions. A spinner replaces each trailing chevron; a stored value
+effort pickers are locked, including their clear actions. A turning arc replaces each trailing chevron; a stored value
 stays visible, while an unset picker shows a localized loading message instead of its placeholder and badge. There
 is no loading note below either field. In the console dialog this applies to all four Model and Reasoning effort
 pickers, for Console sessions and Project sessions alike. The compatibility switches' pickers are not locked.

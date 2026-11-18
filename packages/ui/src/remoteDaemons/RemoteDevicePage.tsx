@@ -6,6 +6,7 @@ import { MODAL_OPEN } from "../components/focus/selectors";
 import { ContentMain } from "../components/panel/ContentMain";
 import { CenteredEmptyPanel } from "../components/panel/EmptyPanel";
 import { FadedScroller, useFadeRegion } from "../components/scroll/scrollFade";
+import { ReconnectingIcon } from "../components/status/ReconnectingIcon";
 import { StatusBadge } from "../components/status/StatusBadge";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
@@ -82,7 +83,12 @@ export function RemoteDevicePage({ drawerOpen = false }: { drawerOpen?: boolean 
                 <h1 id={titleId} dir="auto" className="min-w-0 text-2xl font-semibold [overflow-wrap:anywhere]">{entry.name}</h1>
                 {state && (
                   <StatusBadge color={state === "reconnecting" ? "warning" : "success"} variant="soft">
-                    {t(CONNECTION_STATE_WORDS[state])}
+                    {state === "reconnecting" ? (
+                      <span className="inline-flex items-center gap-1 align-top">
+                        <ReconnectingIcon size="compact" />
+                        {t(CONNECTION_STATE_WORDS[state])}
+                      </span>
+                    ) : t(CONNECTION_STATE_WORDS[state])}
                   </StatusBadge>
                 )}
               </div>

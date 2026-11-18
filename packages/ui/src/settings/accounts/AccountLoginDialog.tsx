@@ -24,7 +24,7 @@ import { ringForAutomaticFocus } from "../../input/lastInput";
 import { accountLoginOf, loginIsActive } from "../../accounts/accountRecords";
 import { useAccountLoginActions } from "./AccountLogin";
 import { raiseError } from "../../components/alerts/raiseError";
-import { Button, ModalStatusIcon, Spinner } from "../../primitives";
+import { Button, ModalStatusIcon, WaitingIcon } from "../../primitives";
 
 /** The login of one account (`null` for an agent's default account), in a modal of its own. With `start` it asks the
  * daemon to start the login on opening; without, it takes up one that is already running (after a reload, or started by
@@ -203,8 +203,8 @@ export function AccountLoginDialog({ agent, account, start, onClose }: {
     >
       <p><Message id="settings.accounts.login.intro" params={{ agent: agentChip, name: who }} /></p>
       <div className="mt-2 flex items-center gap-2 text-sm">
-        <Spinner size="sm" />
-        {/* While the login starts, the intro line above already says "Logging in…", so the spinner stands alone. */}
+        <WaitingIcon className="text-accent" />
+        {/* While the login starts, the intro line above already says "Logging in…", so the arc stands alone. */}
         {login?.status === "waiting" && (
           <span aria-hidden>
             {code

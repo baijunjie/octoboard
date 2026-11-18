@@ -233,29 +233,29 @@ const hasAdvanced = () => buttons().some((button) => button.textContent === "Adv
 /** Whether the Agent and Account pickers are shown, and all of them disabled. */
 const agentTriggers = () => Array.from(document.body.querySelectorAll<HTMLElement>('[data-slot="select-trigger"]'));
 const allDisabled = (elements: HTMLElement[]) => elements.length > 0 && elements.every((element) => element.hasAttribute("disabled") || element.getAttribute("aria-disabled") === "true" || element.hasAttribute("data-disabled"));
-const spinner = () => document.body.querySelector('[data-slot="spinner"]');
+const lookupArc = () => resumeField()?.parentElement?.querySelector("svg.lucide-loader-circle") ?? null;
 
-it("holds only the Session ID until the conversation is found, with a decorative spinner while it is looked up", async () => {
+it("holds only the Session ID until the conversation is found, with a decorative waiting arc while it is looked up", async () => {
   const { daemon } = renderForResume({ default_agent: "codex" }, record("claude", "a-work"), claudeAccounts);
   await chooseResume();
   expect(resumeStatusText()).toBe("");
   expect(nameInput()).toBeUndefined();
   expect(agentTriggers()).toHaveLength(0);
   expect(hasAdvanced()).toBe(false);
-  expect(spinner()).toBeNull();
+  expect(lookupArc()).toBeNull();
   typeResumeId("11111111-2222-3333-4444");
   await settle();
   expect(locateRequests(daemon)).toEqual([]);
   typeResumeId(UUID);
   expect(resumeStatusText()).toBe("Looking up the conversation…");
-  expect(spinner()).not.toBeNull();
-  expect(spinner()!.getAttribute("aria-hidden")).toBe("true");
-  expect(resumeField()!.parentElement!.contains(spinner())).toBe(true);
+  expect(lookupArc()).not.toBeNull();
+  expect(lookupArc()!.getAttribute("aria-hidden")).toBe("true");
+  expect(resumeField()!.parentElement!.contains(lookupArc())).toBe(true);
   expect(nameInput()).toBeUndefined();
   expect(openDisabled()).toBe(true);
   await settle();
   expect(locateRequests(daemon)).toEqual([{ type: "locate_conversation_to_resume", project: "p-1", agent_session_id: UUID }]);
-  expect(spinner()).toBeNull();
+  expect(lookupArc()).toBeNull();
 });
 
 it("opens a new session on the agent and account of a record, which are shown disabled", async () => {
@@ -389,10 +389,10 @@ it("keeps focus in the Session ID field while the lookup comes and goes", async 
   const field = resumeField()!;
   act(() => field.focus());
   typeResumeId(UUID);
-  expect(spinner()).not.toBeNull();
+  expect(lookupArc()).not.toBeNull();
   expect(document.activeElement).toBe(field);
   await settle();
-  expect(spinner()).toBeNull();
+  expect(lookupArc()).toBeNull();
   expect(resumeField()).toBe(field);
   expect(document.activeElement).toBe(field);
 });

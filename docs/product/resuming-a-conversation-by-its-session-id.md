@@ -26,7 +26,7 @@ example ID otherwise — and focus moves to the field. From then on the message 
 ## Finding the conversation
 
 Once the field holds a valid ID and typing pauses, the daemon is asked where the conversation is held, and the answer
-settles which fields follow the ID and what the submit button is and does. Until it answers, a spinner shows at the end
+settles which fields follow the ID and what the submit button is and does. Until it answers, a turning arc shows at the end
 of the ID field and the submit button is disabled. Changing the ID asks again; only the answer for the ID in the field
 counts. What was found is announced to assistive technology; it is not shown as a line of text.
 
@@ -134,7 +134,7 @@ account.
   (`conversation_to_resume_not_found`) — are shown in an error alert like any other failure of the open; once it is
   acknowledged, keyboard focus is back on the Session ID field. A conversation not found leaves the tab as it is, its
   fields kept, so **Open** can be tried again. Any other of these refusals means the answer the tab holds may be stale,
-  so the lookup is asked again: while it runs the fields after the ID go and the spinner shows, and the new answer
+  so the lookup is asked again: while it runs the fields after the ID go and the arc shows, and the new answer
   decides the fields and the submit button as in "Finding the conversation" above.
 
 A session opened this way starts by resuming that conversation, and comes up at the agent's prompt like any session

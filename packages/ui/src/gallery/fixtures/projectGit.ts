@@ -728,7 +728,7 @@ const reviewScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "The branch selector while its list loads",
-    description: "The Branch selector is locked while its options load. Its known branch stays visible beside a spinner that replaces the trailing chevron, with no loading note below the field.",
+    description: "The Branch selector is locked while its options load. Its known branch stays visible beside a turning arc that replaces the trailing chevron, with no loading note below the field.",
     state,
     preferences,
     projectBranches: { [web.id]: "pending" },

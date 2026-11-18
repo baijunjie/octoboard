@@ -67,7 +67,7 @@ it("locks the pickers and says so while the list is out, with the stored value i
       const trigger = groupPicker(group, setting) as HTMLButtonElement;
       expect(trigger.disabled).toBe(true);
       expect(trigger.getAttribute("aria-busy")).toBe("true");
-      expect(trigger.querySelector("[data-slot=spinner]")).not.toBeNull();
+      expect(trigger.querySelector("svg.lucide-loader-circle")).not.toBeNull();
       expect(trigger.closest("[data-slot=select]")!.querySelector("[data-slot=description]")).toBeNull();
     }
   }

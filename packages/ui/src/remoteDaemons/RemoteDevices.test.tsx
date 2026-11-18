@@ -3,11 +3,13 @@ import React, { act } from "react";
 import { beforeEach, expect, it, vi } from "vitest";
 
 import { errorAlerts } from "../components/alerts/errorAlerts";
+import { closeOpenTooltip, enter, openTooltip } from "../components/hint/tooltipTestSupport";
 import { ActionableError } from "../errors/actionableError";
 import { setLanguage } from "../i18n/language";
 import { LanguageProvider } from "../i18n/react";
 import type { PlatformAdapter, RemoteDaemonConnectOutcome, RemoteDaemonHandedOutcome, RemoteDaemonEntry, RemoteDaemonEntryInput, RemoteDaemonStatus } from "../platform";
 import { acknowledgeAllAlerts } from "../test/alertQueue";
+import { fakeTimers, runOutTimers } from "../test/clock";
 import { MAC_HOST } from "../test/hosts";
 import { mountHost } from "../test/mountHost";
 import { RemoteDevicePage } from "./RemoteDevicePage";
@@ -619,10 +621,37 @@ it("lists the saved devices in the order saved, each with its state where it is 
   status.mockResolvedValue([{ id: "staging", state: "connected", via: "window" }, { id: "lab", state: "reconnecting", via: "window" }]);
   const container = await mount();
   const rows = deviceRows(container);
-  expect(rows.map((row) => row.textContent!.startsWith("Keyed") ? "Keyed" : row.textContent!.startsWith("Staging") ? "Staging" : "Home lab")).toEqual(["Keyed", "Staging", "Home lab"]);
-  expect(rows.map((row) => row.textContent!.includes("Connected"))).toEqual([false, true, false]);
-  expect(rows.map((row) => row.textContent!.includes("Reconnecting"))).toEqual([false, false, true]);
+  expect(rows.map((row) => row.textContent)).toEqual(["Keyed", "Staging", "Home lab"]);
+  expect(rows[0].getAttribute("aria-label")).toBe("Keyed");
+  expect(rows[0].querySelector("[role=presentation]")).toBeNull();
   expect(heading(container)).toBe("Keyed");
+});
+
+it.each([
+  ["connected", "window", "Connected", "lucide-link", "text-[var(--tint-success-fg)]"],
+  ["connected", "browser", "Opened in browser", "lucide-app-window", "text-[var(--tint-success-fg)]"],
+  ["reconnecting", "window", "Reconnecting", "lucide-loader-circle", "text-[var(--tint-warning-fg)]"],
+] as const)("shows the %s connection via %s as a glyph with a tooltip and names it on the row", async (state, via, label, glyph, color) => {
+  list.mockResolvedValue([KEYED, STAGING]);
+  status.mockResolvedValue([{ id: "staging", state, via }]);
+  const container = await mount();
+  const row = rowNamed(container, "Staging");
+  expect(row.textContent).toBe("Staging");
+  expect(row.getAttribute("aria-label")).toContain("Staging");
+  expect(row.getAttribute("aria-label")).toContain(label);
+
+  const trigger = row.querySelector("[role=presentation]")!;
+  expect((trigger as HTMLElement).tabIndex).toBe(-1);
+  const icon = trigger.querySelector(`svg.${glyph}`)!;
+  expect(icon.closest('[aria-hidden="true"]')).not.toBeNull();
+  expect(icon.classList.contains(color)).toBe(true);
+  expect(icon.classList.contains("size-4")).toBe(true);
+  expect(icon.classList.contains("motion-safe:animate-spin-slow")).toBe(state === "reconnecting");
+
+  fakeTimers({ beforeDrain: closeOpenTooltip });
+  enter(trigger);
+  runOutTimers();
+  expect(openTooltip()?.textContent).toBe(label);
 });
 
 it("marks the selected device's row, and a press on another row shows that device in its place", async () => {
@@ -642,12 +671,23 @@ it("names where the shown device connects to and how it is connected in its head
   const header = container.querySelector("header")!;
   expect(header.querySelector("h1")!.textContent).toBe("Staging");
   expect(header.textContent).toContain("Connected");
+  expect(header.querySelector("svg.lucide-loader-circle")).toBeNull();
   expect(header.textContent).toContain("deploy@staging.example.com:22");
   // A device that is not held has no state to name.
   list.mockResolvedValue([KEYED]);
   status.mockResolvedValue([]);
   const idle = await mount();
   expect(idle.querySelector("header")!.textContent).not.toContain("Connected");
+});
+
+it("keeps the reconnecting label in a warning badge beside the compact arc", async () => {
+  status.mockResolvedValue([{ id: "staging", state: "reconnecting", via: "window" }]);
+  const container = await mount();
+  const badge = container.querySelector('header [data-color="warning"][data-variant="soft"]')!;
+  expect(badge.textContent).toBe("Reconnecting");
+  const icon = badge.querySelector("svg.lucide-loader-circle")!;
+  expect(icon.getAttribute("aria-hidden")).toBe("true");
+  expect([...icon.classList]).toEqual(expect.arrayContaining(["size-3.5", "text-[var(--tint-warning-fg)]", "motion-safe:animate-spin-slow"]));
 });
 
 it("connects one device at a time: the shown device's Connect is unavailable while another connects, and pending on the one that does", async () => {

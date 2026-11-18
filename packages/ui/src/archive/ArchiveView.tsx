@@ -30,7 +30,7 @@ import { NESTED_ROW_CLASS, TreeRow } from "../components/rows/TreeRow";
 import { useListMotion } from "../components/motion/useListMotion";
 import { sessionRowModel } from "../sessions/sessionRowModel";
 import { ringForAutomaticFocus } from "../input/lastInput";
-import { Button, Spinner } from "../primitives";
+import { Button, WaitingIcon } from "../primitives";
 
 /** How many rows the list adds each time its end scrolls into view. */
 const PAGE = 30;
@@ -277,7 +277,9 @@ export function ArchiveView({
             ))}
             {more && (
               <li ref={sentinelRef} className="flex justify-center py-4">
-                <Spinner size="sm" label={t("archive.loadingMore")} />
+                <span role="status" aria-label={t("archive.loadingMore")}>
+                  <WaitingIcon className="text-accent" />
+                </span>
               </li>
             )}
           </ul>

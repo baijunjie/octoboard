@@ -20,7 +20,7 @@ import { InlineReference } from "../../i18n/InlineReference";
 import { isolate } from "../../i18n/isolate";
 import { joinNodes } from "../../i18n/joinPhrases";
 import { Message, useCurrentLanguage, useT } from "../../i18n/react";
-import { Button, Spinner, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow } from "../../primitives";
+import { Button, Spinner, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, WaitingIcon } from "../../primitives";
 import type { Agent, ConnectorState, LocalMcpServer, McpInventoryUnavailable, PlatformConnector } from "../../protocol";
 import { providerConnectorPlatform, providerMcpSessionSignIn } from "../../providers/registry";
 import type { McpInventoryState } from "./useAccountMcpInventory";
@@ -251,7 +251,7 @@ function ServerEntry({ agent, server, state }: { agent: Agent; server: LocalMcpS
     <EntryRow id={`${server.plugin ?? ""}:${server.name}`} name={server.name} stateCells={[signIn, runtime]} actions={server.oauth_sign_in ? <ServerAuthActions server={server} state={state} /> : undefined} facts={facts}>
       {waiting && (
         <p className="flex items-center gap-2 text-xs text-app-muted">
-          <Spinner size="sm" color="current" />
+          <WaitingIcon />
           <span aria-hidden="true">{t("settings.accounts.mcp.server.waiting")}</span>
           <StatusAnnouncer text={t("settings.accounts.mcp.server.waiting")} element="span" />
         </p>

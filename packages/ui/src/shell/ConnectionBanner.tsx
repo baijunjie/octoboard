@@ -1,6 +1,7 @@
-import { RefreshCw, Unplug } from "lucide-react";
+import { Unplug } from "lucide-react";
 import React, { useEffect, useState } from "react";
 
+import { ReconnectingIcon } from "../components/status/ReconnectingIcon";
 import type { ConnectionState } from "../daemon-client";
 import { useT } from "../i18n/react";
 import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
@@ -107,7 +108,7 @@ export function ConnectionBanner({
           {state === "closed" ? (
             <Unplug aria-hidden="true" className="size-3.5 shrink-0" />
           ) : (
-            <RefreshCw aria-hidden="true" className="size-3.5 shrink-0 motion-safe:animate-spin-slow" />
+            <ReconnectingIcon size="compact" inBanner />
           )}
           <span aria-hidden="true">{message}</span>
           {(state === "closed" || retryWhileReconnecting) && (

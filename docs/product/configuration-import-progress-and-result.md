@@ -24,7 +24,7 @@ whatever was chosen for it. There are no tabs. Each console, project, account an
 glyph followed by its word:
 
 - **Waiting** — not started yet;
-- **Creating…**, or **Cloning…** for a project being cloned, with a spinner in place of the glyph — being worked on;
+- **Creating…**, or **Cloning…** for a project being cloned, with a turning arc in place of the glyph — being worked on;
 - **Done** — finished. A console is done as soon as it is created, before its projects, and an account that already
   exists is done at once;
 - **Failed** — with its reason written out under the name, as in the result (see "The import result" below), and

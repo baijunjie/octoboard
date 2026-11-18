@@ -280,7 +280,7 @@ it("replaces an empty select's placeholder and badge with localized loading text
   expect(trigger.textContent).toBe("加载中…");
   expect(trigger.disabled).toBe(true);
   expect(trigger.getAttribute("aria-busy")).toBe("true");
-  expect(trigger.querySelector("[data-slot=spinner]")).not.toBeNull();
+  expect(trigger.querySelector("svg.lucide-loader-circle")).not.toBeNull();
   expect(trigger.querySelector("[data-slot=select-default-indicator]")).toBeNull();
   expect(container.querySelector("[data-slot=description]")).toBeNull();
   render(false);
@@ -288,7 +288,7 @@ it("replaces an empty select's placeholder and badge with localized loading text
   expect(trigger.textContent).toContain("Inherited model");
   expect(trigger.disabled).toBe(false);
   expect(trigger.hasAttribute("aria-busy")).toBe(false);
-  expect(trigger.querySelector("[data-slot=spinner]")).toBeNull();
+  expect(trigger.querySelector("svg.lucide-loader-circle")).toBeNull();
   expect(trigger.querySelector("[data-slot=select-default-indicator]")).not.toBeNull();
 });
 

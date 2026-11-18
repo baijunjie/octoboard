@@ -222,7 +222,7 @@ export const gitScenarios: Scenario[] = [
     group: "Projects",
     category: "normal",
     title: "Push unavailable while a push is running",
-    description: "The project's push is still running (its badge shows the spinning loader), and the Git submenu of its actions menu is open: Push current branch is dimmed and cannot be chosen, with no reason beside it, while the other Git items stay available.",
+    description: "The project's push is still running (its badge shows a turning arc), and the Git submenu of its actions menu is open: Push current branch is dimmed and cannot be chosen, with no reason beside it, while the other Git items stay available.",
     state: snapshotState({ consoles: [console_], projects: [restoreProject], gitStatuses: [gitStatusOf(restoreProject.id, { activity: "pushing", ahead: 2 })] }),
     steps: openGitSubmenu(restoreProject.name),
   },
@@ -238,14 +238,14 @@ export const gitScenarios: Scenario[] = [
   {
     id: "git-transfer-badges", group: GROUP, category: "normal",
     title: "Push and pull count indicators",
-    description: "Each transfer keeps a spinning loader at the start. Pushing scrolls only ↑ beside 3 upward, with the opposite ↓ arrow and both numbers still; pulling shows only ↓2, because it has no commits ahead of upstream, and scrolls that arrow downward. The zero-count push shows only the loader and branch.",
+    description: "Each transfer keeps a turning arc at the start. Pushing scrolls only ↑ beside 3 upward, with the opposite ↓ arrow and both numbers still; pulling shows only ↓2, because it has no commits ahead of upstream, and scrolls that arrow downward. The zero-count push shows only the arc and branch.",
     state: transferState,
     preferences: { sidebarWidth: 480 },
   },
   {
     id: "git-pull-focus", group: GROUP, category: "normal",
     title: "Pulling in project focus",
-    description: "The focus header keeps the leading loader spinning while only the ↓ count arrow scrolls downward; the zero ahead count is omitted.",
+    description: "The focus header shows the turning arc while only the ↓ count arrow scrolls downward; the zero ahead count is omitted.",
     state: transferState,
     preferences: { sidebarWidth: 480, sidebarConsole: console_.id, sidebarFocus: `project:${pullPreview.id}` },
   },
@@ -422,7 +422,7 @@ export const gitScenarios: Scenario[] = [
     title: "Branch badges",
     state: badgesState,
     preferences: { sidebarWidth: 260 },
-    description: "Remote counts, spinning checks and transfers, detached and missing branches, and long labels. A clipped branch loses its beginning and keeps its end. Hover a clipped project name or branch to scroll only that text, while state glyphs, arrows and counts stay visible; hovering row controls leaves both labels still. Hover badges for their full details, and drag the sidebar wider to inspect clipping.",
+    description: "Remote counts, turning double arrows for checks and arcs for transfers, detached and missing branches, and long labels. A clipped branch loses its beginning and keeps its end. Hover a clipped project name or branch to scroll only that text, while state glyphs, arrows and counts stay visible; hovering row controls leaves both labels still. Hover badges for their full details, and drag the sidebar wider to inspect clipping.",
   },
   {
     id: "git-badge-focus",
@@ -440,7 +440,7 @@ export const gitScenarios: Scenario[] = [
     title: "Long title and branch sharing the project focus header",
     state: badgesState,
     preferences: { sidebarWidth: 400, sidebarConsole: console_.id, sidebarFocus: `project:${squeezeProject.id}` },
-    description: "The title (console over project name) and the branch each take half of the header's free width. The branch fades at its start and shows its end, and the title fades at its end; hover either for its own marquee, while the glyph and both counts stay visible. The leading loading glyph spins during pushing, and the always-visible ahead-count arrow scrolls upward; hover the glyph for the pushing status. Hovering the console subtitle or header controls leaves both still.",
+    description: "The title (console over project name) and the branch each take half of the header's free width. The branch fades at its start and shows its end, and the title fades at its end; hover either for its own marquee, while the glyph and both counts stay visible. The leading arc turns during pushing, and the always-visible ahead-count arrow scrolls upward; hover the glyph for the pushing status. Hovering the console subtitle or header controls leaves both still.",
   },
   {
     id: "git-push-accepted",

@@ -47,12 +47,12 @@ it("shows loading in place of an empty branch choice and returns to its normal p
   expect(trigger.textContent).toBe("Loading…");
   expect(trigger.disabled).toBe(true);
   expect(trigger.getAttribute("aria-busy")).toBe("true");
-  expect(trigger.querySelector("[data-slot=spinner]")).not.toBeNull();
+  expect(trigger.querySelector("svg.lucide-loader-circle")).not.toBeNull();
   expect(trigger.querySelector("[data-slot=select-default-indicator]")).toBeNull();
   act(() => setLoading(false));
   expect(trigger.textContent).toBe("Choose a branch");
   expect(trigger.disabled).toBe(false);
-  expect(trigger.querySelector("[data-slot=spinner]")).toBeNull();
+  expect(trigger.querySelector("svg.lucide-loader-circle")).toBeNull();
   expect(trigger.querySelector("[data-slot=select-default-indicator]")).not.toBeNull();
 });
 

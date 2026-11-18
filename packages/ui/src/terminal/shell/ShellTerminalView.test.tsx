@@ -208,6 +208,8 @@ it("mounts the trouble status empty and writes it after the focus-move delay, th
   expect(spoken(container)).toEqual([]);
   act(() => void vi.advanceTimersByTime(AFTER_FOCUS_MOVE_DELAY_MS));
   expect(spoken(container)).toEqual(["Reconnecting the terminal…"]);
+  expect(container.querySelector("svg.lucide-loader-circle.size-6")).not.toBeNull();
+  expect(container.querySelector("[data-slot=spinner]")).toBeNull();
   expect(regions(container)).toEqual(before);
   FakeController.last.settle("open");
   expect(spoken(container)).toEqual([]);
@@ -418,6 +420,8 @@ it("covers a shell opened pending, attaches nothing, holds its input and keeps i
   expect(FakeController.last.held).toBe(true);
   expect(container.querySelectorAll("[role=region][aria-label]")).toHaveLength(1);
   expect(shellRegion(container)!.textContent).toBe(`${SHELL_TITLE}${SHELL_BODY}`);
+  expect(shellRegion(container)!.querySelector('svg.lucide-loader-circle.size-6[aria-hidden="true"]')).not.toBeNull();
+  expect(shellRegion(container)!.querySelector("[data-slot=spinner]")).toBeNull();
   // Named by the terminal, not by the title it holds, which VoiceOver would read twice.
   expect(shellRegion(container)!.getAttribute("aria-label")).toBe(SHELL_NAME);
   expect(shellRegion(container)!.hasAttribute("aria-labelledby")).toBe(false);

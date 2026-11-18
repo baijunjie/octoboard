@@ -106,6 +106,17 @@ it.each(["reconnecting", "closed"] as const)("defers an initial %s status in an 
   if (state === "closed") expect(hidden(strip.querySelector("button"))).toBe(null);
 });
 
+it("draws a compact arc in the banner foreground while reconnecting and an unplugged cord when closed", () => {
+  const { container, render } = announcementBanner("reconnecting");
+  const strip = container.querySelector('[data-region="banner"]')!;
+  const icon = strip.querySelector("svg.lucide-loader-circle")!;
+  expect(icon.getAttribute("aria-hidden")).toBe("true");
+  expect([...icon.classList]).toEqual(expect.arrayContaining(["size-3.5", "text-inherit", "motion-safe:animate-spin-slow"]));
+  render("closed");
+  expect(strip.querySelector("svg.lucide-loader-circle")).toBeNull();
+  expect(strip.querySelector("svg.lucide-unplug")).not.toBeNull();
+});
+
 it("announces each outage in the same region and updates it when automatic retries are spent", () => {
   const { container, render, advance } = announcementBanner("open");
   const region = container.querySelector('[role="status"]');

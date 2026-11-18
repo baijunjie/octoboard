@@ -314,6 +314,8 @@ export interface Ui {
    * tooltip trigger, which is how `SessionRow` lays it out. A row whose glyph carries no tooltip
    * (focus mode's card) fails rather than match the agent mark's trigger further along. */
   hoverRowStatus: (row: Matcher) => Promise<void>;
+  /** Shows the status glyph's tooltip on a Remote devices row and checks its localized text. */
+  hoverRemoteDeviceStatus: (row: Matcher, status: string) => Promise<void>;
   /** Moves the pointer onto the status glyph of the session titled `title` in the open confirmation
    * dialog's callout list, and leaves it there, as `hoverIndicator` does. Unlike a sidebar row's,
    * that glyph is the named `role="img"` and the list row's first element child. Fails while no
@@ -527,7 +529,8 @@ export type Step = (ui: Ui) => Promise<void>;
  * chooses it: a check, pull or push in flight, a detached `HEAD`, else a branch). A failed check that is idle draws
  * none there: the failure mark (`openGitFailure`) stands in for it outside the trigger. */
 function gitGlyphOf(status: GitStatus): string | undefined {
-  if (status.activity !== "idle") return "refresh-cw";
+  if (status.activity === "checking") return "refresh-cw";
+  if (status.activity !== "idle") return "loader-circle";
   if (gitFailureShown(status)) return undefined;
   return status.detached ? "git-commit-horizontal" : "git-branch";
 }
@@ -1026,6 +1029,17 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
         }
         return glyph as HTMLElement;
       }, `No session row matching ${String(row)} to hover the status glyph of`);
+    },
+    async hoverRemoteDeviceStatus(row, status) {
+      await hover(
+        () => find(row)?.querySelector<HTMLElement>("[role=presentation]"),
+        `No remote device row matching ${String(row)} with a status glyph to hover`,
+      );
+      await tooltipWhere(
+        "[role=tooltip]",
+        (shown) => shown.textContent === status,
+        (last) => `The remote device row matching ${String(row)} has no tooltip "${status}": its last tooltip is ${quoted(last)}`,
+      );
     },
     async hoverCalloutStatus(title) {
       await hover(() => {

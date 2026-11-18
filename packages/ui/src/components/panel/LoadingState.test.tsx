@@ -30,9 +30,17 @@ it("is hidden from assistive technology and shows its label", () => {
   }
 });
 
+it("distinguishes content loading from waiting for a state change", () => {
+  const loading = mount(<LoadingState size="md" label="Loading terminal" />);
+  const waiting = mount(<LoadingState size="md" label="Starting session" indicator="waiting" />);
+  expect(loading.querySelector("[data-slot=spinner]")).not.toBeNull();
+  expect(waiting.querySelector('svg.lucide-loader-circle.size-6[aria-hidden="true"]')).not.toBeNull();
+  expect(waiting.querySelector("[data-slot=spinner]")).toBeNull();
+});
+
 it("leaves out the spinner when asked", () => {
   const withSpinner = mount(<LoadingState size="md" label="Reading" />);
-  const without = mount(<LoadingState size="md" label="Reading" spinner={false} />);
+  const without = mount(<LoadingState size="md" label="Reading" indicator="none" />);
   expect(withSpinner.querySelector("[role=progressbar], svg, .spinner")).not.toBeNull();
   expect(without.querySelector("[role=progressbar], svg, .spinner")).toBeNull();
 });

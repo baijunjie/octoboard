@@ -166,7 +166,7 @@ icons instead.
 
 A folder that is not simply listed says so:
 
-- **loading** while it is being read, in a row of its own under it;
+- **loading** while it is being read, with a turning arc in a row under the folder;
 - **empty** when it has nothing in it, in a row of its own under it;
 - **unreadable**: a red failure mark on the folder's own row, right after its name (not at the row's end), named as the
   folder that could not be listed, and nothing under the folder, which is drawn closed. The mark opens a popover with

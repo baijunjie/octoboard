@@ -369,9 +369,8 @@ export function TerminalPane({
   // and coming back up is no trouble with the connection. A connection in trouble comes after it,
   // over any old output as well: a terminal that is not connected has nothing live to show, and the
   // disconnected state carries the Reconnect. Otherwise, from selecting a session until its first
-  // output is on screen — through a resume starting the process, the socket connecting, and a
-  // freshly started agent drawing its first frame — the blank terminal is covered by a loading
-  // state. An agent that stays silent does not keep it up forever: once the socket has been open
+  // output is on screen, the blank terminal is covered. The cover shows whether it is waiting
+  // for the process or loading the first frame. An agent that stays silent does not keep it up forever: once the socket has been open
   // for `LOADING_LIMIT_MS` the bare terminal is shown. The count only runs while the socket is
   // open, so the limit never uncovers a terminal that is not connected (a first connect that
   // hangs, a manual Reconnect under way, a resume still starting the process).
@@ -402,14 +401,16 @@ export function TerminalPane({
   const barSaid = useHeldWhileHidden(noProcessBar?.sentence, modalOpen || !exposed);
   const pendingCover = livePending && session ? { label: sessionDisplayTitle(t, session), title: t("terminal.holderPending.title"), body: t("terminal.holderPending.body") } : undefined;
   const pendingSaid = useAnnouncedWhilePending(session?.id, livePending, t("terminal.holderPending.sentence"), coverHasFocus);
-  const cover: { text: string; spinner: boolean } | undefined = pendingCover
-    ? { text: pendingCover.title, spinner: true }
+  const waitingForProcess = isStarting || resuming;
+  const coverState = switching && trouble !== "disconnected" ? "waiting" : trouble ?? (waitingForProcess ? "waiting" : "loading");
+  const coverText = pendingCover
+    ? pendingCover.title
     : switching
-      ? { text: t("terminal.switchingAccount"), spinner: true }
+      ? t("terminal.switchingAccount")
       : trouble
-        ? { text: t(trouble === "disconnected" ? "terminal.disconnected" : "terminal.reconnecting"), spinner: trouble === "reconnecting" }
+        ? t(trouble === "disconnected" ? "terminal.disconnected" : "terminal.reconnecting")
         : loading
-          ? { text: t(resuming ? "terminal.resuming" : isStarting ? "terminal.starting" : "terminal.loading"), spinner: true }
+          ? t(resuming ? "terminal.resuming" : isStarting ? "terminal.starting" : "terminal.loading")
           : undefined;
 
   // The mark of a rebuilt display is drawn in the title bar beside the session's title; the pane
@@ -417,7 +418,7 @@ export function TerminalPane({
   // A rise under a pending cover waits for it to go, and for the cover that follows it (the loading
   // one, until the first paint) to go too, so that it overwrites neither of their sentences.
   const [afterPending, setAfterPending] = useState(false);
-  const covered = cover !== undefined;
+  const covered = coverText !== undefined;
   useLayoutEffect(() => {
     const next = livePending || (covered && afterPending);
     if (next !== afterPending) setAfterPending(next);
@@ -427,7 +428,7 @@ export function TerminalPane({
   // announcer included, so they are held until it is exposed too.
   // Exposing the area usually moves focus into the pending cover, whose description reads the same copy.
   const notOnCover = () => !coverHasFocus();
-  const coverSaid = useHeldWhileHidden(livePending ? pendingSaid.immediate : cover?.text, !exposed, { stillDue: notOnCover });
+  const coverSaid = useHeldWhileHidden(livePending ? pendingSaid.immediate : coverText, !exposed, { stillDue: notOnCover });
   const pendingDelayedSaid = useHeldWhileHidden(pendingSaid.delayed, !exposed, { stillDue: notOnCover });
 
   return (
@@ -463,14 +464,13 @@ export function TerminalPane({
           <SessionHistoryView key={session.id} session={session} onSelectSession={onSelectSession} restoreFocus={restoreFocus ?? focusTerminal} exposed={exposed} />
         </div>
       )}
-      {cover && (
+      {coverText !== undefined && (
         <TerminalCover
           ref={coverRef}
           rootRef={rootRef}
           held={held}
-          text={cover.text}
-          spinner={cover.spinner}
-          disconnected={trouble === "disconnected"}
+          text={coverText}
+          state={coverState}
           canReconnect={canReconnect}
           onReconnect={reconnectNow}
           pending={pendingCover}

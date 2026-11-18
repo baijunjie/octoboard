@@ -12,7 +12,7 @@
 | Child sessions working | `idle`, while a session under it is starting, working, waiting for the user, dormant or has work left running in the background | a hollow green ring with a filled green dot in its centre, pinging outward | The process is sitting at its prompt with nothing of its own left running, while work it delegated is in progress in the sessions under it. See "Done, awaiting instructions and child sessions working" below. |
 | Working in background | `idle`, with a non-empty `background_tasks` | a hollow green ring, pinging outward | The process is sitting at its prompt, but its last turn ended with work still running in the background. Claude Code and Grok Build sessions only; see "Working in background" below. |
 | Switching account | any status except `archived`, with `switching_account` true, or queued in this window's account switch | the *starting* arc | An account switch holds the session, or, in the window that confirmed the switch, the session waits for its turn in it (see "While a session is switching" in `docs/product/switching-session-accounts.md`). Shown in place of the session's own status, which it does not change; lists ranked by status sort it by the status it will have once the switch is over (see "The status order" in `docs/product/order-of-projects-and-sessions.md`). |
-| Reconnecting | `starting`, `working`, `waiting_user`, `dormant` or `idle`, with `holder_link` `pending` | the *starting* arc | The session's process still runs but Octoboard cannot reach it for now, and retries by itself (see "A holder that cannot be connected to" in `docs/product/process-holders.md`). Worked out by the client alone and shown in place of the session's own status and of *switching account*; the stored status, which may be out of date until the process is reached again, is unchanged, and lists ranked by status sort the session by it. |
+| Reconnecting | `starting`, `working`, `waiting_user`, `dormant` or `idle`, with `holder_link` `pending` | an amber arc turning once every two seconds | The session's process still runs but Octoboard cannot reach it for now, and retries by itself (see "A holder that cannot be connected to" in `docs/product/process-holders.md`). Worked out by the client alone and shown in place of the session's own status and of *switching account*; the stored status, which may be out of date until the process is reached again, is unchanged, and lists ranked by status sort the session by it. |
 | Interrupted | `interrupted` | a grey pause sign, with no circle | No process is running, and it did not end by being archived. The session stays in its project's list (a console session, in the console sessions section) and can be resumed. |
 | Archived | `archived` | an archive box | Ended by being archived (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`). No longer listed among its project's sessions (a console session, no longer in the console sessions section); reached through the archive (see "Archived sessions" in `docs/product/archiving-and-resuming-sessions.md`) and can be reopened. |
 
@@ -62,8 +62,9 @@ held in a view until the person leaves it. Green is the session at its prompt, w
 pause of *paused*, the check mark of *done*, the speech bubble of *awaiting instructions*, the ring with a centre dot of
 *child sessions working* and the hollow ring of *working in background*. Blue is the session itself busy: the solid dot
 of *working*. The muted grey is a session that cannot be talked to now: the bare pause of *interrupted*, and the turning
-arc that *starting*, *switching account* and *reconnecting* share. *Archived* is an archive box. The ring of *child
-sessions working* is larger than the other dots, and its ping reaches less far, ending within the glyph's own slot.
+arc that *starting* and *switching account* share. *Reconnecting* is a slowly turning amber arc. *Archived* is an
+archive box. The ring of *child sessions working* is larger than the other dots, and its ping reaches less far, ending
+within the glyph's own slot.
 
 **Every glyph sits in a box of one size, whatever the status**: 16 px on rows, cards, the breadcrumb and a
 confirmation's list, 14 px in a status marker (see "The top status" below), so glyphs in a column share one centre line.
@@ -75,11 +76,9 @@ allowed, Zs drift up that diagonal instead, shrinking as they rise, a new one en
 leaves at the top right; each takes about 2.4 seconds to cross, the next a third of that behind, and none is drawn
 outside the glyph's box.
 
-The waving hand, the pings, the turning arc and the rising Zs stand still where the system asks for reduced motion.
-Every status still differs from the rest by shape, so colour is never the only cue: the filled dot of *working* from the
-hollow ring of *working in background*, that ring from the larger ring of *child sessions working* by the latter's centre
-dot, the rings from the speech bubble and the check mark, the "zz" from the hand, and the circled pause of *paused*
-from the bare pause of *interrupted*.
+The waving hand, the pings, the turning arcs and the rising Zs stand still where the system asks for reduced motion.
+The glyphs distinguish most statuses by shape. The arc's label distinguishes *reconnecting*, *starting* and
+*switching account* when their shapes match.
 
 **How the status reaches a user who does not read the glyph** differs by placement:
 

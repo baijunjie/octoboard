@@ -55,9 +55,10 @@ with no console at all. To assistive technology it is named Remote devices.
 
 - **Its header** reads **Remote devices**, with a **+** button, Add remote daemon.
 - **One row for each saved remote daemon**, in the order they were saved: a server glyph, its name, and where it is
-  connected a badge saying how — **Connected**, **Reconnecting**, or **Opened in browser** for one held for the
-  browser. The badges follow the connections as they are made, dropped and ended, wherever that was asked from. The row
-  of the device the content area shows is marked as the selected one, and choosing a row shows that device.
+  connected a coloured status glyph. A green chain link means **Connected**, a green browser window means
+  **Opened in browser**, and an amber arc means **Reconnecting**. The arc turns once every two seconds when motion is allowed.
+  Hovering over the glyph shows the status in words. The glyphs follow connections as they are made, dropped and ended.
+  The row of the device the content area shows is marked as the selected one, and choosing a row shows that device.
 - **A row's ⋮ menu**, also opened by a right-click on the row, holds **Connect** (**Open** for one that is connected)
   and, after a separator, **Remove**. Connect and Open are unavailable while another device is being connected.
 - **With none saved**, one compact empty row says there are no remote daemons yet; pressing it starts Add remote daemon
@@ -72,9 +73,9 @@ dimmed area behind the drawer is named Close remote devices.
 
 The content area shows the selected device under a header holding its name, as the page's heading, the badge of its
 connection where it is connected, its SSH destination as `user@host:port`, read left to right in every language, and
-**Connect** (**Open** for one that is connected; see "Connecting from the page" below). Under the header is the device's
-form (see "The form" below), and under the form, in a card of its own, the **Remove remote daemon** row with
-**Remove**.
+**Connect** (**Open** for one that is connected; see "Connecting from the page" below). The **Reconnecting** badge
+pairs the same amber arc with its status text. Under the header is the device's form (see "The form" below), and under
+the form, in a card of its own, the **Remove remote daemon** row with **Remove**.
 
 **Remove**, from this row or from the row's menu in the sidebar, asks first, in a confirmation saying the daemon is
 removed from the remote daemons and the server and its daemon stay the same; confirmed, it removes the saved daemon and
@@ -192,5 +193,5 @@ consoles, sessions and everything else it last read, with the connection banner 
   the page.
 - **Each button and menu is named with its daemon**: "Connect to Staging", "Open Staging", "Remove Staging", and the
   row's ⋮ "Actions for remote daemon Staging". A row is named by the daemon's name and, where it is connected, the
-  state its badge shows.
+  state its glyph shows. Tapping the glyph selects the row.
 - **Focus mode's shortcut does nothing** while the page shows (see `docs/product/focus-mode.md`).

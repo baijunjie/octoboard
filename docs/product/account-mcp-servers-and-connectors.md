@@ -329,7 +329,7 @@ to the new alert's Try again, or to Refresh when it has none.
 **Sign in** starts a sign-in of the account to the server, and **Sign out** a sign-out (see "Signing an account in to
 and out of an MCP server" above), at once: Sign out asks for no confirmation, since signing in again undoes it. While
 either runs, its button shows as pending and cannot be pressed. During a sign-in, a line in the entry's Details cell
-says, beside a spinner, that it is waiting for the user to sign in in the browser, which Codex has opened; the line is
+says, beside a turning arc, that it is waiting for the user to sign in in the browser, which Codex has opened; the line is
 announced to assistive technology as it appears. A **Cancel** button comes before Sign in meanwhile, its announced name
 naming the server: it ends the sign-in and its CLI, and shows as pending until the daemon has answered. When the sign-in
 ends and Cancel goes, keyboard focus on it moves to the entry's Sign in or Sign out button. A sign-out has neither line

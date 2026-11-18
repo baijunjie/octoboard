@@ -56,7 +56,7 @@ function runningImport() {
 const configurationFile = () => ({ save: vi.fn(), open: vi.fn(async () => ({ name: "mine.json", text: JSON.stringify(DOCUMENT) })) });
 const text = () => document.body.textContent ?? "";
 const rowOf = (name: string) => Array.from(document.body.querySelectorAll("li")).find((li) => li.textContent?.startsWith(name))!;
-const spinnerIn = (element: Element) => element.querySelector("[data-slot=spinner]");
+const waitingArcIn = (element: Element) => element.querySelector("svg.lucide-loader-circle");
 const buttonLabelled = (label: string) => Array.from(document.body.querySelectorAll("button")).find((button) => button.textContent === label);
 const progressBar = () => document.body.querySelector<HTMLElement>("[role=progressbar]")!;
 
@@ -94,9 +94,9 @@ describe("the progress view", () => {
     expect(progressBar().getAttribute("aria-valuemax")).toBe("3");
     expect(rowOf("Website").textContent).toContain("Done");
     expect(rowOf("Search API").textContent).toContain("Cloning…");
-    // Only the items being worked on spin, and a spinner is not read out.
-    expect(spinnerIn(rowOf("Website"))).toBeNull();
-    expect(spinnerIn(rowOf("Search API"))?.getAttribute("aria-hidden")).toBe("true");
+    // Only the active items show a turning arc, which is decorative.
+    expect(waitingArcIn(rowOf("Website"))).toBeNull();
+    expect(waitingArcIn(rowOf("Search API"))?.getAttribute("aria-hidden")).toBe("true");
     // The daemon cannot stop an import: Cancel stays, disabled, beside the pending Import, and so does the close button.
     expect(buttonLabelled("Cancel")!.disabled).toBe(true);
     expect(document.body.querySelector<HTMLButtonElement>('[role=dialog] button[aria-label="Close"]')!.disabled).toBe(true);

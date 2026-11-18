@@ -36,6 +36,7 @@ export { ScrollShadow, scrollShadowAutoProps, scrollShadowClassName, scrollShado
 export { Select, SelectClearButton, SelectPopover, SelectTrigger } from "./Select";
 export { Slider } from "./Slider";
 export { Spinner } from "./Spinner";
+export { WaitingIcon } from "./WaitingIcon";
 export { Surface } from "./Surface";
 export { Switch } from "./Switch";
 export { Table, TableBody, TableCell, TableColumn, TableHeader, TableRow } from "./Table";

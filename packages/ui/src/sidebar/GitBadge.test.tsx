@@ -110,8 +110,8 @@ const BRANCH = isolate("main");
 // the text the badge's tooltip shows end to end, glyph and all.
 const ALL_STATES: Array<[string, Partial<GitStatus>, string, string]> = [
   ["checking", { activity: "checking" }, "refresh-cw", `Checking branch ${BRANCH}`],
-  ["pulling", { activity: "pulling", behind: 2 }, "refresh-cw", `Pulling branch ${BRANCH}, 2 commits behind`],
-  ["pushing", { activity: "pushing", ahead: 3 }, "refresh-cw", `Pushing branch ${BRANCH}, 3 commits ahead`],
+  ["pulling", { activity: "pulling", behind: 2 }, "loader-circle", `Pulling branch ${BRANCH}, 2 commits behind`],
+  ["pushing", { activity: "pushing", ahead: 3 }, "loader-circle", `Pushing branch ${BRANCH}, 3 commits ahead`],
   ["on a branch", {}, "git-branch", `Branch ${BRANCH}`],
   ["detached", { branch: "a1b2c3d", detached: true }, "git-commit-horizontal", `Detached at ${isolate("a1b2c3d")}`],
   ["ahead", { ahead: 1 }, "git-branch", `Branch ${BRANCH}, 1 commit ahead`],

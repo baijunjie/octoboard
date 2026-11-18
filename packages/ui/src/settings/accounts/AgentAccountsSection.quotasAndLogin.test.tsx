@@ -215,6 +215,7 @@ it.each([
   set({ accountLogins: [{ agent: "claude", account: "claude-work", status: "starting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null }] });
   const settled = trackMountRefocus();
   await settled();
+  expect(document.querySelector('[role="dialog"] svg.lucide-loader-circle[aria-hidden="true"]')).not.toBeNull();
   // The button stays disabled until the daemon reports the login cancelled, after the dialog has gone.
   await act(async () => buttonNamed(document.querySelector('[role="dialog"]')!, "Cancel login")!.click());
   await settleFrames();

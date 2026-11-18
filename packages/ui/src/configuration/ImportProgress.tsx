@@ -4,7 +4,7 @@ import React, { useId } from "react";
 import { providerLabel } from "../agents/providers";
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { useT } from "../i18n/react";
-import { Label, ProgressBar, ProgressBarTrack, Spinner } from "../primitives";
+import { Label, ProgressBar, ProgressBarTrack, WaitingIcon } from "../primitives";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useProviders } from "../store";
 import { FlatCard } from "../components/card/FlatCard";
@@ -24,12 +24,12 @@ const WORKING_LABEL: Record<"creating" | "cloning", PlainMessageKey> = {
   cloning: "configuration.import.progress.status.cloning",
 };
 
-/** An item's state as a glyph (a spinner while it is being worked on) and its word. */
+/** An item's status while the import works through its stages. */
 function ItemState({ item }: { item: ItemProgress }): React.ReactElement {
   if (item.state === "creating" || item.state === "cloning") {
     return (
       <StatusLine label={WORKING_LABEL[item.state]}>
-        <Spinner size="sm" color="current" className="size-4 shrink-0" />
+        <WaitingIcon />
       </StatusLine>
     );
   }

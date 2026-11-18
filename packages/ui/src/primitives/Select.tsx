@@ -2,7 +2,7 @@ import { Select as HeroSelect } from "@heroui/react";
 import React, { createContext, useContext, useEffect } from "react";
 
 import { useObjectRef } from "./focus";
-import { Spinner } from "./Spinner";
+import { WaitingIcon } from "./WaitingIcon";
 import { useDisabled } from "./busy";
 import { FieldClearContext, type FieldVariant, LOCKED_FIELD_CLASS, OutsideFieldParts } from "./Field";
 import { type DataAttributes, definedProps } from "./props";
@@ -89,11 +89,10 @@ export function SelectTrigger({ ref: forwarded, value, valueClassName, className
     <HeroSelect.Trigger {...data} ref={ref} {...definedProps({ className: locked ? `${className ?? ""} ${LOCKED_FIELD_CLASS}` : className })}>
       <HeroSelect.Value className={valueClassName}>{() => value}</HeroSelect.Value>
       {children}
-      {/* HeroUI copies the indicator's centering classes onto its single child. The spinner does not
-          forward those attributes, so they have to land on an element around it. */}
+      {/* HeroUI supplies the indicator's positioning and slot to the element around the glyph. */}
       {loading ? (
         <HeroSelect.Indicator className="size-4">
-          <span><Spinner size="sm" color="current" /></span>
+          <span><WaitingIcon /></span>
         </HeroSelect.Indicator>
       ) : <HeroSelect.Indicator />}
     </HeroSelect.Trigger>

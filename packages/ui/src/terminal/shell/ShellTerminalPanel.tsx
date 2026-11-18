@@ -331,7 +331,7 @@ export function ShellTerminalPanel({
           ))}
           <StatusAnnouncer text={terminals.length === 0 && starting ? t("shellTerminal.starting") : undefined} />
           {terminals.length === 0 && starting && (
-            <LoadingState size="md" label={t("shellTerminal.starting")} />
+            <LoadingState size="md" label={t("shellTerminal.starting")} indicator="waiting" />
           )}
           {terminals.length === 0 && !starting && (
             <CenteredEmptyPanel

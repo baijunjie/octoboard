@@ -19,7 +19,7 @@ import { LaunchSettingsFields } from "./LaunchSettingsFields";
 import type { useLaunchChoice } from "./useLaunchChoice";
 import type { useResumeTarget } from "./useResumeTarget";
 import { TextInput } from "../components/form/TextInput";
-import { Spinner } from "../primitives";
+import { WaitingIcon } from "../primitives";
 
 /** An agent and account fixed by what holds the conversation, shown as the picker pair a new session
  * has, disabled (and marked invalid with `errorMessage`, when the account cannot run a session). Each is a single option, so the field reads as the enabled one does; the account
@@ -107,7 +107,7 @@ export function ResumeConversationFields({
           // The ID's text is wrong once a submit has tried it; no conversation having the ID is found out on its own.
           errorMessage={shownProblem ? idProblems[shownProblem] : notFound ? t("dialog.session.resumeNotFound") : undefined}
           describedBy={!shownProblem && problem ? lookupAlertId : undefined}
-          endAdornment={looking ? <Spinner size="sm" /> : null}
+          endAdornment={looking ? <WaitingIcon className="text-accent" /> : null}
           dir="ltr"
         />
         {/* What the lookup the field makes on its own found against the ID is not a verdict on its text

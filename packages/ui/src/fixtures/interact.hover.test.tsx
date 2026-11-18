@@ -627,7 +627,8 @@ it.each(["idle", "checking", "pulling", "pushing"] as const)("hoverGitBadge puts
   expect(targets.map((target) => target.tagName.toLowerCase())).toEqual(["svg", "span"]);
   expect(targets[1]!.textContent).toBe("main");
   expect(targets[1]!.getAttribute("dir")).toBe("ltr");
-  expect(targets[0]!.classList.contains(activity === "idle" ? "lucide-git-branch" : "lucide-refresh-cw")).toBe(true);
+  const glyph = { idle: "lucide-git-branch", checking: "lucide-refresh-cw", pulling: "lucide-loader-circle", pushing: "lucide-loader-circle" }[activity];
+  expect(targets[0]!.classList.contains(glyph)).toBe(true);
 });
 
 it.each(["checking", "pulling", "pushing"] as const)("hoverGitBadge takes the badge of the %s glyph the status draws", async (activity) => {

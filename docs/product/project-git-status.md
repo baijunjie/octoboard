@@ -25,10 +25,9 @@ status has arrived for the project yet, and nothing when the project's directory
 
 What it holds, in this order:
 
-- **A glyph for what is going on**: a branch glyph normally; a commit glyph when `HEAD` is detached; a spinning refresh
-  glyph while the remote is being checked, the branch is being pulled or the current branch is being pushed.
-  Idle and in-flight states differ in shape, not in motion alone, and nothing animates where the system asks for reduced
-  motion.
+- **A glyph for what is going on.** A branch glyph shows normally and a commit glyph shows when `HEAD` is detached.
+  A turning double arrow shows while the remote is being checked, and a turning arc shows while a pull or push runs.
+  The glyphs hold still with reduced motion.
 - **A failure mark**, a red circled `!`, when the last check failed, standing in for the branch or commit glyph at the
   badge's start. It is a button of its own — a tab stop of its own in every placement —
   named that the Git check failed, with no tooltip, and it opens a popover under the rules of a failure mark (see
@@ -53,7 +52,7 @@ What it holds, in this order:
   shown only while it is not zero and each number written in the current language. A branch with no upstream shows
   neither. During a push, the ahead count's arrow scrolls continuously upward; during a pull, the behind count's
   arrow scrolls continuously downward. Each scroll stays inside a fixed area the size of one count arrow; the other
-  arrow and both numbers stay still. A zero count still has no arrow, so the leading refresh glyph remains the in-flight
+  arrow and both numbers stay still. A zero count still has no arrow, so the leading arc remains the in-flight
   indication when the relevant count is zero. Reduced motion keeps the arrows still too.
 
 **While a check is in flight the badge keeps what it was showing** — the branch name (or short commit id) and the
@@ -73,10 +72,9 @@ repositories** on starts, has ended without clearing the failure the last check 
 the mark goes away while it or its popover holds keyboard focus, focus goes to the project's row on the sidebar, or to
 the project heading in focus mode.
 
-**While a push is in flight the badge describes the push**, including over a check or pull running at the same time. All
-three use the same leading refresh glyph; the tooltip, accessible name and animated count arrow follow the push state.
-The branch and counts remain visible and can update during the push, and a failed check's mark gives way to the refresh
-glyph as during a check. Every window showing the project sees the pushing state, including one that connects while the
+**While a push is in flight the badge describes the push**, including over a check or pull running at the same time.
+The leading arc, tooltip, accessible name and animated count arrow follow the push state. The branch and counts remain
+visible and can update during the push, and a failed check's mark gives way to the arc. Every window showing the project sees the pushing state, including one that connects while the
 push is running. Once the push ends, successfully or otherwise, the badge shows the latest check or pull state, or its
 idle glyph if neither is running (see "Pushing the current branch" in `docs/product/project-git-actions.md`).
 

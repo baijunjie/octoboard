@@ -135,7 +135,7 @@ from the repository (see "Committed changes" in `docs/product/project-pane-git-c
   offered with the id its reference names, and comparing it fails (see "What the list says instead" in
   `docs/product/project-pane-git-change-list.md`).
 
-While the first branch list is being loaded, the selector is disabled and a spinner replaces its trailing chevron.
+While the first branch list is being loaded, the selector is disabled and a turning arc replaces its trailing chevron.
 A known branch stays visible; without one, a localized loading message replaces the prompt to choose a branch. There
 is no loading note below the selector. Once a list has been read, later refreshes keep it in place rather than
 returning the selector to its loading state.

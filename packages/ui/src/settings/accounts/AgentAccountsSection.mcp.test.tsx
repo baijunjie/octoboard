@@ -914,6 +914,7 @@ it("shows the wait for the browser in the row's Details and Cancel beside Sign i
   press(buttonNamed(dialog, `Sign in to ${isolate("jira")}`)!);
   const { cells } = rowOf(tableOf(dialog, "Local MCP servers"), "jira");
   expect(cells[3].textContent).toContain("Waiting for the sign-in in your browser…");
+  expect(cells[3].querySelector('svg.lucide-loader-circle[aria-hidden="true"]')).not.toBeNull();
   expect([...cells[4].querySelectorAll("button")].map((button) => button.textContent)).toEqual(["Cancel", "Sign in"]);
 });
 

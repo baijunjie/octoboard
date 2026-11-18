@@ -9,14 +9,14 @@ is on screen.
 - A terminal's connection can drop while the session is still running — the network failing, the daemon restarting;
   falling behind the output does not drop it (see "Sending output to clients" in
   `docs/product/terminal-output-scrollback-and-size.md`). The application then reconnects by itself, with a backoff,
-  up to five times. **While those attempts are under way the terminal is covered by a spinner and a line saying it is
-  reconnecting**, over whatever output was on screen. **Once the attempts are
+  up to five times. **While those attempts are under way the terminal is covered by an amber turning arc and a line
+  saying it is reconnecting**, over whatever output was on screen. The arc holds still with reduced motion. **Once the attempts are
   spent the cover becomes a disconnected panel**, in the shape every empty state takes (see "The full panel" in
   `docs/product/empty-states.md`): an unplugged-cord glyph, a heading saying the terminal is disconnected, and a
   **Reconnect** button. The top bar shows nothing about the terminal's connection in
   either state. Assistive technology is told each of these states as it begins, by the terminal's area alone; the
-  disconnected panel's message and button can also be reached when browsing, while the spinner covers cannot. A
-  reconnect in the background never steals keyboard focus.
+  disconnected panel's message and button can also be reached when browsing. A reconnect in the background never
+  steals keyboard focus.
 - **The Reconnect button is offered only while the connection to the daemon is open.** While it is not, the disconnected
   panel shows its message without the button, and the connection banner and its Retry are the way back (see "Losing the
   daemon connection" in `docs/product/application-lifecycle.md`).
@@ -54,8 +54,8 @@ describes — the process keeps running, but nothing reaches it and none of its 
 status *Reconnecting* (see "Which status a session shows" in `docs/product/session-statuses.md`), and its terminal:
 
 - **is covered at once**, whatever its connection reports and whatever it last drew: over the terminal's background, a
-  spinner, a heading saying it is reconnecting to the session, and a line saying that the session's process is still
-  running, that input is unavailable until the connection returns and that reconnection is automatic. The output already
+  slowly turning amber arc, a heading saying it is reconnecting to the session, and a line saying that the session's
+  process is still running, that input is unavailable until the connection returns and that reconnection is automatic. The output already
   on screen stays under the cover and is not shown as live. The cover offers no button, no countdown and no error:
   Octoboard retries by itself, for as long as the process runs. It comes before every other cover of the terminal — the
   loading state, the reconnecting and disconnected covers, and the switching cover of "While a session is switching" in
@@ -100,13 +100,10 @@ until the cover, and the loading state that follows it, are gone.
 
 ## Loading
 
-**Until the session's first output is on screen, the terminal is covered by a loading state** — a spinner and a line
-saying the session is being resumed, while a resume of it is under way or it has no process yet; that the session is
-starting, while it is still *starting* (see `docs/product/session-statuses.md`), during which there is nothing to
-connect to and the terminal attaches once the agent is up; and that the terminal is loading otherwise. It covers
-whatever comes before that first output, every time the terminal attaches — when a session is selected, resumed or
-reconnected: the resume starting the process, the connection being made, and a freshly started agent drawing its first
-screen. An agent that prints nothing does not keep it up: once the terminal has been connected for 10 seconds without
+**Until the session's first output is on screen, the terminal is covered.** A turning arc accompanies the message
+that the session is resuming or starting. While a session is *starting* (see `docs/product/session-statuses.md`), the
+terminal waits until the agent is up to attach. The cover uses a spinner with its loading message while it connects
+or waits for the first output. An agent that prints nothing does not keep it up: once the terminal has been connected for 10 seconds without
 output, the bare terminal is shown. While the terminal is not connected — a first connection that hangs, an attempt
 started with Reconnect, a resume still starting the process — the loading state stays, however long that takes. While
 the terminal is reconnecting or disconnected, the cover described in "Reconnecting" above is shown in its place. While

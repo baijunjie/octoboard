@@ -30,7 +30,7 @@ export function permissionDenied(path: string, detail: string): FixtureError {
  * everything beneath it, as the daemon marks it. A binary's `answeredParts` is how many parts of 1 MiB `read_file_range`
  * answers before it stops answering, which holds a copy of it part-way. */
 export type FixtureFile = (
-  | { dir: true; complete?: boolean; error?: FixtureError }
+  | { dir: true; complete?: boolean; error?: FixtureError; pending?: true }
   | { text: string; error?: FixtureError }
   | { image: { mediaType: string; data: string }; error?: FixtureError }
   | { binary: { size: number; answeredParts?: number }; error?: FixtureError }

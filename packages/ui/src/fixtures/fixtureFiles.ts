@@ -192,6 +192,7 @@ export function createFileReplies({ scenario, store, fail, restored }: FixtureCo
     list_project_dir: (body) => {
       const files = projectFiles(body.project);
       const dir = browsed(files, body.path);
+      if ("dir" in dir && dir.pending) return neverReplied();
       const complete = "dir" in dir ? dir.complete !== false : true;
       return { type: "project_dir", id: null, project: body.project, worktree: null, path: body.path, root_id: "fixture", entries: entriesUnder(files, body.path), complete };
     },

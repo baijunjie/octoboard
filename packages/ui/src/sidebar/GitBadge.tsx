@@ -18,7 +18,7 @@ import { gitBadgeAriaLabel, gitFailureLabel, gitFailureShown } from "../git/gitS
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { GitStatus } from "../protocol";
 import { useDaemon } from "../store";
-import { Button } from "../primitives";
+import { Button, WaitingIcon } from "../primitives";
 import type { GitRetried } from "./useGitRetryAnnouncement";
 
 function ScrollingCountArrow({ direction }: { direction: "up" | "down" }): React.ReactElement {
@@ -79,9 +79,9 @@ function GitNotFoundMark({ project, error, onRetried }: { project: string; error
  *
  * The glyph differs by `activity` and against the idle glyph, since motion alone is never the only
  * cue for a state: idle is a branch glyph (a commit glyph instead for a detached `HEAD`, so that is
- * told apart without reading the accessible name), and every in-flight activity a spinning
- * `RefreshCw`. The ahead count's arrow scrolls upward during a push; the behind count's arrow
- * scrolls downward during a fast-forward. Both scroll inside a fixed count-arrow-sized clip.
+ * told apart without reading the accessible name), a spinning `RefreshCw` while checking, and a turning arc while a pull
+ * or push runs. The ahead count's arrow scrolls upward during a push, and the behind count's arrow scrolls downward
+ * during a fast-forward. Both scroll inside a fixed count-arrow-sized clip.
  * The ahead/behind counts are likewise never colour alone.
  *
  * A failed check is a failure mark (`StatusMark`, "How a mark is drawn and opened" in
@@ -89,7 +89,7 @@ function GitNotFoundMark({ project, error, onRetried }: { project: string; error
  * application's own words, whose popover holds the reason, the remedy and, last, Git's or the system's own text, which
  * is shown nowhere else. A failure the daemon gives a code (`error_code`: a `git` that cannot be found) is worded as
  * the error alerts word it instead, with its remedy's link (Download Git) and Try again last (`GitNotFoundMark`), whose
- * outcome goes to `onRetried`. While a check, a pull or a push runs, the refresh glyph takes its place
+ * outcome goes to `onRetried`. While a check, a pull or a push runs, the activity glyph takes its place
  * (`gitFailureShown`), and it comes back when that run ends unless a check in it succeeded. It stands outside the
  * tooltip's trigger, since a mark is a popover and never also a tooltip, and outside the `aria-hidden` box below. In a
  * sidebar row it is a tab stop of its own, as the row's other buttons are, and its press (react-aria's, which keeps the
@@ -150,7 +150,7 @@ export function GitBadge({
   // is all the badge says, so this is also the one state with no tooltip repeating it.
   const noCommitsYet = !status.branch && status.activity === "idle" && !status.error;
   const failed = gitFailureShown(status);
-  // `undefined` while in flight (the refresh glyph), `null` where the failure mark stands in for the idle glyph.
+  // `undefined` while in flight (the activity glyph), `null` where the failure mark stands in for the idle glyph.
   const Glyph = status.activity !== "idle" ? undefined : failed ? null : status.detached ? GitCommitHorizontal : GitBranch;
   // A zero-minimum branch track lets the badge shrink to its glyph and counts. Its automatic
   // minimum width reserves those fixed tracks even when the surrounding row is squeezed. Beside the
@@ -159,7 +159,9 @@ export function GitBadge({
   const content = (
     <>
       {Glyph === undefined ? (
-        <RefreshCw aria-hidden="true" className="size-3.5 shrink-0 motion-safe:animate-spin-slow" />
+        status.activity === "checking"
+          ? <RefreshCw aria-hidden="true" className="size-3.5 shrink-0 motion-safe:animate-spin-slow" />
+          : <WaitingIcon size="compact" />
       ) : (
         Glyph && <Glyph aria-hidden="true" className="size-3.5 shrink-0" />
       )}

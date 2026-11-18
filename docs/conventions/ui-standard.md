@@ -125,6 +125,23 @@ status; a bare count after a row's name (the rail processes panel's rows, a Focu
 which reuses the default small bordered `StatusBadge`: green (`success`) in the processes list and neutral in a Focus
 view chip.
 
+The Remote devices sidebar uses 16px connection status glyphs with indicator tooltips. Connected and Opened in browser
+use the success tint foreground, with a chain link and a browser window respectively. Reconnecting uses the
+shared `ReconnectingIcon`. The row's accessible name includes the same status text as the tooltip. The selected device's
+page header shows the connection state in a soft `StatusBadge`, with the compact reconnecting icon before the label
+when the device is reconnecting.
+
+**Choose an activity glyph by what is happening.** The rotating double arrow (Lucide `RefreshCw`,
+`motion-safe:animate-spin-slow`) shows a refresh that re-fetches data, such as Git status, Files or MCP inventory.
+The rotating gapped circle (Lucide `LoaderCircle`) shows a wait for a state to complete, such as starting or switching
+a session, signing in, or loading asynchronous menu items. Starting and switching keep their muted grey. Reconnecting
+uses the shared `ReconnectingIcon` at full opacity and a linear 2 seconds per turn, in the amber warning tint foreground
+(`--tint-warning-fg`) or the inherited connection banner foreground. Use 14px in compact status markers, the device
+badge and the connection banner, 16px in regular status slots and 24px in terminal reconnect and pending covers.
+The small HeroUI spinner in a pending button shows that the operation begun from that control is still running.
+HeroUI's internal spinners and the spinner in a loading cover for content such as a terminal's first output also use
+the standard loading presentation. All rotating glyphs hold still with reduced motion.
+
 Rail counts, notification dots, the update badge on an agent tab's actions button and console avatar markers use
 HeroUI `Badge` with its default typography, border and colours, selected through its semantic props. The wrapper
 extends its sizes with `size="xs"`, a 10px notification dot for marks without a count or glyph, such as the update
@@ -615,7 +632,7 @@ reason: the user is left looking at it and needs to know what would make it avai
 drag selects text, so Copy has nothing useful to add.) One disabled only for the moment an operation takes (a session
 still starting, an account switch or a sharing change under way, a shell that is closing, a login under way) carries
 none: it comes back on its own before a reason would be read. Nor does one whose cause the screen already shows where it
-happens (a terminal that cannot take input, covered by its reconnecting spinner or its disconnected notice). A form
+happens (a terminal that cannot take input, covered by its reconnecting cover or its disconnected notice). A form
 still states a brief hold when it affects the value already chosen, as that field's error or as an alert.
 
 A disabled select option or menu item, with a reason or without, stays in the arrow-key walk (`disabledBehavior:
@@ -1481,9 +1498,9 @@ On touch, a mark opens its tooltip's content in a popover when tapped (the mark 
 see "A tooltip is the application's own"). It is turned off for every mark that sits inside something answering the
 same tap, since the popover must not open over what the press does: the marks of a session row in the sidebar, in a
 focus mode (card and archive preview) and in the archive view (status glyph, agent icon, context size and binding
-badge, plus a focus mode's relative time), the archive submenu's relative time (a menu item), the project row's Git
-badge, the top-status marker (a project row, the console-switch chip), a branch's responsible-session badge (an option),
-and the switch behind focus mode's include-console-sessions tooltip. The same mark where it stands alone, such as the
+badge, plus a focus mode's relative time), a Remote devices sidebar row's connection glyph, the archive submenu's
+relative time (a menu item), the project row's Git badge, the top-status marker (a project row, the console-switch chip),
+a branch's responsible-session badge (an option), and the switch behind focus mode's include-console-sessions tooltip. The same mark where it stands alone, such as the
 title bar's status glyph, the requested-sessions dialog's status and agent glyphs, a focus mode's header Git badge and
 the history header's context badge, opens it. The rest of what a row's marks say reaches touch through the row's
 accessible name alone, a kept shortfall: the row's press is its own, and no second route to the marks is built for it
@@ -1532,7 +1549,7 @@ so a swap does not read as rows removed and added. (Source: user decision.)
 
 ### Loading text with a trailing indicator
 
-When a loading status has a spinner or rotating refresh icon immediately after its text, the text takes no trailing
+When a loading status has a spinner, waiting arc or rotating refresh icon immediately after its text, the text takes no trailing
 ellipsis in any language. This applies to the account MCP dialog's refreshing status. A select whose value and loading
 indicator occupy opposite ends of the control keeps its loading ellipsis. Order follows the reading direction, so RTL
 layouts mirror the positions. (Source: user decision.)
@@ -1978,14 +1995,14 @@ long as the record says so. Nothing global stands for it — no bar, no toast, n
 in the sidebar, the rail or the menu bar.
 
 - **Its status slot** shows the derived status *Reconnecting* (`holdsPendingLink`, `sessionShownStatusKind`) in place
-  of the stored one — the muted turning arc, still under reduced motion, with its name as the slot's name and
-  tooltip — in the title bar's breadcrumb, sidebar rows and focus rows alike. Every place that draws a status gets it
-  from the shared derivation, never from a test of its own. Ordering keeps the stored status; the summaries (console
+  of the stored one, with the amber `ReconnectingIcon` and the status as the slot's name and tooltip. This applies in
+  the title bar's breadcrumb, sidebar rows, Focus cards, confirmation lists and compact status markers. Every status
+  slot uses the shared derivation. Ordering keeps the stored status; the summaries (console
   avatars, the menu bar list) go by the shown status, so a session shown reconnecting is in no summary status, and it is
   counted as waiting for you nowhere.
 - **Its terminal** is covered by a cover of its own over that terminal only (`TerminalCover`'s `pending`): the
-  terminal background, a spinner, an in-progress title with an ellipsis and a short explanation, no button — the
-  retrying is not the user's to do. It is an in-progress cover like the loading cover, its title carrying an ellipsis,
+  terminal background, the shared reconnecting icon, an in-progress title with an ellipsis and a short explanation.
+  The daemon handles the retries automatically. It is an in-progress cover like the loading cover, its title carrying an ellipsis,
   not an empty state, so it is not an `EmptyPanel`. The covered terminal is `inert`; the cover is a focusable region
   named by the session's name (a shell terminal's by its name, as its tab is), not by the title it holds, and described
   by its title and body; it takes focus held in the terminal and is where F6 lands. Its message is spoken once through
@@ -2019,8 +2036,9 @@ its clipping and fade, so a long name clips and the mark stays visible after its
 the name has one, stays the name's alone ("Hover marquees belong to one text label"). Elsewhere it takes the place of
 its own layout: a status column of a table, beside the section's heading for a part of a compact layout, inline with the
 text in a document. A failed Git check of a project stands at the start of its Git badge, in place of the badge's branch
-glyph, outside the badge's tooltip trigger and as a tab stop of its own; while a check, pull or push runs the refresh
-glyph takes its place, and the mark comes back when that run ends unless a check in it succeeded. The row's accessible
+glyph, outside the badge's tooltip trigger and as a tab stop of its own. A check replaces the mark with a rotating
+double arrow. A pull or push replaces it with a rotating gapped circle. When the operation ends, the mark comes back
+unless a check in it succeeded. The row's accessible
 name adds the mark's name ("Git check failed") as its own phrase; Git's text is in no name and no tooltip, only in the
 mark's popover. A check that found no Git at all is worded as the error alert dialog words a missing Git (its sentence
 and remedy), shows no raw text, and offers Download Git before its Try again. A press on the mark keeps to itself and
@@ -2563,7 +2581,7 @@ reason retain their natural height rather than being forced into a fixed-height 
 
 ### Selects while their options load
 
-A select shows its options loading inside the control: a decorative spinner replaces the trailing chevron, and
+A select shows its options loading inside the control: a decorative waiting arc replaces the trailing chevron, and
 `aria-busy` marks the trigger. With no chosen value, a localized "Loading…" replaces the placeholder and its badge;
 a chosen value stays visible and is never cleared by loading. The select and its clear action are disabled until
 the options arrive. There is no loading description below the field. Explanatory notes and failure marks keep their

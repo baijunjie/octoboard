@@ -1086,7 +1086,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Sidebar sessions",
     category: "normal",
     title: "Session resume, looking for the conversation",
-    description: "With a valid ID typed and no answer yet, a small spinner sits at the end of the Session ID field, nothing else appears under it, and the footer button is disabled.",
+    description: "With a valid ID typed and no answer yet, a small turning arc sits at the end of the Session ID field, nothing else appears under it, and the footer button is disabled.",
     conversationLocation: "pending",
     steps: resumeLookup,
   },
@@ -2041,7 +2041,7 @@ export const dialogScenarios: Scenario[] = [
     group: "Consoles",
     category: "normal",
     title: "New console while the model list is out",
-    description: "All four Model and Reasoning effort pickers are locked. Each empty picker says Loading… inside its trigger, with a spinner in place of its trailing chevron and no loading note underneath.",
+    description: "All four Model and Reasoning effort pickers are locked. Each empty picker says Loading… inside its trigger, with a turning arc in place of its trailing chevron and no loading note underneath.",
     state: dialogState,
     agentModels: { claude: "pending" },
     steps: [

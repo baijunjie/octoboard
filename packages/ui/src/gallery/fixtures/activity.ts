@@ -42,6 +42,7 @@ const infrastructure = projectOf("p-infrastructure", console_.id, "Infrastructur
 const designSystem = projectOf("p-design-system", console_.id, "Design system");
 const pipeline = projectOf("p-pipeline", console_.id, "Data pipeline");
 const onboarding = projectOf("p-onboarding", console_.id, "Onboarding");
+const integrations = projectOf("p-integrations", console_.id, "Integrations");
 const payments = projectOf("p-payments", console_.id, "Payments");
 const staging = consoleOf("c-staging", "Staging");
 const preview = projectOf("p-preview", staging.id, "Preview site");
@@ -69,6 +70,7 @@ const markerSessions = [
   sessionOf("s-pipeline-2", console_.id, pipeline.id, "Port the schema", "working", { bound_to: "s-pipeline-1" }),
   sessionOf("s-onboarding-1", console_.id, onboarding.id, "Launch the agent", "starting", { prompt_on_launch: true }),
   sessionOf("s-payments-1", console_.id, payments.id, "Update the card form", "idle"),
+  sessionOf("s-integrations-1", console_.id, integrations.id, "Check the webhook delivery", "working", { holder_link: "pending" }),
   sessionOf("s-preview-1", staging.id, preview.id, "Serve the preview", "idle", watching),
   sessionOf("s-preview-2", staging.id, preview.id, "Update the preview", "working"),
   sessionOf("s-release-1", build.id, release.id, "Prepare the release", "working"),
@@ -90,7 +92,7 @@ const markerSessions = [
 const markerState = switchingAccount(
   snapshotState({
     consoles: [console_, dormant, paused, finished, delegating, staging, build, starting, switching, interrupted, ready],
-    projects: [archived, empty, website, api, mobile, billing, docs, analytics, infrastructure, designSystem, pipeline, onboarding, payments, preview, release],
+    projects: [archived, empty, website, api, mobile, billing, docs, analytics, infrastructure, designSystem, pipeline, onboarding, payments, integrations, preview, release],
     sessions: markerSessions,
   }),
   ["s-payments-1", "s-switching-1"],
@@ -142,7 +144,7 @@ export const activityScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Collapsed project statuses and rail session counts",
-    description: "Collapsed project rows retain every status glyph, while avatar badges show only Waiting for you, Paused, Done and Awaiting instructions by priority. Main's tooltip starts open: its name sits above a divider and a two-column list, with muted status labels at the start and numeric counts aligned at the end. The rows have no icons or coloured chips. Its two waiting sessions include one console session and one project session; its two Done sessions and the remaining project sessions demonstrate grouping by displayed status, including Dormant, Child sessions working, Working in background, Starting, Switching account and Interrupted. Archived project and console sessions are excluded. The avatar's accessible name carries the same counts once. Focus or hover another avatar to compare: consoles without an eligible avatar badge still show all their session counts in their tooltips. Ready is the last avatar, with a complete green speech-bubble badge outside its button; scroll to the bottom at a short window height to check that the badge stays clear of the scroller's edge. The pinned Archived only and No sessions yet projects remain dimmed and folded after the active projects; expand from Projects to open only the eleven active projects.",
+    description: "Collapsed project rows retain every status glyph, while avatar badges show only Waiting for you, Paused, Done and Awaiting instructions by priority. Main's tooltip starts open: its name sits above a divider and a two-column list, with muted status labels at the start and numeric counts aligned at the end. The rows have no icons or coloured chips. Its two waiting sessions include one console session and one project session; its two Done sessions and the remaining project sessions demonstrate grouping by displayed status, including Dormant, Child sessions working, Working in background, Starting, Switching account and Interrupted. The collapsed Integrations row shows the compact amber Reconnecting arc. Archived project and console sessions are excluded. The avatar's accessible name carries the same counts once. Focus or hover another avatar to compare: consoles without an eligible avatar badge still show all their session counts in their tooltips. Ready is the last avatar, with a complete green speech-bubble badge outside its button; scroll to the bottom at a short window height to check that the badge stays clear of the scroller's edge. The pinned Archived only and No sessions yet projects remain dimmed and folded after the active projects; expand from Projects to open only the twelve active projects.",
     state: markerState,
     steps: [
       (ui) => ui.press(ui.t("sidebar.collapseAll")),

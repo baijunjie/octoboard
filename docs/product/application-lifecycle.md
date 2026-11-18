@@ -134,8 +134,9 @@ does while the daemon is not running.
 
 A dropped connection is retried automatically a couple of times with a short backoff, except in a remote daemon's
 window, which retries until it connects or is closed and offers Retry all the while (see "A dropped connection" in
-`docs/product/remote-daemons.md`). While that is happening a banner says so. Once the attempts are spent, the banner
-offers a Retry button; nothing else retries forever on its own. Pressing Retry turns the banner back at once to saying
+`docs/product/remote-daemons.md`). While that is happening a banner shows a turning arc in the banner's
+foreground beside the reconnecting message. The arc holds still with reduced motion. Once the attempts are spent, the
+banner offers a Retry button; nothing else retries forever on its own. Pressing Retry turns the banner back at once to saying
 it is reconnecting, without the button; a connection that fails again is retried automatically as before, and Retry is
 offered again once those attempts are spent. A browser page
 that has asked its daemon to restart into an update starts the attempts again by itself for a while (see "Restarting

@@ -107,6 +107,16 @@ export const projectFilesScenarios: Scenario[] = [
     steps: [...openFiles, (ui) => ui.press("src"), (ui) => ui.press("main.ts"), (ui) => ui.wait(600), (ui) => ui.key("Escape")],
   },
   {
+    id: "files-folder-loading",
+    group: GROUP,
+    category: "normal",
+    title: "Folder listing in progress",
+    description: "The expanded src folder shows a turning arc in its loading row while its listing is pending.",
+    state,
+    filesByProject: { [web.id]: { ...SAMPLE_FILES, src: { dir: true, pending: true } } },
+    steps: [...openFiles, (ui) => ui.press("src")],
+  },
+  {
     id: "files-tree-ignored",
     group: GROUP,
     category: "normal",

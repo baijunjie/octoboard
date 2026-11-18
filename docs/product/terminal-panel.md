@@ -29,7 +29,7 @@ That is what a Terminal card floating in shows, what an open Terminal panel show
 passes to a project with no terminal, and what is left when the project's last tab is closed: the panel stays open, and
 stays maximized if it was (see "Maximizing a panel" in `docs/product/right-pane-panels.md`).
 
-**While the first terminal of the project is being started**, the panel shows a spinner with "Starting terminal…" in
+**While the first terminal of the project is being started**, the panel shows a turning arc with "Starting terminal…" in
 place of the empty state, and assistive technology is told so. Opening the panel or pressing New terminal meanwhile
 joins that start rather than starting a second shell; a folder row's Terminal never joins one, and always starts a
 shell of its own. Once the project has a terminal, every press of New terminal starts another; a project may have any
@@ -192,9 +192,9 @@ part of what is said; it is reached as any other control. The tab stays until it
 
 A running shell's terminal whose connection drops reconnects by itself, as a session's terminal does (see "Reconnecting"
 in `docs/product/session-terminal-reconnecting-and-loading.md`): with a backoff, up to five times, under a cover with a
-spinner saying it is reconnecting; then a cover saying it is disconnected, with a **Reconnect** button offered only
-while the connection to the daemon is open. Pressing Reconnect starts the attempts over and puts keyboard focus in the
-terminal; a tap on it leaves focus where the button's going away puts it after a tap (below). A terminal whose attempts
+turning amber arc and a line saying it is reconnecting. Once the attempts are spent, the cover says it is disconnected,
+with a **Reconnect** button offered only while the connection to the daemon is open. Pressing Reconnect starts the
+attempts over and puts keyboard focus in the terminal; a tap on it leaves focus where the button's going away puts it after a tap (below). A terminal whose attempts
 are spent is tried again by Reconnect, or by itself when the application re-reads the daemon's whole state on a new
 connection to the daemon. Each tab reconnects on its own, shown or hidden; only the shown tab's state is told to
 assistive technology, as it begins, and, for a tab already reconnecting or disconnected, about 1.5 seconds after the tab
@@ -218,8 +218,8 @@ A running shell terminal whose process Octoboard cannot reach for now — its re
 "A holder that cannot be connected to" in `docs/product/process-holders.md` describes — keeps the state *running*, and
 its tab stays as it was. Its terminal follows the same rules as a session's terminal in that case (see "While the
 session's process cannot be reached" in `docs/product/session-terminal-reconnecting-and-loading.md`): a cover at once,
-over its last screen, with a spinner, a heading saying it is reconnecting to the terminal and a line saying that the
-shell's process is still running, that input is unavailable until the connection returns and that reconnection is
+over its last screen, with a slowly turning amber arc, a heading saying it is reconnecting to the terminal and a line
+saying that the shell's process is still running, that input is unavailable until the connection returns and that reconnection is
 automatic; no button; nothing sent to the shell and nothing kept to be sent later; no automatic reconnect attempt made
 or counted; and, once the process can be reached, one attach by itself with the five attempts fresh, even where they had
 been spent. Each tab goes by its own terminal's record. A shell that exits meanwhile shows its exited notice instead

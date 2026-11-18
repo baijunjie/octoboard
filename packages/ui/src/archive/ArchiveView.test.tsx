@@ -458,11 +458,15 @@ it("asks to probe the apps for the rows it lists as it opens, and again for only
   });
   onTestFinished(() => void vi.unstubAllGlobals());
   const onRefreshNativeApps = vi.fn();
-  renderArchiveView(undefined, undefined, listed, { restore: { shown: 1, scrollTop: 0 }, onRefreshNativeApps });
+  const { container } = renderArchiveView(undefined, undefined, listed, { restore: { shown: 1, scrollTop: 0 }, onRefreshNativeApps });
 
   expect(onRefreshNativeApps).toHaveBeenCalledExactlyOnceWith([listed[0].id]);
+  const waiting = container.querySelector('[role="status"][aria-label="Loading more…"]');
+  expect(waiting?.querySelector('svg.lucide-loader-circle[aria-hidden="true"]')).not.toBeNull();
 
   act(() => loadMore());
+
+  expect(waiting?.isConnected).toBe(false);
 
   expect(onRefreshNativeApps).toHaveBeenCalledTimes(2);
   expect(onRefreshNativeApps).toHaveBeenLastCalledWith(listed.slice(1).map((session) => session.id));

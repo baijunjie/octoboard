@@ -1,7 +1,8 @@
-import { Plug, Plus, Server, Trash2 } from "lucide-react";
+import { AppWindow, Link, Plug, Plus, Server, Trash2 } from "lucide-react";
 import React, { useRef } from "react";
 
 import { RowControls, RowIconGroup, RowIconSlot } from "../components/controls/RowControls";
+import { IndicatorTooltip } from "../components/hint/IndicatorTooltip";
 import { ActionMenu } from "../components/menus/ActionMenu";
 import { useListMotion } from "../components/motion/useListMotion";
 import { EmptyPanel } from "../components/panel/EmptyPanel";
@@ -9,7 +10,8 @@ import { PANE_HEADER_FRAME_CLASS } from "../components/panel/paneHeaderFrame";
 import { RowIconButton } from "../components/rows/RowIconButton";
 import { RowLabel, TreeRow } from "../components/rows/TreeRow";
 import { FadedScroller } from "../components/scroll/scrollFade";
-import { StatusBadge } from "../components/status/StatusBadge";
+import { ReconnectingIcon } from "../components/status/ReconnectingIcon";
+import { StatusSlot } from "../components/status/statusGlyphs";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import type { RemoteDaemonEntry } from "../platform";
@@ -18,10 +20,10 @@ import { useRemoteDevices } from "./RemoteDevices";
 
 /** The sidebar's content while the Remote devices page shows: a header with the page's title and Add remote daemon, and
  * below it the saved devices in the order they were saved, one row each: the server glyph, the name, where the device
- * is connected a badge with how, and the row's menu (Connect or Open, Remove), also on a right-click. The selected row
- * is marked as the current item. With none saved, one compact empty row stands in the list's place, whose press starts
- * Add remote daemon. The menu's Connect and Open are unavailable while another device is being connected, as the
- * page's button is. */
+ * is connected a status glyph with a tooltip, and the row's menu (Connect or Open, Remove), also on a right-click.
+ * The selected row is marked as the current item. With none saved, one compact empty row stands in the list's place,
+ * whose press starts Add remote daemon. The menu's Connect and Open are unavailable while another device is being
+ * connected, as the page's button is. */
 export function RemoteDevicesSidebar(): React.ReactElement {
   const t = useT();
   const { entries, entriesRead, statuses, selectedId, select, startAdd, connecting, connect, askRemove } = useRemoteDevices();
@@ -79,21 +81,22 @@ function DeviceRow({ entry, state, selected, connectable, onSelect, onConnect, o
   const t = useT();
   const rowRef = useRef<HTMLDivElement>(null);
   const name = isolate(entry.name);
+  const statusLabel = state ? t(CONNECTION_STATE_WORDS[state]) : undefined;
   return (
     <TreeRow
       ref={rowRef}
-      ariaLabel={state ? t("session.status.named", { name, status: t(CONNECTION_STATE_WORDS[state]) }) : entry.name}
+      ariaLabel={statusLabel ? t("session.status.named", { name, status: statusLabel }) : entry.name}
       selected={selected}
       onActivate={() => onSelect(entry.id)}
     >
       <RowIconSlot placement="leading"><Server aria-hidden="true" className="size-4 text-app-muted" /></RowIconSlot>
       <RowLabel title={entry.name} className="min-w-0 flex-1">{entry.name}</RowLabel>
-      {state && (
-        <StatusBadge color={state === "reconnecting" ? "warning" : "success"} variant="soft">
-          {t(CONNECTION_STATE_WORDS[state])}
-        </StatusBadge>
-      )}
-      <RowControls>
+      <RowControls
+        reserve
+        fixed={state && statusLabel ? (
+          <RowIconSlot><ConnectionStatusIcon state={state} label={statusLabel} /></RowIconSlot>
+        ) : undefined}
+      >
         <ActionMenu
           label={t("remoteDaemons.actionsLabel", { name })}
           items={[
@@ -105,5 +108,19 @@ function DeviceRow({ entry, state, selected, connectable, onSelect, onConnect, o
         />
       </RowControls>
     </TreeRow>
+  );
+}
+
+/** The row names the state itself and handles a tap on the glyph as a row press. */
+function ConnectionStatusIcon({ state, label }: { state: ConnectionState; label: string }): React.ReactElement {
+  const ConnectedIcon = state === "connected" ? Link : AppWindow;
+  return (
+    <IndicatorTooltip tooltip={label} className="inline-flex shrink-0" touchPopover={false}>
+      <StatusSlot aria-hidden="true">
+        {state === "reconnecting"
+          ? <ReconnectingIcon />
+          : <ConnectedIcon className="size-4 text-[var(--tint-success-fg)]" />}
+      </StatusSlot>
+    </IndicatorTooltip>
   );
 }

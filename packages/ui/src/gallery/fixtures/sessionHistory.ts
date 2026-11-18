@@ -275,7 +275,7 @@ export const sessionHistoryScenarios: Scenario[] = [
     ...base,
     id: "history-reopening",
     title: "Reopening an archived session",
-    description: "Reopen was pressed and has not been answered: the \"Resuming session…\" cover with its spinner paints over the history, and the floating bar is gone.",
+    description: "Reopen was pressed and has not been answered: the \"Resuming session…\" cover with its muted turning arc paints over the history, and the floating bar is gone.",
     sessionHistory: { [archived.id]: MESSAGES },
     sessionResumes: { [archived.id]: "pending" },
     steps: [...openHistory, (ui) => ui.press(ui.t("sidebar.session.reopen"))],
