@@ -221,6 +221,48 @@ it("opens on the account whose weekly quota resets soonest when automatic select
   container.remove();
 });
 
+const usedUpSession = (account: string | null) => ({
+  agent: "codex" as const, account, fetched_at: Date.now(), plan: null, unavailable: null,
+  windows: [{ kind: "session" as const, label: null, used_percent: 100, resets_at: Date.now() + 3_600_000, window_minutes: 300 }], email: null,
+});
+const codexSettings = {
+  ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/p", git_workflow: DEFAULT_GIT_WORKFLOW,
+  accounts: [
+    accountOf("a-1", "codex", "Work", "/home/me/.codex-work"),
+    accountOf("a-2", "codex", "Spare", "/home/me/.codex-spare"),
+  ],
+};
+const accountError = () => document.body.querySelector('[data-slot="field-error"] [role="alert"]');
+
+it("moves off a used-up account to a usable one of the agent, and lets the used-up one be picked and opened on", async () => {
+  const { container, root, daemon } = renderDialog([], { settings: codexSettings, accountQuotas: [usedUpSession(null), usedUpSession("a-1")] }, { default_agent: "codex", accounts: { codex: "a-1" } });
+  vi.mocked(daemon.request).mockResolvedValue({ type: "ack", id: null } as never);
+  expect(pickerNamed("Codex account").textContent).toContain("Spare");
+  await act(async () => pickerNamed("Codex account").click());
+  const work = optionElements().find((option) => option.textContent?.includes("Work"));
+  expect(work?.getAttribute("aria-disabled")).not.toBe("true");
+  expect(work?.textContent).toContain("Limit reached");
+  await act(async () => work?.click());
+  expect(pickerNamed("Codex account").textContent).toContain("Work");
+  expect(accountError()).toBeNull();
+  await act(async () => buttons().find((button) => button.textContent === "Open")?.click());
+  expect(daemon.request).toHaveBeenCalledWith(expect.objectContaining({ type: "open_session", agent: "codex", account: "a-1" }));
+  act(() => root.unmount());
+  container.remove();
+});
+
+it("opens on the agent's account when every account of it is used up, with no error", async () => {
+  const { container, root, daemon } = renderDialog([], { settings: codexSettings, accountQuotas: [usedUpSession(null), usedUpSession("a-1"), usedUpSession("a-2")] }, { default_agent: "codex", accounts: { codex: "a-1" } });
+  vi.mocked(daemon.request).mockResolvedValue({ type: "ack", id: null } as never);
+  expect(accountError()).toBeNull();
+  const open = buttons().find((button) => button.textContent === "Open")!;
+  expect(open.hasAttribute("disabled") || open.getAttribute("aria-disabled") === "true").toBe(false);
+  await act(async () => open.click());
+  expect(daemon.request).toHaveBeenCalledWith(expect.objectContaining({ type: "open_session", agent: "codex", account: "a-1" }));
+  act(() => root.unmount());
+  container.remove();
+});
+
 it("hides turned-off accounts and hides their agent when every account is off", async () => {
   const settings = {
     ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/p", git_workflow: DEFAULT_GIT_WORKFLOW, disabled_default_accounts: ["codex" as const],

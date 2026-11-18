@@ -101,7 +101,7 @@ pub(crate) async fn handoff_session_with(
     let open = receiving_request(state, &original, &request, Some(key.clone()));
 
     // Refused here for what opening would refuse, before the package is read and written.
-    super::open::check_open(state, &open).await?;
+    super::open::check_handoff_open(state, &open).await?;
 
     // The original's brief is not kept anywhere, so the package has none; the first user message in
     // its conversation is the same text.

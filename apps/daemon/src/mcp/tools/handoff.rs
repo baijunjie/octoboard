@@ -83,7 +83,7 @@ pub(in crate::mcp) async fn handoff_session(
     // Where nothing the user changes in the dialog could help.
     handoff::refuse_unless_it_can_be_handed_off(state, &target, agent)?;
     let open = handoff::receiving_request(state, &target, &asked.handoff(&target), None);
-    let account = coordinator::open::check_open_asking(state, &open).await?;
+    let account = coordinator::open::check_handoff_open_asking(state, &open).await?;
     let change = Change::Handoff {
         target: target_id,
         agent,
@@ -628,6 +628,63 @@ mod tests {
         .expect_err("refused");
 
         assert!(err.to_string().contains("is disabled"), "{err}");
+        assert!(!state.session_requests.is_waiting_for("a"));
+    }
+
+    /// A handoff that names an account whose quota is used up is refused, with the quota's code and
+    /// nothing launched or recorded, when it needs no approval.
+    #[tokio::test]
+    async fn a_handoff_to_a_used_up_account_is_refused_and_launches_nothing() {
+        let (state, _dir) = shared_console_state("handoff-used-up");
+        state.store.set_auto_approve_handoffs(true).unwrap();
+        state
+            .store
+            .insert_account(&account(
+                "codex-spent",
+                AgentId::CODEX,
+                "Spent",
+                "/tmp/codex-spent",
+            ))
+            .unwrap();
+        state.account_quotas.hold_in_dir_for_test(
+            &crate::protocol::AccountQuota {
+                reset_credits: None,
+                agent: AgentId::CODEX,
+                account: Some("codex-spent".to_string()),
+                fetched_at: 1,
+                plan: None,
+                email: None,
+                windows: vec![crate::protocol::QuotaWindow {
+                    kind: crate::protocol::QuotaWindowKind::Session,
+                    label: None,
+                    used_percent: 100.0,
+                    resets_at: Some(crate::time::now_millis() + 3_600_000),
+                    window_minutes: None,
+                }],
+                unavailable: None,
+            },
+            "/tmp/codex-spent",
+        );
+        let _caller = running(&state, "a");
+        let _original = running(&state, "of-a");
+        let sessions_before = state.store.list_sessions().unwrap().len();
+        let (launches, started) = (Launches::default(), Started::default());
+
+        let err = handoff_session(
+            &state,
+            &state.session_record("a").unwrap(),
+            &arguments(json!({ "session": "of-a", "agent": "codex", "account": "Spent" })),
+            stand_in_launch(&started, &launches, || {}),
+        )
+        .await
+        .expect_err("refused");
+
+        assert_eq!(
+            crate::test_support::code_of(&err),
+            crate::protocol::error_code::ACCOUNT_QUOTA_EXHAUSTED
+        );
+        assert!(launches.lock().unwrap().is_empty());
+        assert_eq!(state.store.list_sessions().unwrap().len(), sessions_before);
         assert!(!state.session_requests.is_waiting_for("a"));
     }
 

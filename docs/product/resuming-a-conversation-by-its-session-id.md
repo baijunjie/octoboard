@@ -66,9 +66,10 @@ If the agent or account holding the record is not offered, or stops being offere
 is uninstalled or no longer added, or the account is removed — the fields after the ID go, an alert under the field says
 that the agent or account holding the conversation is no longer available, and the submit button is disabled; no other
 agent or account is used in its place. An account holding the record that is offered but cannot open a session — turned
-off, used up, not logged in, or having its sharing changed — keeps the fields, and its locked Agent field says why under it, marked
-invalid, as the **Agent** field does (see "The session dialog" in `docs/product/opening-sessions.md`); the submit button
-is disabled meanwhile.
+off, not logged in, or having its sharing changed — keeps the fields, and its locked Agent field says why under it,
+marked invalid, as the **Agent** field does (see "The session dialog" in `docs/product/opening-sessions.md`); the submit
+button is disabled meanwhile. An account holding the record whose quota is used up is not refused: the conversation
+opens on it, as in the **Agent** field.
 
 **Naming a session outside the project.** The error for a conversation held outside the project names the session that
 holds it by its displayed name (see "Displayed names" in `docs/product/session-titles.md`), and where it is: the project

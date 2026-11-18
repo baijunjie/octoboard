@@ -581,13 +581,16 @@ const LIST_AGENTS_FROM_WEEKLY: &str =
     over a billing period). All values are percentages of a window: \
     `used_percent` and `remaining_percent`, with `resets_at` (milliseconds since \
     the epoch) and `window_minutes`; no absolute token or dollar amount is \
-    available. `exhausted` says the account is used up and cannot open a session \
-    until it resets, and `exhausted_until` is when (milliseconds since the epoch; \
-    null when it is not exhausted or the reset time is unknown). `can_open` says a \
-    session could be opened on the account now; when it is false \
-    `cannot_open_reason` says why (used up, not logged in, or a change of its \
-    sharing settings is running). `auto_select_account` says whether automatic \
-    account selection is enabled for sessions opened without naming an account. \
+    available. `exhausted` says the account's plan quota is used up until it \
+    resets, and `exhausted_until` is when (milliseconds since the epoch; null when \
+    it is not exhausted or the reset time is unknown). A new session can still be \
+    opened on an exhausted account by naming it, but it will stop on the usage \
+    limit until the reset. `can_open` says the account is usable now: automatic \
+    account selection may choose it, and a session can be switched or handed off \
+    to it; when it is false `cannot_open_reason` says why (used up, not logged \
+    in, or a change of its sharing settings is running). `auto_select_account` \
+    says whether automatic account selection is enabled for sessions opened \
+    without naming an account. \
     Naming an agent that is not listed returns `agents: []`. These are the \
     readings Octoboard last took, refreshed about every five minutes, and this \
     call takes a new one only when `refresh` is true: `fetched_at` says how old a \

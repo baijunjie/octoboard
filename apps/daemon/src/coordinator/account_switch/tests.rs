@@ -49,6 +49,59 @@ async fn a_switch_onto_a_disabled_account_is_refused() {
     assert_eq!(after.status, SessionStatus::Interrupted);
 }
 
+/// A switch onto an account whose quota is used up is refused, though a new session may open on
+/// one, before anything is recorded or stopped.
+#[tokio::test]
+async fn a_switch_onto_an_account_whose_quota_is_used_up_is_refused() {
+    let (state, dir) = console_with_project_and_accounts("coordinator-switch-used-up");
+    state
+        .store
+        .insert_session(&project_session(
+            "s",
+            AgentId::CLAUDE,
+            SessionStatus::Interrupted,
+        ))
+        .unwrap();
+    let account_dir = state
+        .store
+        .account_dir(&Some("claude-a".to_string()))
+        .unwrap()
+        .unwrap();
+    state.account_quotas.hold_in_dir_for_test(
+        &crate::protocol::AccountQuota {
+            reset_credits: None,
+            agent: AgentId::CLAUDE,
+            account: Some("claude-a".to_string()),
+            fetched_at: 1,
+            plan: None,
+            email: None,
+            windows: vec![crate::protocol::QuotaWindow {
+                kind: crate::protocol::QuotaWindowKind::Weekly,
+                label: None,
+                used_percent: 100.0,
+                resets_at: Some(crate::time::now_millis() + 60_000),
+                window_minutes: None,
+            }],
+            unavailable: None,
+        },
+        &account_dir,
+    );
+
+    let err = switch_session_account(
+        &state,
+        "s",
+        Some(Some("claude-a".to_string())),
+        None,
+        shell_env(&dir),
+    )
+    .await
+    .expect_err("refused");
+    assert_eq!(code_of(&err), error_code::ACCOUNT_QUOTA_EXHAUSTED);
+    let after = state.store.get_session("s").unwrap().unwrap();
+    assert_eq!(after.account_id, None);
+    assert_eq!(after.status, SessionStatus::Interrupted);
+}
+
 /// Every refusal that can be told before the process is ended names its reason and records
 /// nothing: the session keeps its account, its directory and its status, and a Grok home that
 /// was never initialized is not given a `sessions/` directory by the refused attempt.

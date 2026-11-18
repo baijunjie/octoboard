@@ -245,6 +245,43 @@ it("shows the receiving agent's only account in an account picker, its usage dra
   expect(document.body.querySelectorAll('[class*="quota-meter--"]')).toHaveLength(1);
 });
 
+it("refuses a handoff onto the receiving agent's account whose quota is used up, though a new session may open on one", async () => {
+  const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "idle");
+  const quota: AccountQuota = {
+    agent: "codex", account: null, fetched_at: Date.now(), plan: null, unavailable: null,
+    windows: [{ kind: "session", label: null, used_percent: 100, resets_at: Date.now() + 3_600_000, window_minutes: 300 }], email: null,
+  };
+  const { request, onHandedOff } = mount(session, [], [], { claude: "unavailable", codex: "available", grok: "unavailable" }, null, [quota]);
+  await settle();
+  expect(document.body.querySelector('[data-slot="field-error"] [role="alert"]')?.textContent).toContain("cannot be used for now because it has reached its 5h limit.");
+  const handOff = buttons().find((button) => button.textContent === "Hand off")!;
+  expect(handOff.hasAttribute("disabled") || handOff.getAttribute("aria-disabled") === "true").toBe(true);
+  await act(async () => handOff.click());
+  await settle();
+  expect(request.mock.calls.some(([body]) => body.type === "handoff_session")).toBe(false);
+  expect(onHandedOff).not.toHaveBeenCalled();
+});
+
+it("still refuses a handoff when the receiving account it would start on is kept off by something else and only a used-up one is left", async () => {
+  const session = sessionOf("s-1", parentConsole.id, project.id, "Fix search", "idle");
+  const quota: AccountQuota = {
+    agent: "codex", account: "a-x", fetched_at: Date.now(), plan: null, unavailable: null,
+    windows: [{ kind: "session", label: null, used_percent: 100, resets_at: Date.now() + 3_600_000, window_minutes: 300 }], email: null,
+  };
+  const { request, onHandedOff } = mount(session, [], [], { claude: "unavailable", codex: "available", grok: "unavailable" }, null, [quota], {
+    disabled_default_accounts: ["codex"],
+    accounts: [accountOf("a-x", "codex", "Spare", "/tmp/codex-x")],
+  });
+  await settle();
+  expect(document.body.querySelector('[data-slot="field-error"] [role="alert"]')?.textContent).toContain("Spare cannot be used for now because it has reached its 5h limit.");
+  const handOff = buttons().find((button) => button.textContent === "Hand off")!;
+  expect(handOff.hasAttribute("disabled") || handOff.getAttribute("aria-disabled") === "true").toBe(true);
+  await act(async () => handOff.click());
+  await settle();
+  expect(request.mock.calls.some(([body]) => body.type === "handoff_session")).toBe(false);
+  expect(onHandedOff).not.toHaveBeenCalled();
+});
+
 it.each([["en", "handed off. A new session"], ["zh-Hans", "移交。另一个智能体的新会话"]] as const)("joins the two sentences as %s does", (language, joined) => {
   const before = currentLanguage();
   setLanguage(language);

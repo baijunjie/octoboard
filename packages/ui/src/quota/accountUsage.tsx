@@ -6,7 +6,7 @@ import { quotaNaming, quotaUsedUpDetail, quotaUsedUpShort, usageBarSummary, usag
 
 /** How a list of accounts shows one: its usage bar as the `icon`, and in words what the bar only
  * shows to the eye, for assistive technology. For an account whose quota is used up (`exhaustedBy`)
- * that is the full reason as the `detail` and the short one as the `reason` to draw under its name;
+ * that is the full reason as the `detail` and the short one as the `reason` to draw under its name, its bar drawn grey;
  * for the others, what remains of their quota. A reading that is out of date has no bar and no
  * remainder to state. */
 export function accountUsage(
@@ -17,7 +17,7 @@ export function accountUsage(
   exhaustedBy: QuotaWindow | undefined,
   now: number,
 ): { icon: React.ReactElement } & ({ detail?: undefined; reason?: undefined } | { detail: string; reason?: Reason }) {
-  const icon = <AccountUsageBar agent={agent} quota={quota} now={now} />;
+  const icon = <AccountUsageBar agent={agent} quota={quota} now={now} usedUp={exhaustedBy !== undefined} />;
   // A used-up account always has the reading that says so, which names the window.
   if (exhaustedBy && quota) return { icon, detail: quotaUsedUpDetail(t, quotaNaming(quota, providers), exhaustedBy, now), reason: quotaUsedUpShort(t, exhaustedBy, now) };
   const bar = quota && !quota.unavailable ? usageBarWindows(quotaNaming(quota, providers)) : undefined;

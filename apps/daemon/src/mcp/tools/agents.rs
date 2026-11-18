@@ -22,15 +22,15 @@ use crate::mcp::lookup::{optional_agent, optional_bool};
 const NOT_READ_YET: &str = "Not read yet: the daemon has not taken a reading of this account's \
                             quota. Try again shortly.";
 
-/// What is said of an account that is used up, as the reason it cannot open a session.
+/// What is said of an account that is used up, as the reason it is not usable.
 const USED_UP: &str = "Its plan quota is used up; `exhausted_until` says when it resets.";
 
-/// What is said of an account the last reading found not logged in, as the reason it cannot open
-/// a session.
+/// What is said of an account the last reading found not logged in, as the reason it is not
+/// usable.
 const NOT_SIGNED_IN: &str = "It is not logged in; log in to it in Settings → Agent accounts.";
 
-/// What is said of an account whose change of sharing is running, as the reason it cannot open a
-/// session.
+/// What is said of an account whose change of sharing is running, as the reason it is not
+/// usable.
 const SHARING_IN_PROGRESS: &str = "A change of its sharing settings is in progress; try again \
                                    when it has ended.";
 
@@ -40,13 +40,13 @@ const SHARING_IN_PROGRESS: &str = "A change of its sharing settings is in progre
 /// listed, so its tags are not shown, and neither is one that is not installed. One not yet
 /// detected is listed, its accounts not read yet. The accounts are in the order automatic account
 /// selection weighs them (`account_candidates` in `accounts::choice`): the order the user keeps
-/// them in, the ones it does not name after it. An account the user turned off is left out, the caller's
-/// own included: it is shown on the account settings page alone. An account is judged exhausted by
-/// the rule that keeps it from opening a session (`AccountQuotas::exhausted`), and `can_open` also
-/// takes in an account the last reading found not logged in and a running change of its sharing,
-/// the reasons automatic account selection passes an account over for. `auto_select_account` is
-/// the setting, so a caller that cannot read the settings knows whether an account it leaves out
-/// is chosen for it.
+/// them in, the ones it does not name after it. An account the user turned off is left out, the
+/// caller's own included: it is shown on the account settings page alone. An account is judged
+/// exhausted by the rule that keeps a switch or a handoff off it (`AccountQuotas::exhausted`; a new
+/// session may still open on it), and `can_open` also takes in an account the last reading found
+/// not logged in and a running change of its sharing, the reasons automatic account selection
+/// passes an account over for. `auto_select_account` is the setting, so a caller that cannot read
+/// the settings knows whether an account it leaves out is chosen for it.
 ///
 /// With `refresh` the readings of those accounts, and of an agent that is installed but not added
 /// (which the poller reads too), the ones the user turned off excepted, are first taken again
@@ -309,7 +309,7 @@ mod tests {
         assert_eq!(failed["windows"][0]["remaining_percent"], 0.0);
     }
 
-    /// An account is exhausted by the rule that keeps it from opening a session: a used-up
+    /// An account is exhausted by the rule that keeps a switch or a handoff off it: a used-up
     /// window that has not reset. One that has reset is not.
     #[tokio::test]
     async fn an_account_with_a_used_up_window_that_has_not_reset_is_exhausted() {

@@ -933,6 +933,86 @@ async fn a_handoff_to_an_agent_that_is_not_added_is_refused() {
     assert_eq!(fixture.snapshot(), before);
 }
 
+/// A handoff onto a receiving account whose quota is used up, a stored one or the default one, is
+/// refused with `account_quota_exhausted` and nothing is recorded or launched, though a new session
+/// may open on such an account.
+#[tokio::test]
+async fn a_handoff_onto_an_account_whose_quota_is_used_up_is_refused_and_changes_nothing() {
+    use crate::protocol::{AccountQuota, QuotaWindow, QuotaWindowKind};
+
+    let fixture = Fixture::new("target-used-up");
+    let home = fixture.dir.join("codex-spent");
+    std::fs::create_dir_all(&home).unwrap();
+    fixture
+        .state
+        .store
+        .insert_account(&Account {
+            id: "codex-spent".to_string(),
+            agent: AgentId::CODEX,
+            name: "Spent".to_string(),
+            config_dir: home.to_string_lossy().into_owned(),
+            share_default_config: false,
+            share_default_config_incomplete: false,
+            disabled: false,
+            versions: Default::default(),
+        })
+        .unwrap();
+    let used_up = |account: Option<&str>| AccountQuota {
+        reset_credits: None,
+        agent: AgentId::CODEX,
+        account: account.map(str::to_string),
+        fetched_at: 1,
+        plan: None,
+        email: None,
+        windows: vec![QuotaWindow {
+            kind: QuotaWindowKind::Session,
+            label: None,
+            used_percent: 100.0,
+            resets_at: Some(crate::time::now_millis() + 3_600_000),
+            window_minutes: None,
+        }],
+        unavailable: None,
+    };
+    fixture
+        .state
+        .account_quotas
+        .hold_in_dir_for_test(&used_up(Some("codex-spent")), &home.to_string_lossy());
+    fixture.state.account_quotas.hold_for_test(&used_up(None));
+    fixture.run(session("original", true, "idle", None, false));
+    let before = fixture.snapshot();
+
+    for account in [Some("codex-spent"), None] {
+        let err = handoff_session_with(
+            &fixture.state,
+            Handoff {
+                compatibility: Default::default(),
+                session: "original".to_string(),
+                agent: AgentId::CODEX,
+                account: Some(account.map(str::to_string)),
+                model: None,
+                effort: None,
+                title: None,
+                note: None,
+                asked_by: None,
+                terminal_appearance: None,
+            },
+            fixture.launch(),
+        )
+        .await
+        .map(|moved| moved.receiving)
+        .expect_err("refused");
+        let coded = err.downcast_ref::<CodedError>().expect("a coded error");
+        assert_eq!(
+            coded.code,
+            error_code::ACCOUNT_QUOTA_EXHAUSTED,
+            "{account:?}"
+        );
+        assert!(fixture.launches.lock().unwrap().is_empty());
+        assert_eq!(fixture.snapshot(), before, "{account:?}");
+    }
+    assert_eq!(fixture.stored("original").status, SessionStatus::Idle);
+}
+
 /// An agent that cannot be launched leaves the original, its branches and its sessions as they were,
 /// no receiving session and no package, and nobody is told.
 #[tokio::test]

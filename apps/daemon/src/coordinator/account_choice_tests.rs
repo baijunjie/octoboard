@@ -2,9 +2,10 @@
 
 use crate::accounts::choice::*;
 use crate::coordinator::account_switch::switch_session_account;
-use crate::coordinator::accounts::set_account_disabled;
+use crate::coordinator::accounts::{set_account_disabled, AccountGate};
 use crate::coordinator::open::{
-    check_open, open_session, open_session_detached, resolve_open, resolve_open_with, OpenRequest,
+    check_handoff_open, check_handoff_open_asking, check_open, open_session, open_session_detached,
+    resolve_open, resolve_open_with, OpenRequest,
 };
 use crate::coordinator::test_support::{
     console, console_workdir_in, open_request, pins, project_of, shell_env, state_for_opening,
@@ -72,11 +73,11 @@ async fn opening_a_session_is_refused_when_its_resolved_agent_is_unavailable() {
     }
 }
 
-/// An account whose held quota reading has a window used up is refused with the window and
-/// its reset time when known, for the default account and a stored one alike; an account with
-/// no reading is not.
+/// Under the full gate (a switch, a handoff's receiving session), an account whose held quota
+/// reading has a window used up is refused with the window and its reset time when known, for the
+/// default account and a stored one alike; an account with no reading is not.
 #[test]
-fn opening_a_session_is_refused_on_an_account_whose_quota_is_used_up() {
+fn the_full_gate_refuses_an_account_whose_quota_is_used_up() {
     use crate::protocol::{AccountQuota, Params, QuotaWindow, QuotaWindowKind};
 
     let (state, dir) = crate::test_support::app_state("coordinator-open-quota-exhausted");
@@ -131,8 +132,14 @@ fn opening_a_session_is_refused_on_an_account_whose_quota_is_used_up() {
         session_id: None,
         terminal_appearance: None,
     };
-    let refusal =
-        |account: Option<&str>| resolve_open(&state, &request(account.map(str::to_string))).err();
+    let refusal = |account: Option<&str>| {
+        resolve_open_with(
+            &state,
+            &request(account.map(str::to_string)),
+            AccountGate::Full,
+        )
+        .err()
+    };
     let coded = |err: &anyhow::Error| -> (crate::protocol::Code, Params) {
         let coded = err.downcast_ref::<CodedError>().expect("a coded error");
         (coded.code, coded.params.clone())
@@ -754,12 +761,12 @@ fn insert_claude_account(state: &Arc<AppState>, id: &str, disabled: bool) {
         .unwrap();
 }
 
-/// With automatic selection on and no usable account, the session opens on the account of the
-/// preferred agent that becomes usable soonest, so the refusal names it; an account that is
-/// turned off or logged out is not chosen, a missing reset time counts as never, and an equal
-/// time keeps the default account.
+/// With automatic selection on and no usable account, a new session opens on the account of the
+/// preferred agent that becomes usable soonest, which the full gate (a handoff) refuses naming it;
+/// an account that is turned off or logged out is not chosen, a missing reset time counts as never,
+/// and an equal time keeps the default account.
 #[test]
-fn automatic_open_without_a_usable_account_is_refused_on_the_soonest_one() {
+fn automatic_open_without_a_usable_account_opens_on_the_soonest_one() {
     let (state, _dir) = state_for_opening("automatic-open-soonest");
     state.store.set_auto_select_account(true).unwrap();
     state
@@ -781,7 +788,16 @@ fn automatic_open_without_a_usable_account_is_refused_on_the_soonest_one() {
     hold_used_up(&state, Some("off"), Some(hour), false);
     hold_used_up(&state, Some("out"), Some(hour / 2), true);
 
-    let refused = resolve_open(&state, &open_request()).err().unwrap();
+    assert_eq!(
+        resolve_open(&state, &open_request())
+            .unwrap()
+            .account_id
+            .as_deref(),
+        Some("soonest")
+    );
+    let refused = resolve_open_with(&state, &open_request(), AccountGate::Full)
+        .err()
+        .unwrap();
     let coded = refused.downcast_ref::<CodedError>().expect("a coded error");
     assert_eq!(coded.code, error_code::ACCOUNT_QUOTA_EXHAUSTED);
     assert!(coded.message.starts_with("soonest "), "{}", coded.message);
@@ -805,13 +821,11 @@ fn automatic_open_without_a_usable_account_is_refused_on_the_soonest_one() {
         Some(None)
     );
     assert_eq!(
-        resolve_open_with(&state, &open_request(), false)
-            .unwrap()
-            .account_id,
+        resolve_open(&state, &open_request()).unwrap().account_id,
         None
     );
 
-    // A usable account of the agent, or automatic selection off, leaves it as it was.
+    // A usable account of the agent is preferred to every used-up one.
     insert_claude_account(&state, "fresh", false);
     assert_eq!(
         soonest_available_account(&state, AgentId::CLAUDE).unwrap(),
@@ -824,9 +838,18 @@ fn automatic_open_without_a_usable_account_is_refused_on_the_soonest_one() {
             .as_deref(),
         Some("fresh")
     );
+
+    // With automatic selection off the inherited default account is used, used up or not; the
+    // full gate refuses it.
     state.store.delete_account("fresh").unwrap();
     state.store.set_auto_select_account(false).unwrap();
-    let refused = resolve_open(&state, &open_request()).err().unwrap();
+    assert_eq!(
+        resolve_open(&state, &open_request()).unwrap().account_id,
+        None
+    );
+    let refused = resolve_open_with(&state, &open_request(), AccountGate::Full)
+        .err()
+        .unwrap();
     assert!(
         refused
             .downcast_ref::<CodedError>()
@@ -834,6 +857,133 @@ fn automatic_open_without_a_usable_account_is_refused_on_the_soonest_one() {
             .message
             .starts_with("Default "),
         "{refused}"
+    );
+}
+
+/// A new session opens on an account whose quota is used up, whether the request names it, names
+/// the default account or inherits it from the console.
+#[test]
+fn a_new_session_opens_on_an_account_whose_quota_is_used_up() {
+    let (state, _dir) = state_for_opening("open-on-used-up");
+    insert_claude_account(&state, "spent", false);
+    hold_used_up(&state, Some("spent"), Some(60_000), false);
+    hold_used_up(&state, None, Some(60_000), false);
+
+    for account in [Some("spent"), None] {
+        let request = OpenRequest {
+            account: Some(account.map(str::to_string)),
+            ..open_request()
+        };
+        let resolved = resolve_open(&state, &request).expect("opens");
+        assert_eq!(resolved.account_id.as_deref(), account);
+        let refused = resolve_open_with(&state, &request, AccountGate::Full)
+            .err()
+            .expect("refused under the full gate");
+        assert_eq!(code_of(&refused), error_code::ACCOUNT_QUOTA_EXHAUSTED);
+    }
+    assert_eq!(
+        resolve_open(&state, &open_request()).unwrap().account_id,
+        None
+    );
+}
+
+/// What each gate refuses of an account: turned off by all of them, used up by the full gate only,
+/// logged out by the full and the new-session gate.
+#[test]
+fn each_account_gate_refuses_its_own_states() {
+    use crate::protocol::{AccountQuota, QuotaUnavailable};
+
+    let (state, _dir) = state_for_opening("account-gates");
+    for (id, disabled) in [
+        ("off", true),
+        ("spent", false),
+        ("out", false),
+        ("fresh", false),
+    ] {
+        insert_claude_account(&state, id, disabled);
+    }
+    hold_used_up(&state, Some("spent"), Some(60_000), false);
+    state.account_quotas.hold_in_dir_for_test(
+        &AccountQuota {
+            reset_credits: None,
+            agent: AgentId::CLAUDE,
+            account: Some("out".to_string()),
+            fetched_at: 1,
+            plan: None,
+            email: None,
+            windows: Vec::new(),
+            unavailable: Some(QuotaUnavailable::new(
+                crate::protocol::quota_unavailable_code::NOT_SIGNED_IN,
+                "not signed in",
+                &[],
+            )),
+        },
+        "/tmp/out",
+    );
+    let refusal = |account: &str, gate: AccountGate| {
+        let request = OpenRequest {
+            account: Some(Some(account.to_string())),
+            ..open_request()
+        };
+        resolve_open_with(&state, &request, gate)
+            .err()
+            .map(|err| code_of(&err))
+    };
+    let disabled = Some(error_code::ACCOUNT_DISABLED);
+    let used_up = Some(error_code::ACCOUNT_QUOTA_EXHAUSTED);
+    let signed_out = Some(error_code::ACCOUNT_NOT_SIGNED_IN);
+    for (gate, expected) in [
+        (AccountGate::Full, [disabled, used_up, signed_out, None]),
+        (AccountGate::NewSession, [disabled, None, signed_out, None]),
+        (AccountGate::DisabledOnly, [disabled, None, None, None]),
+    ] {
+        let found = ["off", "spent", "out", "fresh"].map(|account| refusal(account, gate));
+        assert_eq!(found, expected, "{gate:?}");
+    }
+}
+
+/// A session request is checked as a new session, which a used-up account does not refuse; a
+/// handoff's receiving session is checked on the full gate, which does, and a handoff that waits
+/// on the user's choice is refused only for a turned-off account.
+#[tokio::test]
+async fn the_checks_of_a_request_refuse_a_used_up_account_only_for_a_handoff() {
+    let (state, _dir) = state_for_opening("check-open-used-up");
+    insert_claude_account(&state, "spent", false);
+    insert_claude_account(&state, "off", true);
+    hold_used_up(&state, Some("spent"), Some(60_000), false);
+    let on = |account: &str| OpenRequest {
+        account: Some(Some(account.to_string())),
+        ..open_request()
+    };
+
+    assert_eq!(
+        check_open(&state, &on("spent")).await.unwrap(),
+        AgentId::CLAUDE
+    );
+    let refused = check_handoff_open(&state, &on("spent")).await.unwrap_err();
+    assert_eq!(code_of(&refused), error_code::ACCOUNT_QUOTA_EXHAUSTED);
+    assert_eq!(
+        check_handoff_open_asking(&state, &on("spent"))
+            .await
+            .unwrap(),
+        Some("spent".to_string())
+    );
+
+    assert_eq!(
+        code_of(&check_open(&state, &on("off")).await.unwrap_err()),
+        error_code::ACCOUNT_DISABLED
+    );
+    assert_eq!(
+        code_of(&check_handoff_open(&state, &on("off")).await.unwrap_err()),
+        error_code::ACCOUNT_DISABLED
+    );
+    assert_eq!(
+        code_of(
+            &check_handoff_open_asking(&state, &on("off"))
+                .await
+                .unwrap_err()
+        ),
+        error_code::ACCOUNT_DISABLED
     );
 }
 

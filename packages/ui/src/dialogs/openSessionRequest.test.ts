@@ -93,10 +93,17 @@ it("opens on the account whose weekly quota resets soonest when automatic select
   expect(open(undefined)).toMatchObject({ request: { agent: "claude", account: "w" } });
 });
 
-it("opens on another account of the agent when the inherited one is used up, and on nothing when all are", () => {
+it("opens on another account of the agent when the inherited one is used up, and still opens when all are", () => {
   const onClaude = consoleOf("c-1", "Main", { default_agent: "claude", accounts: { claude: "w" } });
   expect(quick(t, onClaude, undefined, { kind: "unbound" }, accounts, available(), null, [usedUp("w")], 1)).toMatchObject({ request: { agent: "claude", account: null } });
-  expect(quick(t, onClaude, undefined, { kind: "unbound" }, accounts, available(), null, [usedUp("w"), usedUp(null)], 1)).toEqual({ unavailable: true });
+  const allUsedUp = quick(t, onClaude, undefined, { kind: "unbound" }, accounts, available(), null, [usedUp("w"), usedUp(null)], 1);
+  expect(allUsedUp).toMatchObject({ request: { type: "open_session", agent: "claude" } });
+  expect(allUsedUp).not.toHaveProperty("unavailable");
+});
+
+it("opens on the used-up account when it is the inherited one and nothing else of the agent is added", () => {
+  const onClaude = consoleOf("c-1", "Main", { default_agent: "claude" });
+  expect(quick(t, onClaude, undefined, { kind: "unbound" }, [], available(), ["claude"], [usedUp(null)], 1)).toMatchObject({ request: { agent: "claude", account: null } });
 });
 
 it("opens on another account of the agent when the inherited one is changing its sharing, and refuses when none is left", () => {
@@ -104,7 +111,11 @@ it("opens on another account of the agent when the inherited one is changing its
   const changing = new Map([["w", { account: "w", progress: { share: true, phase: "changing" as const, done: 0, total: 2 } }]]);
   const state = (accountQuotas: AccountQuota[]) => ({ settings: { ...DEFAULT_SETTINGS, accounts, added_agents: null }, agentAvailability: available(), providers: TEST_PROVIDERS, accountQuotas, accountSharing: changing });
   expect(defaultOpenSessionRequest(t, onClaude, undefined, { kind: "unbound" }, state([]), 1, "light")).toMatchObject({ request: { agent: "claude", account: null } });
-  expect(defaultOpenSessionRequest(t, onClaude, undefined, { kind: "unbound" }, state([usedUp(null)]), 1, "light")).toEqual({ unavailable: true });
+  // The default account is used up, which does not keep a session off it; the changing one still does.
+  expect(defaultOpenSessionRequest(t, onClaude, undefined, { kind: "unbound" }, state([usedUp(null)]), 1, "light")).toMatchObject({ request: { agent: "claude", account: null } });
+  // The default account is off, so the changing one is all that is left.
+  const noDefault = { ...state([]), settings: { ...DEFAULT_SETTINGS, accounts, added_agents: null, disabled_default_accounts: ["claude" as Agent] } };
+  expect(defaultOpenSessionRequest(t, onClaude, undefined, { kind: "unbound" }, noDefault, 1, "light")).toEqual({ unavailable: true });
 });
 
 it("opens on another account of the agent when the inherited one is disabled, and refuses when none is left", () => {
@@ -135,15 +146,17 @@ it("opens on another account of the agent when the inherited one is not logged i
   expect(unavailable([signedOut("w")])).toBe(false);
 });
 
-it("counts an agent whose every account is used up or turned off as having nothing for a quick create, a mix of the two included", () => {
+it("counts an agent whose every account is turned off as having nothing for a quick create, a used-up account not counting against it", () => {
   const onClaude = consoleOf("c-1", "Main", { default_agent: "claude" });
   const target = { kind: "new-console-session" as const, console: onClaude };
   const state = (stored: Account[], disabledDefaults: Agent[], accountQuotas: AccountQuota[]) => ({ settings: { ...DEFAULT_SETTINGS, accounts: stored, added_agents: null, disabled_default_accounts: disabledDefaults, default_account_names: undefined }, agentAvailability: available(), providers: TEST_PROVIDERS, accountQuotas });
   const off = { ...accounts[0]!, disabled: true };
   expect(quickCreateUnavailable(target, state(accounts, [], []), 1)).toBe(false);
   expect(quickCreateUnavailable(target, state([off], ["claude"], []), 1)).toBe(true);
-  // The default account is used up and the stored one is off.
-  expect(quickCreateUnavailable(target, state([off], [], [usedUp(null)]), 1)).toBe(true);
+  // The default account is used up and the stored one is off: a session may open on the used-up one.
+  expect(quickCreateUnavailable(target, state([off], [], [usedUp(null)]), 1)).toBe(false);
+  // Every account is used up.
+  expect(quickCreateUnavailable(target, state(accounts, [], [usedUp(null), usedUp("w")]), 1)).toBe(false);
   // One free account is enough.
   expect(quickCreateUnavailable(target, state([off], [], []), 1)).toBe(false);
 });
@@ -160,12 +173,13 @@ it("automatically tries other agents in added order only after the preferred age
   expect(quickCreateUnavailable(target, state, 1)).toBe(false);
   state.agentAvailability = available("grok");
   expect(open()).toMatchObject({ request: { agent: "codex", account: null } });
+  // With no other agent, the preferred agent's used-up accounts are not refused: the soonest-resetting one opens.
   state.settings.added_agents = ["claude"];
-  expect(open()).toEqual({ unavailable: true });
-  expect(quickCreateUnavailable(target, state, 1)).toBe(true);
+  expect(open()).toMatchObject({ request: { type: "open_session", agent: "claude" } });
+  expect(quickCreateUnavailable(target, state, 1)).toBe(false);
   state.settings.added_agents = ["claude", "codex"];
   state.settings.auto_select_account = false;
-  expect(open()).toEqual({ unavailable: true });
+  expect(open()).toMatchObject({ request: { type: "open_session", agent: "claude" } });
 });
 
 it("skips disabled, signed-out and changing accounts across agents but keeps an unread usable account", () => {

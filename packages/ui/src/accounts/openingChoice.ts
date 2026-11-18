@@ -1,14 +1,14 @@
 import { agentsInListingOrder, projectSessionAgent, selectableAgent } from "../agents/agents";
-import type { Account, AgentAvailability, Agent, Console, Project, ProviderInfo, QuotaWindow } from "../protocol";
+import type { Account, AgentAvailability, Agent, Console, Project, ProviderInfo } from "../protocol";
 import { inheritedAccount } from "./accountInheritance";
 import { preferExpiringWeekly, selectionEntries, soonestAvailable } from "./accountRanking";
 import {
   choiceChangingSharing,
   choiceDisabled,
-  choiceExhaustion,
   choiceKey,
   choiceSignedOut,
   findEntry,
+  isOnlyUsedUp,
   isUsable,
   type AccountChoice,
   type ChoiceGroup,
@@ -33,13 +33,14 @@ export function accountOpenedOn(
 }
 
 /** `choice`, or when its account is disabled, used up, not logged in or its sharing change runs, and its agent may be picked, the first
- * account of the same agent that is none of these, in the saved order of the agent's group. With
- * every account of the agent unavailable `choice` stays, for the caller to refuse. */
+ * account of the same agent that is none of these, in the saved order of the agent's group. With none, an account
+ * kept off by something other than its quota moves to the first one only used up, on which a new session may still
+ * open. Otherwise `choice` stays, for the caller to refuse. */
 export function avoidUnavailableAccount(choice: AccountChoice, groups: ChoiceGroup[]): AccountChoice {
   const group = groups.find((candidate) => candidate.agent === choice.agent);
   const held = findEntry(groups, choiceKey(choice));
   if (!group?.selectable || !held || isUsable(held)) return choice;
-  const usable = group.entries.find(isUsable);
+  const usable = group.entries.find(isUsable) ?? (isOnlyUsedUp(held) ? undefined : group.entries.find(isOnlyUsedUp));
   return usable ? { agent: choice.agent, account: usable.account } : choice;
 }
 
@@ -96,9 +97,9 @@ export function openingChoice(
  * the preferred agent's account that becomes usable soonest is chosen (`soonestAvailable`). With it
  * omitted, the inherited account is used as before. The choice made in the dialog sits above this, as the
  * daemon's own chain puts a session's choice above both. `groups` are the agents' entries with their quotas
- * judged (`choiceGroups`). `exhaustedBy` is the window that still keeps the account from running a session
- * when every account of the agent is used up, and `changingSharing`, `signedOut` and `disabled` the same for a running
- * sharing change, an account found not logged in and a turned-off account. */
+ * judged (`choiceGroups`). `changingSharing`, `signedOut` and `disabled` say what still keeps the chosen account from
+ * running a session when no account of the agent is free of it: a running sharing change, an account found not logged
+ * in and a turned-off account. A used-up quota does not: a new session may open on such an account. */
 export function settledInitialChoice(
   owner: Console,
   project: Project | undefined,
@@ -108,10 +109,10 @@ export function settledInitialChoice(
   providers: readonly ProviderInfo[],
   groups: ChoiceGroup[],
   autoSelect?: { now: number },
-): { choice: AccountChoice; exhaustedBy: QuotaWindow | undefined; changingSharing: boolean; signedOut: boolean; disabled: boolean } {
+): { choice: AccountChoice; changingSharing: boolean; signedOut: boolean; disabled: boolean } {
   const agent = selectableAgent(agentAvailability, added, providers, project ? project.default_agent ?? projectSessionAgent(owner) : owner.default_agent);
   const choice = openingChoice(owner, project, agent, accounts, groups, added, autoSelect);
-  return { choice, exhaustedBy: choiceExhaustion(choice, groups), changingSharing: choiceChangingSharing(choice, groups), signedOut: choiceSignedOut(choice, groups), disabled: choiceDisabled(choice, groups) };
+  return { choice, changingSharing: choiceChangingSharing(choice, groups), signedOut: choiceSignedOut(choice, groups), disabled: choiceDisabled(choice, groups) };
 }
 
 /** What the control currently shows: the user's pick while it is still an entry that may be

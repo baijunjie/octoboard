@@ -5,7 +5,7 @@ Where a failure, a warning or a note is shown follows from how it arises, not fr
 | How it arises | Where it is shown |
 |---|---|
 | A failure of the user's own action, once it has been sent: a submitted form, a Save or a confirm, a switch, a menu or row action, copying, opening, and daemon and connection failures reported in reply | The **error alert**, a dialog that requires acknowledgement (see "The error alert" below). A submit or a save that fails inside a dialog opens it over that dialog, which keeps what was entered |
-| An error located at one input field: the form's own validation (a field left empty, a malformed or too long value, a duplicate of a name the window knows); a lookup the form makes on its own that finds the field's value wrong (a path that does not exist or is not a directory, a conversation ID found nowhere); a value the field holds that cannot be used (an account turned off, used up, not logged in or having its sharing changed) | Under its field, which is marked invalid (see "Errors under a field" below) |
+| An error located at one input field: the form's own validation (a field left empty, a malformed or too long value, a duplicate of a name the window knows); a lookup the form makes on its own that finds the field's value wrong (a path that does not exist or is not a directory, a conversation ID found nowhere); a value the field holds that cannot be used (an account turned off, not logged in or having its sharing changed, or, where a session is switched or handed off onto it, used up) | Under its field, which is marked invalid (see "Errors under a field" below) |
 | An important failure of automatic behaviour — a load, a refresh, a lookup a form makes on its own that could not run — one that blocks what follows, or that a component cannot do its job without | On that screen: in place of a whole page, pane, panel or list that could not be loaded, an empty-state failure; among other content, a compact alert (see "Failures shown on the screen" below) |
 | A warning about the consequence of a choice the user is making: an option of a dialog that, selected, makes what the dialog does riskier; or the reason an option, selected, cannot be carried out | A warning alert directly under that option, only while it is selected, never a mark (see "Warnings about a choice being made" below). A warning about the state of what an option acts on is a mark beside it, as below |
 | A failure or a warning about the state of something that does not block what follows, and a note | A mark at the point it concerns — a row, a table cell, a field, a checkbox, a setting, a list section's heading, a page's heading or a pane's or view's title, a line naming what it is about, a spot in a rendered document; one with no point to be located at is a compact alert in a shared place, the top of a dialog's body or of a section (see "Failures, warnings and notes marked at their point" below) |
@@ -51,11 +51,13 @@ submit, and goes when the value changes or stops being wrong; the submit button 
   (see "Associating a project" in `docs/product/projects.md`), or a conversation ID no account holds (see "Finding the
   conversation" in `docs/product/resuming-a-conversation-by-its-session-id.md`). A lookup that could not be made says nothing about the value and is a
   compact alert instead (see "Failures shown on the screen" below);
-- an account the field holds that cannot be used: turned off, used up, not logged in or having its sharing changed, in
-  the session, handoff and session request dialogs (see the **Agent** field in "The session dialog" in
-  `docs/product/opening-sessions.md`, "Handing off from the window" in `docs/product/handing-off-sessions.md` and "The user's approval of an owner's
-  switch" in `docs/product/switching-session-accounts.md`), and, in a switch request, an account asked for that no
-  longer exists or that the session is on already.
+- an account the field holds that cannot be used: turned off, not logged in or having its sharing changed, in the
+  session, handoff and session request dialogs, and used up in the handoff dialog and the session request dialogs,
+  which move a session onto the account, but not in the session dialog, which opens a session on a used-up account (see
+  the **Agent** field in "The session dialog" in `docs/product/opening-sessions.md`, "Handing off from the window" in
+  `docs/product/handing-off-sessions.md` and "The user's approval of an owner's switch" in
+  `docs/product/switching-session-accounts.md`), and, in a switch request, an account asked for that no longer exists
+  or that the session is on already.
 
 Once a submit has passed the form's own validation, anything that goes wrong afterwards is a failure of the operation
 and opens the error alert, with the form left open and its values intact. This includes a refusal by the daemon about

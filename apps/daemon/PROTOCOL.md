@@ -712,9 +712,9 @@ A client also branches on some codes, instead of only showing them:
 | `shell_environment_timeout` | `shell`, `command`, `timeout` | The login shell did not finish printing its environment in time |
 | `agent_not_available` | `agent` | `open_session`'s resolved agent has been determined unavailable (its binary does not resolve on the login shell's `PATH`); never raised while that determination is still pending. The console session's own `open_session` tool is refused the same way, as a tool error carrying this same text |
 | `agent_not_added` | `agent` | `open_session`'s resolved agent is not on the added agents list (never raised while the list is undecided); the message points to Settings → Agent accounts. `handoff_session` and the console session's `open_session` and `request_session` tools are refused the same way, and so is `update_agent_cli` for an agent not on the list |
-| `account_disabled` | `agent`, `account` | The account a session would open on, be handed off to, or be switched to is turned off (`set_account_disabled`); `account` is its name. Raised for every origin, the user's own request included, wherever `account_quota_exhausted` is, and checked before it. Sessions already on the account, and resuming, restarting or reopening one, are never refused for this |
-| `account_quota_exhausted` | `agent`, `account`, `window`, `window_kind`, `window_minutes?`, `model_weekly?`, `resets_at?` | The account a session would open on, or be switched to, has its plan quota used up, going by the reading the daemon already holds: a session, weekly or credit-period window at 100% or more whose reset time has not passed or is unknown. `account` is the account's name, `window` its English name, the same for every agent (`5-hour`, `Weekly`, `Monthly`, `Credits`, or a window's own label when it carries one), `window_kind` its kind (`session`, `weekly` or `credit_period`), `window_minutes` the window's length when known, `model_weekly` `true` when the same reading also has a model's own weekly window (absent otherwise), and `resets_at` the time it resets in milliseconds since the epoch, when known; with several windows used up, the one that resets last. A client words the window from `window_kind`, `window_minutes` and `model_weekly` as the agent's own interface names it (Claude Code's session window "session", Codex's "5h", Claude Code's weekly window "weekly for all models" beside a model's own), and from `window` alone when they are absent; the `message` names it the same way in English. A model's own weekly window never counts, and an account with no reading, or one taken under another directory, is never refused. Raised for every origin, the user's own request included, wherever `open_session` is refused for an agent or account (`handoff_session`, the console session's `open_session` and `request_session` tools), and for `switch_session_account` |
-| `account_not_signed_in` | `agent`, `account` | The account a session would open on, be handed off to, or be switched to is not logged in, going by the quota reading the daemon already holds: its last reading says `quota_not_signed_in` or `quota_config_dir_missing`. `account` is its name. A reading that failed for another reason (a network error, a timeout) never refuses, nor does an account not read yet. Raised for every origin, the user's own request included, wherever `account_quota_exhausted` is. Sessions already on the account, and resuming, restarting or reopening one, are never refused for this |
+| `account_disabled` | `agent`, `account` | The account a session would open on, be handed off to, or be switched to is turned off (`set_account_disabled`); `account` is its name. Raised for every origin, the user's own request included, wherever `open_session` is refused for an agent or account (`handoff_session`, the console session's `open_session` and `request_session` tools) and for `switch_session_account`, and checked before the quota. Sessions already on the account, and resuming, restarting or reopening one, are never refused for this |
+| `account_quota_exhausted` | `agent`, `account`, `window`, `window_kind`, `window_minutes?`, `model_weekly?`, `resets_at?` | The account a session would be switched to, or a handoff's receiving session would open on, has its plan quota used up, going by the reading the daemon already holds: a session, weekly or credit-period window at 100% or more whose reset time has not passed or is unknown. `account` is the account's name, `window` its English name, the same for every agent (`5-hour`, `Weekly`, `Monthly`, `Credits`, or a window's own label when it carries one), `window_kind` its kind (`session`, `weekly` or `credit_period`), `window_minutes` the window's length when known, `model_weekly` `true` when the same reading also has a model's own weekly window (absent otherwise), and `resets_at` the time it resets in milliseconds since the epoch, when known; with several windows used up, the one that resets last. A client words the window from `window_kind`, `window_minutes` and `model_weekly` as the agent's own interface names it (Claude Code's session window "session", Codex's "5h", Claude Code's weekly window "weekly for all models" beside a model's own), and from `window` alone when they are absent; the `message` names it the same way in English. A model's own weekly window never counts, and an account with no reading, or one taken under another directory, is never refused. Raised for every origin, the user's own request included, for `switch_session_account` and `handoff_session` only: any other new session (`open_session`, the console session's `open_session` and `request_session` tools) is not refused for it and opens on the account, which then stops on its usage limit |
+| `account_not_signed_in` | `agent`, `account` | The account a session would open on, be handed off to, or be switched to is not logged in, going by the quota reading the daemon already holds: its last reading says `quota_not_signed_in` or `quota_config_dir_missing`. `account` is its name. A reading that failed for another reason (a network error, a timeout) never refuses, nor does an account not read yet. Raised for every origin, the user's own request included, wherever `account_disabled` is. Sessions already on the account, and resuming, restarting or reopening one, are never refused for this |
 | `daemon_shutting_down` | none | The daemon has begun to shut down, so no session is launched, resumed, switched or handed off, no claim on one is granted and no update of an agent's CLI (`update_agent_cli`) and no download of the daemon's own (`update_daemon`) is started, and `restart_daemon` is refused while a stop, restart or handover is under way. Nothing started is left running in an ordinary stop: a launch past its claim is ended as it is registered. In a planned stop, from its start, nothing that would change or end a terminal or remove what one works in is done either: archiving or deleting sessions (an owner's archive tool, and a `done` report that would archive its session, which is refused whole), removing a project or a console, a restart for an account, model or sharing change, a handoff, `stop_processes`, an interrupt, a trust answer, creating or closing a shell terminal. An operation admitted before the planned stop is waited for up to 5 seconds, and a later irreversible step of one still running after that is refused with this code. Once the queued messages are saved for the next daemon, no message is accepted either. Typing into a handed-over terminal is dropped and told with this code as a broadcast `error` with no request id and no params, once per terminal connection (a paste cut part-way is `terminal_input_lost` instead). The request may be made again once the daemon is back |
 | `holders_in_service` | none | `planned_stop` or `restart_daemon` was asked of a daemon that leaves its next start to a service manager, while a process holder it started runs inside the systemd unit the daemon itself runs in, having no unit of its own: the daemon's exit would stop the service and end that holder with every session and shell terminal it runs. Nothing is stopped; the ordinary stop (`shutdown`) is not refused, and stopping or restarting the unit with `systemctl` on the server ends those sessions anyway. See "`POST /planned-stop`" |
 | `agent_update_running` | none | `restart_daemon` was asked for while an update of an agent's CLI (`update_agent_cli`) runs, which the restart would cut off mid-install, possibly leaving that CLI broken. Nothing is restarted; the request may be made again once the update has ended (`agent_cli_status_updated`) |
@@ -1844,17 +1844,17 @@ way. Only a session being opened is checked: a session of an agent removed since
 or reopening it is never refused for this.
 
 `open_session` also refuses with `account_disabled` when the account it resolves to, named or inherited, is turned off
-(`set_account_disabled`). It is checked in the same place, before the quota check and whatever the quota says, so
+(`set_account_disabled`). It is checked in the same place, whatever the quota says, so
 `handoff_session`, and the `open_session` and `request_session` tools, are refused the same way, and
 `switch_session_account` checks its target account the same way. Only a session being opened or moved is checked: a
 session already on the account keeps running, and resuming, restarting or reopening it is never refused for this.
 
-`open_session` also refuses with `account_quota_exhausted` when the account it resolves to has its plan quota used up,
-by the reading held at that moment: no fresh reading is asked for or waited on, and an account not read yet is not
-refused. It is checked in the same place as the refusals above, so every path that opens a session meets it, and
-`switch_session_account` checks its target account the same way. The same place refuses with `account_not_signed_in` an
-account the held reading found not logged in (`quota_not_signed_in`, `quota_config_dir_missing`). Resuming, restarting
-or reopening a session is not refused for this.
+`open_session` does not refuse an account whose plan quota is used up: a new session opens on it, whatever the origin,
+and stops on the usage limit until it resets. Only `switch_session_account` and a handoff's receiving session
+(`handoff_session`) refuse such an account with `account_quota_exhausted`, by the reading held at that moment: no fresh
+reading is asked for or waited on, and an account not read yet is not refused. `open_session` and every path that opens
+a session do refuse with `account_not_signed_in` an account the held reading found not logged in (`quota_not_signed_in`,
+`quota_config_dir_missing`). Resuming, restarting or reopening a session is not refused for either.
 
 ### Agent models
 
@@ -4711,27 +4711,28 @@ directory.
   of any of the five items, the rest left alone; a bad `development` or `delivery` or an unknown key is refused by the
   tool) through the function `update_settings` runs, so enabling the automatic pull fast-forwards the projects already
   behind at once.
-- `open_session` takes `title`, `agent`, `account` (id or name, `default`), `model` and `effort` besides the brief;
-  the account is read among the accounts of the agent the session will be of. A `model` or `effort` left out is the
+- `open_session` takes `title`, `agent`, `account` (id or name, `default`), `model` and `effort` besides the brief; the
+  account is read among the accounts of the agent the session will be of. A `model` or `effort` left out is the
   project's, else the console's project session value. The result carries `session`, `agent`, `account` (the id, or
   `default`) and `account_name` of the account the session opened on, the `model` and `effort` it was launched with
-  (`null` is the agent's own default), `effective_compatibility` (every compatibility switch's resolved boolean),
-  and with `branches` the `branches` moved and a `note`. `title` is the session's
-  title, trimmed; left out or blank, the title is the first line of `brief.goal` cut to 48 characters. Left out, `agent`
-  is the caller's own agent — unless that agent has been determined unavailable or is not on the added agents list, when
-  the project's and console's default applies as for the `open_session` request while automatic selection is off. While
-  `auto_select_account` is on, a left-out `account` is the account of the session's agent whose weekly quota resets
-  soonest, among accounts that can still open a session. A 5-hour, account-wide weekly, or credit-period window that is
-  used up drops the whole account. The window that ranks is an account-wide weekly window, or a credit period of about a
-  week (`window_minutes` from 6 to 8 days), whose `used_percent` is finite and below 100 and whose reset is strictly
-  ahead. A model's own weekly window, a 5-hour window, a monthly credit period, a reset that has passed or is missing,
-  and a reading taken under another directory do not rank. When the setting is off, or no such account ranks, `account`
-  for a session of the caller's own agent is the caller's own account (`Session.account_id`, the default account
-  included) unless that account no longer exists or it is disabled (see `account_disabled`), its quota is used up by the
-  reading held (see `account_quota_exhausted`) or the reading found it not logged in (see `account_not_signed_in`); a
-  session of another agent, or one whose caller's account was passed over, takes the project's account for the agent,
-  else the console's, as for the `open_session` request. With automatic selection on, the account and agent fallback
-  rules in the settings description above apply before a request is refused.
+  (`null` is the agent's own default), `effective_compatibility` (every compatibility switch's resolved boolean), and
+  with `branches` the `branches` moved and a `note`. `title` is the session's title, trimmed; left out or blank, the
+  title is the first line of `brief.goal` cut to 48 characters. Left out, `agent` is the caller's own agent — unless
+  that agent has been determined unavailable or is not on the added agents list, when the project's and console's
+  default applies as for the `open_session` request while automatic selection is off. While `auto_select_account` is on,
+  a left-out `account` is the account of the session's agent whose weekly quota resets soonest, among accounts that are
+  usable (`can_open` in `list_agents`). A 5-hour, account-wide weekly, or credit-period window that is used up drops the
+  whole account. The window that ranks is an account-wide weekly window, or a credit period of about a week
+  (`window_minutes` from 6 to 8 days), whose `used_percent` is finite and below 100 and whose reset is strictly ahead. A
+  model's own weekly window, a 5-hour window, a monthly credit period, a reset that has passed or is missing, and a
+  reading taken under another directory do not rank. When the setting is off, or no such account ranks, `account` for a
+  session of the caller's own agent is the caller's own account (`Session.account_id`, the default account included)
+  unless that account no longer exists or it is disabled (see `account_disabled`), its quota is used up by the reading
+  held (see `account_quota_exhausted`) or the reading found it not logged in (see `account_not_signed_in`); a session of
+  another agent, or one whose caller's account was passed over, takes the project's account for the agent, else the
+  console's, as for the `open_session` request. With automatic selection on, the account and agent fallback rules in the
+  settings description above apply; with no usable account, the session opens on the account that becomes usable soonest
+  rather than being refused.
 - `request_session` takes `kind` (`project` or `console`), `project`, `console`, `brief` and an optional `branches` —
   and the overrides of the `open_session` tool — and waits for the user's answer. `branches` is a list of local branch
   names in the project's repository to hand to the new session; each must be one the caller is responsible for (see
@@ -4937,17 +4938,18 @@ directory.
   agent a session could be opened on, the added agents that are installed, in the user's added-list order (every agent
   while the list is undecided), each with its `tags` (the user's notes on the agent, `[]` when it has none) and its
   accounts. A removed agent is not listed, so its tags are not shown, and neither is an added agent that is not
-  installed; one not detected yet is listed, its accounts not read yet. It takes an optional `agent` (a provider id, today
-  `claude`, `codex` or `grok`), listing only that agent (every such agent when it is left out; one that is not listed gives
-  `agents: []`), and an optional `refresh`: the accounts it lists are read again first where their last attempt is at
-  least 60 seconds old, as are those of an agent that is installed but not added, which the daemon reads as well,
-  without ever starting a quota window. An account the user turned off is neither listed nor read again, the caller's
-  own included (`get_session` still names a session's account, which is how a session finds its own). Each account
-  carries `can_open` and, when it is false, `cannot_open_reason`: the account is used up, or its last reading found it
-  not logged in, or a change of its sharing is running, the reasons besides being turned off that automatic account
-  selection passes an account over for. The result also carries `auto_select_account`, the setting of that name,
-  read-only, so a session that cannot read `get_settings` knows whether an account it leaves out is chosen for it.
-  See `docs/product/listing-agents-from-a-session.md`.
+  installed; one not detected yet is listed, its accounts not read yet. It takes an optional `agent` (a provider id,
+  today `claude`, `codex` or `grok`), listing only that agent (every such agent when it is left out; one that is not
+  listed gives `agents: []`), and an optional `refresh`: the accounts it lists are read again first where their last
+  attempt is at least 60 seconds old, as are those of an agent that is installed but not added, which the daemon reads
+  as well, without ever starting a quota window. An account the user turned off is neither listed nor read again, the
+  caller's own included (`get_session` still names a session's account, which is how a session finds its own). Each
+  account carries `can_open` and, when it is false, `cannot_open_reason`: the account is used up, or its last reading
+  found it not logged in, or a change of its sharing is running, the reasons besides being turned off that automatic
+  account selection passes an account over for, and that refuse a switch or a handoff onto it. A used-up account
+  (`exhausted`) still takes a new session the caller names it for. The result also carries `auto_select_account`, the
+  setting of that name, read-only, so a session that cannot read `get_settings` knows whether an account it leaves out
+  is chosen for it. See `docs/product/listing-agents-from-a-session.md`.
 - `show_page`, `page_guide`, `list_pages` and `delete_pages` are the report panel's tools, offered to a console session
   and to a project coordinator, with or without a parent; a project worker has none. Pages are kept per session.
   `show_page` takes the page's two properties as its arguments, `title?` and `body` (see `Page.content`), validates the

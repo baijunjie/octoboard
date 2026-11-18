@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { agentOpeningChoice, currentChoice, settledInitialChoice } from "./openingChoice";
+import { agentOpeningChoice, avoidUnavailableAccount, currentChoice, settledInitialChoice } from "./openingChoice";
 import { choiceGroups, choiceKey } from "./choiceEntries";
 import { consoleOf, projectOf } from "../fixtures/builders";
 import type { AccountQuota, Agent, QuotaWindow } from "../protocol";
@@ -152,4 +152,51 @@ describe("currentChoice", () => {
 
 it("gives each agent's entries keys no other agent's can share", () => {
   expect(choiceKey({ agent: "claude", account: null })).not.toBe(choiceKey({ agent: "codex", account: null }));
+});
+
+describe("avoidUnavailableAccount with only used-up accounts left", () => {
+  const stored = [account("w", "claude", "Work"), account("b", "claude", "B")];
+  const sharing = (...ids: string[]) => new Map(ids.map((id) => [id, { account: id, progress: { share: true, phase: "changing" as const, done: 0, total: 2 } }]));
+  const spent = (id: string | null) => reading(id, [windowOf({ used_percent: 100, resets_at: NOW + HOUR, window_minutes: 7 * 24 * 60 })]);
+  const groupsOf = (quotas: AccountQuota[], changing: string[] = [], disabledDefaults: Agent[] = []) =>
+    choiceGroups(stored, availability({}), null, TEST_PROVIDERS, () => "Default", { quotas, now: NOW }, sharing(...changing), disabledDefaults);
+  const avoid = (account: string | null, groups: ReturnType<typeof groupsOf>) => avoidUnavailableAccount({ agent: "claude", account }, groups).account;
+
+  it("moves a choice whose sharing change runs onto the first account that is only used up", () => {
+    expect(avoid("w", groupsOf([spent(null), spent("b")], ["w"]))).toBeNull();
+    expect(avoid("w", groupsOf([spent("b")], ["w"], ["claude"]))).toBe("b");
+  });
+
+  it("moves a disabled or logged-out choice onto an account that is only used up", () => {
+    const disabled = [{ ...stored[0]!, disabled: true }, stored[1]!];
+    const groups = choiceGroups(disabled, availability({}), null, TEST_PROVIDERS, () => "Default", { quotas: [signedOut("claude", null), spent("b")], now: NOW });
+    expect(avoidUnavailableAccount({ agent: "claude", account: "w" }, groups).account).toBe("b");
+    expect(avoidUnavailableAccount({ agent: "claude", account: null }, groups).account).toBe("b");
+  });
+
+  it("prefers a fully usable account to a used-up one", () => {
+    expect(avoid("w", groupsOf([spent(null)], ["w"]))).toBe("b");
+  });
+
+  it("keeps a choice that is itself only used up, though another account is used up earlier in the order", () => {
+    const groups = groupsOf([spent(null), spent("w"), spent("b")]);
+    expect(avoid("w", groups)).toBe("w");
+    expect(avoid("b", groups)).toBe("b");
+  });
+
+  it("moves a choice that is used up and also changing its sharing", () => {
+    expect(avoid("w", groupsOf([spent(null), spent("w"), spent("b")], ["w"]))).toBeNull();
+  });
+
+  it("keeps the choice when every other account is kept off by something besides its quota", () => {
+    expect(avoid("w", groupsOf([], ["w", "b"], ["claude"]))).toBe("w");
+  });
+
+  it("settles the initial choice on the used-up account, flagged by nothing else", () => {
+    const owner = consoleOf("c-1", "Main", { default_agent: "claude", accounts: { claude: "w" } });
+    const groups = groupsOf([spent(null)], ["w", "b"]);
+    const settled = settledInitialChoice(owner, undefined, stored, availability({}), null, TEST_PROVIDERS, groups);
+    expect(settled.choice).toEqual({ agent: "claude", account: null });
+    expect(settled.changingSharing).toBe(false);
+  });
 });

@@ -179,33 +179,36 @@ the row, taking its name below AA (about 2.9:1 in light, 4.2:1 in dark) by the u
 own veil while it is pointed at, selected, holds keyboard focus or has its menu open. The dimming is only a change of
 lightness, so the row's accessible name carries the state (", ignored").
 
-A select option or menu item that cannot be chosen, whether or not it says why (an account whose quota is used up, a
-terminal's Copy with nothing to copy while the program takes the mouse), is dimmed as an agent row is: its name takes
-the secondary text colour (`text-app-muted`, at least 4.5:1 in both themes) and only its icon fades, with HeroUI's
-`--disabled-opacity`. HeroUI's fade of the whole row is switched off (`ui-disabled:opacity-100` on a menu item;
-a select option never gets `data-disabled`, see below), and so is its fade of a menu item's `Label`
-(`[data-disabled=true] .label`, cancelled with `opacity-100` on the `Label`), so no text is faded below AA by opacity.
-The option's badge, checkmark and a reason line under the name stay at full opacity; the reason is the text that
-explains the disabled state, so it must stay readable. A select option's line under the name may also say what the
+A select option or menu item that cannot be chosen, whether or not it says why (an account whose quota is used up in a
+switch or handoff picker, a terminal's Copy with nothing to copy while the program takes the mouse), is dimmed as an
+agent row is: its name takes the secondary text colour (`text-app-muted`, at least 4.5:1 in both themes) and only its
+icon fades, with HeroUI's `--disabled-opacity`. HeroUI's fade of the whole row is switched off
+(`ui-disabled:opacity-100` on a menu item; a select option never gets `data-disabled`, see below), and so is its fade of
+a menu item's `Label` (`[data-disabled=true] .label`, cancelled with `opacity-100` on the `Label`), so no text is faded
+below AA by opacity. The option's badge, checkmark and a reason line under the name stay at full opacity; the reason is
+the text that explains the disabled state, so it must stay readable. In a new session's picker a used-up account can be
+chosen: its name stays at full foreground and nothing fades, while its "Limit reached" reason still stands under the
+name and is its description, and its bar is grey as below. A select option's line under the name may also say what the
 option stands for (a model alias's version, an account's usage); either way the option's accessible name is its label
 and badge alone, on one row, and that line is its description, so nothing is read twice. A menu's note, a line of text
 disabled only so that it cannot be chosen, keeps its muted text at full opacity the same way. HeroUI has a disabled menu
 item's row ignore the pointer; its name takes the pointer back, so that a clipped name shows its tooltip and runs its
 marquee while the pointer is on it. The row then matches `:hover` and `:active` under the name, so HeroUI's hover fill
-and press shrink are cancelled on it (`ui-disabled:hover:bg-transparent`,
-`ui-disabled:active:transform-none`), and the name shows the arrow the rest of the row shows rather than
-HeroUI's `not-allowed` (`cursor-default`). These overrides change HeroUI's default disabled look, an approved exception
-by the user's decision (see "Do not change how a HeroUI component looks").
+and press shrink are cancelled on it (`ui-disabled:hover:bg-transparent`, `ui-disabled:active:transform-none`), and the
+name shows the arrow the rest of the row shows rather than HeroUI's `not-allowed` (`cursor-default`). These overrides
+change HeroUI's default disabled look, an approved exception by the user's decision (see "Do not change how a HeroUI
+component looks").
 
 A used-up account in the rail's quota panel, which is not a control, recedes the same way without fading anything: its
 name and its meters' headlines take the secondary text colour (6.0:1 light, 5.7:1 dark on the panel's popover), a
 warning-coloured "Limit reached" badge on its name line says why in words, and its bars are drawn in a neutral grey
-(`.quota-meter--used-up` in `packages/ui/src/quota/QuotaMeter.css`), fainter than the provider colours. Settings' accounts table marks
-such an account alike, the name muted and the grey bar followed by the same badge in its Usage cell. The menu bar icon's
+(`.quota-meter--used-up` in `packages/ui/src/quota/QuotaMeter.css`), fainter than the provider colours. Settings'
+accounts table marks such an account alike, the name muted and the grey bar followed by the same badge in its Usage
+cell. The account pickers and menus draw a used-up account's bar in the same grey (`accountUsage`). The menu bar icon's
 quota submenus draw such an account's bars in the same grey, `--meter-used-up-fill` read back for the menu's appearance,
-while the account's heading says "Limit reached" in words; every other account's bars take their provider's colour from its
-presentation module, for the menu's appearance. A veil over the row is not used for that state: it would take
-its text below AA.
+while the account's heading says "Limit reached" in words; every other account's bars take their provider's colour from
+its presentation module, for the menu's appearance. A veil over the row is not used for that state: it would take its
+text below AA.
 
 A disabled account is left out of that panel and of the menu bar icon's quota submenus, except the one the selected
 session is running on. That row is drawn like any other, its name, meters and bars unmuted, since the account is in use,
@@ -576,15 +579,16 @@ which includes the tree's expansion) and Space to selection; selection is disabl
 does nothing. Keep that supported collection behavior rather than translating Space locally. The Git section-heading
 band (a `BareButton`, above) acts on both Enter and Space.
 
-A button that is unavailable for a reason the user needs to learn (the quick-create "+" while every account of its agent
-is used up) is not natively disabled, which would take it out of the Tab order and keep its tooltip from ever opening:
-it carries `aria-disabled`, keeps focus and its hover tooltip but takes no hover tint or press shrink, looks faded,
-gives the reason as its tooltip and as an `aria-describedby` description while its name stays the action, and a press
-explains instead of acting. HeroUI's disabled style turns off pointer events on `aria-disabled`, so such a button puts
-them back (`pointer-events-auto`), or its tooltip never opens on hover. `Button`'s `unavailable`, given the reason, does
-all of it but the tooltip and a hover tint drawn by the caller's own classes, which the caller leaves off; its press
-reaches `onPress`, which explains (the Processes panel's Keep raises the refusal the daemon would answer with, and an
-archive row's Open in the agent's app raises the alert its refusal would bring).
+A button that is unavailable for a reason the user needs to learn (the quick-create "+" while no account of its agent
+can open a session, each not logged in, turned off or changing its sharing) is not natively disabled, which would take
+it out of the Tab order and keep its tooltip from ever opening: it carries `aria-disabled`, keeps focus and its hover
+tooltip but takes no hover tint or press shrink, looks faded, gives the reason as its tooltip and as an
+`aria-describedby` description while its name stays the action, and a press explains instead of acting. HeroUI's
+disabled style turns off pointer events on `aria-disabled`, so such a button puts them back (`pointer-events-auto`), or
+its tooltip never opens on hover. `Button`'s `unavailable`, given the reason, does all of it but the tooltip and a hover
+tint drawn by the caller's own classes, which the caller leaves off; its press reaches `onPress`, which explains (the
+Processes panel's Keep raises the refusal the daemon would answer with, and an archive row's Open in the agent's app
+raises the alert its refusal would bring).
 
 A switch unavailable for a reason shown under it (the account's sharing switch while its sessions run) follows the
 same rule: it keeps focus and is marked `aria-disabled`, a press or Space does nothing, and the reason is its
@@ -1574,13 +1578,13 @@ Where an error or a warning is shown follows from how it arises, not from the sc
    see "A value changed elsewhere replaces the form's own" below).
    One more press opens it: an unavailable button whose press explains (see "Buttons") raises the refusal the daemon
    would give for the action it stands for, without sending it (Keep on a process that shares the agent's console).
-2. **An error located at one input field** is the exception to the first and to the third: its error text stands
-   under its field, in the field's `FieldError`, and no dialog opens. That is input validation — a check run
-   synchronously the moment the user submits (empty, malformed, too long, a duplicate of a known name) — and equally a
-   lookup the form makes on its own that finds the value in the field wrong (a path that does not exist or is not a
-   folder, a conversation ID found nowhere) or a value the field holds that cannot be used (an account that is
-   disabled, used up or changing its sharing). A lookup that could not run at all says nothing about the value and
-   stays under the third rule.
+2. **An error located at one input field** is the exception to the first and to the third: its error text stands under
+   its field, in the field's `FieldError`, and no dialog opens. That is input validation — a check run synchronously the
+   moment the user submits (empty, malformed, too long, a duplicate of a known name) — and equally a lookup the form
+   makes on its own that finds the value in the field wrong (a path that does not exist or is not a folder, a
+   conversation ID found nowhere) or a value the field holds that cannot be used (an account that is disabled, not
+   logged in or changing its sharing, or used up in a switch or a handoff). A lookup that could not run at all says
+   nothing about the value and stays under the third rule.
 3. **An important error from automatic behaviour** — one the application ran into by itself (a load, a lookup a form
    makes on its own, a refresh) that blocks what follows, or that a component cannot do its job without — is an Alert
    on the screen; in place of a whole page, pane or list, the empty-state failure ("A whole subject that failed").

@@ -118,7 +118,8 @@ function quotaWindowName(window: QuotaWindow): string {
   return periodDays >= 28 && periodDays <= 31 ? "Monthly" : "Credits";
 }
 
-/** The refusals a session or a switch gets on an account, which the sessions' requests and the accounts' own share. */
+/** The refusals a session or a switch gets on an account, which the sessions' requests and the accounts' own share. A new
+ * session is not refused for a used-up quota, only a switch or a handoff is. */
 export function createAccountGuards({ store, fail }: Pick<FixtureContext, "store" | "fail">) {
   /** The account a new session of `agent` launches under: the one named, or, when none is, the one
    * the project (else the console) resolves to. */
@@ -129,7 +130,7 @@ export function createAccountGuards({ store, fail }: Pick<FixtureContext, "store
       : account;
     return current.settings.accounts.find((candidate) => candidate.id === accountId && candidate.agent === agent);
   };
-  /** Refuses a session on, or a switch to, an account whose last reading in the store has a session, weekly or
+  /** Refuses a switch to, or a handoff onto, an account whose last reading in the store has a session, weekly or
    * credit-period window used up (100% or more) that has not reset, as the daemon does with the reading it holds:
    * a model's weekly window never counts, an account not read yet is never refused, and of several used-up
    * windows the one that resets last (one with no reset time after all) is named, in English, with its kind, length

@@ -1,5 +1,6 @@
-//! The refusals of a session that cannot be opened on an agent or an account: an agent determined
-//! unavailable or not added, an account whose quota is used up or that is not signed in.
+//! The refusals of a session that cannot be put on an agent or an account: an agent determined
+//! unavailable or not added, an account that is not signed in, and one whose quota is used up,
+//! which only a switch or a handoff is refused for.
 
 use std::sync::Arc;
 
@@ -33,11 +34,12 @@ pub(crate) fn refuse_if_agent_unavailable(state: &Arc<AppState>, agent: AgentId)
     ))
 }
 
-/// Refuses to put a session on an account whose plan quota is used up, going by the reading held
-/// at this moment (see [`crate::accounts::quotas::AccountQuotas::exhausted`]): an account not read yet, or
-/// of an agent that is not probed, is not refused, and nothing waits for a fresh reading. Applies
-/// to every origin, the user's own request included. `config_dir` is the account's directory as
-/// [`Store::account_dir`] resolves it, so a reading taken under another directory is ignored.
+/// Refuses to put a session on an account whose plan quota is used up, going by the reading held at
+/// this moment (see [`crate::accounts::quotas::AccountQuotas::exhausted`]): an account not read
+/// yet, or of an agent that is not probed, is not refused, and nothing waits for a fresh reading.
+/// Applies to a switch and a handoff's receiving session, whatever their origin; a new session is
+/// not refused for it. `config_dir` is the account's directory as [`Store::account_dir`] resolves
+/// it, so a reading taken under another directory is ignored.
 ///
 /// [`Store::account_dir`]: crate::store::Store::account_dir
 pub(crate) fn refuse_if_account_quota_exhausted(

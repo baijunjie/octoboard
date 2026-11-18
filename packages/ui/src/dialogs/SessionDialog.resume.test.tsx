@@ -319,39 +319,39 @@ const archived = sessionOf("s-old", parentConsole.id, project.id, "Old work", "a
 const running = sessionOf("s-run", parentConsole.id, project.id, "Busy", "working");
 const interrupted = sessionOf("s-int", parentConsole.id, project.id, "Paused", "interrupted", { account_id: "a-work" });
 
-it("announces exhausted quota only when the selected conversation requires a new launch", async () => {
-  const { daemon, onResume, onOpened } = renderForResume(
+const usedUpReadings = () => [null, "a-work"].map((account) => ({
+  agent: "claude" as const, account, fetched_at: Date.now(), plan: null, unavailable: null,
+  windows: [{ kind: "session" as const, label: null, used_percent: 100, resets_at: Date.now() + 3_600_000, window_minutes: 300 }], email: null,
+}));
+
+it("opens a new session on an account whose quota is used up, with no error announced", async () => {
+  const { daemon } = renderForResume(
     { accounts: { claude: { kind: "account", id: "a-work" } } },
     heldBy("live_session", interrupted.id),
     { ...claudeAccounts, sessions: new Map([[interrupted.id, interrupted]]) },
   );
-  const quotaAlert = fieldError;
-  expect(quotaAlert()).toBeNull();
+  expect(fieldError()).toBeNull();
   expect(openDisabled()).toBe(false);
-  // The quota arrives after the form opened, so it is announced as the account field's error.
-  act(() => daemon.store.setState({ accountQuotas: [null, "a-work"].map((account) => ({
-    agent: "claude" as const, account, fetched_at: Date.now(), plan: null, unavailable: null,
-    windows: [{ kind: "session" as const, label: null, used_percent: 100, resets_at: Date.now() + 3_600_000, window_minutes: 300 }], email: null,
-  })) }));
-  const assertQuotaAlert = () => {
-    const alert = quotaAlert();
-    expect(alert?.textContent).toContain("Work cannot be used for now because it has reached its session limit.");
-    expect(alert?.querySelector("div,p,ul,pre,h1,h2,h3")).toBeNull();
-    expect(openDisabled()).toBe(true);
-  };
-  assertQuotaAlert();
+  // The quota arrives after the form opened: the account is shown as used up but is not refused.
+  act(() => daemon.store.setState({ accountQuotas: usedUpReadings() }));
+  expect(fieldError()).toBeNull();
+  expect(openDisabled()).toBe(false);
   await submit();
-  expect(sentOpenSession(daemon)).toBeUndefined();
+  expect(sentOpenSession(daemon)).toMatchObject({ agent: "claude", account: "a-work" });
+  expect(sentOpenSession(daemon)).not.toHaveProperty("resume_agent_session_id");
+});
 
+it("opens on a resumed record's account whose quota is used up, with no error announced, and still resumes a live session in place", async () => {
+  const { daemon, onResume, onOpened } = renderForResume(
+    { accounts: { claude: { kind: "account", id: "a-work" } } },
+    heldBy("live_session", interrupted.id),
+    { ...claudeAccounts, sessions: new Map([[interrupted.id, interrupted]]), accountQuotas: usedUpReadings() },
+  );
   await chooseResume();
-  expect(quotaAlert()).toBeNull();
   typeResumeId(UUID);
-  expect(quotaAlert()).toBeNull();
-  expect(openDisabled()).toBe(true);
   await settle();
-  expect(quotaAlert()).toBeNull();
+  expect(fieldError()).toBeNull();
   expect(resumeStatusText()).toContain("Found interrupted session");
-  expect(buttons().find((button) => button.textContent === "Resume")?.hasAttribute("disabled")).toBe(false);
   await submit("Resume");
   expect(onResume).toHaveBeenCalledExactlyOnceWith(interrupted.id);
   expect(onOpened).toHaveBeenCalledExactlyOnceWith(interrupted.id);
@@ -359,22 +359,21 @@ it("announces exhausted quota only when the selected conversation requires a new
 
   answerRequests(daemon, record("claude", "a-work"));
   typeResumeId("11111111-2222-3333-4444-555555555556");
-  expect(quotaAlert()).toBeNull();
   await settle();
   expect(resumeStatusText()).toBe(`Found a record on ${isolate("Claude Code")} · ${isolate("Work")}`);
-  assertQuotaAlert();
+  expect(fieldError()).toBeNull();
+  expect(openDisabled()).toBe(false);
   await submit();
-  expect(sentOpenSession(daemon)).toBeUndefined();
-  expect(onResume).toHaveBeenCalledTimes(1);
-  expect(onOpened).toHaveBeenCalledTimes(1);
+  expect(sentOpenSession(daemon)).toMatchObject({ agent: "claude", account: "a-work", resume_agent_session_id: "11111111-2222-3333-4444-555555555556" });
 });
 
 it("holds Open back, with why, when the only account left is changing its sharing", () => {
   const { daemon } = renderForResume({ accounts: { claude: { kind: "account", id: "a-work" } } }, record("claude", null), {
     ...claudeAccounts,
+    // The default account is logged out; a used-up one would be opened on instead.
     accountQuotas: [{
-      agent: "claude", account: null, fetched_at: Date.now(), plan: null, unavailable: null,
-      windows: [{ kind: "session", label: null, used_percent: 100, resets_at: Date.now() + 3_600_000, window_minutes: 300 }], email: null,
+      agent: "claude", account: null, fetched_at: Date.now(), plan: null, windows: [],
+      unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" }, email: null,
     }],
     accountSharing: new Map([["a-work", { account: "a-work", progress: { share: true, phase: "changing" as const, done: 0, total: 2 } }]]),
   });

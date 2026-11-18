@@ -2412,22 +2412,26 @@ describe("the fixture daemon's quota gate", () => {
     state: snapshotState({
       consoles: [consoleOf("c", "Main")],
       projects: [projectOf("p", "c", "Website")],
-      sessions: [sessionOf("s", "c", "p", "Work", "idle")],
+      // `s` runs on the default account, `moved` on Personal, so either can be switched onto the account a test names.
+      sessions: [sessionOf("s", "c", "p", "Work", "idle"), sessionOf("moved", "c", "p", "Moved", "idle", { account_id: "a-free", config_dir: "/Users/dev/.claude-personal" })],
       settings: { ...DEFAULT_SETTINGS, added_agents: ["claude", "codex", "grok"], default_clone_dir: "/Users/dev/Projects", accounts: withAccounts },
       accountQuotas: withReadings,
     }),
   });
 
-  it("refuses a session on an account whose window is used up, naming the window that resets last and when", async () => {
+  /** A session moved onto `account`, the one a refusal of the quota gate is read from. */
+  const switchOnto = (account: string | null, fixture = daemon()) => fixture.request({ type: "switch_session_account", session: account === null ? "moved" : "s", account });
+
+  it("refuses a switch onto an account whose window is used up, naming the window that resets last and when", async () => {
     const reading = readings[0].windows[1];
-    await expect(daemon().request({ type: "open_session", console_id: "c", project_id: "p", account: "a-spent" })).rejects.toMatchObject({
+    await expect(switchOnto("a-spent")).rejects.toMatchObject({
       code: "account_quota_exhausted",
       params: { agent: "Claude Code", account: "Work", window: "Weekly", window_kind: "weekly", window_minutes: String(reading.window_minutes), resets_at: String(reading.resets_at) },
     });
   });
 
   it("names the default account, and leaves out a reset time the agent did not give", async () => {
-    const refused = await daemon().request({ type: "open_session", console_id: "c", project_id: "p", account: null }).catch((error) => error);
+    const refused = await switchOnto(null).catch((error) => error);
     expect(refused).toMatchObject({
       code: "account_quota_exhausted",
       params: { agent: "Claude Code", account: "Default", window: "5-hour" },
@@ -2437,7 +2441,7 @@ describe("the fixture daemon's quota gate", () => {
 
   it("keeps the session window's wire name `5-hour` and words the refusal as each agent's own interface does", async () => {
     const codex = [quotaOf("codex", null, "plus", [quotaWindow("session", 100, 30)])];
-    const claudeRefusal = await daemon().request({ type: "open_session", console_id: "c", project_id: "p", account: null }).catch((error) => error);
+    const claudeRefusal = await switchOnto(null).catch((error) => error);
     expect(claudeRefusal).toMatchObject({ params: { agent: "Claude Code", window: "5-hour", window_kind: "session" } });
     expect(claudeRefusal.message).toContain("session limit");
     const codexRefusal = await daemon([], codex).request({ type: "handoff_session", session: "s", agent: "codex" }).catch((error) => error);
@@ -2447,7 +2451,7 @@ describe("the fixture daemon's quota gate", () => {
 
   it("carries the window's kind and length, and `model_weekly` only when the same reading has a model's own weekly window", async () => {
     const refusal = (windows: ReturnType<typeof quotaWindow>[]) =>
-      daemon([], [quotaOf("claude", null, "max", windows)]).request({ type: "open_session", console_id: "c", project_id: "p", account: null }).catch((error) => error);
+      switchOnto(null, daemon([], [quotaOf("claude", null, "max", windows)])).catch((error) => error);
     const beside = await refusal([quotaWindow("weekly", 100, 30), quotaWindow("weekly_model", 10, 30, "Fable")]);
     expect(beside.params).toMatchObject({ window: "Weekly", window_kind: "weekly", window_minutes: "10080", model_weekly: "true" });
     expect(beside.message).toContain("its weekly limit for all models.");
@@ -2462,13 +2466,19 @@ describe("the fixture daemon's quota gate", () => {
 
   it("lets through an account nearly spent, one never read, one with only a model's window used up, and one whose window has reset", async () => {
     for (const account of ["a-free", "a-unread", "a-model", "a-stale"]) {
+      await expect(switchOnto(account)).resolves.toEqual({ type: "ack", id: null });
+    }
+  });
+
+  it("opens a new session on a used-up account all the same", async () => {
+    for (const account of ["a-spent", null]) {
       await expect(daemon().request({ type: "open_session", console_id: "c", project_id: "p", account })).resolves.toMatchObject({ type: "session_opened" });
     }
   });
 
-  it("refuses a switch to a used-up account and a handoff onto one, with the same code", async () => {
-    await expect(daemon().request({ type: "switch_session_account", session: "s", account: "a-spent" })).rejects.toMatchObject({ code: "account_quota_exhausted" });
-    await expect(daemon().request({ type: "switch_session_account", session: "s", account: "a-free" })).resolves.toEqual({ type: "ack", id: null });
+  it("refuses a handoff onto a used-up account with the same code as a switch onto one", async () => {
+    await expect(switchOnto("a-spent")).rejects.toMatchObject({ code: "account_quota_exhausted" });
+    await expect(switchOnto("a-unread")).resolves.toEqual({ type: "ack", id: null });
     const grok = [quotaOf("grok", null, "SuperGrok", [quotaWindow("credit_period", 100, 60)])];
     await expect(daemon([], grok).request({ type: "handoff_session", session: "s", agent: "grok" })).rejects.toMatchObject({ code: "account_quota_exhausted", params: { window: "Weekly", window_kind: "credit_period", window_minutes: "10080" } });
   });

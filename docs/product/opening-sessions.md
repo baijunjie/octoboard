@@ -42,13 +42,13 @@ A dialog without tabs, and the **New conversation** tab, offer these fields in t
   the user picks is retained even if a later reading makes it unavailable, and then prevents submission.
   Each account in the picker carries a compact usage bar (see "In an account picker" in
   `docs/product/account-quotas.md`). A used-up account (see "A used-up account" in `docs/product/account-quotas.md`) is
-  listed but cannot be picked, with a short note under its name saying it is used up and when it resets. When the
-  account the field would open on, or would fall to when the user turns to another agent without having picked one of
-  its accounts, is used up, the field takes the first account of the same agent that is not, in the picker's order. When
-  the chosen account is used up all the same — every account of the agent is, the agent's only account among them, or a
-  reading arrives while the dialog is open — the field says under its pickers, which are marked invalid, that the
-  account cannot be used for now, naming the quota it has reached and when it resets, and the dialog cannot be submitted
-  until another agent or account is chosen or the account is no longer used up. An account whose sharing of the default
+  listed and can be picked, with a short note under its name saying it is used up and when it resets, and its usage bar
+  drawn grey. When the account the field would open on, or would fall to when the user turns to another agent without
+  having picked one of its accounts, is used up, the field takes the first account of the same agent that is usable —
+  not used up, not logged in, turned off or having its sharing changed — in the picker's order. When the chosen account
+  is used up all the same — every account of the agent is, the agent's only account among them, the user picked it, or a
+  reading arrives while the dialog is open — nothing is marked invalid and the dialog can be submitted: the session opens
+  on that account and stops on its usage limit until the limit resets. An account whose sharing of the default
   configuration is being changed, which the daemon refuses a session on meanwhile (see "When a change is carried out" in
   `docs/product/sharing-the-default-configuration.md`), is listed but cannot be picked while the change runs, keeping
   its usage bar and its description but with no note under its name, as the change ends on its own; the field passes
@@ -60,8 +60,11 @@ A dialog without tabs, and the **New conversation** tab, offer these fields in t
   passes over a used-up account, and when the chosen account is one all the same, the field says under its pickers that
   the account is not logged in, so a session cannot use it, and to choose another account or log in to it. A turned-off
   account (see "Turning an account off" in `docs/product/agent-accounts.md`) is not listed, and the field passes over it
-  as it passes over a used-up account. Only when the account the field ends on is turned off all the same — every
-  account of the agent is unavailable but at least one is still enabled, the account was turned off while the dialog
+  as it passes over a used-up account. When the agent has no usable account, the field passes over an account that is
+  not logged in, turned off or having its sharing changed to the first account of the agent that only its used-up quota
+  keeps from being usable, since a session can still open on that one. Only when the account the field ends on is
+  turned off all the same — every account of the agent is turned off, not logged in or having its sharing changed but
+  at least one is still enabled, the account was turned off while the dialog
   is open and another remains enabled, or the **Resume conversation** tab settles on it — is it listed, and then it
   cannot be picked: its usage bar stays and a short note
   under its name reads "Disabled", with the full reason as its description for assistive technology; the field says
@@ -118,8 +121,8 @@ localized default explicitly when no custom name was entered.
 it (see "The launch environment" in `docs/product/launching-agents.md`). The dialog does not wait for the launch: it
 closes as soon as the session is recorded, and the session's terminal says it is starting until the agent is up (see
 "Loading" in `docs/product/session-terminal-reconnecting-and-loading.md`). A refusal that can be known before anything
-is recorded — an unknown owner, an unavailable agent or one that is not added, a used-up account, a model the agent does
-not offer, the refusals about a conversation to resume (see "Opening a new session on a found conversation" in
+is recorded — an unknown owner, an unavailable agent or one that is not added, a turned-off account or one not logged
+in, a model the agent does not offer, the refusals about a conversation to resume (see "Opening a new session on a found conversation" in
 `docs/product/resuming-a-conversation-by-its-session-id.md`) — is still shown while the dialog is open, in an error
 alert over it, and the dialog stays open. A session an agent opens with `open_session`, and the session an approved
 request for one starts (see "On approval" in `docs/product/session-requests.md`), are listed as *starting* the same way,
@@ -202,10 +205,12 @@ added. Only a session being opened is checked: a session of an agent removed sin
 reopening or restarting it is never refused for this.
 
 **The daemon refuses to open a session on a turned-off account** (see "Turning an account off" in
-`docs/product/agent-accounts.md`). Whatever opens it — the same openings as for a used-up account below — a new session
-whose account, once resolved (see "Which account a session uses" below), named or inherited, is turned off is refused
-with `account_disabled`, and nothing is recorded; the user's own request is refused too. It is checked before the quota,
-so a turned-off account is refused as turned off whatever its quota says. The refusal carries `agent` and `account` (the
+`docs/product/agent-accounts.md`). Whatever opens it — the dialog, a session opened with defaults, the `open_session`
+request (with `resume_agent_session_id` too), a console or project session's `open_session` tool, a handoff's receiving
+session, or an approved session request — a new session whose account, once resolved (see "Which account a session
+uses" below), named or inherited, is turned off is refused with `account_disabled`, and nothing is recorded; the user's
+own request is refused too. It is checked first, so a turned-off account is refused as turned off whatever its quota
+says or whether it is logged in. The refusal carries `agent` and `account` (the
 account's name; the default account under the name the user gave it, else `Default`). In the window it is shown in an
 error alert, in the UI's language, saying the account is turned off, so a session cannot be opened on it; the next step
 is to choose another account, or to turn this one back on, and the alert has a **Manage accounts** button (see
@@ -216,44 +221,48 @@ then (see `docs/product/session-requests.md`). Only a session being opened is ch
 keeps running, and resuming, reopening or restarting it is never refused for this.
 
 **The daemon refuses to open a session on an account that is not logged in** (see "An account that is not logged in"
-in `docs/product/account-quotas.md`). Whatever opens it — the same openings as for a used-up account below — a new
+in `docs/product/account-quotas.md`). Whatever opens it — the same openings as for a turned-off account above — a new
 session whose account, once resolved, is found not logged in by the reading the daemon holds at that moment is refused
-with `account_not_signed_in`, and nothing is recorded; the user's own request is refused too. It is checked after the
-quota. The refusal carries `agent` and `account` (the account's name). In the window it is shown in an error alert, in
-the UI's language, saying the account is not logged in, so a session cannot be opened on it; the next step is to
+with `account_not_signed_in`, and nothing is recorded; the user's own request is refused too. Where the quota is
+checked as well (a handoff's receiving session, below), it is checked after the quota. The refusal carries `agent` and
+`account` (the account's name). In the window it is shown in an error alert, in the UI's language, saying the account is not logged in, so a session cannot be opened on it; the next step is to
 choose another account, or to log in to this one, and the alert has a **Manage accounts** button (see "Recovery and
 unexpected errors" in `docs/product/error-alerts.md`). An agent's tool call is refused with a reason in English naming
 the account and the agent and saying to choose another account or log in to it in Settings → Agent accounts. A session
 request is refused that way before the user is asked, and again on approval should the account be found not logged in
-by then; an owner's handoff the user is asked to approve is refused for it only on approval, as for a used-up account.
+by then; an owner's handoff the user is asked to approve is refused for it only on approval, as for a used-up account
+(below).
 Only a session being opened is checked: a session already on the account keeps running, and resuming, reopening or
 restarting it is never refused for this.
 
-**The daemon refuses to open a session on a used-up account.** Whatever opens it — the dialog, a session opened with
-defaults, the `open_session` request (with `resume_agent_session_id` too), a console or project session's `open_session`
-tool, a handoff's receiving session, or an approved session request — a new session whose account, once resolved (see
-"Which account a session uses" below), is used up by the reading the daemon holds at that moment (see "A used-up
-account" in `docs/product/account-quotas.md`) is refused with `account_quota_exhausted`, and nothing is recorded; the
-user's own request is refused too. The refusal carries `agent`, `account` (the account's name), `window` (the used-up
-window's name in English, the same for every agent: `5-hour`, `Weekly`, `Monthly` or `Credits`, or a window's own label
-when it carries one), `window_kind` (session, weekly or credit period), `window_minutes` (its length, when known),
-`model_weekly` (when the same reading also has a model's own weekly window) and, when the agent gives a reset time,
-`resets_at` in milliseconds since the epoch. In the window it is shown in an error alert, in the UI's language, saying
-the account cannot run a session because it has reached that limit, the window named as everywhere else in the UI (see
-"Quota windows" in `docs/product/account-quotas.md`): Claude Code's "session limit", Codex's "5h limit", Claude Code's
-account-wide weekly window as "weekly limit for all models" when the reading also has a model's own weekly window, and
-so on; a refusal that does not say what the window is names it as a limit of its `window` name. The alert also says,
-when known, how long until it resets, counted from when the alert is shown; the next step is to choose another account
-that has not reached its limit, or to try again once the usage limit resets. An agent's tool call is refused with a
-reason in English naming the account, the agent and the window (the five-hour window as "session" for Claude Code and
-"5h" for Codex, Claude Code's account-wide weekly window as "Weekly · all models" when the reading also has a model's
-own weekly window, any other by its `window` name), about how long until it resets when known, and saying to choose
-another account or wait for the reset. A session request is refused that way before the user is asked, and again on
-approval should the account be used up by then (see `docs/product/session-requests.md`); an owner's handoff the user is
-asked to approve is refused for it only on approval, since its form lets the user choose another account (see "The
-user's approval of an owner's handoff" in `docs/product/handing-off-sessions.md`). Only a session being opened is
-checked: a session already on the account keeps running, and resuming, reopening or restarting it is never refused for
-this.
+**A used-up account does not keep a new session from opening.** Whatever opens it — the same openings as for a
+turned-off account above, other than a handoff's receiving session — a new session whose account, once resolved, is used
+up by the reading the daemon holds at that moment (see "A used-up account" in `docs/product/account-quotas.md`) opens on
+it as on any other account, whether the account was named or chosen automatically, and stops on its usage limit until
+that limit resets. Automatic choices still prefer a usable account (see "Which account a session uses" below), and the
+window still marks a used-up account where it lists one (see the **Agent** field in "The session dialog" above).
+
+**The daemon refuses a handoff's receiving session on a used-up account**, as it refuses a switch onto one (see "When a
+switch fails" in `docs/product/switching-session-accounts.md`): a handoff whose receiving session's account, once
+resolved, is used up by the reading the daemon holds at that moment is refused with `account_quota_exhausted`, and
+nothing is recorded; the user's own handoff is refused too. The refusal carries `agent`, `account` (the account's name),
+`window` (the used-up window's name in English, the same for every agent: `5-hour`, `Weekly`, `Monthly` or `Credits`,
+or a window's own label when it carries one), `window_kind` (session, weekly or credit period), `window_minutes` (its
+length, when known), `model_weekly` (when the same reading also has a model's own weekly window) and, when the agent
+gives a reset time, `resets_at` in milliseconds since the epoch. In the window it is shown in an error alert, in the UI's
+language, saying the account cannot run a session because it has reached that limit, the window named as everywhere
+else in the UI (see "Quota windows" in `docs/product/account-quotas.md`): Claude Code's "session limit", Codex's "5h
+limit", Claude Code's account-wide weekly window as "weekly limit for all models" when the reading also has a model's
+own weekly window, and so on; a refusal that does not say what the window is names it as a limit of its `window` name.
+The alert also says, when known, how long until it resets, counted from when the alert is shown; the next step is to
+choose another account that has not reached its limit, or to try again once the usage limit resets. An agent's tool
+call is refused with a reason in English naming the account, the agent and the window (the five-hour window as
+"session" for Claude Code and "5h" for Codex, Claude Code's account-wide weekly window as "Weekly · all models" when the
+reading also has a model's own weekly window, any other by its `window` name), about how long until it resets when
+known, and saying to choose another account or wait for the reset. An owner's handoff the user is asked to approve is
+refused for it only on approval, since its form lets the user choose another account (see "The user's approval of an
+owner's handoff" in `docs/product/handing-off-sessions.md`). A session already on the account keeps running, and
+resuming, reopening or restarting it is never refused for this.
 
 **Nothing is opened while the daemon shuts down.** Once it has begun to, every opening above, and every resume, is
 refused with `daemon_shutting_down` (see "Quitting" in `docs/product/application-lifecycle.md`).
@@ -316,8 +325,11 @@ select an account** is on (see "Which agent a session uses" and "Which account a
 last change of sharing is incomplete still asks the user first; cancelling opens nothing (see "Starting a session on an
 account whose last change is incomplete" in `docs/product/sharing-the-default-configuration.md`).
 
-When the resolved choice has no usable account after the applicable fallbacks — every candidate is used up, not logged
-in, turned off or changing its sharing of the default configuration — nothing can be opened with defaults:
+A used-up account does not make it unavailable: when the choice settles on one, the session opens on it (see "When the
+agent or the account cannot open a session" above). When the resolved choice ends, after the applicable fallbacks, on an
+account that is not logged in, turned off or changing its sharing of the default configuration — no account of its
+agent is usable or kept from being usable only by a used-up quota, and, with automatic selection on, no other agent has
+a usable account — nothing can be opened with defaults:
 
 - the **+** in its quick form looks disabled but stays focusable and under the pointer; its accessible name stays its
   action, while its tooltip and its description for assistive technology briefly say that no account is available;
@@ -423,12 +435,15 @@ window" in `docs/product/handing-off-sessions.md`.
 
 With automatic selection off, the new-session and handoff dialogs, and quick creation, still pass over an inherited
 account that is used up, not logged in, turned off or changing its sharing, choosing the first usable account of the
-same agent in saved display order. MCP calls retain their caller/project/console inheritance rules in
+same agent in saved display order; with none, an inherited account that is not logged in, turned off or changing its
+sharing gives way to the first account of the agent kept from being usable only by a used-up quota (the handoff
+dialog, which refuses a used-up account, then says why under its field; see "Handing off from the window" in
+`docs/product/handing-off-sessions.md`). MCP calls retain their caller/project/console inheritance rules in
 `docs/product/hub-orchestration.md`.
 
 The dialog and the daemon rank the same way:
 
-- Candidates are that agent's accounts that can still open a session. An account is not a candidate when it is used up
+- Candidates are that agent's usable accounts. An account is not a candidate when it is used up
   (see "A used-up account" in `docs/product/account-quotas.md`): a five-hour, account-wide weekly, or credit-pool window
   at 100% or more, whose reset is still ahead or absent, drops the whole account. A model-specific weekly limit never
   does that, and it does not drive this pick either. Nor is an account a candidate while it is turned off (see "Turning
@@ -466,10 +481,11 @@ When no account of the initial agent can be used and no other agent has one eith
 the initial agent that becomes usable soonest: of the accounts kept off only by a used-up quota (not turned off, not
 logged out, with no sharing change running), the one whose blocking window resets first. Where several windows of an
 account are used up, that is the one that resets last, and a blocking window with no reset time counts as never. Equal
-times keep the candidate order above. With none of those, or with automatic selection off, the dialog keeps the
-inherited account. The daemon settles the account the same way for a session that leaves it out (the tools
-`open_session`, `request_session`, `handoff_session`): the first two are refused naming that account. An automatically
-approved handoff is refused naming it too; a handoff that asks the user starts its approval form on it. With no
+times keep the candidate order above. With none of those the dialog keeps the inherited account, and with automatic
+selection off it follows the fallback above. The daemon settles the account the same way for a session that leaves it out (the tools
+`open_session`, `request_session`, `handoff_session`): the first two open the session on that account, as the dialog
+does. An automatically approved handoff is refused naming it; a handoff that asks the user starts its approval form on
+it. With no
 qualifying account, or with automatic selection off, the daemon falls back to the caller or project/console inheritance
 rules above.
 

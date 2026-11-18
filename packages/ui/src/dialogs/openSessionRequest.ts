@@ -61,16 +61,16 @@ function settledQuickChoice(parentConsole: Console, project: Project | undefined
   );
 }
 
-/** Whether the settled choice for `target` has no usable account after any automatic fallback,
- * so that creating with defaults has nothing to run on. The dialog still opens, as the user can pick
- * another agent there. */
+/** Whether the settled choice for `target` has no account a session can open on after any automatic fallback, so
+ * that creating with defaults has nothing to run on. A used-up account does not count: a session may be opened on one
+ * all the same. The dialog still opens, as the user can pick another agent there. */
 export function quickCreateUnavailable(target: NewSessionRequest, state: QuickCreateState, now: number): boolean {
-  const { exhaustedBy, changingSharing, signedOut, disabled } = settledQuickChoice(target.console, target.kind === "new-session" ? target.project : undefined, state, now);
-  return exhaustedBy !== undefined || changingSharing || signedOut || disabled;
+  const { changingSharing, signedOut, disabled } = settledQuickChoice(target.console, target.kind === "new-session" ? target.project : undefined, state, now);
+  return changingSharing || signedOut || disabled;
 }
 
 /** The request the untouched session dialog would send, including its localized name and any fixed owner.
- * Automatic selection can try other agents. With no usable account, no request is sent. */
+ * Automatic selection can try other agents. With no account a session can open on, no request is sent. */
 export function defaultOpenSessionRequest(
   t: Translate,
   parentConsole: Console,
@@ -80,8 +80,8 @@ export function defaultOpenSessionRequest(
   now: number,
   appearance: "light" | "dark",
 ): { request: OpenSessionRequest } | { unavailable: true } {
-  const { choice, exhaustedBy, changingSharing, signedOut, disabled } = settledQuickChoice(parentConsole, project, state, now);
-  if (disabled || exhaustedBy || signedOut || changingSharing) return { unavailable: true };
+  const { choice, changingSharing, signedOut, disabled } = settledQuickChoice(parentConsole, project, state, now);
+  if (disabled || signedOut || changingSharing) return { unavailable: true };
   return {
     request: openSessionRequest(t, {
       console: parentConsole,

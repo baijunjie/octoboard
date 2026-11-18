@@ -6,8 +6,8 @@ every account the user owns (see `docs/product/agent-accounts.md`) — for Claud
 shown in Settings' **Agent accounts** section, in the rail's account quota panel (see
 `docs/product/account-quota-panel.md`), in a compact indicator for the selected session (see "The selected session's
 quota indicator" below) and, in the macOS application, on the menu bar icon and in its quota submenus (see "The icon's
-menu" in `docs/product/menu-bar-icon.md`). An account whose quota is used up cannot open a session or have one switched
-onto it (see "A used-up account" below). Octoboard can also start a window that has reset but not begun counting, at the
+menu" in `docs/product/menu-bar-icon.md`). An account whose quota is used up cannot have a session switched or handed
+off onto it, though a new session can still be opened on it (see "A used-up account" below). Octoboard can also start a window that has reset but not begun counting, at the
 user's choice (see `docs/product/starting-usage-windows.md`), and, for a Codex account, shows the usage limit resets it
 holds and lets the user redeem one (see `docs/product/usage-limit-resets.md`).
 
@@ -75,8 +75,9 @@ account details dialog, says whether the account is logged in (see "The accounts
   `docs/product/starting-usage-windows.md`);
 - a bar of what remains, full when nothing is used. The bar has one colour per agent: an orange for Claude Code, a
   blue for Codex, and the text colour for Grok Build, each set off against the bar's track in both light and dark
-  appearance. In the rail's panel, in Settings' accounts table and in the menu bar icon's quota submenus a used-up
-  account's bars are a neutral grey instead (see "A used-up account" below).
+  appearance. In the rail's panel, in Settings' accounts table, in the account pickers and the Switch account submenu,
+  and in the menu bar icon's quota submenus a used-up account's bars are a neutral grey instead (see "A used-up account"
+  below).
 
 Settings shows an account's quota in two places (see "The accounts table" and "The account details dialog" in
 `docs/product/agent-accounts.md`):
@@ -126,8 +127,10 @@ of date — shows an empty track. The tracks of a picker's or menu's bars have a
 have none), and the thin weekly bar is three quarters as tall as the main one, as everywhere a two-layer bar is drawn.
 The same bar fills the Usage cell of Settings' accounts table, wider, where out-of-date windows are drawn rather than
 the empty track (see "How an account's quota is shown" above). The bar is not read by assistive technology; the
-account's option states what remains of those windows in words instead, or, for a used-up account or one that is not
-logged in, why it cannot be chosen (see "A used-up account" and "An account that is not logged in" below).
+account's option states what remains of those windows in words instead, or, for a used-up account, that it is used up
+and when it resets, and for one that is not logged in, why it cannot be chosen (see "A used-up account" and "An account
+that is not logged in" below). A used-up account's bar is drawn in a neutral grey instead of the agent's colour, as in
+the rail's panel.
 
 A session row's **Switch account** submenu shows its accounts the same way: the same bar before each account's name,
 and the same words for assistive technology as the item's description, while its name stays the account's name (see
@@ -185,20 +188,27 @@ same way:
 - With several windows used up, the one named is the one that resets last, since the account cannot be used until
   then; one with no reset time counts as resetting last.
 
-A used-up account cannot have a session opened on it, by anyone, the user included (see "When the agent or the account
-cannot open a session" in `docs/product/opening-sessions.md`), and a session cannot be switched onto it (see "When a
-switch fails" in `docs/product/switching-session-accounts.md`). A session already running on it keeps running, and
+A session cannot be switched onto a used-up account (see "When a switch fails" in
+`docs/product/switching-session-accounts.md`), nor can a handoff's receiving session open on it (see "When the agent or
+the account cannot open a session" in `docs/product/opening-sessions.md`), by anyone, the user included. Any other new
+session can open on it, named or chosen automatically, and stops on its usage limit until that limit resets; automatic
+choices prefer a usable account and fall to a used-up one only when there is none (see "Which account a session uses"
+in `docs/product/opening-sessions.md`). A session already running on it keeps running, and
 resuming, restarting or reopening a session is never refused for this. Octoboard never moves a session off it because
 it reads as used up; only a turn that stops on the usage limit can, while the user has turned automatic switching on
 (see `docs/product/automatic-account-switch.md`).
 
-The window does not offer what the daemon would refuse:
+The window marks a used-up account and does not offer what the daemon would refuse:
 
-- the session and handoff dialogs list a used-up account but do not let it be picked, open on another account instead,
-  and refuse to submit when no account of the chosen agent is left (see the **Agent** field in "The session dialog" in
+- the session dialog lists a used-up account and lets it be picked, opens on a usable account of the agent instead when
+  there is one, and submits on a used-up one without marking anything invalid (see the **Agent** field in "The session
+  dialog" in `docs/product/opening-sessions.md`);
+- the handoff dialog lists a used-up account but does not let it be picked, opens on another account instead, and
+  refuses to hand off when the chosen account is used up (see "Handing off from the window" in
+  `docs/product/handing-off-sessions.md`);
+- opening a session with defaults opens on a used-up account its fallback rules settle on; it is unavailable only for
+  the other reasons an account cannot be used (see "Opening a session with defaults" in
   `docs/product/opening-sessions.md`);
-- opening a session with defaults follows its account and agent fallback rules, and is unavailable only after those
-  choices are exhausted (see "Opening a session with defaults" in `docs/product/opening-sessions.md`);
 - a session row's **Switch account** submenu disables a used-up account (see "Session rows" in
   `docs/product/sidebar-session-rows.md`), and the switch confirmation refuses one on Confirm, in an error alert (see
   "Confirming a switch" in `docs/product/switching-session-accounts.md`).
@@ -231,7 +241,9 @@ cell's words say which limit the account has reached and, when known, when it re
 42m"). The account details dialog does not mark a used-up account.
 
 In the macOS menu bar icon's quota submenus a used-up account's bars are drawn in the same neutral grey (see "The
-icon's menu" in `docs/product/menu-bar-icon.md`); no other usage bar turns grey.
+icon's menu" in `docs/product/menu-bar-icon.md`), and so is a used-up account's compact bar in an account picker and
+in the Switch account submenu, other than the session's own account there (see "In an account picker" above); no other
+usage bar turns grey.
 
 The panel and the table judge on the clock as an open dialog does, so the account returns to its usual look within 30
 seconds of its reset time passing, without waiting for a newer reading.
@@ -267,7 +279,7 @@ An account that is not logged in is treated as clearly unusable:
   account is not logged in, so a session cannot use it, and to choose another account or log in to it. An account
   that is turned off is described as turned off instead. The console and project dialogs' account pickers do not mark
   it, since a console's or project's account is a lasting preference.
-- **Opening a session with defaults passes over it**, as it passes over a used-up account (see "Opening a session with
+- **Opening a session with defaults passes over it**, and is unavailable when it cannot (see "Opening a session with
   defaults" in `docs/product/opening-sessions.md`).
 
 ## The selected session's quota indicator

@@ -93,8 +93,8 @@ fn automatic_choice(
 /// The account a session of `agent` that `caller` starts runs on when the call names none:
 /// `caller`'s own, for a session of `caller`'s own agent, so that work a session hands out goes on
 /// in the same agent and account unless the user asked otherwise. `None` — the project's account
-/// for the agent, else the console's — for another agent, and when `caller`'s account could not
-/// open a session now: removed since, turned off, logged out, or with its quota used up.
+/// for the agent, else the console's — for another agent, and when `caller`'s account is not
+/// usable now: removed since, turned off, logged out, or with its quota used up.
 fn callers_account(
     state: &Arc<AppState>,
     caller: &Session,

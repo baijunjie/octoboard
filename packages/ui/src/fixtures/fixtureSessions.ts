@@ -331,7 +331,7 @@ export function createSessionReplies({ scenario, store, fail, refuseLocked }: Fi
       const account = launchAccount(owner, project, agent, body.account);
       refuseIfSharingChanges(account?.id);
       refuseIfDisabled(agent, account);
-      refuseIfQuotaExhausted(agent, account);
+      // A new session may be opened on an account whose quota is used up, so only a logged-out one is refused after.
       refuseIfNotSignedIn(agent, account);
       const ordinal = nextConsoleOrdinals.get(owner.id) ?? 1;
       if (!project) nextConsoleOrdinals.set(owner.id, ordinal + 1);

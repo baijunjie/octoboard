@@ -19,8 +19,8 @@ import { setKeyboardModality } from "../primitives";
 /**
  * A "+" that is a menu of `projects`, for a view with no project of its own to open a session in.
  * Choosing a project opens the session dialog for `target(project)`; while the modifier is held and an
- * agent is available it turns into a bolt named `quickLabel` and choosing one calls `onQuickCreate` instead. A project whose agent has no account that can open a session (each used up, not logged in
- * or turned off) is disabled then, with why under its name and in its accessible name. With no project, or
+ * agent is available it turns into a bolt named `quickLabel` and choosing one calls `onQuickCreate` instead. A project whose agent has no account that can open a session (each not logged in, turned
+ * off or changing its sharing) is disabled then, with why under its name and in its accessible name. With no project, or
  * no agent that is added and installed, it is a disabled "+".
  */
 export function NewSessionMenu({
@@ -60,8 +60,8 @@ export function NewSessionMenu({
     triggerRef.current?.click();
     armedRef.current = undefined;
   });
-  // In the quick form, the projects whose agent has no account that can open a session (each used up, not logged in
-  // or turned off) cannot be chosen. The time is read as the store is: the modifier is held only for a
+  // In the quick form, the projects whose agent has no account that can open a session (each not logged in, turned
+  // off or changing its sharing) cannot be chosen. The time is read as the store is: the modifier is held only for a
   // moment.
   const unavailable = useDaemonStore(useShallow((s) => {
     const ids = new Set<string>();

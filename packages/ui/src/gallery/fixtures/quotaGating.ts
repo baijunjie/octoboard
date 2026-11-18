@@ -3,7 +3,7 @@ import { type Account, type AccountQuota, type Agent, type AgentAvailability, ty
 import { FIXTURE_AGENTS } from "../../fixtures/fixtureProviders";
 import type { Scenario } from "../scenario";
 import { describing, type Ui } from "../../fixtures/interact";
-import { accountOf, SAMPLE, accountSharingOf, minutesFromNow, projectOf, projectWith, sessionOf, snapshotState, switchingAccount } from "../../fixtures/builders";
+import { accountOf, SAMPLE, accountSharingOf, projectOf, projectWith, sessionOf, snapshotState, switchingAccount } from "../../fixtures/builders";
 import { quotaFailure, quotaOf, quotaWindow } from "../../fixtures/quotas";
 
 import { settingsUpdated } from "./liveChanges";
@@ -53,9 +53,6 @@ const codexSpent: AccountQuota[] = [
   quotaOf("codex", null, "plus", [quotaWindow("session", 100, 95), quotaWindow("weekly", 52, 5 * 24 * 60)]),
   quotaOf("codex", "a-team", "pro", [quotaWindow("session", 30, 200), quotaWindow("weekly", 100, 3 * 24 * 60 + 60)]),
 ];
-
-/** Grok Build's one credit pool, spent. */
-const grokSpent: AccountQuota[] = [quotaOf("grok", null, "SuperGrok", [quotaWindow("credit_period", 100, 2 * 24 * 60)])];
 
 const website = { ...web, default_agent: "claude" as const };
 const searchApi = projectOf("p-api", console_.id, "Search API", { default_agent: "codex" });
@@ -154,15 +151,6 @@ const teamIncomplete: Settings = {
 };
 const onTeam = projectWith(searchApi, { accounts: { codex: { kind: "account", id: "a-team" } } });
 
-/** When the daemon, which holds a newer reading than the window, refuses: the session window resets in 95 minutes.
- * Its wire name stays "5-hour", with its kind and its five-hour length beside it; the app words it "session" for
- * Claude Code. */
-const refusedWithReset = {
-  code: "account_quota_exhausted",
-  params: { agent: "Claude Code", account: "Work", window: "5-hour", window_kind: "session", window_minutes: "300", resets_at: String(minutesFromNow(95)) },
-  message: "Work has reached its Claude Code usage limit (5-hour)",
-};
-
 /** The daemon refusing a session on Work, which it turned off since the window last heard. */
 const refusedDisabled = {
   code: "account_disabled",
@@ -183,6 +171,12 @@ const signedOutQuotas: AccountQuota[] = [
 /** Grok Build's one account, not logged in. */
 const grokSignedOut: AccountQuota[] = [quotaOf("grok", null, null, [], { unavailable: quotaFailure("quota_not_signed_in", { agent: "Grok Build" }, "Grok Build is not signed in") })];
 
+/** Codex with both its accounts not logged in. */
+const codexSignedOut: AccountQuota[] = [
+  quotaOf("codex", null, null, [], { unavailable: quotaFailure("quota_not_signed_in", { agent: "Codex" }, "Codex is not signed in") }),
+  quotaOf("codex", "a-team", null, [], { unavailable: quotaFailure("quota_not_signed_in", { agent: "Codex" }, "Codex is not signed in") }),
+];
+
 /** Hub's own Codex handoff: the default account is spent and Team is not. */
 const handoffQuotas: AccountQuota[] = [
   codexSpent[0],
@@ -195,7 +189,7 @@ export const quotaGatingScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "New session, account picker with usage bars",
-    description: "Website would run on Work, whose usage limit is reached, so the Claude Code account field opens on Default, the first account with usage left, and the open picker lists every account with a compact usage bar before its name: the session window's bar with the weekly window's thin one right under it. Default has plenty left and is selected; Work is unselectable, its name in the secondary text colour and its bar faded and its reason at full contrast under the name on two lines, \"Limit reached\" and when it resets; Personal is nearly empty; Client has no reading yet and shows an empty track. An account whose sharing change is running is unselectable the same way, without a reason.",
+    description: "Website would run on Work, whose usage limit is reached, so the Claude Code account field opens on Default, the first account with usage left, and the open picker lists every account with a compact usage bar before its name: the session window's bar with the weekly window's thin one right under it. Default has plenty left and is selected; Work, at its limit, can still be chosen for a new session: its bars are grey instead of the agent's colour, its name is in the normal text colour and its reason sits under the name on two lines, \"Limit reached\" and when it resets; Personal is nearly empty; Client has no reading yet and shows an empty track.",
     state: launchState([onWork], claudeQuotas),
     steps: [openSessionDialog, (ui) => ui.press(accountField(ui, "Claude Code"))],
   },
@@ -244,20 +238,11 @@ export const quotaGatingScenarios: Scenario[] = [
   {
     id: "dialog-new-session-quota-all-used-up",
     group: GROUP,
-    category: "exceptional",
+    category: "normal",
     title: "New session, every account of the agent has reached its limit",
-    description: "Both of Codex's accounts have reached their limit (Default in its 5h window, Team in its weekly one), so none can be preselected: Open is disabled and the Agent field is marked invalid, with its own error under the agent and account pair naming the unavailable account and giving the limit reason and reset time. No Alert stands above the form. An agent whose only account is not logged in marks the field the same way.",
+    description: "Both of Codex's accounts have reached their limit (Default in its 5h window, Team in its weekly one), and the dialog still opens on Default: the account field shows its grey usage bar and no error, no Alert stands above the form and Open is enabled, since a session may be opened on an account at its limit.",
     state: launchState([searchApi], codexSpent),
     steps: [openSessionDialog],
-  },
-  {
-    id: "dialog-new-session-quota-single-account",
-    group: GROUP,
-    category: "exceptional",
-    title: "New session, the agent's only account has reached its limit",
-    description: "Grok Build has only its default account, and its account picker is still there beside the agent select, offering that one option. Its credit pool has reached its limit: the open picker lists Default unselectable, its name in the secondary text colour and its empty bar faded and its reason at full contrast under the name on two lines, \"Limit reached\" and when it resets. Open is disabled and the Agent field is marked invalid, its error naming the account and giving the limit reason and reset time under the pair, partly behind the open list (the closed picker is the scenario above).",
-    state: launchState([chat], grokSpent),
-    steps: [openSessionDialog, (ui) => ui.press(accountField(ui, "Grok Build"))],
   },
   {
     id: "dialog-new-session-incomplete-launch",
@@ -307,16 +292,6 @@ export const quotaGatingScenarios: Scenario[] = [
       (ui) => ui.focusControl(ui.t("dialog.incompleteLaunch.viewSettings")),
       (ui) => ui.key("Enter"),
     ],
-  },
-  {
-    id: "dialog-new-session-quota-refused",
-    group: GROUP,
-    category: "exceptional",
-    title: "Session launch refused, the account's usage limit is reached",
-    description: "The daemon holds a newer reading than the window: Work's session limit is reached. An error dialog opens over the session dialog, which stays behind it: it names the account and the agent, says the session limit is reached and in how long it resets, and advises another account or waiting.",
-    state: launchState([onWork], []),
-    sessionOpenError: refusedWithReset,
-    steps: [openSessionDialog, (ui) => ui.confirm()],
   },
   {
     id: "dialog-new-session-disabled-refused",
@@ -417,7 +392,7 @@ export const quotaGatingScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Hand off, the inherited Codex account has reached its limit",
-    description: "Hub hands off to Codex, whose default account has reached its limit: the field opens on Team, the account with usage left, and the open picker lists the default account unselectable, its name in the secondary text colour and its bar faded and its reason at full contrast under the name on two lines, \"Limit reached\" and when it resets.",
+    description: "Hub hands off to Codex, whose default account has reached its limit: the field opens on Team, the account with usage left, and the open picker lists the default account unselectable, its name in the secondary text colour, its bars grey and its reason under the name on two lines, \"Limit reached\" and when it resets.",
     state: launchState([], handoffQuotas),
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: hub.title })),
@@ -430,7 +405,7 @@ export const quotaGatingScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Hand off, the only Codex account has reached its limit",
-    description: "Hub hands off to Codex, which has only its default account, and that has reached its limit: Hand off is disabled and the Hand off to field is marked invalid, with its own error under the pair naming the unavailable account and giving the limit reason and reset time. The account picker beside the agent select holds that one account, Default, with its two-layer usage bar, the 5h bar empty over the part-filled weekly one, and the picker stays closed.",
+    description: "Hub hands off to Codex, which has only its default account, and that has reached its limit: Hand off is disabled and the Hand off to field is marked invalid, with its own error under the pair naming the unavailable account and giving the limit reason and reset time. The account picker beside the agent select holds that one account, Default, with its two-layer usage bar drawn grey, the 5h bar empty over the part-filled weekly one, and the picker stays closed.",
     state: { ...launchState([], [codexSpent[0]]), settings: { ...settings, accounts: accounts.filter((account) => account.agent === "claude") } },
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: hub.title })),
@@ -438,13 +413,13 @@ export const quotaGatingScenarios: Scenario[] = [
     ],
   },
   {
-    id: "sidebar-quick-create-quota-used-up",
+    id: "sidebar-quick-create-no-account",
     group: GROUP,
     category: "exceptional",
     held: true,
-    title: "Quick create, the default agent's accounts at their limit or turned off",
-    description: "With the modifier held the new-session buttons are bolts. The console's sessions run on Codex, the default agent: its default account has reached its 5h limit and Team is turned off, so no Codex account can open a session. The bolt in the sidebar header looks disabled but can be focused and hovered: the pointer rests on it and its tooltip is the short reason \"No available account\", while its accessible name stays \"New console session with defaults\". Search API's project row has the same disabled bolt, whose tooltip shows the same reason on hover.",
-    state: { ...launchState([searchApi], [codexSpent[0]], codexConsole), settings: codexTeamOff },
+    title: "Quick create, the default agent's accounts not logged in or turned off",
+    description: "With the modifier held the new-session buttons are bolts. The console's sessions run on Codex, the default agent: its default account is not logged in and Team is turned off, so no Codex account can open a session. The bolt in the sidebar header looks disabled but can be focused and hovered: the pointer rests on it and its tooltip is the short reason \"No available account\", while its accessible name stays \"New console session with defaults\". Search API's project row has the same disabled bolt, whose tooltip shows the same reason on hover.",
+    state: { ...launchState([searchApi], [codexSignedOut[0]], codexConsole), settings: codexTeamOff },
     // The "+" is still plain while the steps run: the modifier is pressed after them, and the open tooltip then reads the reason.
     steps: [(ui) => ui.hoverTitledControl(ui.t("sidebar.consoleSessions.new"))],
   },
@@ -455,7 +430,7 @@ export const quotaGatingScenarios: Scenario[] = [
     title: "Quick create refused, no agent has an available account",
     description: "Automatic account selection is on, but none of the added agents can open a session. Pressing New console session with the modifier opens a short error dialog: \"No account is currently available to open a session.\" It offers OK, with no recovery advice or account-management action.",
     state: {
-      ...launchState([searchApi], [...codexSpent, ...grokSignedOut, { ...signedOutQuotas[1], account: "a-personal" }], codexConsole),
+      ...launchState([searchApi], [...codexSignedOut, ...grokSignedOut, { ...signedOutQuotas[1], account: "a-personal" }], codexConsole),
       settings: {
         ...settings,
         auto_select_account: true,
@@ -471,9 +446,9 @@ export const quotaGatingScenarios: Scenario[] = [
     group: FOCUS_GROUP,
     category: "exceptional",
     held: "from-start",
-    title: "Quick create menu with an agent's accounts at their limit",
-    description: "With the modifier held, the project chooser opened from the focus header is in its quick form: Search API, whose default agent (Codex) has all its accounts at their limit, is greyed out and cannot be chosen, with the short reason \"No available account\" under its name, while Website, which can fall back to Default, is offered.",
-    state: launchState([onWork, searchApi], [...claudeQuotas, ...codexSpent]),
+    title: "Quick create menu with accounts at their limit and not logged in",
+    description: "With the modifier held, the project chooser opened from the focus header is in its quick form. Search API, whose default agent (Codex) has all its accounts at their limit, is offered like Website, since a session may be opened on an account at its limit. Chat Bot, whose default agent (Grok Build) has its only account not logged in, is greyed out and cannot be chosen, with the short reason \"No available account\" under its name.",
+    state: launchState([onWork, searchApi, chat], [...claudeQuotas, ...codexSpent, ...grokSignedOut]),
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub.id}` },
     // Named plain or quick: the viewer's Released choice leaves the modifier up, which names it plain.
     steps: [(ui) => ui.press(describing("The focus header's new-session button, plain or quick", (name) => name === ui.t("sidebar.focus.newSession") || name === ui.t("sidebar.focus.newSessionQuick")))],

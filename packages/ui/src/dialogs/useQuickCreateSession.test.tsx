@@ -89,18 +89,16 @@ it("reports a refusal as a notification and selects nothing", async () => {
   expect(onOpened).not.toHaveBeenCalled();
 });
 
-it("explains that no account is available without adding recovery instructions", async () => {
+it("opens on an account whose quota is used up, as the dialog does, without an error", async () => {
   const spent = {
     agent: "claude" as const, account: null, fetched_at: 0, plan: null, unavailable: null,
     windows: [{ kind: "session" as const, label: null, used_percent: 100, resets_at: Date.now() + 3_600_000, window_minutes: 300 }], email: null,
   };
-  const { daemon, run } = mount({ accountQuotas: [spent] });
+  const { daemon, onOpened, run } = mount({ accountQuotas: [spent] });
   await run({ kind: "new-console-session", console: parent });
-  expect(daemon.request).not.toHaveBeenCalled();
-  const [error] = raised();
-  expect((error as Error).message).toBe("No account is currently available to open a session.");
-  expect(errorAlerts.getSnapshot()[0].classification).toEqual({ kind: "actionable", recovery: "none" });
-  expect(error).toMatchObject({ code: "quick_create_unavailable", params: {} });
+  expect(daemon.request).toHaveBeenCalledWith(expect.objectContaining({ type: "open_session", agent: "claude", account: null }));
+  expect(raised()).toEqual([]);
+  expect(onOpened).toHaveBeenCalledWith("s-new");
 });
 
 it("refuses a disabled account with the short unavailable message", async () => {

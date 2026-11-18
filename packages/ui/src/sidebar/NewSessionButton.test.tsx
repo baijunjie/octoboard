@@ -127,8 +127,23 @@ const spent = TEST_AGENTS.map((value) => ({
   windows: [{ kind: "weekly" as const, label: null, used_percent: 100, resets_at: null, window_minutes: null }], email: null,
 }));
 
-it("keeps the quick form focusable, named for the action and described by why it cannot create, when every account is used up", () => {
+const signedOut = TEST_AGENTS.map((value) => ({
+  agent: value, account: null, fetched_at: 0, plan: null, windows: [],
+  unavailable: { code: "quota_not_signed_in", params: {}, message: "signed out" }, email: null,
+}));
+
+it("keeps the quick form available when every account is used up, as a session may open on one", () => {
   const { button, key, click, onOpen, onQuickCreate } = mount({ agentAvailability: available, accountQuotas: spent });
+  key("keydown", true);
+  expect(button().getAttribute("aria-disabled")).toBeNull();
+  expect(button().getAttribute("aria-describedby") || null).toBeNull();
+  click();
+  expect(onQuickCreate).toHaveBeenCalledWith(request);
+  expect(onOpen).not.toHaveBeenCalled();
+});
+
+it("keeps the quick form focusable, named for the action and described by why it cannot create, when every account is logged out", () => {
+  const { button, key, click, onOpen, onQuickCreate } = mount({ agentAvailability: available, accountQuotas: signedOut });
   button().focus();
   key("keydown", true);
   expect(document.activeElement).toBe(button());

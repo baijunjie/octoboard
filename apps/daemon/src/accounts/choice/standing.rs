@@ -1,5 +1,7 @@
-//! Whether a new session could open on an agent or an account as things stand, and why one cannot:
-//! the agent's availability and the account's own state, judged from what the daemon holds.
+//! Whether an agent or an account is usable as things stand, and why one is not: the agent's
+//! availability and the account's own state, judged from what the daemon holds. An unusable account
+//! is passed over by automatic choices and refused a switch or a handoff; a new session the user
+//! names it for is refused only when it is turned off or logged out, not for a used-up quota.
 
 use std::sync::Arc;
 
@@ -16,10 +18,10 @@ pub(crate) fn agent_is_available(state: &Arc<AppState>, agent: AgentId) -> bool 
     state.agent_availability_of(agent).availability != Availability::Unavailable
 }
 
-/// The used-up window that keeps a new session off `account_id` (`None` the default account) of
-/// `agent` at `now`, judged from the reading held alone; `config_dir` is the account's directory,
-/// so a reading taken under another one does not count. What
-/// [`refuse_if_account_quota_exhausted`] refuses and what [`account_can_open`] passes over.
+/// The used-up window that makes `account_id` (`None` the default account) of `agent` unusable at
+/// `now`, judged from the reading held alone; `config_dir` is the account's directory, so a reading
+/// taken under another one does not count. What [`refuse_if_account_quota_exhausted`] refuses and
+/// what [`account_can_open`] passes over.
 ///
 /// [`refuse_if_account_quota_exhausted`]: super::refusals::refuse_if_account_quota_exhausted
 pub(super) fn used_up_quota(
@@ -44,12 +46,12 @@ pub(crate) fn agent_can_open(state: &Arc<AppState>, agent: AgentId) -> Result<bo
     Ok(agent_is_available(state, agent) && state.store.agent_is_added(agent)?)
 }
 
-/// Whether a new session of `agent` could run on `account_id` (`None` the default account) as
-/// things stand: the account is still one of that agent's ([`checked_account_reference`]), it is
-/// not turned off ([`refuse_if_account_disabled`]), its quota is not used up
+/// Whether `account_id` (`None` the default account) of `agent` is usable as things stand: the
+/// account is still one of that agent's ([`checked_account_reference`]), it is not turned off
+/// ([`refuse_if_account_disabled`]), its quota is not used up
 /// ([`refuse_if_account_quota_exhausted`]) and it is not found logged out
-/// ([`refuse_if_account_not_signed_in`]). For a caller choosing a default
-/// it can fall back from, rather than a refusal.
+/// ([`refuse_if_account_not_signed_in`]). For a caller choosing a default it can fall back from,
+/// rather than a refusal.
 ///
 /// [`refuse_if_account_disabled`]: crate::coordinator::accounts::refuse_if_account_disabled
 /// [`refuse_if_account_quota_exhausted`]: super::refusals::refuse_if_account_quota_exhausted
@@ -63,7 +65,7 @@ pub(crate) fn account_can_open(
     Ok(blocked_by(state, agent, account_id)?.is_none())
 }
 
-/// Why a new session cannot run on an account, in the order [`blocked_by`] judges them.
+/// Why an account is not usable, in the order [`blocked_by`] judges them.
 pub(crate) enum CannotOpen {
     /// The account is turned off, or is no longer one of the agent's.
     Unusable,
@@ -76,7 +78,7 @@ pub(crate) enum CannotOpen {
     SharingInProgress,
 }
 
-/// What keeps a new session of `agent` off `account_id` (`None` the default account) as things
+/// What makes `account_id` (`None` the default account) of `agent` unusable as things
 /// stand, or `None` when nothing does: [`blocked_by`], then a sharing change running on the
 /// account. For a caller that lists accounts and says why one is passed over, or only decides
 /// whether one is.
@@ -93,7 +95,7 @@ pub(crate) fn cannot_open(
         .then_some(CannotOpen::SharingInProgress))
 }
 
-/// What keeps a new session off `account_id` (`None` the default account) of `agent`, going by
+/// What makes `account_id` (`None` the default account) of `agent` unusable, going by
 /// what is held now: what [`refuse_if_account_disabled`], [`refuse_if_account_not_signed_in`] and
 /// [`refuse_if_account_quota_exhausted`] refuse, the quota judged last. A sharing change running
 /// on the account is not counted; see [`cannot_open`].

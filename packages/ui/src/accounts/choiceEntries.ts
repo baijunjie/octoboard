@@ -136,7 +136,7 @@ export function findEntry(groups: ChoiceGroup[], key: string): (ChoiceEntry & { 
   return undefined;
 }
 
-/** The window that keeps `choice`'s account from running a session right now, if it is used up. */
+/** The window that keeps `choice`'s account from taking a handoff right now, if it is used up. */
 export function choiceExhaustion(choice: AccountChoice, groups: ChoiceGroup[]): QuotaWindow | undefined {
   return findEntry(groups, choiceKey(choice))?.exhaustedBy;
 }
@@ -156,8 +156,13 @@ export function choiceChangingSharing(choice: AccountChoice, groups: ChoiceGroup
   return findEntry(groups, choiceKey(choice))?.changingSharing === true;
 }
 
-/** Whether nothing keeps a session off the entry's account: its quota is not used up, no sharing change runs, it is
- * logged in and it is not turned off. */
+/** Whether the entry's account is usable, the one a choice prefers: its quota is not used up, no sharing change runs, it
+ * is logged in and it is not turned off. */
 export function isUsable(entry: Pick<ChoiceEntry, "exhaustedBy" | "changingSharing" | "signedOut" | "disabled">): boolean {
   return !entry.exhaustedBy && !entry.changingSharing && !entry.signedOut && !entry.disabled;
+}
+
+/** Whether the entry's used-up quota alone keeps it from being usable, so that a new session may still open on it. */
+export function isOnlyUsedUp(entry: Pick<ChoiceEntry, "exhaustedBy" | "changingSharing" | "signedOut" | "disabled">): boolean {
+  return entry.exhaustedBy !== undefined && !entry.changingSharing && !entry.signedOut && !entry.disabled;
 }

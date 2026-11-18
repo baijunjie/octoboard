@@ -620,6 +620,14 @@ it("a handoff marks an unfinished sharing change of the account its form is on, 
   expect(document.body.querySelector('[data-slot="alert-root"]')).toBeNull();
 });
 
+it("a handoff onto an account whose quota is used up cannot be confirmed, though a new session may open on one", () => {
+  const codexSpent = accountOf("a-codex", "codex", "Spent", "/a/codex");
+  const spent = { agent: "codex" as const, account: "a-codex", fetched_at: 0, plan: null, unavailable: null, windows: [{ kind: "session" as const, label: null, used_percent: 100, resets_at: Date.now() + 3_600_000, window_minutes: 300 }], email: null };
+  mountWith({ ...request, action: "handoff", agent: "codex", target: "s-held", account: "a-codex" }, owned, [codexSpent] as never, { accountQuotas: [spent] });
+  expect(document.querySelector('[data-slot="field-error"] [role="alert"]')?.textContent).toContain("cannot be used for now because it has reached its 5h limit.");
+  expect(findButton("Hand off session")?.disabled).toBe(true);
+});
+
 it("a switch approves with the account the user picked instead", async () => {
   const dialog = mountWith(switching);
   await pickOption("Default");

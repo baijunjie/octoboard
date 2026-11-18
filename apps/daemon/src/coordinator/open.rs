@@ -20,7 +20,7 @@ use crate::store::LOCAL_HOST_ID;
 use crate::text::trimmed_or_none;
 use crate::time::now_millis;
 
-use super::accounts::refuse_unless_account_usable;
+use super::accounts::{refuse_unless_account_usable, AccountGate};
 use super::bindings::resolve_owner;
 use super::launch::{check_launch_settings, start_process, stop_process, SettingsChecked};
 use super::resume::{
@@ -198,17 +198,18 @@ pub(super) struct ResolvedOpen {
 }
 
 /// Resolves what [`open_session`] opens from `request`, refusing an unknown console, project or
-/// owner, an agent that is not available or not added, an account of another agent, a disabled
-/// account, and an account whose plan quota is used up.
+/// owner, an agent that is not available or not added, an account of another agent, and a disabled
+/// account or one found not logged in. A used-up account is not refused: the user may open a
+/// session on one all the same.
 pub(super) fn resolve_open(state: &Arc<AppState>, request: &OpenRequest) -> Result<ResolvedOpen> {
-    resolve_open_with(state, request, true)
+    resolve_open_with(state, request, AccountGate::NewSession)
 }
 
-/// [`resolve_open`], refusing an account whose quota is used up only when `enforce_quota`.
+/// [`resolve_open`], refusing the account's states that `gate` names.
 pub(super) fn resolve_open_with(
     state: &Arc<AppState>,
     request: &OpenRequest,
-    enforce_quota: bool,
+    gate: AccountGate,
 ) -> Result<ResolvedOpen> {
     let console = state.store.require_console(&request.console_id)?;
 
@@ -286,7 +287,7 @@ pub(super) fn resolve_open_with(
         agent,
         account_id.as_deref(),
         config_dir.as_deref(),
-        enforce_quota,
+        gate,
     )?;
     // Asked again by the launch under its claim; asked here so that nothing is recorded.
     crate::accounts::shared_config::refuse_if_changing(state, account_id.as_deref())?;
@@ -611,31 +612,41 @@ fn settle_started(state: &Arc<AppState>, session: &Session, has_task: bool) -> R
 
 /// Refuses a session that [`open_session`] would refuse for what `request` asks, a console session
 /// included, before anything is launched or recorded: an unknown console, project or owner, an
-/// agent that is not available or not added, an account of another agent, a disabled account, an
-/// account whose plan quota is used up or that the last quota reading found not logged in, a model
-/// or effort the agent does not offer. For a session whose opening waits on the user's answer, so
-/// that a request which could never be carried out is refused to the asker rather than put to the
-/// user. Returns the agent the session would be of.
+/// agent that is not available or not added, an account of another agent, a disabled account or
+/// one the last quota reading found not logged in, a model or effort the agent does not offer. For
+/// a session whose opening waits on the user's answer, so that a request which could never be
+/// carried out is refused to the asker rather than put to the user. Returns the agent the session
+/// would be of.
 pub async fn check_open(state: &Arc<AppState>, request: &OpenRequest) -> Result<AgentId> {
-    Ok(check_open_with(state, request, true).await?.0)
+    Ok(check_open_with(state, request, AccountGate::NewSession)
+        .await?
+        .0)
 }
 
-/// [`check_open`] for a session whose opening waits on the user's choice of account, which is not
+/// [`check_open`] for a handoff's receiving session, which moves an existing conversation and so
+/// is refused an account whose plan quota is used up as well.
+pub async fn check_handoff_open(state: &Arc<AppState>, request: &OpenRequest) -> Result<AgentId> {
+    Ok(check_open_with(state, request, AccountGate::Full).await?.0)
+}
+
+/// [`check_open`] for a handoff whose opening waits on the user's choice of account, which is not
 /// refused for an account whose quota is used up or that is not logged in (the user can pick
 /// another; the refusal comes at approval). Returns the account the session would open on.
-pub async fn check_open_asking(
+pub async fn check_handoff_open_asking(
     state: &Arc<AppState>,
     request: &OpenRequest,
 ) -> Result<Option<String>> {
-    Ok(check_open_with(state, request, false).await?.1)
+    Ok(check_open_with(state, request, AccountGate::DisabledOnly)
+        .await?
+        .1)
 }
 
-/// The checks of [`check_open`], refusing an account whose quota is used up or that is not logged
-/// in only when `enforce_quota`; returns the agent and the account the session would open on.
+/// The checks of [`check_open`], refusing the account's states that `gate` names; returns the agent
+/// and the account the session would open on.
 async fn check_open_with(
     state: &Arc<AppState>,
     request: &OpenRequest,
-    enforce_quota: bool,
+    gate: AccountGate,
 ) -> Result<(AgentId, Option<String>)> {
     let ResolvedOpen {
         project,
@@ -643,7 +654,7 @@ async fn check_open_with(
         agent,
         account_id,
         ..
-    } = resolve_open_with(state, request, enforce_quota)?;
+    } = resolve_open_with(state, request, gate)?;
     check_compatibility(agent, &request.compatibility)?;
     check_launch_settings(
         state,

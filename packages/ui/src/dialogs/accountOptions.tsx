@@ -5,17 +5,18 @@ import { accountUsage } from "../quota/accountUsage";
 import type { Option } from "../components/form/OptionSelect";
 
 /** An account's entry in a picker: its name behind a compact usage bar. One that is turned off, is not logged in,
- * has its quota used up, or has a sharing change running is shown but cannot be chosen. The first two say why in short
- * under its name and in full as its description (`accountDisabledUnavailable`, `accountSignedOutUnavailable`), in place
- * of what remains of its quota; a used-up one says so through its usage (see `accountUsage`); a sharing change, which
- * ends on its own, says nothing. */
-export function accountOption(t: Translate, providers: readonly ProviderInfo[], entry: ChoiceEntry, now: number, isDisabled: boolean): Option<string> {
+ * or has a sharing change running is shown but cannot be chosen, nor one whose quota is used up when `refuseUsedUp`
+ * (a new session may still be opened on it; a handoff may not). The first two say why in short under its name and in
+ * full as its description (`accountDisabledUnavailable`, `accountSignedOutUnavailable`), in place of what remains of
+ * its quota; a used-up one says so through its usage (see `accountUsage`), chosen or not; a sharing change, which ends
+ * on its own, says nothing. */
+export function accountOption(t: Translate, providers: readonly ProviderInfo[], entry: ChoiceEntry, now: number, isDisabled: boolean, refuseUsedUp: boolean): Option<string> {
   const usage = accountUsage(t, providers, entry.agent, entry.quota, entry.exhaustedBy, now);
   return {
     value: entry.key,
     label: entry.name,
     ...(entry.disabled ? { icon: usage.icon, ...accountDisabledUnavailable(t) } : entry.signedOut ? { icon: usage.icon, ...accountSignedOutUnavailable(t) } : usage),
-    isDisabled: isDisabled || entry.exhaustedBy !== undefined || entry.changingSharing || entry.signedOut || entry.disabled,
+    isDisabled: isDisabled || (refuseUsedUp && entry.exhaustedBy !== undefined) || entry.changingSharing || entry.signedOut || entry.disabled,
   };
 }
 

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import { avoidUnavailableAccount, settledInitialChoice } from "./openingChoice";
-import { choiceSignedOut, choiceChangingSharing, choiceDisabled, choiceExhaustion, choiceGroups, incompleteAccount } from "./choiceEntries";
+import { choiceSignedOut, choiceChangingSharing, choiceDisabled, choiceExhaustion, choiceGroups, incompleteAccount, isOnlyUsedUp, isUsable } from "./choiceEntries";
 import { switchEntryBlock, switchEntries } from "./switchEntries";
-import { preferExpiringWeekly } from "./accountRanking";
+import { preferExpiringWeekly, soonestAvailable } from "./accountRanking";
 import { consoleOf, sessionOf } from "../fixtures/builders";
 import type { Translate } from "../i18n/catalog";
 import type { AccountQuota, AccountSharing } from "../protocol";
@@ -196,14 +196,17 @@ describe("an account whose quota is used up", () => {
   });
 
   it("moves the opening choice to the first other account of the agent, the default account first", () => {
-    expect(open([usedUp("claude", "w")])).toEqual({ choice: { agent: "claude", account: null }, exhaustedBy: undefined, changingSharing: false, signedOut: false, disabled: false });
+    expect(open([usedUp("claude", "w")])).toEqual({ choice: { agent: "claude", account: null }, changingSharing: false, signedOut: false, disabled: false });
     expect(open([usedUp("claude", "w"), usedUp("claude", null)]).choice).toEqual({ agent: "claude", account: "w2" });
   });
 
-  it("keeps the choice, and says what used it up, when every account of the agent is used up", () => {
-    const settled = open([usedUp("claude", "w"), usedUp("claude", null), usedUp("claude", "w2")]);
-    expect(settled.choice).toEqual({ agent: "claude", account: "w" });
-    expect(settled.exhaustedBy?.kind).toBe("session");
+  it("keeps the choice, with nothing blocking it, when every account of the agent is used up", () => {
+    const quotas = [usedUp("claude", "w"), usedUp("claude", null), usedUp("claude", "w2")];
+    const settled = open(quotas);
+    expect(settled).toEqual({ choice: { agent: "claude", account: "w" }, changingSharing: false, signedOut: false, disabled: false });
+    expect(settled).not.toHaveProperty("exhaustedBy");
+    const groups = choiceGroups(stored, availability({}), null, TEST_PROVIDERS, () => "Default", { quotas, now: NOW });
+    expect(choiceExhaustion(settled.choice, groups)?.kind).toBe("session");
   });
 
   it("never moves to another agent", () => {
@@ -238,5 +241,30 @@ describe("incompleteAccount", () => {
     ["an account whose sharing change runs, which the daemon refuses anyway", [half], new Map([["h", running]]), "h"],
   ] as const)("names nothing for %s", (_, stored, sharing, id) => {
     expect(incompleteAccount([...stored], sharing, id)).toBeUndefined();
+  });
+});
+
+describe("isOnlyUsedUp", () => {
+  const window = windowOf({ used_percent: 100 });
+  const free = { exhaustedBy: undefined, changingSharing: false, signedOut: false, disabled: false };
+
+  it("is true only when the quota is used up and nothing else keeps the account off", () => {
+    expect(isOnlyUsedUp({ ...free, exhaustedBy: window })).toBe(true);
+    expect(isOnlyUsedUp(free)).toBe(false);
+  });
+
+  it.each([["changing its sharing", { changingSharing: true }], ["logged out", { signedOut: true }], ["turned off", { disabled: true }]])("is false for a used-up account that is also %s", (_, extra) => {
+    expect(isOnlyUsedUp({ ...free, exhaustedBy: window, ...extra })).toBe(false);
+  });
+
+  it("is never true for a usable account, and the two never overlap", () => {
+    expect(isUsable(free) && isOnlyUsedUp(free)).toBe(false);
+    expect(isUsable({ ...free, exhaustedBy: window })).toBe(false);
+  });
+
+  it("is what lets an account be the soonest available: one that is also blocked is passed over", () => {
+    const group = (extra: Partial<typeof free>) => choiceGroups(accounts, availability({}), null, TEST_PROVIDERS, () => "Default", { quotas: [usedUp("claude", "w")], now: NOW }, extra.changingSharing ? new Map([["w", { account: "w", progress: { share: true, phase: "changing" as const, done: 0, total: 2 } }]]) : undefined, extra.disabled ? ["claude"] : undefined)[0]!.entries;
+    expect(soonestAvailable(group({}))?.account).toBe("w");
+    expect(soonestAvailable(group({ changingSharing: true }))).toBeUndefined();
   });
 });

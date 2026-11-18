@@ -1,5 +1,5 @@
 import type { AccountQuota, Agent, QuotaWindow } from "../protocol";
-import { isUsable, type ChoiceEntry, type ChoiceGroup } from "./choiceEntries";
+import { isOnlyUsedUp, isUsable, type ChoiceEntry, type ChoiceGroup } from "./choiceEntries";
 import { creditPeriodLength } from "./quotaFormat";
 
 /** Whether `window` is the account-wide weekly quota. A model-specific weekly window and a session
@@ -105,7 +105,7 @@ export function soonestAvailable(entries: ChoiceEntry[]): ChoiceEntry | undefine
   let best: ChoiceEntry | undefined;
   let bestAt = Infinity;
   for (const entry of entries) {
-    if (!entry.exhaustedBy || entry.changingSharing || entry.signedOut || entry.disabled) continue;
+    if (!isOnlyUsedUp(entry) || !entry.exhaustedBy) continue;
     const at = entry.exhaustedBy.resets_at ?? Infinity;
     if (!best || at < bestAt) {
       best = entry;

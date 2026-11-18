@@ -20,7 +20,7 @@ use crate::session::term;
 use crate::state::refusals::refuse_if_archived;
 use crate::state::{session_archived, AppState, ChangeAdmission};
 
-use super::accounts::refuse_unless_account_usable;
+use super::accounts::{refuse_unless_account_usable, AccountGate};
 use super::bindings::refuse_unless_still_askers;
 use super::launch::{checked_launch_overrides, relaunch_session_with, wait_until_down, LaunchEdit};
 use super::restart::{self, came_up_under_claim};
@@ -317,7 +317,7 @@ pub(crate) async fn switch_session_account_if(
         before.agent,
         target_account.as_deref(),
         target_dir.as_deref(),
-        true,
+        AccountGate::Full,
     )?;
     // Asked under the claim, which a change of the source's sharing counts as a session starting.
     crate::accounts::shared_config::refuse_if_changing(state, before.account_id.as_deref())?;

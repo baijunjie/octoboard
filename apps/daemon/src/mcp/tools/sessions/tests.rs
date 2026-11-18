@@ -1670,10 +1670,10 @@ async fn open_session_returns_the_account_automatic_selection_picked() {
     assert_eq!(answer["effort"], "high");
 }
 
-/// With automatic selection on and no usable account, `open_session` is refused naming the
-/// account that becomes usable soonest, not the caller's own.
+/// With automatic selection on and no usable account, `open_session` opens on the account that
+/// becomes usable soonest, not the caller's own: a used-up account does not refuse a new session.
 #[tokio::test]
-async fn open_session_with_no_usable_account_is_refused_on_the_soonest_one() {
+async fn open_session_with_no_usable_account_opens_on_the_soonest_one() {
     use crate::protocol::{AccountQuota, QuotaWindow, QuotaWindowKind};
     use crate::test_support::{stand_in_launch, Launched, StandIn};
     use std::sync::Mutex;
@@ -1723,17 +1723,85 @@ async fn open_session_with_no_usable_account_is_refused_on_the_soonest_one() {
     let launches = Arc::new(Mutex::new(Vec::<Launched>::new()));
     let started = Arc::new(Mutex::new(Vec::<StandIn>::new()));
 
-    let err = open_session(
+    let opened = open_session(
         &state,
         &caller,
         &arguments(json!({ "project": "project-1", "brief": { "goal": "x" } })),
         stand_in_launch(&started, &launches, || {}),
     )
     .await
-    .expect_err("refused");
+    .expect("opens");
 
-    assert!(err.to_string().starts_with("Second "), "{err}");
-    assert!(launches.lock().unwrap().is_empty());
+    assert_eq!(opened["account"], "claude-b");
+    assert_eq!(opened["account_name"], "Second");
+    assert_eq!(launches.lock().unwrap().len(), 1);
+}
+
+/// `open_session` naming an account whose quota is used up opens on it; one that is turned off is
+/// still refused.
+#[tokio::test]
+async fn open_session_on_a_named_account_opens_when_its_quota_is_used_up_but_not_when_it_is_off() {
+    use crate::protocol::{AccountQuota, QuotaWindow, QuotaWindowKind};
+    use crate::test_support::{stand_in_launch, Launched, StandIn};
+    use std::sync::Mutex;
+
+    let (state, _dir) = shared_console_state("new-session-named-used-up");
+    state
+        .store
+        .set_added_agents_if_undecided(&[AgentId::CLAUDE])
+        .unwrap();
+    state
+        .store
+        .insert_account(&account("spent", AgentId::CLAUDE, "Spent", "/tmp/spent"))
+        .unwrap();
+    state
+        .store
+        .insert_account(&crate::protocol::Account {
+            disabled: true,
+            ..account("off", AgentId::CLAUDE, "Off", "/tmp/off")
+        })
+        .unwrap();
+    state.account_quotas.hold_in_dir_for_test(
+        &AccountQuota {
+            reset_credits: None,
+            agent: AgentId::CLAUDE,
+            account: Some("spent".to_string()),
+            fetched_at: 1,
+            plan: None,
+            email: None,
+            windows: vec![QuotaWindow {
+                kind: QuotaWindowKind::Session,
+                label: None,
+                used_percent: 100.0,
+                resets_at: Some(crate::time::now_millis() + 3_600_000),
+                window_minutes: None,
+            }],
+            unavailable: None,
+        },
+        "/tmp/spent",
+    );
+    let caller = state.session_record("a").unwrap();
+    let launches = Arc::new(Mutex::new(Vec::<Launched>::new()));
+    let started = Arc::new(Mutex::new(Vec::<StandIn>::new()));
+    let (state, caller, started_ref, launches_ref) = (&state, &caller, &started, &launches);
+    let open = |account: &'static str| async move {
+        let input = arguments(
+            json!({ "project": "project-1", "brief": { "goal": "x" }, "account": account }),
+        );
+        open_session(
+            state,
+            caller,
+            &input,
+            stand_in_launch(started_ref, launches_ref, || {}),
+        )
+        .await
+    };
+
+    let opened = open("Spent").await.expect("opens");
+    assert_eq!(opened["account"], "spent");
+    let refused = open("Off").await.expect_err("refused");
+    assert!(refused.to_string().contains("is disabled"), "{refused}");
+    assert_eq!(launches.lock().unwrap().len(), 1);
 }
 
 #[tokio::test]

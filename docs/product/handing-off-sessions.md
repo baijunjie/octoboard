@@ -52,8 +52,9 @@ changed, when:
 - the receiving agent is not available (`agent_not_available`), is not added (`agent_not_added`; see "When the agent or
   the account cannot open a session" in `docs/product/opening-sessions.md` for when that applies), the account named is
   not one of that agent's (`unknown_account`), the receiving session's account, once resolved, is turned off
-  (`account_disabled`), used up (`account_quota_exhausted`) or not logged in (`account_not_signed_in`; see "When the
-  agent or the account cannot open a session" in `docs/product/opening-sessions.md` for all three), or the model or
+  (`account_disabled`), used up (`account_quota_exhausted`, though a new session could open on it) or not logged in
+  (`account_not_signed_in`; see "When the agent or the account cannot open a session" in
+  `docs/product/opening-sessions.md` for all three), or the model or
   reasoning effort is not one the agent offers (`invalid_launch_setting`);
 - a change of the sharing of the default configuration runs for the session's account or for the receiving session's
   (`account_sharing_in_progress`; see "When a change is carried out" in
@@ -129,11 +130,13 @@ Then come the fields:
   agent's account ranked as in "Which account a session uses" in `docs/product/opening-sessions.md`, or, when none of
   its accounts can be used, the one that becomes usable soonest; otherwise, or when none ranks, the account the project
   or console resolves (see "Which account a session uses" in `docs/product/opening-sessions.md`). The account the field
-  shows is sent as the receiving session's own account choice. Used-up accounts are treated as in the session dialog's
-  field: listed with a usage bar but not pickable, passed over when the field opens, and, when the chosen account is
-  used up all the same, the field says why under it, marked invalid, and **Hand off** cannot be pressed. An account
-  whose sharing of the default configuration is being changed is treated the same way while the change runs, and so is
-  an account that is not logged in; a turned-off account is left out unless the field ends on it, as in the session
+  shows is sent as the receiving session's own account choice. Unlike the session dialog's field, it does not take a
+  used-up account: one is listed with its grey usage bar and its note but cannot be picked, is passed over when the
+  field opens, and, when the chosen account is used up all the same, the field says under it, marked invalid, that the
+  account cannot be used for now, naming the quota it has reached and when it resets, and **Hand off** cannot be
+  pressed. An account whose sharing of the default configuration is being changed, and an account that is not logged
+  in, are treated as in the session dialog's field (see the **Agent** field in "The session dialog" in
+  `docs/product/opening-sessions.md`); a turned-off account is left out unless the field ends on it, as in the session
   dialog.
 - The collapsed **Advanced** section — the receiving session's model, reasoning effort and compatibility switches,
   showing what a new session of the chosen agent and account would inherit, as in the session dialog (see "The Advanced section" in
@@ -236,7 +239,7 @@ the title nor the note it passed. A form follows:
   window" above), the session's own agent never offered, starting on the agent and the account the call asked for.
   Another agent the user switches to, without picking one of its accounts, opens on the account the handoff dialog
   would open on. An account whose quota is used up, that is not logged in, or whose sharing change runs, is treated as
-  there: the field says
+  in the handoff dialog: the field says
   why under it, marked invalid, and Confirm cannot be pressed. So is an account turned off while the request waits
   (a call naming one is refused before the user is asked): the field says that it is turned off, and Confirm cannot be
   pressed.

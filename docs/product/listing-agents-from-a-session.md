@@ -36,8 +36,9 @@ and an optional `refresh` (below), and answers:
   `docs/product/what-every-session-reads.md`).
 
 Each account entry gives its `agent`, `account`, `account_name`, `plan`, `fetched_at` (milliseconds since the epoch,
-`null` for an account not read yet), `exhausted` (whether the account is used up, by the rule in "A used-up account" in
-`docs/product/account-quotas.md`) and `exhausted_until` (when the window that keeps it used up resets, in milliseconds
+`null` for an account not read yet), `exhausted` (whether the account is used up until its reset, by the rule in "A
+used-up account" in `docs/product/account-quotas.md`; a session that names it can still be opened on it, but stops on
+its usage limit until the reset) and `exhausted_until` (when the window that keeps it used up resets, in milliseconds
 since the epoch; `null` when it is not used up or the agent gives no reset time), `unavailable` (the reason a reading is
 missing or could not be refreshed, else `null`), `can_open` and `cannot_open_reason` (below), and its `windows`, each
 with `kind` (`session` for the five-hour window, whichever agent's it is; `weekly` for the account-wide weekly window;
@@ -45,7 +46,8 @@ with `kind` (`session` for the five-hour window, whichever agent's it is; `weekl
 `used_percent`, `remaining_percent` (100 less the used share, never below 0), `resets_at` and `window_minutes`. Values
 are percentages only; no absolute token or money amount is given, and no account's sign-in email.
 
-- **`can_open`** says whether a session could be opened on the account now. When it is `false`, `cannot_open_reason`
+- **`can_open`** says whether the account is usable now: automatic account selection may choose it, and a session can
+  be switched or handed off onto it. When it is `false`, `cannot_open_reason`
   says why in prose: the account is used up (see "A used-up account" in `docs/product/account-quotas.md`), it is not
   logged in (see "An account that is not logged in" in `docs/product/account-quotas.md`), or a change of its sharing
   of the default configuration is running — the reasons, besides being turned off, that automatic account selection

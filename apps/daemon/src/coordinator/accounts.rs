@@ -188,11 +188,23 @@ pub(crate) fn refuse_if_account_disabled(
     ))
 }
 
-/// Refuses to put a session on an account that cannot take one: turned off
-/// ([`refuse_if_account_disabled`]) and, when `enforce_quota`, whose quota is used up
-/// ([`refuse_if_account_quota_exhausted`]) or that was found logged out
-/// ([`refuse_if_account_not_signed_in`]), in that order. `config_dir` is the account's directory as
-/// [`Store::account_dir`] resolves it.
+/// Which of an account's states keep a session off it, for [`refuse_unless_account_usable`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum AccountGate {
+    /// Turned off, used up or found logged out: an existing session moving onto the account (a
+    /// switch, a handoff's receiving session).
+    Full,
+    /// Turned off or found logged out: a new session, which the user may open on a used-up account
+    /// all the same.
+    NewSession,
+    /// Turned off only: an opening whose account the user still chooses, refused at approval.
+    DisabledOnly,
+}
+
+/// Refuses to put a session on an account that cannot take one under `gate`: turned off
+/// ([`refuse_if_account_disabled`]), whose quota is used up ([`refuse_if_account_quota_exhausted`])
+/// or that was found logged out ([`refuse_if_account_not_signed_in`]), in that order. `config_dir`
+/// is the account's directory as [`Store::account_dir`] resolves it.
 ///
 /// [`Store::account_dir`]: crate::store::Store::account_dir
 pub(crate) fn refuse_unless_account_usable(
@@ -200,11 +212,18 @@ pub(crate) fn refuse_unless_account_usable(
     agent: AgentId,
     account_id: Option<&str>,
     config_dir: Option<&str>,
-    enforce_quota: bool,
+    gate: AccountGate,
 ) -> Result<()> {
     refuse_if_account_disabled(state, agent, account_id)?;
-    if enforce_quota {
+    let (quota, signed_out) = match gate {
+        AccountGate::Full => (true, true),
+        AccountGate::NewSession => (false, true),
+        AccountGate::DisabledOnly => (false, false),
+    };
+    if quota {
         refuse_if_account_quota_exhausted(state, agent, account_id, config_dir)?;
+    }
+    if signed_out {
         refuse_if_account_not_signed_in(state, agent, account_id, config_dir)?;
     }
     Ok(())
