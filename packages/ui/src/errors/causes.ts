@@ -1,6 +1,8 @@
 // The causes a coded failure carries in `params.cause`, which the UI words itself: each is read with the client's
 // own fallback, as a daemon newer than this client may send one it does not know.
 
+import type { SharingCause } from "../protocol";
+
 const SOURCE_UNAVAILABLE_CAUSES = ["missing", "link", "not_a_directory", "other"] as const;
 
 /** The `cause` of a `source_unavailable`: why a folder a request is scoped to cannot be read. */
@@ -62,4 +64,23 @@ export type AccountTrashFailedCause = (typeof ACCOUNT_TRASH_FAILED_CAUSES)[numbe
  * move that failed for no reason the client can name, worded by the code's own key. */
 export function accountTrashFailedCause(raw: string | undefined): AccountTrashFailedCause | undefined {
   return ACCOUNT_TRASH_FAILED_CAUSES.find((cause) => cause === raw);
+}
+
+const PROJECT_TRASH_FAILED_CAUSES = ["unanswered", "unreadable"] as const;
+
+/** The `cause` of a `project_directory_trash_failed`: why a project's directory was not moved to the Trash. */
+export type ProjectTrashFailedCause = (typeof PROJECT_TRASH_FAILED_CAUSES)[number];
+
+/** `raw` as a `project_directory_trash_failed` cause: none, and one this client does not know, are `undefined`, worded
+ * by the code's own key. */
+export function projectTrashFailedCause(raw: string | undefined): ProjectTrashFailedCause | undefined {
+  return PROJECT_TRASH_FAILED_CAUSES.find((cause) => cause === raw);
+}
+
+const SHARING_CAUSES = Object.keys({ permission_denied: 0, busy: 0, not_found: 0, no_space: 0, conflict: 0, default_moved: 0, other: 0 } satisfies Record<SharingCause, 0>) as SharingCause[];
+
+/** `raw` as the `cause` of a sharing failure (`account_sharing_failed`, `account_sharing_repair_failed`) or of one of
+ * its entries: one this client does not know, and none, are `other`, which names no reason a reader could act on. */
+export function sharingCause(raw: string | undefined): SharingCause {
+  return SHARING_CAUSES.find((cause) => cause === raw) ?? "other";
 }

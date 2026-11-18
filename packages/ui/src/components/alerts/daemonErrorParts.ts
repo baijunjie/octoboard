@@ -4,7 +4,8 @@ import { CodedError, type MessageParams } from "../../errors/codedError";
 import { codeRecord, messageKey } from "../../errors/codes";
 import { furtherKey, hasRichMessage, hasTrustDiagnostic, messageCode } from "../../errors/daemonMessage";
 import { hasCodeParams, hasShellTimeoutDetails, uncataloguedSummaryKey, unwordedReason } from "../../errors/errorPresentation";
-import { sharingFailureItems, sharingRawReason, sharingReasonKey, type SharingFailureItem } from "../../errors/sharingFailure";
+import { sharingFailureCause, sharingFailureItems, sharingRawReason, sharingReasonKey, type SharingFailureItem } from "../../errors/sharingFailure";
+import type { SharingCause } from "../../protocol";
 import { isUncataloguedFailure } from "../../errors/uncataloguedFailure";
 import { isMessageKey, type MessageKey, type PlainMessageKey } from "../../i18n/catalog";
 
@@ -29,9 +30,9 @@ export type DaemonErrorParts = {
   left?: LeftBranchItem[];
   /** The failure's further explanation in the application's own words. */
   further?: MessageKey;
-  /** For a sharing failure, its entries, the raw text that says why the change failed as a whole, and whether its
-   * cause has a line of its own to show. */
-  sharing?: { items?: SharingFailureItem[]; raw?: string; hasReasonLine: boolean };
+  /** For a sharing failure, its entries, the raw text that says why the change failed as a whole, its cause as a whole,
+   * and whether that cause has a line of its own to show. */
+  sharing?: { items?: SharingFailureItem[]; raw?: string; cause: SharingCause; hasReasonLine: boolean };
   /** Verbatim diagnostic output the failure carries. */
   diagnostic?: string;
   /** Text the user wrote that the failure carries (`detailLabel`), and the key of the label it is shown under. */
@@ -78,7 +79,7 @@ export function daemonErrorParts(error: Failure): DaemonErrorParts {
     actionableDetail,
     left: leftBranchItems(error.code, error.params),
     further: furtherKey(error.code, error.params),
-    sharing: reason && { items: sharingFailureItems(error.code, error.params), raw: reason.raw, hasReasonLine: sharingReasonKey(error.params.cause) !== undefined },
+    sharing: reason && sharingParts(error.params, reason.raw, sharingFailureItems(error.code, error.params)),
     diagnostic,
     ownText,
     unworded: unwordedRaw === undefined ? undefined : { raw: unwordedRaw, summary: record?.nested ? uncataloguedSummaryKey(new CodedError(unwordedRaw, error.params.reason_code ?? error.code, error.params)) : "daemon.trust_reason.unexpected" },
@@ -86,4 +87,10 @@ export function daemonErrorParts(error: Failure): DaemonErrorParts {
     nested: nestedFailure(error),
     nestedRemedy: record?.nested === "failureAndRemedy",
   };
+}
+
+/** The parts of a sharing failure: its cause as a whole is read once, so the reason line and whether there is one agree. */
+function sharingParts(params: MessageParams, raw: string | undefined, items: SharingFailureItem[] | undefined): NonNullable<DaemonErrorParts["sharing"]> {
+  const cause = sharingFailureCause(params);
+  return { items, raw, cause, hasReasonLine: sharingReasonKey(cause) !== undefined };
 }

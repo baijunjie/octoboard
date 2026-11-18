@@ -69,7 +69,8 @@ coded daemon failures and how the UI words them are in `docs/conventions/error-c
 - **Global placeholders are filled by `format` and `<Message>`, and a caller never passes them**: `{appName}` (from
   `config/app.json`), the product names (`{git}`, `{tauri}` and each provider's `params`), `{osName}` and the platform
   words (`{trash}`, `{systemSettings}`, ...), which come from the host. The product name is never a literal and never
-  translated; when copy names it at all is in `docs/conventions/ui-standard.md`, "Naming the application in copy".
+  translated (`catalog.test.ts` refuses the name from `config/app.json` in any catalog's key or message); when copy
+  names it at all is in `docs/conventions/ui-standard.md`, "Naming the application in copy".
 - **Numbers, dates, times, currencies and measurements are not written into a message.** The platform formatter produces
   them (`Intl`, the helpers in `src/format/`) and they enter through a placeholder; a number placeholder is formatted
   for the language by `format`.

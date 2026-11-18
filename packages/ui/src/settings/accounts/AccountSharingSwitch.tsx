@@ -8,6 +8,7 @@ import { HelpTip } from "../../components/hint/HelpTip";
 import { InlineReference } from "../../i18n/InlineReference";
 import { StatusAnnouncer } from "../../components/announce/StatusAnnouncer";
 import { StatusMark } from "../../components/status/StatusMark";
+import { sharingCause } from "../../errors/causes";
 import { parseSharingItems, sharingCauseGroups, sharingFixKey, sharingReasonKey } from "../../errors/sharingFailure";
 import { isolate } from "../../i18n/isolate";
 import { Message, useT } from "../../i18n/react";
@@ -66,7 +67,7 @@ export function AccountSharingSwitch({ account, opensFocused }: { account: Accou
   // starts); after a restart there is the flag alone.
   const unfinished = !progress && account.share_default_config_incomplete;
   const failure = unfinished ? sharing?.failure : undefined;
-  const moved = failure?.cause === "default_moved";
+  const moved = failure !== undefined && sharingCause(failure.cause) === "default_moved";
   // A retry is turning the switch, which asks for the recorded choice again; so the switch shows the position it had
   // before. A moved default directory cannot be mended by asking again, so it shows the recorded choice.
   const shown = unfinished && !moved && !busy ? !shared : shared;
@@ -241,7 +242,8 @@ function SharingIncomplete({ id, failure, title, guidance, idle, switchElement }
   const groups = items?.length ? sharingCauseGroups(items) : undefined;
   // A single cause is said by itself: one named group of entries, or the change's own cause with no entry to name.
   const group = groups?.length === 1 ? groups[0] : undefined;
-  const whole = !groups && failure && sharingReasonKey(failure.cause) ? failure.cause : undefined;
+  const cause = failure && sharingCause(failure.cause);
+  const whole = !groups && cause && sharingReasonKey(cause) ? cause : undefined;
   const single = group !== undefined || whole !== undefined;
   // The raw reason is further down the same popover, so a fix that points at it says so.
   const fix = sharingFixKey(group ? group.cause : whole, true);

@@ -164,7 +164,7 @@ function CodedDaemonMessage({ error, part, ownTextApart }: { error: CodedError; 
   const reasonLines = sharing
     ? <SharingCauseSummary items={sharing} />
     : parts.sharing && (parts.sharing.hasReasonLine || !!pointedAt)
-      ? <span className="block"><SharingFailureReason cause={error.params.cause} detail={pointedAt} /></span>
+      ? <span className="block"><SharingFailureReason cause={parts.sharing.cause} detail={pointedAt} /></span>
       : null;
   const sharingRaw = sharing || (parts.sharing && rawReason) ? <SharingDetails items={sharing ?? []} detail={rawReason} /> : null;
   const diagnostic = parts.diagnostic ? <DiagnosticBlock>{parts.diagnostic}</DiagnosticBlock> : null;

@@ -55,6 +55,20 @@ it("registers a complete catalog for every offered language", () => {
   }
 });
 
+it("never writes the product name into a catalog's key or message, which only `{appName}` brings in", () => {
+  expect(appConfig.name.length).toBeGreaterThan(0);
+  const offending: string[] = [];
+  for (const [language, catalog] of Object.entries(CATALOGS) as [Language, Record<string, Message>][]) {
+    for (const [key, message] of Object.entries(catalog)) {
+      if (key.includes(appConfig.name)) offending.push(`${language} ${key} (key)`);
+      for (const form of formsOf(message)) {
+        if (form.includes(appConfig.name)) offending.push(`${language} ${key}: ${form}`);
+      }
+    }
+  }
+  expect(offending).toEqual([]);
+});
+
 it("omits ellipses beside the MCP refresh icon and keeps them in loading placeholders in every language", () => {
   for (const language of LANGUAGES) {
     expect(messageText(language, "settings.accounts.mcp.refreshing"), language).not.toMatch(/(?:…|\.{3})\s*$/);

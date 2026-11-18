@@ -854,6 +854,14 @@ it("names the cause of a change that could not start when no entry is listed", (
   expect(raw.querySelector("[data-inline-reference]")).toBeNull();
 });
 
+it.each([["a cause the client does not know", "from_a_newer_daemon"], ["no cause", undefined]])("words a whole sharing failure with %s as other: no reason line, the details pointed at", (_name, cause) => {
+  const mountWith = (detail: string | undefined) => mount(<DaemonProvider value={testDaemon()}>
+    <DaemonErrorMessage error={new CodedError("raw", "account_sharing_failed", { name: "Work", account: "a1", items: "[]", detail, cause } as never)} />
+  </DaemonProvider>);
+  expect(mountWith("x").querySelector("span.block")!.textContent).toBe("See the details.");
+  expect(mountWith(undefined).querySelector("span.block")).toBeNull();
+});
+
 it("joins a whole failure's reason and its guidance in the catalog, and points a cause with no line of its own at Details", () => {
   const mountWith = (cause: string, detail: string | undefined) => mount(<DaemonProvider value={testDaemon()}>
     <DaemonErrorMessage error={new CodedError("raw", "account_sharing_failed", { name: "Work", account: "a1", items: "[]", detail, cause } as never)} />

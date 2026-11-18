@@ -1,6 +1,6 @@
 import { EXAMPLE_CONVERSATION_ID } from "../agents/conversationId";
 import { CodedError, type MessageParams } from "./codedError";
-import { accountTrashFailedCause, pathLinkRefusedCause } from "./causes";
+import { accountTrashFailedCause, pathLinkRefusedCause, projectTrashFailedCause } from "./causes";
 import { PROVIDER_CODES } from "../agents/providers";
 import type { ErrorRecovery } from "./errorRecovery";
 import type { PlatformHost } from "../i18n/platformTerms";
@@ -288,7 +288,7 @@ const CORE_CODES = {
   project_branches_not_determined: { origin: "daemon", recovery: "projectBranches", alertTitle: true, detailBlock: true, summaryForDetail: false, nameParams: ["name"], uiParams: { git: "Git", pathVar: "PATH" }, variants: { git: { nameParams: ["name"], codeParams: ["pathVar"] } }, variantOf: (params) => params.reason_code === "binary_not_found" && params.binary === "git" ? "git" : undefined },
   project_directory_protected: { origin: "daemon", recovery: "trash" },
   project_directory_shared: { origin: "daemon", recovery: "trash", recoveryLine: true, nameParams: ["project"], variants: { retryTrash: { nameParams: ["project"] } } },
-  project_directory_trash_failed: { origin: "daemon", recovery: "trash", detailBlock: true, recoveryLine: true, variantOf: (params) => params.cause === "unanswered" || params.cause === "unreadable" ? params.cause : undefined },
+  project_directory_trash_failed: { origin: "daemon", recovery: "trash", detailBlock: true, recoveryLine: true, variantOf: (params) => projectTrashFailedCause(params.cause) },
   project_has_running_sessions: { origin: "daemon", recovery: "stopSessions", recoveryLine: true },
   provider_unsupported: { origin: "daemon", recovery: "none", variants: UNSUPPORTED_OPERATIONS, variantOf: (params) => params.operation !== undefined && Object.hasOwn(UNSUPPORTED_OPERATIONS, params.operation) ? params.operation : undefined },
   // A push refused because the project's previous one is still running, and says so.

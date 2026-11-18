@@ -2,6 +2,7 @@ import { format } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import type { Language } from "../i18n/languages";
 import type { AccountSharing, SharingCause, SharingLeft } from "../protocol";
+import { sharingCause } from "./causes";
 import type { MessageParams } from "./codedError";
 import { CODE, codeRecord } from "./codes";
 
@@ -20,9 +21,6 @@ export type SharingFailureItem = Omit<NonNullable<AccountSharing["failure"]>["it
   sessions: string[];
   cause: SharingEntryCause;
 };
-
-/** The causes in the order a summary lists them; `other` also stands for a cause this client does not know. */
-const SHARING_CAUSES: readonly SharingEntryCause[] = ["permission_denied", "busy", "not_found", "no_space", "conflict", "other"];
 
 /** The entries a sharing failure names, or nothing when the param is absent, empty or not the
  * shape above. An operation that could not start at all sends an empty list: `account_sharing_failed`
@@ -49,7 +47,8 @@ export function parseSharingItems(items: unknown): SharingFailureItem[] | undefi
     if (typeof entry.left !== "string" || !(SHARING_LEFT as readonly string[]).includes(entry.left)) return undefined;
     if (typeof entry.detail !== "string") return undefined;
     if (!Array.isArray(sessions) || sessions.some((id) => typeof id !== "string" || id.length === 0)) return undefined;
-    const cause = SHARING_CAUSES.includes(entry.cause as SharingEntryCause) ? entry.cause as SharingEntryCause : "other";
+    const read = sharingCause(typeof entry.cause === "string" ? entry.cause : undefined);
+    const cause: SharingEntryCause = read === "default_moved" ? "other" : read;
     parsed.push({ item: entry.item, left: entry.left, detail: entry.detail, sessions, cause });
   }
   return parsed;
@@ -66,9 +65,14 @@ export function sharingCauseGroups(items: SharingFailureItem[]): { cause: Sharin
   return groups;
 }
 
+/** The cause of a sharing failure as a whole, from its `cause` param. */
+export function sharingFailureCause(params: MessageParams): SharingCause {
+  return sharingCause(params.cause);
+}
+
 /** The catalog key of the line that says why a change could not start or failed as a whole, when no entry is named;
- * nothing for `other` or an unknown cause, which says nothing a reader could act on. */
-export function sharingReasonKey(cause: string | undefined) {
+ * nothing for `other`, which says nothing a reader could act on. */
+export function sharingReasonKey(cause: SharingCause) {
   switch (cause) {
     case "permission_denied": return "daemon.sharing.reason.permission_denied";
     case "busy": return "daemon.sharing.reason.busy";
@@ -91,7 +95,7 @@ export function sharingRawReason(error: { code: string; params: MessageParams; m
 /** The catalog key of the line that says what to do about a cause before turning the switch again, or nothing when
  * turning it again is all there is to do (`not_found`) or the warning says what to do itself (`default_moved`).
  * `rawBelow` is for a place that shows the raw reason right after the line rather than behind Details. */
-export function sharingFixKey(cause: string | undefined, rawBelow = false) {
+export function sharingFixKey(cause: SharingCause | undefined, rawBelow = false) {
   switch (cause) {
     case "permission_denied": return "daemon.sharing.fix.permission_denied";
     case "busy": return "daemon.sharing.fix.busy";

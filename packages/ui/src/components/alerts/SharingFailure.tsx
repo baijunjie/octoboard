@@ -2,6 +2,7 @@ import React, { useId } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import { sharingStateKey, sharingCauseGroups, sharingCauseKey, sharingFixKey, sharingReasonKey, sharingItemLabel, type SharingEntryCause, type SharingFailureItem } from "../../errors/sharingFailure";
+import type { SharingCause } from "../../protocol";
 import { joinNodes } from "../../i18n/joinPhrases";
 import { Message, useCurrentLanguage, useT } from "../../i18n/react";
 import { useDaemonStoreOrEmpty } from "../../store";
@@ -23,7 +24,7 @@ function SharingReason({ reason, fix }: { reason: React.ReactNode; fix?: ReturnT
 
 /** Why a change failed as a whole, with no entry to name, and what to do about it: the cause's own line, or, for a
  * cause with none (`other`), pointing at the raw reason in Details when there is one. Nothing when there is neither. */
-export function SharingFailureReason({ cause, detail, withFix = true }: { cause?: string; detail?: string; withFix?: boolean }): React.ReactElement | null {
+export function SharingFailureReason({ cause, detail, withFix = true }: { cause: SharingCause; detail?: string; withFix?: boolean }): React.ReactElement | null {
   const reasonKey = sharingReasonKey(cause);
   if (reasonKey) return <SharingReason reason={<Message id={reasonKey} />} fix={withFix ? sharingFixKey(cause) : undefined} />;
   return detail ? <Message id="daemon.sharing.fix.other" /> : null;

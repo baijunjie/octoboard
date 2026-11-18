@@ -9,7 +9,7 @@ import type { PathStyle } from "../format/hostPath";
 import { leftBranchesText, leftBranchGroups, leftBranchItems } from "./branchCleanupItems";
 import { providerLabel } from "../agents/providers";
 import { CODE, codeRecord, messageFacets, messageKey } from "./codes";
-import { sharingFailureItems, sharingItemsText, sharingReasonKey } from "./sharingFailure";
+import { sharingFailureCause, sharingFailureItems, sharingItemsText, sharingReasonKey } from "./sharingFailure";
 import { type Console, type Project, type ProviderInfo, type QuotaWindow, type Session, type Settings, type ShellTerminal } from "../protocol";
 import { type MessageParams } from "./codedError";
 import { DEFAULT_ACCOUNT_NAME } from "../accounts/defaultAccount";
@@ -268,7 +268,7 @@ export function daemonMessage(
     const sessions = (ids: string[]) => joinPhrases(language, ids.map((id) => paramText(records, "session", id, CODE.unknown_session, language)));
     return `${text}\n${sharingItemsText(language, sharing, title, sessions)}`;
   }
-  const reason = codeRecord(code)?.sharingItems ? sharingReasonKey(params.cause) : undefined;
+  const reason = codeRecord(code)?.sharingItems ? sharingReasonKey(sharingFailureCause(params)) : undefined;
   if (reason) return `${text}\n${format(language, reason, {})}${code === CODE.account_sharing_failed && params.detail ? `\n${params.detail}` : ""}`;
   // A repair that names no entry keeps its reason only in the daemon's English message.
   if (code === CODE.account_sharing_repair_failed && fallback) return `${text}\n${fallback}`;

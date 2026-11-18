@@ -74,8 +74,14 @@ messages". What code must do to meet it:
 - **A code covering situations the user fixes differently sends a `cause`, and `classifyError` picks the remedy from
   `SOURCE_CAUSE_RECOVERY`**, never an explicit `recovery` at the call sites, so every route that raises the code gets
   it. The vocabulary is a closed type with a normaliser in `packages/ui/src/errors/causes.ts`; the table is keyed by
-  that type, every reader goes through the normaliser, and both defaults (unknown cause, no cause) are covered in
-  `errorRecovery.test.ts`.
+  that type, and both defaults (unknown cause, no cause) are covered in `errorRecovery.test.ts`.
+- **Every reader of a coded failure's `params.cause` goes through that code's normaliser in
+  `packages/ui/src/errors/causes.ts`**, whatever the cause picks (a remedy, a record's `variantOf`, a line of wording,
+  a branch in a component), and so does a reader of a typed protocol field that carries the same vocabulary (the
+  `account_sharing` event's `failure.cause`); never a comparison of the raw value, or a list of its values, at the
+  reader. A normaliser whose unknown cause is worded by the code's own key returns `undefined`; one with a catch-all
+  cause (`other`) returns that. Why: a daemon newer than this client may send a cause it does not know, which a
+  generated type does not stop at run time, and only the normaliser gives every reader the same fallback.
 - **A record with `detailBlock: true` has a `.summary` key for every variant that could arrive with `detail`** (the
   normaliser's unknown-cause default included), and such a key is never dropped as unused except for `noSummary` codes.
 - **A `.summary` adds what the alert's title does not say**; where it would repeat the title, the record is
