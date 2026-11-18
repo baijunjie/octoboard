@@ -151,8 +151,10 @@ one of two variants:
 
 `StatusBadge` uses HeroUI's `Chip` with `sm`, `md` and `lg` sizes (20px, 24px and 28px tall). The default is `sm`,
 with 12px text and 8px of padding on each side, so metadata such as the session context size stays compact. Use
-`lg` for the granted-permission state in Settings, with a 16px circle-check icon before its label. A single-character
-badge is square at each size; a wrapping badge can grow taller to fit its content.
+`lg` for the granted-permission state in Settings, with a 16px circle-check icon before its label. A badge whose
+content is one character (text or a number of one code point: a count, a change's status letter, a one-character word
+in any language) is a circle at each size, 20px, 24px or 28px across, without being asked; longer content is a pill. A
+wrapping badge can grow taller to fit its content.
 
 Badge and inline reference serve different purposes but share one colour configuration: a single set of generic tint
 tokens in `packages/ui/src/styles/palette.css`, per colour a fill, a text colour (neutral reads HeroUI's `--default-foreground`
@@ -2004,6 +2006,10 @@ in the sidebar, the rail or the menu bar.
 This section sets how every mark is drawn and opened, wherever "On the screen: an Alert when it matters, a mark at its
 point otherwise" places it: its popover, its name, the input that opens it, and its in-heading and inline forms.
 
+A mark's glyph is 14px in every form, the size an `xs` icon button gives its icon: the icon button, the inline form,
+and the glyph before a word, pressable or plain, so marks side by side in one column or row are the same size whether or
+not they have something to open.
+
 A failure, a warning or a note belonging to one item of a collection, one part of a compact layout (one section of a
 side pane, such as the Committed section of the Git change list or the Git pane's branch list, with the rest of the pane
 still shown), or one spot in rendered content does not break that row, section or sentence into an error block. The item
@@ -2077,8 +2083,8 @@ what the user expanded, so it is open again once it lists. A failure arriving wh
 take rows or the mark away, so focus that fell to the page or the tree goes to the folder's row.
 
 **The inline form** is the mark inside running text (a Markdown image that could not load, a formula that could not be
-drawn): the glyph takes the text's size, the trigger is a button whose box is square (sized from the glyph, so its round
-shape is a circle as everywhere else). A wrapper keeps the surrounding text's line height and centres the button
+drawn): the glyph is the marks' 14px, the trigger is a button whose box is square around it (so its round shape is a
+circle as everywhere else). A wrapper keeps the surrounding text's line height and centres the button
 within it; its full width stays in the layout, so the target and hover background do not overlap neighbouring controls.
 The button is phrasing content, so valid inside a paragraph. It is a tab stop like any other mark, so a sighted keyboard user
 reaches the reason, which the tooltip it replaced never gave them; the document's links and text are untouched, the mark
@@ -2762,7 +2768,7 @@ columns with actions hidden, hovered, focused and open, including right-to-left 
 
 WCAG 2.2 SC 2.5.8 also excepts an **Inline** target: one "in a sentence, or its size is otherwise constrained by the
 line-height of non-target text". A status mark standing in running text (the inline form in "How a mark is drawn and
-opened") is such a target: it is drawn at the text's size and cannot be larger without growing its line.
+opened") is such a target: it is drawn within the text's line and cannot be larger without growing it.
 
 The criterion is about controls, so a mark that only opens a tooltip with a mouse is not held to it: a tooltip is not an
 action, and a mark too small to aim at reliably costs a hover that can be tried again, not an activation. Several such

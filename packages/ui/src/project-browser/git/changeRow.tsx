@@ -157,7 +157,6 @@ function ChangeStatusLetter({ status }: { status: StatusKey }): React.ReactEleme
         ref={letter}
         aria-hidden="true"
         status={status}
-        single
         className="font-mono"
         onPointerEnter={() => setHovered(true)}
         onPointerLeave={() => setHovered(false)}

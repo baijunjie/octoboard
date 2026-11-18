@@ -94,7 +94,7 @@ export function CodeGallery(): React.ReactElement {
                       Granted
                     </StatusBadge>
                   ))}
-                  <StatusBadge size={size} single separated={false}>M</StatusBadge>
+                  <StatusBadge size={size} separated={false}>M</StatusBadge>
                 </div>
               ))}
             </div>
@@ -103,7 +103,7 @@ export function CodeGallery(): React.ReactElement {
             <h2 id="status-marks-title" className="font-semibold">Status marks: danger, warning and note</h2>
             <div className="grid gap-3 tablet:grid-cols-3">
               <div data-status-mark-sample="danger" className="flex min-w-0 flex-col gap-2 rounded-lg border border-transparent shadow-(--panel-shadow) bg-surface p-3">
-                <h3 className="text-sm font-medium">danger: the row has nothing to show</h3>
+                <h3 className="text-sm font-medium">danger with a reason: open it, the label titles the reason</h3>
                 <p className="flex items-center gap-1.5 text-sm">Default <StatusMark label="Usage unavailable">Claude Code took too long to report its usage.</StatusMark></p>
               </div>
               <div data-status-mark-sample="warning" className="flex min-w-0 flex-col gap-2 rounded-lg border border-transparent shadow-(--panel-shadow) bg-surface p-3">
@@ -111,15 +111,15 @@ export function CodeGallery(): React.ReactElement {
                 <p className="flex items-center gap-1.5 text-sm">Work <StatusMark tone="warning" label="Out of date: last read 12 minutes ago">Claude Code took too long to report its usage.</StatusMark></p>
               </div>
               <div data-status-mark-sample="bare" className="flex min-w-0 flex-col gap-2 rounded-lg border border-transparent shadow-(--panel-shadow) bg-surface p-3">
-                <h3 className="text-sm font-medium">without a reason: the popover holds the name</h3>
+                <h3 className="text-sm font-medium">danger without a reason: looks the same, open it to compare; the tone's word is the title</h3>
                 <p className="flex items-center gap-1.5 text-sm">Notes <StatusMark label="Failed" /></p>
               </div>
               <div data-status-mark-sample="word" className="flex min-w-0 flex-col gap-2 rounded-lg border border-transparent shadow-(--panel-shadow) bg-surface p-3">
-                <h3 className="text-sm font-medium">a word and no reason: plain glyph and word</h3>
+                <h3 className="text-sm font-medium">a word and no reason: not pressable, the word already says it</h3>
                 <p className="flex items-center gap-1.5 text-sm">Website <StatusMark label="Website failed" text="Failed" /></p>
               </div>
               <div data-status-mark-sample="note" className="flex min-w-0 flex-col gap-2 rounded-lg border border-transparent shadow-(--panel-shadow) bg-surface p-3">
-                <h3 className="text-sm font-medium">note: neither failed nor stale, a tooltip</h3>
+                <h3 className="text-sm font-medium">note: neither failed nor stale, a popover</h3>
                 <p className="flex items-center gap-1.5 text-sm">Shared <StatusMark tone="note" label="Shared by two accounts">Both accounts read from this folder.</StatusMark></p>
               </div>
             </div>

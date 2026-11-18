@@ -61,11 +61,14 @@ function colorClasses(color: StatusBadgeColor, variant: StatusBadgeVariant): str
  * and the hairline a faint edge off its fill.
  *
  * A comma that only assistive technology reads keeps the name and the value apart, which
- * `separated={false}` leaves out for a badge with no name before it. `single` is for one character
- * (a change's status letter): a fixed width with no side padding, so the letter is centred in either
- * reading direction. `overflow` lets the badge shrink for text that may be long: `"wrap"` breaks it
- * inside a long word (a path in a tooltip, which cannot run past its width). `dir` is the direction of
- * that text where it is not the UI's. The other props, a `ref` among them, go to the badge's span. */
+ * `separated={false}` leaves out for a badge with no name before it. Text or a number of one
+ * character (counted by code point, after dropping empty children such as a `false` condition) is a
+ * circle: a fixed width as wide as the badge is tall, with no side padding, so the character is
+ * centred in either reading direction. `single` forces that layout for content that is not detected
+ * as one character, such as an element holding one glyph. `overflow` lets the badge shrink for text
+ * that may be long: `"wrap"` breaks it inside a long word (a path in a tooltip, which cannot run past
+ * its width). `dir` is the direction of that text where it is not the UI's. The other props, a `ref`
+ * among them, go to the badge's span. */
 export function StatusBadge({ children, className = "", color = "default", variant = "bordered", size = "sm", separated = true, single = false, overflow, dir, ...rest }: Omit<React.ComponentProps<"span">, "color"> & {
   children?: React.ReactNode;
   className?: string;
@@ -77,6 +80,7 @@ export function StatusBadge({ children, className = "", color = "default", varia
   overflow?: "wrap";
   dir?: "ltr" | "auto";
 }): React.ReactElement {
+  const round = single || isSingleCharacter(children);
   return (
     <>
       {separated && <span className="sr-only">, </span>}
@@ -88,7 +92,7 @@ export function StatusBadge({ children, className = "", color = "default", varia
         data-color={color}
         data-variant={variant}
         data-size={size}
-        className={`inline w-auto font-[weight:inherit] ${overflow === "wrap" ? `min-w-0 shrink ${SIZES[size].wrapRadius} whitespace-normal [overflow-wrap:anywhere]` : "shrink-0 whitespace-nowrap rounded-full"} ${colorClasses(color, variant)} ${SIZES[size].spacing} ${single ? `inline-block ${SIZES[size].single} px-0 text-center` : ""} ${className}`}
+        className={`inline w-auto font-[weight:inherit] ${overflow === "wrap" ? `min-w-0 shrink ${SIZES[size].wrapRadius} whitespace-normal [overflow-wrap:anywhere]` : "shrink-0 whitespace-nowrap rounded-full"} ${colorClasses(color, variant)} ${SIZES[size].spacing} ${round ? `inline-block ${SIZES[size].single} px-0 text-center` : ""} ${className}`}
       >
         {/* Content goes directly in the badge, with no chip label: its padding is more than a
             single-character badge and the compact metadata badges can take. */}
@@ -96,4 +100,14 @@ export function StatusBadge({ children, className = "", color = "default", varia
       </Chip>
     </>
   );
+}
+
+/** Whether the content is text (or a number) of one character, counted by code point so a letter outside the BMP
+ * is one. Empty children (`false`, `null`) are dropped first, so a conditional sibling that renders nothing does not
+ * hide a lone character. */
+function isSingleCharacter(children: React.ReactNode): boolean {
+  const parts = React.Children.toArray(children);
+  if (parts.length !== 1) return false;
+  const [only] = parts;
+  return (typeof only === "string" || typeof only === "number") && Array.from(String(only)).length === 1;
 }

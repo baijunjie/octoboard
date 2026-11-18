@@ -54,7 +54,50 @@ it("seats a single character in a fixed width with no side padding, so it is cen
   const markup = html(<StatusBadge single separated={false}>M</StatusBadge>);
   expect(markup).toContain("inline-block w-5 px-0 text-center");
   expect(markup).not.toContain('data-slot="chip-label"');
-  expect(html(<StatusBadge separated={false}>M</StatusBadge>)).toContain("px-2");
+});
+
+it("keeps the circle for an explicit single on content that is not detected as one character, such as an element", () => {
+  expect(html(<StatusBadge single separated={false}><b>M</b></StatusBadge>)).toContain("inline-block w-5 px-0 text-center");
+});
+
+it.each([
+  ["sm", "w-5"],
+  ["md", "w-6"],
+  ["lg", "w-7"],
+] as const)("makes text of one character a circle without being asked, at size %s", (size, width) => {
+  for (const content of ["M", 0, "\u{1D4B3}"]) {
+    const markup = html(<StatusBadge size={size} separated={false}>{content}</StatusBadge>);
+    expect(markup).toContain(`inline-block ${width} px-0 text-center`);
+  }
+});
+
+it.each([
+  ["sm", "px-2"],
+  ["md", "px-2"],
+  ["lg", "px-3"],
+] as const)("keeps the pill padding for longer text, a longer number, an element or nothing, at size %s", (size, padding) => {
+  for (const content of ["10", "", <b key="b">M</b>]) {
+    const markup = html(<StatusBadge size={size} separated={false}>{content}</StatusBadge>);
+    expect(markup).toContain(padding);
+    expect(markup).not.toContain("px-0");
+    expect(markup).not.toContain("inline-block");
+    expect(markup).not.toContain("text-center");
+  }
+});
+
+it("counts one character among empty children as a circle, but not an element or a second string beside it", () => {
+  const Ring = () => <i />;
+  const circle = "inline-block w-5 px-0 text-center";
+  expect(html(<StatusBadge separated={false}>{false}{"8"}</StatusBadge>)).toContain(circle);
+  expect(html(<StatusBadge separated={false}>{null}{"8"}{undefined}</StatusBadge>)).toContain(circle);
+  for (const markup of [
+    html(<StatusBadge separated={false}><Ring />{"8"}</StatusBadge>),
+    html(<StatusBadge separated={false}>{"1"}{"2"}</StatusBadge>),
+  ]) {
+    expect(markup).toContain("px-2");
+    expect(markup).not.toContain("px-0");
+    expect(markup).not.toContain("inline-block");
+  }
 });
 
 it("offers all three Chip sizes without adding label padding to compact text", () => {

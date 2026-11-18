@@ -77,12 +77,23 @@ it("draws the circled exclamation for danger and the triangle for a warning", ()
   expect(note.querySelector("svg.lucide-info")).not.toBeNull();
 });
 
-it("takes the size and baseline of the text only when it is inline", () => {
+it("draws the glyph at 14px in every form, and an inline note without a baseline shift", () => {
   const glyph = (mark: React.ReactElement) => mountForTooltip(mark).querySelector("svg")!.getAttribute("class") ?? "";
-  expect(glyph(<StatusMark inline label="Failed" />)).toContain("size-3.5");
+  const forms = [
+    <StatusMark label="Failed" />,
+    <StatusMark inline label="Failed" />,
+    <StatusMark label="Failed">Path not found.</StatusMark>,
+    <StatusMark inline label="Failed">Path not found.</StatusMark>,
+    <StatusMark label="Failed" text="Failed" />,
+    <StatusMark inline label="Failed" text="Failed" />,
+    <StatusMark label="Failed" text="Failed">Path not found.</StatusMark>,
+  ];
+  for (const form of forms) {
+    const glyphClass = glyph(form);
+    expect(glyphClass).toContain("size-3.5");
+    expect(glyphClass).not.toContain("size-4");
+  }
   expect(glyph(<StatusMark inline tone="note" label="Large" />)).not.toContain("translate-y-0.5");
-  expect(glyph(<StatusMark label="Failed" />)).toContain("size-4");
-  expect(glyph(<StatusMark inline label="Failed">Path not found.</StatusMark>)).toContain("size-3.5");
 });
 
 it("draws a visible word after the glyph inside the trigger, named by the label all the same", () => {
@@ -91,7 +102,6 @@ it("draws a visible word after the glyph inside the trigger, named by the label 
   expect(button.textContent).toBe("Failed");
   const glyph = button.querySelector("svg.lucide-circle-alert")!;
   expect(glyph).not.toBeNull();
-  expect(glyph.getAttribute("class")).toContain("size-4");
   const text = document.createTreeWalker(button, NodeFilter.SHOW_TEXT).nextNode()!;
   expect(text.textContent).toBe("Failed");
   expect(glyph.compareDocumentPosition(text) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
