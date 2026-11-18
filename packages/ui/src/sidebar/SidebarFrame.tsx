@@ -24,7 +24,7 @@ function columnClipClass(easing: boolean): string {
   );
 }
 
-/** What `viewKey` calls the sidebar showing the devices of the Remote devices page in place of a console. */
+/** The frame's console ID when the Remote devices page takes the sidebar's place. */
 export const DEVICES_VIEW_KEY = "remote-devices";
 
 interface SidebarFrameProps {
@@ -121,33 +121,26 @@ export function SidebarFrame({
     : `${drawerClass("drawer", open)} sidebar-docked:h-full`;
   const handleOverflow = dock.inset ? "tablet:overflow-visible!" : "tablet:sidebar-floating:overflow-visible!";
 
-  // What the sidebar is showing, and how it arrived there: going down into a focus mode slides the
-  // new view in from the end, coming back up slides it in from the start, and switching to another
-  // console fades it in.
-  const viewKey = focusId ? `focus:${focusId}` : `console:${shownConsoleId}`;
+  const inFocusMode = focus !== undefined;
   const viewRef = useRef<HTMLDivElement>(null);
-  const previousViewRef = useRef(viewKey);
+  const previousViewRef = useRef({ shownConsoleId, inFocusMode });
   const viewAnimationRef = useRef<Animation>(undefined);
   // Played in place rather than by remounting the view, so a console switch leaves what is mounted
   // in it (the header and its menu trigger among it) as it is.
   useLayoutEffect(() => {
     const previous = previousViewRef.current;
-    previousViewRef.current = viewKey;
-    if (previous === viewKey || prefersReducedMotion()) return;
+    previousViewRef.current = { shownConsoleId, inFocusMode };
+    const changesConsoleView = previous.shownConsoleId !== shownConsoleId;
+    const changesFocusMode = previous.inFocusMode !== inFocusMode;
+    if ((!changesConsoleView && !changesFocusMode) || prefersReducedMotion()) return;
     // The card owns its entry animation; animate content changes only once it is visible.
     if (peek?.active && !dock.insetShown) return;
-    // Going into or out of a focus mode slides sideways; between two views of the same level (two
-    // focus modes, or two consoles) there is no level to go down or up, so the view rises in place.
-    const enters = viewKey.startsWith("focus:");
-    const leaves = previous.startsWith("focus:");
-    const from =
-      enters === leaves
-        ? { transform: "translateY(6px)" }
-        : enters
-          ? { transform: "translateX(var(--view-shift))" }
-          : { transform: "translateX(calc(-1 * var(--view-shift)))" };
-    viewAnimationRef.current = viewRef.current?.animate([{ ...from, opacity: 0 }, {}], { duration: 240, easing: "cubic-bezier(0.2, 0, 0, 1)" });
-  }, [viewKey]);
+    const switchesConsoles = changesConsoleView && previous.shownConsoleId !== DEVICES_VIEW_KEY && shownConsoleId !== DEVICES_VIEW_KEY;
+    const transform = changesFocusMode && !switchesConsoles
+      ? `translateX(${inFocusMode ? "var(--view-shift)" : "calc(-1 * var(--view-shift))"})`
+      : "translateY(6px)";
+    viewAnimationRef.current = viewRef.current?.animate([{ transform, opacity: 0 }, {}], { duration: 240, easing: "cubic-bezier(0.2, 0, 0, 1)" });
+  }, [shownConsoleId, inFocusMode]);
   // Reduced motion requested while the view is arriving: it is where it ends up at once.
   useEffect(() => onReducedMotion(() => viewAnimationRef.current?.cancel()), []);
 

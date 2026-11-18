@@ -443,6 +443,43 @@ it("uses the card entry alone for a new console, then animates switches while th
 });
 
 
+it("switches focused console sessions immediately and fades up when switching consoles", () => {
+  vi.stubGlobal("matchMedia", () => ({ matches: false }));
+  const originalAnimate = HTMLElement.prototype.animate;
+  const animate = vi.fn();
+  HTMLElement.prototype.animate = animate;
+  onTestFinished(() => {
+    if (originalAnimate) HTMLElement.prototype.animate = originalAnimate;
+    else Reflect.deleteProperty(HTMLElement.prototype, "animate");
+    vi.unstubAllGlobals();
+  });
+
+  const other = consoleOf("c-2", "Other");
+  const { container, render } = mountSidebar({ focus: { consoleSession: hub1 } });
+  const currentName = () => container.querySelector('[aria-current="true"]')?.getAttribute("aria-label");
+  const expectEntryFrom = (transform: string) => {
+    expect(animate).toHaveBeenCalledExactlyOnceWith([{ transform, opacity: 0 }, {}], expect.anything());
+    animate.mockClear();
+  };
+  expect(currentName()).toBe(`${isolate("Hub")}, Done`);
+
+  const focus = { consoleSession: hub2 };
+  render({ focus });
+  expect(currentName()).toBe(`${isolate("Hub 2")}, Done`);
+  expect(animate).not.toHaveBeenCalled();
+
+  render({ focus, devices: { label: "Remote devices", content: <div /> } });
+  expect(container.querySelector("nav")?.getAttribute("aria-label")).toBe("Remote devices");
+  expectEntryFrom("translateX(calc(-1 * var(--view-shift)))");
+  render({ focus });
+  expect(currentName()).toBe(`${isolate("Hub 2")}, Done`);
+  expectEntryFrom("translateX(var(--view-shift))");
+
+  render({ shownConsole: other, projects: [] });
+  expectEntryFrom("translateY(6px)");
+});
+
+
 it("cuts a running view-switch animation short when reduced motion is requested", () => {
   const preference = new EventTarget() as MediaQueryList;
   Object.defineProperty(preference, "matches", { value: false, writable: true });

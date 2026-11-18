@@ -278,8 +278,8 @@ console: there is then no terminal at all, and the content panel shows the welco
 
 ## How the sidebar's view changes
 
-**The sidebar's view changes are animated**, the incoming view only, over about a fifth of a second: entering a focus
-mode slides it in from the sidebar's end edge as it fades in, a level down; returning to the console's view slides
-that in from the start edge, a level up; and switching to another console fades its view in with a slight upward
-drift, as does going from one focus mode straight to another (following a chip). The horizontal slides are
-mirrored under a right-to-left language, and nothing moves where the system asks for reduced motion.
+Switching directly between focus views within a console shows the new view immediately. Entering focus mode within
+the console slides the incoming view in from the sidebar's end edge as it fades in. Returning to that console's
+view slides it in from the start edge as it fades in. Switching to another console fades its view in with a slight
+upward drift. These animations affect the incoming view and take about a quarter of a second. The horizontal slides
+are mirrored under a right-to-left language. If the system asks for reduced motion, every view appears immediately.
