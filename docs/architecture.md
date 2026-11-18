@@ -43,7 +43,7 @@ what several users would take is in "Why the daemon is split out".
 In the server form the daemon binds to loopback only, on a fixed port when it is given one (`--port`), runs in the
 background from the command line or as a systemd user service, and serves the UI itself from a build that embeds it;
 its owner gets the address with its key from `octoboardd address` on the server and opens it through an SSH port
-forward. How the Linux build is distributed is not settled, and the application cannot connect to a remote daemon.
+forward, or adds it in the macOS or Windows application's Remote devices page from the line `octoboardd connection` prints.
 What the form asks of the design is stated below, where each constraint comes up.
 
 "Server" names where the daemon lives: a machine kept running for its owner to reach from elsewhere, with nobody sitting
@@ -224,6 +224,40 @@ credential of its own. A device is let in by its SSH key and revoked by removing
 lasts until it drops. Each key identifies a device of the owner's, and the daemon runs as that one user for every
 client. The daemon provides `octoboardd address` for its owner to obtain its address and key, including for a daemon
 run by a service manager.
+
+#### How another machine gets in
+
+The decisions behind remote access, which the code alone does not explain:
+
+- **The owner endpoint.** A daemon is opened from another machine at an endpoint only its own user can reach: the
+  socket in the data directory on Linux and macOS, and on Windows a named pipe only that user can open. The owner key
+  is accepted there, never on the daemon's own TCP port. Windows' SSH server cannot forward to a socket or a named
+  pipe, so on Windows alone a separate loopback listener for the browser takes the owner key while remote access is on,
+  at the cost the confirmation states: on a computer other people log in to, one of them can take that port while the
+  daemon does not hold it and be sent the key by a browser that reconnects.
+- **The desktop form opens itself only on request.** One Allow remote access switch, off by default and confirmed when
+  turned on, kept by the daemon and offered neither to the agents' settings tools nor in a configuration document, so
+  neither can open a machine to remote use. The desktop daemon carries the UI, as the server builds do, so both forms
+  serve a browser through one code path and the switch needs no restart.
+- **The application reaches a remote daemon through a command it runs over SSH, not through an SSH forward**: one run
+  of `octoboardd proxy` per connection the window opens, behind a loopback port the application holds for as long as the
+  window lives, so the window never sends the key to a port someone else could have taken (Docker's
+  `docker system dial-stdio` and Zed's server proxy work the same way). It works on every host system and does not
+  depend on the SSH server's forwarding settings. The application carries its own SSH client (russh), so failures are
+  told apart by kind and macOS and Windows behave alike, at the cost of an SSH implementation among its dependencies.
+- **First login with the owner's own credentials**, then a key pair of the application's own for that device,
+  installed as `ssh-copy-id` does and kept in the system's credential store; no password is stored. The host key is
+  pinned from the connection details' fingerprint, or confirmed by the owner at the first connection.
+- **One window per daemon**, each isolated with its own consoles, projects, sessions and notifications, rather than one
+  window switched between daemons, which would leave the daemons not shown without notifications. A remote daemon of
+  another protocol generation is refused before its window loads, since the screen for a daemon of another version is
+  a dead end there.
+- **No relay.** Reaching a daemon without SSH, through a relay as remote-desktop tools do, would be a separate design.
+
+Not settled: which mobile client a phone uses (the connection details' QR code is built for it, and nothing scans it
+yet); whether the application honours the owner's SSH agent and `~/.ssh/config` (host aliases, identity files) and jump
+hosts; whether Windows can offer the application's way in (the named pipe) without also opening the browser's port; and
+how the page for a refused key words its way back when the daemon is the desktop application's.
 
 **Other users of the same machine share its loopback.** The key is what keeps their processes out, so it reaches only
 the daemon's own Unix user: no key the daemon or a holder accepts is in any process's arguments, which every user can
