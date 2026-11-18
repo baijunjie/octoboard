@@ -17,6 +17,8 @@ pub(crate) mod pids;
 mod linux;
 #[cfg(target_os = "macos")]
 mod macos;
+#[cfg(test)]
+mod tests;
 #[cfg(windows)]
 mod windows;
 
@@ -37,6 +39,9 @@ pub(crate) struct ProcInfo {
     /// What groups the process with those that descend from it where the host groups them (on
     /// Unix its terminal session); `None` where it does not.
     pub sid: Option<ContainerId>,
+    /// The id of its process group, which is the pid of the group's leader; `None` where the host
+    /// has no process groups.
+    pub pgid: Option<i32>,
     /// The name of the program it runs, as the system keeps it (cut to 15 or 16 bytes).
     pub comm: String,
 }

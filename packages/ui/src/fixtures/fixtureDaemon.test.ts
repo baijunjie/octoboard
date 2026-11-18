@@ -2980,6 +2980,13 @@ describe("the fixture daemon's process ledger", () => {
     await expect(archived.request({ type: "archive_session", session: running.id, keep_process_ids: ["1:1"] })).resolves.toEqual({ type: "ack", id: null });
   });
 
+  it("refuses a keep naming a tree in one of its agent's running commands as such, before anything is kept", async () => {
+    const grouped = processTreeOf("9:1", running, "/usr/bin/node serve.mjs", 40, { keepable: false, unkeepable_reason: "agent_command_group" });
+    const daemon = createFixtureDaemon({ ...scenario, processes: { ...scenario.processes, trees: [...scenario.processes.trees, grouped] } });
+    await expect(daemon.request({ type: "keep_processes", ids: ["1:1", "9:1"] })).rejects.toMatchObject({ code: "process_in_agent_command_group", params: { pid: "9", name: "node" } });
+    await expect(list(daemon, { session_id: running.id })).resolves.toEqual(["1:1", "9:1", "2:1"]);
+  });
+
   it("ends an archived session's trees but the ones the user keeps, which stay kept when the archive is refused", async () => {
     const archived = createFixtureDaemon(scenario);
     await archived.request({ type: "archive_session", session: running.id, keep_process_ids: ["1:1"] });
@@ -3207,5 +3214,15 @@ describe("the fixture daemon's handover check", () => {
     await expect(ask({ sessions: [gone.id] })).rejects.toThrow("not a running session");
     await expect(ask({ sessions: ["missing"] })).rejects.toThrow("not a running session");
     await expect(ask({ shellTerminals: [exited.id] })).rejects.toThrow("not a running shell terminal");
+  });
+});
+
+describe("the fixture daemon's restart", () => {
+  const state = snapshotState({ consoles: [consoleOf("c", "Main")], projects: [], sessions: [] });
+
+  it("acknowledges a restart, and refuses it with the error the scenario names", async () => {
+    await expect(createFixtureDaemon({ state }).request({ type: "restart_daemon" })).resolves.toEqual({ type: "ack", id: null });
+    const daemonRestartError = { code: "agent_update_running", params: {}, message: "an agent's CLI is being updated" };
+    await expect(createFixtureDaemon({ state, daemonRestartError }).request({ type: "restart_daemon" })).rejects.toMatchObject({ code: "agent_update_running" });
   });
 });

@@ -4,11 +4,11 @@ import { agentPickerOptions, agentSetupOptions } from "../../agents/agents";
 import type { Translate } from "../../i18n/catalog";
 import type { Agent, AgentAvailability, ProviderInfo } from "../../protocol";
 import { providerMark } from "../../providers/registry";
-import { IndicatorTooltip } from "../hint/IndicatorTooltip";
+import { Tooltip } from "../../primitives";
 
 /** The mark of a session's agent. Always decorative: wherever it appears, the agent's name is in
  * the accessible name of the row or written out beside it (`sessionAriaLabel`). `tooltip`, where
- * given, shows on pointer hover only, through `IndicatorTooltip`, without a name of its own, the
+ * given, shows on pointer hover only, through a mark `Tooltip`, without a name of its own, the
  * mark being decorative. A tap opens the tooltip's content in a popover unless `touchPopover` is off, which
  * a mark inside a pressable row turns off, as the tap is the row's. */
 export function AgentIcon({
@@ -30,9 +30,9 @@ export function AgentIcon({
   );
   if (!tooltip) return icon;
   return (
-    <IndicatorTooltip tooltip={tooltip} className="flex shrink-0" touchPopover={touchPopover}>
+    <Tooltip trigger="mark" content={tooltip} className="flex shrink-0" touchPopover={touchPopover}>
       {icon}
-    </IndicatorTooltip>
+    </Tooltip>
   );
 }
 

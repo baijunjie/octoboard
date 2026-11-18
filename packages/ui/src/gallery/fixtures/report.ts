@@ -772,7 +772,7 @@ export const reportVisualScenarios: Scenario[] = [
     clipboard: { text: "" },
     steps: [
       openForm(copiedHub.title),
-      (ui) => ui.hoverTitledControl(ui.t("report.copyNamed", { label: "Command" })),
+      (ui) => ui.hoverTooltip(ui.t("report.copyNamed", { label: "Command" })),
       (ui) => ui.press(ui.t("report.copyNamed", { label: "Command" })),
     ],
   },

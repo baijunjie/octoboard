@@ -3,7 +3,6 @@ import React from "react";
 
 import { IconToggle } from "../components/controls/IconToggle";
 import { ROW_ICON_BUTTON_CLASS } from "../components/controls/RowControls";
-import { TitledControl } from "../components/hint/TitledControl";
 import { useT } from "../i18n/react";
 import type { ChangeLayout } from "./git/changeLayout";
 import type { FileFilterState } from "./FileFilterField";
@@ -33,22 +32,19 @@ export function BrowserViewControls({
         {filterOpen ? <FunnelX className="size-4" /> : <Funnel className="size-4" />}
       </IconToggle>
       {collapseAll && (
-        <TitledControl title={t("browser.collapseAll")}>
-          <Button iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={t("browser.collapseAll")} disabled={collapseAll.disabled} focusOnPress={false} onPress={collapseAll.onPress}>
-            <ChevronsDownUp className="size-4" />
-          </Button>
-        </TitledControl>
+        <Button tooltip={t("browser.collapseAll")} iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={t("browser.collapseAll")} disabled={collapseAll.disabled} focusOnPress={false} onPress={collapseAll.onPress}>
+          <ChevronsDownUp className="size-4" />
+        </Button>
       )}
       {foldDirectories && (
-        <TitledControl title={foldLabel}>
-          <Button
-            iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS}
-            label={foldLabel}
-            disabled={foldDirectories.disabled} focusOnPress={false} onPress={foldDirectories.onPress}
-          >
-            {foldDirectories.collapse ? <ChevronsDownUp className="size-4" /> : <ChevronsUpDown className="size-4" />}
-          </Button>
-        </TitledControl>
+        <Button
+          tooltip={foldLabel}
+          iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS}
+          label={foldLabel}
+          disabled={foldDirectories.disabled} focusOnPress={false} onPress={foldDirectories.onPress}
+        >
+          {foldDirectories.collapse ? <ChevronsDownUp className="size-4" /> : <ChevronsUpDown className="size-4" />}
+        </Button>
       )}
       {layout && (
         <IconToggle label={t(layout.value === "tree" ? "git.layout.flat" : "git.layout.tree")} isSelected={layout.value === "tree"} onChange={(grouped) => layout.onChange(grouped ? "tree" : "flat")}>

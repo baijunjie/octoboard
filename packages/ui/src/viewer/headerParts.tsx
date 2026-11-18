@@ -3,9 +3,7 @@ import React from "react";
 
 import { CopyButton } from "../components/controls/CopyButton";
 import { FileTypeIcon } from "../components/icons/FileTypeIcon";
-import { IndicatorTooltip } from "../components/hint/IndicatorTooltip";
 import { ROW_ICON_BUTTON_CLASS } from "../components/controls/RowControls";
-import { TitledControl } from "../components/hint/TitledControl";
 import { PlainMarkedPath } from "../components/text/MarkedPath";
 import { type HostPath, useHostPathActions } from "../components/host/useHostPathActions";
 import { useDaemon } from "../store";
@@ -17,7 +15,7 @@ import { ChangeStatusBadge } from "./ChangeStatusBadge";
 import type { ViewerChange } from "./content";
 import type { FileDownload } from "./download/useFileDownload";
 import type { StatusKey } from "./statusMarks";
-import { Button } from "../primitives";
+import { Button, Tooltip } from "../primitives";
 
 /** Copy path leads the view controls at the detail row's end, an icon button that
  * takes no focus from a press, as the view controls do. It copies `text`, the path as the header shows it. */
@@ -82,11 +80,9 @@ export function HostPathButtons({ host, linkHost, launchable = false, download, 
   return (
     <>
       {buttons.map(({ key, title, name, Icon, run }) => (
-        <TitledControl key={key} title={title}>
-          <Button iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={name} onPress={run} focusOnPress={false}>
-            <Icon className="size-4" />
-          </Button>
-        </TitledControl>
+        <Button key={key} tooltip={title} iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={name} onPress={run} focusOnPress={false}>
+          <Icon className="size-4" />
+        </Button>
       ))}
     </>
   );
@@ -97,11 +93,9 @@ export function HostPathButtons({ host, linkHost, launchable = false, download, 
 function DownloadButton({ download }: { download: FileDownload }): React.ReactElement {
   const t = useT();
   return (
-    <TitledControl title={t("viewer.downloadAndOpen")}>
-      <Button iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={t("viewer.downloadAndOpen")} pending={download.progress !== undefined} onPress={download.start} focusOnPress={false}>
-        <Download className="size-4" />
-      </Button>
-    </TitledControl>
+    <Button tooltip={t("viewer.downloadAndOpen")} iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={t("viewer.downloadAndOpen")} pending={download.progress !== undefined} onPress={download.start} focusOnPress={false}>
+      <Download className="size-4" />
+    </Button>
   );
 }
 
@@ -131,8 +125,8 @@ export function TitleStatusBadge({ status, label, tooltip }: { status: StatusKey
   const badge = <ChangeStatusBadge status={status}>{label}</ChangeStatusBadge>;
   if (tooltip === undefined) return badge;
   return (
-    <IndicatorTooltip tooltip={tooltip} phrasing className="inline-flex">
+    <Tooltip trigger="mark" content={tooltip} phrasing className="inline-flex">
       {badge}
-    </IndicatorTooltip>
+    </Tooltip>
   );
 }

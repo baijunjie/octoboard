@@ -9,7 +9,6 @@ import { AgentIcon } from "../components/icons/AgentIcon";
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import { StatusBadge } from "../components/status/StatusBadge";
 import { HELP_TIP_BUTTON_CLASS } from "../components/hint/HelpTip";
-import { TitledControl } from "../components/hint/TitledControl";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
@@ -76,21 +75,20 @@ export function ConsoleAccountsField({
       label={label}
       description={description}
       help={
-        <TitledControl title={t("dialog.console.manageAccounts")}>
-          <Button
-            iconOnly
-            size="xs"
-            variant="ghost"
-            label={t("dialog.console.manageAccounts")}
-            className={HELP_TIP_BUTTON_CLASS}
-            ref={manageRef}
-            onPress={() => {
-              if (manageRef.current) onManageAccounts(manageRef.current);
-            }}
-          >
-            <KeyRound className="size-3.5" />
-          </Button>
-        </TitledControl>
+        <Button
+          tooltip={t("dialog.console.manageAccounts")}
+          iconOnly
+          size="xs"
+          variant="ghost"
+          label={t("dialog.console.manageAccounts")}
+          className={HELP_TIP_BUTTON_CLASS}
+          ref={manageRef}
+          onPress={() => {
+            if (manageRef.current) onManageAccounts(manageRef.current);
+          }}
+        >
+          <KeyRound className="size-3.5" />
+        </Button>
       }
     >
       <div ref={rowsRef} {...focusHandoff} className="flex flex-col gap-3">

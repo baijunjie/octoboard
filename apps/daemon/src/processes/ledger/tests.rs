@@ -9,12 +9,13 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use super::attribute::{Attributed, Book, ENDED};
+use super::keepable::AGENT_CONSOLE_OVERRIDE;
 use super::looks::LOOK_DEADLINE_OVERRIDE;
 #[cfg(target_os = "macos")]
 use super::scan::UNREADABLE_OVERRIDE;
 use super::stop::{self, follow_ups};
 use super::table::{self, Identity, Proc, Table};
-use super::trees::{TreesStopped, AGENT_CONSOLE_OVERRIDE};
+use super::trees::TreesStopped;
 #[cfg(unix)]
 use super::SETTLED_OVERRIDE;
 use super::{boot_id, persist, ProcessLedger, BOOT_ID_OVERRIDE, TAG_VARIABLE};
@@ -131,7 +132,7 @@ fn wrapper_leaving_a_sleeper(child_file: &Path, go: &Path) -> Background {
 fn agent(state: &Arc<AppState>, id: &str, script: &str) -> StandIn {
     let live = fake_live_session(
         id,
-        AgentId::CLAUDE,
+        AgentId::TEST,
         80,
         24,
         &format!("{script}\nexec sleep 300"),
@@ -1746,7 +1747,7 @@ fn a_scan_before_a_launch_starts_leaves_its_agents_internals_alone() {
         helper_file.display(),
         helper_file.display()
     );
-    let live = tagged_live_session("s1", AgentId::CLAUDE, &script, pending.tag());
+    let live = tagged_live_session("s1", AgentId::TEST, &script, pending.tag());
     let helper = wait_for_pid(&helper_file);
     let _guard = KillOnDrop(vec![helper]);
     wait_for_tag(helper);
@@ -2051,6 +2052,7 @@ fn a_stop_goes_on_only_to_new_descendants_of_the_same_launch() {
         },
         ppid: ProcessId(ppid as u32),
         sid: Some(ContainerId(sid as u32)),
+        pgid: None,
         comm: String::new(),
     };
     let table = Table::from_procs([
@@ -2799,6 +2801,280 @@ fn a_tree_on_its_agent_s_console_is_listed_unkeepable_and_its_keep_refused() {
     assert_stops_running(child);
 }
 
+/// What a command of an agent that ends its command groups starts, for [`command_scenario`].
+#[cfg(unix)]
+#[derive(Clone, Copy)]
+enum Started {
+    /// Nothing more in the command's group: the command's own sleeper.
+    SameGroup,
+    /// A sleeper that starts a terminal session, and so a group, of its own.
+    NewSession,
+    /// A sleeper that starts a process group of its own, in the command's session.
+    NewGroup,
+}
+
+/// An agent whose one command, in a group of its own led by itself (its parent being the agent),
+/// starts the sleeper `started` says, writes both their pids and waits for `go`, which the test
+/// makes once the command is to exit, leaving the sleeper running.
+#[cfg(unix)]
+struct CommandScenario {
+    live: StandIn,
+    /// The command: a direct child of the agent, leading its group.
+    command: i32,
+    /// What the command started.
+    sleeper: i32,
+    go: std::path::PathBuf,
+}
+
+#[cfg(unix)]
+fn command_scenario(state: &Arc<AppState>, dir: &Path, started: Started) -> CommandScenario {
+    let (command_file, sleeper_file, go) =
+        (dir.join("command"), dir.join("sleeper"), dir.join("go"));
+    let setup = match started {
+        Started::SameGroup => "",
+        Started::NewSession => "POSIX::setsid();",
+        Started::NewGroup => "POSIX::setpgid(0, 0);",
+    };
+    let body = format!(
+        "my $c = fork(); if ($c == 0) {{ {setup} {} exec \"/bin/sleep\", \"300\" }} {} {} exit 0;",
+        perl_write(&sleeper_file, "$$"),
+        perl_write(&command_file, "$$"),
+        perl_wait_for(&go)
+    );
+    let live = agent_of(state, "s1", vec![Background::perl(&body)]);
+    let (command, sleeper) = (wait_for_pid(&command_file), wait_for_pid(&sleeper_file));
+    state.process_ledger.scan(false);
+    for pid in [command, sleeper] {
+        assert_eq!(
+            launch_of(&state.process_ledger, pid).as_deref(),
+            Some(live.launch_id.as_str())
+        );
+    }
+    CommandScenario {
+        live,
+        command,
+        sleeper,
+        go,
+    }
+}
+
+/// What the ledger lists for the session `s1`: whether each tree can be kept, and why not.
+#[cfg(unix)]
+fn listed_keepable(ledger: &ProcessLedger) -> Vec<(bool, Option<UnkeepableReason>)> {
+    ledger
+        .trees_of_sessions(&["s1".to_string()], Duration::ZERO)
+        .into_iter()
+        .map(|tree| (tree.keepable, tree.unkeepable_reason))
+        .collect()
+}
+
+/// Lists the trees of `s1` until what they show is `expected`, for up to [`PATIENCE`]: a process
+/// that has exited stops showing in the table a moment after it is observed to be gone.
+#[cfg(unix)]
+fn wait_for_listing(ledger: &ProcessLedger, expected: &[(bool, Option<UnkeepableReason>)]) {
+    let deadline = Instant::now() + PATIENCE;
+    loop {
+        let listed = listed_keepable(ledger);
+        if listed == expected {
+            return;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the trees never showed {expected:?}, but {listed:?}"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+#[cfg(unix)]
+const CAN_BE_KEPT: [(bool, Option<UnkeepableReason>); 1] = [(true, None)];
+#[cfg(unix)]
+const IN_A_COMMAND_GROUP: [(bool, Option<UnkeepableReason>); 1] =
+    [(false, Some(UnkeepableReason::AgentCommandGroup))];
+
+/// A tree with a process in the process group of a running command of an agent that ends its
+/// command groups as it exits ends with the session whatever keeps it, so it is listed as one that
+/// cannot be kept and a keep naming it is refused as a whole, with nothing kept. The same tree of
+/// an agent that does not end them is keepable.
+#[test]
+#[cfg(unix)]
+fn a_tree_in_the_group_of_a_running_command_of_its_agent_is_listed_unkeepable_and_its_keep_refused()
+{
+    let (state, dir) = app_state("ledger-command-group");
+    let scenario = command_scenario(&state, &dir, Started::SameGroup);
+    let _guard = KillOnDrop(vec![scenario.command, scenario.sleeper]);
+    let ledger = &state.process_ledger;
+    let key = identity(scenario.command).key();
+    let sessions = std::collections::HashMap::from([("s1".to_string(), "p1".to_string())]);
+
+    // The agent has not declared it ends its command groups.
+    assert_eq!(listed_keepable(ledger), CAN_BE_KEPT);
+
+    ledger.command_groups_end(&scenario.live.launch_id, None);
+    assert_eq!(listed_keepable(ledger), IN_A_COMMAND_GROUP);
+    let refused = ledger.keep_trees(std::slice::from_ref(&key), &[], &sessions);
+    let Err(refused) = refused else {
+        panic!("a tree in an agent's command group was kept: {refused:?}");
+    };
+    assert_eq!(refused.reason, UnkeepableReason::AgentCommandGroup);
+    assert!(
+        [scenario.command, scenario.sleeper].contains(&(refused.pid.0 as i32)),
+        "{refused:?}"
+    );
+    assert!(!refused.name.is_empty());
+    assert!(ledger.book().kept.is_empty());
+
+    ledger.end_launch(&scenario.live.launch_id);
+    assert_stops_running(scenario.command);
+    assert_stops_running(scenario.sleeper);
+}
+
+/// What a command started in its own terminal session, or its own process group, is not in the
+/// command's group: with the command gone, the tree is one an agent's ending its command groups
+/// leaves alone, and is kept.
+#[test]
+#[cfg(unix)]
+fn what_a_command_started_in_a_group_of_its_own_is_kept_once_the_command_has_exited() {
+    for started in [Started::NewSession, Started::NewGroup] {
+        let (state, dir) = app_state("ledger-command-group-own");
+        let scenario = command_scenario(&state, &dir, started);
+        let guard = KillOnDrop(vec![scenario.command, scenario.sleeper]);
+        let ledger = &state.process_ledger;
+        ledger.command_groups_end(&scenario.live.launch_id, None);
+        // While the command runs, the tree it leads is the agent's command's.
+        assert_eq!(listed_keepable(ledger), IN_A_COMMAND_GROUP);
+
+        std::fs::write(&scenario.go, "").unwrap();
+        assert_stops_running(scenario.command);
+        wait_for_listing(ledger, &CAN_BE_KEPT);
+        let key = identity(scenario.sleeper).key();
+        let sessions = std::collections::HashMap::from([("s1".to_string(), "p1".to_string())]);
+        assert_eq!(
+            ledger.keep_trees(std::slice::from_ref(&key), &[], &sessions),
+            Ok(vec![key.clone()])
+        );
+
+        ledger.end_launch(&scenario.live.launch_id);
+        assert!(is_running(scenario.sleeper), "stopped with the session");
+        drop(guard);
+    }
+}
+
+/// A process left in the group of a command that has finished survives the agent's end, which
+/// ends only the groups of the commands it still runs: its tree is kept.
+#[test]
+#[cfg(unix)]
+fn what_a_finished_command_left_in_its_group_is_kept() {
+    let (state, dir) = app_state("ledger-command-group-finished");
+    let scenario = command_scenario(&state, &dir, Started::SameGroup);
+    let _guard = KillOnDrop(vec![scenario.command, scenario.sleeper]);
+    let ledger = &state.process_ledger;
+    ledger.command_groups_end(&scenario.live.launch_id, None);
+    assert_eq!(listed_keepable(ledger), IN_A_COMMAND_GROUP);
+
+    std::fs::write(&scenario.go, "").unwrap();
+    assert_stops_running(scenario.command);
+    wait_for_listing(ledger, &CAN_BE_KEPT);
+    let key = identity(scenario.sleeper).key();
+    let sessions = std::collections::HashMap::from([("s1".to_string(), "p1".to_string())]);
+    assert_eq!(
+        ledger.keep_trees(std::slice::from_ref(&key), &[], &sessions),
+        Ok(vec![key.clone()])
+    );
+    ledger.end_launch(&scenario.live.launch_id);
+    assert!(is_running(scenario.sleeper), "stopped with the session");
+}
+
+/// Where the agent's commands run from a host (Codex's app server), a command is a child of the
+/// host: a group led by a child of the agent is not a command's, while one led by a child of the
+/// host is.
+#[test]
+#[cfg(unix)]
+fn with_a_command_host_only_a_group_led_by_the_hosts_child_is_a_command_group() {
+    let (state, dir) = app_state("ledger-command-group-host");
+    // The agent's direct child leads its group, and its sleeper is in it.
+    let scenario = command_scenario(&state, &dir, Started::SameGroup);
+    let _guard = KillOnDrop(vec![scenario.command, scenario.sleeper]);
+    let ledger = &state.process_ledger;
+    let launch = &scenario.live.launch_id;
+
+    ledger.command_groups_end(launch, None);
+    assert_eq!(listed_keepable(ledger), IN_A_COMMAND_GROUP);
+    ledger.command_groups_end(launch, Some(identity(scenario.command)));
+    assert_eq!(
+        listed_keepable(ledger),
+        CAN_BE_KEPT,
+        "the group is led by a child of the agent, which runs no command"
+    );
+    ledger.end_launch(launch);
+    assert_stops_running(scenario.command);
+    assert_stops_running(scenario.sleeper);
+}
+
+/// With a command host, a process in a group led by one of its children is in a command's group.
+#[test]
+#[cfg(unix)]
+fn with_a_command_host_a_group_led_by_its_child_is_a_command_group() {
+    let (state, dir) = app_state("ledger-command-group-host-child");
+    // The host is the agent's direct child; its sleeper leads a group of its own.
+    let scenario = command_scenario(&state, &dir, Started::NewGroup);
+    let _guard = KillOnDrop(vec![scenario.command, scenario.sleeper]);
+    let ledger = &state.process_ledger;
+    let launch = &scenario.live.launch_id;
+
+    ledger.command_groups_end(launch, Some(identity(scenario.command)));
+    assert_eq!(listed_keepable(ledger), IN_A_COMMAND_GROUP);
+    // The host is gone from the table once it exits: nothing runs commands to end any.
+    std::fs::write(&scenario.go, "").unwrap();
+    assert_stops_running(scenario.command);
+    wait_for_listing(ledger, &CAN_BE_KEPT);
+    ledger.end_launch(launch);
+    assert_stops_running(scenario.sleeper);
+}
+
+/// Registering a session records that its agent ends its command groups exactly when its provider
+/// declares it, with the command host its transport names.
+#[test]
+#[cfg(unix)]
+fn registering_a_session_records_the_command_groups_its_provider_declares_ended() {
+    use crate::platform::term::PartialWrite;
+    use crate::session::term::{MessageTransport, QueueStart, Sent, TransportEvents};
+
+    struct Hosted(Option<crate::platform::proc::ProcessIdentity>);
+    impl MessageTransport for Hosted {
+        fn send(&self, _: &str, _: &str) -> Result<Sent, PartialWrite> {
+            Ok(Sent::Queued)
+        }
+        fn attach(&self, _: TransportEvents) {}
+        fn start_queue(&self) -> QueueStart {
+            QueueStart::Nothing
+        }
+        fn stop(&self) {}
+        fn command_host(&self) -> Option<crate::platform::proc::ProcessIdentity> {
+            self.0
+        }
+    }
+
+    let (state, _dir) = app_state("ledger-command-groups-registered");
+    let hosted = identity(std::process::id() as i32);
+    let mut lives = Vec::new();
+    for (id, agent, ends, host) in [
+        ("s-claude", AgentId::CLAUDE, true, None),
+        ("s-codex", AgentId::CODEX, true, Some(hosted)),
+        ("s-grok", AgentId::GROK, true, None),
+        ("s-test", AgentId::TEST, false, Some(hosted)),
+    ] {
+        let live = fake_live_session(id, agent, 80, 24, "exec sleep 300")
+            .with_transport(Arc::new(Hosted(host)));
+        state.register_live(live.clone());
+        let launches = state.process_ledger.book().launches.clone();
+        let launch = &launches[&live.launch_id];
+        assert_eq!(launch.ends_command_groups, ends, "{id}");
+        assert_eq!(launch.command_host, if ends { host } else { None }, "{id}");
+        lives.push(live);
+    }
+}
+
 /// A kept tree is listed among its project's trees that no session owns, marked kept, under the
 /// project of the session whose tree it was, also after a restart; it is never stopped by the
 /// end of that session's launch, and a stop the user asks for stops it.
@@ -2879,7 +3155,7 @@ fn ending_a_launch_removes_its_group_and_spares_what_was_kept() {
     )
     .chain(std::iter::once("exec sleep 300".to_string()))
     .collect();
-    let live = tagged_live_session("s1", AgentId::CLAUDE, &script, pending.tag());
+    let live = tagged_live_session("s1", AgentId::TEST, &script, pending.tag());
     state.register_live(live.clone());
     std::fs::write(&go, "").expect("the go file is written");
     let escapee = wait_for_pid(&escapee_file);
@@ -3019,7 +3295,7 @@ fn the_file_written_at_a_launch_end_names_no_session_its_stop_emptied() {
         test_binary(),
         SLEEPER.join(" "),
     );
-    let live = tagged_live_session("s1", AgentId::CLAUDE, &script, pending.tag());
+    let live = tagged_live_session("s1", AgentId::TEST, &script, pending.tag());
     state.register_live(live.clone());
     let first = wait_for_pid(&dir.join("gen-0"));
     let _guard = KillOnDrop(vec![first]);

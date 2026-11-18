@@ -17,7 +17,7 @@ use crate::holder::client::{HeldCompanion, Issued};
 use crate::holder::protocol::{CompanionEndpoint, ContainmentSpec, EndpointKind, Ready};
 use crate::platform::ipc::{Address, PrivateListen};
 use crate::platform::proc::server::{Readiness, ServerChild};
-use crate::platform::proc::Containment;
+use crate::platform::proc::{Containment, ProcessIdentity};
 use crate::platform::term::Command;
 
 /// How long a server the daemon runs is given to exit after the polite request, before it is
@@ -144,6 +144,11 @@ pub trait RunningServer: Send + Sync {
     /// Whether the server ends once its terminal has exited, by the holder that runs both, so the
     /// daemon never ends it once the terminal runs: a session's stop leaves it alone.
     fn ends_with_its_terminal(&self) -> bool;
+
+    /// The server's process, where it is known.
+    fn process(&self) -> Option<ProcessIdentity> {
+        None
+    }
 }
 
 fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -266,6 +271,12 @@ impl RunningServer for LocalServer {
     fn ends_with_its_terminal(&self) -> bool {
         false
     }
+
+    fn process(&self) -> Option<ProcessIdentity> {
+        let pid = locked(&self.child).pid();
+        crate::platform::proc_table::start_of(pid.0 as i32)
+            .map(|start_micros| ProcessIdentity { pid, start_micros })
+    }
 }
 
 impl Drop for LocalServer {
@@ -374,6 +385,10 @@ impl RunningServer for HeldServer {
 
     fn ends_with_its_terminal(&self) -> bool {
         true
+    }
+
+    fn process(&self) -> Option<ProcessIdentity> {
+        self.0.identity()
     }
 }
 
@@ -518,6 +533,12 @@ mod tests {
             assert!(
                 !server.ends_with_its_terminal(),
                 "the daemon ends a server it runs"
+            );
+            let process = server.process().expect("the server's process is known");
+            assert_eq!(process.pid.0 as i32, pid);
+            assert_eq!(
+                Some(process.start_micros),
+                crate::platform::proc_table::start_of(pid)
             );
 
             server.end();

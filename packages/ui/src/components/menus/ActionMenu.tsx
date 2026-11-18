@@ -5,7 +5,6 @@ import { isSecondaryPress } from "../../input/keys";
 import { interactionIsTouch } from "../../input/lastInput";
 import { useT } from "../../i18n/react";
 import { useHost } from "../../platform/react";
-import { TitledControl } from "../hint/TitledControl";
 import { useLatest } from "../hooks/useLatest";
 import { ICON_TRIGGER_CLASS } from "../controls/iconTrigger";
 import {
@@ -23,7 +22,7 @@ import { type ActionMenuFilter, FilteredMenuItems } from "./FilteredMenuItems";
 import { MenuItems } from "./MenuItems";
 import { MenuShortcutScope } from "./menuShortcutScope";
 import { usePointerFocusReturn } from "./usePointerFocusReturn";
-import { BadgedControl, Menu, MenuPopover, MenuTrigger, partSelector } from "../../primitives";
+import { BadgedControl, Menu, MenuPopover, MenuTrigger, partSelector, Tooltip } from "../../primitives";
 
 /** The entries of a menu given as a function, read when the menu opens (the popover mounts its content
  * then), so that what they judge against the clock is the time they are looked at. */
@@ -307,7 +306,7 @@ export function ActionMenu({
         {/* `focusOnPress={false}` keeps a press from moving focus off whatever had it (typically
             the terminal); the menu itself takes focus once it opens. */}
         <BadgedControl badge={badge}>
-          <TitledControl title={tooltip === false ? undefined : (tooltip ?? t("common.moreActions"))}>
+          <Tooltip content={tooltip === false ? undefined : (tooltip ?? t("common.moreActions"))}>
             <MenuTrigger
               ref={triggerRef}
               label={label}
@@ -317,7 +316,7 @@ export function ActionMenu({
             >
               {trigger ?? <EllipsisVertical className="size-4" />}
             </MenuTrigger>
-          </TitledControl>
+          </Tooltip>
         </BadgedControl>
         {/* Key caps spelled out (Ctrl Shift F, off an Apple keyboard) are wider than macOS's glyphs; a menu that has
             them is that much wider, so the label beside them keeps the room it has next to glyphs. */}

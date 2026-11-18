@@ -48,8 +48,7 @@ Beside the row one button moves the update on:
 - **Restart now** once the update is installed, showing a pending spinner as "Restarting to apply an update" in
   `docs/product/in-app-updates.md` says; in a browser it restarts the daemon and stays pending until the next daemon
   greets the page, and while an update of any agent's CLI runs it is unavailable, with that reason, and its press
-  sends nothing and opens an error alert saying why (see "Restarting into the update" in
-  `docs/product/server-form-updates.md`);
+  does nothing (see "Restarting into the update" in `docs/product/server-form-updates.md`);
 - **Download and install** once a newer version is found that can be installed from here, showing the spinner while a
   check or the download is under way — in a browser, from the press. A successful installation also starts the restart
   flow described in "Restarting to apply an update" in `docs/product/in-app-updates.md` and "Restarting into the update"

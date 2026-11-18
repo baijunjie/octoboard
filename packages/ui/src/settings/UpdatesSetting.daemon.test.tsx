@@ -135,7 +135,7 @@ const UPDATING_AGENT = agentCliStatusesOf([agentCliStatusOf("claude", { update: 
 const restartButtons = (container: HTMLElement) => Array.from(container.querySelectorAll<HTMLButtonElement>("button[aria-label='Restart now']"));
 const rowRestart = (container: HTMLElement) => restartButtons(container)[0]!;
 
-it("says in the row that the restart waits for an agent's update, and leaves Restart now unavailable with the reason, which a press explains instead of asking for the restart", async () => {
+it("says in the row that the restart waits for an agent's update, and leaves Restart now unavailable with the reason, and a press does nothing", async () => {
   const { container, request } = mount(INSTALLED, undefined, { agentCliStatuses: UPDATING_AGENT, notice: false });
   expect(textOf(container)).toContain("Version 0.2.0 is installed. Restart when the agent update finishes.");
   expect(textOf(container)).not.toContain("takes effect after");
@@ -146,10 +146,7 @@ it("says in the row that the restart waits for an agent's update, and leaves Res
   expect(errorAlerts.getSnapshot()).toHaveLength(0);
   await act(async () => void restart.click());
   expect(request.mock.calls.some(([body]) => body.type === "restart_daemon")).toBe(false);
-  const alerts = errorAlerts.getSnapshot();
-  expect(alerts).toHaveLength(1);
-  expect(alerts[0]?.title).toBe("Cannot restart");
-  expect((alerts[0]?.error as { code?: string }).code).toBe("agent_update_running");
+  expect(errorAlerts.getSnapshot()).toHaveLength(0);
 });
 
 it("keeps the row's Restart now as it was while no agent's update runs", async () => {

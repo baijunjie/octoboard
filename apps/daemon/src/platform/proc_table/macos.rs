@@ -30,6 +30,7 @@ pub(crate) fn list() -> Option<Vec<ProcInfo>> {
                     start: start_micros(&info),
                     ppid: info.pbi_ppid as i32,
                     sid: Some(ContainerId(sid as u32)),
+                    pgid: Some(info.pbi_pgid as i32),
                     comm: comm_of(&info),
                 })
             })

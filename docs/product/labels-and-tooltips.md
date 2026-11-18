@@ -44,10 +44,12 @@ keeps its own width, padding and text sizes, being a panel):
   opens nothing extra, and neither does a keyboard press, since keyboard focus has the tooltip open already. The popover
   is drawn like the tooltip (the same surface, padding, text size and width) and takes focus while open; a tap outside
   it or Escape closes it — that tap does nothing else — and focus goes back to what held it. It opens on a mark that
-  only carries a tooltip (which marks, see "Tooltips on indicators" below). It does not open on a control that has an
-  action of its own, where a tap runs the action (an icon-only button, a menu trigger, a switch), nor on a mark inside a
-  row, a button or an option, where the tap belongs to what holds the mark, nor on clipped text or a change row's status
-  letter. Where a tap opens none, a touch screen has no route to the text.
+  only carries a tooltip (which marks, see "Tooltips on indicators" below), and on a control unavailable for a reason,
+  with that reason (see "How such a control behaves" in `docs/product/controls-unavailable-for-a-reason.md`). It does
+  not open on an available control that has an action of its own, where a tap runs the action (an icon-only button, a
+  menu trigger, a switch), nor on a mark inside a row, a button or an option, where the tap belongs to what holds the
+  mark, nor on clipped text or a change row's status letter. Where a tap opens none, a touch screen has no route to the
+  text.
 - Text too long for the tooltip's width **wraps at word boundaries**. A single run with no boundary in it — a path, a
   long branch name — is broken within rather than widening the tooltip. A script written without spaces wraps between
   its characters, which is its word boundary.
@@ -158,12 +160,13 @@ application buttons and the Keyboard shortcuts section's Cancel and Reset button
   directories" in `docs/product/consoles.md`);
 - the close button of every dismissable dialog, of Settings and of each toast ("Close").
 
-**An icon-only control that carries a reason or a warning has a headed tooltip**: the control's name on a line of its
-own, a divider line, and the sentence under it — why it does nothing, or what to know before pressing it. The archive
-view rows' Open in the agent's app button has one while the session has no conversation yet, and while the
-application may not see the conversation (see "Where it is offered" and "Whether the app can see the conversation" in
-`docs/product/opening-a-session-in-its-agents-app.md`); otherwise its tooltip is its name alone. A warning's sentence
-is also the control's description for assistive technology. The console avatar's tooltip on the rail is laid out the
+**An icon-only control that carries a warning has a headed tooltip**: the control's name on a line of its own, a
+divider line, and the sentence under it — what to know before pressing it. The archive view rows' Open in the agent's
+app button has one while the application may not see the conversation (see "Whether the app can see the conversation"
+in `docs/product/opening-a-session-in-its-agents-app.md`); otherwise its tooltip is its name alone. A warning's
+sentence is also the control's description for assistive technology. Why a control is unavailable is not such a
+sentence: while it lasts, it replaces the control's tooltip, headed or not, as plain text (see "How such a control
+behaves" in `docs/product/controls-unavailable-for-a-reason.md`). The console avatar's tooltip on the rail is laid out the
 same way, with its status counts under the console's name.
 
 The rail's **Account usage** button is an exception: it has **no tooltip**, on hover or on keyboard focus. Resting the

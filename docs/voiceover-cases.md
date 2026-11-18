@@ -1180,7 +1180,7 @@ proxy and VoiceOver were stopped afterwards; `cleanup.json` records the exact ow
   and press Enter on its bare Note mark. Close with Escape. Navigate to a malformed `broken.svg` that falls back to its
   text, let the temporary fallback announcement end, then press Enter on its bare Error mark and close with Escape.
   These are the two representative tones heard; no warning or touch interaction was exercised.
-- **Mechanism.** `packages/ui/src/components/status/StatusMark.tsx` (`PopoverMark`) gives a bare mark's `Hint` the
+- **Mechanism.** `packages/ui/src/components/status/StatusMark.tsx` (`PopoverMark`) gives a bare mark's `PopoverHint` the
   localized tone label, while `MarkButton` retains the notice sentence as its `aria-label`.
   `packages/ui/src/components/hint/hintPopover.tsx` (`PopoverHint`) names its pressed react-aria `Dialog` with
   `aria-label`, independently of the body text, and moves focus inside. Escape restores the existing trigger.
@@ -1222,7 +1222,7 @@ proxy and VoiceOver were stopped afterwards; `cleanup.json` records the exact ow
   triggers, with the marks inside the open viewer dialog; marks in the main window (the Files tree, the Git view) are
   not covered. It replaces the E6 duplicated-sentence naming result, without erasing it. It does not establish a pass
   for Warning, the restricted-change rich path line, marks with their own custom bodies, hover navigation, quota,
-  removed triggers or another language. Touch VoiceOver on iOS/iPadOS and the touch wrapper's generic `Hint` naming were
+  removed triggers or another language. Touch VoiceOver on iOS/iPadOS and the generic naming of `Tooltip`'s touch popover were
   not tested; no desktop simulation is claimed.
 
 ### FOCUS-5 Busy dialog hands focus to its pending button and returns after refusal
@@ -2523,7 +2523,7 @@ Hand-built `role="status"` elements, which are not `StatusAnnouncer`:
 
 - KNW-9 preserves the E6 bare mark's duplicated sentence as a failure. FOCUS-4 heard the replacement in E8 for Error and
   Note, with one sentence in the opening phrase and focus returned on Escape. Warning, the restricted-change rich path
-  line, other custom-body marks and the generic `Hint` touch wrapper were not heard. Touch VoiceOver requires iOS/iPadOS
+  line, other custom-body marks and the generic touch popover of `Tooltip` were not heard. Touch VoiceOver requires iOS/iPadOS
   and is outside this desktop pass.
 - WARN-3 to WARN-5 (E9) establish the warning modals' plain body and the external option notes on focus and in
   sequential reading, the Remove project mark and the Codex trust caution as plain text; they replace WARN-1 and

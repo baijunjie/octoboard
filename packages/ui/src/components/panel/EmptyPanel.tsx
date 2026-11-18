@@ -1,7 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import React, { useId } from "react";
 
-import { TitledControl } from "../hint/TitledControl";
 import { useAlertAnnouncement } from "../announce/useAlertAnnouncement";
 import { Button, EmptyState, Surface } from "../../primitives";
 
@@ -139,25 +138,24 @@ export function EmptyPanel({
     // plain row above overrides that padding outright.
     return (
       <EmptyState className="flex p-0">
-        <TitledControl title={action.label}>
-          <Button
-            variant="ghost"
-            labelledBy={`${messageId} ${actionId}`}
-            // The tooltip says the action and nothing more, which the name already ends with, so it
-            // is not also this row's description — `TitledControl` drops a tooltip that repeats an
-            // `aria-label` by itself, but cannot see into a name assembled from other elements.
-            describedBy=""
-            ref={actionRef}
-            focusOnPress={false}
-            onPress={action.onPress}
-            className="h-auto min-h-8 w-full justify-start gap-2 rounded-lg py-1 ps-2 pe-1 text-start font-normal text-[inherit] whitespace-normal hover:bg-panel-hover [&_svg]:m-0"
-          >
-            {row}
-            <span id={actionId} className="sr-only">
-              {action.label}
-            </span>
-          </Button>
-        </TitledControl>
+        <Button
+          tooltip={action.label}
+          variant="ghost"
+          labelledBy={`${messageId} ${actionId}`}
+          // The tooltip says the action and nothing more, which the name already ends with, so it
+          // is not also this row's description — a button drops a tooltip that repeats its `label` by itself,
+          // but cannot see into a name assembled from other elements.
+          describedBy=""
+          ref={actionRef}
+          focusOnPress={false}
+          onPress={action.onPress}
+          className="h-auto min-h-8 w-full justify-start gap-2 rounded-lg py-1 ps-2 pe-1 text-start font-normal text-[inherit] whitespace-normal hover:bg-panel-hover [&_svg]:m-0"
+        >
+          {row}
+          <span id={actionId} className="sr-only">
+            {action.label}
+          </span>
+        </Button>
       </EmptyState>
     );
   }

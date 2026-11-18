@@ -13,6 +13,7 @@ use crate::platform::proc::ProcessIdentity;
 use crate::processes::ledger::AGENT_CONSOLE_OVERRIDE;
 use crate::protocol::{
     error_code, AgentId, CodedError, Event, ProcessTarget, ProcessTree, RequestBody, SessionStatus,
+    UnkeepableReason,
 };
 use crate::state::AppState;
 #[cfg(windows)]
@@ -576,6 +577,68 @@ async fn a_keep_of_a_tree_on_its_agent_s_console_is_refused_and_nothing_is_archi
         SessionStatus::Archived
     );
     assert!(is_running(pids[0]));
+}
+
+/// A tree with a process in the process group of a command its agent ends as it exits is listed
+/// as one that cannot be kept, and a keep, alone or with an archive, naming it is refused with the
+/// process named and the code that says why, keeping nothing and archiving nothing.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_keep_of_a_tree_in_an_agent_command_group_is_refused_and_nothing_is_archived() {
+    let (state, dir) = console_with_project_and_accounts("process-requests-command-group");
+    let (live, pids) = agent_with(&state, "s1", &[&dir.join("one")]);
+    let _guard = KillOnDrop(pids.clone());
+    let trees = trees_when(&state, session_s1, 1).await;
+    let tree = trees[0].id.clone();
+    assert!(trees[0].keepable);
+    assert_eq!(trees[0].unkeepable_reason, None);
+
+    // The stand-in's command leads a group of its own and runs directly under the agent.
+    state
+        .process_ledger
+        .command_groups_end(&live.launch_id, None);
+    let trees = trees_when(&state, session_s1, 1).await;
+    assert!(!trees[0].keepable);
+    assert_eq!(
+        trees[0].unkeepable_reason,
+        Some(UnkeepableReason::AgentCommandGroup)
+    );
+
+    let keep = handle(
+        &state,
+        None,
+        RequestBody::KeepProcesses {
+            ids: vec![tree.clone()],
+        },
+    )
+    .await;
+    let archive = handle(
+        &state,
+        None,
+        RequestBody::ArchiveSession {
+            session: "s1".to_string(),
+            force_remove: Vec::new(),
+            keep: Vec::new(),
+            keep_process_ids: vec![tree],
+        },
+    )
+    .await;
+
+    for refused in [keep, archive] {
+        let err = refused.expect_err("a tree in an agent's command group was kept");
+        let coded = CodedError::of(&err);
+        assert_eq!(coded.code, error_code::PROCESS_IN_AGENT_COMMAND_GROUP);
+        assert_eq!(coded.params.get("pid"), Some(&pids[0].to_string()));
+        assert!(coded.params.contains_key("name"));
+    }
+    assert_ne!(
+        state.session_record("s1").unwrap().status,
+        SessionStatus::Archived
+    );
+    assert!(is_running(pids[0]));
+    let after = trees_when(&state, session_s1, 1).await;
+    assert!(!after[0].kept, "a refused keep kept the tree");
+    assert_eq!(after[0].session_id.as_deref(), Some("s1"));
 }
 
 /// A list of the same target computed a moment ago answers again, so clients polling it do not

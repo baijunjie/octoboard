@@ -114,7 +114,7 @@ function SwitchSetting({ agent, descriptor }: { agent: Agent; descriptor: Settin
       <SettingSwitch
         label={copy.text("label") ?? heading}
         isSelected={switchValue(descriptor, stored)}
-        isUnavailable={busy}
+        unavailable={busy}
         onChange={change}
       />
     </SettingRow>

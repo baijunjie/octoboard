@@ -46,7 +46,7 @@ it("maps the project's props onto the button's attributes", () => {
   expect(button.className).toContain("extra");
 });
 
-it("stays focusable and pressable while unavailable, describing itself with the reason and keeping its fill", () => {
+it("stays focusable while unavailable, takes no press, describing itself with the reason and keeping its fill", () => {
   const onPress = vi.fn();
   const { container } = mount(<Button label="Keep" describedBy="other" variant="secondary" unavailable="Cannot be kept" onPress={onPress}>Keep</Button>);
   const button = container.querySelector("button")!;
@@ -60,7 +60,8 @@ it("stays focusable and pressable while unavailable, describing itself with the 
   expect(button.className).toContain("pointer-events-auto");
   expect(button.className).toContain("[--button-bg-hover:var(--button-bg)]");
   pressWithKeyboard(button);
-  expect(onPress).toHaveBeenCalledTimes(1);
+  button.click();
+  expect(onPress).not.toHaveBeenCalled();
 });
 
 it("overlays a decorative spinner while keeping the hidden label as its accessible name", () => {

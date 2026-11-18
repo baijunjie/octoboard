@@ -1,6 +1,5 @@
 import React from "react";
 
-import { TitledControl } from "../components/hint/TitledControl";
 import { BadgedControl, Button, type ButtonPress } from "../primitives";
 
 /** The hover and pressed fills of a control on the window chrome: translucent tints (`styles/surfaces.css`), so
@@ -15,8 +14,8 @@ export const CHROME_CURRENT_FILLS =
   "[--button-bg:var(--chrome-current)] [--button-bg-hover:var(--chrome-current)] [--button-bg-pressed:var(--chrome-current)]";
 
 /** A press on any of the window chrome's controls (the top bar's, the rail's) must leave keyboard
- * focus on the terminal, so every one of them is built from this. `TitledControl` gives it the
- * tooltip; a control on the rail opens it toward the content (`tooltipPlacement`). */
+ * focus on the terminal, so every one of them is built from this. Its `tooltip` is its tooltip;
+ * a control on the rail opens it toward the content (`tooltipPlacement`). */
 export function ChromeButton({
   id,
   label,
@@ -78,28 +77,28 @@ export function ChromeButton({
   className?: string;
 }): React.ReactElement {
   const control = (
-    <TitledControl title={noTooltip ? "" : label} placement={tooltipPlacement}>
-      <Button
-        id={id}
-        ref={buttonRef}
-        iconOnly
-        disabled={isDisabled}
-        size="sm"
-        variant="ghost"
-        label={label}
-        expanded={expanded}
-        controls={controls ?? regionId ?? popupId}
-        current={current}
-        data-pane-toggle={paneToggle ?? controls}
-        focusOnPress={false}
-        onBlur={onBlur}
-        className={`shrink-0 ${selected || current ? CHROME_CURRENT_FILLS : CHROME_BUTTON_FILLS} ${className}`}
-        onPress={onPress}
-        onMouseHoverChange={onMouseHoverChange}
-      >
-        {children}
-      </Button>
-    </TitledControl>
+    <Button
+      tooltip={noTooltip ? "" : label}
+      tooltipPlacement={tooltipPlacement}
+      id={id}
+      ref={buttonRef}
+      iconOnly
+      disabled={isDisabled}
+      size="sm"
+      variant="ghost"
+      label={label}
+      expanded={expanded}
+      controls={controls ?? regionId ?? popupId}
+      current={current}
+      data-pane-toggle={paneToggle ?? controls}
+      focusOnPress={false}
+      onBlur={onBlur}
+      className={`shrink-0 ${selected || current ? CHROME_CURRENT_FILLS : CHROME_BUTTON_FILLS} ${className}`}
+      onPress={onPress}
+      onMouseHoverChange={onMouseHoverChange}
+    >
+      {children}
+    </Button>
   );
   return <BadgedControl badge={badge}>{control}</BadgedControl>;
 }

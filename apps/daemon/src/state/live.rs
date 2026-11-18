@@ -165,6 +165,20 @@ impl AppState {
         });
         self.process_ledger
             .launch_started(&session.launch_id, &session.id, session.process_id());
+        if session
+            .agent
+            .descriptor()
+            .capabilities
+            .ends_command_groups_on_exit
+        {
+            self.process_ledger.command_groups_end(
+                &session.launch_id,
+                session
+                    .transport
+                    .as_ref()
+                    .and_then(|transport| transport.command_host()),
+            );
+        }
         let mut live = self.live.write().expect("live sessions lock poisoned");
         live.sessions.insert(session.id.clone(), session.clone());
         drop(live);

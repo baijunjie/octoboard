@@ -379,7 +379,7 @@ it.each([
   expect(buttonNamed(container, "Delete")!.disabled).toBe(false);
 });
 
-it("presses Open in the app unavailable to explain, raising the refusal's reason as an alert", () => {
+it("does nothing when Open in the app is unavailable and pressed, raising no alert", () => {
   const onOpenInApp = vi.fn();
   const { container } = renderArchiveView(undefined, undefined, [resumable(boundArchived[0], { has_conversation: false })], { nativeApps: ["claude"], onOpenInApp });
   onTestFinished(() => void act(() => errorAlerts.acknowledge()));
@@ -387,7 +387,7 @@ it("presses Open in the app unavailable to explain, raising the refusal's reason
   act(() => buttonNamed(container, "Open in Claude app")!.click());
 
   expect(onOpenInApp).not.toHaveBeenCalled();
-  expect(errorAlerts.getSnapshot().map((alert) => [alert.title, alert.message])).toEqual([["Could not open the agent's app", "The session has no conversation yet, so there is nothing to open."]]);
+  expect(errorAlerts.getSnapshot()).toEqual([]);
 });
 
 it("gives Open in the app, where nothing needs saying, no description of its own, and not the tooltip's either", () => {
@@ -414,7 +414,7 @@ const headingElement = () => openTooltip()?.querySelector("hr")?.previousElement
 /** What the control's `aria-describedby` names, as its description. */
 const descriptionOf = (control: HTMLElement) => document.getElementById(control.getAttribute("aria-describedby") ?? "")?.textContent;
 
-it("says why Open in the app does nothing in its tooltip, after its name", () => {
+it("says why Open in the app does nothing in its tooltip, in place of its name's", () => {
   fakeTimers();
   const { container } = renderArchiveView(undefined, undefined, [resumable(boundArchived[0], { has_conversation: false })], { nativeApps: ["claude"], onOpenInApp: () => {} });
   const open = buttonNamed(container, "Open in Claude app")!;
@@ -422,10 +422,8 @@ it("says why Open in the app does nothing in its tooltip, after its name", () =>
   enter(open);
   runOutTimers();
 
-  expect(headedTooltip()).toEqual({ heading: "Open in Claude app", body: "The session has no conversation yet, so there is nothing to open." });
+  expect(document.querySelector('[role="tooltip"]')?.textContent).toBe("The session has no conversation yet, so there is nothing to open.");
   expect(descriptionOf(open)).toBe("The session has no conversation yet, so there is nothing to open.");
-  // An action's name keeps the regular weight, as in the tooltip it shows with nothing to add.
-  expect(headingElement()?.classList.contains("font-medium")).toBe(false);
 });
 
 it("keeps Open in the app enabled where the app may not see the conversation, and says so in its tooltip, after its name", () => {

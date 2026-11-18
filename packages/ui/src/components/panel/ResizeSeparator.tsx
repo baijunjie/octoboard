@@ -1,9 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 
-import { AnchoredTooltip } from "../hint/AnchoredTooltip";
 import { useLatest } from "../hooks/useLatest";
 import { startResizeDrag } from "./resizeDrag";
-import { useFocusVisibleProps } from "../../primitives";
+import { Tooltip, useFocusVisibleProps } from "../../primitives";
 
 /** Pixels an arrow key press moves the edge; Shift multiplies it. */
 const KEY_STEP = 16;
@@ -202,7 +201,7 @@ export function ResizeSeparator({
       ) : (
         <div className={`transition-colors motion-reduce:transition-none group-hover:bg-accent group-ui-keyboard-focus:bg-accent ${axis.line} ${dragging ? "bg-accent" : ""}`} />
       )}
-      {tooltip && appearance === "grip" && <AnchoredTooltip tooltip={tooltip} anchor={gripRef} hovered={hovered && !dragging} placement={orientation === "vertical" ? tooltipPlacement : undefined} />}
+      {tooltip && appearance === "grip" && <Tooltip trigger="anchored" content={tooltip} anchor={gripRef} hovered={hovered && !dragging} placement={orientation === "vertical" ? tooltipPlacement : undefined} />}
     </div>
   );
 }

@@ -3,7 +3,7 @@ import React from "react";
 /** The content of a tooltip that has a heading and something under it: the heading on a line of its own, a groove
  * line, then `children`, which the caller lays out (the rail avatar's status rows, an action's reason or note). The
  * heading reads in its own direction, as a name the user typed does. A control with such a tooltip names itself in its
- * own `label` and may keep the tooltip as its description, which says the rest (see `ControlHint`, which drops it where
+ * own `label` and may keep the tooltip as its description, which says the rest (see `Tooltip`, which drops it where
  * the tooltip only repeats the name). The heading is `emphasized` (medium weight) where it names a subject, as the rail
  * avatar's console name; an action's name keeps the regular weight, so it reads as the same tooltip the action shows
  * when it has nothing to add. */

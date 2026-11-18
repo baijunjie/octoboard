@@ -9,7 +9,6 @@ import type { ActionMenuEntry } from "../../components/menus/menuEntries";
 import { Button, TabPanel, Tabs } from "../../primitives";
 import { AgentTabList, tabActionsTrigger } from "../../components/tabs/AgentTabList";
 import { EmptyPanel } from "../../components/panel/EmptyPanel";
-import { TitledControl } from "../../components/hint/TitledControl";
 import { PATH_VAR_PARAMS } from "../../components/text/literalParams";
 import { canTakeFocus } from "../../components/focus/regionFocus";
 import { tryEachFrame } from "../../components/focus/tryEachFrame";
@@ -87,11 +86,9 @@ function handFocusOnceClosed(find: () => HTMLElement | null | undefined, { ring 
  * no room for words. */
 function IconAction({ label, icon: Icon, onPress, buttonRef }: { label: string; icon: LucideIcon; onPress: () => void; buttonRef?: React.Ref<HTMLButtonElement> }): React.ReactElement {
   return (
-    <TitledControl title={label}>
-      <Button ref={buttonRef} variant="ghost" focusOnPress={false} label={label} className={ICON_TRIGGER_CLASS} onPress={onPress}>
-        <Icon className="size-4" />
-      </Button>
-    </TitledControl>
+    <Button tooltip={label} ref={buttonRef} variant="ghost" focusOnPress={false} label={label} className={ICON_TRIGGER_CLASS} onPress={onPress}>
+      <Icon className="size-4" />
+    </Button>
   );
 }
 

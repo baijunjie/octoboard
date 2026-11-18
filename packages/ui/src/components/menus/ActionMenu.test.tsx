@@ -9,7 +9,6 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 import { CodedError } from "../../errors/codedError";
 import { errorAlerts } from "../alerts/errorAlerts";
 import { detailsButton } from "../alerts/detailsTestSupport";
-import { AnchoredTooltip } from "../hint/AnchoredTooltip";
 import { closeOpenTooltip, tooltipsCooledDown } from "../hint/tooltipTestSupport";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../announce/StatusAnnouncer";
 import { ActionMenu } from "./ActionMenu";
@@ -17,7 +16,7 @@ import { filterField, holdExitAnimations, openBy, pressInFilter, SUBMENU_HOVER_D
 import { runMenuCommand } from "./menuCommands";
 import type { ActionMenuEntry, ActionMenuItem, ActionMenuPanelContext } from "./menuEntries";
 import { fakeTimers, runOutTimers } from "../../test/clock";
-import { partSelector } from "../../primitives";
+import { partSelector, Tooltip } from "../../primitives";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -445,7 +444,7 @@ describe("Escape with a label's tooltip open", () => {
     return (
       <>
         <span ref={anchor}>{text}</span>
-        <AnchoredTooltip tooltip={`The whole ${text}`} anchor={anchor} hovered immediate={immediate} />
+        <Tooltip trigger="anchored" content={`The whole ${text}`} anchor={anchor} hovered immediate={immediate} />
       </>
     );
   }

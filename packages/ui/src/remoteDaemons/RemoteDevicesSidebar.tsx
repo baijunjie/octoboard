@@ -2,7 +2,6 @@ import { AppWindow, Link, Plug, Plus, Server, Trash2 } from "lucide-react";
 import React, { useRef } from "react";
 
 import { RowControls, RowIconGroup, RowIconSlot } from "../components/controls/RowControls";
-import { IndicatorTooltip } from "../components/hint/IndicatorTooltip";
 import { ActionMenu } from "../components/menus/ActionMenu";
 import { useListMotion } from "../components/motion/useListMotion";
 import { EmptyPanel } from "../components/panel/EmptyPanel";
@@ -17,6 +16,7 @@ import { useT } from "../i18n/react";
 import type { RemoteDaemonEntry } from "../platform";
 import { CONNECTION_STATE_WORDS, connectionState, type ConnectionState } from "./connectionState";
 import { useRemoteDevices } from "./RemoteDevices";
+import { Tooltip } from "../primitives";
 
 /** The sidebar's content while the Remote devices page shows: a header with the page's title and Add remote daemon, and
  * below it the saved devices in the order they were saved, one row each: the server glyph, the name, where the device
@@ -115,12 +115,12 @@ function DeviceRow({ entry, state, selected, connectable, onSelect, onConnect, o
 function ConnectionStatusIcon({ state, label }: { state: ConnectionState; label: string }): React.ReactElement {
   const ConnectedIcon = state === "connected" ? Link : AppWindow;
   return (
-    <IndicatorTooltip tooltip={label} className="inline-flex shrink-0" touchPopover={false}>
+    <Tooltip trigger="mark" content={label} className="inline-flex shrink-0" touchPopover={false}>
       <StatusSlot aria-hidden="true">
         {state === "reconnecting"
           ? <ReconnectingIcon />
           : <ConnectedIcon className="size-4 text-[var(--tint-success-fg)]" />}
       </StatusSlot>
-    </IndicatorTooltip>
+    </Tooltip>
   );
 }

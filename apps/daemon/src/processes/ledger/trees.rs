@@ -13,10 +13,11 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use super::attribute::{keep, Attributed, Book, Launch, ENDED};
+use super::keepable::Unkeepable;
 use super::looks::Roots;
 use super::table::{self, Cwd, Identity, Table};
 use super::ProcessLedger;
-use crate::platform::proc::{self, ContainerId, Containment, ProcessId};
+use crate::platform::proc::{ContainerId, Containment, ProcessId};
 use crate::protocol::{ProcessCount, ProcessTree, UnkeepableReason, UnstoppedProcess};
 
 /// The longest command a tree reports, in bytes.
@@ -26,26 +27,6 @@ const COMMAND_LIMIT: usize = 1024;
 /// members still run are kept at all, so this bounds what a long run of listings could make the
 /// ledger hold.
 const LISTINGS_LIMIT: usize = 1024;
-
-/// The processes tests take as attached to their agent's console, in place of what the host says.
-/// Process-wide, as a keep the request layer asks for runs on a blocking thread, and keyed by the
-/// processes a test started, so that no other test's are affected.
-#[cfg(test)]
-pub(crate) static AGENT_CONSOLE_OVERRIDE: std::sync::Mutex<Vec<Identity>> =
-    std::sync::Mutex::new(Vec::new());
-
-/// Whether `member` is attached to the console of `agent` (`platform::proc::shares_console`).
-fn shares_console(agent: &Identity, member: &Identity) -> Option<bool> {
-    #[cfg(test)]
-    if AGENT_CONSOLE_OVERRIDE
-        .lock()
-        .expect("agent console override lock poisoned")
-        .contains(member)
-    {
-        return Some(true);
-    }
-    proc::shares_console(agent, member)
-}
 
 /// Why [`ProcessLedger::move_trees`] moved nothing.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -57,15 +38,6 @@ pub enum MoveRefused {
     NotFrom(Vec<String>),
     /// The process table could not be read.
     Unreadable,
-}
-
-/// Why [`ProcessLedger::keep_trees`] kept nothing: the process `pid`, named `name`, of a tree it
-/// was asked to keep is attached to its agent's own console, which ends it with the launch
-/// whatever keeps it.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SharesAgentConsole {
-    pub pid: ProcessId,
-    pub name: String,
 }
 
 /// What [`ProcessLedger::stop_trees`] came to.
@@ -381,13 +353,14 @@ impl ProcessLedger {
     /// directory a tree left behind is in; a tree of a session that `session_projects` gives no
     /// project, a console session's, is not kept. Returns the ids of the trees it kept, or, with
     /// nothing kept, the first process of a tree named that is attached to its agent's own
-    /// console ([`Self::on_agent_console`]). **Blocks.**
+    /// console or in the process group of one of its agent's commands ([`Self::unkeepable`]).
+    /// **Blocks.**
     pub fn keep_trees(
         &self,
         ids: &[String],
         projects: &[(String, PathBuf)],
         session_projects: &HashMap<String, String>,
-    ) -> Result<Vec<String>, SharesAgentConsole> {
+    ) -> Result<Vec<String>, Unkeepable> {
         let Some(table) = self.scan(false) else {
             return Ok(Vec::new());
         };
@@ -396,11 +369,11 @@ impl ProcessLedger {
         let named = self.resolve(ids, &table, &roots, |launch| !launch.ending, false);
         // Refused as a whole rather than leaving the tree out: the user is told why it cannot
         // be kept instead of seeing it stopped with the session after asking for it to be kept.
-        if let Some(shared) = named
+        if let Some(refused) = named
             .iter()
-            .find_map(|(_, members)| self.on_agent_console(members, &table))
+            .find_map(|(_, members)| self.unkeepable(members, &table))
         {
-            return Err(shared);
+            return Err(refused);
         }
         // Read before the lock is taken, and only what may lie in a project: only a tree no
         // session owns is placed by its directory.
@@ -642,8 +615,8 @@ impl ProcessLedger {
             .into_iter()
             .map(|(session, top, members)| {
                 let unkeepable = self
-                    .on_agent_console(&members, table)
-                    .map(|_| UnkeepableReason::AgentConsole);
+                    .unkeepable(&members, table)
+                    .map(|refused| refused.reason);
                 describe(
                     top,
                     &members,
@@ -894,34 +867,6 @@ impl ProcessLedger {
         }
     }
 
-    /// The first of `members` attached to the console of the agent of the launch it is
-    /// attributed to (`platform::proc::shares_console`), which ends it with that launch whatever
-    /// keeps it, with the name `table` gives it. A member whose console cannot be told is taken
-    /// not to be: only a console known to be shared refuses a keep.
-    fn on_agent_console(&self, members: &[Identity], table: &Table) -> Option<SharesAgentConsole> {
-        let pairs: Vec<(Identity, Identity)> = {
-            let book = self.book();
-            members
-                .iter()
-                .filter_map(|member| {
-                    let launch = book.launches.get(&book.attributed.get(member)?.launch)?;
-                    Some((launch.agent?, *member))
-                })
-                .filter(|(agent, member)| agent != member)
-                .collect()
-        };
-        let (_, member) = pairs
-            .into_iter()
-            .find(|(agent, member)| shares_console(agent, member) == Some(true))?;
-        Some(SharesAgentConsole {
-            pid: member.pid,
-            name: table
-                .get(member.pid)
-                .map(|proc| proc.comm.clone())
-                .unwrap_or_default(),
-        })
-    }
-
     /// The processes left behind in `roots`' directories (see [`Self::trees_of_project`]), each
     /// with its working directory. Only a process whose directory the system reports under one
     /// of them has the directory looked at, within the deadline of a look.
@@ -1064,6 +1009,7 @@ mod tests {
             },
             ppid: ledger.own,
             sid: Some(ContainerId(300)),
+            pgid: None,
             comm: String::new(),
         };
         let helper = Proc {
@@ -1073,6 +1019,7 @@ mod tests {
             },
             ppid: ProcessId(300),
             sid: Some(ContainerId(300)),
+            pgid: None,
             comm: String::new(),
         };
         let task = Proc {
@@ -1082,6 +1029,7 @@ mod tests {
             },
             ppid: ProcessId(300),
             sid: Some(ContainerId(302)),
+            pgid: None,
             comm: String::new(),
         };
         let table = Table::from_procs([server, helper.clone(), task.clone()]);
@@ -1109,6 +1057,7 @@ mod tests {
             },
             ppid: ProcessId(ppid),
             sid: Some(ContainerId(sid)),
+            pgid: None,
             comm: String::new(),
         };
         let holder = proc(250, 1, 250);

@@ -51,6 +51,7 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         per_session_trust: false,
         config_sharing: false,
         mcp_inventory: false,
+        ends_command_groups_on_exit: false,
         delivery: DeliveryQuirks {
             confirms_by_reported_prompt: false,
             holds_report_for_completion_notice: false,

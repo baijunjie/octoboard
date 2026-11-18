@@ -3,7 +3,6 @@ import React, { useEffect, useRef, useState } from "react";
 
 import { Button } from "../../primitives";
 import { StatusAnnouncer } from "../announce/StatusAnnouncer";
-import { TitledControl } from "../hint/TitledControl";
 
 /** How long the done state outlasts the tooltip's close, so the tooltip's exit animation (100 ms)
  * is over before the text and icon go back, and the user never sees them flip while it fades. */
@@ -77,14 +76,12 @@ export function FeedbackButton({
   const iconOnly = children === undefined || children === null || children === false;
   return (
     <>
-      <TitledControl title={tooltipText} keepOpenOnPress onOpenChange={feedback.onTooltipOpenChange}>
-        <Button {...buttonProps} ref={buttonRef} iconOnly={iconOnly} label={iconOnly ? tooltipText : buttonProps.label} onPress={onPress}>
-          {children}
-          {feedback.done
-            ? <Check key="done" className="size-4 motion-safe:animate-copy-icon-in" />
-            : <Icon key="idle" className={feedback.everDone ? "size-4 motion-safe:animate-copy-icon-in" : "size-4"} />}
-        </Button>
-      </TitledControl>
+      <Button tooltip={tooltipText} tooltipKeepOpenOnPress onTooltipOpenChange={feedback.onTooltipOpenChange} {...buttonProps} ref={buttonRef} iconOnly={iconOnly} label={iconOnly ? tooltipText : buttonProps.label} onPress={onPress}>
+        {children}
+        {feedback.done
+          ? <Check key="done" className="size-4 motion-safe:animate-copy-icon-in" />
+          : <Icon key="idle" className={feedback.everDone ? "size-4 motion-safe:animate-copy-icon-in" : "size-4"} />}
+      </Button>
       <StatusAnnouncer text={feedback.done ? doneText : undefined} element="span" />
     </>
   );

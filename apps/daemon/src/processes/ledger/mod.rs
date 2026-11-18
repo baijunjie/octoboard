@@ -55,6 +55,7 @@
 
 mod attribute;
 mod carry;
+mod keepable;
 mod looks;
 mod persist;
 mod scan;
@@ -78,9 +79,10 @@ use crate::protocol::{ProcessCount, ProcessTree};
 
 pub use crate::platform::proc::TAG_VARIABLE;
 pub use carry::HeldForLaunch;
+pub use keepable::Unkeepable;
 #[cfg(test)]
-pub(crate) use trees::AGENT_CONSOLE_OVERRIDE;
-pub use trees::{MoveRefused, SharesAgentConsole, TreesStopped};
+pub(crate) use keepable::AGENT_CONSOLE_OVERRIDE;
+pub use trees::{MoveRefused, TreesStopped};
 
 /// How often the table is read while there is anything to follow.
 const SCAN_INTERVAL: Duration = Duration::from_secs(2);
@@ -683,6 +685,18 @@ impl ProcessLedger {
             self.forget_lists();
         }
         self.start(false);
+    }
+
+    /// Records that the agent of the launch `launch_id` ends the process group of each command
+    /// it still runs as it exits, the commands being run by `command_host` where the agent does
+    /// not run them itself. A tree with a process in such a group ends with the launch whatever
+    /// keeps it, so it cannot be kept (see [`Self::keep_trees`]).
+    pub fn command_groups_end(&self, launch_id: &str, command_host: Option<Identity>) {
+        let mut book = self.book();
+        if let Some(launch) = book.launches.get_mut(launch_id) {
+            launch.ends_command_groups = true;
+            launch.command_host = command_host;
+        }
     }
 
     /// Reads the table once, for the daemon about to end an agent: what the agent started a

@@ -10,10 +10,9 @@ import { useT } from "../i18n/react";
 import { sessionLocationContent } from "../sessions/sessionCopy";
 import { useDaemon, type NotificationRequest } from "../store";
 import { TOAST_BREAKPOINT } from "../components/dialog/toastGeometry";
-import { TitledControl } from "../components/hint/TitledControl";
 import { useMediaQuery } from "../components/hooks/breakpoint";
 import { useLatest } from "../components/hooks/useLatest";
-import { closeToast, partSelector, showToast as queueToast, Toast, ToastCloseButton, ToastContent, ToastDescription, type ToastEntry, ToastIndicator, ToastRegion, ToastTitle } from "../primitives";
+import { closeToast, partSelector, showToast as queueToast, Toast, ToastCloseButton, ToastContent, ToastDescription, type ToastEntry, ToastIndicator, ToastRegion, ToastTitle, Tooltip } from "../primitives";
 
 /** How long a notice stays before it dismisses itself. */
 const NOTICE_DURATION_MS = 5000;
@@ -192,8 +191,8 @@ function renderToast({ title, description, variant }: ToastEntry): React.ReactEl
 function ToastClose(): React.ReactElement {
   const t = useT();
   return (
-    <TitledControl title={t("common.close")}>
+    <Tooltip content={t("common.close")}>
       <ToastCloseButton label={t("common.close")} focusOnPress={false} />
-    </TitledControl>
+    </Tooltip>
   );
 }

@@ -1,12 +1,12 @@
 import React from "react";
 
 import { InlineReference } from "../../i18n/InlineReference";
-import { IndicatorTooltip } from "../../components/hint/IndicatorTooltip";
 import { isolate } from "../../i18n/isolate";
 import { Message, useT } from "../../i18n/react";
 import type { BranchOriginInfo } from "../../protocol";
 import { sessionDisplayTitle } from "../../sessions/sessionLabel";
 import { useDaemonStore } from "../../store";
+import { Tooltip } from "../../primitives";
 
 /**
  * The mark a branch carries for the session working on it now, its responsible session: a ring,
@@ -25,7 +25,7 @@ import { useDaemonStore } from "../../store";
  * It has no touch popover (`touchPopover={false}`): it sits in an option of the branch list, whose press
  * (choosing the branch) a tap on the ring would share with it.
  *
- * Kept shortfall: it is an `IndicatorTooltip`, so the title shows on pointer hover only and the badge
+ * Kept shortfall: it is a mark `Tooltip`, so the title shows on pointer hover only and the badge
  * is no tab stop. A screen-reader user has it in the option's name, which includes the ring's, but a
  * sighted keyboard-only user has no route to the session's name.
  */
@@ -44,8 +44,8 @@ export function BranchOriginBadge({ origin, selectedSessionId }: { origin: Branc
     title: isolate(liveTitle ?? origin.responsible_title),
   });
   return (
-    <IndicatorTooltip tooltip={<Message id={message} params={{ title: <InlineReference dir="auto" wrap>{liveTitle ?? origin.responsible_title}</InlineReference> }} />} label={label} className="inline-flex shrink-0" touchPopover={false}>
+    <Tooltip trigger="mark" content={<Message id={message} params={{ title: <InlineReference dir="auto" wrap>{liveTitle ?? origin.responsible_title}</InlineReference> }} />} label={label} className="inline-flex shrink-0" touchPopover={false}>
       <span aria-hidden="true" className={`inline-block size-2.5 rounded-full border-2 ${selected ? "border-accent-soft-foreground bg-accent-soft-foreground" : "border-app-muted"}`} />
-    </IndicatorTooltip>
+    </Tooltip>
   );
 }

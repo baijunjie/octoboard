@@ -72,6 +72,12 @@ pub(crate) struct Launch {
     pub started: bool,
     /// The agent's process, once it is started and while its start time could be read.
     pub agent: Option<Identity>,
+    /// The agent ends the process group of each command it still runs as it exits
+    /// (`Capabilities::ends_command_groups_on_exit`), where the host has process groups.
+    pub ends_command_groups: bool,
+    /// The process that runs the agent's commands where that is not the agent itself, such as
+    /// the server the agent's commands go through. `None` where the agent runs them.
+    pub command_host: Option<Identity>,
     /// Its processes are being stopped, or carried over (see [`Self::heir`]).
     pub ending: bool,
     /// The session whose launch takes the launch's processes over when its agent process ends,
@@ -812,6 +818,7 @@ mod tests {
             },
             ppid: ProcessId(ppid as u32),
             sid: Some(ContainerId(sid as u32)),
+            pgid: None,
             comm: String::new(),
         }
     }

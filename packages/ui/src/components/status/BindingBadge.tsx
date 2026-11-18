@@ -1,12 +1,12 @@
 import React from "react";
 
 import { InlineReference } from "../../i18n/InlineReference";
-import { IndicatorTooltip } from "../hint/IndicatorTooltip";
 import { isolate } from "../../i18n/isolate";
 import { Message, useT } from "../../i18n/react";
 import type { Session } from "../../protocol";
 import { sessionColourVars } from "../../sessions/sessionColours";
 import { sessionDisplayTitle } from "../../sessions/sessionLabel";
+import { Tooltip } from "../../primitives";
 
 /**
  * A bound project session's binding badge: a dot in its owner console session's colour, on the
@@ -24,7 +24,7 @@ import { sessionDisplayTitle } from "../../sessions/sessionLabel";
  * row, whose press (selecting the session) a tap on the dot would share with the popover, so a touch
  * has no route to the owner's name beyond the row's own label.
  *
- * The tooltip is an `IndicatorTooltip`: the badge is a non-interactive dot, so it shows on pointer
+ * The tooltip is a mark `Tooltip`: the badge is a non-interactive dot, so it shows on pointer
  * hover only and adds no tab stop to the row; a screen-reader user has the row's own `aria-label`
  * ("Bound to …"), and there is today no keyboard route to the owner's name for a sighted user who
  * cannot tell the colours apart.
@@ -48,8 +48,8 @@ export function BindingBadge({ owner, decorative }: { owner: Session; decorative
   if (decorative) return dot;
   const label = t("sidebar.session.boundTo", { name: isolate(sessionDisplayTitle(t, owner)) });
   return (
-    <IndicatorTooltip tooltip={<Message id="sidebar.session.boundTo" params={{ name: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, owner)}</InlineReference> }} />} label={label} className="inline-flex" touchPopover={false}>
+    <Tooltip trigger="mark" content={<Message id="sidebar.session.boundTo" params={{ name: <InlineReference dir="auto" wrap>{sessionDisplayTitle(t, owner)}</InlineReference> }} />} label={label} className="inline-flex" touchPopover={false}>
       {dot}
-    </IndicatorTooltip>
+    </Tooltip>
   );
 }

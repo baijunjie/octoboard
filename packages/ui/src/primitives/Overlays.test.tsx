@@ -9,7 +9,7 @@ import { Modal, ModalBody, ModalHeading } from "./Modal";
 import { partSelector, toastStateAttributes } from "./parts";
 import { mount } from "./testSupport";
 import { closeToast, showToast, Toast, ToastContent, ToastRegion } from "./Toast";
-import { Tooltip, TooltipContent, TooltipTrigger, useTooltipState } from "./Tooltip";
+import { TooltipContent, TooltipRoot as Tooltip, TooltipTrigger, useTooltipState } from "./tooltipParts";
 import { withModality } from "../components/dialog/dialogTestSupport";
 import { FAKE_FRAME_MS, fakeTimers, flushPromises } from "../test/clock";
 

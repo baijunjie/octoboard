@@ -51,13 +51,16 @@ export function createProcessLedger({ scenario, store, fail }: FixtureContext) {
     return kept.map(({ tree }) => tree.id);
   };
   // A keep, or an archive that keeps, naming a tree the daemon lists as unkeepable is refused whole, before any tree is
-  // kept: that tree would end with its session whatever kept it. The process named is the tree's first, as its command
-  // gives it, and its id begins with the process id.
+  // kept: that tree would end with its session whatever kept it, the refusal naming why (a process in one of its agent's
+  // running commands, else one on its agent's console). The process named is the tree's first, as its command gives it,
+  // and its id begins with the process id.
   const refuseUnkeepable = (ids: string[]): void => {
     const tree = followed.find((candidate) => ids.includes(candidate.id) && !candidate.keepable);
     if (tree === undefined) return;
     const name = tree.command.split(" ")[0].split("/").pop() ?? "";
-    fail({ code: "process_shares_agent_console", params: { pid: tree.id.split(":")[0], name }, message: `process ${tree.id.split(":")[0]} shares its agent's console` });
+    const pid = tree.id.split(":")[0];
+    if (tree.unkeepable_reason === "agent_command_group") fail({ code: "process_in_agent_command_group", params: { pid, name }, message: `process ${pid} runs in a command group its agent ends on exit` });
+    fail({ code: "process_shares_agent_console", params: { pid, name }, message: `process ${pid} shares its agent's console` });
   };
   // The count of trees as the daemon's `list_all_processes` answers it: one entry for each project the store has that
   // has trees, in the store's order (its running sessions' trees and the ones no session owns), then one for each

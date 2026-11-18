@@ -2,8 +2,6 @@ import { LockKeyhole, RotateCcw, X } from "lucide-react";
 import React, { useContext, useEffect, useId, useRef, useState } from "react";
 
 import { AFTER_FOCUS_MOVE_DELAY_MS, StatusAnnouncer } from "../components/announce/StatusAnnouncer";
-import { IndicatorTooltip } from "../components/hint/IndicatorTooltip";
-import { TitledControl } from "../components/hint/TitledControl";
 import { useShortcutScopeDescription } from "../components/hooks/useShortcutScopeDescription";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { CodeToneContext } from "../i18n/codeTone";
@@ -19,7 +17,7 @@ import type { ShortcutProblem } from "../shortcuts/validate";
 import { SettingRow } from "./SettingRow";
 import { SettingsGroup } from "./SettingsGroup";
 import { SettingsFocusContext } from "./useSectionRefocus";
-import { Button } from "../primitives";
+import { Button, Tooltip } from "../primitives";
 
 /**
  * The keyboard shortcuts: every key the app has, grouped, with the app's own commands rebindable. A
@@ -248,69 +246,66 @@ function ShortcutRow({
         ) : command.rebindable ? (
           <>
             <span id={bindingDescriptionId} hidden>{describeBinding(binding, t, host)}</span>
-            <TitledControl title={actionLabel}>
-              <Button
-                ref={changeRef}
-                data-shortcut-change=""
-                size="sm"
-                variant="ghost"
-                // An approved departure from HeroUI (`docs/conventions/ui-standard.md`, "Do not change how a HeroUI
-                // component looks"): the ghost button draws no fill of its own, so only the key caps show; hover and
-                // press darken the caps themselves.
-                className="h-auto min-h-6 min-w-0 justify-self-end rounded-md p-0 whitespace-normal [--button-bg-hover:transparent] [--button-bg-pressed:transparent]"
-                label={actionLabel}
-                // Never left undefined: an empty value keeps the tooltip, which repeats the name, from being read as
-                // the description too.
-                describedBy={[bindingDescriptionId, problem && problemId].filter(Boolean).join(" ")}
-                onPress={() => onRecord(id)}
-              >
-                <BindingKbd binding={binding} className="motion-safe:transition-colors in-ui-hovered:bg-(--default-hover) in-ui-hovered:text-foreground in-ui-pressed:bg-(--default-hover) in-ui-pressed:text-foreground" />
-              </Button>
-            </TitledControl>
+            <Button
+              tooltip={actionLabel}
+              ref={changeRef}
+              data-shortcut-change=""
+              size="sm"
+              variant="ghost"
+              // An approved departure from HeroUI (`docs/conventions/ui-standard.md`, "Do not change how a HeroUI
+              // component looks"): the ghost button draws no fill of its own, so only the key caps show; hover and
+              // press darken the caps themselves.
+              className="h-auto min-h-6 min-w-0 justify-self-end rounded-md p-0 whitespace-normal [--button-bg-hover:transparent] [--button-bg-pressed:transparent]"
+              label={actionLabel}
+              // Never left undefined: an empty value keeps the tooltip, which repeats the name, from being read as
+              // the description too.
+              describedBy={[bindingDescriptionId, problem && problemId].filter(Boolean).join(" ")}
+              onPress={() => onRecord(id)}
+            >
+              <BindingKbd binding={binding} className="motion-safe:transition-colors in-ui-hovered:bg-(--default-hover) in-ui-hovered:text-foreground in-ui-pressed:bg-(--default-hover) in-ui-pressed:text-foreground" />
+            </Button>
           </>
         ) : (
           <span className="justify-self-end"><BindingKbd binding={binding} /></span>
         )}
         <div className="flex size-6 items-center justify-center">
           {recording && (
-            <TitledControl title={t("common.cancel")}>
-              <Button
-                ref={cancelRef}
-                size="xs"
-                iconOnly
-                variant="ghost"
-                label={actionLabel}
-                describedBy={[promptId, problem && problemId].filter(Boolean).join(" ")}
-                onPress={onCancel}
-              >
-                <X className="size-3.5" />
-              </Button>
-            </TitledControl>
+            <Button
+              tooltip={t("common.cancel")}
+              ref={cancelRef}
+              size="xs"
+              iconOnly
+              variant="ghost"
+              label={actionLabel}
+              describedBy={[promptId, problem && problemId].filter(Boolean).join(" ")}
+              onPress={onCancel}
+            >
+              <X className="size-3.5" />
+            </Button>
           )}
           {/* A short tooltip, as the row's name sits beside it; the accessible name keeps the full wording. */}
           {differs && !recording && (
-            <TitledControl title={t("settings.shortcuts.reset")}>
-              <Button
-                size="xs"
-                iconOnly
-                variant="ghost"
-                label={t("settings.shortcuts.resetLabel", { command: label })}
-                describedBy={problem ? problemId : ""}
-                onPress={() => {
-                  // Reset removes its own button; keep focus on this row's shortcut instead.
-                  if (onReset(id)) changeRef.current?.focus();
-                }}
-              >
-                <RotateCcw className="size-3.5" />
-              </Button>
-            </TitledControl>
+            <Button
+              tooltip={t("settings.shortcuts.reset")}
+              size="xs"
+              iconOnly
+              variant="ghost"
+              label={t("settings.shortcuts.resetLabel", { command: label })}
+              describedBy={problem ? problemId : ""}
+              onPress={() => {
+                // Reset removes its own button; keep focus on this row's shortcut instead.
+                if (onReset(id)) changeRef.current?.focus();
+              }}
+            >
+              <RotateCcw className="size-3.5" />
+            </Button>
           )}
           {/* "Fixed" is the lock's tooltip and name only, so a sighted keyboard user does not see it; kept on purpose,
             as the introduction already says these keys cannot be changed. */}
           {!command.rebindable && (
-            <IndicatorTooltip tooltip={t("settings.shortcuts.fixed")} label={t("settings.shortcuts.fixed")} className="inline-flex text-app-muted">
+            <Tooltip trigger="mark" content={t("settings.shortcuts.fixed")} label={t("settings.shortcuts.fixed")} className="inline-flex text-app-muted">
               <LockKeyhole className="size-3.5" />
-            </IndicatorTooltip>
+            </Tooltip>
           )}
         </div>
       </div>

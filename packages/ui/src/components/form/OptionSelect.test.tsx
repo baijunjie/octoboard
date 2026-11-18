@@ -5,8 +5,8 @@ import { setInteractionModality } from "react-aria";
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import { AnchoredTooltip } from "../hint/AnchoredTooltip";
 import { InlineReference } from "../../i18n/InlineReference";
+import { Tooltip } from "../../primitives";
 
 import { currentLanguage, setLanguage } from "../../i18n/language";
 import { fakeTimers, runOutTimers } from "../../test/clock";
@@ -235,7 +235,7 @@ it("closes only an option's tooltip on Escape, leaving the list open with focus 
     return (
       <>
         <span ref={anchor}>Long</span>
-        <AnchoredTooltip tooltip="The whole Long" anchor={anchor} hovered immediate />
+        <Tooltip trigger="anchored" content="The whole Long" anchor={anchor} hovered immediate />
       </>
     );
   }

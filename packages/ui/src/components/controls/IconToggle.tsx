@@ -1,7 +1,6 @@
 import React from "react";
 
-import { TitledControl } from "../hint/TitledControl";
-import { ToggleButton } from "../../primitives";
+import { ToggleButton, Tooltip } from "../../primitives";
 import { ROW_ICON_BUTTON_CLASS } from "./RowControls";
 
 /**
@@ -36,7 +35,7 @@ export function IconToggle({
   children: React.ReactNode;
 }): React.ReactElement {
   return (
-    <TitledControl title={label}>
+    <Tooltip content={label}>
       <ToggleButton
         ref={ref}
         tabStop={!inHeader}
@@ -54,6 +53,6 @@ export function IconToggle({
       >
         {children}
       </ToggleButton>
-    </TitledControl>
+    </Tooltip>
   );
 }

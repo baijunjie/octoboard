@@ -2,12 +2,11 @@ import { X } from "lucide-react";
 import React, { useRef, useState } from "react";
 
 import { HandoffOnUnmount } from "../../components/focus/HandoffOnUnmount";
-import { AnchoredTooltip } from "../../components/hint/AnchoredTooltip";
 import { ActionMenu } from "../../components/menus/ActionMenu";
 import type { ActionMenuEntry } from "../../components/menus/menuEntries";
 import { t } from "../../i18n/language";
 import { raiseError } from "../../components/alerts/raiseError";
-import { menuOfTrigger } from "../../primitives";
+import { menuOfTrigger, Tooltip } from "../../primitives";
 import type { Daemon } from "../../store";
 
 // The parts of a shell terminal's tab strip that stand on their own: what a tab holds and does,
@@ -82,7 +81,7 @@ export function TabCloseMark({ title, onClose }: { title: string; onClose: () =>
       >
         <X className="size-3" />
       </span>
-      <AnchoredTooltip tooltip={title} anchor={ref} hovered={hovered} />
+      <Tooltip trigger="anchored" content={title} anchor={ref} hovered={hovered} />
     </>
   );
 }

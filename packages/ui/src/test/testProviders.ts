@@ -21,6 +21,7 @@ export const TEST_AGENT_PROVIDER: ProviderInfo = {
     per_session_trust: false,
     config_sharing: false,
     mcp_inventory: false,
+    ends_command_groups_on_exit: false,
     delivery: { confirms_by_reported_prompt: false, holds_report_for_completion_notice: false, resume_instruction_as_launch_prompt: false },
   },
   quota_windows: { kinds: ["session"], session_window: "session", weekly_all_models: false },

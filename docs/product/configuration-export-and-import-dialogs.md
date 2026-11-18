@@ -126,7 +126,7 @@ accessible name says it needs attention, and while the pointer rests on it or it
 says that this part has something that needs the user's attention. The Settings tab never has one. The first tab is
 open when the review opens.
 
-**Import** is unavailable while the review would import nothing: no Consoles and projects, no Agent accounts, and
+**Import** is disabled while the review would import nothing: no Consoles and projects, no Agent accounts, and
 either no Settings or Settings with every section unchecked. With Agent accounts checked it stays available even with
 every agent unchecked: the three switches of the agent account settings the file carries are applied whichever agents
 are checked.
@@ -370,8 +370,9 @@ while the file is read again, and assistive technology is told that the file was
 
 When reading it again fails, an Alert at the top of the review, titled "Could not read the file again", gives the reason
 with **Try again**, or, for a failure no retry can change, says to choose the file again with a **Choose file** button
-that does so. Meanwhile **Import** is unavailable: its tooltip and description are the Alert's title, and a press of it
-moves keyboard focus to the Alert's button, its focus ring showing only when Import was pressed with a key. The Alert
+that does so. Meanwhile **Import** is unavailable (see "How such a control behaves" in
+`docs/product/controls-unavailable-for-a-reason.md`): its tooltip and description are the Alert's title, and neither a
+press of it nor `Enter` in the review imports anything. The Alert
 goes once the file is read again, or once nothing checked writes settings any more.
 
 ## Applying the import

@@ -25,6 +25,8 @@ pub struct Proc {
     pub ppid: ProcessId,
     /// The terminal session it is in, where the host has them.
     pub sid: Option<ContainerId>,
+    /// The process group it is in, where the host has them: the pid of the group's leader.
+    pub pgid: Option<ProcessId>,
     /// The name of the program it runs, as the system keeps it (cut to 15 or 16 bytes): what
     /// changes when it execs another.
     pub comm: String,
@@ -51,6 +53,7 @@ impl Table {
             },
             ppid: ProcessId(info.ppid as u32),
             sid: info.sid,
+            pgid: info.pgid.map(|pgid| ProcessId(pgid as u32)),
             comm: info.comm,
         }));
         let unlisted: HashSet<ContainerId> = table

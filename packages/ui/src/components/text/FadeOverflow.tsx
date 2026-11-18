@@ -1,8 +1,8 @@
 import React, { useCallback, useLayoutEffect, useRef, useState } from "react";
 
 import { onReducedMotion, prefersReducedMotion } from "../motion/reducedMotion";
-import { AnchoredTooltip } from "../hint/AnchoredTooltip";
 import { ValueTooltipText } from "../hint/ValueTooltipText";
+import { Tooltip } from "../../primitives";
 
 interface Clipped {
   start: boolean;
@@ -426,7 +426,7 @@ export function FadeOverflow({
       onPointerLeave={follows ? () => setHovered(false) : undefined}
     >
       {children}
-      {tooltip !== undefined && <AnchoredTooltip tooltip={tooltip} anchor={anchor} hovered={hovered} />}
+      {tooltip !== undefined && <Tooltip trigger="anchored" content={tooltip} anchor={anchor} hovered={hovered} />}
     </Tag>
   );
 }

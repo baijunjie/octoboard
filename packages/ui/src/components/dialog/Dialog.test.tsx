@@ -15,7 +15,6 @@ import { useDialogAction } from "./dialogHooks";
 import { failureOf, framesAsTimers, settleFrames, trackMountRefocus, withModality } from "./dialogTestSupport";
 import { fakeTimers, runOutTimers } from "../../test/clock";
 import { TextInput } from "../form/TextInput";
-import { TitledControl } from "../hint/TitledControl";
 import { Button, Checkbox, Input, Switch } from "../../primitives";
 import { ExternalLink } from "../text/ExternalLink";
 
@@ -624,9 +623,7 @@ it("does not close on Escape while busy, with a tooltip open or not", () => {
   expect(escapeFrom(submit).closes).toBe(1);
 
   const body = (pending: boolean) => (
-    <TitledControl title="Explained">
-      <Button pending={pending}>Extra</Button>
-    </TitledControl>
+    <Button tooltip="Explained" pending={pending}>Extra</Button>
   );
   const extra = (dialog: Element) => [...dialog.querySelectorAll<HTMLElement>("button")].find((b) => b.textContent === "Extra");
   expect(escapeFrom(extra, { busy: true, body: body(true) })).toEqual({ closes: 0, tooltip: true });

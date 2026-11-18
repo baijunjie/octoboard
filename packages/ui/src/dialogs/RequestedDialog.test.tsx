@@ -620,16 +620,27 @@ it("offers no checkbox at all when every process of an archive is a console sess
   expect(dialog.textContent).toContain("1 process will be stopped.");
 });
 
-it("lists a tree that cannot be kept as a row that is always stopped, with the reason under it and no checkbox, and never sends it to be kept", async () => {
+it("lists a tree that cannot be kept as a checked, unavailable checkbox with the reason as its description, and never sends it to be kept", async () => {
   const unkeepable = { ...TREE, id: "4500:4", command: "node shared.js", keepable: false, unkeepable_reason: "agent_console" as const };
+  const reason = "This process runs in the agent's own terminal, which closes when the session ends, so it cannot be kept.";
   const { daemon } = mount({ kind: "archive-session", session: owner, inspection: { sessions: [owner.id], items: [], processes: [unkeepable, TREE] } }, [owner]);
   await act(async () => {});
   const dialog = document.querySelector("[role=alertdialog]")!;
-  expect(boxes()).toHaveLength(1);
+  expect(boxes()).toHaveLength(2);
+  const [kept, fixed] = boxes();
   expect(dialog.textContent).toContain("node shared.js");
-  expect(dialog.textContent).toContain("This process runs in the agent's own terminal, so it ends with the session and cannot be kept. Start it in a window of its own to keep it running.");
+  expect(fixed.checked).toBe(true);
+  expect(fixed.getAttribute("aria-disabled")).toBe("true");
+  expect(fixed.disabled).toBe(false);
+  expect(document.getElementById(fixed.getAttribute("aria-describedby")!)?.textContent).toBe(reason);
+  expect(kept.hasAttribute("aria-disabled")).toBe(false);
+  // The reason is not written under the command.
+  expect([...dialog.querySelectorAll("p")].some((p) => p.textContent === reason)).toBe(false);
   expect(dialog.textContent).toContain("2 processes will be stopped.");
-  act(() => boxes()[0].click());
+  act(() => fixed.click());
+  expect(fixed.checked).toBe(true);
+  expect(dialog.textContent).toContain("2 processes will be stopped.");
+  act(() => kept.click());
   expect(dialog.textContent).toContain("1 process will be stopped.");
   await submitDialog();
   expect(vi.mocked(daemon.request)).toHaveBeenLastCalledWith({ type: "archive_session", session: owner.id, keep_process_ids: [TREE.id] });

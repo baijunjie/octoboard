@@ -76,9 +76,9 @@ submenu. Focus mode's preview rows are described in "What both views show" in `d
 - **Open in the agent's app** — labelled for the application, as "Open in Claude app" — opens the session's
   conversation in its agent's desktop application (see `docs/product/opening-a-session-in-its-agents-app.md`). It is
   offered on a row only while that agent's application is installed on the daemon's host; a Grok Build row has none.
-  For a session with no conversation yet it is shown unavailable: it can still be focused, and pressing it raises the
-  alert that explains why instead of opening anything. Where there is such a reason, or a warning that the application
-  may not see the conversation, its tooltip carries the sentence under the action's name. Opening the view asks the daemon
+  For a session with no conversation yet it is unavailable, its tooltip saying why, and pressing it does nothing (see
+  "How such a control behaves" in `docs/product/controls-unavailable-for-a-reason.md`). Where the application may not
+  see the conversation, its tooltip carries that warning under the action's name. Opening the view asks the daemon
   afresh which applications are installed, and each row with a conversation is asked about once, as it is listed,
   whether the application can see that conversation.
 - **Reopen** resumes the session and selects it, which closes the view (see "Selecting a session" in

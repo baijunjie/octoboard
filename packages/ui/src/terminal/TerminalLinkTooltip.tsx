@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 
-import { AnchoredTooltip } from "../components/hint/AnchoredTooltip";
 import { ValueTooltipText } from "../components/hint/ValueTooltipText";
 import { TERMINAL_FONT_FAMILY } from "./TerminalController";
 import type { HoveredTerminalLink } from "./links/terminalLinks";
+import { Tooltip } from "../primitives";
 
 /**
  * Tells the target of the OSC 8 hyperlink the pointer is on, which its visible text may differ
@@ -39,9 +39,9 @@ export function TerminalLinkTooltip({
         style={{ left: link.left, top: link.top, width: link.width, height: link.height, fontFamily: TERMINAL_FONT_FAMILY }}
       />
       {/* Keyed so a move straight from one link to another places the tooltip afresh. */}
-      <AnchoredTooltip
+      <Tooltip trigger="anchored"
         key={`${link.uri}\n${link.left},${link.top}`}
-        tooltip={<ValueTooltipText label={anchor} dir="ltr">{link.uri}</ValueTooltipText>}
+        content={<ValueTooltipText label={anchor} dir="ltr">{link.uri}</ValueTooltipText>}
         anchor={anchor}
         hovered
       />

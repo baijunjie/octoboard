@@ -3,7 +3,7 @@ import { act } from "react";
 import { expect, it, vi } from "vitest";
 
 import { HelpTip } from "./HelpTip";
-import { HOVER_CLOSE_DELAY_MS, HOVER_OPEN_DELAY_MS } from "./Hint";
+import { HOVER_CLOSE_DELAY_MS, HOVER_OPEN_DELAY_MS } from "./hintPopover";
 import { activate, enter, leave, mountForTooltip, openPopover, openTooltip, press, tap } from "./tooltipTestSupport";
 import { fakeTimers, runOutTimers } from "../../test/clock";
 

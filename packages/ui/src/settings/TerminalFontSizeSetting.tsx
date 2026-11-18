@@ -1,7 +1,6 @@
 import { RotateCcw } from "lucide-react";
 import React, { useContext, useRef } from "react";
 
-import { TitledControl } from "../components/hint/TitledControl";
 import { useT } from "../i18n/react";
 import { interactionIsTouch } from "../input/lastInput";
 import { Button, NumberField } from "../primitives";
@@ -26,21 +25,20 @@ export function TerminalFontSizeSetting(): React.ReactElement {
     <SettingRow fill searchId="terminal-font-size" label={t("settings.terminalFontSize.label")} description={t("settings.terminalFontSize.description")}>
       <div className="flex min-w-0 items-center gap-2">
         <div className={isDefault ? "invisible" : undefined} aria-hidden={isDefault || undefined}>
-          <TitledControl title={reset}>
-            <Button
-              size="sm"
-              variant="tertiary"
-              iconOnly
-              label={reset}
-              disabled={isDefault}
-              onPress={() => {
-                resetTerminalFontSize();
-                (interactionIsTouch() ? sectionTab() : input.current)?.focus();
-              }}
-            >
-              <RotateCcw className="size-4" />
-            </Button>
-          </TitledControl>
+          <Button
+            tooltip={reset}
+            size="sm"
+            variant="tertiary"
+            iconOnly
+            label={reset}
+            disabled={isDefault}
+            onPress={() => {
+              resetTerminalFontSize();
+              (interactionIsTouch() ? sectionTab() : input.current)?.focus();
+            }}
+          >
+            <RotateCcw className="size-4" />
+          </Button>
         </div>
         <NumberField
           label={t("settings.terminalFontSize.label")}

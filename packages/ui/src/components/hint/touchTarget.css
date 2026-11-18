@@ -1,4 +1,4 @@
-/* A mark that opens a touch popover is a touch target (`IndicatorTooltip`), so on a device that has
+/* A mark that opens a touch popover is a touch target (the mark `Tooltip`), so on a device that has
    a coarse pointer its hit area reaches 24 by 24 CSS pixels, as "Pointer target size" in
    docs/conventions/ui-standard.md asks, where the drawing is smaller: an `::after` that grows to that size
    and never shrinks, so a larger mark is untouched. The query asks about the device, not the input

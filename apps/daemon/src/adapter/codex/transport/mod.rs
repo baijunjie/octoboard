@@ -748,6 +748,14 @@ impl MessageTransport for CodexTransport {
         }
     }
 
+    fn command_host(&self) -> Option<crate::platform::proc::ProcessIdentity> {
+        self.server
+            .lock()
+            .expect("Codex server lock poisoned")
+            .as_ref()
+            .and_then(|server| server.process())
+    }
+
     fn stop(&self) {
         // What the session was told of a wait no longer holds once its server is gone.
         self.shared.end_held();

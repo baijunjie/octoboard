@@ -2430,6 +2430,46 @@ fn stopping_a_transport_leaves_a_server_its_holder_runs_and_ends_one_the_daemon_
     }
 }
 
+/// A server whose process is known, as a holder's companion or a server the daemon runs is.
+struct KnownProcess(crate::platform::proc::ProcessIdentity);
+
+impl RunningServer for KnownProcess {
+    fn exited(&self) -> bool {
+        false
+    }
+
+    fn end(&self) {}
+
+    fn ends_with_its_terminal(&self) -> bool {
+        false
+    }
+
+    fn process(&self) -> Option<crate::platform::proc::ProcessIdentity> {
+        Some(self.0)
+    }
+}
+
+/// The agent's commands run from its app server, so the server's process is the transport's
+/// command host: it is the server's process while the transport has the server, and none where the
+/// server's process is not known or once the transport has let the server go.
+#[test]
+fn the_transport_names_its_servers_process_as_its_command_host() {
+    let identity = crate::platform::proc::ProcessIdentity {
+        pid: crate::platform::proc::ProcessId(4242),
+        start_micros: 1234,
+    };
+    let (_listener, port, token) = listening();
+    let transport = adopted(port, &token, Some("main"), Box::new(KnownProcess(identity)));
+    assert_eq!(transport.command_host(), Some(identity));
+    transport.stop();
+    assert_eq!(transport.command_host(), None);
+
+    let (_listener, port, token) = listening();
+    let (server, _, _) = held_server(true);
+    let transport = adopted(port, &token, Some("main"), server);
+    assert_eq!(transport.command_host(), None);
+}
+
 /// A host whose servers are one fake app server the test listens for, which records what it was
 /// asked and in which order.
 struct RecordingHost {

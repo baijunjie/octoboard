@@ -54,10 +54,6 @@ impl HeldCompanion {
     }
 
     /// The companion's process identity, when the holder could read its start time.
-    #[allow(
-        dead_code,
-        reason = "nothing in the daemon names a companion's process yet"
-    )]
     pub fn identity(&self) -> Option<ProcessIdentity> {
         self.identity
     }

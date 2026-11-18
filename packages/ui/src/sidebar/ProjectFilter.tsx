@@ -5,7 +5,6 @@ import { EmptyPanel } from "../components/panel/EmptyPanel";
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import { FieldClearButton } from "../components/controls/FieldClearButton";
 import { Tag } from "../components/form/Tag";
-import { TitledControl } from "../components/hint/TitledControl";
 import { useListMotion } from "../components/motion/useListMotion";
 import { usePointerFocusReturn } from "../components/menus/usePointerFocusReturn";
 import { useScrollFade } from "../components/scroll/scrollFade";
@@ -100,19 +99,18 @@ export function ProjectFilterButton({
   // Keep the trigger mounted when its action changes so clearing or closing preserves keyboard
   // focus. A clear action has no popup; the controlled open callback handles that press instead.
   const trigger = (
-    <TitledControl title={label}>
-      <Button
-        iconOnly
-        size="xs"
-        variant="ghost"
-        label={label}
-        focusOnPress={false}
-        hasPopup={clearAction ? false : undefined}
-        className="shrink-0 rounded-md text-app-muted hover:text-foreground"
-      >
-        {filtering ? <FunnelX className="size-4" /> : <Funnel className="size-4" />}
-      </Button>
-    </TitledControl>
+    <Button
+      tooltip={label}
+      iconOnly
+      size="xs"
+      variant="ghost"
+      label={label}
+      focusOnPress={false}
+      hasPopup={clearAction ? false : undefined}
+      className="shrink-0 rounded-md text-app-muted hover:text-foreground"
+    >
+      {filtering ? <FunnelX className="size-4" /> : <Funnel className="size-4" />}
+    </Button>
   );
 
   return (

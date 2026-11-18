@@ -45,8 +45,9 @@ write to the conversation.
 
 **A session with no conversation yet** (see "Done, awaiting instructions and child sessions working" in
 `docs/product/session-statuses.md`) has nothing to open: the action is disabled with "No conversation yet". In the
-archive view the button is shown unavailable rather than disabled: it can still be focused, its tooltip gives the
-reason, and pressing it raises the alert described in "When opening fails" below, with that reason as its message.
+archive view the button is unavailable rather than disabled: its tooltip and its description for assistive technology
+give the reason, and pressing it does nothing (see "How such a control behaves" in
+`docs/product/controls-unavailable-for-a-reason.md`).
 
 The daemon refuses the open, with nothing changed, while the session:
 

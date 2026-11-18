@@ -84,7 +84,7 @@ export function SettingSwitch({
   isSelected,
   onChange,
   describedBy,
-  isUnavailable,
+  unavailable,
   opensFocused,
 }: {
   label: string;
@@ -92,17 +92,17 @@ export function SettingSwitch({
   onChange: SwitchChange;
   /** The ids of the notes that describe the switch. */
   describedBy?: string;
-  /** The switch cannot be changed now: for a reason `describedBy` gives, or only for as long as an operation it
-   * started is unanswered, which needs no note. It is not natively disabled, which would take
+  /** The switch cannot be changed now: for a reason, which is its tooltip and description (see `Switch`), or, given
+   * `true`, only for as long as an operation it started is unanswered, which needs no note. It is not natively disabled, which would take
    * it out of the Tab order and drop focus from a user who is on it: it stays focusable, reads as `aria-disabled`,
    * looks faded, and a press or Space leaves it as it is. */
-  isUnavailable?: boolean;
+  unavailable?: React.ReactNode;
   /** The switch is where the dialog around it puts focus on opening (see `openingFocus`). */
   opensFocused?: boolean;
 }): React.ReactElement {
   const saving = useRef(false);
   const change = (value: boolean) => {
-    if (isUnavailable || saving.current) return;
+    if (unavailable || saving.current) return;
     const save = onChange(value);
     if (!save) return;
     saving.current = true;
@@ -114,11 +114,10 @@ export function SettingSwitch({
     <Switch
       label={label}
       describedBy={describedBy}
-      unavailable={isUnavailable}
+      unavailable={unavailable}
       opensFocused={opensFocused}
       selected={isSelected}
       onSelectedChange={change}
-      className={isUnavailable ? "opacity-(--disabled-opacity)" : undefined}
     />
   );
 }

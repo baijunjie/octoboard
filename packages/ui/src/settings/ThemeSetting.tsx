@@ -1,10 +1,9 @@
 import { Monitor, Moon, Sun } from "lucide-react";
 import React from "react";
 
-import { TitledControl } from "../components/hint/TitledControl";
 import { useT } from "../i18n/react";
 import { useOctoboardTheme } from "../preferences/theme";
-import { ToggleButton, ToggleButtonGroup } from "../primitives";
+import { ToggleButton, ToggleButtonGroup, Tooltip } from "../primitives";
 import { SettingRow } from "./SettingRow";
 
 const OPTIONS = [
@@ -31,11 +30,11 @@ export function ThemeSetting(): React.ReactElement {
         }}
       >
         {OPTIONS.map(({ key, label, Icon }) => (
-          <TitledControl key={key} title={t(label)}>
+          <Tooltip key={key} content={t(label)}>
             <ToggleButton id={key} size="sm" iconOnly label={t(label)} focusOnPress={false}>
               <Icon className="size-4" />
             </ToggleButton>
-          </TitledControl>
+          </Tooltip>
         ))}
       </ToggleButtonGroup>
     </SettingRow>

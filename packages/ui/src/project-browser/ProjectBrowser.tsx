@@ -6,7 +6,6 @@ import { handFocusOff } from "../components/focus/handFocusOff";
 import { HandoffOnUnmount } from "../components/focus/HandoffOnUnmount";
 import { handFocusToRegionStart } from "../components/focus/modalFocus";
 import { Button, Tab, TabList, TabListContainer, TabPanel, Tabs } from "../primitives";
-import { TitledControl } from "../components/hint/TitledControl";
 import { ROW_ICON_BUTTON_CLASS } from "../components/controls/RowControls";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { useT } from "../i18n/react";
@@ -140,11 +139,9 @@ export function ProjectBrowser({
                   foldDirectories={mode === "git" ? git.foldDirectories : undefined}
                   layout={mode === "git" ? { value: browser.layout, onChange: browser.setLayout } : undefined}
                 />
-                <TitledControl title={t("browser.refresh")}>
-                  <Button ref={refreshRef} iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={t("browser.refresh")} focusOnPress={false} onPress={pressRefresh}>
-                    <RefreshCw className={spinning > 0 ? "size-4 motion-safe:animate-spin-slow" : "size-4"} />
-                  </Button>
-                </TitledControl>
+                <Button tooltip={t("browser.refresh")} ref={refreshRef} iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={t("browser.refresh")} focusOnPress={false} onPress={pressRefresh}>
+                  <RefreshCw className={spinning > 0 ? "size-4 motion-safe:animate-spin-slow" : "size-4"} />
+                </Button>
               </div>
             }
           >

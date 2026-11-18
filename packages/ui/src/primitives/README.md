@@ -42,7 +42,7 @@ such a part itself (a tag drawn outside a tag group, a group's error message), t
   on. It is removed from call sites and the global stylesheet's rule bodies. A treatment that only some uses need is a
   prop of the wrapper, not a class each call site repeats.
 - **Hooks and utilities.** A `react-aria` hook the application uses is wrapped by a project hook with the project's
-  arguments and results (`useKeyboardModality`, `useFocusVisibleProps`, `useObjectRef`, `useTooltipState`). A utility
+  arguments and results (`useKeyboardModality`, `useFocusVisibleProps`, `useObjectRef`). A utility
   that is neither a component nor a hook (`mergeRefs`) is re-exported from the entry point, with its type redefined
   here where it would otherwise bring a third-party type into a consumer's code; only the ones the application uses
   are exported, and one only a wrapper needs (`mergeProps`, `parseColor`) stays inside it.
@@ -82,6 +82,12 @@ such a part itself (a tag drawn outside a tag group, a group's error message), t
   (`ListBox`, `Tree`, `TagGroup`, `ColorSwatchPicker`) leaves it to its items and buttons, which take it. A control
   drawn without a wrapper reads `useBusy` and renders itself unavailable. Never `inert`: assistive technology still
   reads the disabled controls.
+- **There is one tooltip, `Tooltip`** (`Tooltip.tsx`), with a `trigger` kind for what carries it (`control`, `mark`,
+  `anchored`, and the internal `box` a `Switch` or a `Checkbox` uses for its visible part); `tooltipParts.tsx` holds the
+  HeroUI parts it is assembled from and stays off the barrel but for `tooltipSurfaceClassName`. `Button`, `Switch` and
+  `Checkbox` carry their own tooltip (`tooltip`) and the reason they are unavailable (`unavailable`, shared handling in
+  `unavailable.tsx`), and a dev-time guard (`useOwnTooltipGuard`) reports one wrapped in a `Tooltip`. A touch popover
+  drawn like the tooltip stands in where a tap has no other action; its generic name comes from `PrimitiveLabels.tooltip`.
 - **Tests sit beside the wrapper**, covering what it adds or translates (prop mapping, a treatment, focus or press
   behaviour it must keep); the component's own behaviour is HeroUI's to test. `testSupport.tsx` holds the helpers they
   share (`mount`, `pressWithMouse`), self-contained like the rest of the layer.

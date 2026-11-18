@@ -9,8 +9,8 @@ import { mount } from "./testSupport";
 
 type Orientation = "vertical" | "horizontal";
 
-const FIRST: PrimitiveLabels = { scrollTabs: { up: "Up 1", down: "Down 1", left: "Left 1", right: "Right 1" } };
-const SECOND: PrimitiveLabels = { scrollTabs: { up: "Up 2", down: "Down 2", left: "Left 2", right: "Right 2" } };
+const FIRST: PrimitiveLabels = { scrollTabs: { up: "Up 1", down: "Down 1", left: "Left 1", right: "Right 1" }, tooltip: "Hint 1" };
+const SECOND: PrimitiveLabels = { scrollTabs: { up: "Up 2", down: "Down 2", left: "Left 2", right: "Right 2" }, tooltip: "Hint 2" };
 
 function Strip({ orientation, labels }: { orientation: Orientation; labels: PrimitiveLabels }): React.ReactElement {
   return (

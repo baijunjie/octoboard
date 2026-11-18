@@ -23,8 +23,10 @@ export const partSelector = {
   disabledControl: '[data-disabled="true"]',
   /** A `Button` that is `pending`. */
   pendingButton: "[data-pending=true]",
-  /** What wraps a `Tooltip`'s trigger (`TooltipTrigger`); not the `phrasing` form, whose span is not marked. */
+  /** What wraps the trigger of a mark `Tooltip` (`trigger="mark"`); not the `phrasing` form, whose span is not marked. */
   tooltipTrigger: "[data-slot=tooltip-trigger]",
+  /** The visible box of a `Switch` (its track) or a `Checkbox`, which the hidden input behind it is not. */
+  toggleBox: ".switch__control, .checkbox__control",
   /** The region the toasts are stacked in (`ToastRegion`), and one toast in it. */
   toastRegion: "[data-slot=toast-region]",
   toast: "[data-slot=toast]",

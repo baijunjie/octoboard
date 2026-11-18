@@ -330,9 +330,6 @@ export const en = {
   "daemon.console_has_running_sessions.recovery": "Archive the running ones, or wait for the ones that are starting to finish.",
   "daemon.project_has_running_sessions.summary": "This project still has sessions that are running or starting.",
   "daemon.project_has_running_sessions.recovery": "Archive the running ones, or wait for the ones that are starting to finish.",
-  "daemon.process_shares_agent_console.summary":
-    "This process runs in the agent's own terminal, so it ends with the session and cannot be kept.",
-  "daemon.process_shares_agent_console.recovery": "Start it in a window of its own to keep it running.",
   "daemon.write_conflict.summary": "A change was made elsewhere after you last saw this, so nothing was saved.",
   "daemon.write_conflict.recovery": "Check the current value, then make your change again.",
   "daemon.process_not_stopped.summary": "The process or some of its child processes are still running after the app tried to stop them.",
@@ -479,8 +476,8 @@ export const en = {
     "This console still has sessions that are running or starting. Archive the running ones, or wait for the ones that are starting to finish.",
   "daemon.project_has_running_sessions":
     "This project still has sessions that are running or starting. Archive the running ones, or wait for the ones that are starting to finish.",
-  "daemon.process_shares_agent_console":
-    "This process runs in the agent's own terminal, so it ends with the session and cannot be kept. Start it in a window of its own to keep it running.",
+  "daemon.process_shares_agent_console": "This process runs in the agent's own terminal, which closes when the session ends, so it cannot be kept.",
+  "daemon.process_in_agent_command_group": "This process runs inside a command the agent is still running, and the agent ends it when it exits, so it cannot be kept.",
   "daemon.write_conflict": "A change was made elsewhere after you last saw this, so nothing was saved. Check the current value, then make your change again.",
   "daemon.process_not_stopped": "The process or some of its child processes are still running after the app tried to stop them. Try again in a moment.",
   "daemon.process_not_stopped.accessDenied": "The app does not have permission to stop the process or some of its child processes, so they are still running. To stop them, run the app with the same permissions as those processes.",
@@ -3478,6 +3475,4 @@ export const en = {
   "processes.refreshFailed": "The processes shown may be out of date.",
   "processes.stopFailedTitle": "Could not stop the process",
   "processes.keepFailedTitle": "Could not keep the process",
-  "processes.keepRefusedTitle": "Cannot keep the process",
-  "processes.unkeepableUnknownReason": "The app does not recognise why.",
 } as const;

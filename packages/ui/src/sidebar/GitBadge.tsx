@@ -9,7 +9,6 @@ import { CodedError } from "../errors/codedError";
 import { CODE } from "../errors/codes";
 import { classifyError } from "../errors/errorRecovery";
 import { FadeOverflow } from "../components/text/FadeOverflow";
-import { IndicatorTooltip } from "../components/hint/IndicatorTooltip";
 import { focusHolderOrButton } from "../components/focus/handFocusOff";
 import { StatusMark } from "../components/status/StatusMark";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
@@ -18,7 +17,7 @@ import { gitBadgeAriaLabel, gitFailureLabel, gitFailureShown } from "../git/gitS
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { GitStatus } from "../protocol";
 import { useDaemon } from "../store";
-import { Button, WaitingIcon } from "../primitives";
+import { Button, Tooltip, WaitingIcon } from "../primitives";
 import type { GitRetried } from "./useGitRetryAnnouncement";
 
 function ScrollingCountArrow({ direction }: { direction: "up" | "down" }): React.ReactElement {
@@ -97,7 +96,7 @@ function GitNotFoundMark({ project, error, onRetried }: { project: string; error
  * holds focus (a check starting, or succeeding), focus goes to `returnFocusTo` (itself when it is a tab stop, else its
  * first button), as for any control a state change removes.
  *
- * The rest of the badge is one `IndicatorTooltip` (hover only, so it adds no tab stop to its row)
+ * The rest of the badge is one `Tooltip` of the mark kind (hover only, so it adds no tab stop to its row)
  * whose rich facts mirror the accessible-name sentence: one tooltip for the glyph, the branch and
  * both counts, rather than one per part, so the branch name can still be read once it is squeezed
  * away. The one state with no tooltip is the one showing "No commits yet" as visible text, which a
@@ -109,7 +108,7 @@ function GitNotFoundMark({ project, error, onRetried }: { project: string; error
  * `aria-label` there). The tooltip's trigger is then unnamed and its contents are `aria-hidden`, as
  * the whole badge always was in a row, so the branch and the counts are not read twice; the
  * focus-mode header badge is not inside such a row, so its trigger keeps the name and its contents
- * stay exposed. Hiding the contents rather than the trigger is what `IndicatorTooltip` allows
+ * stay exposed. Hiding the contents rather than the trigger is what the mark `Tooltip` allows
  * without a change of its own, and it costs nothing: the trigger, which stays outside the hidden
  * wrapper, is `tabIndex={-1}`, and nothing inside the wrapper is focusable.
  *
@@ -200,7 +199,7 @@ export function GitBadge({
     );
   } else if (label) {
     facts = (
-      <IndicatorTooltip tooltip={gitBadgeContent(language, t, status)} label={decorative ? undefined : label} labelRepeatsTooltip className={className} touchPopover={touchPopover}>
+      <Tooltip trigger="mark" content={gitBadgeContent(language, t, status)} label={decorative ? undefined : label} labelRepeatsTooltip className={className} touchPopover={touchPopover}>
         {/* `contents` keeps the glyph, branch and counts the trigger's own grid items. */}
         {decorative ? (
           <span aria-hidden="true" className="contents">
@@ -209,7 +208,7 @@ export function GitBadge({
         ) : (
           content
         )}
-      </IndicatorTooltip>
+      </Tooltip>
     );
   }
   if (!failed) return facts;

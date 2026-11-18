@@ -234,6 +234,7 @@ pub(crate) fn list() -> Option<Vec<ProcInfo>> {
                     start: process.start()?,
                     ppid: listed.ppid as i32,
                     sid: None,
+                    pgid: None,
                     comm: listed.name,
                 })
             })

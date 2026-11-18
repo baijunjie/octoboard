@@ -11,8 +11,8 @@ import { Message } from "../i18n/react";
  * open again; the other refusals (a download under way, `daemon_update_running`; the daemon already stopping,
  * `daemon_shutting_down`; holders inside the daemon's systemd unit, `holders_in_service`, whose own copy names the
  * command; an agent's CLI being updated, `agent_update_running`) have their own sentence only. The window foresees the
- * last (`UpdateState.restartBlocked` leaves Restart now unavailable, whose press raises this alert with that code), so
- * from the daemon it arrives only when the update began after the press. */
+ * last (`UpdateState.restartBlocked` leaves Restart now unavailable), so from the daemon it arrives only when the
+ * update began after the press. */
 export function reportDaemonRestartFailure(refusal: CodedError): void {
   raiseError(refusal, {
     title: t("exit.daemonRestartFailed.title"),

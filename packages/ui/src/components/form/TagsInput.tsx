@@ -3,10 +3,9 @@ import React, { useRef, useState } from "react";
 import { MotionListBox } from "../motion/MotionListBox";
 import { Tag } from "./Tag";
 import { InlineReference } from "../../i18n/InlineReference";
-import { AnchoredTooltip } from "../hint/AnchoredTooltip";
 import { useListMotion } from "../motion/useListMotion";
 import { Message, useT } from "../../i18n/react";
-import { ComboBox, ComboBoxInputGroup, ComboBoxPopover, ComboBoxTrigger, Description, Input, Label, ListBoxItem, TagGroup, TagList, useBusy, useKeyboardModality } from "../../primitives";
+import { ComboBox, ComboBoxInputGroup, ComboBoxPopover, ComboBoxTrigger, Description, Input, Label, ListBoxItem, TagGroup, TagList, Tooltip, useBusy, useKeyboardModality } from "../../primitives";
 
 const GROUP_CLASS =
   "relative flex min-h-9 w-full flex-wrap items-center gap-1.5 rounded-field border border-(--field-border) bg-default py-1 ps-2 pe-8 [border-width:var(--border-width-field)] transition-[background-color,border-color,box-shadow] has-[input:focus]:border-(--field-border-focus) has-[input:focus]:ring-2 has-[input:focus]:ring-focus not-has-[input:focus]:hover:bg-default-hover not-has-[input:focus]:hover:border-(--field-border-hover) motion-reduce:transition-none";
@@ -187,7 +186,7 @@ function SuggestionsTrigger({ label, isDisabled }: { label: string; isDisabled?:
         onHoverStart={(button) => { anchor.current = button; }}
         onHoverChange={setHovered}
       />
-      <AnchoredTooltip key={String(focused)} tooltip={label} anchor={anchor} hovered={!isDisabled && (isHovered || focused)} immediate={focused} />
+      <Tooltip trigger="anchored" key={String(focused)} content={label} anchor={anchor} hovered={!isDisabled && (isHovered || focused)} immediate={focused} />
     </>
   );
 }

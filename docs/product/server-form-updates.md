@@ -216,13 +216,13 @@ under way (a restart would end it), while the daemon is already stopping or rest
 which takes a second request as the first), while a holder inside the daemon's own systemd service runs a session
 (see "Where a holder cannot be started as a unit of its own" in `docs/product/server-form.md`; the alert names
 `systemctl`), and while an update of an agent's CLI runs (`agent_update_running`; a restart would cut it off
-mid-install). The page foresees only the last: while an update of any agent's CLI runs, **Restart now**, in the notice
-and in Settings, is unavailable — faded, still focusable, its tooltip and accessible description saying that an agent
-is being updated and to restart when the update finishes — and pressing it sends nothing and opens that same alert,
-saying that restarting the daemon now could leave the agent partly updated and to try again when the update finishes.
-It becomes available again once the agent update ends. If an agent update blocked the automatic restart after
+mid-install). The page foresees only the last: while an update of any agent's CLI runs, **Restart now**, on the rail,
+in the notice and in Settings, is unavailable, its tooltip and accessible description saying that an agent is being
+updated and to restart when the update finishes, and pressing it does nothing (see "How such a control behaves" in
+`docs/product/controls-unavailable-for-a-reason.md`). It becomes available again once the agent update ends. If an agent update blocked the automatic restart after
 installation, it does not retry when that update ends; **Restart now** remains for the user to press. The alert still
-comes from the daemon when an agent update began after the press. A page whose connection to the daemon is not open sends nothing and says that the connection is
+comes from the daemon when an agent update began after the press, saying that restarting the daemon now could leave
+the agent partly updated and to try again when the update finishes. A page whose connection to the daemon is not open sends nothing and says that the connection is
 closed. `octoboardd restart` on the server
 restarts into the update just the same.
 

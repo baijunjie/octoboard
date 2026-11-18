@@ -685,6 +685,14 @@ export type Capabilities = {
    * Can list an account's MCP servers and platform connectors (`read_account_mcp_inventory`).
    */
   mcp_inventory: boolean,
+  /**
+   * Ends the process groups of the commands it still has running as it exits, so a process in
+   * such a group ends with the session whatever keeps it. Each command's group is led by a
+   * descendant of the process that runs the commands (the agent, or the server it runs them
+   * from, `crate::session::term::MessageTransport::command_host`), reached from the runner
+   * without another group leader in between.
+   */
+  ends_command_groups_on_exit: boolean,
   delivery: DeliveryQuirks,
 };
 
@@ -6391,7 +6399,7 @@ export type TerminalAppearance = "light" | "dark";
 /**
  * Why a tree cannot be kept.
  */
-export type UnkeepableReason = "agent_console";
+export type UnkeepableReason = "agent_console" | "agent_command_group";
 
 /**
  * A process a `stop_processes` left running: still running once the stop was through with it.

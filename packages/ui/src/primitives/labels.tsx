@@ -6,6 +6,9 @@ import React, { createContext, useContext } from "react";
 export interface PrimitiveLabels {
   /** A tab strip's scroll buttons, by the way each scrolls. */
   scrollTabs: { up: string; down: string; left: string; right: string };
+  /** The generic name of the popover a tap opens in place of a tooltip, where no better name fits (a `Tooltip`'s touch
+   * popover). */
+  tooltip: string;
 }
 
 const PrimitiveLabelsContext = createContext<PrimitiveLabels | undefined>(undefined);

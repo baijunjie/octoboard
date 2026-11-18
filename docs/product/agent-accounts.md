@@ -418,8 +418,9 @@ while the dialog is open. The line is left out while a change runs and while the
 account has none. The switch's accessible name
 identifies the account. A change is carried out at once or not at all (see "When a change is carried out" in
 `docs/product/sharing-the-default-configuration.md`), so the switch is either free to use or unavailable, and says
-which. Unavailable, it looks disabled but stays focusable and is marked unavailable for assistive technology; a press on
-it is ignored, and what is shown under the row's line says why.
+which. Unavailable, it follows "How such a control behaves" in `docs/product/controls-unavailable-for-a-reason.md`: a
+press on it is ignored, and where there is a reason, its tooltip and its description for assistive technology say why,
+with nothing under the row's line repeating it.
 
 A help tip beside the row's name says, one line each, that configuration (skills, plugins, settings and more) and
 conversation history are linked to the default account's directory, what is never shared for the selected agent, and
@@ -436,24 +437,25 @@ incomplete change can therefore only be tried again in the same direction; it ca
 succeeds. The one exception is turning sharing on that failed because the default account's directory has moved since
 sharing was turned on (the cause `default_moved`), which asking again cannot mend: the switch then shows the recorded
 choice, on, and turning it off, then on again, shares the new directory. Every window shows the same state, from the
-account's sharing state (see "The account's sharing state" in `docs/product/sharing-the-default-configuration.md`). What
-stands under the row's line is the switch's description for assistive technology:
+account's sharing state (see "The account's sharing state" in `docs/product/sharing-the-default-configuration.md`). The
+reason the switch is unavailable, where it has one, is its tooltip and its description for assistive technology:
 
-| State | The switch | Under it |
+| State | The switch | Its reason |
 |---|---|---|
-| Free, off or on, with or without idle sessions of the account | Can be turned | Nothing beyond the row's line, which says what turning it on does or that the account shares; the idle sessions a change would end are in the help tip. |
+| Free, off or on, with or without idle sessions of the account | Can be turned | None; the row's line says what turning it on does or that the account shares, and the idle sessions a change would end are in the help tip. |
 | Sessions of the account working | Unavailable | That sharing cannot be changed while that many of the account's sessions are working, and to wait for them to finish. Which sessions count as working is in "When a change is carried out" in `docs/product/sharing-the-default-configuration.md`. |
-| The account being signed in | Unavailable | That sharing cannot be changed while the account is being signed in. With sessions running too, both lines are shown. |
+| The account being signed in | Unavailable | That sharing cannot be changed while the account is being signed in. With sessions working too, both, one line each. |
 | The daemon's host cannot make the file links sharing is made of — Windows without Developer Mode, say — and the switch showing off | Unavailable | The refusal's message: that the computer running the daemon cannot share the default configuration, and how to turn on Developer Mode (see "The sharing choice" in `docs/product/sharing-the-default-configuration.md`). It takes the place of the lines about sessions and signing in. |
-| The daemon's host cannot make those file links, and the switch showing on | Can be turned, to turn sharing off | Nothing beyond the row's line, with nothing about the host; once sharing is off, the row above applies and its message explains why it cannot be turned on again. While sessions of the account are working or it is being signed in, the switch is unavailable and the lines about those show, as in the rows above. |
-| A change running | Unavailable | A progress bar (below). |
-| The last change incomplete | Its position before that change (on, after a moved default directory) | Nothing; an amber warning mark follows the switch (below), and the switch is described by the mark's title. |
+| The daemon's host cannot make those file links, and the switch showing on | Can be turned, to turn sharing off | None, and nothing about the host; once sharing is off, the row above applies and its message explains why it cannot be turned on again. While sessions of the account are working or it is being signed in, the switch is unavailable with the lines about those, as in the rows above. |
+| A change running | Unavailable | None: a progress bar (below) describes it. |
+| The last change incomplete | Its position before that change (on, after a moved default directory) | None; an amber warning mark follows the switch (below), and the switch is described by the mark's title. |
 
 Text typed into an idle session's terminal but not yet sent is not seen, and is lost when the change ends that session
 (see "When a change is carried out" in `docs/product/sharing-the-default-configuration.md`); the switch does not warn
 of it.
 
-A reason the account is in use stays under the row's line alongside a progress bar or the warning mark. The progress
+While the account's sessions are working or it is being signed in, that reason is the switch's tooltip and description
+alongside a progress bar or the warning mark too, in place of the description they give it. The progress
 bar stands under the row, across its width. The switch is also
 unavailable while this window's own request for a change is still unanswered, and shows the recorded choice meanwhile.
 

@@ -68,7 +68,7 @@ export const consoleSessionsScenarios: Scenario[] = [
     description: "The pointer rests on the sidebar header's plus: its tooltip says New console session and shows the New session shortcut as key caps at its end, the same as the focus header's plus. Set Modifier to Held to see it read New console session with defaults with the quick-create shortcut.",
     state,
     // Named plain or quick: the viewer's Held choice names the button for its quick form.
-    steps: [(ui) => ui.hoverTitledControl(describing("The sidebar header's new-session button, plain or quick", (name) => name === ui.t("sidebar.consoleSessions.new") || name === ui.t("sidebar.consoleSessions.newQuick")))],
+    steps: [(ui) => ui.hoverTooltip(describing("The sidebar header's new-session button, plain or quick", (name) => name === ui.t("sidebar.consoleSessions.new") || name === ui.t("sidebar.consoleSessions.newQuick")))],
   },
   {
     id: "console-session-colour-submenu",

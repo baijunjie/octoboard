@@ -9,7 +9,6 @@ import { AttendedStatusAnnouncer } from "../../components/announce/AttendedStatu
 import { StatusAnnouncer } from "../../components/announce/StatusAnnouncer";
 import { ROW_ICON_BUTTON_CLASS } from "../../components/controls/RowControls";
 import { focusHandoffTarget, useHandoffAfterRemoval } from "../../components/focus/HandoffOnUnmount";
-import { TitledControl } from "../../components/hint/TitledControl";
 import { EmptyPanel } from "../../components/panel/EmptyPanel";
 import { DotStatusBadge } from "../../components/status/DotStatusBadge";
 import { StatusMark } from "../../components/status/StatusMark";
@@ -38,11 +37,9 @@ export function McpInventoryAside({ state, refreshButton }: { state: McpInventor
       {state.reading
         ? <span>{t("settings.accounts.mcp.refreshing")}</span>
         : inventory && !inventory.unavailable && <UpdatedAge at={inventory.read_at} copy={{ now: "settings.accounts.mcp.updatedNow", age: "settings.accounts.mcp.updated" }} />}
-      <TitledControl title={t("settings.accounts.mcp.refresh")}>
-        <Button ref={refreshButton} iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={t("settings.accounts.mcp.refresh")} focusOnPress={false} pending={state.reading} dimWhilePending={false} pendingIndicator={<RefreshCw className="size-4 motion-safe:animate-spin-slow" />} onPress={state.refresh}>
-          <RefreshCw className="size-4" />
-        </Button>
-      </TitledControl>
+      <Button tooltip={t("settings.accounts.mcp.refresh")} ref={refreshButton} iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={t("settings.accounts.mcp.refresh")} focusOnPress={false} pending={state.reading} dimWhilePending={false} pendingIndicator={<RefreshCw className="size-4 motion-safe:animate-spin-slow" />} onPress={state.refresh}>
+        <RefreshCw className="size-4" />
+      </Button>
     </span>
   );
 }

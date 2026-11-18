@@ -6,7 +6,6 @@ import React, { useRef } from "react";
 
 import { IconToggle } from "../../components/controls/IconToggle";
 import { ROW_ICON_BUTTON_CLASS, RowIconGroup } from "../../components/controls/RowControls";
-import { TitledControl } from "../../components/hint/TitledControl";
 import { handFocusOff } from "../../components/focus/handFocusOff";
 import { useCurrentLanguage, useT } from "../../i18n/react";
 import { SECTION_LABELS, foldRows, holderOf, sectionKey, type ChangeNode, type ChangeSection } from "./changes";
@@ -170,16 +169,15 @@ export function ChangeSectionHeading({
       {band}
       <RowIconGroup>
         {byCommit?.value && (
-          <TitledControl title={foldLabel}>
-            <Button
-              iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS}
-              label={foldLabel} tabStop={false} data-section-heading-control=""
-              disabled={commitKeys.length === 0} focusOnPress={false}
-              onPress={foldCommits}
-            >
-              {hasOpenCommit ? <ChevronsDownUp className="size-4" /> : <ChevronsUpDown className="size-4" />}
-            </Button>
-          </TitledControl>
+          <Button
+            tooltip={foldLabel}
+            iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS}
+            label={foldLabel} tabStop={false} data-section-heading-control=""
+            disabled={commitKeys.length === 0} focusOnPress={false}
+            onPress={foldCommits}
+          >
+            {hasOpenCommit ? <ChevronsDownUp className="size-4" /> : <ChevronsUpDown className="size-4" />}
+          </Button>
         )}
         {byCommit && (
           <IconToggle inHeader label={t(byCommit.value ? "git.layout.allCommits" : "git.layout.byCommit")} isSelected={byCommit.value} onChange={byCommit.onChange}>

@@ -2,7 +2,6 @@ import { SquareArrowOutUpRight } from "lucide-react";
 import React, { useEffect, useLayoutEffect, useRef } from "react";
 
 import { useHandoffAfterRemoval } from "../components/focus/HandoffOnUnmount";
-import { TitledControl } from "../components/hint/TitledControl";
 import { ValueTooltipText } from "../components/hint/ValueTooltipText";
 import { useListMotion } from "../components/motion/useListMotion";
 import { FadedScroller } from "../components/scroll/scrollFade";
@@ -86,19 +85,22 @@ function ForwardRow({ forward, name, handoff, onOpen, onStop }: {
   return (
     <li data-list-motion={String(forward.remotePort)} className="flex min-w-0 items-center gap-1">
       {handoff(`li[data-list-motion="${forward.remotePort}"] [data-forward-stop]`)}
-      <TitledControl title={<ValueTooltipText label={address} dir="ltr">{forward.address}</ValueTooltipText>} placement="end">
-        <Button variant="ghost" size="sm" className="h-auto min-h-0 min-w-0 flex-1 justify-start gap-2 rounded-lg px-2 py-1.5 font-normal"
-          label={t("forwards.open", { address: shownAddress(forward.localAddress), port: String(forward.remotePort), name })}
-          // The tooltip repeats the address the name already says.
-          describedBy=""
-          onPress={() => onOpen(forward)}>
-          <span className="flex min-w-0 flex-1 flex-col text-start">
-            <FadeOverflow ref={address} as="span" dir="ltr" className="block font-semibold">{shownAddress(forward.localAddress)}</FadeOverflow>
-            <FadeOverflow as="span" dir="auto" className="block text-xs text-app-muted">{t("forwards.remote", { port: String(forward.remotePort), name })}</FadeOverflow>
-          </span>
-          <SquareArrowOutUpRight className="-me-0.5 size-3.5 shrink-0 text-app-muted" />
-        </Button>
-      </TitledControl>
+      <Button
+        tooltip={<ValueTooltipText label={address} dir="ltr">{forward.address}</ValueTooltipText>}
+        tooltipPlacement="end"
+        variant="ghost"
+        size="sm"
+        className="h-auto min-h-0 min-w-0 flex-1 justify-start gap-2 rounded-lg px-2 py-1.5 font-normal"
+        label={t("forwards.open", { address: shownAddress(forward.localAddress), port: String(forward.remotePort), name })}
+        // The tooltip repeats the address the name already says.
+        describedBy=""
+        onPress={() => onOpen(forward)}>
+        <span className="flex min-w-0 flex-1 flex-col text-start">
+          <FadeOverflow ref={address} as="span" dir="ltr" className="block font-semibold">{shownAddress(forward.localAddress)}</FadeOverflow>
+          <FadeOverflow as="span" dir="auto" className="block text-xs text-app-muted">{t("forwards.remote", { port: String(forward.remotePort), name })}</FadeOverflow>
+        </span>
+        <SquareArrowOutUpRight className="-me-0.5 size-3.5 shrink-0 text-app-muted" />
+      </Button>
       <Button size="xs" variant="danger-soft" className="shrink-0" label={t("forwards.stopNamed", { port: String(forward.remotePort) })} focusOnPress={false} data-forward-stop="" onPress={() => onStop(forward)}>
         {t("forwards.stop")}
       </Button>

@@ -284,7 +284,8 @@ const CORE_CODES = {
   // A stop the daemon answered with processes it left running (`processes_stopped`'s `not_stopped`), worded by why
   // the first of them was left.
   process_not_stopped: { origin: "ui", recovery: "none", recoveryLine: true, variantOf: (params) => params.reason === "access_denied" ? "accessDenied" : undefined },
-  process_shares_agent_console: { origin: "daemon", recovery: "none", recoveryLine: true },
+  process_in_agent_command_group: { origin: "daemon", recovery: "none" },
+  process_shares_agent_console: { origin: "daemon", recovery: "none" },
   // The failure it nests (`reason_code`) words it only where Git could not be found, whose remedy (`classifyError`) is
   // to install Git, before looking at what was left: any other reason stays the raw text of its `detail`.
   project_branches_not_determined: { origin: "daemon", recovery: "projectBranches", alertTitle: true, detailBlock: true, summaryForDetail: false, nameParams: ["name"], uiParams: { git: "Git", pathVar: "PATH" }, variants: { git: { nameParams: ["name"], codeParams: ["pathVar"] } }, variantOf: (params) => params.reason_code === "binary_not_found" && params.binary === "git" ? "git" : undefined },

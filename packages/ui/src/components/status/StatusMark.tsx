@@ -3,7 +3,7 @@ import React from "react";
 
 import { useT } from "../../i18n/react";
 import { DiagnosticBlock } from "../alerts/DiagnosticBlock";
-import { Hint } from "../hint/Hint";
+import { PopoverHint } from "../hint/hintPopover";
 import { usePopoverOwnerProps } from "../hint/popoverOwner";
 import { FadedScroller, useFadeRegion } from "../scroll/scrollFade";
 import { Button } from "../../primitives";
@@ -173,8 +173,7 @@ function PopoverMark({
     }));
   };
   return (
-    <Hint
-      kind="popover"
+    <PopoverHint
       label={bare ? t(`mark.tone.${tone}`) : label}
       // react-aria caps the popover's height at the room left beside the mark. Unless the mark is a plain line,
       // the surface and the body are flex columns so that the body can shrink below it, and the content scrolls
@@ -197,7 +196,7 @@ function PopoverMark({
           {actions && <div className="flex shrink-0 justify-end">{actions(close)}</div>}
         </>
       )}
-    </Hint>
+    </PopoverHint>
   );
 }
 

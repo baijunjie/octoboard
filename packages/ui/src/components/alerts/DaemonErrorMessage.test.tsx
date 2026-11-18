@@ -654,7 +654,7 @@ it("retains a named quota window as a rich name and a plain isolated value", () 
   expect(daemonMessage("en", "account_quota_exhausted", params, "fallback", createStateStore({}).getState())).toContain(`\u2068${params.window}\u2069`);
 });
 
-it.each(["path_not_absolute", "project_directory_shared", "agent_not_available", "console_has_running_sessions", "trust_answer_failed", "conversation_in_session", "session_locked", "queued_messages_lost", "queued_messages_lost.held", "process_shares_agent_console"])("keeps %s recovery visible as the remedy, with only its own further explanation for Details, and preserves the complete plain wording", (entry) => {
+it.each(["path_not_absolute", "project_directory_shared", "agent_not_available", "console_has_running_sessions", "trust_answer_failed", "conversation_in_session", "session_locked", "queued_messages_lost", "queued_messages_lost.held"])("keeps %s recovery visible as the remedy, with only its own further explanation for Details, and preserves the complete plain wording", (entry) => {
   // `queued_messages_lost.held` is that code with `fragment: "held"`, worded as a variant with further explanation of its own.
   const [code, variant] = entry.split(".");
   const params = { path: "/tmp/مراجعة", project: "Docs", agent: "Codex", reason_code: "screen_gone", session: "missing", reason: "fallback reason", ...(variant ? { fragment: variant } : {}) };

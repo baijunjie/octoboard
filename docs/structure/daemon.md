@@ -437,7 +437,7 @@ which the Linux release archive ships and the website's `install.sh` installs wi
 - `src/terminal/` — PTY processes and what clients see of them (`backend.rs` where a terminal and its program live,
   `Backend::Local` (`platform::term`'s) or `Backend::Held` (a holder's), and `start`, which production spawn sites go
   through, and `Helpers::server_host`, which picks where a launch's private server runs; `server_host.rs` where that
-  server runs (`ServerHost` and `RunningServer`: open its endpoint, start it, wait for it, end it, with the provider
+  server runs (`ServerHost` and `RunningServer`: open its endpoint, start it, wait for it, end it, name its process, with the provider
   saying what to run and how readiness shows; `LocalHost` has the daemon run it as a child it owns, for a terminal that
   runs in the daemon, `HeldHost` has the holder that runs the terminal start it as the terminal's companion so that it
   outlives the daemon; `FoundServer`, the server a holder lists with an adopted terminal; none for a holder that runs no
@@ -490,7 +490,8 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   through a `ServerHost`, `LaunchPlan::private_server`, with `StartedServer` and `TransportEvents`, which
   `register_live` attaches so a transport can retry its queue, hand over the notice that messages are held and the code
   of that notice once they went in (the state layer only broadcasts them), and end the terminal when the server dies;
-  `UncertainSubmission`, the error of a write whose acceptance is unknown, which holds the session's later messages;
+  `MessageTransport::command_host`, the server's process where the agent's commands run from it, which the ledger
+  reads to tell which process groups the agent ends on exit; `UncertainSubmission`, the error of a write whose acceptance is unknown, which holds the session's later messages;
   `RefusedByAgent`, the error of a message the agent's own queue refused outright, which fails that message to its
   sender, coded `message_refused`, while the queue behind it goes on, and `HeldByServer`, that of a message the server
   holds back for now; `AfterExit`, the work a launch leaves for once its process has exited: `LaunchPlan::after_exit`;
@@ -552,7 +553,7 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   `cf.rs` the CoreFoundation calls the macOS parts share (a retained `Object`, strings and URLs made from text; used by
   `sleep/macos.rs` and `open/native_app.rs`); `sleep/` holding the host awake (`Hold`, `available`; macOS IOKit assertions, a Windows power request, Linux's logind
   inhibitor lock and the session bus's screen saver inhibition over `zbus`), whose answer is `HostFacts::keep_awake`;
-  `proc_table/` the native reads of the system's process table (list, every pid, start time, parent and children, a
+  `proc_table/` the native reads of the system's process table (list, every pid, start time, parent and children, process group, a
   descriptor's path, sockets, working directory), one reader per OS, shared by the ledger's `table.rs`, `platform::proc`
   and `terminal/shell/busy.rs`; `open/` the launcher commands `host_open` starts (file manager, default application,
   system terminal), chosen by an OS name so every OS's choice is tested anywhere (`terminal.rs`'s `host_launch` decides
@@ -680,7 +681,8 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   constant), `ProviderDescriptor` (id, names, install page, binary, layout, the markers that detect a project set up for
   it, inherited session marker variables, instruction file, tool-name prefix, ask-question tool, `Capabilities` (status
   line, reset credits, per-session trust, configuration sharing, the URL scheme of its desktop application
-  `native_app_scheme`, the delivery quirks), `quota_windows` (`QuotaWindowNaming`, which windows the provider has and
+  `native_app_scheme`, whether it ends its running commands' process groups as it exits
+  `ends_command_groups_on_exit`, the delivery quirks), `quota_windows` (`QuotaWindowNaming`, which windows the provider has and
   what its own interface calls them), `model_display` (`ModelDisplay`, how its model ids are shown), whether other
   providers can be made compatible with it, its `settings` schema and its error and notice `codes`) and `descriptors()`
   in the registry's order. A `SettingDescriptor` declares one user setting of the provider: a choice (some choices

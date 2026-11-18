@@ -418,10 +418,10 @@ export const quotaGatingScenarios: Scenario[] = [
     category: "exceptional",
     held: true,
     title: "Quick create, the default agent's accounts not logged in or turned off",
-    description: "With the modifier held the new-session buttons are bolts. The console's sessions run on Codex, the default agent: its default account is not logged in and Team is turned off, so no Codex account can open a session. The bolt in the sidebar header looks disabled but can be focused and hovered: the pointer rests on it and its tooltip is the short reason \"No available account\", while its accessible name stays \"New console session with defaults\". Search API's project row has the same disabled bolt, whose tooltip shows the same reason on hover.",
+    description: "With the modifier held the new-session buttons are bolts. The console's sessions run on Codex, the default agent: its default account is not logged in and Team is turned off, so no Codex account can open a session. The bolt in the sidebar header looks disabled but can be focused and hovered: the pointer rests on it and its tooltip is the short reason \"No available account\", while its accessible name stays \"New console session with defaults\"; pressing it does nothing. Search API's project row has the same disabled bolt, whose tooltip shows the same reason on hover.",
     state: { ...launchState([searchApi], [codexSignedOut[0]], codexConsole), settings: codexTeamOff },
     // The "+" is still plain while the steps run: the modifier is pressed after them, and the open tooltip then reads the reason.
-    steps: [(ui) => ui.hoverTitledControl(ui.t("sidebar.consoleSessions.new"))],
+    steps: [(ui) => ui.hoverTooltip(ui.t("sidebar.consoleSessions.new"))],
   },
   {
     id: "sidebar-quick-create-unavailable",

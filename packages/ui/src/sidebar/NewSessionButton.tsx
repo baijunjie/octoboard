@@ -16,8 +16,9 @@ import { useNewSessionMode } from "./useNewSessionMode";
  * `onQuickCreate` instead of `onOpen`. With no agent that is added and installed there is nothing to create with, so
  * it is disabled. Its quick form, when no account of the agent it would create with can open a session (each is used
  * up, not logged in or turned off), only looks disabled: it keeps its focus, its tooltip and its description give the
- * short reason while its name stays the action, and a press calls `onQuickCreate`, which refuses with a short
- * unavailable-account message. A `target` that is not there (`undefined`) makes a press do nothing.
+ * short reason while its name stays the action, and a press does nothing. `onQuickCreate` still refuses with a short
+ * unavailable-account message when the modifier was pressed before the held state was noticed, and for New session
+ * with defaults from the keyboard. A `target` that is not there (`undefined`) makes a press do nothing.
  */
 export function NewSessionButton({
   label,

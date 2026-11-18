@@ -602,9 +602,10 @@ const servingTrees = [
   processTreeOf("512:1", serving, "python3 -m http.server 8000", 12, { cwd: "/Users/dev/code/website/dist", memory_bytes: 18_000_000, ports: [8000] }),
 ];
 
-// A watcher whose process is attached to the agent's own console (Windows): it ends with the session whatever keeps
-// it, so the archive lists it without a choice.
-const sharedConsoleTree = processTreeOf("513:1", serving, "node scripts/export-report.mjs --watch", 25, { process_count: 2, memory_bytes: 64_000_000, keepable: false, unkeepable_reason: "agent_console" });
+// A watcher running inside one of the agent's still-running shell commands, whose process group the agent CLI kills when
+// it exits: it ends with the session whatever keeps it, so the archive lists it without a choice. (The Windows reason,
+// a process on the agent's own console, lays out the same and differs only in its wording.)
+const unkeepableTree = processTreeOf("513:1", serving, "node scripts/export-report.mjs --watch", 25, { process_count: 2, memory_bytes: 64_000_000, keepable: false, unkeepable_reason: "agent_command_group" });
 
 // An idle session whose turn ended with a dev server still running, beside one sitting at its prompt
 // with nothing left running, which archives without asking.
@@ -1405,13 +1406,27 @@ export const dialogScenarios: Scenario[] = [
     group: "Archive view",
     category: "normal",
     title: "Archive an idle session that left processes running",
-    description: "The session is idle with nothing else to ask about, yet archiving it opens this confirmation instead of archiving at once, because of the four processes it started. Under the message, a single \"Background processes\" section, with no divider and no other section, has the line \"Selected processes will be stopped. Uncheck any to keep them running.\" over them, oldest first, as checkboxes, each labelled by its single-line command alone; the checkboxes start ticked for stopping, and here the first, the dev server, is unticked to keep it running while the other two remain ticked. Its long command stays on one line and fades at the end (hover it for a tooltip with the whole command), and each option has a closed Details disclosure under it, which holds no command. Selected stop options carry a danger-coloured PlayOff icon, while the unchecked option kept running carries a success-green Play icon. The fourth, a script attached to the agent's own console, cannot be kept: it is the last row of the checkbox list, after the checkbox rows, with no checkbox but set in so that its danger-coloured PlayOff icon and its command line up with the icon and command of the checkbox rows above, and under the command a muted line saying why (it runs in the agent's own terminal, so it ends with the session and cannot be kept, and to start it in a window of its own to keep it running), then its own closed Details disclosure. Directly under the options in that section, two consequence lines say that \"3 processes will be stopped.\" and that \"The process you keep stays running.\" The confirming button reads \"Archive\" in the normal colour.",
+    description: "The session is idle with nothing else to ask about, yet archiving it opens this confirmation instead of archiving at once, because of the four processes it started. Under the message, a single \"Background processes\" section, with no divider and no other section, has the line \"Selected processes will be stopped. Uncheck any to keep them running.\" over them, oldest first, as checkboxes, each labelled by its single-line command alone; the checkboxes start ticked for stopping, and here the first, the dev server, is unticked to keep it running while the other two remain ticked. Its long command stays on one line and fades at the end (hover it for a tooltip with the whole command), and each option has a closed Details disclosure under it, which holds no command. Selected stop options carry a danger-coloured PlayOff icon, while the unchecked option kept running carries a success-green Play icon. The fourth, a script running inside one of the agent's running commands, cannot be kept: it is the last row of the checkbox list, a checkbox that stays ticked and is faded, with the same danger-coloured PlayOff icon and its command, and under the command nothing but its own closed Details disclosure: hovering its box (not the command label) opens a tooltip saying why (it runs inside a command the agent is still running, and the agent ends it when it exits, so it cannot be kept), the reason written nowhere else, and pressing it does not untick it (the next scenario shows that tooltip open). Directly under the options in that section, two consequence lines say that \"3 processes will be stopped.\" and that \"The process you keep stays running.\" The confirming button reads \"Archive\" in the normal colour.",
     state: servingState,
-    processes: { trees: [...servingTrees, sharedConsoleTree] },
+    processes: { trees: [...servingTrees, unkeepableTree] },
     steps: [
       (ui) => ui.press(ui.t("sidebar.session.actions", { title: serving.title })),
       (ui) => ui.press(ui.t("sidebar.session.archive")),
       (ui) => ui.press(servingTrees[0].command),
+    ],
+  },
+  {
+    id: "dialog-archive-session-processes-unkeepable",
+    group: "Archive view",
+    category: "exceptional",
+    title: "Archive a session whose only process cannot be kept",
+    description: "The single \"Background processes\" section has no line inviting to uncheck, as there is nothing to keep: only a ticked, faded checkbox for a script running inside one of the agent's running commands, with its PlayOff icon, its command and a closed Details disclosure, and the mouse rests on its box (not the command label): its tooltip says why it cannot be kept, as it runs inside a command the agent is still running. One consequence line says \"1 process will be stopped.\", with none about a kept process. The confirming button reads \"Archive\".",
+    state: servingState,
+    processes: { trees: [unkeepableTree] },
+    steps: [
+      (ui) => ui.press(ui.t("sidebar.session.actions", { title: serving.title })),
+      (ui) => ui.press(ui.t("sidebar.session.archive")),
+      (ui) => ui.hoverTooltip(unkeepableTree.command, ui.t("daemon.process_in_agent_command_group")),
     ],
   },
   {

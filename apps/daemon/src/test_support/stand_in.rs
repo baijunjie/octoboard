@@ -226,13 +226,7 @@ pub(crate) fn stand_in_starting(id: &str, commands: Vec<Background>) -> StandIn 
     #[cfg(unix)]
     {
         let lines: String = commands.iter().map(Background::line).collect();
-        fake_live_session(
-            id,
-            AgentId::CLAUDE,
-            80,
-            24,
-            &format!("{lines}exec sleep 300"),
-        )
+        fake_live_session(id, AgentId::TEST, 80, 24, &format!("{lines}exec sleep 300"))
     }
     #[cfg(windows)]
     {
@@ -318,7 +312,7 @@ pub(crate) fn running_leaving_two(
     #[cfg(unix)]
     let live = fake_live_session(
         id,
-        AgentId::CLAUDE,
+        AgentId::TEST,
         80,
         24,
         &format!(

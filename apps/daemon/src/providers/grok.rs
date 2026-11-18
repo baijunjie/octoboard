@@ -94,6 +94,10 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         per_session_trust: true,
         config_sharing: true,
         mcp_inventory: true,
+        // Read from the 1.0.89 binary, not measured: it runs each command in its own process group
+        // (`posix_spawnattr_setpgroup`, `setpgid`) and kills child groups with `killpg`; headless
+        // runs stop their background work on exit, an interactive exit was not tried.
+        ends_command_groups_on_exit: true,
         delivery: DeliveryQuirks {
             confirms_by_reported_prompt: false,
             holds_report_for_completion_notice: false,

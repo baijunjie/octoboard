@@ -177,6 +177,10 @@ export const TOOLTIP_DELAY_MS = 500;
 /** Left after the delay for the tooltip to mount, be placed and finish fading in. */
 export const TOOLTIP_SHOW_MS = 500;
 
+/** A part of the window that a step can be confined to, for a control whose name is shared between parts: an update
+ * action offered both on the rail and in the bottom update notice. */
+export type UiRegion = "rail" | "update";
+
 /**
  * What a scenario's steps drive the mounted app with: they press controls the way a user would, by
  * name, so a dialog or a view that lives in component state opens through the app's own code. Names
@@ -203,15 +207,11 @@ export interface Ui {
    * on the sidebar's heading row (earlier in the DOM) and in the filter picker, so pressing it
    * again to unpick it would hit the sidebar row. `region` disambiguates an update action offered both on the rail and
    * in the bottom update notice. */
-  press: (matcher: Matcher, region?: "rail" | "update") => Promise<void>;
+  press: (matcher: Matcher, region?: UiRegion) => Promise<void>;
   /** Presses the control named `matcher` inside the first row `row` names that holds one (as `press` finds a row), for a
    * control that every row of a list names alike, such as the icon-only Delete of an archived session's row; a row of the
    * same name elsewhere that holds none (the session's row in the sidebar) is passed over. */
   pressInRow: (row: Matcher, matcher: Matcher) => Promise<void>;
-  /** Presses the first control named `matcher` that is unavailable (`aria-disabled`, yet focusable and pressable, with its
-   * reason as a tooltip): the press the control answers by explaining, which `press` does not reach, since it waits for a
-   * control that can act. Fails for a natively disabled control, or one that is not unavailable. */
-  pressUnavailable: (matcher: Matcher) => Promise<void>;
   /** Presses the menu item named `matcher`, for a name an open menu shares with a control elsewhere on the page (the
    * Settings item of an account's menu, and the rail's Settings button). */
   pressMenuItem: (matcher: Matcher) => Promise<void>;
@@ -346,14 +346,16 @@ export interface Ui {
    * avoids by matching the state glyph instead. */
   hoverStatusMarker: (host: Matcher) => Promise<void>;
   /** Moves the pointer onto the first control named `matcher` and leaves it there, as `hoverIndicator`
-   * does, for a control whose tooltip repeats its accessible name, such as a rail avatar's. Without
+   * does, for a control whose own tooltip (a `Tooltip` of the control kind, or the `tooltip` / `unavailable`
+   * of a `Button`, `Switch` or `Checkbox`) repeats its accessible name, such as a rail avatar's. Without
    * `tooltip` it is not for a control whose tooltip says something else (an actions button, a pane toggle): the step
    * fails unless the tooltip that opens is the control's name, so hovering one whose tooltip stays shut (a rail avatar
    * while the hidden sidebar can float in, where the pointer floats the sidebar instead) is not passed over. `tooltip`
-   * is for a control whose tooltip says something else than its name (an unavailable button's reason, which it also
+   * is for a control whose tooltip says something else than its name (an unavailable control's reason, which it also
    * reaches): the step then fails unless the tooltip that opens reads it. A shortcut's key caps shown beside the words
-   * are not part of what is compared. */
-  hoverTitledControl: (matcher: Matcher, tooltip?: string) => Promise<void>;
+   * are not part of what is compared. `region` looks only inside that part of the window, as `press` does, for
+   * controls that share a name between the rail and the update notice. */
+  hoverTooltip: (matcher: Matcher, tooltip?: string, region?: UiRegion) => Promise<void>;
   /** Moves the pointer onto the first control named `host` and leaves it there, for a control that
    * floats a panel in while the pointer rests on it (the rail's quota entry), and returns once the
    * dialog named `panel` is up. Fails if none opens, which also catches a control whose panel needs a
@@ -677,11 +679,21 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
     return named.filter((element) => !named.some((other) => other !== element && element.contains(other)));
   };
   const find = (matcher: Matcher): HTMLElement | undefined => findAll(matcher)[0];
-  /** The control named `matcher` that is unavailable (`aria-disabled`) but not disabled: it stays focusable and pressable, and a
-   * press explains why it does nothing, so a step reaches it on purpose, by the steps that say so, and `find` leaves it be.
-   * A natively disabled control, or one in an inert subtree, is not found. */
-  const findUnavailable = (matcher: Matcher): HTMLElement | undefined =>
-    Array.from(doc.querySelectorAll<HTMLElement>(PRESSABLE)).find((element) =>
+  /** What `look` finds inside `region`'s root, for a step confined to a part of the window. When the root is there but
+   * `look` finds nothing in it because the root is inert (the rail while the drawer is closed), the lookup is flagged
+   * as `inClosedDrawer`, so `waitFor` opens the drawer instead of failing. `look` runs after the flag is cleared
+   * (`findAll` clears it), so it must leave the flag alone. */
+  const inRegion = (region: UiRegion, look: (root: ParentNode) => HTMLElement | undefined): HTMLElement | undefined => {
+    const root = doc.querySelector<HTMLElement>(`[data-region="${region}"]`);
+    const control = root ? look(root) : undefined;
+    if (!control && root?.hasAttribute("inert")) inClosedDrawer = true;
+    return control;
+  };
+  /** The control named `matcher` that is unavailable (`aria-disabled`) but not disabled: it stays focusable and under the
+   * pointer, for its tooltip with the reason, and takes no press, so only the steps that focus or hover it reach it, and
+   * `find` leaves it be. A natively disabled control, or one in an inert subtree, is not found. */
+  const findUnavailable = (matcher: Matcher, root: ParentNode = doc): HTMLElement | undefined =>
+    Array.from(root.querySelectorAll<HTMLElement>(PRESSABLE)).find((element) =>
       element.getAttribute("aria-disabled") === "true" && !element.hasAttribute("disabled") && !element.closest("[inert]") && matches(matcher, nameOf(element)));
   /** The focusable scroll region named `matcher`. */
   const findRegion = (matcher: Matcher): HTMLElement | undefined =>
@@ -769,6 +781,18 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
     for (const type of ["pointermove", "pointerover"]) {
       element.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerType: "mouse" }));
     }
+  };
+
+  /** The visible track or box of a switch or checkbox whose hidden `input` is `control`, which is where the pointer is and
+   * where the tooltip of such a control opens (the input itself is never under the pointer); `undefined` for any other
+   * control. */
+  const visibleBoxOf = (control: HTMLElement): HTMLElement | undefined => {
+    if (!control.matches("input[type=checkbox]")) return undefined;
+    for (let root = control.parentElement; root && root !== doc.body; root = root.parentElement) {
+      const box = root.querySelector<HTMLElement>(partSelector.toggleBox);
+      if (box) return box;
+    }
+    return undefined;
   };
 
   /** Puts the pointer on what `look` finds, waiting for it to appear, and gives its tooltip the time to open and
@@ -944,10 +968,16 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
     },
     async focusControl(matcher) {
       const control = await waitFor(() => find(matcher) ?? findUnavailable(matcher), `Nothing to focus matching ${String(matcher)}`);
-      // react-aria reads what the focus came from off the last key event, so Tab is sent first.
-      (doc.activeElement ?? doc.body).dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
-      control.focus();
-      await wait(150);
+      // A menu or dialog that closed just before gives focus back to what opened it a few frames later, which would take it
+      // off the control again, so the focus is put back until it stays.
+      let attempt = 0;
+      do {
+        // react-aria reads what the focus came from off the last key event, so Tab is sent first.
+        (doc.activeElement ?? doc.body).dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }));
+        control.focus();
+        await wait(150);
+        attempt += 1;
+      } while (attempt < 5 && doc.activeElement !== control);
     },
     async contextMenuRegion(matcher) {
       await rightClick(await waitFor(() => findRegion(matcher), `No scroll region named ${String(matcher)} to right-click`));
@@ -1084,8 +1114,13 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
         (last) => `The control matching ${String(host)} has no status marker: its last tooltip is ${quoted(last)}`,
       );
     },
-    async hoverTitledControl(matcher, tooltip) {
-      const control = await hover(() => find(matcher) ?? findUnavailable(matcher), `Nothing to hover matching ${String(matcher)}`);
+    async hoverTooltip(matcher, tooltip, region) {
+      const control = await waitFor(() => {
+        const within = (root: ParentNode) => findAll(matcher, root)[0] ?? findUnavailable(matcher, root);
+        return region ? inRegion(region, within) : within(doc);
+      }, `Nothing to hover matching ${String(matcher)}${region ? ` in ${region}` : ""}`);
+      pointAt(visibleBoxOf(control) ?? control);
+      await wait(TOOLTIP_DELAY_MS + TOOLTIP_SHOW_MS);
       const expected = tooltip ?? nameOf(control);
       await tooltipWhere(
         "[role=tooltip]",
@@ -1394,13 +1429,10 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
       await rightClick(await waitFor(() => find(matcher), `Nothing to right-click matching ${String(matcher)}`));
     },
     async press(matcher, region) {
-      await clickWhenFound(() => {
-        if (!region) return find(matcher);
-        const root = doc.querySelector<HTMLElement>(`[data-region="${region}"]`);
-        const control = root ? findAll(matcher, root)[0] : undefined;
-        if (!control && root?.hasAttribute("inert")) inClosedDrawer = true;
-        return control;
-      }, `Nothing to press matching ${String(matcher)}${region ? ` in ${region}` : ""}`);
+      await clickWhenFound(
+        () => (region ? inRegion(region, (root) => findAll(matcher, root)[0]) : find(matcher)),
+        `Nothing to press matching ${String(matcher)}${region ? ` in ${region}` : ""}`,
+      );
     },
     async pressInRow(row, matcher) {
       await clickWhenFound(() => {
@@ -1412,9 +1444,6 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
         }
         return undefined;
       }, `Nothing to press matching ${String(matcher)} in a row matching ${String(row)}`);
-    },
-    async pressUnavailable(matcher) {
-      await clickWhenFound(() => findUnavailable(matcher), `Nothing unavailable to press matching ${String(matcher)}`);
     },
     async pressMenuItem(matcher) {
       await clickWhenFound(() => findAll(matcher).find((element) => element.matches('[role="menuitem"]')), `No menu item matching ${String(matcher)}`);

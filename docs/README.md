@@ -209,6 +209,8 @@ Where to start, by question:
 - [Toasts](product/toasts.md) — the notices that need no answer.
 - [Empty states](product/empty-states.md) — how a view with nothing to show says so.
 - [Labels and tooltips](product/labels-and-tooltips.md) — tooltips, help tips and handling of names that do not fit.
+- [Controls unavailable for a reason](product/controls-unavailable-for-a-reason.md) — a button, switch or checkbox
+  that cannot be used: faded, no response to a press, the reason in its tooltip only.
 - [Scrolling surfaces](product/scrolling-surfaces.md) — edge fades and keyboard scrolling.
 - [Collection motion](product/collection-motion.md) — transitions for items entering, leaving and moving in
   collections.

@@ -1,7 +1,6 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import React from "react";
 
-import { TitledControl } from "../hint/TitledControl";
 import { Button, type ButtonBlur } from "../../primitives";
 import { ROW_ICON_BUTTON_CLASS } from "./RowControls";
 
@@ -27,22 +26,21 @@ export function PagerButton({
 }): React.ReactElement {
   const Icon = direction === "previous" ? ChevronLeft : ChevronRight;
   return (
-    <TitledControl title={label}>
-      <Button
-        ref={ref}
-        iconOnly
-        size="xs"
-        variant="ghost"
-        className={ROW_ICON_BUTTON_CLASS}
-        label={label}
-        focusOnPress={false}
-        disabled={isDisabled}
-        onPress={onPress}
-        onFocus={onFocus}
-        onBlur={onBlur}
-      >
-        <Icon className="size-4 rtl:-scale-x-100" />
-      </Button>
-    </TitledControl>
+    <Button
+      tooltip={label}
+      ref={ref}
+      iconOnly
+      size="xs"
+      variant="ghost"
+      className={ROW_ICON_BUTTON_CLASS}
+      label={label}
+      focusOnPress={false}
+      disabled={isDisabled}
+      onPress={onPress}
+      onFocus={onFocus}
+      onBlur={onBlur}
+    >
+      <Icon className="size-4 rtl:-scale-x-100" />
+    </Button>
   );
 }

@@ -30,7 +30,8 @@ decisions are unknown are preserved for the next daemon too.
 
 Where things are: `mod.rs` the types, the launch lifecycle, reconciliation and `ForgetLaunch`, `attribute.rs` the rules
 that attribute processes to launches, `scan.rs` the scan of the table, the scanner thread and the stop of what ended
-launches left and what has worked in a removed directory, `looks.rs` the deadline-bounded looks at working directories
+launches left and what has worked in a removed directory, `keepable.rs` why a tree cannot be kept (`Unkeepable`, the agent-console rule and the agent-command-group rule),
+`looks.rs` the deadline-bounded looks at working directories
 and project directories, `trees.rs` listings and stop, keep and move by tree, `carry.rs` carry-over between launches,
 `persist.rs` what is kept on disk (`Persisted::from_book`, `read_back`), `stop.rs` stopping by identity and the rounds of
 signals that follow what started meanwhile, and `table.rs` the table as the ledger reads it, over
@@ -105,14 +106,26 @@ signals that follow what started meanwhile, and `table.rs` the table as the ledg
   and the processes still running once it is through (the system refused to kill them, or they outlived the kill),
   each with the tree it was stopped with and why; `stop.rs` traces a process a round's scan finds back to the target of
   the first round it descends from, so a follow-up is told against the tree that was named. `keep_trees` refuses, with nothing kept, a request naming a
-  tree with a process attached to its agent's own console (`SharesAgentConsole`), and the listings mark such a tree
-  as not keepable.
+  tree with a process that ends with its launch whatever keeps it (`Unkeepable`, with its `reason`: attached to its
+  agent's own console, or in the process group of one of its agent's running commands), and the listings mark such a
+  tree as not keepable with that reason.
+- `ProcessLedger::command_groups_end` — record, for a launch whose provider declares
+  `Capabilities::ends_command_groups_on_exit`, that its agent ends the process groups of its running commands on exit,
+  with the launch's command host (`MessageTransport::command_host`) where the agent runs its commands through a server of
+  its own; `apps/daemon/src/state/live.rs` calls it once the launch is followed.
 - `ProcessLedger::project_processes`, `ProcessLedger::stop_project_processes` — list and stop a project's processes,
   for its removal.
 - `carry.rs`: `HeldForLaunch::keep_what_is_held` — keep what a failed restart (an account switch, a model change, a
   change of an account's sharing) still holds for the session, under its project.
 
 ## Known limits
+
+- The agent-command-group rule (`keepable.rs`) reads each process's process group from the table (`ProcInfo::pgid`),
+  so it applies only where the host has process groups; on Windows there is none and only the console rule applies. A
+  tree is refused only for a process in a group led by a process that still runs and descends from the runner of the
+  agent's commands (the agent, or its command host) with no other group leader between: a process that started a group
+  of its own (`setsid`, `setpgid`), or whose group's leader has exited, is not refused, and neither is one of a launch
+  whose runner has exited.
 
 - On Linux a launch's process enters the launch's cgroup v2 group before its program runs (a hook in the child,
   `Containment::enter_before_exec`), so nothing it forks starts outside the group. Only where that entry fails is the

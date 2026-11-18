@@ -67,7 +67,8 @@ pub(crate) fn archive_admitted(
 /// trees in `keep_process_ids` are kept from being stopped with it, and its branches are removed
 /// once it is down, the locked worktrees in `force_remove` included and those in `keep` left.
 /// Refused, with nothing kept or archived, when one of those trees cannot be kept because a
-/// process of it is on its agent's own console ([`super::processes::keep`]).
+/// process of it is on its agent's own console or in the process group of a command the agent
+/// ends as it exits ([`super::processes::keep`]).
 pub(super) async fn archive_requested(
     state: &Arc<AppState>,
     session: String,

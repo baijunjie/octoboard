@@ -361,6 +361,12 @@ pub mod error_code {
     /// (`ProcessTree.unkeepable_reason` `agent_console`). Nothing was kept, and the archive did not
     /// go ahead. `params` names the process's `pid` and `name`.
     pub const PROCESS_SHARES_AGENT_CONSOLE: Code = Code("process_shares_agent_console");
+    /// A `keep_processes`, or an `archive_session` with `keep_process_ids`, named a tree with a
+    /// process in the process group of one of its agent's running commands, which the agent ends
+    /// as it exits, so the process ends with the session whatever keeps it
+    /// (`ProcessTree.unkeepable_reason` `agent_command_group`). Nothing was kept, and the archive
+    /// did not go ahead. `params` names the process's `pid` and `name`.
+    pub const PROCESS_IN_AGENT_COMMAND_GROUP: Code = Code("process_in_agent_command_group");
     /// A `use_reset_credit` for an account whose use of a credit is already running. Nothing
     /// was sent. `params` names `agent`.
     pub const RESET_CREDIT_IN_PROGRESS: Code = Code("reset_credit_in_progress");

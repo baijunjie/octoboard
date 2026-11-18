@@ -127,6 +127,10 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         per_session_trust: false,
         config_sharing: true,
         mcp_inventory: true,
+        // Measured: its commands still running as it exits have their groups killed, each led by
+        // a direct child of the process that runs commands (its private app server where it has
+        // one).
+        ends_command_groups_on_exit: true,
         delivery: DeliveryQuirks {
             confirms_by_reported_prompt: false,
             holds_report_for_completion_notice: false,

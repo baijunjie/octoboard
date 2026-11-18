@@ -392,6 +392,12 @@ pub trait MessageTransport: Send + Sync {
     /// messages held back; called after the session's process is reaped. A server a holder runs
     /// with the terminal is the holder's to end, and is left to it.
     fn stop(&self);
+    /// The server's process where the agent's commands run from it rather than from the agent
+    /// itself, so the processes they start are the server's descendants; `None` where the agent
+    /// runs them, or the server's process is not known.
+    fn command_host(&self) -> Option<crate::platform::proc::ProcessIdentity> {
+        None
+    }
 }
 
 /// What came of a [`MessageTransport::send`] that did not fail.

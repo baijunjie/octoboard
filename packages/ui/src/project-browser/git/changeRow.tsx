@@ -3,7 +3,6 @@ import React, { useRef, useState } from "react";
 
 import { ChangeLineCounts } from "../../components/status/ChangeLineCounts";
 import { InlineReference } from "../../i18n/InlineReference";
-import { AnchoredTooltip } from "../../components/hint/AnchoredTooltip";
 import { FadeOverflow } from "../../components/text/FadeOverflow";
 import { FileTypeIcon } from "../../components/icons/FileTypeIcon";
 import type { PlainMessageKey, Translate } from "../../i18n/catalog";
@@ -16,6 +15,7 @@ import { displayWirePath, wireBaseName } from "../../format/wirePath";
 import type { ChangeItem } from "./changes";
 import { RowActions } from "../RowActions";
 import { parentPath } from "../tree";
+import { Tooltip } from "../../primitives";
 
 // The lowercase words the row's accessible name is built from; the tooltip says the capitalised
 // `STATUS_LABELS` instead, which is what the viewer's header badge shows.
@@ -143,7 +143,7 @@ function ChangeIcon({ item }: { item: ChangeItem }): React.ReactElement {
 
 /** The row's status letter, which says in a tooltip what it stands for. The row's accessible name
  * already carries the status, so the letter stays out of the accessibility tree. It takes the
- * anchored shape, not `IndicatorTooltip`: a row of a react-aria collection walks every focusable
+ * anchored shape, not the mark kind: a row of a react-aria collection walks every focusable
  * descendant with the arrow keys, and an indicator's trigger would be a new stop in that walk
  * that opens its tooltip on focus. The letter reports the hover itself and is what the tooltip is
  * placed against, so nothing else in the row opens it. */
@@ -163,7 +163,7 @@ function ChangeStatusLetter({ status }: { status: StatusKey }): React.ReactEleme
       >
         {STATUS_MARKS[status].letter}
       </ChangeStatusBadge>
-      <AnchoredTooltip tooltip={t(STATUS_LABELS[status])} anchor={letter} hovered={hovered} />
+      <Tooltip trigger="anchored" content={t(STATUS_LABELS[status])} anchor={letter} hovered={hovered} />
     </>
   );
 }

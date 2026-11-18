@@ -167,8 +167,11 @@ Applies to a probe of what a job started from a session still does after the com
 has ended — a leftover job's git reports and gate, say. Two things end such a job before it acts, and the probe then
 reads its silence as the behaviour under test:
 
-- Codex (0.166–0.167) kills a plain `nohup … &` job when the command that started it finishes; start it detached in a
-  new session with `setsid`.
+- The agent ends the process group of a shell command it runs, and with it a job still in that group: Codex
+  (0.166–0.167) as soon as the command finishes, so a plain `nohup … &` job is gone at once, and Claude Code, Codex and
+  Grok Build as they exit, for every command still running ("Processes in a command the agent still runs" in
+  `docs/product/background-processes.md`). Start the job detached in a new session with `setsid`; a job in the group of
+  a command still running cannot be kept either.
 - When the session ends, Octoboard stops every process of its launch that was not kept, its tag
   (`OCTOBOARD_PROCESS_TAG`) included ("Which processes belong to a launch" in `docs/product/background-processes.md`);
   keep the job, or start it from outside the launch so it carries no tag.

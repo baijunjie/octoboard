@@ -1,6 +1,6 @@
 import React from "react";
 
-import { Hint } from "../components/hint/Hint";
+import { PopoverHint } from "../components/hint/hintPopover";
 import { PopoverOwnerContext } from "../components/hint/popoverOwner";
 import { ChromeButton } from "./ChromeButton";
 import { CloseWhenCovered } from "./CloseWhenCovered";
@@ -16,7 +16,7 @@ interface RailPanelState {
   popupId: string;
 }
 
-/** A rail button and the floating panel it anchors: a `Hint` of kind `popover` whose content is the entry's own
+/** A rail button and the floating panel it anchors: a `PopoverHint` whose content is the entry's own
  * (`children`), rendered inside a `PopoverOwnerContext` valued `owner` so the status mark and Details popovers opened
  * from it count as part of the panel. `triggerLabel` names the button, `label` the popover. The button draws `glyph`
  * and takes its ref in `triggerRef`; `onHoverChange` hears the mouse come to and leave it, with whether the popover is
@@ -37,8 +37,7 @@ export function RailPanelEntry({ owner, label, triggerId, triggerLabel, triggerR
 }): React.ReactElement {
   const nested = nestedPopovers(owner);
   return (
-    <Hint
-      kind="popover"
+    <PopoverHint
       label={label}
       placement="end bottom"
       offset={8}
@@ -77,6 +76,6 @@ export function RailPanelEntry({ owner, label, triggerId, triggerLabel, triggerR
           {children({ close, form, popupId })}
         </PopoverOwnerContext.Provider>
       )}
-    </Hint>
+    </PopoverHint>
   );
 }

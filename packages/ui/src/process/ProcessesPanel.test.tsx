@@ -329,7 +329,7 @@ it("offers Stop and Keep on a session's tree, each named by the command, and onl
   expect(button("Stop", rows()[2]).getAttribute("aria-label")).toContain("node old.js");
 });
 
-const AGENT_CONSOLE_REASON = "This process runs in the agent's own terminal, so it ends with the session and cannot be kept. Start it in a window of its own to keep it running.";
+const AGENT_CONSOLE_REASON = "This process runs in the agent's own terminal, which closes when the session ends, so it cannot be kept.";
 const keepOf = (row: Element) => row.querySelector<HTMLButtonElement>('button[aria-label^="Keep "]')!;
 const describedBy = (element: Element) => (element.getAttribute("aria-describedby") ?? "").split(" ").filter(Boolean).map((id) => document.getElementById(id)?.textContent).join(" ");
 
@@ -349,17 +349,34 @@ it("leaves Keep unavailable on a tree that cannot be kept, saying why as its des
   // Control tooltips use HeroUI's CSS delay (react-stately's default without styles), not the popover delay.
   act(() => void vi.advanceTimersByTime(CONTROL_TOOLTIP_DELAY_MS));
   expect(openTooltip()?.textContent).toBe(AGENT_CONSOLE_REASON);
-  // A press explains, raising the refusal the daemon would answer a keep with, and asks nothing.
+  // A press does nothing: no alert, no confirmation, no request.
   await act(async () => keep.click());
   expect(confirmation()).toBeNull();
   expect(sent(request, "keep_processes")).toEqual([]);
-  expect(errorAlerts.getSnapshot().map((alert) => [alert.title, alert.error])).toMatchObject([["Cannot keep the process", { code: "process_shares_agent_console" }]]);
-  await act(async () => errorAlerts.acknowledge());
+  expect(errorAlerts.getSnapshot()).toEqual([]);
   const other = keepOf(rows()[1]);
   expect(other.hasAttribute("aria-disabled")).toBe(false);
   expect(other.hasAttribute("aria-describedby")).toBe(false);
   await act(async () => other.click());
   expect(confirmation().textContent).toContain("Keep process");
+});
+
+const AGENT_COMMAND_GROUP_REASON = "This process runs inside a command the agent is still running, and the agent ends it when it exits, so it cannot be kept.";
+
+it("leaves Keep unavailable on a tree in the process group of one of its agent's commands, saying so as its description, and a press does nothing", async () => {
+  const { request } = await mount({ project }, async () => ({
+    type: "processes_listed",
+    id: null,
+    trees: [tree("1:1", { keepable: false, unkeepable_reason: "agent_command_group" }), tree("2:2", { command: "vite" })],
+  }));
+  const keep = keepOf(rows()[0]);
+  expect(keep.getAttribute("aria-disabled")).toBe("true");
+  expect(describedBy(keep)).toBe(AGENT_COMMAND_GROUP_REASON);
+  await act(async () => keep.click());
+  expect(confirmation()).toBeNull();
+  expect(sent(request, "keep_processes")).toEqual([]);
+  expect(errorAlerts.getSnapshot()).toEqual([]);
+  expect(keepOf(rows()[1]).hasAttribute("aria-disabled")).toBe(false);
 });
 
 it("says plainly that a tree cannot be kept when its reason is one this window does not know", async () => {

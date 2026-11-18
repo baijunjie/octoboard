@@ -873,6 +873,9 @@ is set, in the user's or the project's `.codex/config.toml`; with them on, a var
 Measured on 0.167, macOS. A plain `nohup … &` from a command the model runs is gone once that command finishes; a job
 meant to outlive it has to be started in a session of its own (`setsid`).
 
+Every agent also ends, as it exits, the process group of each command still running (see "Exiting ends the process
+groups of running commands" under "Across the three agents").
+
 ## Grok Build
 
 **Permission modes** (1.0.77). The [official permission modes](https://docs.x.ai/build/features/permissions) are Ask,
@@ -1189,6 +1192,19 @@ registered under the key `k` exposes its tool `t` as `mcp__k__t` on Claude Code 
 **All three connect their MCP servers when the process starts**, before any turn — a `command`-type server's child is
 already running by the time the TUI is drawn. So whether an injected server was accepted is observable without a prompt
 ever being submitted.
+
+### Exiting ends the process groups of running commands
+
+Measured on macOS with Claude Code 2.1.327 and Codex 0.167.1, by sending `SIGTERM` to `claude -p` and `codex exec` and
+watching marker `sleep` processes. Grok Build 1.0.89 was only read from its executable, which runs each command in a
+process group of its own and ends child groups with `killpg`; its headless runs stop their background work on exit, and
+an interactive exit was not tried.
+
+Each command the agent runs is a shell leading its own process group, a direct child of the process that runs commands;
+as the agent exits it kills each such group still running, orphans of the group included. A `setsid` job survives; so,
+under Claude Code, does a `nohup … &` orphan whose command had already finished. `claude -p` waits for its background
+tasks before it exits, so a probe of this has to end it. How Octoboard refuses to keep such a process is in "Processes
+in a command the agent still runs" in `docs/product/background-processes.md`.
 
 ### Terminal titles and the titles in an agent's own records
 

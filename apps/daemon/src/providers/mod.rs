@@ -463,6 +463,12 @@ pub struct Capabilities {
     pub config_sharing: bool,
     /// Can list an account's MCP servers and platform connectors (`read_account_mcp_inventory`).
     pub mcp_inventory: bool,
+    /// Ends the process groups of the commands it still has running as it exits, so a process in
+    /// such a group ends with the session whatever keeps it. Each command's group is led by a
+    /// descendant of the process that runs the commands (the agent, or the server it runs them
+    /// from, `crate::session::term::MessageTransport::command_host`), reached from the runner
+    /// without another group leader in between.
+    pub ends_command_groups_on_exit: bool,
     pub delivery: DeliveryQuirks,
 }
 
@@ -595,6 +601,25 @@ mod tests {
             assert_eq!(
                 crate::adapter::provider(agent).native_app().is_some(),
                 agent.descriptor().capabilities.native_app_scheme.is_some(),
+                "{}",
+                agent.descriptor().id
+            );
+        }
+    }
+
+    /// Claude Code, Codex and Grok Build declare that they end the process group of each command
+    /// they still run as they exit; the test provider does not.
+    #[test]
+    fn the_real_agents_declare_that_they_end_command_groups() {
+        for (agent, ends) in [
+            (AgentId::CLAUDE, true),
+            (AgentId::CODEX, true),
+            (AgentId::GROK, true),
+            (AgentId::TEST, false),
+        ] {
+            assert_eq!(
+                agent.descriptor().capabilities.ends_command_groups_on_exit,
+                ends,
                 "{}",
                 agent.descriptor().id
             );

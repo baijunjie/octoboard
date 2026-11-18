@@ -5,13 +5,10 @@ import { SessionAgentIcon } from "../components/icons/SessionAgentIcon";
 import { EmptyPanel } from "../components/panel/EmptyPanel";
 import { PANE_HEADER_FRAME_CLASS } from "../components/panel/paneHeaderFrame";
 import { FadeOverflow } from "../components/text/FadeOverflow";
-import { raiseError } from "../components/alerts/raiseError";
-import { ActionableError } from "../errors/actionableError";
 import { HeadedTooltip } from "../components/hint/HeadedTooltip";
 import { InlineReference } from "../i18n/InlineReference";
 import { PaneTitle } from "../components/panel/PaneTitle";
 import { ArchivedSessionMetadata, hasVisibleContext, SessionContextLabel } from "../components/status/SessionMetadata";
-import { TitledControl } from "../components/hint/TitledControl";
 import { FadedScroller } from "../components/scroll/scrollFade";
 import { afterFrames } from "../components/focus/afterFrames";
 import { useLatest } from "../components/hooks/useLatest";
@@ -243,11 +240,9 @@ export function ArchiveView({
             {t("archive.deleteAll")}
           </Button>
         )}
-        <TitledControl title={t("common.close")}>
-          <Button ref={closeRef} iconOnly size="sm" variant="ghost" label={t("common.close")} onPress={onClose}>
-            <X className="size-4" />
-          </Button>
-        </TitledControl>
+        <Button tooltip={t("common.close")} ref={closeRef} iconOnly size="sm" variant="ghost" label={t("common.close")} onPress={onClose}>
+          <X className="size-4" />
+        </Button>
       </header>
       {/* Only the empty state is centred; the list of rows starts at the top. */}
       <FadedScroller ref={scrollerRef} onScroll={reportViewState} className={`min-h-0 flex-1 ${archived.length === 0 ? "flex flex-col justify-center-safe" : ""}`}>
@@ -339,15 +334,11 @@ function ArchiveRow({
   // process, and it is disabled only for what the conversation cannot be opened with (`openInAppBlock`).
   const openInApp = onOpenInApp && nativeApps.includes(session.agent) ? nativeAppLabel(t, providers, session.agent) : undefined;
   const openInAppBlock = openInApp ? openInAppBlockOf(t, session) : undefined;
-  // What the tooltip adds after the name: why the button does nothing, or that the app may not see the conversation.
-  const openInAppAside = openInAppBlock?.detail ?? (openInApp ? openInAppNote(t, nativeAppSeen)?.detail : undefined);
-  // A warning is the button's description (a block is, as `unavailable`), the tooltip being open only while it is looked at.
+  // What the tooltip adds after the name: that the app may not see the conversation. Why the button does nothing is its
+  // `unavailable`, which replaces the tooltip.
+  const openInAppAside = openInApp ? openInAppNote(t, nativeAppSeen)?.detail : undefined;
+  // A warning is the button's description, the tooltip being open only while it is looked at.
   const openInAppNoteId = openInAppAside && !openInAppBlock ? noteId : undefined;
-  // A press on the unavailable button explains rather than acts: it raises the refusal the daemon would answer with.
-  const pressOpenInApp = () => {
-    if (openInAppBlock) raiseError(new ActionableError(openInAppBlock.detail, "none"), { title: t("sidebar.session.openInAppFailedTitle") });
-    else onOpenInApp?.(session);
-  };
   return (
     <TreeRow
       ariaLabel={name}
@@ -378,31 +369,28 @@ function ArchiveRow({
             {/* Only this wrapper, padding-free, keeps a press from reaching the row. */}
             <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
               {openInApp && (
-                <TitledControl title={openInAppAside ? <HeadedTooltip heading={openInApp} emphasized={false}><div>{openInAppAside}</div></HeadedTooltip> : openInApp}>
-                  <Button iconOnly size="sm" variant="tertiary" label={t("sidebar.session.openInAppItem", { label: openInApp, title: isolate(sessionDisplayTitle(t, session)) })} describedBy={openInAppNoteId ?? ""} unavailable={openInAppBlock?.detail} onPress={pressOpenInApp}>
-                    <AppWindow className="size-4" />
-                    {openInAppNoteId && <span id={openInAppNoteId} className="sr-only">{openInAppAside}</span>}
-                  </Button>
-                </TitledControl>
+                <Button iconOnly size="sm" variant="tertiary" label={t("sidebar.session.openInAppItem", { label: openInApp, title: isolate(sessionDisplayTitle(t, session)) })} describedBy={openInAppNoteId ?? ""}
+                  tooltip={openInAppAside ? <HeadedTooltip heading={openInApp} emphasized={false}><div>{openInAppAside}</div></HeadedTooltip> : openInApp}
+                  unavailable={openInAppBlock?.detail} onPress={() => onOpenInApp?.(session)}>
+                  <AppWindow className="size-4" />
+                  {openInAppNoteId && <span id={openInAppNoteId} className="sr-only">{openInAppAside}</span>}
+                </Button>
               )}
-              <TitledControl title={t("sidebar.session.reopen")}>
-                <Button iconOnly size="sm" variant="tertiary" label={t("sidebar.session.reopenItem", { title: isolate(sessionDisplayTitle(t, session)) })} describedBy="" onPress={() => onReopen(session)}>
-                  <RotateCcw className="size-4" />
-                </Button>
-              </TitledControl>
-              <TitledControl title={t("common.delete")}>
-                <Button
-                  iconOnly
-                  size="sm"
-                  variant="danger-soft"
-                  disabled={session.locked}
-                  label={t("sidebar.session.deleteItem", { title: isolate(sessionDisplayTitle(t, session)) })}
-                  describedBy=""
-                  onPress={() => onOpenDialog({ kind: "delete-session", session })}
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-              </TitledControl>
+              <Button tooltip={t("sidebar.session.reopen")} iconOnly size="sm" variant="tertiary" label={t("sidebar.session.reopenItem", { title: isolate(sessionDisplayTitle(t, session)) })} describedBy="" onPress={() => onReopen(session)}>
+                <RotateCcw className="size-4" />
+              </Button>
+              <Button
+                tooltip={t("common.delete")}
+                iconOnly
+                size="sm"
+                variant="danger-soft"
+                disabled={session.locked}
+                label={t("sidebar.session.deleteItem", { title: isolate(sessionDisplayTitle(t, session)) })}
+                describedBy=""
+                onPress={() => onOpenDialog({ kind: "delete-session", session })}
+              >
+                <Trash2 className="size-4" />
+              </Button>
             </div>
           </div>
         </div>

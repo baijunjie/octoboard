@@ -29,7 +29,6 @@ import { ConsoleAvatar } from "./ConsoleAvatar";
 import { NotificationsBell } from "./NotificationsBell";
 import { useListMotion } from "../components/motion/useListMotion";
 import { HeadedTooltip } from "../components/hint/HeadedTooltip";
-import { TitledControl } from "../components/hint/TitledControl";
 import { FadedScroller } from "../components/scroll/scrollFade";
 import { BadgeAnchor, Button } from "../primitives";
 
@@ -109,27 +108,28 @@ const ConsoleTile = memo(function ConsoleTile({
   return (
     <div ref={tileRef} data-list-motion={thisConsole.id} className="flex">
       <BadgeAnchor>
-        <TitledControl title={tooltip} placement="end" focusOnly={hoverOpensSidebar}>
-          <Button
-            iconOnly
-            size="sm"
-            variant="ghost"
-            label={label}
-            // The markup tooltip repeats the name, which TitledControl only detects for plain text.
-            describedBy=""
-            current={current}
-            // Not styling: `usePanePeekPointer` (`Sidebar.tsx`) matches this to keep the floating sidebar
-            // up while the pointer is on an avatar, which lies outside the card and its gap. Without it
-            // the card slides away from under a pointer resting here.
-            data-sidebar-peek-keep=""
-            focusOnPress={false}
-            onPress={onSelect}
-            onMouseHoverChange={onHoverChange}
-            className={`size-8 min-w-0 rounded-lg p-0 ${current ? CHROME_CURRENT_FILLS : CHROME_BUTTON_FILLS}`}
-          >
-            <ConsoleAvatar name={thisConsole.name} icon={thisConsole.icon} className="size-7" />
-          </Button>
-        </TitledControl>
+        <Button
+          tooltip={tooltip}
+          tooltipPlacement="end"
+          tooltipFocusOnly={hoverOpensSidebar}
+          iconOnly
+          size="sm"
+          variant="ghost"
+          label={label}
+          // The markup tooltip repeats the name, which a button only detects for plain text.
+          describedBy=""
+          current={current}
+          // Not styling: `usePanePeekPointer` (`Sidebar.tsx`) matches this to keep the floating sidebar
+          // up while the pointer is on an avatar, which lies outside the card and its gap. Without it
+          // the card slides away from under a pointer resting here.
+          data-sidebar-peek-keep=""
+          focusOnPress={false}
+          onPress={onSelect}
+          onMouseHoverChange={onHoverChange}
+          className={`size-8 min-w-0 rounded-lg p-0 ${current ? CHROME_CURRENT_FILLS : CHROME_BUTTON_FILLS}`}
+        >
+          <ConsoleAvatar name={thisConsole.name} icon={thisConsole.icon} className="size-7" />
+        </Button>
         <AvatarStatusBadge status={status} />
       </BadgeAnchor>
       <ActionMenu

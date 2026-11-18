@@ -506,6 +506,14 @@ const redeemFromDetails: Step = (ui) => ui.press(ui.t("quota.resetCredits.useFor
 /** Settings → Agent accounts with the settings (the switches) of the account `name` in front. */
 const accountSettings = (name: string | ((ui: Ui) => string), agent: Agent = "claude"): Step[] => [...openAccounts, openSettings(name, agent)];
 
+/** The mouse rests on Work's locked sharing switch, and the step waits for its tooltip to read `reason`: the only place
+ * the reason is written. */
+const hoverSharingSwitch = (reason: (ui: Ui) => string): Step => (ui) => ui.hoverTooltip(ui.t("settings.accounts.sharing.switchLabel", { name: "Work" }), reason(ui));
+/** The reasons Work's sharing switch is locked for in the scenarios: sessions working while it is being signed in as well,
+ * and a daemon host that cannot make file links. */
+const inUseReason = (ui: Ui) => ui.t("settings.accounts.sharing.inUseSessions", { count: 2 }) + ui.t("settings.accounts.sharing.inUseSigningIn");
+const unlinkableReason = (ui: Ui) => ui.t("daemon.sharing_unavailable_on_host");
+
 const openSharingHelp = (name: string, agent: Agent = "claude"): Step[] => [
   ...accountSettings(name, agent),
   (ui) => ui.touchPress(ui.t("settings.accounts.sharing.helpLabel")),
@@ -551,7 +559,7 @@ const sharingEmailState: Scenario["state"] = {
   accountQuotas: [quotaOf("claude", "a-work", "pro", [quotaWindow("session", 38, 150), quotaWindow("weekly", 66, 2 * 24 * 60 + 5 * 60)], { email: WORK_EMAIL })],
 };
 
-/** Work has two sessions working and is being signed in as well, so its switch cannot be used and says both why. */
+/** Work has two sessions working and is being signed in as well, so its switch cannot be used and its tooltip says both why. */
 const sharingInUseState: Scenario["state"] = {
   ...sharingAccounts({ share: false }, { share: true }),
   accountSharing: accountSharingOf([{ account: "a-work", in_use: { sessions: 2, signing_in: true } }]),
@@ -576,7 +584,7 @@ function sharingUnlinkableState(share: boolean): Scenario["state"] {
   });
 }
 
-/** Work does not share: its switch is locked, with the reason under it. */
+/** Work does not share: its switch is locked, with the reason as its tooltip. */
 const sharingUnavailableState = sharingUnlinkableState(false);
 
 /** Work already shares: its switch can be turned off, and its line says turning it on again is not possible there. */
@@ -1302,7 +1310,7 @@ export const settingsScenarios: Scenario[] = [
     title: "Settings: accounts, the icon buttons at the end of the tab row",
     description: "Add account, the last icon button in the tab row (the other, Add agent, is beside it), has the pointer on it, so its tooltip, \"Add account\", is open above it. The two buttons are plain icons in the same style as the ⋮ buttons, with no words.",
     state: quotaState,
-    steps: [...openAccounts, (ui) => ui.hoverTitledControl(ui.t("settings.accounts.add"))],
+    steps: [...openAccounts, (ui) => ui.hoverTooltip(ui.t("settings.accounts.add"))],
   },
   {
     id: "settings-accounts-start-windows-help-popover",
@@ -1877,17 +1885,17 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Settings: accounts, no sharing where the daemon's computer cannot make file links",
-    description: "Work's Account settings with the daemon on a Windows computer whose Developer Mode is off, so it cannot create the file links sharing needs: Share default configuration is still the row above Disable account, with its label and help button, but its switch is off and unavailable (faded, still focusable), and under the row's description a line says why: the computer running the daemon cannot create the file links sharing needs, to turn on Developer Mode in Settings on that computer, then quit Octoboard and open it again, or restart the daemon, with Developer Mode and Settings as chips. The refusal the daemon would give is never reached, since the switch cannot be turned.",
+    description: "Work's Account settings with the daemon on a Windows computer whose Developer Mode is off, so it cannot create the file links sharing needs: Share default configuration is still the row above Disable account, with its label and help button, but its switch is off and unavailable (faded, still focusable, taking no press), and the mouse rests on it: its tooltip says why, that the computer running the daemon cannot create the file links sharing needs, to turn on Developer Mode in Settings on that computer, then quit Octoboard and open it again, or restart the daemon, with Developer Mode and Settings as chips. The reason is written nowhere else, with no line under the row's description. The refusal the daemon would give is never reached, since the switch cannot be turned.",
     state: sharingUnavailableState,
     host: WINDOWS_HOST,
-    steps: accountSettings("Work"),
+    steps: [...accountSettings("Work"), hoverSharingSwitch(unlinkableReason)],
   },
   {
     id: "settings-accounts-sharing-on-unlinkable-windows",
     group: GROUP,
     category: "exceptional",
     title: "Settings: accounts, sharing already on where the daemon's computer cannot make file links",
-    description: "Work's Account settings with the daemon on a Windows computer whose Developer Mode is off, and Work already sharing: unlike the locked off switch of the scenario above, Share default configuration is on and free (not faded), so it can be turned off. Nothing stands under the switch's description: the host's missing file links are not warned about while sharing is on, and only the in-use reasons would appear there. Turn it off to see the locked-off reason of the scenario above.",
+    description: "Work's Account settings with the daemon on a Windows computer whose Developer Mode is off, and Work already sharing: unlike the locked off switch of the scenario above, Share default configuration is on and free (not faded), so it can be turned off. The switch has no tooltip: the host's missing file links are not warned about while sharing is on, and only the in-use reasons would give one. Turn it off to see the locked-off reason of the scenario above.",
     state: sharingUnlinkableOnState,
     host: WINDOWS_HOST,
     steps: accountSettings("Work"),
@@ -1897,16 +1905,16 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, sharing cannot be changed while the account is in use",
-    description: "Work's sharing switch is faded but still focusable, and the lines under the row's description, which say why, read that sharing cannot be changed while 2 of the account's sessions are working and to wait for them to finish, and that it cannot be changed while the account is being signed in.",
+    description: "Work's sharing switch is faded, still focusable and taking no press, and the mouse rests on it: its tooltip, the only place the reason is written, says that sharing cannot be changed while 2 of the account's sessions are working and to wait for them to finish, and that it cannot be changed while the account is being signed in.",
     state: sharingInUseState,
-    steps: accountSettings("Work"),
+    steps: [...accountSettings("Work"), hoverSharingSwitch(inUseReason)],
   },
   {
     id: "settings-accounts-sharing-progress",
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, sharing change running",
-    description: "Work is turning sharing on and changing entries, so its switch is faded but still focusable, with no lock line and no state description under the label. A determinate progress bar under the row reads 3 of 9, with the entry being processed, plugins/, as a chip under it.",
+    description: "Work is turning sharing on and changing entries, so its switch is faded but still focusable, with no tooltip and no state description under the label. A determinate progress bar under the row reads 3 of 9, with the entry being processed, plugins/, as a chip under it.",
     state: sharingProgressState,
     steps: accountSettings("Work"),
   },
@@ -1915,7 +1923,7 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Settings: accounts, sharing change ending and resuming sessions",
-    description: "Work is turning sharing on and is ending the account's idle sessions first: its switch is faded but still focusable, with no lock line and no state description under the label, and an indeterminate bar under the row reads \"Ending idle sessions…\" in place of the count, with no entry.",
+    description: "Work is turning sharing on and is ending the account's idle sessions first: its switch is faded but still focusable, with no tooltip and no state description under the label, and an indeterminate bar under the row reads \"Ending idle sessions…\" in place of the count, with no entry.",
     state: sharingRestartState,
     steps: accountSettings("Work"),
   },

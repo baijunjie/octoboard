@@ -17,7 +17,6 @@ import { ROW_ICON_BUTTON_CLASS, RowIconGroup } from "../../components/controls/R
 import { StatusAnnouncer } from "../../components/announce/StatusAnnouncer";
 import { INACTIVE_VEIL_CLASS } from "../../components/status/inactiveVeil";
 import { Button, itemKeyOf, itemKeySelector, partSelector, Tab, TabList, TabListContainer, Tabs, useKeyboardModality, useTabPanelLink } from "../../primitives";
-import { TitledControl } from "../../components/hint/TitledControl";
 import { useLatest, useStableHandler } from "../../components/hooks/useLatest";
 import { useListMotion } from "../../components/motion/useListMotion";
 import { ConfirmDialog } from "../../components/dialog/ConfirmDialog";
@@ -241,11 +240,9 @@ export function ShellTerminalPanel({
     terminal.state === "exited" ? t("shellTerminal.tab.exited", { title: isolate(title) }) : title;
 
   const newTerminalButton = (
-    <TitledControl title={t("shellTerminal.new")}>
-      <Button ref={newRef} data-region-landing={terminals.length === 0 ? "" : undefined} iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={t("shellTerminal.new")} focusOnPress={false} onPress={() => void start()}>
-        <Plus className="size-4" />
-      </Button>
-    </TitledControl>
+    <Button tooltip={t("shellTerminal.new")} ref={newRef} data-region-landing={terminals.length === 0 ? "" : undefined} iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={t("shellTerminal.new")} focusOnPress={false} onPress={() => void start()}>
+      <Plus className="size-4" />
+    </Button>
   );
 
   return (

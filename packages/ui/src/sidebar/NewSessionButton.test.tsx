@@ -152,9 +152,9 @@ it("keeps the quick form focusable, named for the action and described by why it
   expect(button().getAttribute("aria-label")).toBe("New session with defaults");
   const reason = document.getElementById(button().getAttribute("aria-describedby")!);
   expect(reason?.textContent).toBe("No available account");
-  // The press goes to the quick create, which refuses with the reason; it does not open a session.
+  // A press does nothing: it neither quick-creates nor opens a session.
   click();
-  expect(onQuickCreate).toHaveBeenCalledWith(request);
+  expect(onQuickCreate).not.toHaveBeenCalled();
   expect(onOpen).not.toHaveBeenCalled();
   key("keyup", false);
   expect(button().getAttribute("aria-disabled")).toBeNull();

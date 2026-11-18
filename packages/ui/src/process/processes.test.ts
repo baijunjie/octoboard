@@ -2,9 +2,8 @@
 import { expect, it, vi } from "vitest";
 
 import { looseRequestSender } from "../requests";
-import { CodedError } from "../errors/codedError";
 import type { ProcessTree } from "../protocol";
-import { isUnkeepable, keepProcesses, listProcesses, stopProcesses, unkeepableMessage, unkeepableRefusal, type UnkeepableTree } from "./processes";
+import { isUnkeepable, keepProcesses, listProcesses, stopProcesses, unkeepableMessage, type UnkeepableTree } from "./processes";
 import type { Event, ClientRequestBody } from "../protocol";
 
 function daemon(reply: Event) {
@@ -30,6 +29,7 @@ it("lists a session's or a project's trees and names the stopped and kept ones",
 it("words why a tree cannot be kept as the refusal of keeping it", () => {
   const tree: UnkeepableTree = { id: "1:2", command: "vite", cwd: null, cwd_missing: false, kept: false, keepable: false, started_at: 0, process_count: 1, memory_bytes: 0, ports: [] };
   expect(unkeepableMessage({ ...tree, unkeepable_reason: "agent_console" })).toBe("daemon.process_shares_agent_console");
+  expect(unkeepableMessage({ ...tree, unkeepable_reason: "agent_command_group" })).toBe("daemon.process_in_agent_command_group");
   // A newer daemon's reason, or none, is said plainly.
   expect(unkeepableMessage(tree)).toBe("processes.unkeepable");
   expect(unkeepableMessage({ ...tree, unkeepable_reason: "later" as never })).toBe("processes.unkeepable");
@@ -42,15 +42,6 @@ it("takes only a keepable the daemon sends as false as a tree that cannot be kep
   // An older daemon sends no `keepable`, and its trees could always be kept.
   const { keepable: _, ...older } = tree;
   expect(isUnkeepable(older as ProcessTree)).toBe(false);
-});
-
-it("refuses a keep of a tree that cannot be kept as the daemon does, with its code where the reason is known", () => {
-  const t = ((key: string) => `[${key}]`) as never;
-  const tree: UnkeepableTree = { id: "1:2", command: "vite", cwd: null, cwd_missing: false, kept: false, keepable: false, started_at: 0, process_count: 1, memory_bytes: 0, ports: [] };
-  const known = unkeepableRefusal({ ...tree, unkeepable_reason: "agent_console" }, t);
-  expect(known).toBeInstanceOf(CodedError);
-  expect(known).toMatchObject({ code: "process_shares_agent_console", message: "[daemon.process_shares_agent_console]" });
-  expect(unkeepableRefusal(tree, t)).toMatchObject({ message: "[processes.unkeepableUnknownReason]", recovery: "none" });
 });
 
 it("refuses a stop that left a process running, worded by why it was left", async () => {

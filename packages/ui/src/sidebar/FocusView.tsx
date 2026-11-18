@@ -7,13 +7,11 @@ import { SessionAgentIcon } from "../components/icons/SessionAgentIcon";
 import { EmptyPanel } from "../components/panel/EmptyPanel";
 import { PANE_HEADER_FRAME_CLASS } from "../components/panel/paneHeaderFrame";
 import { FadeOverflow } from "../components/text/FadeOverflow";
-import { IndicatorTooltip } from "../components/hint/IndicatorTooltip";
 import { InlineReference } from "../i18n/InlineReference";
 import { PaneTitle } from "../components/panel/PaneTitle";
 import { RowControls, RowIconGroup, RowIconLine, RowIconSlot } from "../components/controls/RowControls";
 import { hasVisibleContext, SessionContextLabel, SessionRelativeTime } from "../components/status/SessionMetadata";
 import { StatusIcon } from "../components/status/StatusIcon";
-import { TitledControl } from "../components/hint/TitledControl";
 import { useListMotion } from "../components/motion/useListMotion";
 import { STICKY_HEADING_HEIGHT, StickyHeading } from "../components/scroll/StickyHeading";
 import { NESTED_INSET_CLASS, RowLabel, TreeRow } from "../components/rows/TreeRow";
@@ -65,19 +63,19 @@ function FocusHeader({
     // card's border and padding add up to `--row-content-inset`), so the end padding matches that and
     // this header's trailing menus line up with the menu on a row or card. The start stays put.
     <div ref={ref} className={`${PANE_HEADER_FRAME_CLASS} gap-1 ps-(--row-fill-inset) pe-(--pane-inset)`}>
-      <TitledControl title={<ShortcutTooltip action="focusMode">{t("sidebar.focus.exit")}</ShortcutTooltip>} placement="bottom">
-        <Button
-          iconOnly
-          size="sm"
-          variant="ghost"
-          label={t("sidebar.focus.exit")}
-          data-focus-exit
-          focusOnPress={false}
-          onPress={() => handlers.onFocus(undefined)}
-        >
-          <ArrowLeft className="size-4 rtl:-scale-x-100" />
-        </Button>
-      </TitledControl>
+      <Button
+        tooltip={<ShortcutTooltip action="focusMode">{t("sidebar.focus.exit")}</ShortcutTooltip>}
+        tooltipPlacement="bottom"
+        iconOnly
+        size="sm"
+        variant="ghost"
+        label={t("sidebar.focus.exit")}
+        data-focus-exit
+        focusOnPress={false}
+        onPress={() => handlers.onFocus(undefined)}
+      >
+        <ArrowLeft className="size-4 rtl:-scale-x-100" />
+      </Button>
       {children}
     </div>
   );
@@ -176,17 +174,13 @@ export function ProjectFocusView({
             variant="list"
             action={elsewhere && (
               <span className="contents" {...switchFocus}>
-                {/* Switch sends hover props to its hidden input; this trigger covers the visible control without adding a tab stop.
-                    No touch popover: a tap on the switch toggles it. */}
-                <IndicatorTooltip tooltip={t("sidebar.focus.includeConsoleSessions")} touchPopover={false}>
-                  <Switch
-                    size="sm"
-                    label={t("sidebar.focus.includeConsoleSessions")}
-                    describedBy=""
-                    selected={includeConsoleSessions}
-                    onSelectedChange={(value) => projectFocusIncludeConsoleSessions.set(value)}
-                  />
-                </IndicatorTooltip>
+                <Switch
+                  size="sm"
+                  label={t("sidebar.focus.includeConsoleSessions")}
+                  tooltip={t("sidebar.focus.includeConsoleSessions")}
+                  selected={includeConsoleSessions}
+                  onSelectedChange={(value) => projectFocusIncludeConsoleSessions.set(value)}
+                />
               </span>
             )}
           >

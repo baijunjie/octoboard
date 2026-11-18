@@ -40,9 +40,9 @@ create symbolic links, which Developer Mode allows. The daemon finds this out on
 on takes effect when the daemon next starts. Where the host cannot, turning sharing on is refused with
 `sharing_unavailable_on_host`, with nothing recorded. Turning sharing off is not refused, so an account that already
 shares can still stop sharing there, but cannot then share again until the host can. The window locks a switch that is
-off, with the refusal's message under it, and leaves the switch of an account that shares free, with nothing under it
-about the host, unless its sessions or a sign-in lock it, which it then says (see "Sharing the default configuration"
-in `docs/product/agent-accounts.md`). The refusal's message says that the computer running the daemon cannot share the
+off, with the refusal's message as its tooltip and description, and leaves the switch of an account that shares free,
+with nothing said about the host, unless its sessions or a sign-in lock it, which it then says the same way (see
+"Sharing the default configuration" in `docs/product/agent-accounts.md`). The refusal's message says that the computer running the daemon cannot share the
 default configuration because it cannot create the file links sharing needs, and to turn on Developer Mode in that
 computer's settings app — named as its own system names it, Settings on Windows — and then to quit Octoboard and open
 it again, or restart the daemon.

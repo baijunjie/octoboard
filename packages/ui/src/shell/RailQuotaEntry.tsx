@@ -2,7 +2,7 @@ import { Gauge } from "lucide-react";
 import React, { useMemo, useRef, useState } from "react";
 
 import { pickableAgents } from "../agents/agents";
-import { keepsEscapeFromPanel } from "../components/hint/Hint";
+import { keepsEscapeFromPanel } from "../components/hint/hintPopover";
 import { STATUS_MARK_POPOVER } from "../components/status/StatusMark";
 import { useT } from "../i18n/react";
 import type { Agent } from "../protocol";
@@ -24,7 +24,7 @@ const nested = nestedPopovers(OWNER);
 
 /** The rail's quota button and the floating panel it anchors, which lists each added and installed agent's accounts
  * in the saved display order, bar the ones the user turned off, with their plan and quota (see "Opening the panel" in
- * `docs/product/account-quota-panel.md`). The panel is a `Hint` of kind `popover`, the same behaviour as a status mark's
+ * `docs/product/account-quota-panel.md`). The panel is a `PopoverHint`, the same behaviour as a status mark's
  * popover: resting the mouse on the button opens it without moving focus; a mouse click opens nothing; a tap, a pen,
  * assistive technology and the keyboard open it with focus in it. Each opening asks the daemon to refresh the quotas
  * that are due. */

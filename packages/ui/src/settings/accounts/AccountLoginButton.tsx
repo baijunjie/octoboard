@@ -2,7 +2,6 @@ import { LogIn } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
 import { ICON_TRIGGER_BASE_CLASS, ICON_TRIGGER_CLASS } from "../../components/controls/iconTrigger";
-import { TitledControl } from "../../components/hint/TitledControl";
 import { isolate } from "../../i18n/isolate";
 import { useT } from "../../i18n/react";
 import type { Agent } from "../../protocol";
@@ -105,22 +104,20 @@ export function AccountLoginButton({ agent, account, name, quota, turnedOff, onL
   const returnFocus = useLoginFocusReturn(button, fallback, { active, succeeded: login?.status === "succeeded" });
   if (turnedOff || loginStateOf(quota) !== "out") return null;
   return (
-    <TitledControl title={active ? t("settings.accounts.login.starting") : t("settings.accounts.login")}>
-      <Button
-        ref={button}
-        variant="ghost"
-        focusOnPress={false}
-        unavailable={active ? t("settings.accounts.login.starting") : undefined}
-        label={t("settings.accounts.login.open", { name: isolate(name) })}
-        className={active ? ICON_TRIGGER_BASE_CLASS : ICON_TRIGGER_CLASS}
-        onPress={() => {
-          if (active) return;
-          const focused = document.activeElement;
-          onLogin(focused === document.body || button.current?.contains(focused) ? returnFocus : () => {});
-        }}
-      >
-        <LogIn className="size-4" />
-      </Button>
-    </TitledControl>
+    <Button
+      ref={button}
+      variant="ghost"
+      focusOnPress={false}
+      tooltip={t("settings.accounts.login")}
+      unavailable={active ? t("settings.accounts.login.starting") : undefined}
+      label={t("settings.accounts.login.open", { name: isolate(name) })}
+      className={active ? ICON_TRIGGER_BASE_CLASS : ICON_TRIGGER_CLASS}
+      onPress={() => {
+        const focused = document.activeElement;
+        onLogin(focused === document.body || button.current?.contains(focused) ? returnFocus : () => {});
+      }}
+    >
+      <LogIn className="size-4" />
+    </Button>
   );
 }

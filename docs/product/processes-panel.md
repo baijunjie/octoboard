@@ -121,16 +121,13 @@ or "Keep *command*", so the cards' buttons can be told apart. A mouse or touch p
 belongs to no session, so their cards offer Stop alone (see "Automatic stopping and its boundaries" in
 `docs/product/background-processes.md`).
 
-**A tree that cannot be kept** — on a Windows daemon host, one with a process on the agent's own console (see
-"Processes on the agent's own console" in `docs/product/background-processes.md`) — still shows Keep, unavailable: it
-can take keyboard focus and shows no hover or press feedback. Hovering or focusing it shows the reason as its tooltip,
-which is also its description for assistive technology: the same sentences as the refusal of a keep, or, for a reason
-this window does not know, that the process cannot be kept. Pressing it explains rather than acts: it asks for no
-confirmation and sends no request, and raises the error alert a refused keep raises, titled that the process could not
-be kept, with the daemon's refusal (`process_shares_agent_console`) as its body — the process runs in the agent's own
-terminal, so it ends with the session and cannot be kept, with the remedy of starting it in a window of its own to keep
-it running — or, for a reason this window does not know, only that the process cannot be kept (see "The error alert"
-in `docs/product/error-alerts.md`).
+**A tree that cannot be kept** — one with a process on the agent's own console on a Windows daemon host, or with a
+process inside a command the agent is still running on macOS and Linux (see "Processes that cannot be kept" in
+`docs/product/background-processes.md`) — still shows Keep, unavailable (see "How such a control behaves" in
+`docs/product/controls-unavailable-for-a-reason.md`). Its tooltip and its description for assistive technology are the
+window's sentence for why the tree cannot be kept, which says only the cause, or, for a reason this window does not
+know, that the process cannot be kept. Pressing it does nothing: it asks for no confirmation, sends no request and
+raises no alert.
 
 **Each asks for confirmation first**, showing the tree's command whole, wrapped rather than cut, and its working
 directory and facts, without its web links:

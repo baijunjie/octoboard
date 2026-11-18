@@ -8,6 +8,8 @@ import { useFieldClear } from "./Field";
 import { openingFocus, useObjectRef } from "./focus";
 import { Spinner } from "./Spinner";
 import type { DataAttributes } from "./props";
+import { Tooltip, useOwnTooltipGuard } from "./Tooltip";
+import { UNAVAILABLE_BUTTON_CLASS, useUnavailable } from "./unavailable";
 
 /** HeroUI's button variants, by HeroUI's own names. */
 export type ButtonVariant = "primary" | "secondary" | "tertiary" | "outline" | "ghost" | "danger" | "danger-soft";
@@ -40,12 +42,6 @@ export function buttonClassName({ variant, size }: { variant?: ButtonVariant; si
 
 /** The extra-small size on top of HeroUI's small one; the unlayered `.app-button--xs` rules extend HeroUI's scale. */
 const XS_CLASS = "app-button--xs";
-
-/** The look of an unavailable button over HeroUI's disabled one, which turns pointer events off for `aria-disabled`:
- * they are turned back on, for the tooltip with the reason to open and a press to reach `onPress`, and the hover and
- * pressed fills stay the resting one and the press shrink is left off, as nothing is done. A fill of the caller's own
- * classes (a row icon's `hover:` tint) is the caller's to leave off. */
-const UNAVAILABLE_CLASS = "pointer-events-auto [--button-bg-hover:var(--button-bg)] [--button-bg-pressed:var(--button-bg)] ui-pressed:[transform:none] active:[transform:none]";
 
 /** What a plain button and a toggle button share: its name and description, and how it takes focus. */
 export interface ButtonBaseProps extends DataAttributes {
@@ -116,7 +112,7 @@ export function baseButtonProps({
  * layout space and accessible name, and the button reports itself busy (`aria-busy`). In a busy `Modal` it is disabled,
  * unless it is `pending`: the pending button is the one control left, and takes the focus the others give up (see
  * `busy.ts`). */
-export function Button({ variant, size, type = "button", pending, pendingIndicator, dimWhilePending = true, unavailable, current, hasPopup, onPress, className, children, ref: forwarded, ...rest }: ButtonBaseProps & {
+export function Button(props: ButtonBaseProps & {
   variant?: ButtonVariant;
   /** `submit` submits the form around it. */
   type?: "button" | "submit";
@@ -128,11 +124,24 @@ export function Button({ variant, size, type = "button", pending, pendingIndicat
   /** Whether a pending button is dimmed; false keeps its normal opacity while presses remain blocked. */
   dimWhilePending?: boolean;
   /** Why the button cannot act now, which makes it unavailable rather than disabled (see "Buttons" in
-   * `docs/conventions/ui-standard.md`): it stays focusable and pressable, reads as `aria-disabled` and in HeroUI's
-   * disabled style with neither hover fill nor press shrink, and has the reason as its description, from a visually
-   * hidden copy inside it, in place of `describedBy`; its name stays the action. A press still reaches `onPress`, which
-   * answers it, and the caller shows the reason as its tooltip. */
-  unavailable?: string;
+   * `docs/conventions/ui-standard.md`): it stays focusable, reads as `aria-disabled` and in HeroUI's disabled style
+   * with neither hover fill nor press shrink, and has the reason as its description, from a visually hidden copy inside
+   * it, in place of `describedBy`; its name stays the action. A press (click, Enter or Space) does nothing and never
+   * reaches `onPress`. The reason is also the button's tooltip, which replaces `tooltip`, and on touch a tap opens it in
+   * a popover (see `Tooltip`). `true` is unavailable with no reason, `""` is available (see `./unavailable`). */
+  unavailable?: React.ReactNode;
+  /** The button's own tooltip while it is available, which the reason replaces while it is unavailable. The button
+   * always carries its tooltip itself, so the caller wraps it in no `Tooltip`, and one with no text (`undefined`, `""`)
+   * is held back with the button staying in its place. A tooltip that repeats `label` does not describe the button. */
+  tooltip?: React.ReactNode;
+  /** Where the tooltip opens relative to the button; see `Tooltip`. */
+  tooltipPlacement?: "end" | "bottom";
+  /** The tooltip opens on keyboard focus only, not on hover. */
+  tooltipFocusOnly?: boolean;
+  /** A press does not close the tooltip, for a button whose tooltip answers the press. */
+  tooltipKeepOpenOnPress?: boolean;
+  /** Told when the tooltip opens or closes. */
+  onTooltipOpenChange?: (isOpen: boolean) => void;
   /** Marks the button as the current item of a set (`aria-current`). */
   current?: boolean;
   /** Overrides whether the button says it opens a popup (`aria-haspopup`), for a trigger whose press does not always
@@ -140,6 +149,7 @@ export function Button({ variant, size, type = "button", pending, pendingIndicat
   hasPopup?: boolean;
   onPress?: (press: ButtonPress) => void;
 }): React.ReactElement {
+  const { variant, size, type = "button", pending, pendingIndicator, dimWhilePending = true, unavailable, tooltip, tooltipPlacement, tooltipFocusOnly, tooltipKeepOpenOnPress, onTooltipOpenChange, current, hasPopup, onPress, className, children, ref: forwarded, ...rest } = props;
   // Placed as a field's clear button (`SearchField`, `SelectClearButton`), it takes what makes it the field's.
   const { className: placement, ...fieldClear } = useFieldClear() ?? {};
   const disabled = useDisabled(rest.disabled, pending);
@@ -153,29 +163,38 @@ export function Button({ variant, size, type = "button", pending, pendingIndicat
   }, [pending, ref]);
   const indicator = pending && (pendingIndicator ?? <Spinner color="current" size={size === "lg" ? "md" : "sm"} className={size === "xs" ? "size-3" : undefined} />);
   const contentId = useId();
-  const reasonId = useId();
-  const reason = unavailable !== undefined && <span id={reasonId} className="sr-only">{unavailable}</span>;
-  const classes = [pending && "app-button--pending", size === "xs" && XS_CLASS, pending && !dimWhilePending && "[--disabled-opacity:1]", unavailable !== undefined && UNAVAILABLE_CLASS, className, placement].filter(Boolean).join(" ");
-  return (
+  const why = useUnavailable(unavailable);
+  useOwnTooltipGuard("Button");
+  const text = why.reason ?? tooltip;
+  // A tooltip that only repeats the name would be heard twice, as the name and then as the description.
+  const describedBy = why.id ?? (rest.describedBy === undefined && why.reason === undefined && tooltip === rest.label ? "" : rest.describedBy);
+  const classes = [pending && "app-button--pending", size === "xs" && XS_CLASS, pending && !dimWhilePending && "[--disabled-opacity:1]", why.frozen && UNAVAILABLE_BUTTON_CLASS, className, placement].filter(Boolean).join(" ");
+  const button = (
     <HeroButton
-      {...baseButtonProps({ ...rest, disabled, labelledBy: rest.labelledBy ?? (pending && !rest.label ? contentId : undefined), describedBy: unavailable === undefined ? rest.describedBy : reasonId })}
+      {...baseButtonProps({ ...rest, disabled, labelledBy: rest.labelledBy ?? (pending && !rest.label ? contentId : undefined), describedBy })}
       ref={ref}
       {...fieldClear}
-      type={type}
+      // An unavailable submit button must not submit the form on a native click either.
+      type={why.frozen ? "button" : type}
       variant={variant}
       size={size === "xs" ? "sm" : size}
       data-size={size}
       isPending={pending}
-      aria-disabled={unavailable !== undefined || undefined}
+      aria-disabled={why.frozen || undefined}
       aria-current={current ? "true" : undefined}
       aria-haspopup={hasPopup}
-      onPress={onPress && ((event) => onPress(toButtonPress(event)))}
+      onPress={onPress && ((event) => !why.frozen && onPress(toButtonPress(event)))}
       className={classes || undefined}
     >
-      {reason}
+      {why.element}
       <span id={contentId} className="app-button__content">{children}</span>
       {indicator && <span className="app-button__indicator" aria-hidden="true">{indicator}</span>}
     </HeroButton>
+  );
+  return (
+    <Tooltip content={text} placement={tooltipPlacement} label={rest.label} focusOnly={tooltipFocusOnly} keepOpenOnPress={tooltipKeepOpenOnPress} onOpenChange={onTooltipOpenChange} touchPopover={why.reason !== undefined}>
+      {button}
+    </Tooltip>
   );
 }
 

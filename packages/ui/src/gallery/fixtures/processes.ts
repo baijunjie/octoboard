@@ -47,9 +47,11 @@ const portTrees = [
   processTreeOf("107:1", preview, "postgres -D /opt/homebrew/var/postgresql@16", 400, { cwd: "/opt/homebrew/var", process_count: 5, memory_bytes: 96_000_000, ports: [5432], http_ports: [] }),
 ];
 
-// A tree with a process on its agent's own console (Windows): it ends with its session whatever keeps it, so the daemon
-// lists it as unkeepable, beside the first of `pair`, which can be kept.
-const sharedConsoleTree = processTreeOf("105:1", preview, "node scripts/export-report.mjs --watch", 20, { process_count: 2, memory_bytes: 64_000_000, keepable: false, unkeepable_reason: "agent_console" });
+// A tree running inside one of its agent's still-running shell commands: the agent CLI kills that command's process
+// group when it exits, so it ends with its session whatever keeps it and the daemon lists it as unkeepable, beside the
+// first of `pair`, which can be kept. This is the reason on macOS and Linux; the Windows one (a process on the agent's
+// own console) lays out the same and differs only in its wording, so a test covers it.
+const unkeepableTree = processTreeOf("105:1", preview, "node scripts/export-report.mjs --watch", 20, { process_count: 2, memory_bytes: 64_000_000, keepable: false, unkeepable_reason: "agent_command_group" });
 
 // Two trees are enough for the views of one button at work.
 const pair = sessionTrees.slice(0, 2);
@@ -302,12 +304,12 @@ export const processScenarios: Scenario[] = [
     id: "processes-keep-unavailable",
     group: GROUP,
     category: "exceptional",
-    title: "Keep unavailable for a process on the agent's own console",
-    description: "Two rows, the dev server and, under it, a script that cannot be kept because it shares the agent's own console and so ends with the session whatever keeps it. Keyboard focus is on the second row's Keep, which stays in the row beside the danger-coloured Stop: it is faded and takes no hover fill, and a tooltip says why it is unavailable (the process runs in the agent's own terminal, so it ends with the session, and it should be started in a window of its own to keep it running); a screen reader reads the same reason as its description. Pressing it asks nothing and sends nothing: it raises the error alert titled \"Cannot keep the process\", whose body is the daemon's refusal (the process runs in the agent's own terminal, so it ends with the session and cannot be kept) followed by the remedy to start it in a window of its own. The first row's Keep, which a hover or focus on that row reveals, is the ordinary secondary button.",
+    title: "Keep unavailable for a process that ends with its session",
+    description: "Two rows, the dev server and, under it, a script that cannot be kept because it runs inside one of the agent's running commands and so ends with the session whatever keeps it. Keyboard focus is on the second row's Keep, which stays in the row beside the danger-coloured Stop: it is faded and takes no hover fill, and a tooltip says why it is unavailable (the process runs inside a command the agent is still running, and the agent ends it when it exits, so it cannot be kept); a screen reader reads the same reason as its description. The reason is written nowhere else, and pressing it does nothing: no confirmation, no request, no alert. The first row's Keep, which a hover or focus on that row reveals, is the ordinary secondary button.",
     state,
     preferences: panelPreferences,
-    processes: { trees: [pair[0], sharedConsoleTree] },
-    steps: [...openSession, (ui) => ui.focusControl(keepOf(ui, sharedConsoleTree))],
+    processes: { trees: [pair[0], unkeepableTree] },
+    steps: [...openSession, (ui) => ui.focusControl(keepOf(ui, unkeepableTree))],
   },
   {
     id: "processes-stop-confirmation",
@@ -443,7 +445,7 @@ export const processScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "Stop refused",
-    description: "The user confirmed Stop on the first row, and the stop request was refused: an error alert titled \"Could not stop the process\" stands over the stop confirmation. After OK the confirmation remains available for retry or cancellation, with both process rows preserved in the panel behind it. A refused Keep is reported in the same way over its confirmation; Keep on a process that cannot be kept is refused before any confirmation (see Keep unavailable for a process on the agent's own console).",
+    description: "The user confirmed Stop on the first row, and the stop request was refused: an error alert titled \"Could not stop the process\" stands over the stop confirmation. After OK the confirmation remains available for retry or cancellation, with both process rows preserved in the panel behind it. A refused Keep is reported in the same way over its confirmation.",
     state,
     preferences: panelPreferences,
     processes: { trees: pair, stop: stopRefused },

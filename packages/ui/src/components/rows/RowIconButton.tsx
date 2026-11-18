@@ -2,7 +2,6 @@ import type { LucideIcon } from "lucide-react";
 import React from "react";
 
 import { ROW_ICON_BUTTON_BASE_CLASS, ROW_ICON_BUTTON_CLASS } from "../controls/RowControls";
-import { TitledControl } from "../hint/TitledControl";
 import { Button, type ButtonPress } from "../../primitives";
 
 /** A small icon-only button inside a row (the "+" that opens a session), with its tooltip. Its click
@@ -27,9 +26,9 @@ export function RowIconButton({
   onPress: (event: ButtonPress) => void;
   isDisabled?: boolean;
   /** Why the action cannot be done now, for a button that looks disabled but stays focusable and under
-   * the pointer so that the reason is reachable: it is the tooltip and, through `Button`'s `unavailable`, the button's
-   * description, while the name stays the action. The row's hover tint is left off. A press still reaches `onPress`,
-   * which answers it. */
+   * the pointer so that the reason is reachable: it is the tooltip, in place of its own, and the button's
+   * description, through `Button`'s `unavailable`, while the name stays the action. The row's hover tint is left off. A
+   * press does nothing. */
   unavailable?: string;
   /** Extra classes on the glyph itself, such as a right-to-left mirror. */
   iconClassName?: string;
@@ -38,22 +37,21 @@ export function RowIconButton({
 }): React.ReactElement {
   return (
     <div ref={ref} className="flex" onClick={(e) => e.stopPropagation()}>
-      <TitledControl title={unavailable ?? title ?? label}>
-        <Button
-          iconOnly
-          size="xs"
-          variant="ghost"
-          label={ariaLabel}
-          describedBy={title && ariaLabel === label ? "" : undefined}
-          unavailable={unavailable || undefined}
-          focusOnPress={false}
-          onPress={onPress}
-          disabled={isDisabled}
-          className={unavailable ? ROW_ICON_BUTTON_BASE_CLASS : ROW_ICON_BUTTON_CLASS}
-        >
-          <Icon className={iconClassName ? `size-4 ${iconClassName}` : "size-4"} />
-        </Button>
-      </TitledControl>
+      <Button
+        iconOnly
+        size="xs"
+        variant="ghost"
+        label={ariaLabel}
+        describedBy={ariaLabel === label ? "" : undefined}
+        tooltip={title ?? label}
+        unavailable={unavailable || undefined}
+        focusOnPress={false}
+        onPress={onPress}
+        disabled={isDisabled}
+        className={unavailable ? ROW_ICON_BUTTON_BASE_CLASS : ROW_ICON_BUTTON_CLASS}
+      >
+        <Icon className={iconClassName ? `size-4 ${iconClassName}` : "size-4"} />
+      </Button>
     </div>
   );
 }

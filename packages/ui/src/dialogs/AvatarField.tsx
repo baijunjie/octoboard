@@ -2,7 +2,6 @@ import { ImageUp, X } from "lucide-react";
 import React, { useRef } from "react";
 
 import { handFocusOff } from "../components/focus/handFocusOff";
-import { TitledControl } from "../components/hint/TitledControl";
 import { useT } from "../i18n/react";
 import type { Console } from "../protocol";
 import { Button } from "../primitives";
@@ -39,44 +38,42 @@ export function AvatarField({
   const remove = t("dialog.console.avatarRemove");
   return (
     <div role="group" aria-label={t("dialog.console.avatar")} className="group relative size-12">
-      <TitledControl title={choose}>
+      <Button
+        tooltip={choose}
+        ref={uploadButton}
+        type="button"
+        iconOnly
+        variant={icon ? "ghost" : "tertiary"}
+        label={choose}
+        pending={isPending}
+        onPress={() => fileInput.current?.click()}
+        className="size-12 overflow-hidden rounded-full p-0"
+      >
+        {icon ? (
+          <img src={icon} alt="" className="size-12 rounded-full object-cover" />
+        ) : (
+          <ImageUp className="size-5" />
+        )}
+      </Button>
+      {icon && (
         <Button
-          ref={uploadButton}
+          tooltip={remove}
+          ref={removeButton}
           type="button"
           iconOnly
-          variant={icon ? "ghost" : "tertiary"}
-          label={choose}
-          pending={isPending}
-          onPress={() => fileInput.current?.click()}
-          className="size-12 overflow-hidden rounded-full p-0"
+          size="xs"
+          variant="secondary"
+          label={remove}
+          onPress={() => {
+            // This button is gone once the image is, and focus on it would fall to `<body>`,
+            // taking the dialog's Escape and Tab along.
+            handFocusOff(removeButton.current, uploadButton.current, false);
+            onRemove();
+          }}
+          className="absolute -end-1.5 -top-1.5 rounded-full opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100 motion-reduce:transition-none"
         >
-          {icon ? (
-            <img src={icon} alt="" className="size-12 rounded-full object-cover" />
-          ) : (
-            <ImageUp className="size-5" />
-          )}
+          <X className="size-3" />
         </Button>
-      </TitledControl>
-      {icon && (
-        <TitledControl title={remove}>
-          <Button
-            ref={removeButton}
-            type="button"
-            iconOnly
-            size="xs"
-            variant="secondary"
-            label={remove}
-            onPress={() => {
-              // This button is gone once the image is, and focus on it would fall to `<body>`,
-              // taking the dialog's Escape and Tab along.
-              handFocusOff(removeButton.current, uploadButton.current, false);
-              onRemove();
-            }}
-            className="absolute -end-1.5 -top-1.5 rounded-full opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 [@media(hover:none)]:opacity-100 motion-reduce:transition-none"
-          >
-            <X className="size-3" />
-          </Button>
-        </TitledControl>
       )}
       <input
         ref={fileInput}

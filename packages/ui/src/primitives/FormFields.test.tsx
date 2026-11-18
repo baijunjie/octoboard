@@ -91,7 +91,7 @@ it("marks an unavailable switch's input aria-disabled and its opening focus, fol
   const input = container.querySelector("input")!;
   expect(input.getAttribute("aria-disabled")).toBe("true");
   expect(input.hasAttribute("data-opening-focus")).toBe(true);
-  render(<Switch label="On" selected={false} onSelectedChange={() => {}} />);
+  render(<Switch label="On" selected={false} onSelectedChange={() => {}} unavailable={undefined} />);
   expect(input.hasAttribute("aria-disabled")).toBe(false);
   expect(input.hasAttribute("data-opening-focus")).toBe(false);
 });

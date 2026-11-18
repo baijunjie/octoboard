@@ -20,12 +20,11 @@ import { useHost } from "../platform/react";
 import { isUpdateChannel } from "../updates/updateChannel";
 import { installedMessageKey } from "../updates/installedMessageKey";
 import { reloadPage } from "../platform/reloadPage";
-import { restartPress } from "../updates/restartPress";
+import { restartBlockedReason } from "../updates/restartBlockedReason";
 import type { UpdateState } from "../updates/updateStore";
 import { useRemoteUpdatePreferences, useUpdates, useUpdateStore } from "../updates/UpdatesProvider";
 import { useDaemonStore } from "../store";
 import { useSettingsWrite } from "./useSettingsWrite";
-import { TitledControl } from "../components/hint/TitledControl";
 import { SettingRow, SwitchSettingRow } from "./SettingRow";
 import { Button } from "../primitives";
 
@@ -210,15 +209,12 @@ function OwnUpdatesSetting(): React.ReactElement {
       <ExternalLink data-release-notes-id={notesId} href={releaseUrl(notesVersion)} appearance="button" size="sm">{t("settings.updates.notes")}</ExternalLink>
     </>
   );
-  const restart = restartPress(t, state, store);
+  const blockedReason = restartBlockedReason(t, state);
   const action =
     state.reloadNeeded ? (
       <Button ref={actionButton} size="sm" variant="primary" onPress={reloadPage}>{t("settings.updates.reload")}</Button>
     ) : state.phase === "installed" ? (
-      // The title stays put and only goes inert, so the button is not remounted (losing focus) as it toggles.
-      <TitledControl title={restart.unavailable ?? t("updates.restartBlocked")} isDisabled={restart.unavailable === undefined}>
-        <Button ref={actionButton} size="sm" variant="primary" label={t("settings.updates.restart")} pending={state.restarting} unavailable={restart.unavailable} onPress={restart.onPress}>{t("settings.updates.restart")}</Button>
-      </TitledControl>
+      <Button ref={actionButton} size="sm" variant="primary" label={t("settings.updates.restart")} pending={state.restarting} unavailable={blockedReason} onPress={() => void store.restart()}>{t("settings.updates.restart")}</Button>
     ) : state.update && !state.manual ? (
       // Pending rather than disabled while a check runs: a disabled button would drop the focus it holds.
       <Button ref={actionButton} size="sm" variant="primary" pending={state.phase !== "idle"} onPress={() => void store.install()}>

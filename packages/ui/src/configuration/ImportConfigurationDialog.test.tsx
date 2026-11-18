@@ -411,8 +411,6 @@ it("shows a refresh that fails as an Alert in the review with its own Try again,
   expect(importButton().getAttribute("aria-disabled")).toBe("true");
   await act(async () => importButton().click());
   expect(mounted.sent().some((body) => body.type === "import_configuration")).toBe(false);
-  // The press explained by taking focus to the Alert's button.
-  expect(document.activeElement?.textContent).toBe("Try again");
   // It is not tried again by itself.
   expect(inspections).toBe(2);
   await act(async () => Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Try again")!.click());
@@ -455,16 +453,17 @@ const tryAgain = () => Array.from(document.body.querySelectorAll("button")).find
 it.each([
   ["a mouse press", "pointer", (button: HTMLElement) => pressWithMouse(button, "mouse")],
   ["a key", "keyboard", pressWithKey],
-] as const)("takes focus to the Alert's Try again from a press of the unavailable Import, ringed only after a key: %s", async (_, modality, activate) => {
-  await reviewWithFailedRefresh();
+] as const)("does nothing on a press of the unavailable Import, which keeps focus and sends nothing: %s", async (_, __, activate) => {
+  const mounted = await reviewWithFailedRefresh();
   runOutTimers();
   act(() => importButton().focus());
 
+  const before = mounted.sent().length;
   activate(importButton());
   await act(async () => {});
-  expect(document.activeElement).toBe(tryAgain());
-  expect(getInteractionModality()).toBe(modality);
-  expect(document.activeElement?.hasAttribute("data-focus-visible")).toBe(modality === "keyboard");
+  expect(document.activeElement).toBe(importButton());
+  expect(mounted.sent().length).toBe(before);
+  expect(text()).toContain("Could not read the file again");
 });
 
 it.each([

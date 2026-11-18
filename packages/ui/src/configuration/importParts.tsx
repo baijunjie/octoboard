@@ -2,9 +2,8 @@ import { CircleAlert, CircleMinus, CircleSlash, Folder, Info, type LucideIcon } 
 import React from "react";
 
 import { FlatCard } from "../components/card/FlatCard";
-import { Checkbox } from "../primitives";
+import { Checkbox, Tooltip } from "../primitives";
 import { DetailsButton } from "../components/alerts/DetailsButton";
-import { IndicatorTooltip } from "../components/hint/IndicatorTooltip";
 import { InlineReference } from "../i18n/InlineReference";
 import { TILDE_PARAMS } from "../components/text/literalParams";
 import { MarkLineBox } from "../components/status/MarkLineBox";
@@ -154,9 +153,9 @@ export function Field({ label, value, mark }: {
 export function DirectoryLine({ label, value }: { label: string; value: string }): React.ReactElement {
   return (
     <div className="flex items-start gap-1.5 text-sm">
-      <IndicatorTooltip tooltip={label} label={label} className="mt-0.5 shrink-0 text-app-muted">
+      <Tooltip trigger="mark" content={label} label={label} className="mt-0.5 shrink-0 text-app-muted">
         <Folder className="size-3.5" />
-      </IndicatorTooltip>
+      </Tooltip>
       <span className="min-w-0 font-mono [overflow-wrap:anywhere]" dir="ltr">{value}</span>
     </div>
   );

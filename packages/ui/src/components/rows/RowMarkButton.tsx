@@ -2,7 +2,6 @@ import type { LucideIcon } from "lucide-react";
 import React, { type RefObject, useRef } from "react";
 
 import { handFocusOff } from "../focus/handFocusOff";
-import { TitledControl } from "../hint/TitledControl";
 import { Button } from "../../primitives";
 
 /** The mark of a pinned or locked row, which is also the way to take it off: its glyph becomes
@@ -30,23 +29,22 @@ export function RowMarkButton({
   const holder = useRef<HTMLDivElement>(null);
   return (
     <div ref={holder} className="flex shrink-0" onClick={(e) => e.stopPropagation()}>
-      <TitledControl title={tooltip}>
-        <Button
-          iconOnly
-          size="xs"
-          variant="ghost"
-          label={label}
-          focusOnPress={false}
-          onPress={() => {
-            handFocusOff(holder.current, returnFocusTo.current, true);
-            onPress();
-          }}
-          className={`group/mark shrink-0 rounded-md hover:text-foreground ${tone}`}
-        >
-          <Icon className="size-4 group-hover/mark:hidden group-ui-keyboard-focus/mark:hidden" />
-          <HoverIcon className="hidden size-4 group-hover/mark:block group-ui-keyboard-focus/mark:block" />
-        </Button>
-      </TitledControl>
+      <Button
+        tooltip={tooltip}
+        iconOnly
+        size="xs"
+        variant="ghost"
+        label={label}
+        focusOnPress={false}
+        onPress={() => {
+          handFocusOff(holder.current, returnFocusTo.current, true);
+          onPress();
+        }}
+        className={`group/mark shrink-0 rounded-md hover:text-foreground ${tone}`}
+      >
+        <Icon className="size-4 group-hover/mark:hidden group-ui-keyboard-focus/mark:hidden" />
+        <HoverIcon className="hidden size-4 group-hover/mark:block group-ui-keyboard-focus/mark:block" />
+      </Button>
     </div>
   );
 }

@@ -55,7 +55,6 @@ import type { Region } from "./RegionTabs";
 import { raiseError } from "../components/alerts/raiseError";
 import { ringForAutomaticFocus } from "../input/lastInput";
 import { Button } from "../primitives";
-import { TitledControl } from "../components/hint/TitledControl";
 
 type Stage =
   | { kind: "choose" }
@@ -280,17 +279,10 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
     ringForAutomaticFocus();
     return importButton.current;
   }, [stuck]);
-  // The Alert of a failed refresh, whose last button is the one thing to do about it (Try again, or Choose file).
-  const refreshAlert = useRef<HTMLDivElement>(null);
 
   const apply = () => {
     if (stage.kind !== "review" || busy || refreshingRef.current) return;
-    if (stuck) {
-      // The press of an unavailable Import explains by taking focus to what the Alert offers.
-      ringForAutomaticFocus();
-      Array.from(refreshAlert.current?.querySelectorAll("button") ?? []).at(-1)?.focus();
-      return;
-    }
+    if (stuck) return;
     const accounts = stage.inspection.accounts;
     const { parts, sections } = choices;
     if (nothingToImport(parts, sections)) return;
@@ -355,20 +347,17 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
         {t("common.cancel")}
       </Button>
       {/* Unavailable rather than disabled while the review could not be read again, so the button keeps focus and says why
-          (the Alert above the review states the same), as its tooltip and description; a press takes focus to the Alert's
-          button (see `apply`). The title stays the same in every state and `isDisabled` gates it: an empty title
-          would drop the tooltip wrapper and remount the button, losing focus. */}
-      <TitledControl key="import" title={t("configuration.import.refreshFailedTitle")} isDisabled={!stuck}>
-        <Button
-          ref={importButton}
-          type="submit"
-          pending={busy || refreshing}
-          disabled={choices.nothingChosen}
-          unavailable={stuck ? t("configuration.import.refreshFailedTitle") : undefined}
-        >
-          {t("configuration.import.review.submit")}
-        </Button>
-      </TitledControl>
+          (the Alert above the review states the same), as its tooltip and description; a press does nothing. */}
+      <Button
+        key="import"
+        ref={importButton}
+        type="submit"
+        pending={busy || refreshing}
+        disabled={choices.nothingChosen}
+        unavailable={stuck ? t("configuration.import.refreshFailedTitle") : undefined}
+      >
+        {t("configuration.import.review.submit")}
+      </Button>
     </>
   );
 
@@ -377,13 +366,11 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
       <Button key="cancel" type="button" variant="secondary" onPress={onClose}>
         {t("common.cancel")}
       </Button>
-      {/* Pending rather than disabled, so the button keeps focus and the dialog its Escape. */}
-      {/* Wrapped as the review's Import button is, so the same element carries on into the review. */}
-      <TitledControl key="import" title={t("configuration.import.refreshFailedTitle")} isDisabled>
-        <Button type="submit" pending={busy || waiting} autoFocus>
-          {t("configuration.import.choose.submit")}
-        </Button>
-      </TitledControl>
+      {/* Pending rather than disabled, so the button keeps focus and the dialog its Escape. Keyed as the review's Import
+          button is, so the same element carries on into the review. */}
+      <Button key="import" type="submit" pending={busy || waiting} autoFocus>
+        {t("configuration.import.choose.submit")}
+      </Button>
     </>
   );
 
@@ -417,27 +404,25 @@ export function ImportConfigurationDialog({ onClose }: { onClose: () => void }):
       <div ref={bodyRef} className="flex flex-col gap-4">
         {stage.kind === "choose" && <p className="text-sm"><Message id="configuration.import.choose.filePrompt" /></p>}
         {stage.kind === "review" && stuck && refreshFailure && (
-          <div ref={refreshAlert} className="contents">
-            <FailureAlert
-              title={t("configuration.import.refreshFailedTitle")}
-              message={refreshFailure.message}
-              onRetry={() => void refresh(stage)}
-              // A failure no retry can change is met by reading the file from the start.
-              otherwise={{
-                remedy: <Message id="configuration.import.refreshFailedChooseAgain" />,
-                action: (
-                  <AlertButton kind="action" size="sm" focusOnPress={false} pending={waiting} onPress={() => void choose()}>
-                    {t("configuration.import.choose.submit")}
-                  </AlertButton>
-                ),
-              }}
-              pending={refreshing}
-              announce
-              announceDelayMs={AFTER_FOCUS_MOVE_DELAY_MS}
-              delayEachAttempt
-              attempt={refreshFailure.attempt}
-            />
-          </div>
+          <FailureAlert
+            title={t("configuration.import.refreshFailedTitle")}
+            message={refreshFailure.message}
+            onRetry={() => void refresh(stage)}
+            // A failure no retry can change is met by reading the file from the start.
+            otherwise={{
+              remedy: <Message id="configuration.import.refreshFailedChooseAgain" />,
+              action: (
+                <AlertButton kind="action" size="sm" focusOnPress={false} pending={waiting} onPress={() => void choose()}>
+                  {t("configuration.import.choose.submit")}
+                </AlertButton>
+              ),
+            }}
+            pending={refreshing}
+            announce
+            announceDelayMs={AFTER_FOCUS_MOVE_DELAY_MS}
+            delayEachAttempt
+            attempt={refreshFailure.attempt}
+          />
         )}
         {stage.kind === "review" && (
           <ImportReview

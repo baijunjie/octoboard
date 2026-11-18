@@ -289,7 +289,7 @@ between field and card is decorative and held to no figure.
 A tooltip or popover is portalled to the end of `<body>`, so it never inherits the `.control-fills` that the pane or
 dialog around its trigger carries, and a control drawn from `--default` inside it, a secondary button or a ghost
 button's hover, would land almost on its `--overlay` surface. The shared tooltip and popover components
-(`IndicatorTooltip`, `AnchoredTooltip`, `TitledControl`, and the touch popover they open, which is drawn as a tooltip)
+(`Tooltip` of every kind, `PopoverHint`, and the touch popover `Tooltip` opens, which is drawn as a tooltip)
 therefore carry `control-fills` themselves, giving a step in light; in dark the floating-surface rule above sets
 the fills itself. A new tooltip or popover that can hold a control drawn from `--default` carries `control-fills`
 too. In light the project filter's popover keeps HeroUI's own fills: it holds a search field, and the remap would leave
@@ -602,21 +602,30 @@ which includes the tree's expansion) and Space to selection; selection is disabl
 does nothing. Keep that supported collection behavior rather than translating Space locally. The Git section-heading
 band (a `BareButton`, above) acts on both Enter and Space.
 
-A button that is unavailable for a reason the user needs to learn (the quick-create "+" while no account of its agent
-can open a session, each not logged in, turned off or changing its sharing) is not natively disabled, which would take
-it out of the Tab order and keep its tooltip from ever opening: it carries `aria-disabled`, keeps focus and its hover
-tooltip but takes no hover tint or press shrink, looks faded, gives the reason as its tooltip and as an
-`aria-describedby` description while its name stays the action, and a press explains instead of acting. HeroUI's
-disabled style turns off pointer events on `aria-disabled`, so such a button puts them back (`pointer-events-auto`), or
-its tooltip never opens on hover. `Button`'s `unavailable`, given the reason, does all of it but the tooltip and a hover
-tint drawn by the caller's own classes, which the caller leaves off; its press reaches `onPress`, which explains (the
-Processes panel's Keep raises the refusal the daemon would answer with, and an archive row's Open in the agent's app
-raises the alert its refusal would bring).
-
-A switch unavailable for a reason shown under it (the account's sharing switch while its sessions run) follows the
-same rule: it keeps focus and is marked `aria-disabled`, a press or Space does nothing, and the reason is its
-`aria-describedby` description. When the control that held focus goes away with the state it belonged to, focus moves
-to the control the state was about, unless the user has already moved it.
+**A control unavailable for a reason says why in its tooltip, and nowhere else.** Any control that is unavailable for a
+reason the user needs to learn — a button (the quick-create "+" while no account of its agent can open a session, each
+not logged in, turned off or changing its sharing), a switch (the account's sharing switch while its sessions run) or a
+checkbox (a process tree an archive confirmation must stop because it cannot be kept) — is not natively disabled, which
+would take it out of the Tab order and keep its tooltip from ever opening: it carries `aria-disabled`, keeps focus and
+its hover tooltip but takes no hover tint or press shrink, looks faded, and gives the reason as its tooltip and as an
+`aria-describedby` description while its name stays the action. The reason replaces the control's own tooltip while it
+lasts, as plain text with no heading above it (a reason is not a `HeadedTooltip`, see "An icon-only control: tooltip and
+`aria-label`"). It does not respond to interaction: a click, Enter or Space does nothing — no action, no alert, no
+change of value (a checkbox stays as it is shown). On touch a tap on it opens the reason in the touch popover, still
+with no action and no alert, whereas a tap on an available control runs its action and opens nothing. The tooltip and
+the description are the only place the reason appears; it is not repeated as text beside, under or after the control.
+Status text that describes the state itself is not such a repeat: the update notice's, and the version line in
+Settings > Updates, saying that the new version is installed and the agent restarts when its update finishes, say what
+the state is, not why a control is unavailable. A select option or a menu item is the one exception to the rule, below.
+HeroUI's disabled style turns off pointer events on `aria-disabled`, so such a control puts them back
+(`pointer-events-auto`), or its tooltip never opens on hover. `Button`, `Switch` and `Checkbox` take the reason as
+`unavailable` (`""` is available, `true` is unavailable with no reason) and carry their own tooltip (`tooltip` and
+`tooltipPlacement`; a `Button` also `tooltipFocusOnly`, `tooltipKeepOpenOnPress` and `onTooltipOpenChange`), so they do
+all of it themselves (for a switch or a checkbox, the tooltip is on its track or box, not its input or label). A caller
+never wraps one in an outer `Tooltip`, and passes no tooltip or description of its own for the reason. They always
+render the same tree, so toggling `unavailable` or the tooltip never remounts the control and it keeps focus. A press
+does not reach `onPress`. When the control that held focus goes away with the state it belonged
+to, focus moves to the control the state was about, unless the user has already moved it.
 
 A warning that a switch's last change did not finish does not block anything (turning the switch again is the retry), so
 it is a warning mark right after the switch in its row (see "On the screen: an Alert when it matters, a mark at its
@@ -641,7 +650,10 @@ still states a brief hold when it affects the value already chosen, as that fiel
 
 A disabled select option or menu item, with a reason or without, stays in the arrow-key walk (`disabledBehavior:
 "selection"` on the select, and on the menu and any single-selection section inside it), so a keyboard user reaches it
-and, where it has one, hears why; it still cannot be activated or selected. Pointing at its clipped name still shows
+and, where it has one, hears why; it still cannot be activated or selected, and pressing it does nothing. Unlike the
+controls above, a select option or menu item shows its reason as secondary text within the item itself, not as a
+tooltip: the open list is already what the user is looking at, and a tooltip on a row would collide with submenus and
+popovers. Pointing at its clipped name still shows
 the full name, and pressing it runs nothing. Under that setting react-aria sets no
 `aria-disabled` on a select option, so the option gets it by hand.
 
@@ -746,7 +758,7 @@ needs an equivalent reachable another way; Close terminal in the panel's tab-row
 ### A floating panel that does not take the window
 
 A panel that floats in from a button and leaves the rest of the window usable (the rail's account quota panel, its
-processes panel, and the popover of an error or warning mark) is a large tooltip with a body: one component (`Hint`, kind `popover`) gives both
+processes panel, and the popover of an error or warning mark) is a large tooltip with a body: one component (`PopoverHint`) gives both
 the same input logic. It is not a region: it is reached through its button, the way a menu is. Its dialog is named by
 what the panel is (Quota, Processes, the mark's name, a tone's word for a mark of one line), never by the text it holds: VoiceOver
 reads both a dialog's name and its content as focus enters it, so a dialog named by its own text is read twice.
@@ -1150,7 +1162,7 @@ Every control has an accessible name: its visible text, or an `aria-label` when 
   joining them into one `aria-label`: a catalog's messages are whole sentences and a joined string is a fragment
   nobody can translate. An empty row that is itself the button filling the list (`EmptyPanel`'s compact form with an
   action) is the instance — its visible message, then an `sr-only` span with the action, giving "No projects yet Add
-  project". Such a row also sets an empty `aria-describedby` itself, since `TitledControl` only recognizes a tooltip
+  project". Such a row also sets an empty `aria-describedby` itself, since `Tooltip` only recognizes a tooltip
   that repeats an `aria-label`.
 - **An accepted exception to 2.5.3: a shortcut's key caps as its edit button.** In Settings > Keyboard shortcuts the
   button shows only the caps of the current combination (symbols such as ⇧⌘G on a Mac), and is named "Change the
@@ -1209,15 +1221,16 @@ a button whose hover opens a floating panel that shows what its tooltip would sa
 Processes buttons (above), a status mark, the help tip's "?": it carries only its accessible name. So does a Files or
 Git tree chevron, whose whole row does what it does (see "Buttons").
 
-When an icon-only control's tooltip has to say more than the action — why it is unavailable, or a warning that does not
-block it — the tooltip is a `HeadedTooltip` (`packages/ui/src/components/hint/`): the action's name as a heading on its
+When an icon-only control's tooltip has to say more than the action — a warning or a note that does not block it — the
+tooltip is a `HeadedTooltip` (`packages/ui/src/components/hint/`, which builds the content that goes in `Tooltip`'s
+`content`): the action's name as a heading on its
 own line, a divider, and the sentence below. The action's name keeps the tooltip's regular weight
 (`emphasized={false}`), so it reads as the same tooltip the control shows when it has nothing to add; only a heading
 that names a subject rather than an action is set in medium weight (`emphasized`, the default), as the rail's console
 avatar shows its console's name above its status rows. The
 tooltip is never the action name and the sentence joined on one line. The sentence also reaches assistive technology
-without the tooltip open: as the `unavailable` reason's description, or, for a warning, as a visually hidden
-description of the control.
+without the tooltip open, as a visually hidden description of the control. The reason a control is unavailable is not
+one of these: it replaces the tooltip as plain text, with no heading (see "Buttons").
 
 A menu item that stays available with a warning (Open in the agent's app when the app may not see the conversation)
 shows a short muted note under its label, in the place a disabled item's reason takes, and carries the full sentence as
@@ -1229,13 +1242,14 @@ catalog ("Increase terminal font size") passed by the field's caller rather than
 field's label.
 
 A tap does not open that tooltip, and on such a control it must not: a tap on an icon-only button or a menu trigger runs
-its action, so `TitledControl` has no touch popover. A control whose only action is to show its text is a popover hint
-instead (the help tip's "?").
+its action, so the `control` kind has no touch popover by default. The exception is a control unavailable for a
+reason: it has no action to run, so a tap opens its reason (see "Buttons"). A control whose only action is to show its
+text is a popover hint instead (the help tip's "?").
 
 A copy button (`CopyButton`) takes its accessible name from its tooltip, which changes to "Copied" once the text is on
 the clipboard. A control that keeps focus is not reliably re-read when its name changes, so the button also announces
-the copied text through a `role="status"` region beside it. Its tooltip stays open through the press (`keepOpenOnPress`
-on `TitledControl`), and the icon changes, both ways, are played with `motion-safe:` only, so under reduced motion the
+the copied text through a `role="status"` region beside it. Its tooltip stays open through the press (`tooltipKeepOpenOnPress`
+on `Button`), and the icon changes, both ways, are played with `motion-safe:` only, so under reduced motion the
 icon simply appears. It is drawn where the platform has no clipboard too, copying through a hidden text it selects
 (`copyText`), which never moves focus: a focus change would blur the button and close its tooltip.
 
@@ -1266,34 +1280,35 @@ has one. Two places keep it, and both are a case where nothing else can serve:
 That second reason is the rule the replacement has to be read against, for every tooltip but a control's own:
 **such a tooltip answers the pointer and nothing else**, and is no tab stop. A control's opens on keyboard focus as
 well, and the control is a tab stop either way (see "An icon-only control: tooltip and `aria-label`" above). The
-anchored shape (`AnchoredTooltip`, which a run of running text takes, a mark in a row that walks its focusable
+anchored kind (`Tooltip` with `trigger="anchored"`, which a run of running text takes, a mark in a row that walks its focusable
 descendants with the arrow keys, and a tab that carries a mark inside it, since none of them can be a trigger of its
 own) is not associated with what it describes for assistive technology at all; the tab, being a control, opens it on
 keyboard focus as well. So whatever a tooltip says must reach a screen reader by another route: a clipped
 label's full text is in the document whether it fits or not, a row or a tab carries its own accessible name, and an
 indicator that means something on its own is a named `role="img"`.
 
-**One component, one look.** Every floating hint of the application is `Hint` (`components/hint/Hint.tsx`), whatever it
-carries: a plain tooltip, the touch popover, a status mark's popover with or without a body, the rail's quota panel.
-`kind` says what carries the trigger — `control` (a react-aria control as the child), `indicator` (a non-control mark),
-`anchored` (the caller's hover) or `popover` (the caller draws the trigger from the wiring `Hint` hands it) — and all
-four are drawn with one definition, HeroUI's `tooltip` class plus `control-fills` (`TOOLTIP_SURFACE`): the same surface,
-shadow, radius and offset, and for text hints (a tooltip, a mark's popover) its padding and text size too (measured 8
-px, 12 px, 12 px radius). Width is what the content needs, up to the class's 320 px cap. The quota panel is a panel, not
-a hint: it shares the surface, shadow and radius, and keeps its own width, edge-to-edge padding and text sizes. The
-element underneath is chosen by whether the content is interactive, which the caller says with `kind` and which is never
-sniffed from the content: the first three are tooltips (`role="tooltip"`, react-aria's `Tooltip`, described to the
-trigger, opened by hover and keyboard focus, nothing on a mouse click), and `popover` is a dialog popover, because a
-tooltip can hold neither focus nor a button, so content with a Try again or raw text to select cannot be one. It follows
-the input matrix of "A floating panel that does not take the window". `TitledControl`, `IndicatorTooltip` and
-`AnchoredTooltip` are `Hint` of the first three kinds under shorter names; "one wrapper" below is `Hint`'s three tooltip
-kinds.
+**One component, one look.** Every tooltip of the application is `Tooltip` (`packages/ui/src/primitives/Tooltip.tsx`), the
+touch popover it opens included, and every floating hint with something to press or select is `PopoverHint`
+(`components/hint/hintPopover.tsx`: a status mark's popover with or without a body, the help tip's "?", the rail's quota
+panel). `Tooltip`'s `trigger` says what carries the trigger — `control` (the default: a react-aria control as the child),
+`mark` (a non-control mark), `anchored` (the caller reports the hover and names the anchor) and `box`, which only `Switch`
+and `Checkbox` use for their own tooltip (the tooltip and the touch popover are anchored to the visible track or box, never
+the hidden input) — and all of them, `PopoverHint` too, are drawn with one definition, HeroUI's `tooltip` class plus
+`control-fills` (`tooltipSurfaceClassName`): the same surface, shadow, radius and offset, and for text hints (a tooltip, a
+mark's popover) its padding and text size too (measured 8 px, 12 px, 12 px radius). Width is what the content needs, up to
+the class's 320 px cap. The quota panel is a panel, not a hint: it shares the surface, shadow and radius, and keeps its own
+width, edge-to-edge padding and text sizes. The element underneath is chosen by whether the content is interactive, which
+the caller says by the component it uses and which is never sniffed from the content: `Tooltip` is a tooltip
+(`role="tooltip"`, react-aria's `Tooltip`, described to the trigger, opened by hover and keyboard focus, nothing on a mouse
+click), and `PopoverHint` is a dialog popover, because a tooltip can hold neither focus nor a button, so content with a Try
+again or raw text to select cannot be one. It follows the input matrix of "A floating panel that does not take the
+window". `HeadedTooltip` builds content only, for `Tooltip`'s `content`.
 
-**One wrapper, and the input chooses the surface.** Every tooltip in the window goes through `Hint` (none through
-HeroUI's `Tooltip` directly), in one of three kinds: the control kind (`TitledControl`, a react-aria control as the
-child), the indicator kind (`IndicatorTooltip`, a non-control indicator) and the anchored kind (`AnchoredTooltip`, the
-caller's hover). What shows follows the input of the interaction, not the device, so a touch-screen laptop or a tablet
-with a trackpad gets what the input it used answers:
+**One wrapper, and the input chooses the surface.** Every tooltip in the window goes through `Tooltip` (none through
+HeroUI's `Tooltip` directly), in one of its kinds: `control`, `mark` or `anchored`, or the `box` kind inside `Switch` and
+`Checkbox`. `Button`, `Switch` and `Checkbox` carry their own tooltip (`tooltip`) and are never wrapped in an outer
+`Tooltip`; a dev-time `console.error` reports it. What shows follows the input of the interaction, not the device, so a
+touch-screen laptop or a tablet with a trackpad gets what the input it used answers:
 
 - a mouse hover and keyboard focus open the tooltip, as always; a mouse press opens nothing extra;
 - a touch or pen press opens the same content in a **touch popover**, where the shape allows it. The popover is drawn
@@ -1311,18 +1326,21 @@ button" is unreliable: a react-aria control hides its press handling in its own 
 `role="button"` element, and a row's action lives on an ancestor. So the default follows the shape's trigger, which the
 wrapper knows statically:
 
-- the control shape has none, since a tap on a control is its action; a control whose only action is to show its text
-  is a popover hint instead;
-- the mark shape's `touchPopover` is **on**, since a tap on a mark does nothing else; it is turned off, with the reason
+- the `control` kind has none by default, since a tap on a control is its action; the exception is a `Button`
+  unavailable for a reason, whose tap has no action and opens its reason (see "Buttons"). A control whose only action is
+  to show its text is a `PopoverHint` instead;
+- the `box` kind (the visible box of a `Switch` or a `Checkbox`) opens one only while the control is unavailable for a
+  reason, and then with that reason; available, or unavailable with no reason, a tap opens nothing;
+- the `mark` kind's `touchPopover` is **on**, since a tap on a mark does nothing else; it is turned off, with the reason
   in a comment, for a mark inside something that handles the same tap (a tree row, a button, an option), or the popover
   would open over what the press does;
-- the anchored shape has no such parameter and never opens one: it has no trigger to tap, and a tap on its row is the
+- the `anchored` kind has no such parameter and never opens one: it has no trigger to tap, and a tap on its row is the
   row's action.
 
-The mark shape is also the one trigger that fits a control whose hover is sent to a hidden input, so it takes no tooltip
-trigger from context (focus mode's include-console-sessions switch). That use turns the popover off, as a tap on the
-switch toggles it, and the shape's mouse-press cancel does not stop the switch: react-aria's press takes its own focus
-and toggles on the click.
+A control whose hover is sent to a hidden input (a switch, a checkbox) takes no tooltip trigger from context, as the
+trigger would be the input. `Switch` and `Checkbox` therefore use the `box` kind for their own tooltip, anchored to the
+visible track or box: its hover opens the tooltip, keyboard focus on the input opens it too, a tap opens the touch popover
+only while the control is unavailable for a reason, with that reason, and nothing links it to the input, whose own description already says it.
 
 A mark that opens a touch popover is a touch target (see "Pointer target size").
 
@@ -1345,7 +1363,7 @@ A tooltip of any shape closes once what it belongs to turns inert: a dialog or a
 region the window makes inert itself. An overlay that covers the control under a resting pointer sends no
 `pointerleave`, so without this the tooltip would stay drawn over the overlay, naming a control that can no longer be
 reached, until the pointer next moved. A tooltip of a control inside the overlay is unaffected. The surface every
-tooltip shape draws on does this (`hintTooltips.tsx` in `packages/ui/src/components/hint/`), so a new tooltip needs
+tooltip shape draws on does this (`tooltipParts.tsx` in `packages/ui/src/primitives/`), so a new tooltip needs
 nothing of its own.
 
 Escape dismisses a shown tooltip without the pointer or focus moving (WCAG 2.2 SC 1.4.13). Inside a popup that holds
@@ -1367,7 +1385,7 @@ text it replaced was.
 
 - It is a tab stop with an accessible name of its own ("About the default account"), not the explanation itself, so
   the name stays short; the same name names the popover the explanation is shown in.
-- The explanation is in a popover, `Hint` of kind `popover`, as a status mark's content is, not in a tooltip: it can
+- The explanation is in a popover, a `PopoverHint`, as a status mark's content is, not in a tooltip: it can
   run to several lines, and a mouse has to be able to select and copy it, which a tooltip, closing the instant the
   pointer leaves its trigger, never allows. The popover follows the input matrix of "A floating panel that does not
   take the window", with focus returned to the "?" when it closes.
@@ -1396,8 +1414,8 @@ switch's state, so it stays the same whichever way the switch is set.
 
 So is the share-default-config explanation in an owned account's settings dialog: what sharing links, and that idle
 sessions are ended and resumed by a change, sit in a `HelpTip` beside the row's visible label, under which a one-line
-description stays visible. The reason the switch is locked is a status, so it stays visible text under the row while
-the lock lasts: the reason a control is unavailable is its state, not a warning or a note.
+description stays visible. The reason the switch is locked is not text under the row: while the lock lasts it is the
+switch's own tooltip and description (see "Buttons"), as for every control unavailable for a reason.
 
 Another deliberate exception: an added agent that is not installed is marked in the Settings agent strip by a warning
 glyph after its tab's name, and the explanation sits in a tooltip anchored to the tab rather than in a status mark's
@@ -1501,13 +1519,13 @@ What is left over is a shortfall kept on purpose, marked at its code: a sighted 
 no tooltip, so a name that lives only there is a name they do not get. (A status mark, a note included, is not one of
 these: it is a popover on a button, which the keyboard reaches; see "How a mark is drawn and opened".)
 
-On touch, a mark opens its tooltip's content in a popover when tapped (the mark shape's `touchPopover`, on by default;
+On touch, a mark opens its tooltip's content in a popover when tapped (`touchPopover` of the `mark` kind, on by default;
 see "A tooltip is the application's own"). It is turned off for every mark that sits inside something answering the
 same tap, since the popover must not open over what the press does: the marks of a session row in the sidebar, in a
 focus mode (card and archive preview) and in the archive view (status glyph, agent icon, context size and binding
 badge, plus a focus mode's relative time), a Remote devices sidebar row's connection glyph, the archive submenu's
 relative time (a menu item), the project row's Git badge, the top-status marker (a project row, the console-switch chip),
-a branch's responsible-session badge (an option), and the switch behind focus mode's include-console-sessions tooltip. The same mark where it stands alone, such as the
+a branch's responsible-session badge (an option). The same mark where it stands alone, such as the
 title bar's status glyph, the requested-sessions dialog's status and agent glyphs, a focus mode's header Git badge and
 the history header's context badge, opens it. The rest of what a row's marks say reaches touch through the row's
 accessible name alone, a kept shortfall: the row's press is its own, and no second route to the marks is built for it
@@ -1619,9 +1637,8 @@ Where an error or a warning is shown follows from how it arises, not from the sc
 1. **An error the user's own action directly causes** — a submitted form, a Save or a confirm, a switch, a menu or row
    action, copying, opening — opens the dedicated error alert dialog, below. That includes a submit or a save failing
    inside a dialog: the error alert dialog opens over it, and the dialog keeps its input (except a field changed elsewhere,
-   see "A value changed elsewhere replaces the form's own" below).
-   One more press opens it: an unavailable button whose press explains (see "Buttons") raises the refusal the daemon
-   would give for the action it stands for, without sending it (Keep on a process that shares the agent's console).
+   see "A value changed elsewhere replaces the form's own" below). A press on a control unavailable for a reason opens
+   nothing: it does not respond, and its tooltip is the explanation (see "Buttons").
 2. **An error located at one input field** is the exception to the first and to the third: its error text stands under
    its field, in the field's `FieldError`, and no dialog opens. That is input validation — a check run synchronously the
    moment the user submits (empty, malformed, too long, a duplicate of a known name) — and equally a lookup the form
@@ -1688,9 +1705,7 @@ the consoles is checked, keeping the choices made, with the Import button pendin
 read again because settings changed."; a read that fails while the review is behind is an Alert at the top of the review
 with its own Try again (a failure no retry can change says to choose the file again, with a button that does), not an
 error alert dialog, as it is automatic behaviour, and Import is an unavailable button (see "Buttons") until the review
-is current again: the Alert's title is its tooltip and description, and a press explains by moving focus to the Alert's
-button (Try again, or Choose file), the ring following the last input (so only after a key), instead of doing
-nothing.
+is current again: the Alert's title is its tooltip and description, and a press does nothing.
 
 Once a submit has passed the form's own validation, anything that goes wrong afterwards that the window could not
 foresee — a refusal from the daemon included, even one about a single field's value — is a failure of the user's own
@@ -2098,7 +2113,7 @@ tone side by side look alike, take the pointer alike, are each reachable from th
 their collection's own walk) and open the same way, so they differ only in glyph and colour. Glyphs per tone: circled
 `!` for danger, a triangle for a warning, circled `i` for a note.
 
-The popover is `Hint` of kind `popover` and follows the input matrix of "A floating panel that does not take the
+The popover is a `PopoverHint` and follows the input matrix of "A floating panel that does not take the
 window": **a mouse click opens nothing**, and its buttons and text are reached with the mouse by moving the pointer into
 the hover-opened popover, which stays open.
 
@@ -2818,7 +2833,7 @@ action, and a mark too small to aim at reliably costs a hover that can be tried 
 marks are drawn well under 24 — the binding badge on a session row, a branch's responsible-session badge, a change row's
 status letter — and the press under them, where there is one, belongs to the row and keeps the row's own target.
 
-A mark whose tap opens a touch popover (`IndicatorTooltip`, `touchPopover` on) is an activation on touch, so it is held
+A mark whose tap opens a touch popover (`Tooltip` of `trigger="mark"`, `touchPopover` on) is an activation on touch, so it is held
 to it there: `.touch-target` in `packages/ui/src/components/hint/touchTarget.css` grows its hit area to 24 by 24 on a device that has a coarse pointer
 (`any-pointer: coarse`, which a hybrid device's mouse falls under too) with an `::after` that never shrinks a larger
 mark, changes nothing drawn and sits behind the mark's own content so it takes no hover from it. Where two such marks

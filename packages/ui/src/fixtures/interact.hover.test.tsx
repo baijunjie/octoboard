@@ -9,13 +9,11 @@ import { ChangeList } from "../project-browser/git/ChangeList";
 import { changeItems } from "../project-browser/git/changes";
 import { TopStatusMarker } from "../components/status/TopStatusMarker";
 import { AgentIcon } from "../components/icons/AgentIcon";
-import { AnchoredTooltip } from "../components/hint/AnchoredTooltip";
 import { HelpTip } from "../components/hint/HelpTip";
 import { SessionAgentTooltip } from "../components/icons/SessionAgentIcon";
 import { SessionContextLabel, SessionRelativeTime } from "../components/status/SessionMetadata";
 import { StatusIcon } from "../components/status/StatusIcon";
 import { StatusMark } from "../components/status/StatusMark";
-import { TitledControl } from "../components/hint/TitledControl";
 import { leave, mountForTooltip, openPopover, openTooltip } from "../components/hint/tooltipTestSupport";
 import { gitBadgeAriaLabel } from "../git/gitStatusLabel";
 import { isolate } from "../i18n/isolate";
@@ -32,7 +30,7 @@ import { settleInAct } from "./clockTestSupport";
 import { fakeTimers } from "../test/clock";
 import { createUi, POLL_MS, TIMEOUT_MS, TOOLTIP_DELAY_MS, TOOLTIP_SHOW_MS } from "./interact";
 import { FIXTURE_PROVIDERS } from "./fixtureProviders";
-import { Button } from "../primitives";
+import { Button, Checkbox, Switch, Tooltip } from "../primitives";
 
 /** The tooltip of a Claude Code session's agent mark, drawn by the app's own `SessionAgentTooltip`: the
  * agent's name, then the account the session runs under as a badge or, given `launch`, a list of the
@@ -111,12 +109,8 @@ function mountWindow(): void {
           </li>
         </ul>
       </div>
-      <TitledControl title="Operations, a session is working" placement="end">
-        <Button iconOnly label="Operations, a session is working" />
-      </TitledControl>
-      <TitledControl title="Billing" placement="end" focusOnly>
-        <Button iconOnly label="Billing" />
-      </TitledControl>
+      <Button iconOnly label="Operations, a session is working" tooltip="Operations, a session is working" tooltipPlacement="end" />
+      <Button iconOnly label="Billing" tooltip="Billing" tooltipPlacement="end" tooltipFocusOnly />
       <HelpTip label="About Billing">Billing is charged monthly.</HelpTip>
       <div role="button" aria-label="Card, Claude Code, Idle">
         {pressTarget}
@@ -319,23 +313,23 @@ it("hoverChangeStatus fails for a row that is not there", async () => {
   expect(openTooltip()).toBeNull();
 });
 
-it("hoverTitledControl puts up the tooltip of the control it names", async () => {
+it("hoverTooltip puts up the tooltip of the control it names", async () => {
   mountWindow();
-  await settleInAct(createUi(document, "en").hoverTitledControl((name) => name.startsWith("Operations")));
+  await settleInAct(createUi(document, "en").hoverTooltip((name) => name.startsWith("Operations")));
   expect(openTooltip()?.textContent).toBe("Operations, a session is working");
   release(document.querySelector('[aria-label^="Operations"]')!);
 });
 
-it("hoverTitledControl fails for a control whose tooltip stays shut under the pointer", async () => {
+it("hoverTooltip fails for a control whose tooltip stays shut under the pointer", async () => {
   mountWindow();
-  const done = expect(createUi(document, "en").hoverTitledControl("Billing")).rejects.toThrow(/has no tooltip of its name: its last tooltip is none/);
+  const done = expect(createUi(document, "en").hoverTooltip("Billing")).rejects.toThrow(/has no tooltip of its name: its last tooltip is none/);
   await settleInAct(done);
   expect(openTooltip()).toBeNull();
 });
 
-it("hoverTitledControl fails for a control that is not there", async () => {
+it("hoverTooltip fails for a control that is not there", async () => {
   mountWindow();
-  const done = expect(createUi(document, "en").hoverTitledControl("Nothing")).rejects.toThrow(/Nothing to hover/);
+  const done = expect(createUi(document, "en").hoverTooltip("Nothing")).rejects.toThrow(/Nothing to hover/);
   await settleInAct(done);
 });
 
@@ -358,7 +352,7 @@ function mountProbe(tooltip: string | ((shown: HTMLElement) => void), after: num
 it("a hover step waits for the tooltip it expects past the time a tooltip is given to open", async () => {
   mountProbe("Probe", TOOLTIP_DELAY_MS + TOOLTIP_SHOW_MS + POLL_MS);
   const started = Date.now();
-  await settleInAct(createUi(document, "en").hoverTitledControl("Probe"));
+  await settleInAct(createUi(document, "en").hoverTooltip("Probe"));
   expect(openTooltip()?.textContent).toBe("Probe");
   expect(Date.now() - started).toBeGreaterThan(TOOLTIP_DELAY_MS + TOOLTIP_SHOW_MS);
 });
@@ -366,38 +360,65 @@ it("a hover step waits for the tooltip it expects past the time a tooltip is giv
 it("a hover step fails, naming the last tooltip, only once its patience has run out", async () => {
   mountProbe("Other", 0);
   const started = Date.now();
-  const done = expect(createUi(document, "en").hoverTitledControl("Probe")).rejects.toThrow(/has no tooltip of its name: its last tooltip is "Other"/);
+  const done = expect(createUi(document, "en").hoverTooltip("Probe")).rejects.toThrow(/has no tooltip of its name: its last tooltip is "Other"/);
   await settleInAct(done);
   expect(Date.now() - started).toBeGreaterThanOrEqual(TOOLTIP_DELAY_MS + TOOLTIP_SHOW_MS + TIMEOUT_MS);
 });
 
-it("hoverTitledControl compares the words of a tooltip, not the key caps of the shortcut beside them", async () => {
+it("hoverTooltip compares the words of a tooltip, not the key caps of the shortcut beside them", async () => {
   mountProbe((shown) => { shown.innerHTML = "<span><span>Probe</span><kbd>\u2318N</kbd></span>"; }, 0);
-  await settleInAct(createUi(document, "en").hoverTitledControl("Probe"));
+  await settleInAct(createUi(document, "en").hoverTooltip("Probe"));
 });
 
-it("hoverTitledControl with a tooltip passes for a control whose tooltip reads it, though it is not the control's name", async () => {
+it("hoverTooltip with a tooltip passes for a control whose tooltip reads it, though it is not the control's name", async () => {
   mountProbe("Cannot be kept", 0);
-  await settleInAct(createUi(document, "en").hoverTitledControl("Probe", "Cannot be kept"));
+  await settleInAct(createUi(document, "en").hoverTooltip("Probe", "Cannot be kept"));
   expect(openTooltip()?.textContent).toBe("Cannot be kept");
 });
 
-it("hoverTitledControl with a tooltip fails where the tooltip that opens reads something else, the control's name included, and names both", async () => {
+it("hoverTooltip with a tooltip fails where the tooltip that opens reads something else, the control's name included, and names both", async () => {
   mountProbe("Probe", 0);
-  const done = expect(createUi(document, "en").hoverTitledControl("Probe", "Cannot be kept")).rejects.toThrow(/has no tooltip "Cannot be kept": its last tooltip is "Probe"/);
+  const done = expect(createUi(document, "en").hoverTooltip("Probe", "Cannot be kept")).rejects.toThrow(/has no tooltip "Cannot be kept": its last tooltip is "Probe"/);
   await settleInAct(done);
 });
 
-it("hoverTitledControl reaches an unavailable control (aria-disabled), whose tooltip is its reason", async () => {
+it("hoverTooltip reaches an unavailable control (aria-disabled), whose tooltip is its reason", async () => {
   mountProbe("Cannot be kept", 0, true);
-  await settleInAct(createUi(document, "en").hoverTitledControl("Probe", "Cannot be kept"));
+  await settleInAct(createUi(document, "en").hoverTooltip("Probe", "Cannot be kept"));
   expect(openTooltip()?.textContent).toBe("Cannot be kept");
 });
 
-it("hoverTitledControl does not reach a natively disabled control, even one marked aria-disabled", async () => {
+it("hoverTooltip does not reach a natively disabled control, even one marked aria-disabled", async () => {
   mountForTooltip(<button disabled aria-disabled="true" aria-label="Probe">Probe</button>);
-  const done = expect(createUi(document, "en").hoverTitledControl("Probe", "Cannot be kept")).rejects.toThrow(/Nothing to hover matching Probe/);
+  const done = expect(createUi(document, "en").hoverTooltip("Probe", "Cannot be kept")).rejects.toThrow(/Nothing to hover matching Probe/);
   await settleInAct(done);
+});
+
+it("hoverTooltip with a region hovers the unavailable control of that region, not the first of the same name", async () => {
+  mountForTooltip(
+    <>
+      <div data-region="update"><Button unavailable="In the notice">Restart</Button></div>
+      <div data-region="rail"><Button unavailable="On the rail">Restart</Button></div>
+    </>,
+  );
+  await settleInAct(createUi(document, "en").hoverTooltip((name) => name.endsWith("Restart"), "On the rail", "rail"));
+  expect(openTooltip()?.textContent).toBe("On the rail");
+});
+
+it("hoverTooltip rests on the track of a locked switch and the box of a locked checkbox, which carry the tooltip", async () => {
+  mountForTooltip(
+    <>
+      <Switch label="Share" selected={false} onSelectedChange={() => {}} unavailable="Sessions are running" />
+      <Checkbox selected onSelectedChange={() => {}} unavailable="Cannot be kept">Command</Checkbox>
+    </>,
+  );
+  const ui = createUi(document, "en");
+  await settleInAct(ui.hoverTooltip("Share", "Sessions are running"));
+  expect(openTooltip()?.textContent).toBe("Sessions are running");
+  release(document.querySelector(".switch__control")!);
+  await settleInAct(ui.hoverTooltip("Command", "Cannot be kept"));
+  expect(openTooltip()?.textContent).toBe("Cannot be kept");
+  release(document.querySelector(".checkbox__control")!);
 });
 
 /** The rail's quota entry over a daemon with Claude Code available, the panel a resting pointer floats in. */
@@ -851,7 +872,7 @@ function TabWithTip(): React.ReactElement {
   return (
     <div role="tab" aria-label="Codex (not installed)" ref={ref} {...hoverProps}>
       Codex
-      <AnchoredTooltip tooltip="Codex is not installed." anchor={ref} hovered={isHovered} />
+      <Tooltip trigger="anchored" content="Codex is not installed." anchor={ref} hovered={isHovered} />
     </div>
   );
 }
@@ -895,7 +916,7 @@ function FieldWithTip({ tip }: { tip?: string }): React.ReactElement {
   return (
     <div {...hoverProps}>
       <input ref={ref} aria-label="Directory" defaultValue="~/Projects" />
-      {tip !== undefined && <AnchoredTooltip tooltip={tip} anchor={ref} hovered={isHovered} />}
+      {tip !== undefined && <Tooltip trigger="anchored" content={tip} anchor={ref} hovered={isHovered} />}
     </div>
   );
 }
@@ -925,7 +946,7 @@ function ItemWithLabelTip({ tip, disabled }: { tip: string; disabled?: boolean }
       <span data-slot="label">
         <span ref={ref} {...hoverProps}>
           feature/a-long-branch
-          <AnchoredTooltip tooltip={tip} anchor={ref} hovered={isHovered} />
+          <Tooltip trigger="anchored" content={tip} anchor={ref} hovered={isHovered} />
         </span>
       </span>
     </div>
@@ -967,7 +988,7 @@ function ItemWithLineTip({ tip }: { tip: string }): React.ReactElement {
           <span>Copy session ID</span>
           <span ref={ref} {...hoverProps}>
             bb1cf4cb-37e3-4ea1
-            <AnchoredTooltip tooltip={tip} anchor={ref} hovered={isHovered} />
+            <Tooltip trigger="anchored" content={tip} anchor={ref} hovered={isHovered} />
           </span>
         </span>
       </span>

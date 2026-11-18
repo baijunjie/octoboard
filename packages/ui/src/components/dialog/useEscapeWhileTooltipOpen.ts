@@ -22,7 +22,7 @@ import { partSelector } from "../../primitives";
  *
  * It acts only while a tooltip with a trigger element is open, which is exactly when react-aria
  * will swallow the key, so no other state is touched and the surface cannot be asked to close
- * twice. An `AnchoredTooltip` has no trigger element, so react-aria holds no listener for it and the
+ * twice. An anchored `Tooltip` has no trigger element, so react-aria holds no listener for it and the
  * key reaches the surface (it holds the key back itself only inside a popup that holds focus, which
  * is portalled out of every surface); it is marked `data-anchored-tooltip` and left out here, as
  * acting on it too would close the surface from this listener and from its own handler both. It

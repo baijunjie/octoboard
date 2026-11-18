@@ -4,7 +4,6 @@ import { takeMenuFocusToRestore } from "../focus/menuFocus";
 import { ringForAutomaticFocus } from "../../input/lastInput";
 import { focusAfterModalCloses } from "../focus/modalFocus";
 import { FadedScroller, useFadeRegion } from "../scroll/scrollFade";
-import { TitledControl } from "../hint/TitledControl";
 import { useT } from "../../i18n/react";
 import type { AcknowledgementView } from "../alerts/errorAlerts";
 import { dialogAround } from "./dialogElement";
@@ -15,7 +14,7 @@ import { useToastClearance } from "./useToastClearance";
 import { useTopLayerAtMount } from "./useTopLayerAtMount";
 import { useFocusWhenShown, useFocusLeavingWhenDisabled, useRefocusIfLost } from "./dialogHooks";
 import { useFocusLeavingWhenBusy } from "./useFocusLeavingWhenBusy";
-import { Button, Modal, ModalBody, ModalCloseButton, ModalFooter, ModalHeader, ModalHeading, ModalStatusIcon, openingFocus } from "../../primitives";
+import { Button, Modal, ModalBody, ModalCloseButton, ModalFooter, ModalHeader, ModalHeading, ModalStatusIcon, openingFocus, Tooltip } from "../../primitives";
 
 const NOT_TYPED_INTO = new Set(["checkbox", "radio", "button", "submit", "image", "reset", "range", "color", "file"]);
 
@@ -318,10 +317,10 @@ function DialogFrame({
       }
     >
       <span ref={markerRef} hidden />
-      <TitledControl title={t("common.close")}>
-        {/* Named explicitly so it always matches the tooltip. */}
+      {/* Named explicitly so it always matches the tooltip. */}
+      <Tooltip content={t("common.close")}>
         <ModalCloseButton label={t("common.close")} className={fullScreen ? "top-2 end-3" : undefined} />
-      </TitledControl>
+      </Tooltip>
       {onSubmit ? (
       // A key held down repeats: the press that opened the dialog (a menu item takes Enter and
       // Space on keydown) would otherwise go on to submit it before the user has read it, Enter

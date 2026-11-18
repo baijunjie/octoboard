@@ -6,12 +6,11 @@ import { providerLabel } from "../../agents/providers";
 import { useT } from "../../i18n/react";
 import type { Agent, ProviderInfo } from "../../protocol";
 import { AgentIcon } from "../icons/AgentIcon";
-import { AnchoredTooltip } from "../hint/AnchoredTooltip";
 import { beginTabDrag, DRAG_THRESHOLD } from "./tabDrag";
 import { useLatest, useStableHandler } from "../hooks/useLatest";
 import { onWindowFocusLoss } from "../hooks/windowFocus";
 import { DURATION, releaseListMotion, useListMotion } from "../motion/useListMotion";
-import { itemKeySelector, partSelector, Tab, TabList, TabListContainer, useKeyboardModality, useObjectRef } from "../../primitives";
+import { itemKeySelector, partSelector, Tab, TabList, TabListContainer, Tooltip, useKeyboardModality, useObjectRef } from "../../primitives";
 
 /** How long after keyboard focus arrives to wait for the scroll that reveals the tab to begin, and how long a
  * scroll has to be quiet before it counts as over. A tooltip is closed by a scroll under it, so one opened
@@ -152,7 +151,7 @@ export function AgentTabList({
   );
 }
 
-/** One agent's tab. With a `notInstalledTip` its tooltip is an `AnchoredTooltip` placed against the tab
+/** One agent's tab. With a `notInstalledTip` its tooltip is an anchored `Tooltip` placed against the tab
  * itself: the tab is itself the control, so no trigger can be nested inside it, and the glyph is decorative.
  * It opens while the pointer is on the tab and as the tab takes keyboard focus (by react-aria's input
  * modality, not CSS `:focus-visible`, so a press that focuses it with the mouse does not, nor does a later
@@ -271,9 +270,9 @@ function AgentTab({ providers, agent, tabRef, notInstalledTip, elements, onDragS
       {notInstalledTip && (
         <>
           <TriangleAlert className="-ms-1 size-3.5 shrink-0 text-warning-soft-foreground" />
-          <AnchoredTooltip
+          <Tooltip trigger="anchored"
             key={arrivals}
-            tooltip={notInstalledTip}
+            content={notInstalledTip}
             anchor={ref}
             hovered={!dismissed && (focused ? settled : hovered)}
             immediate={focused}

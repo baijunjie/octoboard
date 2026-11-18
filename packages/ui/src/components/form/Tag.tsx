@@ -3,8 +3,7 @@ import React from "react";
 import { textDirection } from "../../i18n/languages";
 import { useCurrentLanguage, useT } from "../../i18n/react";
 import { FadeOverflow } from "../text/FadeOverflow";
-import { TitledControl } from "../hint/TitledControl";
-import { StaticTag, Tag as TagItem, TagRemoveButton } from "../../primitives";
+import { StaticTag, Tag as TagItem, TagRemoveButton, Tooltip } from "../../primitives";
 
 /** HeroUI has no accent variant for a removable tag, so this takes its selected tag's fill and the
  * shared accent text colour (`--tint-accent-fg`, a text on `--accent-soft` as a badge's is) without
@@ -117,13 +116,13 @@ function RemovableTag({ tag, removeTitle, motionKey }: RemovableTagProps): React
           </span>
         </FadeOverflow>
       </span>
-      <TitledControl title={removeTitle}>
+      <Tooltip content={removeTitle}>
         <TagRemoveButton
           label={t("common.removeTag")}
           describedBy=""
           className={`${REMOVE_CLASS} ${REMOVE_COLOUR_CLASS}`}
         />
-      </TitledControl>
+      </Tooltip>
     </TagItem>
   );
 }

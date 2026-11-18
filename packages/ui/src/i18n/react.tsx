@@ -107,6 +107,6 @@ export function LanguageProvider({ children }: { children: React.ReactNode }): R
 function usePrimitiveLabelsFor(language: Language): PrimitiveLabels {
   return useMemo(() => {
     const t = translatorFor(language);
-    return { scrollTabs: { up: t("tabs.scroll.up"), down: t("tabs.scroll.down"), left: t("tabs.scroll.left"), right: t("tabs.scroll.right") } };
+    return { scrollTabs: { up: t("tabs.scroll.up"), down: t("tabs.scroll.down"), left: t("tabs.scroll.left"), right: t("tabs.scroll.right") }, tooltip: t("hint.name") };
   }, [language]);
 }

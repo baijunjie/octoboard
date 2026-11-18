@@ -26,8 +26,9 @@ connected to it was not started by the launch: it is not the session's, and the 
 
 The user's way to spare a process the launch started is to keep it: **Keep** on its card in the Processes panel (see
 "Stop and Keep" in `docs/product/processes-panel.md`), or unchecking it in an archive confirmation to keep it running
-(see "Processes in an archive confirmation" below). Nothing else exempts a process, and on a Windows daemon host a
-process on the agent's own console cannot be kept at all (see "Processes on the agent's own console" below). What
+(see "Processes in an archive confirmation" below). Nothing else exempts a process, and some processes cannot be kept at
+all: on a Windows daemon host one on the agent's own console, and on macOS and Linux one inside a command the agent is
+still running (see "Processes that cannot be kept" below). What
 Octoboard keeps without being asked, after a restart that fails or when its saved records cannot be read, and the
 processes outside these rules altogether (the daemon's own and its process holders', the user's shell terminals, the
 agent's own terminal session), are in "Automatic stopping and its boundaries" below.
@@ -236,28 +237,66 @@ Windows daemon host a kept process's descendants are followed by their chain of 
 exits before the next scan has seen it loses that chain, is pulled back to the launch by the job it is still a member
 of (see "Which processes belong to a launch" above), and is stopped with the launch instead of being kept.
 
-## Processes on the agent's own console
+## Processes that cannot be kept
+
+Some processes end with their session whatever keeps them, so a session's tree with such a process cannot be kept.
+There are two reasons, each in a section below: a process on the agent's own console, on a Windows daemon host, and a
+process inside a command the agent is still running, on macOS and Linux. For such a tree:
+
+- **It is listed as not keepable**: in the daemon's process list it carries `keepable: false` and an
+  `unkeepable_reason` naming why, `agent_console` or `agent_command_group`; every other tree carries `keepable: true`
+  and no reason. A tree with processes of both kinds is given `agent_console`. Only `keepable` sent as `false` marks a
+  tree not keepable: a tree from a daemon that does not send the field can be kept. Whether a tree can be kept is
+  worked out afresh each time it is listed, so it can change while the tree runs. The Processes panel shows its Keep
+  as unavailable (see "Stop and Keep" in `docs/product/processes-panel.md`), and an archive confirmation shows it as a
+  checkbox that stays checked (see "Processes in an archive confirmation" below). The window says why in a sentence of
+  its own for each reason, giving only the cause; a reason this window does not know reads only that the process cannot
+  be kept.
+- **A keep naming it is refused** with the error code of its reason, whose parameters name the first such process
+  (`pid`, and `name`, empty when unknown): a `keep_processes` keeps none of the trees it names, and an
+  `archive_session` whose `keep_process_ids` names it keeps nothing and does not archive. The error's own message, the
+  daemon's English sentence rather than the window's, gives the cause and what to do to keep such a process running.
+
+### Processes on the agent's own console
 
 On a Windows daemon host the agent runs on a pseudo console, and ending its launch closes that console, which ends every
 process attached to it whatever keeps it (see "Automatic stopping and its boundaries" above). So a session's tree with a
-process attached to the agent's own console cannot be kept:
+process attached to the agent's own console cannot be kept: it is listed with `unkeepable_reason: "agent_console"`, and
+a keep naming it is refused with `process_shares_agent_console`. The window's sentence says that the process runs in the
+agent's own terminal, which closes when the session ends, so it cannot be kept. The error's message says the same and
+adds that, to keep it running, it is to be started in a window of its own.
 
-- **It is listed as not keepable**: in the daemon's process list it carries `keepable: false` and
-  `unkeepable_reason: "agent_console"`, the one reason there is; every other tree carries `keepable: true` and no
-  reason. Only `keepable` sent as `false` marks a tree not keepable: a tree from a daemon that does not send the field
-  can be kept. The Processes panel shows its Keep as unavailable (see "Stop and Keep" in
-  `docs/product/processes-panel.md`), and an archive confirmation lists it with no choice (see "Processes in an archive
-  confirmation" below).
-- **A keep naming it is refused** with `process_shares_agent_console`, whose parameters name the process (`pid`, and
-  `name`, empty when unknown): a `keep_processes` keeps none of the trees it names, and an `archive_session` whose
-  `keep_process_ids` names it keeps nothing and does not archive. Its message, also the reason shown ahead of the
-  choice, says the process runs in the agent's own terminal, so it ends with the session and cannot be kept, and that
-  to keep it running it is to be started in a window of its own.
-- **A process whose console cannot be told** — it cannot be opened, or the system does not say which console it is
-  on — is taken not to be on the agent's console, so its tree stays keepable.
+A process whose console cannot be told — it cannot be opened, or the system does not say which console it is on — is
+taken not to be on the agent's console, so its tree stays keepable.
 
 This never applies on macOS or Linux, where what sits in the agent's own terminal session is not listed at all (see
 "Automatic stopping and its boundaries" above).
+
+### Processes in a command the agent still runs
+
+Some agents end, as they exit, the whole process group of every shell command they still have running, so whatever
+runs in such a group ends with the session whatever keeps it. Each agent's provider declares whether its agent does so,
+served with the agents as the capability `ends_command_groups_on_exit`: Claude Code, Codex and Grok Build do. On a
+macOS or Linux daemon host, a session's tree with a process in such a group cannot be kept: it is listed with
+`unkeepable_reason: "agent_command_group"`, and a keep naming it is refused with `process_in_agent_command_group`.
+
+A process of a launch whose agent declares this is in such a group when the leader of its process group — which may be
+the process itself — is still running and descends from the launch's **command runner** with no other process-group
+leader on the way between them. The command runner is the process the agent's commands are started from: a Codex
+launch's private app server where the launch has one (see "Codex's private app server" in
+`docs/product/per-agent-launch-specifics.md`), and the agent itself otherwise. So these stay keepable:
+
+- a process that started a process group of its own from within a command, for instance with `setsid`;
+- a process whose group leader has exited: the command that started it has finished, and the agent ends only the
+  groups of the commands it still runs;
+- any process of a launch whose command runner has exited.
+
+The window's sentence says that the process runs inside a command the agent is still running, and that the agent ends
+it when it exits, so it cannot be kept. The error's message says the same and adds that, to keep it running, it is to
+be started detached from the agent, in a new session (with `setsid`, for instance).
+
+This never applies on a Windows daemon host, where processes have no process groups and only "Processes on the agent's
+own console" above applies, nor to an agent whose provider does not declare it.
 
 ## Processes a restart ended
 
@@ -394,13 +433,15 @@ shows the tree's working directory and its facts, as on a Processes panel card (
 Each checkbox starts **checked, meaning Stop**. Unchecking it means Keep running. A newly listed tree starts checked;
 existing choices follow the tree across inspections. **A console session's trees**, which cannot be kept, are listed
 apart, after a line saying that a console session's processes are always stopped, each as a plain row with the
-crossed-out glyph and its own Details disclosure, and no checkbox. **A tree listed as not keepable** (see "Processes on
-the agent's own console" above) is such a row too, always stopped, with the reason under its command, and no line of
-its own leading it. Beside trees that can be kept, these rows close the list of checkboxes, set in so that their glyph
-and command line up with the checkboxes' glyphs and commands; with no tree that can be kept they stand alone. Either
-way they come before a console session's trees. A reason this window
-does not know reads only that the process cannot be kept. Under the trees, lines say how many processes are
-stopped and, while any is unchecked, that the ones kept stay running. Younger trees are not offered, but are still
+crossed-out glyph and its own Details disclosure, and no checkbox. **A tree listed as not keepable** (see "Processes
+that cannot be kept" above) is a checkbox that stays checked and is unavailable: it is always stopped, counted among
+the processes stopped, and never kept. Only its box looks faded — its command and glyph keep their usual look — and only
+the box carries why the tree cannot be kept, as its tooltip and its description for assistive technology, with no line
+under its command; a press on it does nothing (see "How such a control behaves" in
+`docs/product/controls-unavailable-for-a-reason.md`). Beside trees that can be kept, these checkboxes close the list,
+under the same leading line; with no tree that can be kept they stand alone, without that line. Either way they come
+before a console session's trees. Under the trees, lines say how many processes are stopped and, while any is
+unchecked, that the ones kept stay running. Younger trees are not offered, but are still
 stopped when the launch ends unless already kept. Keeping a process does not keep its working directory or prevent the
 archive's branch and worktree cleanup.
 

@@ -19,14 +19,15 @@ import { alertFailure } from "../../components/alerts/raiseError";
 import { Label, ProgressBar, ProgressBarTrack } from "../../primitives";
 
 /** An account's Share default configuration switch (see "The sharing choice" in
- * `docs/product/sharing-the-default-configuration.md`), shown for every account but the agent's default one, in the account's settings dialog, as a `SettingRow` (label with its help tip and a description, the switch at the end,
+ * `docs/product/sharing-the-default-configuration.md`), shown for every account but the agent's default one, in the
+ * account's settings dialog, as a `SettingRow` (label with its help tip and a description, the switch at the end,
  * with the warning's mark after it): the progress bar takes the row's full width under it. What the switch does now
  * is the row's description, following its position (and left out while a change runs or did not finish); what
- * turning it off does is behind the label's help tip, with the idle sessions it would end; and under the
- * description, why the switch is locked. A change is carried out at once, so the switch is either free or
- * unavailable, and says which. Unavailable, it stays focusable and describes itself, so a keyboard user hears why
- * (see "Buttons" in `docs/conventions/ui-standard.md`):
- * - free: nothing under it;
+ * turning it off does is behind the label's help tip, with the idle sessions it would end; and why the switch is
+ * locked is its tooltip and description, written nowhere else. A change is carried out at once, so the switch is either
+ * free or unavailable, and says which. Unavailable, it stays focusable, takes no press, and its tooltip describes it, so a
+ * keyboard user hears why (see "Buttons" in `docs/conventions/ui-standard.md`):
+ * - free: no tooltip;
  * - unavailable, turning sharing on, where the daemon's host cannot make the file links sharing needs (`file_links`),
  *   saying how to turn that on there (Windows' Developer Mode). Sharing already on can still be turned off, as the
  *   daemon allows, and its line says that turning it on again is not possible there until then;
@@ -109,7 +110,7 @@ export function AccountSharingSwitch({ account, opensFocused }: { account: Accou
       .catch(alertFailure({ title: t("settings.accounts.sharing.failedTitle") }))
       .finally(() => setBusy(false));
   };
-  // The only line kept under the switch: why it cannot be turned now. What it does is in the help tip. With sharing on,
+  // Why the switch cannot be turned now, its tooltip and description. What it does is in the help tip. With sharing on,
   // a host that makes no file links does not stop it being turned off, so only what locks it (sessions running, a
   // sign-in) is said; once it is off, the host is the reason, and stays so.
   const caption = unlinkable && !shown
@@ -121,7 +122,6 @@ export function AccountSharingSwitch({ account, opensFocused }: { account: Accou
       </>
       : undefined;
   const describedByIds = [
-    caption !== undefined && `${id}-caption`,
     progress && `${id}-label`,
     progress && `${id}-value`,
     progress && progress.phase === "changing" && progress.item !== undefined && `${id}-current`,
@@ -149,7 +149,6 @@ export function AccountSharingSwitch({ account, opensFocused }: { account: Accou
             id={shared ? "settings.accounts.sharing.describeOnAccount" : "settings.accounts.sharing.describeOffAccount"}
             params={{ name: <InlineReference dir="auto" wrap>{defaultName}</InlineReference> }}
           />}
-          {caption !== undefined && <p id={`${id}-caption`} className="text-xs">{caption}</p>}
         </>
       }
       below={progress && <SharingProgress id={id} progress={progress} />}
@@ -157,7 +156,7 @@ export function AccountSharingSwitch({ account, opensFocused }: { account: Accou
     >
       <div className="flex items-center gap-2">
         <div ref={root} data-sharing-account={account.id}>
-          <SettingSwitch label={label} isSelected={shown} onChange={ask} isUnavailable={locked} describedBy={describedBy} opensFocused={opensFocused} />
+          <SettingSwitch label={label} isSelected={shown} onChange={ask} unavailable={locked ? caption ?? true : undefined} describedBy={describedBy} opensFocused={opensFocused} />
         </div>
         {unfinished && (
           <SharingIncomplete

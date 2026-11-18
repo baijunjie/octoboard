@@ -13,6 +13,7 @@ use crate::platform::proc::ContainerId;
 struct Stat {
     comm: String,
     ppid: i32,
+    pgid: i32,
     sid: i32,
     /// Clock ticks since boot.
     start_ticks: u64,
@@ -32,6 +33,7 @@ fn stat(pid: i32) -> Option<Stat> {
         comm: String::from_utf8_lossy(text.get(before + 1..after)?).into_owned(),
         zombie: matches!(fields.first(), Some(&"Z") | Some(&"X")),
         ppid: fields.get(1)?.parse().ok()?,
+        pgid: fields.get(2)?.parse().ok()?,
         sid: fields.get(3)?.parse().ok()?,
         start_ticks: fields.get(19)?.parse().ok()?,
     })
@@ -114,6 +116,7 @@ pub(crate) fn list() -> Option<Vec<ProcInfo>> {
                     start: start_micros(stat.start_ticks)?,
                     ppid: stat.ppid,
                     sid: Some(ContainerId(stat.sid as u32)),
+                    pgid: Some(stat.pgid),
                     comm: stat.comm,
                 })
             })

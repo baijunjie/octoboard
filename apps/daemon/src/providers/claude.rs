@@ -103,6 +103,9 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         per_session_trust: false,
         config_sharing: true,
         mcp_inventory: true,
+        // Measured: on exit it kills the group of each shell it still runs, a shell that leads a
+        // group of its own as a direct child of the agent.
+        ends_command_groups_on_exit: true,
         delivery: DeliveryQuirks {
             confirms_by_reported_prompt: true,
             holds_report_for_completion_notice: true,

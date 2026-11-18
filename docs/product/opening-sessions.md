@@ -331,11 +331,13 @@ account that is not logged in, turned off or changing its sharing of the default
 agent is usable or kept from being usable only by a used-up quota, and, with automatic selection on, no other agent has
 a usable account — nothing can be opened with defaults:
 
-- the **+** in its quick form looks disabled but stays focusable and under the pointer; its accessible name stays its
-  action, while its tooltip and its description for assistive technology briefly say that no account is available;
-- pressing it — or pressing a **+** with the modifier before the hold was noticed — sends nothing and shows a known
-  failure (`quick_create_unavailable`) saying only that no account is currently available to open a session. It has
-  an acknowledgement button, with no recovery instructions, account-management button or request to report an issue;
+- the **+** in its quick form is unavailable (see "How such a control behaves" in
+  `docs/product/controls-unavailable-for-a-reason.md`): its accessible name stays its action, while its tooltip and its
+  description for assistive technology briefly say that no account is available, and pressing it does nothing;
+- pressing a **+** with the modifier before the hold was noticed, or **New session with defaults** from the keyboard
+  (see "Creating sessions from the keyboard" in `docs/product/sidebar.md`), sends nothing and shows a known failure
+  (`quick_create_unavailable`) saying only that no account is currently available to open a session. It has an
+  acknowledgement button, with no recovery instructions, account-management button or request to report an issue;
 - in the **+** menu of projects in a console session's focus mode, opened in its quick form, each such project is
   disabled, with a short note under its name saying no account is available; it stays reachable with the arrow keys,
   and its accessible name ends with that note.

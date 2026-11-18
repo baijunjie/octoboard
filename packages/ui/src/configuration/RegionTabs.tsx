@@ -1,8 +1,7 @@
 import { TriangleAlert } from "lucide-react";
 import React, { useRef, useState } from "react";
 
-import { AnchoredTooltip } from "../components/hint/AnchoredTooltip";
-import { Tab, TabList, TabListContainer, TabPanel, Tabs, useKeyboardModality } from "../primitives";
+import { Tab, TabList, TabListContainer, TabPanel, Tabs, Tooltip, useKeyboardModality } from "../primitives";
 import { useListMotion } from "../components/motion/useListMotion";
 import { useT } from "../i18n/react";
 
@@ -70,7 +69,7 @@ export function RegionTabs({
 
 /**
  * One region's tab. One that needs attention is named so (see `RegionTabs`) and a tooltip beside the tab says it, an
- * `AnchoredTooltip` placed against the tab itself, since the tab is the control and nothing can be nested in it, so
+ * anchored `Tooltip` placed against the tab itself, since the tab is the control and nothing can be nested in it, so
  * the glyph is decorative. It opens while the pointer is on the tab and while the tab has keyboard focus (by
  * react-aria's input modality, not `:focus-visible`, so a press with the mouse that focuses the tab does not). The
  * tab's accessible name already says it needs attention, so the tooltip is not linked to the tab.
@@ -97,7 +96,7 @@ function RegionTab({ region }: { region: RegionPanel }): React.ReactElement {
       {region.attention && (
         <>
           <TriangleAlert className="size-3.5 shrink-0 text-warning-soft-foreground" />
-          <AnchoredTooltip tooltip={t("configuration.import.tab.attentionTip")} anchor={ref} placement="end" hovered={hovered || (focused && isFocusVisible)} immediate={focused} />
+          <Tooltip trigger="anchored" content={t("configuration.import.tab.attentionTip")} anchor={ref} placement="end" hovered={hovered || (focused && isFocusVisible)} immediate={focused} />
         </>
       )}
     </Tab>

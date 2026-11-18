@@ -282,6 +282,10 @@ export interface Fixture {
    * daemon finding a session mid-turn that the window still lists as idle). Unlisted sessions are
    * handed off normally. */
   sessionHandoffs?: Record<string, FixtureError | "pending">;
+  /** A refusal of `restart_daemon` for what the window could not have foreseen (`agent_update_running` for an agent's CLI
+   * update that began after the press); the window holds Restart now back for one it already knows of. Left out, the
+   * restart is acknowledged. */
+  daemonRestartError?: FixtureError;
   /** A refusal to save a provider setting (a `set_provider_setting`: an agent's permission approval or its Claude compatibility); successful requests update settings. */
   accountApprovalError?: FixtureError;
   /** A refusal of `update_agent_cli` for what the window could not have seen coming (`agent_cli_update_unsupported` when the

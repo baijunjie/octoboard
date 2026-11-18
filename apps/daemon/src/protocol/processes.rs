@@ -49,6 +49,9 @@ pub enum UnkeepableReason {
     /// A process of the tree is attached to its agent's own console, which ends it with the
     /// session whatever keeps it.
     AgentConsole,
+    /// A process of the tree is in the process group of one of its agent's running commands,
+    /// which the agent ends as it exits, so the process ends with the session whatever keeps it.
+    AgentCommandGroup,
 }
 
 /// How many trees there are under one project, or for one console session, in the count of

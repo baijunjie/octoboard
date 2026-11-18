@@ -11,15 +11,16 @@ import { fakeTimers } from "../../test/clock";
 /** The elements a tooltip has been placed against. */
 const anchored: Element[] = [];
 const placements: (string | undefined)[] = [];
-vi.mock("../hint/AnchoredTooltip", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../hint/AnchoredTooltip")>();
+vi.mock("../../primitives", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../primitives")>();
   return {
-    AnchoredTooltip: (props: React.ComponentProps<typeof actual.AnchoredTooltip>) => {
-      if (props.hovered) {
+    ...actual,
+    Tooltip: (props: React.ComponentProps<typeof actual.Tooltip>) => {
+      if (props.trigger === "anchored" && props.hovered) {
         anchored.push(props.anchor.current!);
         placements.push(props.placement);
       }
-      return actual.AnchoredTooltip(props);
+      return actual.Tooltip(props);
     },
   };
 });

@@ -4,11 +4,10 @@ import React, { useId } from "react";
 import { StatusAnnouncer, AFTER_FOCUS_MOVE_DELAY_MS } from "../../components/announce/StatusAnnouncer";
 import { IconToggle } from "../../components/controls/IconToggle";
 import { ROW_ICON_BUTTON_CLASS } from "../../components/controls/RowControls";
-import { TitledControl } from "../../components/hint/TitledControl";
 import { isImeKey } from "../../input/imeKey";
 import { useT } from "../../i18n/react";
 import type { FindOptions } from "./find";
-import { Button, Input, ToggleButton } from "../../primitives";
+import { Button, Input, ToggleButton, Tooltip } from "../../primitives";
 
 /** How a search stands, for the count beside the query. */
 export type FindStatus =
@@ -123,7 +122,7 @@ export function FindBar({
       </span>
       <StatusAnnouncer text={spoken} firstWriteDelayMs={AFTER_FOCUS_MOVE_DELAY_MS} />
       {OPTIONS.map(({ option, label, Icon }) => (
-        <TitledControl key={option} title={t(label)}>
+        <Tooltip key={option} content={t(label)}>
           <ToggleButton
             iconOnly
             size="sm"
@@ -136,23 +135,17 @@ export function FindBar({
           >
             <Icon className="size-4" />
           </ToggleButton>
-        </TitledControl>
+        </Tooltip>
       ))}
-      <TitledControl title={t("viewer.find.previous")}>
-        <Button iconOnly size="xs" variant="ghost" className={`row-icon-control ${ROW_ICON_BUTTON_CLASS}`} label={t("viewer.find.previous")} disabled={stepDisabled} onPress={() => onStep("previous")} focusOnPress={false}>
-          <ChevronUp className="size-4" />
-        </Button>
-      </TitledControl>
-      <TitledControl title={t("viewer.find.next")}>
-        <Button iconOnly size="xs" variant="ghost" className={`row-icon-control ${ROW_ICON_BUTTON_CLASS}`} label={t("viewer.find.next")} disabled={stepDisabled} onPress={() => onStep("next")} focusOnPress={false}>
-          <ChevronDown className="size-4" />
-        </Button>
-      </TitledControl>
-      <TitledControl title={t("viewer.find.close")}>
-        <Button iconOnly size="xs" variant="ghost" className={`row-icon-control ${ROW_ICON_BUTTON_CLASS}`} label={t("viewer.find.close")} onPress={onClose}>
-          <X className="size-4" />
-        </Button>
-      </TitledControl>
+      <Button tooltip={t("viewer.find.previous")} iconOnly size="xs" variant="ghost" className={`row-icon-control ${ROW_ICON_BUTTON_CLASS}`} label={t("viewer.find.previous")} disabled={stepDisabled} onPress={() => onStep("previous")} focusOnPress={false}>
+        <ChevronUp className="size-4" />
+      </Button>
+      <Button tooltip={t("viewer.find.next")} iconOnly size="xs" variant="ghost" className={`row-icon-control ${ROW_ICON_BUTTON_CLASS}`} label={t("viewer.find.next")} disabled={stepDisabled} onPress={() => onStep("next")} focusOnPress={false}>
+        <ChevronDown className="size-4" />
+      </Button>
+      <Button tooltip={t("viewer.find.close")} iconOnly size="xs" variant="ghost" className={`row-icon-control ${ROW_ICON_BUTTON_CLASS}`} label={t("viewer.find.close")} onPress={onClose}>
+        <X className="size-4" />
+      </Button>
     </div>
   );
 }

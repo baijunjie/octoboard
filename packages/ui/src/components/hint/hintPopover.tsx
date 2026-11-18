@@ -2,9 +2,8 @@ import React, { useEffect, useId, useRef, useState } from "react";
 
 import { isImeKey } from "../../input/imeKey";
 import { keepsEscape } from "../focus/keepsEscape";
-import { OFFSET, PLACEMENT, TOOLTIP_SURFACE } from "./hintSurface";
 import { useStableHandler } from "../hooks/useLatest";
-import { type ButtonPress, FloatingPopover, type OverlayPlacement, Popover, PopoverDialog } from "../../primitives";
+import { type ButtonPress, FloatingPopover, type OverlayPlacement, Popover, PopoverDialog, TOOLTIP_OFFSET, TOOLTIP_PLACEMENT, tooltipSurfaceClassName } from "../../primitives";
 
 /** How long the pointer rests on the trigger before the panel floats in. */
 export const HOVER_OPEN_DELAY_MS = 250;
@@ -168,9 +167,9 @@ interface HoverPopoverTrigger {
 }
 
 /**
- * The `popover` kind of `Hint`: a floating surface for interactive content, a body that holds a control or
+ * A floating surface for interactive content, a body that holds a control or
  * text to select. A tooltip is `role="tooltip"`, described to its trigger, and can hold neither focus nor a
- * control, so this is a dialog popover drawn on the same surface (`TOOLTIP_SURFACE`).
+ * control, so this is a dialog popover drawn on the same surface (`tooltipSurfaceClassName`).
  *
  * Inputs: a mouse resting on the trigger opens it without moving focus (non-modal, `aria-modal="false"`,
  * `data-escape-topmost`); a mouse click opens nothing; a tap, a pen, assistive technology and the keyboard
@@ -291,14 +290,14 @@ export function PopoverHint({
         open={open}
         nonModal={form === "hover"}
         anchor={triggerRef}
-        placement={placement ?? PLACEMENT}
-        offset={offset ?? OFFSET}
+        placement={placement ?? TOOLTIP_PLACEMENT}
+        offset={offset ?? TOOLTIP_OFFSET}
         {...contentProps}
         data-escape-topmost={mode === "hover" ? "" : undefined}
         onOpenChange={(isOpen) => {
           if (!isOpen) close();
         }}
-        className={`${TOOLTIP_SURFACE} ${contentClassName ?? ""}`}
+        className={`${tooltipSurfaceClassName} ${contentClassName ?? ""}`}
       >
         {form === "hover" ? (
           // Focusable but no tab stop: a mouse press on the panel's text has to leave focus in the panel, or a

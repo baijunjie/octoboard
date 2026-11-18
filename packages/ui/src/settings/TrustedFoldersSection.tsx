@@ -5,7 +5,6 @@ import { EmptyPanel } from "../components/panel/EmptyPanel";
 import { InlineReference } from "../i18n/InlineReference";
 import { MarkedPath } from "../components/text/MarkedPath";
 import { useListMotion } from "../components/motion/useListMotion";
-import { TitledControl } from "../components/hint/TitledControl";
 import { ConfirmDialog } from "../components/dialog/ConfirmDialog";
 import { isolate } from "../i18n/isolate";
 import { Message, useT } from "../i18n/react";
@@ -52,19 +51,18 @@ export function TrustedFoldersSection(): React.ReactElement {
             <div ref={listRef} className="relative">
               {directories.map((path) => (
                 <SettingRow compact key={path} motionKey={path} label={<MarkedPath path={path} />}>
-                  <TitledControl title={t("settings.trusted.removeTooltip")}>
-                    <Button
-                      size="sm"
-                      variant="danger-soft"
-                      focusOnPress={false}
-                      // The tooltip nearly repeats the accessible name; an empty description keeps it from being read twice.
-                      describedBy=""
-                      label={t("settings.trusted.removeLabel", { path: isolate(path) })}
-                      onPress={() => setRemoving(path)}
-                    >
-                      {t("common.remove")}
-                    </Button>
-                  </TitledControl>
+                  <Button
+                    tooltip={t("settings.trusted.removeTooltip")}
+                    size="sm"
+                    variant="danger-soft"
+                    focusOnPress={false}
+                    // The tooltip nearly repeats the accessible name; an empty description keeps it from being read twice.
+                    describedBy=""
+                    label={t("settings.trusted.removeLabel", { path: isolate(path) })}
+                    onPress={() => setRemoving(path)}
+                  >
+                    {t("common.remove")}
+                  </Button>
                 </SettingRow>
               ))}
             </div>

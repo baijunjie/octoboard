@@ -115,7 +115,7 @@ const UPDATING_AGENT = agentCliStatusesOf([agentCliStatusOf("claude"), agentCliS
 /** Found by its accessible name, which stays "Restart now" while the reason sits inside the button for a screen reader. */
 const restartNow = (container: HTMLElement) => container.querySelector<HTMLButtonElement>("button[aria-label='Restart now']")!;
 
-it("says the restart waits for an agent's update, leaves Restart now unavailable with the reason, and asks for no restart when it is pressed, which it explains instead", async () => {
+it("says the restart waits for an agent's update, leaves Restart now unavailable with the reason, and asks for no restart and raises nothing when it is pressed", async () => {
   const { container, request } = mount(INSTALLED, undefined, UPDATING_AGENT);
   expect(textOf(container)).toContain("Version 0.2.0 is installed. Restart when the agent update finishes.");
   expect(textOf(container)).not.toContain("takes effect after");
@@ -126,10 +126,7 @@ it("says the restart waits for an agent's update, leaves Restart now unavailable
   expect(errorAlerts.getSnapshot()).toHaveLength(0);
   await act(async () => void restart.click());
   expect(request.mock.calls.some(([body]) => body.type === "restart_daemon")).toBe(false);
-  const alerts = errorAlerts.getSnapshot();
-  expect(alerts).toHaveLength(1);
-  expect(alerts[0]?.title).toBe("Cannot restart");
-  expect((alerts[0]?.error as { code?: string }).code).toBe("agent_update_running");
+  expect(errorAlerts.getSnapshot()).toHaveLength(0);
 });
 
 it("keeps Restart now as it was while no agent's update runs", async () => {
@@ -183,9 +180,11 @@ it("drops the hover and press fills of Restart now while it is unavailable, and 
   const { container, daemon } = mount(INSTALLED);
   // The installed strip's Later is a text button, found by its text (the dismiss icon button of an available update has the label).
   const later = () => button(container, "Later")!;
-  expect(restartNow(container).className).toContain("var(--accent-hover)");
+  // An unavailable button takes the resting fills over the notice's own tints.
+  const resting = "[--button-bg-hover:var(--button-bg)]!";
+  expect(restartNow(container).className).not.toContain(resting);
   act(() => daemon.store.setState({ agentCliStatuses: UPDATING_AGENT }));
-  expect(restartNow(container).className).not.toContain("var(--accent-hover)");
+  expect(restartNow(container).className).toContain(resting);
   expect(later().className).toContain("var(--accent-hover)");
   act(() => daemon.store.setState({ agentCliStatuses: agentCliStatusesOf([agentCliStatusOf("codex")]) }));
   expect(restartNow(container).className).toContain("var(--accent-hover)");

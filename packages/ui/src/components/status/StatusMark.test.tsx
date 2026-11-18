@@ -4,7 +4,7 @@ import { FocusScope } from "react-aria";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { StatusMark } from "./StatusMark";
-import { HOVER_CLOSE_DELAY_MS, HOVER_OPEN_DELAY_MS } from "../hint/Hint";
+import { HOVER_CLOSE_DELAY_MS, HOVER_OPEN_DELAY_MS } from "../hint/hintPopover";
 import { enter, leave, mountForTooltip, openTooltip, pointer, press as pointerPress, tap } from "../hint/tooltipTestSupport";
 import { fakeTimers, runOutTimers } from "../../test/clock";
 

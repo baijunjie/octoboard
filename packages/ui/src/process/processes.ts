@@ -1,4 +1,3 @@
-import { ActionableError } from "../errors/actionableError";
 import { CodedError } from "../errors/codedError";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
 import type { ProcessCount, ProcessTree, UnkeepableReason, UnstoppedProcess } from "../protocol";
@@ -43,13 +42,14 @@ export async function listAllProcesses(request: Request): Promise<ProcessCount[]
   return (await request({ type: "list_all_processes" })).counts;
 }
 
-/** Why a tree cannot be kept, as the error the daemon refuses a keep with, its code and its sentence, so the reason
- * shown ahead of the choice and the refusal read alike. */
-const UNKEEPABLE_REFUSALS: Record<UnkeepableReason, { code: string; message: PlainMessageKey }> = {
-  agent_console: { code: "process_shares_agent_console", message: "daemon.process_shares_agent_console" },
+/** Why a tree cannot be kept, as the sentence of the error the daemon refuses a keep with, so the reason shown ahead of
+ * the choice and the refusal read alike. */
+const UNKEEPABLE_MESSAGES: Record<UnkeepableReason, PlainMessageKey> = {
+  agent_console: "daemon.process_shares_agent_console",
+  agent_command_group: "daemon.process_in_agent_command_group",
 };
 
-const isUnkeepableReason = knownValues<UnkeepableReason>({ agent_console: true });
+const isUnkeepableReason = knownValues<UnkeepableReason>({ agent_console: true, agent_command_group: true });
 
 /** A tree the daemon says cannot be kept. */
 export type UnkeepableTree = ProcessTree & { keepable: false };
@@ -60,23 +60,9 @@ export function isUnkeepable(tree: ProcessTree): tree is UnkeepableTree {
   return tree.keepable === false;
 }
 
-/** The refusal of keeping `tree` for its reason, when this window knows the reason (a newer daemon's it does not). */
-function refusalOf(tree: UnkeepableTree): (typeof UNKEEPABLE_REFUSALS)[UnkeepableReason] | undefined {
-  const reason = tree.unkeepable_reason;
-  return isUnkeepableReason(reason) ? UNKEEPABLE_REFUSALS[reason] : undefined;
-}
-
 /** The sentence saying why `tree` cannot be kept. A reason this window does not know is said plainly, as is a tree
  * with none. */
 export function unkeepableMessage(tree: UnkeepableTree): PlainMessageKey {
-  return refusalOf(tree)?.message ?? "processes.unkeepable";
-}
-
-/** The error a keep of `tree` is refused with, for a press of its unavailable Keep to raise as the daemon's refusal
- * would be raised: the daemon's own code where the reason is known, worded in the current language, and otherwise a
- * sentence that says the reason is not known, the alert's title (`processes.keepRefusedTitle`) already saying it
- * cannot be kept. */
-export function unkeepableRefusal(tree: UnkeepableTree, t: Translate): Error {
-  const refusal = refusalOf(tree);
-  return refusal ? new CodedError(t(refusal.message), refusal.code, {}) : new ActionableError(t("processes.unkeepableUnknownReason"), "none");
+  const reason = tree.unkeepable_reason;
+  return isUnkeepableReason(reason) ? UNKEEPABLE_MESSAGES[reason] : "processes.unkeepable";
 }

@@ -260,7 +260,7 @@ export const archiveScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Archived row with no conversation, Open in the agent's app unavailable",
-    description: "The Claude Code row has no conversation yet, so its Open in Claude app button is dimmed but still focusable. Focus is on it, so the row's actions show, with Open in app leftmost and Reopen and Delete after it as usual, and its tooltip is headed: the action name as its heading, a divider, and under it the reason, that the session has no conversation so there is nothing to open. Pressing the dimmed button raises an alert titled \"Could not open the agent's app\" with that same sentence.",
+    description: "The Claude Code row has no conversation yet, so its Open in Claude app button is dimmed but still focusable. Focus is on it, so the row's actions show, with Open in app leftmost and Reopen and Delete after it as usual, and its tooltip is the reason alone, one plain sentence with no heading: that the session has no conversation so there is nothing to open. Pressing the dimmed button does nothing.",
     state: appEmptyState,
     nativeApps: ["claude"],
     steps: [...openProjectArchive(project.name), (ui) => ui.focusControl(openInAppButton(ui, "claude", appEmpty))],

@@ -4,7 +4,6 @@ import React, { createContext, useContext } from "react";
 import { FadeOverflow } from "../text/FadeOverflow";
 import { ROW_ICON_BUTTON_CLASS, RowIconGroup } from "../controls/RowControls";
 import { FadedScroller } from "../scroll/scrollFade";
-import { TitledControl } from "../hint/TitledControl";
 import { useT } from "../../i18n/react";
 import { Button } from "../../primitives";
 
@@ -100,18 +99,14 @@ export function PanelHeader({
       )}
       <RowIconGroup className={prioritizeChildren || compact || actions ? "" : "ms-auto"}>
         {frame?.canMaximize && (
-          <TitledControl title={t(frame.maximized ? "panel.restore" : "panel.maximize")}>
-            <Button iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={t(frame.maximized ? "panel.restore" : "panel.maximize")} focusOnPress={false} onPress={frame.onToggleMaximized}>
-              {frame.maximized ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
-            </Button>
-          </TitledControl>
+          <Button tooltip={t(frame.maximized ? "panel.restore" : "panel.maximize")} iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={t(frame.maximized ? "panel.restore" : "panel.maximize")} focusOnPress={false} onPress={frame.onToggleMaximized}>
+            {frame.maximized ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
+          </Button>
         )}
         {frame && (
-          <TitledControl title={t("panel.close")}>
-            <Button iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={t("panel.close")} focusOnPress={false} onPress={frame.onClose}>
-              <X className="size-4" />
-            </Button>
-          </TitledControl>
+          <Button tooltip={t("panel.close")} iconOnly size="xs" variant="ghost" className={ROW_ICON_BUTTON_CLASS} label={t("panel.close")} focusOnPress={false} onPress={frame.onClose}>
+            <X className="size-4" />
+          </Button>
         )}
       </RowIconGroup>
     </div>

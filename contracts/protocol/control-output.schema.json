@@ -822,6 +822,10 @@
           "type": "boolean",
           "description": "Can list an account's MCP servers and platform connectors (`read_account_mcp_inventory`)."
         },
+        "ends_command_groups_on_exit": {
+          "type": "boolean",
+          "description": "Ends the process groups of the commands it still has running as it exits, so a process in\nsuch a group ends with the session whatever keeps it. Each command's group is led by a\ndescendant of the process that runs the commands (the agent, or the server it runs them\nfrom, `crate::session::term::MessageTransport::command_host`), reached from the runner\nwithout another group leader in between."
+        },
         "delivery": {
           "$ref": "#/$defs/DeliveryQuirks"
         }
@@ -835,6 +839,7 @@
         "per_session_trust",
         "config_sharing",
         "mcp_inventory",
+        "ends_command_groups_on_exit",
         "delivery"
       ],
       "description": "What a provider can do that not every provider can, declared so that code and the UI branch\non it rather than on which provider it is."
@@ -10021,6 +10026,11 @@
           "type": "string",
           "const": "agent_console",
           "description": "A process of the tree is attached to its agent's own console, which ends it with the\nsession whatever keeps it."
+        },
+        {
+          "type": "string",
+          "const": "agent_command_group",
+          "description": "A process of the tree is in the process group of one of its agent's running commands,\nwhich the agent ends as it exits, so the process ends with the session whatever keeps it."
         }
       ],
       "description": "Why a tree cannot be kept."

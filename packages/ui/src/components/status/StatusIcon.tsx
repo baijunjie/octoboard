@@ -4,10 +4,10 @@ import React from "react";
 import { useT } from "../../i18n/react";
 import { statusLabel } from "../../sessions/sessionLabel";
 import { type ShownStatusKind } from "../../sessions/sessionStatus";
-import { IndicatorTooltip } from "../hint/IndicatorTooltip";
 import { BUBBLE_SHIFT, shiftedViewBox } from "./opticalCentring";
 import { ReconnectingIcon } from "./ReconnectingIcon";
 import { SleepGlyph, StatusSlot, WavingHand, WorkingDot } from "./statusGlyphs";
+import { Tooltip } from "../../primitives";
 
 const ICON_CLASS = "size-4 shrink-0";
 /** The compact glyph's size: the marker beside a collapsed project's name and on a switch chip. */
@@ -97,7 +97,7 @@ function statusDrawing(status: ShownStatusKind, small: boolean): React.ReactElem
  *
  * `small` is the compact size of the marker beside a collapsed project's name and on a switch chip.
  *
- * `touchPopover` is the caller's to set (see `IndicatorTooltip`): on where the glyph stands alone, off
+ * `touchPopover` is the caller's to set (see `Tooltip`): on where the glyph stands alone, off
  * inside a pressable row, whose press a tap on the glyph would share.
  */
 export function StatusIcon({
@@ -119,8 +119,8 @@ export function StatusIcon({
   const glyph = statusGlyph(status, named && !withTooltip ? { role: "img", "aria-label": label } : { "aria-hidden": true }, !!small);
   if (!withTooltip) return glyph;
   return (
-    <IndicatorTooltip tooltip={label} label={named ? label : undefined} className="inline-flex shrink-0" touchPopover={touchPopover}>
+    <Tooltip trigger="mark" content={label} label={named ? label : undefined} className="inline-flex shrink-0" touchPopover={touchPopover}>
       {glyph}
-    </IndicatorTooltip>
+    </Tooltip>
   );
 }

@@ -42,11 +42,15 @@ Each rule is a bullet: the rule, then why. Where nothing names an enforcing chec
 - **Use the project composite where one exists** (`Dialog`, `ActionMenu`, the shared dialogs). Where its shape cannot
   hold what is being built, build on the wrapper's parts and comment at the component why; do not widen the composite
   with a switch only one case passes.
+- **A need many callers share that looks or acts like an existing shared component becomes a parameter or a kind of
+  it, never a second component beside it.** Examples: `Tooltip`'s `trigger` kinds and `Button`/`Switch`/`Checkbox`'s
+  `unavailable` (a tooltip, a control unavailable for a reason). The bullet above still holds for a shape only one case
+  needs.
 - **A hand-built element is acceptable only where HeroUI has no equivalent or cannot meet a stated requirement**; build
   it on the layer's React Aria hooks, not bare DOM events, and comment why HeroUI's is not used.
 - **Give a compound component's layout classes to its parts and put no element of your own between two parts.** HeroUI
   variants use direct-child selectors (`.tabs--secondary > .tabs__list-container`) and parents scan their direct
-  children for parts (`Tag` for `Tag.RemoveButton`); a wrapper `div` (the project's `TitledControl` included) switches
+  children for parts (`Tag` for `Tag.RemoveButton`); a wrapper `div` switches
   the variant off or leaves the default part beside yours. Where the parent takes a render-function child, wrap a part
   that way.
 - **Before passing children to a HeroUI part, search its component file for `children ??` / `children ||`.** Where the
@@ -85,15 +89,19 @@ Each rule is a bullet: the rule, then why. Where nothing names an enforcing chec
 - **Give a `Tab` its `Tabs.Indicator` only where the strip's tab set does not change while shown.** A strip that adds
   and selects a tab at once draws the fill on the tab (`ui-selected:` classes), as the Terminal panel's strip does; the
   indicator's shared-element transition sticks otherwise.
-- **A tooltip on a control goes through `TitledControl` only around a child that consumes react-aria's
-  `FocusableContext`** (HeroUI buttons and triggers); never around a plain element, a `span` or a collection item, and
-  never wrap a control in the wrapper layer's `TooltipTrigger`. A mark that is no control takes `IndicatorTooltip`;
-  where nothing can be a trigger, `AnchoredTooltip`.
+- **Every tooltip goes through `Tooltip` (`primitives/Tooltip.tsx`), and `trigger` says what carries it.** The `control`
+  kind (the default) goes only around a child that consumes react-aria's `FocusableContext` (a `ToggleButton`, a
+  `MenuTrigger`, a `ModalCloseButton`); never around a plain element, a `span` or a collection item. HeroUI's tooltip
+  parts (`primitives/tooltipParts.tsx`) are `Tooltip`'s own and are not used elsewhere, but for `tooltipSurfaceClassName`, the surface a `PopoverHint` is drawn on. A mark that is no control takes `trigger="mark"`; where nothing can be
+  a trigger, `trigger="anchored"`. `Button`, `Switch` and `Checkbox` carry their own tooltip (`tooltip`, and `unavailable`
+  for the reason that replaces it) and are never wrapped in a `Tooltip`: a dev-time `console.error` reports it, as the
+  outer one would never open. Content with something to press or select is a `PopoverHint`, not a tooltip.
 - **Never pass `title` to a HeroUI control to get a tooltip**; react-aria filters it out.
-- **Where a tooltip only repeats the control's name and `TitledControl` cannot see the repeat (a rich title, an
-  `IndicatorTooltip`), pass `aria-describedby=""` on the control**, or the name is announced twice. A tooltip that says
-  more than the name keeps the link.
-- **Never name as an `AnchoredTooltip`'s anchor an element the UI itself scrolls (a marquee).** A non-modal react-aria
+- **Where a tooltip only repeats the control's name and the repeat cannot be seen (a rich `content`, a `mark`), pass
+  `aria-describedby=""` on the control**, or the name is announced twice. `Button` and the `control` kind see a `content`
+  equal to the control's `label` and set `describedBy=""` themselves. A tooltip that says more than the name keeps the
+  link. A `box` tooltip (a `Switch`'s or a `Checkbox`'s) is linked to nothing, so it never needs `aria-describedby=""`.
+- **Never name as the anchor of a `Tooltip` of `trigger="anchored"` an element the UI itself scrolls (a marquee).** A non-modal react-aria
   overlay closes when anything holding its trigger scrolls.
 - **A press that opens a list and focuses something partly out of view brings the field into view before react-aria
   handles the press** (`useRevealOnTriggerPress` in `components/form/TagsInput.tsx`). Never add a gallery or test step

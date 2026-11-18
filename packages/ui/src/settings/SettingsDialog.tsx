@@ -3,14 +3,13 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 
 import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
 import { FieldClearButton } from "../components/controls/FieldClearButton";
-import { TitledControl } from "../components/hint/TitledControl";
 import { EmptyPanel } from "../components/panel/EmptyPanel";
 import { FadedScroller } from "../components/scroll/scrollFade";
 import { STICKY_HEADING_HEIGHT } from "../components/scroll/StickyHeading";
 import { CountBadge } from "../components/status/CountBadge";
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import { useListMotion } from "../components/motion/useListMotion";
-import { Modal, ModalCloseButton, openingFocus, setKeyboardModality, SearchField, Tab, TabList, TabListContainer, TabPanel, Tabs } from "../primitives";
+import { Modal, ModalCloseButton, openingFocus, setKeyboardModality, SearchField, Tab, TabList, TabListContainer, TabPanel, Tabs, Tooltip } from "../primitives";
 import { dialogAround } from "../components/dialog/dialogElement";
 import { tryEachFrame } from "../components/focus/tryEachFrame";
 import { useEscapeWhileTooltipOpen } from "../components/dialog/useEscapeWhileTooltipOpen";
@@ -305,10 +304,10 @@ function SettingsDialogContent({ initialSection = SETTINGS_SECTION_IDS[0], navig
       className={`control-fills raised-fills grid overflow-hidden p-0 ${fullScreen ? "grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_minmax(0,1fr)] gap-y-2" : "h-[calc(100dvh-32px-var(--bottom-chrome-height))] w-[min(1000px,calc(100vw-32px))] max-w-none grid-cols-[auto_minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)] gap-x-2 desktop:h-[min(85vh,calc(100vh-96px-var(--bottom-chrome-height)))] desktop:w-[min(1000px,calc(100vw-96px))]"}`}
     >
       <span ref={markerRef} hidden />
-      <TitledControl title={t("common.close")}>
-        {/* The panels' positioned scrollers overlap this corner. Keep the close button above them. */}
+      {/* The panels' positioned scrollers overlap this corner. Keep the close button above them. */}
+      <Tooltip content={t("common.close")}>
         <ModalCloseButton label={t("common.close")} data-settings-close className="z-10 max-phone:top-4.5 max-phone:end-3" />
-      </TitledControl>
+      </Tooltip>
       {/* The wide column's ground: HeroUI's secondary surface, the step below the dialog's own in both appearances,
           with the divider, a groove, as its edge (recorded in `docs/conventions/ui-standard.md`'s "The Settings section
           menu" section). Purely visual, so assistive technology meets nothing between the column and the panel; first

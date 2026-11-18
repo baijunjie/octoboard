@@ -6,9 +6,8 @@ import { useCurrentLanguage, useT } from "../../i18n/react";
 import type { Session, SessionContext } from "../../protocol";
 import { formatRelativeTime } from "../../format/relativeTime";
 import { useNow } from "../../format/useNow";
-import { IndicatorTooltip } from "../hint/IndicatorTooltip";
 import { StatusBadge } from "./StatusBadge";
-import { Meter, ProgressCircle } from "../../primitives";
+import { Meter, ProgressCircle, Tooltip } from "../../primitives";
 
 export function hasVisibleContext(context: SessionContext | null | undefined): context is SessionContext {
   return (context?.tokens ?? 0) > 0;
@@ -122,9 +121,9 @@ function ContextLabel({ context, touchPopover }: { context: SessionContext; touc
   );
   return (
     // The card states the same figures as `details`, rounded, so its touch popover is not named by them.
-    <IndicatorTooltip tooltip={<ContextTooltip title={title} amount={amount} usage={usage} />} label={details} labelRepeatsTooltip className="flex shrink-0 items-center" touchPopover={touchPopover}>
+    <Tooltip trigger="mark" content={<ContextTooltip title={title} amount={amount} usage={usage} />} label={details} labelRepeatsTooltip className="flex shrink-0 items-center" touchPopover={touchPopover}>
       {mark}
-    </IndicatorTooltip>
+    </Tooltip>
   );
 }
 
@@ -154,7 +153,7 @@ export function ArchivedSessionMetadata({ session }: { session: Pick<Session, "s
 /** How long ago a session was archived, or created while it is not archived, compactly, for rows and menu
  * items; its tooltip and name write out both dates in full.
  *
- * Kept shortfall: it is an `IndicatorTooltip`, so the dates show on pointer hover only and the time is no
+ * Kept shortfall: it is a mark `Tooltip`, so the dates show on pointer hover only and the time is no
  * tab stop. A screen-reader user has them in the row's description or the menu item's name, but a sighted
  * keyboard-only user has no route to them in the list. */
 export function SessionRelativeTime({
@@ -170,8 +169,8 @@ export function SessionRelativeTime({
   const dates = useSessionDates(session);
   const at = session.ended_at ?? session.started_at;
   return (
-    <IndicatorTooltip
-      tooltip={<div className="flex flex-col">{dates.map(({ text }) => <span key={text}>{text}</span>)}</div>}
+    <Tooltip trigger="mark"
+      content={<div className="flex flex-col">{dates.map(({ text }) => <span key={text}>{text}</span>)}</div>}
       label={joinPhrases(language, dates.map(({ text }) => text))}
       labelRepeatsTooltip
       className="flex shrink-0"
@@ -182,6 +181,6 @@ export function SessionRelativeTime({
           {formatRelativeTime(language, at, now)}
         </time>
       </span>
-    </IndicatorTooltip>
+    </Tooltip>
   );
 }

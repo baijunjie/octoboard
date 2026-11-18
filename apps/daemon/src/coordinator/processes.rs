@@ -10,9 +10,11 @@ use std::time::Duration;
 
 use anyhow::Result;
 
-use crate::processes::ledger::{SharesAgentConsole, TreesStopped};
+use crate::processes::ledger::{TreesStopped, Unkeepable};
 use crate::processes::web_ports;
-use crate::protocol::{error_code, CodedError, ProcessCount, ProcessTarget, ProcessTree, Project};
+use crate::protocol::{
+    error_code, CodedError, ProcessCount, ProcessTarget, ProcessTree, Project, UnkeepableReason,
+};
 use crate::state::AppState;
 use crate::store::LOCAL_HOST_ID;
 
@@ -283,7 +285,8 @@ pub async fn stop(state: &Arc<AppState>, ids: Vec<String>) -> Result<TreesStoppe
 /// Makes the trees `ids` name that are still a tree of a running launch, or a leftover of a
 /// project, the user's, so the ledger never stops them unless asked to; they stay listed among
 /// the trees of their project that no session owns. Returns the ids it kept; refused, with nothing
-/// kept, when a tree named has a process on its agent's own console.
+/// kept, when a tree named has a process that ends with its session whatever keeps it (on its
+/// agent's own console, or in the process group of one of the agent's commands).
 pub async fn keep(state: &Arc<AppState>, ids: Vec<String>) -> Result<Vec<String>> {
     let projects = local_projects(state)?;
     let session_projects: HashMap<String, String> = state
@@ -299,11 +302,23 @@ pub async fn keep(state: &Arc<AppState>, ids: Vec<String>) -> Result<Vec<String>
             .keep_trees(&ids, &projects, &session_projects)
     })
     .await?;
-    kept.map_err(|SharesAgentConsole { pid, name }| {
+    kept.map_err(|Unkeepable { reason, pid, name }| {
+        let (code, message) = match reason {
+            UnkeepableReason::AgentConsole => (
+                error_code::PROCESS_SHARES_AGENT_CONSOLE,
+                "This process runs in the agent's own terminal, so it ends with the session and \
+                 cannot be kept. Start it in a window of its own to keep it running.",
+            ),
+            UnkeepableReason::AgentCommandGroup => (
+                error_code::PROCESS_IN_AGENT_COMMAND_GROUP,
+                "This process runs inside one of the agent's running commands, so it ends with \
+                 the session and cannot be kept. Start it detached from the agent, in a new \
+                 session (for example with `setsid`), to keep it running.",
+            ),
+        };
         CodedError::raised(
-            error_code::PROCESS_SHARES_AGENT_CONSOLE,
-            "This process runs in the agent's own terminal, so it ends with the session and \
-             cannot be kept. Start it in a window of its own to keep it running.",
+            code,
+            message,
             &[("pid", &pid.0.to_string()), ("name", &name)],
         )
     })

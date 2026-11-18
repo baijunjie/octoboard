@@ -2,13 +2,12 @@ import { Folder } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
 import { ChangedElsewhereAnnouncer } from "../components/announce/ChangedElsewhereAnnouncer";
-import { AnchoredTooltip } from "../components/hint/AnchoredTooltip";
 import { ValueTooltipText } from "../components/hint/ValueTooltipText";
 import { useLatest, useStableHandler } from "../components/hooks/useLatest";
 import { useDirectoryBrowse } from "../components/dialog/DirectoryPicker";
 import { useTrimmedField } from "../components/form/useTrimmedField";
 import { Message, useT } from "../i18n/react";
-import { Input, TextField } from "../primitives";
+import { Input, TextField, Tooltip } from "../primitives";
 import { isImeKey } from "../input/imeKey";
 import { display } from "../format/hostPath";
 import { CodedError } from "../errors/codedError";
@@ -226,7 +225,7 @@ export function CloneDirSetting(): React.ReactElement {
           </TextField>
           {/* The field says the whole path while the pointer is on it, the hover being the group's
               and the tooltip anchored to the input inside it. */}
-          {stored !== storedFull && <AnchoredTooltip tooltip={<ValueTooltipText label={input} dir="ltr">{storedFull}</ValueTooltipText>} anchor={input} hovered={hovered} />}
+          {stored !== storedFull && <Tooltip trigger="anchored" content={<ValueTooltipText label={input} dir="ltr">{storedFull}</ValueTooltipText>} anchor={input} hovered={hovered} />}
           {/* A mouse press on Browse leaves focus in the field until the picker opens, and a cancelled
               picker hands it back to the field rather than to Browse. */}
           {directoryBrowse.browseButton({ focusOnPress: false })}

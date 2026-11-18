@@ -7,8 +7,10 @@ import { FIXTURE_DAEMON_INSTALL_STARTED_AT } from "./builders";
 import type { FixtureContext, Handlers } from "./fixtureContext";
 
 /** The replies about the daemon's own lifecycle. */
-export function createLifecycleReplies({ scenario, store }: FixtureContext): Handlers {
+export function createLifecycleReplies({ scenario, store, fail }: FixtureContext): Handlers {
   return {
+    // A restart is acknowledged unless the scenario has the daemon refuse it.
+    restart_daemon: () => scenario.daemonRestartError ? fail(scenario.daemonRestartError) : { type: "ack", id: null },
     // The daemon starts a check, after the last one that ended at the `at` its status holds; a scenario ends it by sending a
     // status whose last check has another `at`.
     check_daemon_update: () => ({ type: "daemon_update_check", id: null, started: true, last_check_at: store.getState().daemonUpdate?.last_check?.at ?? null }),

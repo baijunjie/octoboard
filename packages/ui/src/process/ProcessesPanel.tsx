@@ -10,7 +10,6 @@ import { HOVER_ACTIONS_CLASS } from "../components/rows/hoverActions";
 import { FadeOverflow } from "../components/text/FadeOverflow";
 import { focusFellToPage, focusLanding } from "../components/focus/regionFocus";
 import { PaneFailure } from "../components/alerts/PaneFailure";
-import { raiseError } from "../components/alerts/raiseError";
 import { IconToggle } from "../components/controls/IconToggle";
 import { PanelHeader } from "../components/panel/PanelHeader";
 import { ProcessCommand, ProcessTreeDetails, StopGlyph } from "./ProcessTreeDetails";
@@ -24,7 +23,7 @@ import type { PlainMessageKey, Translate } from "../i18n/catalog";
 import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import type { ErrorPresentation } from "../errors/errorPresentation";
-import { isUnkeepable, keepProcesses, stopProcesses, unkeepableMessage, unkeepableRefusal } from "./processes";
+import { isUnkeepable, keepProcesses, stopProcesses, unkeepableMessage } from "./processes";
 import type { ProcessTree } from "../protocol";
 import { sessionDisplayTitle } from "../sessions/sessionLabel";
 import { useSession } from "../store";
@@ -33,7 +32,6 @@ import { ringForAutomaticFocus } from "../input/lastInput";
 import { ConfirmDialog } from "../components/dialog/ConfirmDialog";
 import { useProcessPanelContext } from "./useProcessPanel";
 import { ProcessSessionSelect } from "./ProcessSessionSelect";
-import { TitledControl } from "../components/hint/TitledControl";
 import { Button } from "../primitives";
 
 export function ProcessesPanel(): React.ReactElement | null {
@@ -373,8 +371,8 @@ function TreeList({ trees, acting, offersKeep, onStop, onKeep, labelledBy }: {
  * shown while the row is hovered or holds focus and always where nothing can hover. Each is named with the command so
  * the rows' buttons can be told apart. An open confirmation makes them unavailable. A tree the daemon says cannot be
  * kept (`isUnkeepable`) leaves Keep focusable but unavailable, with the reason as its tooltip and description: it
- * stays long enough for a user to look at it, so it says why, and a press explains rather than acts, raising the
- * refusal the daemon would answer a keep with (see "Buttons" in `docs/conventions/ui-standard.md`). */
+ * stays long enough for a user to look at it, so it says why, and a press does nothing (see "Buttons" in
+ * `docs/conventions/ui-standard.md`). */
 function TreeRow({ tree, acting, offersKeep, onStop, onKeep }: {
   tree: ProcessTree;
   acting: boolean;
@@ -385,10 +383,6 @@ function TreeRow({ tree, acting, offersKeep, onStop, onKeep }: {
   const t = useT();
   const command = isolate(tree.command === "" ? t("processes.commandUnknown") : tree.command);
   const reason = isUnkeepable(tree) ? t(unkeepableMessage(tree)) : undefined;
-  const keep = () => {
-    if (isUnkeepable(tree)) raiseError(unkeepableRefusal(tree, t), { title: t("processes.keepRefusedTitle") });
-    else onKeep();
-  };
   // In dark the Stop label is short of 4.5:1 on this card, a shortfall kept by the user's decision (see the
   // `--panel-row` comment in styles/surfaces.css and docs/conventions/ui-standard.md, "Conformance level and
   // exceptions").
@@ -400,12 +394,10 @@ function TreeRow({ tree, acting, offersKeep, onStop, onKeep }: {
            revealing them leaves the command and directory at the card's full width. */
         <div className={`${HOVER_ACTIONS_CLASS} items-center gap-1 [@media(hover:none)]:ms-2 group-hover:ms-2 group-focus-within:ms-2`}>
           {offersKeep && (
-            <TitledControl title={reason ?? ""} isDisabled={reason === undefined}>
-              <Button data-region-landing size="xs" variant="secondary" label={t("processes.keepNamed", { command })} focusOnPress={false} disabled={acting}
-                unavailable={reason} onPress={keep}>
-                {t("processes.keep")}
-              </Button>
-            </TitledControl>
+            <Button data-region-landing size="xs" variant="secondary" label={t("processes.keepNamed", { command })} focusOnPress={false} disabled={acting}
+              unavailable={reason} onPress={onKeep}>
+              {t("processes.keep")}
+            </Button>
           )}
           <Button data-region-landing={offersKeep ? undefined : true} size="xs" variant="danger-soft" label={t("processes.stopNamed", { command })} focusOnPress={false} disabled={acting} onPress={onStop}>
             {t("processes.stop")}

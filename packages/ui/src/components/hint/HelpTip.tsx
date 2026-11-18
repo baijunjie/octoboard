@@ -1,7 +1,7 @@
 import { CircleHelp } from "lucide-react";
 import React from "react";
 
-import { Hint } from "./Hint";
+import { PopoverHint } from "./hintPopover";
 import { Button } from "../../primitives";
 
 /** The size, colour and hit area of the "?" beside a title, for another icon-only control that sits there. */
@@ -9,7 +9,7 @@ export const HELP_TIP_BUTTON_CLASS = "shrink-0 -my-0.5 rounded-full text-app-mut
 
 /** A small muted "?" that carries an explanation, to take a line of explanatory text out of a row. It is an
  * icon-only control, so it is a tab stop (see "The help tip" in `docs/product/labels-and-tooltips.md`), and it
- * opens the explanation in a popover (`Hint` of kind `popover`), as a status mark does, so the explanation can
+ * opens the explanation in a popover (`PopoverHint`), as a status mark does, so the explanation can
  * be selected and copied with the mouse:
  *
  * - A mouse resting on it opens the popover without moving focus, and it stays open while the pointer
@@ -20,8 +20,7 @@ export const HELP_TIP_BUTTON_CLASS = "shrink-0 -my-0.5 rounded-full text-app-mut
  * explanation is text, or rich content such as a `<Message>` with literals in chips. */
 export function HelpTip({ label, children }: { label: string; children: React.ReactNode }): React.ReactElement {
   return (
-    <Hint
-      kind="popover"
+    <PopoverHint
       label={label}
       trigger={({ expanded: _, popupId: __, ...wiring }) => (
         <Button {...wiring} iconOnly size="xs" variant="ghost" label={label} className={HELP_TIP_BUTTON_CLASS}>
@@ -30,6 +29,6 @@ export function HelpTip({ label, children }: { label: string; children: React.Re
       )}
     >
       {() => children}
-    </Hint>
+    </PopoverHint>
   );
 }
