@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, type KeyboardEventHandler } from "react";
 
 import { useLatest } from "../hooks/useLatest";
 import { isImeKey } from "../../input/imeKey";
@@ -6,9 +6,9 @@ import { partSelector } from "../../primitives";
 
 /**
  * Closes the surface `surface` returns on Escape while a tooltip is open — the one state in which
- * the surface's own Escape never arrives. A surface is a dialog or a view that closes itself from
- * a React `onKeyDown`, which is what makes it lose the key; one that listens above React, as
- * `usePaneToggles` does, does not need this.
+ * React's Escape handling never sees the key. A view with no library dismissal passes the returned
+ * handler to its root's `onKeyDown`; a dialog with its own library dismissal needs only the capture
+ * listener. A surface that listens above React, as `usePaneToggles` does, does not need this.
  *
  * react-aria dismisses a modal from a React `onKeyDown` on its overlay, and the overlay is
  * portalled to `<body>`, so React dispatches that press from a listener on `<body>`; a view in the
@@ -31,19 +31,20 @@ import { partSelector } from "../../primitives";
  * focus ring. A modified, held or composing Escape is left alone: react-aria's own dismissal
  * ignores those presses, so with a tooltip open they do nothing, as they do without one.
  *
- * TODO: Drop this once react-aria leaves Escape to the surfaces around a tooltip: its
- * `useTooltipTrigger` stops propagation for every Escape while the tooltip is open, whatever else
- * on the page was waiting for the key (react-aria 3.52.1, unchanged in 3.53.1).
+ * React Aria's `useTooltipTrigger` stops propagation while a tooltip is open (observed in 3.53.1).
+ * This listener is needed while the tooltip prevents Escape from reaching the surrounding surface.
  */
-export function useEscapeWhileTooltipOpen(surface: () => HTMLElement | null | undefined, onClose: () => void): void {
+export function useEscapeWhileTooltipOpen(
+  surface: () => HTMLElement | null | undefined,
+  onClose: () => void,
+): KeyboardEventHandler<HTMLElement> {
   const close = useLatest(onClose);
   const find = useLatest(surface);
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" || event.repeat || isImeKey(event)) return;
-      if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      if (!isDismissEscape(event)) return;
       // A tooltip fading out has already handed the key back, and is marked while it does.
-      if (!document.querySelector(`${partSelector.liveTooltip}:not([data-anchored-tooltip])`)) return;
+      if (!hasTriggeredTooltip()) return;
       const focused = document.activeElement;
       const around = find.current();
       // Only the surface holding focus acts, so a dialog opened from inside another one keeps
@@ -65,4 +66,21 @@ export function useEscapeWhileTooltipOpen(surface: () => HTMLElement | null | un
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, []);
+  return (event) => {
+    const target = event.target;
+    if (event.defaultPrevented || !isDismissEscape(event.nativeEvent) || !(target instanceof Node) || !surface()?.contains(target)) return;
+    // A triggered tooltip has already handled this key in the capture listener.
+    if (hasTriggeredTooltip()) return;
+    event.preventDefault();
+    onClose();
+  };
+}
+
+function isDismissEscape(event: KeyboardEvent): boolean {
+  return event.key === "Escape" && !event.repeat && !isImeKey(event) &&
+    !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
+}
+
+function hasTriggeredTooltip(): boolean {
+  return document.querySelector(`${partSelector.liveTooltip}:not([data-anchored-tooltip])`) !== null;
 }

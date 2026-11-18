@@ -156,21 +156,28 @@ fn copy_any(from: &Path, to: &Path) -> io::Result<()> {
 
 fn same_content(a: &Path, b: &Path) -> io::Result<bool> {
     use std::io::Read;
-    if std::fs::metadata(a)?.len() != std::fs::metadata(b)?.len() {
+    let (mut a, mut b) = (
+        crate::hostfs::open_regular(a)?,
+        crate::hostfs::open_regular(b)?,
+    );
+    let size = a.metadata()?.len();
+    if size != b.metadata()?.len() {
         return Ok(false);
     }
-    let (mut a, mut b) = (std::fs::File::open(a)?, std::fs::File::open(b)?);
-    let (mut left, mut right) = (vec![0u8; 64 * 1024], vec![0u8; 64 * 1024]);
-    loop {
-        let read = a.read(&mut left)?;
-        if read == 0 {
-            return Ok(true);
-        }
-        b.read_exact(&mut right[..read])?;
-        if left[..read] != right[..read] {
+    const CHUNK: usize = 64 * 1024;
+    let (mut left, mut right) = (vec![0u8; CHUNK], vec![0u8; CHUNK]);
+    let mut remaining = size;
+    while remaining > 0 {
+        let count = remaining.min(CHUNK as u64) as usize;
+        a.read_exact(&mut left[..count])?;
+        b.read_exact(&mut right[..count])?;
+        if left[..count] != right[..count] {
             return Ok(false);
         }
+        remaining -= count as u64;
     }
+    // An append during the comparison may have changed either file.
+    Ok(a.read(&mut left[..1])? == 0 && b.read(&mut right[..1])? == 0)
 }
 
 /// Moves `from` to `into`, where something may be already. A directory is merged entry by entry.

@@ -72,6 +72,12 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         own: &[".grok"],
         generic: &["AGENTS.md", ".agents"],
     },
+    inherited_session_vars: &[
+        "GROK_HOOK_EVENT",
+        "GROK_HOOK_NAME",
+        "GROK_SESSION_ID",
+        "GROK_WORKSPACE_ROOT",
+    ],
     instruction_file: "AGENTS.md",
     // A line `@AGENTS.md` reaches the model as written (Grok Build 1.0.77).
     instruction_import_prefix: None,

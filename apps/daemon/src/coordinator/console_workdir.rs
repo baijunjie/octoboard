@@ -1,7 +1,6 @@
-//! A console's working directory: the console session's instruction file written into it,
-//! `AGENTS.md` with each provider's other spelling (`CLAUDE.md`) a symlink to it, or a file that
-//! takes it in where the host makes no file links, and its removal with the console. The text is
-//! built elsewhere; this puts it on disk.
+//! A console's working directory: its canonical instruction content exposed under each
+//! provider's declared filename by a link, an import or a copy, and its removal with the console.
+//! The text is built elsewhere; this puts it on disk.
 
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
@@ -61,15 +60,12 @@ pub fn write_console_session_instructions_from_settings(
     )
 }
 
-/// Writes the console's instruction file into its working directory: `AGENTS.md`, with every other
-/// instruction file a registered provider reads (`CLAUDE.md`) a relative symlink to it, so every
-/// provider reads the one text, and one that reads several of the spellings (Grok) loads it once.
-/// Where the host makes no file links ([`file_links_available`]), each other name is a regular file
-/// instead: the provider's import line naming `AGENTS.md` (`@AGENTS.md` for Claude Code), not a
-/// copy of the text, because Grok reads `CLAUDE.md` as well and loads a copy as a second file while
-/// it takes the line as written. A provider with no import line gets a copy, written again with
-/// every write of `AGENTS.md`. Each form replaces what the other left, so a host that gains or
-/// loses file links between runs leaves no stale name. Each is replaced atomically, so concurrent
+/// Writes the canonical instruction content, then exposes it under each provider's declared
+/// filename. Links let a provider that reads several filenames recognise one file. Where the
+/// host makes no file links, a provider with an import syntax gets a reference to the canonical
+/// file; a provider with none gets a copy refreshed on every write. Each form replaces what the
+/// other left, so a host that gains or loses file links leaves no stale name. Atomic replacements
+/// ensure concurrent
 /// launches never read a truncated file, including when they run different agents in the same
 /// console. Not locked: a console no one has been told of yet has no other writer, and every other
 /// caller goes through [`refresh_console_session_instructions`]. The working directory must exist:
@@ -216,12 +212,22 @@ mod tests {
             console.console_session_prompt = prompt.map(str::to_string);
             write_console_session_instructions(&console, &RoleOptions::default()).unwrap();
             assert_eq!(
-                std::fs::read_to_string(workdir.join("AGENTS.md")).unwrap(),
+                std::fs::read_to_string(workdir.join(INSTRUCTION_FILE)).unwrap(),
                 expected
             );
+            for descriptor in crate::providers::descriptors() {
+                assert_eq!(
+                    std::fs::read_link(workdir.join(descriptor.instruction_file)).unwrap(),
+                    Path::new(INSTRUCTION_FILE)
+                );
+                assert_eq!(
+                    std::fs::read_to_string(workdir.join(descriptor.instruction_file)).unwrap(),
+                    expected
+                );
+            }
             assert_eq!(
                 std::fs::read_link(workdir.join("CLAUDE.md")).unwrap(),
-                Path::new("AGENTS.md")
+                Path::new(INSTRUCTION_FILE)
             );
             assert_eq!(
                 std::fs::read_to_string(workdir.join("CLAUDE.md")).unwrap(),
@@ -234,7 +240,7 @@ mod tests {
         write_console_session_instructions(&console, &RoleOptions::default()).unwrap();
         assert_eq!(
             std::fs::read_link(workdir.join("CLAUDE.md")).unwrap(),
-            Path::new("AGENTS.md")
+            Path::new(INSTRUCTION_FILE)
         );
     }
 
@@ -268,8 +274,9 @@ mod tests {
             console.console_session_prompt = prompt.map(str::to_string);
             write_console_session_instructions(&console, &RoleOptions::default()).unwrap();
             let expected = console_session_instructions(prompt, &RoleOptions::default());
+            assert_eq!(regular_file(INSTRUCTION_FILE), expected);
             assert_eq!(regular_file("AGENTS.md"), expected);
-            assert_eq!(regular_file("CLAUDE.md"), "@AGENTS.md\n");
+            assert_eq!(regular_file("CLAUDE.md"), format!("@{INSTRUCTION_FILE}\n"));
             assert_eq!(regular_file("TEST_AGENT.md"), expected);
             assert_eq!(workdir.read_dir().unwrap().count(), names.len());
         }
@@ -279,7 +286,7 @@ mod tests {
         for name in others {
             assert_eq!(
                 std::fs::read_link(workdir.join(name)).unwrap(),
-                Path::new("AGENTS.md")
+                Path::new(INSTRUCTION_FILE)
             );
         }
         assert_eq!(workdir.read_dir().unwrap().count(), names.len());
@@ -294,7 +301,7 @@ mod tests {
         let workdir = ScratchDir::new("console-instructions-mode");
         let console = console(AgentId::CLAUDE, &workdir);
         write_console_session_instructions(&console, &RoleOptions::default()).unwrap();
-        let file = workdir.join("AGENTS.md");
+        let file = workdir.join(INSTRUCTION_FILE);
         std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o640)).unwrap();
         write_console_session_instructions(&console, &RoleOptions::default()).unwrap();
         assert_eq!(
@@ -319,6 +326,6 @@ mod tests {
             .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
             .collect();
         names.sort();
-        assert_eq!(names, ["AGENTS.md", "CLAUDE.md"]);
+        assert_eq!(names, ["CLAUDE.md", INSTRUCTION_FILE]);
     }
 }

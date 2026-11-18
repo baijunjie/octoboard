@@ -344,7 +344,10 @@ async fn a_conversation_id_that_is_not_one_is_refused_as_unavailable() {
         .store
         .insert_console(&crate::test_support::console(&dir))
         .unwrap();
-    for agent in [AgentId::CLAUDE, AgentId::CODEX] {
+    for agent in AgentId::ALL
+        .into_iter()
+        .filter(|agent| crate::adapter::provider(*agent).native_app().is_some())
+    {
         let session = Session {
             id: format!("bad-{agent:?}"),
             agent,

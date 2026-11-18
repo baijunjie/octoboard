@@ -404,7 +404,7 @@ pub fn open(state: &crate::state::AppState, project: Option<&str>, path: &str) -
         state,
         project,
         path,
-        crate::host_open::paths::is_macos_package,
+        crate::host_open::paths::is_package,
         |path| crate::host_open::paths::open_path(path, false),
     )
 }

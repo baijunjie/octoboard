@@ -1646,7 +1646,9 @@ async fn an_adopted_idle_claude_session_takes_messages_and_one_at_its_trust_scre
 
         if held {
             // Long enough for the adopted session's watch to have looked a few times.
-            tokio::time::sleep(Duration::from_secs(1)).await;
+            // A poll that leaves the adopted session held publishes no event.
+            const HELD_ADOPTION_OBSERVATION: Duration = Duration::from_secs(1);
+            tokio::time::sleep(HELD_ADOPTION_OBSERVATION).await;
         } else {
             let deadline = Instant::now() + PATIENCE;
             while live.trust.holds_writes() && Instant::now() < deadline {

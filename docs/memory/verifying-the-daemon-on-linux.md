@@ -14,17 +14,19 @@ daemon code below, since a clean run on macOS says nothing about it:
   revokes nothing, and the reader, the master and the buffers live on until that job goes. A test of a terminal
   outliving its process therefore cannot fail on macOS.
 
-So run `cargo test -p octoboardd`, and `cargo clippy --all-targets -p octoboardd -- -D warnings` for the Linux-only
-code (a warning fails the Linux checks a release runs), inside a Linux container
-(Docker). Start the container with `docker run --init`: without an init that reaps, orphans reparented to PID 1 (here
-cargo) stay zombies, and every test that waits for a process to be gone (`test_support::assert_gone_by`, which waits for
-`ESRCH`) fails, on `main` as on the change. Give cargo there a target directory of its own (a Docker volume), not the
-worktree's `target/` that the host's builds use, and one per architecture when you also run an x86_64 container under
-emulation on an arm64 host (`--platform linux/amd64`, which works at about half the native speed): their build-script
-artifacts share paths and collide. Set `CARGO_PROFILE_DEV_DEBUG=0` (or `line-tables-only`, which
-also fits and keeps line numbers in backtraces): linking the daemon's test binary with full debug info takes several GiB
-of memory, enough for a Docker VM's memory limit to SIGKILL it, and the tests behave the same without it. For the same
-reason run one Linux build at a time, with `CARGO_BUILD_JOBS=2`.
+So run the daemon's tests and clippy inside a Linux container (Docker). A container with no Node runs plain `cargo`,
+which `docs/conventions/tooling.md`, "Running tests, lint and checks", allows there, with the flags `scripts/cargo.mjs`
+passes for one crate: `cargo test -p octoboardd`, and `cargo clippy -p octoboardd --all-targets -- -D warnings` for the
+Linux-only code (a warning fails the Linux checks a release runs). Do not install Node only to run the wrapper. Start
+the container with `docker run --init`: without an init that reaps, orphans reparented to PID 1 (here cargo) stay
+zombies, and every test that waits for a process to be gone (`test_support::assert_gone_by`, which waits for `ESRCH`)
+fails, on `main` as on the change. Give cargo there a target directory of its own (a Docker volume), not the worktree's
+`target/` that the host's builds use, and one per architecture when you also run an x86_64 container under emulation on
+an arm64 host (`--platform linux/amd64`, which works at about half the native speed): their build-script artifacts share
+paths and collide. Set `CARGO_PROFILE_DEV_DEBUG=0` (or `line-tables-only`, which also fits and keeps line numbers in
+backtraces): linking the daemon's test binary with full debug info takes several GiB of memory, enough for a Docker VM's
+memory limit to SIGKILL it, and the tests behave the same without it. For the same reason run one Linux build at a time,
+with `CARGO_BUILD_JOBS=2`.
 
 Run the suite as a normal user, not as root, the container's default user: some `accounts::shared_config` tests fail
 as root. Switching to that user with Debian's `su` gives it umask 002, under which the `path_links` tests fail, since

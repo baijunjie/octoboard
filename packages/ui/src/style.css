@@ -297,7 +297,7 @@ html {
    recessed frame of raw diagnostics, a confirmation's branch list, licence texts and the file viewer's checkerboard)
    below the surface. Every floating surface is the one colour, as in light, so one over another (a tooltip over a menu,
    a confirmation over Settings) is set apart by `--overlay-shadow`. A deliberate departure from HeroUI's look, kept in
-   docs/ui-standard.md's "Confirmed visual choices" section; light keeps HeroUI's own.
+   docs/conventions/ui-standard.md's "Confirmed visual choices" section; light keeps HeroUI's own.
 
    The step is small because HeroUI's `--muted` on a fill that holds secondary text (a placeholder, a menu item's
    description under the pointer) keeps 4.5:1 only up to L 0.335, the resting fill; on the hovered fill it is 4.05:1.

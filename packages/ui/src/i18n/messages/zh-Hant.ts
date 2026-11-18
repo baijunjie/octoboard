@@ -140,8 +140,6 @@ export const zhHant: Translation<"other"> = {
   "error.recovery.mcpSignOut": "請確認伺服器可連線，然後再次撤銷授權。",
   "error.recovery.addedAgents": "已加入的代理程式清單與此次更改所依據的不一致。請先檢視，再重新更改。",
   "error.recovery.fileBusy": "請關閉其他正在使用此帳號檔案的程式，然後再次嘗試切換。",
-  "error.recovery.codexConfig": "請檢查此帳號的 {configToml}，確保檔案可讀且 TOML 格式正確，或將其移除，然後再次嘗試切換。",
-  "error.recovery.sqliteHome": "請將此帳號 {configToml} 中的 {sqliteHome}，或登入 shell 中的 {codexSqliteHome}，設為絕對路徑（以 {tilde} 開頭時需要設定 {home}），然後再次嘗試切換。",
   "error.recovery.symlink": "對話檔案中含有符號連結，不會被複製。請在詳細資訊所列檔案中，將它替換為其所指內容的副本，或在不需要時將其移除，然後再次嘗試切換。",
   "error.recovery.notRestoredAutomatic": "如果需要那個較早的條目，請在此之前從上面所列資料夾中複製出來。",
   "error.recovery.notRestored": "如果需要那個較早的條目，請在此之前從上面所列資料夾中複製出來，然後再次嘗試切換。",

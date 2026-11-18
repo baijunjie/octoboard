@@ -5,8 +5,8 @@
 //!
 //! Everything the user sees has to be what their own status line would show: it is run with the
 //! very bytes read from stdin, through a POSIX shell as Claude Code runs one on Unix, with the
-//! environment and working directory Claude Code gave this process, its stdout and stderr this
-//! process's own, and its exit status returned as this process's. No status line of their own
+//! environment and working directory Claude Code gave this process, with bounded output relayed
+//! on the corresponding streams and its exit status returned. No status line of their own
 //! prints nothing and exits 0. Which one is theirs is read from their settings files on every run,
 //! so an edit made while the session runs is followed. The window is posted while that command
 //! runs, so a daemon that is slow or gone delays nothing beyond the post's own short bound, and
@@ -14,15 +14,36 @@
 
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Command;
 use std::time::Duration;
 
 use crate::adapter::StatusLine;
+use crate::platform::proc::Reach;
 use crate::platform::shell::{self, Dialect};
+use crate::processes::subprocess::{run_bounded_input, Bounds};
 
 /// Bound on each step of the post. The daemon answers before doing anything with the report, so
 /// this is only ever reached by one that is wedged.
 const TIMEOUT: Duration = Duration::from_millis(500);
+
+/// A stuck or flooding command must not hold up the agent's status line.
+const COMMAND_BOUNDS: Bounds = Bounds {
+    timeout: Duration::from_secs(5),
+    stdout_limit: 64 * 1024,
+    stderr_limit: 64 * 1024,
+    reach: Reach::Group,
+    term_grace: Duration::ZERO,
+};
+
+fn command_bounds() -> Bounds {
+    let bounds = COMMAND_BOUNDS;
+    #[cfg(test)]
+    let bounds = Bounds {
+        timeout: crate::test_support::PATIENCE,
+        ..bounds
+    };
+    bounds
+}
 
 /// Claude Code's status line, with the `--cwd` and `--config-dir` the injected command names.
 pub struct ClaudeStatusLine;
@@ -51,7 +72,7 @@ fn run(session: &str, port: u16, key_file: &Path, dirs: Option<&(PathBuf, PathBu
         .zip(crate::key_file::read(key_file))
         .map(|(window, key)| report(port, key, session, window));
     let status = match dirs.and_then(|(cwd, config_dir)| user_command(config_dir, cwd)) {
-        Some(command) => pass_through(&command, &input, Stdio::inherit()),
+        Some(command) => pass_through(&command, input, std::io::stdout(), std::io::stderr()),
         None => 0,
     };
     if let Some(report) = report {
@@ -87,31 +108,22 @@ fn user_command(config_dir: &Path, cwd: &Path) -> Option<String> {
     Some(line.get("command")?.as_str()?.to_owned())
 }
 
-/// Runs `command` through the shell with `input` on its stdin and `stdout` as its stdout, and
-/// returns its exit status: 1 when it was ended by a signal or could not be started, which is what
-/// Claude Code makes of either.
-fn pass_through(command: &str, input: &[u8], stdout: Stdio) -> i32 {
+/// Passes through the user's command output and exit code. An unsuccessful run returns 1.
+fn pass_through(
+    command: &str,
+    input: Vec<u8>,
+    mut stdout: impl Write,
+    mut stderr: impl Write,
+) -> i32 {
     let runner = shell::command_runner(Dialect::Posix);
-    let Ok(mut child) = Command::new(&runner.program)
-        .args(&runner.args)
-        .arg(command)
-        .stdin(Stdio::piped())
-        .stdout(stdout)
-        .stderr(Stdio::inherit())
-        .spawn()
-    else {
+    let mut shell = Command::new(&runner.program);
+    shell.args(&runner.args).arg(command);
+    let Ok(output) = run_bounded_input(&mut shell, &command_bounds(), input) else {
         return 1;
     };
-    if let Some(mut stdin) = child.stdin.take() {
-        // A command that exits without reading its input closes the pipe early; that is its
-        // business, and it is still waited for.
-        let _ = stdin.write_all(input);
-    }
-    child
-        .wait()
-        .ok()
-        .and_then(|status| status.code())
-        .unwrap_or(1)
+    let _ = stdout.write_all(&output.stdout);
+    let _ = stderr.write_all(&output.stderr);
+    output.status.code().unwrap_or(1)
 }
 
 #[cfg(test)]
@@ -141,26 +153,44 @@ mod tests {
     /// is the one returned.
     #[test]
     fn the_users_command_gets_the_same_input_and_its_output_and_status_pass_through() {
-        let dir = crate::test_support::ScratchDir::new("status-line-pass-through");
-        let output = dir.join("output");
-        let input = format!("{INPUT}\n");
-        let file = || std::fs::File::create(&output).unwrap();
+        let input = format!("{INPUT}\n").into_bytes();
+        let mut stdout = Vec::new();
+        let mut stderr = Vec::new();
         assert_eq!(
-            pass_through("cat; printf '\\033[1m!'", input.as_bytes(), file().into()),
-            0
+            pass_through(
+                "cat; printf '\\033[1m!'; printf diagnostic >&2; exit 7",
+                input.clone(),
+                &mut stdout,
+                &mut stderr,
+            ),
+            7,
         );
+        assert_eq!(stdout, [input.as_slice(), b"\x1b[1m!"].concat());
+        assert_eq!(stderr, b"diagnostic");
+    }
+
+    #[test]
+    fn reports_the_exit_status_even_when_the_command_ignores_input() {
+        let sink = std::io::sink;
         assert_eq!(
-            std::fs::read(&output).unwrap(),
-            [input.as_bytes(), b"\x1b[1m!"].concat()
+            pass_through("exit 3", vec![b'x'; 1 << 20], sink(), sink()),
+            3
         );
-        assert_eq!(pass_through("echo partial; exit 3", b"", file().into()), 3);
-        assert_eq!(std::fs::read(&output).unwrap(), b"partial\n");
-        // One that never reads its input is not held up by it.
-        let large = vec![b'x'; 1 << 20];
-        assert_eq!(pass_through("exit 0", &large, file().into()), 0);
-        // Where a signal ends a process the status says so; Git for Windows' bash gives a code.
         #[cfg(unix)]
-        assert_eq!(pass_through("kill -9 $$", b"", file().into()), 1);
+        assert_eq!(pass_through("kill -9 $$", Vec::new(), sink(), sink()), 1);
+    }
+
+    #[test]
+    fn output_past_the_limit_is_refused_without_a_partial_status_line() {
+        let mut stdout = Vec::new();
+        let status = pass_through(
+            &format!("printf '%0{}d' 0", COMMAND_BOUNDS.stdout_limit + 1),
+            Vec::new(),
+            &mut stdout,
+            std::io::sink(),
+        );
+        assert_eq!(status, 1);
+        assert!(stdout.is_empty());
     }
 
     /// The local settings outrank the project's, which outrank the user's; an object is merged key

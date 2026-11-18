@@ -19,7 +19,15 @@ import {
   type ContentPageKind,
 } from "../../seo/site-seo";
 
+function directoryUrl(value: unknown) {
+  const url = new URL(String(value));
+  if (!url.pathname.endsWith("/")) url.pathname += "/";
+  return url.href;
+}
+
 export function useSiteSeo() {
+  const { locale: languageCode } = useI18n();
+  const localeHead = useLocaleHead({ seo: true });
   const route = useRoute();
   const config = useRuntimeConfig();
   const { t } = useSiteCopy();
@@ -98,5 +106,50 @@ export function useSiteSeo() {
         ]
         : [],
     };
+  });
+
+  useHead(() => ({
+    htmlAttrs: {
+      lang: localeHead.value.htmlAttrs?.lang || languageCode.value,
+      dir: languageCode.value === "ar" ? "rtl" : "ltr",
+    },
+    link: (localeHead.value.link || []).map((link) =>
+      link.rel === "canonical"
+        ? { rel: "canonical" as const, href: directoryUrl(link.href) }
+        : {
+          rel: "alternate" as const,
+          type: "text/html",
+          href: directoryUrl(link.href),
+          hreflang: String(link.hreflang || ""),
+        },
+    ),
+    // Use the locale tags above: they carry territories where i18n would use a script code.
+    meta: (localeHead.value.meta || [])
+      .filter(
+        (meta) =>
+          meta.property !== "og:locale" &&
+          meta.property !== "og:locale:alternate",
+      )
+      .map((meta) => ({
+        property: meta.property ? String(meta.property) : undefined,
+        content:
+          meta.property === "og:url"
+            ? directoryUrl(meta.content)
+            : String(meta.content),
+      })),
+  }));
+  // One card per route code, drawn by scripts/generate-og-images.py.
+  // The site build does not redraw them.
+  const shareImage = () => `${config.public.siteUrl}og-image-${languageCode.value}.png`;
+  useSeoMeta({
+    ogImage: shareImage,
+    ogImageWidth: 1200,
+    ogImageHeight: 630,
+    ogImageAlt: () =>
+      `${config.public.appName} — ${t("brandSlogan")} — ${t("brandSloganMeaning")} — ${[t("workspaceTitle"), t("workspaceTitleSecond"), t("workspaceTitleAccent")].join(" ")}`,
+    ogType: "website",
+    ogSiteName: config.public.appName,
+    twitterCard: "summary_large_image",
+    twitterImage: shareImage,
   });
 }

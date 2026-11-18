@@ -1,4 +1,5 @@
-/* A notification dot has no count or glyph to clear; see docs/ui-standard.md, "Conformance level and exceptions". */
+/* A notification dot has no count or glyph to clear; see docs/conventions/ui-standard.md, "Conformance level and
+   exceptions". */
 .app-badge--xs {
   width: 10px;
   height: 10px;

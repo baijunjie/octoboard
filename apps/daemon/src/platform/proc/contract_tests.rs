@@ -385,7 +385,9 @@ fn a_polite_stop_is_followed_by_a_kill() {
     let mut guard = KillOnDrop(vec![polite.id() as i32]);
     wait_for_pid(&ready);
     if !asked_politely(&polite_handle) {
-        std::thread::sleep(Duration::from_millis(300));
+        // The child sends no acknowledgement when it receives no terminating signal.
+        const SURVIVAL_WINDOW: Duration = Duration::from_millis(300);
+        std::thread::sleep(SURVIVAL_WINDOW);
         assert_eq!(polite_handle.exited_unreaped(), Some(false));
         assert!(polite_handle.kill().delivered());
     }
@@ -399,7 +401,9 @@ fn a_polite_stop_is_followed_by_a_kill() {
     let mut guard = KillOnDrop(vec![deaf.id() as i32]);
     wait_for_pid(&ready);
     asked_politely(&deaf_handle);
-    std::thread::sleep(Duration::from_millis(300));
+    // The child sends no acknowledgement when it receives no terminating signal.
+    const SURVIVAL_WINDOW: Duration = Duration::from_millis(300);
+    std::thread::sleep(SURVIVAL_WINDOW);
     assert_eq!(deaf_handle.exited_unreaped(), Some(false));
     assert!(deaf_handle.kill().delivered());
     wait_for_unreaped_exit(&deaf_handle);
@@ -503,7 +507,9 @@ fn a_kept_identity_survives_a_stop_and_a_sweep() {
     let swept = leader_handle.kill_leftovers(&[kept]);
     assert!(swept.complete);
     assert_eq!(swept.killed, 0);
-    std::thread::sleep(Duration::from_millis(300));
+    // The child sends no acknowledgement when it receives no terminating signal.
+    const SURVIVAL_WINDOW: Duration = Duration::from_millis(300);
+    std::thread::sleep(SURVIVAL_WINDOW);
     assert!(
         is_running(helper),
         "a kept process was killed with its leader"
@@ -538,7 +544,9 @@ fn a_helper_that_left_the_session_outlives_its_sweep() {
     let swept = leader_handle.kill_leftovers(&[]);
     assert!(swept.complete);
     assert_eq!(swept.killed, 0);
-    std::thread::sleep(Duration::from_millis(300));
+    // The child sends no acknowledgement when it receives no terminating signal.
+    const SURVIVAL_WINDOW: Duration = Duration::from_millis(300);
+    std::thread::sleep(SURVIVAL_WINDOW);
     assert!(is_running(helper), "the sweep reached a helper that left");
     assert!(!wait_for_exit(&mut leader).success());
     // The leader is reaped and its pid free for another process; the helper is ended here.

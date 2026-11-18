@@ -16,7 +16,7 @@ import { focusTopBar } from "./regionFocus";
  * or to the top bar's first control when that leaves it on `<body>`. The user did not ask for the
  * move, so the ring follows the last input (`ringForAutomaticFocus`): a key shows it, a press of a
  * finger, a pen or a mouse never does (see "Focus moved by a change the user did not
- * make" in `docs/ui-standard.md`).
+ * make" in `docs/conventions/ui-standard.md`).
  *
  * The caller must stay mounted while the control goes away (render `null`, not unmount): the check
  * runs in the caller's own effect. */

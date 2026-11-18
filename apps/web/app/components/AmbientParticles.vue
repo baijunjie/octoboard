@@ -1,22 +1,23 @@
 <script setup lang="ts">
 const props = defineProps<{ paused?: boolean }>();
 const canvas = ref<HTMLCanvasElement | null>(null);
+const heroElement = computed(() => canvas.value?.parentElement ?? null);
+const { running, reduced } = useVisibleMotion(heroElement);
+const animating = computed(() => running.value && !props.paused);
 let dispose: (() => void) | undefined;
 
 onMounted(() => {
   const surface = canvas.value;
-  const hero = surface?.parentElement;
+  const hero = heroElement.value;
   const context = surface?.getContext("2d");
   if (
     !surface ||
     !hero ||
     !context ||
-    !("IntersectionObserver" in window) ||
     !("ResizeObserver" in window)
   )
     return;
 
-  const motion = matchMedia("(prefers-reduced-motion: reduce)");
   const protectedElements = Array.from(
     hero.querySelectorAll<HTMLElement>(".hero-copy, .hero-art, .hero-bottom"),
   );
@@ -35,7 +36,6 @@ onMounted(() => {
   let width = 0;
   let height = 0;
   let compact = false;
-  let visible = false;
   let frame = 0;
   let previous = 0;
   let elapsed = 0;
@@ -132,7 +132,7 @@ onMounted(() => {
         break;
       }
     }
-    if (visible && !document.hidden && !motion.matches && !props.paused) draw();
+    if (animating.value) draw();
   }
 
   function tick(timestamp: number) {
@@ -146,7 +146,7 @@ onMounted(() => {
   }
 
   function synchronize() {
-    if (visible && !document.hidden && !motion.matches && !props.paused) {
+    if (animating.value) {
       if (!frame) {
         previous = 0;
         frame = requestAnimationFrame(tick);
@@ -155,30 +155,19 @@ onMounted(() => {
       cancelAnimationFrame(frame);
       frame = 0;
       previous = 0;
-      if (motion.matches) context!.clearRect(0, 0, width, height);
+      if (reduced.value) context!.clearRect(0, 0, width, height);
     }
   }
 
-  const visibility = new IntersectionObserver(([entry]) => {
-    visible = entry?.isIntersecting ?? false;
-    synchronize();
-  });
   const dimensions = new ResizeObserver(resize);
   resize();
-  visibility.observe(hero);
   dimensions.observe(hero);
   for (const element of protectedElements) dimensions.observe(element);
-  document.addEventListener("visibilitychange", synchronize);
-  motion.addEventListener("change", synchronize);
-
-  const stopWatching = watch(() => props.paused, synchronize);
+  const stopWatching = watch([animating, reduced], synchronize, { immediate: true });
   dispose = () => {
     stopWatching();
     cancelAnimationFrame(frame);
-    visibility.disconnect();
     dimensions.disconnect();
-    document.removeEventListener("visibilitychange", synchronize);
-    motion.removeEventListener("change", synchronize);
   };
 });
 

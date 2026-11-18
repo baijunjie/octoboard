@@ -362,6 +362,15 @@ pub fn run_bounded(
     run_bounded_with(command, bounds, cancel, None)
 }
 
+/// [`run_bounded`] with bytes written to stdin and no caller cancellation.
+pub fn run_bounded_input(
+    command: &mut Command,
+    bounds: &Bounds,
+    input: Vec<u8>,
+) -> std::result::Result<Output, BoundedFailure> {
+    run_bounded_with(command, bounds, &NEVER, Some(input))
+}
+
 /// [`run_bounded`] with `input`, when there is any, written to the command's stdin on a thread of
 /// its own, so that a command which answers before it has read it all cannot block the deadline.
 fn run_bounded_with(

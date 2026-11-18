@@ -1317,7 +1317,9 @@ mod tests {
             .any(|window| window == asks_background));
         read_until(&mut second, b"\x1b]11;rgb:0000/0000/0000\x07").await;
         forget_echo();
-        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        // The PTY output reader has no flush signal for a reply the daemon did not forward.
+        const DUPLICATE_REPLY_WINDOW: std::time::Duration = std::time::Duration::from_millis(200);
+        tokio::time::sleep(DUPLICATE_REPLY_WINDOW).await;
         let printed = live.output_since(mark);
         assert_eq!(
             printed

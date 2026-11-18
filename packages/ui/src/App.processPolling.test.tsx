@@ -13,7 +13,7 @@ import { PlatformProvider } from "./platform/react";
 import { POLL_MS } from "./process/processPolling";
 import type { ProcessTree, Project } from "./protocol";
 import { DaemonProvider, type Daemon } from "./store";
-import { testDaemon } from "./test/testDaemon";
+import { defaultDaemonReply, testDaemon } from "./test/testDaemon";
 import { ThemeProvider } from "./preferences/theme";
 import { matchesWidthQuery } from "./test/viewport";
 import { BROWSER_HOST } from "./test/hosts";
@@ -57,7 +57,7 @@ async function mountApp(phone: boolean) {
   let trees: ProcessTree[] = [{ id: "1:1", session_id: session.id, command: "npm run dev", cwd: "/work/site", cwd_missing: false, kept: false, keepable: true, started_at: Date.now(), process_count: 1, memory_bytes: 120_000_000, ports: [3000] }];
   const daemon = testDaemon({
     state: snapshotState({ consoles: [console_], projects: [project], sessions: [session] }),
-    request: vi.fn(async (body) => body.type === "list_processes" ? { type: "processes_listed", id: null, trees: structuredClone(trees) } : { type: "ack", id: null }) as Daemon["request"],
+    request: vi.fn(async (body) => body.type === "list_processes" ? { type: "processes_listed", id: null, trees: structuredClone(trees) } : defaultDaemonReply(body)) as Daemon["request"],
     showNotice: vi.fn(),
   });
   const container = document.body.appendChild(document.createElement("div"));

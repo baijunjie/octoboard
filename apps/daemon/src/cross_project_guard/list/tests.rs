@@ -179,6 +179,7 @@ async fn a_project_that_is_no_repository_lists_every_other_project() {
 
     let list = list_for(&fixture, "p").await.expect("a list");
 
+    assert_eq!(list.agent, Some(AgentId::CLAUDE));
     assert_eq!(names(&list), BTreeSet::from(["project"]));
     assert_eq!(list.own, [text(&plain)]);
     assert_eq!(
@@ -305,6 +306,7 @@ fn the_launch_adds_the_shells_temporary_directories_that_are_safe_to_pass() {
 fn the_list_is_written_into_the_scratch_directory_for_its_owner_alone() {
     let scratch = ScratchDir::new("guard-list-write");
     let list = GuardList {
+        agent: Some(crate::protocol::AgentId::CLAUDE),
         tool: TOOL.to_string(),
         own: vec!["/a".to_string()],
         repository: Some("/a/.git".to_string()),
@@ -332,6 +334,7 @@ fn the_list_is_written_into_the_scratch_directory_for_its_owner_alone() {
     }
     // A second launch writes over the first.
     let other = GuardList {
+        agent: Some(crate::protocol::AgentId::CLAUDE),
         tool: "t".to_string(),
         ..GuardList::default()
     };

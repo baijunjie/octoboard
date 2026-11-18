@@ -788,6 +788,18 @@ fn sent(received: &Path) -> Vec<u8> {
     std::fs::read(received).unwrap_or_default()
 }
 
+/// Sends a marker through the same PTY after the operation finished. The stand-in reads one
+/// extra byte, so the marker is the next recorded byte only if nothing else was sent.
+fn assert_input_through_marker(live: &StandIn, received: &Path, expected: &[u8]) {
+    const MARKER: &[u8] = b"!";
+    live.write_input(MARKER).expect("the input marker");
+    assert!(
+        wait_for(PATIENCE, || sent(received).len() > expected.len()),
+        "the stand-in did not record the extra byte"
+    );
+    assert_eq!(sent(received), [expected, MARKER].concat());
+}
+
 /// The stand-in's whole conversation: the screen, a read of the Down, the redraw, a read of the
 /// Enter, the main screen, and then one more read, so that anything sent after the Enter shows
 /// up in what was received.
@@ -831,9 +843,7 @@ fn answering_sends_a_down_and_then_an_enter_and_nothing_else() {
 
     answer(&live).expect("answered");
 
-    // The stand-in is still reading, so a stray byte after the Enter would land in the file.
-    std::thread::sleep(Duration::from_millis(500));
-    assert_eq!(sent(&received), answer_keys());
+    assert_input_through_marker(&live, &received, &answer_keys());
 }
 
 /// With the cursor already on "Yes", a Down would wrap to "No, exit" and the Enter after it
@@ -890,8 +900,7 @@ fn enter_is_withheld_when_the_cursor_does_not_move() {
 
     // The Down may still be on its way through the PTY when the short wait runs out.
     assert!(wait_for(PATIENCE, || sent(&received) == DOWN));
-    std::thread::sleep(Duration::from_millis(300));
-    assert_eq!(sent(&received), DOWN, "no Enter was sent");
+    assert_input_through_marker(&live, &received, DOWN);
 }
 
 /// An agent slow to redraw after the Down, as on a slow machine, is waited for: the Enter follows
@@ -981,12 +990,7 @@ fn a_hook_seen_before_the_enter_ends_the_press_without_sending_it() {
     let err = answering.join().unwrap().expect_err("not waiting");
     assert!(is_not_waiting(&err), "{err}");
     assert!(!live.trust.pressed.load(Ordering::Acquire));
-    std::thread::sleep(Duration::from_millis(300));
-    assert_eq!(
-        sent(&received),
-        [DOWN, chatter].concat(),
-        "no Enter was sent"
-    );
+    assert_input_through_marker(&live, &received, &[DOWN, chatter].concat());
 }
 
 /// What [`not_dismissed_after_the_enter`] leaves for the test to look at.
@@ -1178,8 +1182,7 @@ fn a_terminals_own_traffic_does_not_stop_the_answer() {
     live.write_input(chatter).expect("the terminal's traffic");
     answering.join().unwrap().expect("answered");
 
-    std::thread::sleep(Duration::from_millis(500));
-    assert_eq!(sent(&received), [DOWN, chatter, ENTER].concat());
+    assert_input_through_marker(&live, &received, &[DOWN, chatter, ENTER].concat());
 }
 
 /// The count of foreign writes and the refusal that rests on it: a terminal's own traffic is not
@@ -1193,7 +1196,7 @@ fn a_key_is_written_only_while_nothing_else_has_written() {
     // takes a report for itself while the program on it has not asked for them.
     let script = format!(
         "printf 'ready\\e[?1004h'; {}; sleep 30",
-        take(5, &quoted(&received))
+        take(6, &quoted(&received))
     );
     let live = stand_in("s", AgentId::CLAUDE, &script);
     // Input written before the stand-in has set its terminal up would be thrown away.
@@ -1216,10 +1219,8 @@ fn a_key_is_written_only_while_nothing_else_has_written() {
         .write_input_if_untouched(live.input_writes(), &[Input::Enter])
         .unwrap());
 
-    // The focus report, the typed byte and the key — not the key that was refused.
-    assert!(wait_for(PATIENCE, || sent(&received).len() >= 5));
-    std::thread::sleep(Duration::from_millis(200));
-    assert_eq!(sent(&received), b"\x1b[Ix\r");
+    // The focus report, the typed byte and the key are followed by only the marker.
+    assert_input_through_marker(&live, &received, b"\x1b[Ix\r");
 }
 
 /// Someone else types into the session after the Down went in — the user pressing a key in the
@@ -1244,8 +1245,7 @@ fn enter_is_withheld_when_something_else_writes_into_the_session_meanwhile() {
 
     let err = answering.join().unwrap().expect_err("withheld");
     assert!(err.to_string().contains("something else wrote"), "{err}");
-    std::thread::sleep(Duration::from_millis(300));
-    assert_eq!(sent(&received), [DOWN, b"x"].concat(), "no Enter was sent");
+    assert_input_through_marker(&live, &received, &[DOWN, b"x"].concat());
 }
 
 /// A session that never showed its screen, or showed another agent's, is never typed at.
@@ -1253,16 +1253,26 @@ fn enter_is_withheld_when_something_else_writes_into_the_session_meanwhile() {
 fn nothing_is_sent_to_a_session_that_never_showed_its_own_screen() {
     let dir = scratch("never");
     let received = dir.join("received");
-    let script = format!("echo hello; {}; sleep 30", take(1, &quoted(&received)));
-    let claude = stand_in("a", AgentId::CLAUDE, &script);
+    let claude = stand_in(
+        "a",
+        AgentId::CLAUDE,
+        &format!("echo hello; {}; sleep 30", take(1, &quoted(&received))),
+    );
+    let codex_received = dir.join("codex-received");
+    let script = format!(
+        "echo hello; {}; sleep 30",
+        take(1, &quoted(&codex_received))
+    );
     assert!(answer(&claude).is_err());
 
     let codex = stand_in("b", AgentId::CODEX, &script);
     codex.trust.feed(SCREEN, 0, 0);
     assert!(answer(&codex).is_err());
 
-    std::thread::sleep(Duration::from_millis(300));
-    assert!(sent(&received).is_empty());
+    assert!(wait_for(PATIENCE, || printed(&claude, 64).starts_with(b"hello")));
+    assert!(wait_for(PATIENCE, || printed(&codex, 64).starts_with(b"hello")));
+    assert_input_through_marker(&claude, &received, b"");
+    assert_input_through_marker(&codex, &codex_received, b"");
 }
 
 /// A stand-in that shows the screen and takes the Down but never redraws, so the cursor never
@@ -1432,7 +1442,9 @@ async fn a_project_without_consent_is_asked_about_and_nothing_is_sent_until_conf
         SessionStatus::WaitingUser,
         "the trust prompt raises the hand, including after reconnect"
     );
-    tokio::time::sleep(Duration::from_millis(600)).await;
+    // The stand-in cannot report whether its supervisor attempted an automatic answer.
+    const PENDING_CONSENT_WINDOW: Duration = Duration::from_millis(600);
+    tokio::time::sleep(PENDING_CONSENT_WINDOW).await;
     assert!(
         sent(&received).is_empty(),
         "nothing is sent before the user agrees"
@@ -2218,7 +2230,9 @@ async fn trusting_a_directory_answers_the_screens_waiting_under_it_and_no_others
 
     add_trusted_directory(&state, &work).await.expect("trusted");
     answered(&under_live, &under_received).await;
-    tokio::time::sleep(Duration::from_millis(600)).await;
+    // The other session has no completion signal because no answer is scheduled for it.
+    const OTHER_DIRECTORY_INPUT_WINDOW: Duration = Duration::from_millis(600);
+    tokio::time::sleep(OTHER_DIRECTORY_INPUT_WINDOW).await;
     assert!(
         sent(&beside_received).is_empty(),
         "the one beside it is not"
@@ -2306,7 +2320,9 @@ async fn a_project_linked_out_of_a_trusted_directory_is_asked_about_and_not_pres
         start(&state, &dir, later, &full_script(Path::new("%RECEIVED%")));
     supervise(&state, &later_live);
     assert_eq!(offered_in_prompt(&mut events, "later-1").await, None);
-    tokio::time::sleep(Duration::from_millis(600)).await;
+    // Neither supervisor signals when it declines to send an automatic answer.
+    const UNTRUSTED_DIRECTORY_INPUT_WINDOW: Duration = Duration::from_millis(600);
+    tokio::time::sleep(UNTRUSTED_DIRECTORY_INPUT_WINDOW).await;
     assert!(sent(&waiting_received).is_empty(), "the waiting one");
     assert!(sent(&later_received).is_empty(), "the later one");
     assert_eq!(pending_prompts(&state).await.len(), 2);
@@ -2563,7 +2579,9 @@ async fn one_sessions_go_ahead_answers_the_others_waiting_under_the_directory() 
     add_trusted_directory(&state, &work)
         .await
         .expect("a repeat");
-    tokio::time::sleep(Duration::from_millis(800)).await;
+    // Ineligible sessions on the PTY provide no completion event for a repeated grant.
+    const REPEATED_CONSENT_WINDOW: Duration = Duration::from_millis(800);
+    tokio::time::sleep(REPEATED_CONSENT_WINDOW).await;
     assert!(sent(&c_received).is_empty());
     let mut announced = 0;
     while let Ok(event) = events.try_recv() {
@@ -2586,8 +2604,7 @@ fn codex_is_pressed_with_an_enter_and_nothing_else() {
 
     answer(&live).expect("pressed");
 
-    std::thread::sleep(Duration::from_millis(500));
-    assert_eq!(sent(&received), ENTER);
+    assert_input_through_marker(&live, &received, ENTER);
 }
 
 /// Codex runs no hook after its screen is answered in the terminal, so the person's own key is
@@ -2634,8 +2651,7 @@ async fn codex_answered_in_the_terminal_is_no_longer_waiting() {
         Some(error_code::TRUST_NOT_WAITING)
     );
     assert!(!consented_in_store(&state));
-    tokio::time::sleep(Duration::from_millis(300)).await;
-    assert_eq!(sent(&received), ENTER, "only the person's own key");
+    assert_input_through_marker(&live, &received, ENTER);
     tokio::time::timeout(PATIENCE, async {
         loop {
             if let Event::SessionUpserted { session } = events.recv().await.unwrap() {
@@ -2679,7 +2695,7 @@ async fn a_message_waits_while_codex_is_at_its_screen_and_follows_the_press() {
         delivery,
         crate::messaging::delivery::Delivery::Queued
     ));
-    tokio::time::sleep(Duration::from_millis(300)).await;
+
     assert!(sent(&received).is_empty(), "nothing reaches the screen");
 
     confirm(&state, "codex-1", false, false)
@@ -2737,7 +2753,9 @@ async fn trusting_a_project_presses_its_other_waiting_screens_and_no_others() {
         pressed.await.unwrap(),
         "the other agent's screen in the project"
     );
-    tokio::time::sleep(Duration::from_millis(600)).await;
+    // The other project has no answer task to await.
+    const OTHER_PROJECT_INPUT_WINDOW: Duration = Duration::from_millis(600);
+    tokio::time::sleep(OTHER_PROJECT_INPUT_WINDOW).await;
     assert!(sent(&other_received).is_empty(), "not another project's");
 }
 
@@ -2774,7 +2792,7 @@ async fn a_message_for_codex_is_let_through_at_its_first_title_with_no_screen() 
         delivery,
         crate::messaging::delivery::Delivery::Queued
     ));
-    tokio::time::sleep(Duration::from_millis(600)).await;
+
     assert!(sent(&received).is_empty(), "held while there is no title");
 
     live.on_output(b"\x1b]0;project\x07");
@@ -3232,8 +3250,9 @@ async fn the_hook_fallback_never_lets_a_sighted_trust_screen_through() {
     let (live, _) = start(&state, &dir, record, "sleep 30");
     live.on_output(GROK_SCREEN);
     assert!(live.trust.waiting());
-    release_when_no_hook_comes(&state, &live, Duration::from_millis(50));
-    tokio::time::sleep(Duration::from_millis(600)).await;
+    let fallback = Duration::from_millis(50);
+    release_when_no_hook_comes(&state, &live, fallback);
+    crate::test_support::runtime_advanced(fallback + RELEASE_POLL).await;
     assert!(live.trust.holds_writes());
     assert!(!live.trust.released_without_hook.load(Ordering::Acquire));
 
@@ -3266,7 +3285,7 @@ async fn a_grok_screen_seen_to_go_with_no_hook_releases_what_it_held() {
     release_when_the_sighted_screen_goes(&state, &live);
 
     live.on_output(GROK_ANIMATION);
-    tokio::time::sleep(Duration::from_millis(700)).await;
+    crate::test_support::runtime_advanced(RELEASE_POLL * 2).await;
     assert!(live.trust.holds_writes(), "the screen is still up");
 
     live.on_output(b"\x1b[2J\x1b[HGrok is ready\r\n");
@@ -3444,7 +3463,7 @@ async fn claude_messages_wait_for_bracketed_paste_after_the_first_hook() {
         crate::messaging::delivery::Delivery::Queued
     ));
     on_hook(&state, &live);
-    tokio::time::sleep(Duration::from_millis(600)).await;
+    crate::test_support::runtime_advanced(RELEASE_POLL * 2).await;
     assert!(live.trust.holds_writes(), "the hook alone is not enough");
     assert_eq!(state.write_hold("claude-1"), Some(WriteHold::Starting));
     assert!(sent(&received).is_empty());
@@ -3532,10 +3551,10 @@ async fn claude_messages_are_not_released_by_the_start_probes_bracketed_paste() 
     ));
     // Long enough between the two for the release's poll to see bracketed paste on.
     live.on_output(b"\x1b[?2004h\x1b[?2031h");
-    tokio::time::sleep(RELEASE_POLL * 3).await;
+    crate::test_support::runtime_advanced(RELEASE_POLL * 3).await;
     live.on_output(b"\x1b[?2031l\x1b[?2004l");
     on_hook(&state, &live);
-    tokio::time::sleep(Duration::from_millis(600)).await;
+    crate::test_support::runtime_advanced(RELEASE_POLL * 2).await;
     assert!(
         live.trust.holds_writes(),
         "the probe's toggle is not enough"
@@ -3597,13 +3616,16 @@ async fn an_adopted_agent_that_draws_its_input_box_later_has_its_held_messages_r
     release_when_the_adopted_agent_reads_input(&state, &live);
 
     live.on_output(b"\x1b[2J\x1b[HStarting up...\r\n");
-    tokio::time::sleep(RELEASE_POLL * 3).await;
+    crate::test_support::tasks_idle().await;
+    tokio::time::advance(RELEASE_POLL * 3).await;
+    crate::test_support::tasks_idle().await;
     assert!(live.trust.awaits_adopted_start());
     assert!(live.trust.holds_writes());
     assert_eq!(state.outbox.len("s"), 1, "no input box is on the screen");
 
     live.on_output(&drawn_input_box());
-    tokio::time::sleep(RELEASE_POLL * 2).await;
+    tokio::time::advance(RELEASE_POLL * 2).await;
+    crate::test_support::tasks_idle().await;
     assert!(!live.trust.awaits_adopted_start(), "the box was seen");
     assert!(!live.trust.holds_writes());
     // The release's write runs in a blocking task, which holds the clock still until it is done.

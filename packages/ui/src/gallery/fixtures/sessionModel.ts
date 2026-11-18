@@ -6,6 +6,8 @@ import type { Scenario } from "../scenario";
 import { accountOf, consoleOf, minutesAgo, projectOf, sessionOf, snapshotState } from "../../fixtures/builders";
 import type { FixtureError } from "../../fixtures/sampleFiles";
 
+import { sessionUpdated } from "./liveChanges";
+
 const GROUP = "Sidebar sessions";
 
 const console_ = consoleOf("c-1", "Main");
@@ -49,8 +51,8 @@ const changeToOpus = [
 const editedThenChangedOutside = (outside: Partial<Session>) => [
   ...openDialog(running.title),
   (ui: Ui) => ui.press(describing("the Reasoning effort picker holding medium", (name) => name.startsWith("medium"))),
-  (ui: Ui) => ui.press("high"),
-  (ui: Ui) => ui.daemonEvents({ type: "session_upserted", session: { ...running, ...outside } }),
+  (ui: Ui) => ui.press(describing("the high effort option", (name) => name === "high")),
+  sessionUpdated({ ...running, ...outside }),
 ];
 
 const didNotStop: FixtureError = {

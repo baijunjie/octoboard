@@ -1160,7 +1160,7 @@ async fn associating_projects_with_one_console_is_serialised() {
     );
 
     drop(first);
-    tokio::time::timeout(Duration::from_secs(5), waiting)
+    tokio::time::timeout(crate::test_support::PATIENCE, waiting)
         .await
         .expect("the claim is granted once released")
         .unwrap();
@@ -1210,7 +1210,7 @@ async fn add_project_waits_for_the_consoles_claim_before_storing() {
     assert!(state.store.project_paths("console-1").unwrap().is_empty());
 
     drop(claim);
-    let added = tokio::time::timeout(Duration::from_secs(5), adding)
+    let added = tokio::time::timeout(crate::test_support::PATIENCE, adding)
         .await
         .expect("the association goes ahead once the claim is released")
         .unwrap()

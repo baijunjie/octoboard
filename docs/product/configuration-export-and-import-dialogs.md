@@ -308,8 +308,7 @@ in `docs/product/settings-in-a-configuration.md`).
 **Language**, which the daemon holds rather than the client, reads the same way, comparing the file's language with
 the language the daemon holds now — or with the language this window shows, when the daemon holds none or one this
 build does not offer — each by its name in its own language (see "The language the daemon holds" in
-`docs/product/language.md`). For a file of version 4, the file's language is its `agent_language` where it carries one
-(see "Versions" in `docs/product/configuration-export-and-import.md`).
+`docs/product/language.md`).
 
 The **default clone directory** has its line when the file carries one that can be used here, or one written on another
 operating system. A directory written on another operating system (see "The default clone directory on import" in

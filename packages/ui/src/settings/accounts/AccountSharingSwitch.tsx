@@ -24,7 +24,7 @@ import { Label, ProgressBar, ProgressBarTrack } from "../../primitives";
  * turning it off does is behind the label's help tip, with the idle sessions it would end; and under the
  * description, why the switch is locked. A change is carried out at once, so the switch is either free or
  * unavailable, and says which. Unavailable, it stays focusable and describes itself, so a keyboard user hears why
- * (see "Buttons" in `docs/ui-standard.md`):
+ * (see "Buttons" in `docs/conventions/ui-standard.md`):
  * - free: nothing under it;
  * - unavailable, turning sharing on, where the daemon's host cannot make the file links sharing needs (`file_links`),
  *   saying how to turn that on there (Windows' Developer Mode). Sharing already on can still be turned off, as the

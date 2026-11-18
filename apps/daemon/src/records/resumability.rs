@@ -249,11 +249,16 @@ mod tests {
             )])
         };
         let hints = Hints::default();
-        for agent in [AgentId::CLAUDE, AgentId::CODEX, AgentId::GROK] {
+        for agent in AgentId::ALL {
+            let expected = if provider(agent).records().recognises_records() {
+                Absent
+            } else {
+                Unknown
+            };
             let mut native = session(agent, CLAUDE_ID, Some(&account));
             assert_eq!(
                 presence(&hints, &mut Locator::with_shell(shell()), &[], &native),
-                Absent
+                expected
             );
             native.agent_session_id = None;
             assert_eq!(
@@ -404,7 +409,7 @@ mod tests {
     fn a_session_without_a_conversation_is_resumable_and_an_unusable_id_is_unknown() {
         let dir = crate::test_support::ScratchDir::new("agent-records-resume-fresh");
         let account = dir.join("account");
-        for agent in [AgentId::CLAUDE, AgentId::CODEX, AgentId::GROK] {
+        for agent in AgentId::ALL {
             let mut fresh = session(agent, CLAUDE_ID, Some(&account));
             fresh.has_conversation = false;
             assert_eq!(judged(&fresh), Resumability::Resumable);
@@ -419,7 +424,7 @@ mod tests {
     #[test]
     fn an_account_directory_that_cannot_be_read_is_unknown_for_every_agent() {
         let dir = crate::test_support::ScratchDir::new("agent-records-resume-gone");
-        for agent in [AgentId::CLAUDE, AgentId::CODEX, AgentId::GROK] {
+        for agent in AgentId::ALL {
             let gone = session(agent, CLAUDE_ID, Some(&dir.join("gone")));
             assert_eq!(judged(&gone), Resumability::Unknown);
         }
@@ -433,7 +438,7 @@ mod tests {
     fn an_account_directory_without_any_records_directory_is_unknown_for_every_agent() {
         let dir = crate::test_support::ScratchDir::new("agent-records-resume-empty");
         std::fs::create_dir_all(dir.join("account")).unwrap();
-        for agent in [AgentId::CLAUDE, AgentId::CODEX, AgentId::GROK] {
+        for agent in AgentId::ALL {
             let empty = session(agent, CLAUDE_ID, Some(&dir.join("account")));
             assert_eq!(judged(&empty), Resumability::Unknown);
         }

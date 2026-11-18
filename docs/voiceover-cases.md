@@ -2,8 +2,8 @@
 
 Real-device VoiceOver results for the packaged macOS application, kept as reusable cases. A new implementation that
 matches a passing case below needs no further real-device testing; one that matches none needs one listening pass and a
-case of its own. How to build an announcement lives in `docs/ui-standard.md` ("Announcing a change"); this file
-holds what was actually heard.
+case of its own. How to build an announcement lives in `docs/conventions/ui-standard.md` ("Announcing a change"); this
+file holds what was actually heard.
 
 ## Rules
 
@@ -75,7 +75,7 @@ result and they are not a listening result themselves; report them as checks.
   behavior around the write.
 - Browser inspection of the rendered DOM: the effective role, accessible name and description, the live attributes, and
   that neither the region nor an ancestor is hidden by `aria-hidden` or `inert` while the real overlay is open (a marked
-  element is left exposed with its ancestors; the rule is in `docs/ui-standard.md`, "Announcing a change").
+  element is left exposed with its ancestors; the rule is in `docs/conventions/ui-standard.md`, "Announcing a change").
 - A statement of which case is matched and, item by item, why each point under "What \"matches a case\" means" holds.
 
 ### When a new listening pass is needed
@@ -155,6 +155,7 @@ commands. Native accessibility trees were read separately (VoiceOver off or on) 
 | E18 | Local main `bd3282721bd8b543e908d45ad7e9b0ed07036190`, with only the opt-in scratch import scheduling gate in the daemon | Packaged `Octoboard Checked VoiceOver`, identifier and ad-hoc signing identifier `dev.octoboard.verify.manual-checked-vo-20261110`; real isolated daemon and two real clients. SA-Q, SA-R, ALERT-2, ALERT-4 and the ALERT-3 baseline; no synthetic result events. |
 | E19 | E18 with `errors/errorRecovery.ts` from `docs/checked-write-voiceover`: configuration-document refusals cannot be retried | Rebuilt UI in the same isolated bundle. The recovery action passes, but the focused Import state feedback masks the immediate re-read alert (ALERT-3 / KNW-14). |
 | E20 | E19 plus the branch's `configuration/ImportConfigurationDialog.tsx` re-read alert delay and `components/announce/useAlertAnnouncement.ts` per-attempt delay | Final rebuilt production UI in the same isolated bundle; ALERT-3 re-listens initial failure, repeated failure, changed recovery, keyboard landing and successful retry. The scratch daemon and input-fault transport are unchanged. |
+| E21 | Batch E, branch `fix/conv-e-ui` at `28cdbb845` | Packaged `Octoboard E VoiceOver`, bundle and scratch signing identifier `dev.octoboard.verify.convevoice`. Real isolated daemon, offline Claude CLI fixture and a local Markdown file. FOCUS-6 through FOCUS-8 use the packaged WKWebView. |
 
 E14, E15 and E16 used macOS 26.2 (25C56), arm64, English application text, Simplified Chinese VoiceOver, and light
 appearance (E16's from its own-window screenshots) on 2026-11-10 JST. Reports use native AppleScript `content of last phrase`, requested every 25 ms, with
@@ -386,6 +387,9 @@ proxy and VoiceOver were stopped afterwards; `cleanup.json` records the exact ow
 | [FOCUS-3 Status mark and quota popover focus and reading paths](#focus-3-status-mark-and-quota-popover-focus-and-reading-paths) | shared hover/press popover, focus and item chooser | Pass for quota Enter/Escape focus paths, the mark's focus return on Escape and item-chooser reachability; the bare-mark Enter naming failed, see KNW-9 and FOCUS-4 |
 | [FOCUS-4 Bare mark dialog named by its tone](#focus-4-bare-mark-dialog-named-by-its-tone) | tone-named bare mark dialog; sentence remains the trigger name | Pass for Enter speech without the repeated sentence and Escape focus return, Error and Note |
 | [FOCUS-5 Busy dialog hands focus to its pending button and returns after refusal](#focus-5-busy-dialog-hands-focus-to-its-pending-button-and-returns-after-refusal) | busy context, layout-effect handoff, nested error acknowledgement and explicit input return | Pass by native caption verification, SessionDialog Enter submission |
+| [FOCUS-6 Project archive takes focus and returns it on Escape](#focus-6-project-archive-takes-focus-and-returns-it-on-escape) | menu-to-region focus and Escape with a tooltip open | Pass for the keyboard path; a separate context-menu AXPress path included a web-area phrase before the region |
+| [FOCUS-7 Deleting all archived sessions lands on Close](#focus-7-deleting-all-archived-sessions-lands-on-close) | named alert dialog and fallback when its return target disappears | Pass with a transient web-area phrase; no separate empty-state phrase captured |
+| [FOCUS-8 Escape from a terminal-linked file returns to terminal input](#focus-8-escape-from-a-terminal-linked-file-returns-to-terminal-input) | linked file viewer removal and layout-effect return | Pass in two rounds; one had a subsequent macOS notification |
 | [PLAIN-1 Text change in a mounted plain status](#plain-1-text-change-in-a-mounted-plain-status) | `role="status"` replaced in place inside a modal | Pass (first build) |
 | [PLAIN-2 Persistent visible status with an action](#plain-2-persistent-visible-status-with-an-action) | plain `role="status"` filled in place | Pass |
 | [ALERT-1 A conflicted file read fails](#alert-1-a-conflicted-file-read-fails) | delayed `PaneFailure` alert inside the viewer | Pass for file-not-found |
@@ -1136,9 +1140,9 @@ proxy and VoiceOver were stopped afterwards; `cleanup.json` records the exact ow
   dialog`; within it the text read `Shown without syntax highlighting because the file is large.`. Quota's selected
   heading read `标题级别2 No agent available`, then `An agent's quota is shown once its command is found on your PATH .`.
   Thus content was reachable through the item chooser; this record does not call sequential navigation a pass or explain
-  why it did not reach the panels. A bare mark's hover panel is now also named by its tone, so the mark listing above
-  is not the current wiring, and the chooser route for tone-named panels was not heard. The hover form is the mouse's
-  and the keyboard and assistive technology open the press form (`docs/ui-standard.md`, "A floating panel that
+  why it did not reach the panels. A bare mark's hover panel is now also named by its tone, so the mark listing above is
+  not the current wiring, and the chooser route for tone-named panels was not heard. The hover form is the mouse's and
+  the keyboard and assistive technology open the press form (`docs/conventions/ui-standard.md`, "A floating panel that
   does not take the window"), so sequential navigation not reaching a hover-opened panel is the designed behaviour, not
   an open defect.
 - **Result, Enter.** **Fail for the E6 bare mark's naming (recorded as KNW-9, which holds the exact phrase):** the SVG
@@ -1280,6 +1284,115 @@ proxy and VoiceOver were stopped afterwards; `cleanup.json` records the exact ow
   read, explicit Tab to acknowledgement and named-input return even when submit becomes disabled. Callers still
   have to satisfy every matching item above. It is not direct listening coverage for an Install link, another
   dialog, pointer submission, a removed return target, another language or unrelated live-region announcements.
+
+### FOCUS-6 Project archive takes focus and returns it on Escape
+
+- **Location and state change.** With the live fixture session selected, Tab to the project's More actions, press
+  Return, use the arrows to reach View archive → View all, and press Return. The archive covers the live terminal.
+  Tab to Delete all and then to Close. With the Close tooltip visible, press Escape once.
+- **Mechanism and ARIA wiring.** `packages/ui/src/archive/ArchiveView.tsx` (`ArchiveView`) focuses the named
+  `section` after the menu's deferred focus return. The section has an `aria-label` from the project-scoped archive
+  title. `packages/ui/src/components/dialog/useEscapeWhileTooltipOpen.ts` (`useEscapeWhileTooltipOpen`) handles
+  Escape even with the tooltip open. `packages/ui/src/app/useArchiveView.ts` (`useArchiveView`) hands focus to
+  the live terminal when the archive closes. The rendered destinations heard and verified through native AX focus
+  were the named archive region and the Terminal input text area.
+- **Result.** Pass. The opening Return automatically read, in order:
+
+  ```text
+  main Archived sessions of VoiceOver project region
+  你当前在region上。
+  ```
+
+  The two deliberate Tab moves read `Delete all button Archived sessions of VoiceOver project region`, then
+  `Close button` and `你当前在button上。若要点按此按钮，请按下Control-Option-空格键。`. A screenshot verified
+  that the Close tooltip was showing. One Escape closed the archive and restored keyboard focus to VoiceOver live's
+  Terminal input. The automatic phrases were:
+
+  ```text
+  Terminal input text entry area main
+  你当前在文本区域上。
+  ```
+
+  Terminal input was the last app control named. A separate setup activation of View all through the right-click
+  project menu using AXPress sampled `Octoboard 网页内容` before the archive region. The keyboard retest had no such
+  interjection.
+- **Capture, environment and date.** E21, 2026-11-18, macOS 26.2, light appearance, English application text and
+  mixed English/Simplified Chinese speech. Native AppleScript `content of last phrase` was polled every 25 ms.
+  Keyboard focus was sampled separately through native AX. No VO+Fn+F4 queries were used. Identical adjacent phrases
+  cannot be counted separately through this interface.
+- **Reuse scope.** The project archive opened by keyboard with a live terminal underneath, and Escape from its focused
+  Close button with the tooltip exposed. The context-menu AXPress observation is separate. The result does not cover
+  return to archived history or an empty terminal area.
+
+### FOCUS-7 Deleting all archived sessions lands on Close
+
+- **Location and state change.** In the open project archive with two fixture records, focus Delete all and press
+  Return. Tab through the confirmation to its Delete all button and press Return again. The dialog closes and the
+  archive remains with No archived sessions. The archive's Delete all opener disappears.
+- **Mechanism and ARIA wiring.**
+  `packages/ui/src/dialogs/confirmations/DeleteArchivedDialog.tsx` (`DeleteArchivedDialog`) provides the title and
+  count-dependent message to `packages/ui/src/components/dialog/ConfirmDialog.tsx` (`ConfirmDialog`).
+  `packages/ui/src/components/dialog/Dialog.tsx` (`Dialog`) uses the body as the alert dialog's description.
+  `packages/ui/src/archive/ArchiveView.tsx` (`ArchiveView`) tracks the row count while the dialog is
+  open and waits for the dialog's focus return. If focus fell to the page or remained on the bare archive after the
+  deletion, it places focus on the surviving Close button through its ref. The native focus reading corroborated
+  the rendered Close button within the named archive region.
+- **Result.** Pass. Opening the confirmation automatically read:
+
+  ```text
+  Delete archived sessions 2 archived sessions will be deleted permanently. The project's files are kept. web alert dialog
+  你当前在网页内容内部的web alert dialog上。按下Control-Option-Command-斜线以调出更多内容菜单。 若要退出此网页区域，请按下Control-Option-Shift-上箭头。
+  ```
+
+  Deliberate Tab moves read `Close button Delete archived sessions … web alert dialog`, `Cancel button`, then
+  `Delete all button`. The ellipsis marks an omitted part of the captured phrase. Button hints were also
+  reported. After the confirming Return, the automatic reading was:
+
+  ```text
+  Octoboard 网页内容
+  Close button Archived sessions of VoiceOver project region
+  ```
+
+  The web-area phrase was transient. The dialog was gone and native keyboard focus was on the archive's Close
+  button. No separate announcement of the empty state was captured.
+- **Capture, environment and date.** E21, 2026-11-18, macOS 26.2, light appearance, English application text and
+  mixed English/Simplified Chinese speech. Native AppleScript `content of last phrase` was polled every 25 ms.
+  Keyboard focus was checked separately through native AX. No VO+Fn+F4 queries were used. Identical adjacent phrases
+  cannot be counted separately through this interface.
+- **Reuse scope.** Keyboard confirmation of Delete all when the archive empties and the return target disappears.
+  This records a focus landing, with the transient web-area speech retained. It does not establish separate
+  empty-state speech or coverage for cancelling, pointer confirmation or a single-row deletion.
+
+### FOCUS-8 Escape from a terminal-linked file returns to terminal input
+
+- **Location and state change.** Click the Markdown path in VoiceOver live's terminal. The linked viewer opens over the
+  live terminal. Press Escape in the viewer.
+- **Mechanism and ARIA wiring.** `packages/ui/src/project-browser/files/LinkedFileViewer.tsx` (`LinkedFileViewer`)
+  uses `packages/ui/src/viewer/FileViewer.tsx` (`FileViewer`), which presents the filename as the dialog's name.
+  `packages/ui/src/app/useLinkedFile.ts` (`useLinkedFile`) restores focus in a layout effect after the viewer has
+  been removed. Native speech identified a web dialog named voice-over-link.md and its Close button. Native AX focus
+  confirmed the return to VoiceOver live's Terminal input text area.
+- **Result.** Pass in two rounds. On opening, both sampled
+  `voice-over-link.md web dialog 包含14个项目 Close button`. The first round also sampled `系统 有新的 窗口`
+  and the dialog button hint. After Escape, both automatically read:
+
+  ```text
+  Terminal input text entry area main
+  你当前在文本区域上。
+  ```
+
+  Terminal input was the last app control named by the close. In the first round an unrelated macOS notification
+  then contributed `若要打开通知菜单，请按下Control-Option-N。` and
+  `提示 了解如何在 Mac 上更新图标样式。 组 若要打开通知菜单，请按下Control-Option-N。`.
+  The second round sampled only the filename dialog phrase on open and the two terminal phrases after Escape.
+  In both rounds the viewer closed and the same terminal input held keyboard focus.
+- **Capture, environment and date.** E21, 2026-11-18, macOS 26.2, light appearance, English application text and
+  mixed English/Simplified Chinese speech. Native AppleScript `content of last phrase` was polled every 25 ms.
+  Keyboard focus was checked separately through native AX. No VO+Fn+F4 queries were used. Identical adjacent phrases
+  cannot be counted separately through this interface.
+- **Reuse scope.** A pointer-opened Markdown viewer from an agent terminal, closed with Escape while that terminal
+  remains available. The system notification is recorded separately from the app's focus return. This does not
+  cover a shell-terminal or project-browser opener, or a missing return destination.
 
 ### PLAIN-1 Text change in a mounted plain status
 

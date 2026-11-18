@@ -179,8 +179,9 @@ mod tests {
             .expect("ended");
         assert!(state.last_turn_abnormal("s"));
 
+        let expired_at = Instant::now() - LATE_TURN_END_BOUND;
+        state.ended_turns.lock().unwrap().get_mut("s").unwrap().at = expired_at;
         LATE_TURN_END_OVERRIDE.with(|bound| bound.set(Some(Duration::ZERO)));
-        std::thread::sleep(Duration::from_millis(1));
         assert!(!state.apply_late_turn_event("s", "t1", Some(TurnOutcome::Normal)));
         assert!(state.last_turn_abnormal("s"));
 

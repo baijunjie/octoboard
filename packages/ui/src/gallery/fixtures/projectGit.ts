@@ -756,7 +756,11 @@ const reviewScenarios: Scenario[] = [
     state,
     preferences,
     git: { ...SAMPLE_GIT, branches: CROWDED_BRANCHES },
-    steps: [...openGit, (ui) => ui.press("main"), (ui) => ui.wait(400)],
+    steps: [
+      ...openGit,
+      (ui) => ui.press("main"),
+      (ui) => ui.waitForControl(describing("the ranking branch option", (name) => name.startsWith(BRANCHES[0].name))),
+    ],
   },
   {
     id: "git-compare-origins",

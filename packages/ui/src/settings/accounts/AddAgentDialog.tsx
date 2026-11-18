@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
 
-import { providerLabel } from "../../agents/providers";
+import { providerLabel, providerInstallUrl } from "../../agents/providers";
 import { AgentIcon } from "../../components/icons/AgentIcon";
 import { ExternalLink } from "../../components/text/ExternalLink";
 import { FadeOverflow } from "../../components/text/FadeOverflow";
@@ -54,7 +54,7 @@ export function AddAgentDialog({ onClose }: { onClose: () => void }): React.Reac
         {providers.map((provider) => {
           const agent = provider.id;
           const label = providerLabel(t, providers, agent);
-          const installUrl = provider.install_url;
+          const installUrl = providerInstallUrl(providers, agent);
           const state = availability.get(agent)?.availability;
           const isAdded = added?.includes(agent) ?? false;
           const status = isAdded ? "added" : state === "available" ? "installed" : state === "unavailable" ? "notInstalled" : "checking";

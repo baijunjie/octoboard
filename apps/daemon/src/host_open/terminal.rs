@@ -23,7 +23,6 @@ pub fn open_directory(directory: &Path) -> Result<(), anyhow::Error> {
     // login-shell snapshot. A snapshot that did not run is that failure: treating it as "not
     // installed" would report a missing terminal when the lookup never happened.
     let launch = host_launch(
-        std::env::consts::OS,
         directory,
         || crate::env_shell::cached_snapshot().map_err(|err| format!("{err:#}")),
         |name, env| crate::env_shell::resolve_program(name, env).ok(),

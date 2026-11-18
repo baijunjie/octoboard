@@ -87,7 +87,7 @@ function useLoginFocusReturn(
  * turned off (`turnedOff`, where the cell says "Disabled" instead), and nothing otherwise. While a login of the account
  * runs it is unavailable, not natively disabled: it keeps focus, is marked `aria-disabled`, takes no hover tint or
  * press shrink, gives "Logging in…" as its tooltip and its description (its name stays the action), and a press does
- * nothing (see "Buttons" in `docs/ui-standard.md`). Focus comes back after the login dialog closes as
+ * nothing (see "Buttons" in `docs/conventions/ui-standard.md`). Focus comes back after the login dialog closes as
  * `useLoginFocusReturn` settles it (`fallback` is where it goes when the button is gone). */
 export function AccountLoginButton({ agent, account, name, quota, turnedOff, onLogin, fallback }: {
   agent: Agent;

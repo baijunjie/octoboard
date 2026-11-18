@@ -53,7 +53,7 @@ use crate::platform::shell::ResolvedBinary;
 use crate::processes::subprocess::{run_bounded, BoundedFailure, Bounds};
 use crate::protocol::{
     agent_cli_code, error_code, AgentCliStatus, AgentCliUpdate, AgentId, CliInstallMethod,
-    CliUpdateState, CodedError, Event,
+    CliUpdateState, CodedError, Event, PerAgent,
 };
 use crate::state::{shutting_down_refusal, AppState};
 use crate::time::now_millis;
@@ -88,14 +88,14 @@ pub struct AgentClis {
 
 #[derive(Default)]
 struct Inner {
-    statuses: HashMap<AgentId, AgentCliStatus>,
-    held: HashMap<AgentId, Held>,
+    statuses: PerAgent<Option<AgentCliStatus>>,
+    held: PerAgent<Held>,
 }
 
 impl Inner {
     /// The latest time at which a running update is given up on, or `None` while none runs.
     fn latest_update_deadline(&self) -> Option<Instant> {
-        self.held.values().filter_map(|held| held.updating).max()
+        self.held.iter().filter_map(|(_, held)| held.updating).max()
     }
 }
 
@@ -134,7 +134,7 @@ pub(crate) struct Claim {
 impl Drop for Claim {
     fn drop(&mut self) {
         let mut inner = self.state.agent_clis.lock();
-        let held = inner.held.entry(self.agent).or_default();
+        let held = inner.held.get_mut(self.agent);
         match self.work {
             Work::Check => held.checking = false,
             Work::Update => held.updating = None,
@@ -143,7 +143,7 @@ impl Drop for Claim {
         if self.work == Work::Update {
             // A stop waiting for the updates to end.
             self.state.agent_clis.ended.notify_all();
-            if let Some(status) = inner.statuses.get_mut(&self.agent) {
+            if let Some(status) = inner.statuses.get_mut(self.agent).as_mut() {
                 let running = status
                     .update
                     .as_mut()
@@ -172,7 +172,7 @@ impl AgentClis {
         let inner = self.lock();
         AgentId::ALL
             .into_iter()
-            .filter_map(|agent| inner.statuses.get(&agent).cloned())
+            .filter_map(|agent| inner.statuses.get(agent).clone())
             .collect()
     }
 
@@ -180,7 +180,7 @@ impl AgentClis {
     /// or updated within [`CHECK_FLOOR`].
     fn begin_check(&self, state: &Arc<AppState>, agent: AgentId) -> Option<Claim> {
         let mut inner = self.lock();
-        let held = inner.held.entry(agent).or_default();
+        let held = inner.held.get_mut(agent);
         let recent = held
             .last_ended
             .is_some_and(|ended| ended.elapsed() < CHECK_FLOOR);
@@ -216,7 +216,7 @@ impl AgentClis {
         }
         let claim = {
             let mut inner = self.lock();
-            let held = inner.held.entry(agent).or_default();
+            let held = inner.held.get_mut(agent);
             if held.updating.is_some() {
                 return Err(CodedError::raised(
                     error_code::AGENT_CLI_UPDATE_RUNNING,
@@ -246,8 +246,8 @@ impl AgentClis {
     pub(crate) fn any_updating(&self) -> bool {
         self.lock()
             .held
-            .values()
-            .any(|held| held.updating.is_some())
+            .iter()
+            .any(|(_, held)| held.updating.is_some())
     }
 
     /// Blocks until no update is running, or until the latest deadline of those running has
@@ -274,25 +274,22 @@ impl AgentClis {
     /// carries, and announces it; dropped when an update started since the claim was taken.
     fn record_checked(&self, state: &AppState, claim: &Claim, mut status: AgentCliStatus) {
         let mut inner = self.lock();
-        if inner
-            .held
-            .get(&claim.agent)
-            .is_some_and(|held| held.generation != claim.generation)
-        {
+        if inner.held.get(claim.agent).generation != claim.generation {
             return;
         }
         status.update = inner
             .statuses
-            .get(&status.agent)
+            .get(status.agent)
+            .as_ref()
             .and_then(|held| held.update.clone());
-        inner.statuses.insert(status.agent, status.clone());
+        *inner.statuses.get_mut(status.agent) = Some(status.clone());
         state.broadcast(Event::AgentCliStatusUpdated { status });
     }
 
     /// Records `status` whole, an update's last word included, and announces it.
     fn record(&self, state: &AppState, status: AgentCliStatus) {
         let mut inner = self.lock();
-        inner.statuses.insert(status.agent, status.clone());
+        *inner.statuses.get_mut(status.agent) = Some(status.clone());
         state.broadcast(Event::AgentCliStatusUpdated { status });
     }
 
@@ -300,7 +297,7 @@ impl AgentClis {
     /// held yet, and announces it.
     fn record_update_started(&self, state: &AppState, found: AgentCliStatus) {
         let mut inner = self.lock();
-        let mut status = inner.statuses.remove(&found.agent).unwrap_or(found);
+        let mut status = inner.statuses.get_mut(found.agent).take().unwrap_or(found);
         status.update = Some(AgentCliUpdate {
             state: CliUpdateState::Running,
             started_at: now_millis(),
@@ -308,7 +305,7 @@ impl AgentClis {
             error: None,
             detail: None,
         });
-        inner.statuses.insert(status.agent, status.clone());
+        *inner.statuses.get_mut(status.agent) = Some(status.clone());
         state.broadcast(Event::AgentCliStatusUpdated { status });
     }
 }

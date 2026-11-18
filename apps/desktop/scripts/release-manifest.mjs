@@ -259,13 +259,12 @@ export function planReleaseAssets({ platforms, assets, existing, productName, ve
   return { create: false, add, resume, conflict: null };
 }
 
-// The oldest version a daemon adopts process holders from is a constant of the daemon (`FLOOR`).
-export const HOLDER_FLOOR_FILE = "apps/daemon/src/holder/compat.rs";
+// The oldest holder version the daemon adopts, shared with its compatibility check.
+export const HOLDER_FLOOR_FILE = "config/holder-floor.txt";
 
-// The `FLOOR` the daemon names in the tree at `root`, or undefined when the file has no such constant.
 export function readHolderFloor(root) {
-  const file = readFileSync(path.join(root, HOLDER_FLOOR_FILE), "utf8");
-  return /pub const FLOOR: &str = "([^"]+)";/.exec(file)?.[1];
+  const floor = readFileSync(path.join(root, HOLDER_FLOOR_FILE), "utf8").trim();
+  return /^\d+\.\d+\.\d+$/.test(floor) ? floor : undefined;
 }
 
 // The manifest the updater reads for one platform: the version, its notes and date and, for each platform key the

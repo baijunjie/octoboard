@@ -140,8 +140,6 @@ export const ko: Translation<"other"> = {
   "error.recovery.mcpSignOut": "서버에 연결할 수 있는지 확인한 후 인증을 다시 해제해 주세요.",
   "error.recovery.addedAgents": "추가된 에이전트 목록이 이 변경에서 예상한 상태와 다릅니다. 목록을 확인한 후 다시 변경해 주세요.",
   "error.recovery.fileBusy": "계정 파일을 사용 중인 다른 프로그램을 닫은 후 전환을 다시 시도해 주세요.",
-  "error.recovery.codexConfig": "계정의 {configToml}을(를) 읽을 수 있는 올바른 TOML 파일로 수정하거나 제거한 후 전환을 다시 시도해 주세요.",
-  "error.recovery.sqliteHome": "계정의 {configToml}에 있는 {sqliteHome} 또는 로그인 셸의 {codexSqliteHome}을(를) 절대 경로로 설정한 후 전환을 다시 시도해 주세요. {tilde}(으)로 시작하려면 {home}이(가) 설정되어 있어야 합니다.",
   "error.recovery.symlink": "대화 파일에 심볼릭 링크가 있습니다. 심볼릭 링크는 복사하지 않습니다. 세부사항에 나열된 파일에서 링크를 대상 내용의 사본으로 교체하거나, 필요 없다면 제거한 후 전환을 다시 시도해 주세요.",
   "error.recovery.notRestoredAutomatic": "이전 항목이 필요하다면, 그전에 위에 표시된 폴더에서 복사해 주세요.",
   "error.recovery.notRestored": "이전 항목이 필요하다면, 그전에 위에 표시된 폴더에서 복사한 후 전환을 다시 시도해 주세요.",

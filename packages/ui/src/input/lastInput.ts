@@ -1,3 +1,4 @@
+import { readHost } from "../platform";
 import { setKeyboardModality, settleUnknownModality } from "../primitives";
 
 import { CANNOT_HOVER, TEXT_ENTRY } from "./touchInput";
@@ -32,9 +33,9 @@ function isTouchPointer(pointerType: string | null | undefined): boolean {
  * Android only (WebKit reports a pressure of 0 for real mouse presses, so react-aria's broader 1x1 rule could mark
  * those virtual); and an empty pointer type counts as virtual, being a screen reader's too (JAWS or NVDA in
  * Firefox). */
-function isVirtualPress(event: PointerEvent): boolean {
+function isVirtualPress(event: PointerEvent, isAndroid: boolean): boolean {
   if (!event.pointerType) return true;
-  if (/Android/i.test(navigator.userAgent)) {
+  if (isAndroid) {
     return event.width === 1 && event.height === 1 && event.pressure === 0 && event.detail === 0 && event.pointerType === "mouse";
   }
   return event.width === 0 && event.height === 0;
@@ -47,8 +48,9 @@ function isVirtualPress(event: PointerEvent): boolean {
  * a floating panel) cannot hide it. */
 let lastInput: "touch" | "pointer" | "key" | undefined;
 if (typeof window !== "undefined") {
+  const isAndroid = readHost().isAndroid === true;
   window.addEventListener("pointerdown", (event) => {
-    if (isVirtualPress(event)) return;
+    if (isVirtualPress(event, isAndroid)) return;
     lastInput = isTouchPointer(event.pointerType) ? "touch" : "pointer";
   }, true);
   window.addEventListener("keydown", (event) => {

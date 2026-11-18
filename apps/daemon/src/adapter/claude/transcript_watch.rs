@@ -8,11 +8,12 @@
 //! `Notification`, nothing. `PermissionDenied` exists in the binary's strings but never fires. The
 //! only machine-readable trace is in the transcript JSONL at the payload's `transcript_path`: a
 //! `tool_result` with `is_error: true` whose text begins "The user doesn't want to proceed with
-//! this tool use", immediately followed by a user entry reading `[Request interrupted by user for
-//! tool use]`. Either one alone says the pending decision was resolved by a rejection or an
-//! interrupt — see `docs/agent-cli-reference.md`, section "## Claude Code", for the full
-//! measurement. Cancelling an `AskUserQuestion` with Esc writes the same two records, field for
-//! field — measured on 2.1.286 — and falls just as silent afterwards: no hook event either.
+//! this tool use", immediately followed by a user entry reading
+//! `[Request interrupted by user for tool use]`. Either one alone says the pending decision was
+//! resolved by a rejection or an interrupt — see `docs/agent-cli-reference.md`, section
+//! "Claude Code", for the full measurement. Cancelling an `AskUserQuestion` with Esc writes the
+//! same two records, field for field — measured on 2.1.286 — and falls just as silent afterwards:
+//! no hook event either.
 //!
 //! On 2.1.289 the records and the recovery were confirmed in the running application rather than by
 //! the same event-by-event measurement: a declined prompt wrote the record, and the session left
@@ -111,7 +112,7 @@ const POLL_INTERVAL: Duration = Duration::from_secs(1);
 ///
 /// Most lines never reach the JSON parser at all: on the common path — the user answered `Yes`, and
 /// the session sits in `WaitingUser` for the rest of the approved tool's run, per
-/// `docs/agent-cli-reference.md`, section "## Claude Code" — the appended line is that tool's own
+/// `docs/agent-cli-reference.md`, section "Claude Code" — the appended line is that tool's own
 /// completed `tool_result`, which for a `Bash` with a lot of output or a `Read` of a big file runs
 /// to hundreds of KB or more. A substring check for either marker rules out such a line before
 /// paying for a DOM parse of it; only a line that actually contains one of the markers is parsed,
@@ -120,8 +121,8 @@ const POLL_INTERVAL: Duration = Duration::from_secs(1);
 /// match. The substring check assumes a marker appears in the serialized line exactly as it does
 /// decoded — true today, since both markers are plain printable ASCII and Claude Code's
 /// `JSON.stringify` escapes none of it, but a marker written out with a JSON escape would slip past
-/// this check even though the structural check below, which matches the decoded string, would
-/// still have caught it.
+/// this check even though the structural check below, which matches the decoded string, would still
+/// have caught it.
 ///
 /// Only a user entry counts, for the reason [`is_interrupt_entry`] gives: the transcript also holds
 /// logged requests whose `message.content` replays the conversation so far, earlier declines

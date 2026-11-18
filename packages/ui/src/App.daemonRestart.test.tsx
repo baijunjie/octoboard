@@ -11,6 +11,7 @@ import { byLabel, deliver, fakeDaemon, mountApp, pressElement, stubWindow } from
 import { consoleOf, projectOf, snapshotState } from "./fixtures/builders";
 import { PREFERENCE_KEYS } from "./preferences/preferenceKeys";
 import type { ClientRequestBody, DaemonUpdateStatus } from "./protocol";
+import { defaultDaemonReply } from "./test/testDaemon";
 import { fakeTimers, flushPromises } from "./test/clock";
 import { UpdatesProvider } from "./updates/UpdatesProvider";
 import { RESTART_RECONNECT_BUDGET_MS } from "./updates/useReloadAfterRestart";
@@ -44,6 +45,10 @@ const project = projectOf("p-site", console_.id, "Website");
 const OLD_VERSION = __OCTOBOARD_VERSION__;
 const INSTALLED: DaemonUpdateStatus = { phase: "installed", available: null, progress: null, installed: { version: "0.2.0", holder_floor: null }, last_check: null, install: null, manual: null, updated_from: null };
 
+const HANDOVER_NOTHING = { type: "handover_check", id: null, known: true, sessions: [], shell_terminals: [], unreached_shell_terminals: [] };
+
+const restartReply = (body: ClientRequestBody) => body.type === "handover_check" ? HANDOVER_NOTHING : defaultDaemonReply(body);
+
 it("raises the failure to restart, sends no restart and waits for no reload, while the connection is not open", async () => {
   stubWindow();
   const daemon = fakeDaemon({
@@ -51,12 +56,12 @@ it("raises the failure to restart, sends no restart and waits for no reload, whi
     connectionState: "reconnecting",
     daemon: { version: OLD_VERSION, generation: 1 },
     daemonUpdate: INSTALLED,
-  }, (body) => (body.type === "handover_check" ? { type: "handover_check", id: null, known: true, sessions: [], shell_terminals: [], unreached_shell_terminals: [] } : { type: "ack", id: null }));
+  }, restartReply);
   onTestFinished(() => act(() => errorAlerts.acknowledge()));
   mountApp(daemon, { wrap: (app) => <UpdatesProvider firstCheckDelayMs={null}>{app}</UpdatesProvider> });
   const restart = Array.from(document.querySelectorAll("button")).find((button) => button.textContent === "Restart now");
   await pressElement(restart);
-  await act(async () => new Promise((resolve) => setTimeout(resolve, 100)));
+  await flushPromises();
   expect(vi.mocked(daemon.request).mock.calls.some(([body]) => body.type === "restart_daemon")).toBe(false);
   expect(errorAlerts.getSnapshot()[0]?.title).toBe("Cannot restart");
   // The daemon coming back on the version it was meant to go to is no business of a page that sent nothing.
@@ -67,14 +72,13 @@ it("raises the failure to restart, sends no restart and waits for no reload, whi
 });
 
 const IDLE: DaemonUpdateStatus = { ...INSTALLED, phase: "idle", installed: null };
-const HANDOVER_NOTHING = { type: "handover_check", id: null, known: true, sessions: [], shell_terminals: [], unreached_shell_terminals: [] };
 
 /** The window over a daemon whose connection is open and that has an update installed, waiting for the restart. */
 function mountRestartable() {
   stubWindow();
   const daemon = fakeDaemon(
     { ...snapshotState({ consoles: [console_], projects: [project], sessions: [] }), connectionState: "open", daemon: { version: OLD_VERSION, generation: 1 }, daemonUpdate: INSTALLED },
-    (body) => (body.type === "handover_check" ? HANDOVER_NOTHING : { type: "ack", id: null }),
+    restartReply,
   );
   mountApp(daemon, { wrap: (app) => <UpdatesProvider firstCheckDelayMs={null}>{app}</UpdatesProvider> });
   return daemon;

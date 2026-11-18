@@ -6,8 +6,7 @@ import { ownTextOf, rawErrorDetails } from "./errorParts";
 import { messageKey } from "../../errors/codes";
 import { messageCode } from "../../errors/daemonMessage";
 import { isStructuredFailure } from "../../errors/errorPresentation";
-import { isMessageKey, type MessageKey } from "../../i18n/catalog";
-import { t } from "../../i18n/language";
+import { isMessageKey, type MessageKey, type Translate } from "../../i18n/catalog";
 import type { NotificationRequest } from "../../store";
 
 type AlertTitleKey = Extract<MessageKey, `${string}.alertTitle`>;
@@ -31,7 +30,7 @@ function alertTitleKey({ daemonError, daemonTitle }: NotificationRequest): Alert
  * is the daemon's structure where it words the message, else the message as worded in this language; the raw text it
  * carries is the details, never the body. Text the user wrote that the failure carries (`detailLabel`) is `attached`:
  * left out of the body and shown after it, outside the alert's description. */
-export function errorAlertParts(request: NotificationRequest): { title: string | undefined; body: React.ReactNode; details: React.ReactNode; remedyInBody: boolean; attached: React.ReactNode } {
+export function errorAlertParts(t: Translate, request: NotificationRequest): { title: string | undefined; body: React.ReactNode; details: React.ReactNode; remedyInBody: boolean; attached: React.ReactNode } {
   const { daemonError } = request;
   const titleKey = alertTitleKey(request);
   const shown = daemonError && isStructuredFailure(daemonError) ? daemonError : request.message;

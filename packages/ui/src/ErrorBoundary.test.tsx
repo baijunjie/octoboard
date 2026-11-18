@@ -10,6 +10,8 @@ import { t } from "./i18n/language";
 import type { ExitCapability, PlatformAdapter } from "./platform";
 import { PlatformProvider } from "./platform/react";
 import { DaemonProvider, type Daemon } from "./store";
+import { fakeTimers } from "./test/clock";
+import { settleFrames } from "./components/dialog/dialogTestSupport";
 import { testDaemon } from "./test/testDaemon";
 import { BROWSER_HOST } from "./test/hosts";
 
@@ -23,6 +25,7 @@ function Crashing(): React.ReactElement {
 /** Mounts the boundary over a component that crashes, measuring every element as `scrollHeight`
  * tall in a `clientHeight` box, since jsdom has no layout and the fade's state follows those. */
 async function mountCrashed(sizes: { scrollHeight: number; clientHeight: number }, Child: () => React.ReactElement = Crashing, platform: PlatformAdapter = { kind: "browser", host: BROWSER_HOST }, daemon?: Daemon, beforeFrame?: (container: HTMLElement) => void): Promise<HTMLElement> {
+  fakeTimers();
   const restore = (["scrollHeight", "clientHeight"] as const).map((key) => {
     const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, key);
     Object.defineProperty(HTMLElement.prototype, key, { configurable: true, get: () => sizes[key] });
@@ -51,7 +54,7 @@ async function mountCrashed(sizes: { scrollHeight: number; clientHeight: number 
   );
   beforeFrame?.(container);
   // HeroUI writes the fade's state on the next frame.
-  await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+  await settleFrames(1);
   return container;
 }
 

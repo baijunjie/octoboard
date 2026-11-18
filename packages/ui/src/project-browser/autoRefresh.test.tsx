@@ -137,20 +137,20 @@ for (const { name, type, use } of hooks) {
     await settle();
 
     // Within half an interval, coming back asks for nothing.
-    await advance(AUTO_REFRESH_MS / 2 - 1000);
+    await advance(AUTO_REFRESH_MS / 2 - 1);
     act(() => void window.dispatchEvent(new Event("focus")));
     setVisibility("visible");
     expect(count(type)).toBe(0);
 
     // After it, window focus does.
-    await advance(2000);
+    await advance(2);
     act(() => void window.dispatchEvent(new Event("focus")));
     expect(count(type)).toBe(1);
     await settle();
 
     // So does a pane that was hidden and shown again, off the tick.
     setVisibility("hidden");
-    await advance(AUTO_REFRESH_MS / 2 + 1000);
+    await advance(AUTO_REFRESH_MS / 2 + 1);
     expect(count(type)).toBe(0);
     setVisibility("visible");
     expect(count(type)).toBe(1);
@@ -197,7 +197,7 @@ it("restarts the interval of a change list when its worktree changes, reading th
   const { render } = mountChangeList();
   await advance(0);
   await settle();
-  await advance(AUTO_REFRESH_MS / 2 - 1000);
+  await advance(AUTO_REFRESH_MS / 2 - 1);
 
   render("b");
   await advance(0);
@@ -205,8 +205,8 @@ it("restarts the interval of a change list when its worktree changes, reading th
   await settle();
 
   // The first worktree's timer would have fired by now.
-  await advance(AUTO_REFRESH_MS / 2 + 1000);
+  await advance(AUTO_REFRESH_MS / 2 + 1);
   expect(count("list_project_changes")).toBe(0);
-  await advance(AUTO_REFRESH_MS / 2 - 1000);
+  await advance(AUTO_REFRESH_MS / 2 - 1);
   expect(count("list_project_changes")).toBe(1);
 });

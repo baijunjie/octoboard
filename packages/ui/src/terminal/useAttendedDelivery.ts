@@ -8,7 +8,8 @@ import { useLatest } from "../components/hooks/useLatest";
  * `sentence` for a terminal view's `StatusAnnouncer` once it is due, for an announcement queued under `key` (the
  * subject it is about) and dropped as `key` goes `undefined`. It is due after `AFTER_FOCUS_MOVE_DELAY_MS` of attended
  * time (`useWindowAttended`), the wait started over each time the user comes back to the window, as "Announcing a
- * change" in `docs/ui-standard.md` sets out for a status that can arrive while the user is away or with a focus move.
+ * change" in `docs/conventions/ui-standard.md` sets out for a status that can arrive while the user is away or with a
+ * focus move.
  *
  * A queued announcement that is hidden, switched to another subject or resolved before it is due is never said: the
  * caller drops or changes `key`, which clears the sentence at once, so a switch to another subject with the same

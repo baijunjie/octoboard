@@ -198,7 +198,7 @@ for (const platform of platforms) {
 const pubDate = new Date().toISOString();
 // Read from the tree, which is the release commit: a publish refuses uncommitted changes below.
 const holderFloor = readHolderFloor(repoRoot);
-if (holderFloor === undefined) throw new Error(`${HOLDER_FLOOR_FILE} has no FLOOR constant to publish.`);
+if (holderFloor === undefined) throw new Error(`${HOLDER_FLOOR_FILE} has no stable version to publish.`);
 for (const platform of platforms) {
   const entries = {};
   for (const update of publishing[platform].updates) {

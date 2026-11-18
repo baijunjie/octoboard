@@ -158,7 +158,7 @@ jobs:
         with:
           profile: linux-musl
       - name: Compile the daemon's tests
-        run: /usr/bin/time -v cargo test --locked -p octoboardd --target ${{ matrix.target }} --no-run
+        run: /usr/bin/time -v node scripts/cargo.mjs test --locked -p octoboardd --target ${{ matrix.target }} --no-run
         env:
           CC_x86_64_unknown_linux_musl: musl-gcc
           CC_aarch64_unknown_linux_musl: musl-gcc

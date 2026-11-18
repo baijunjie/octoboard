@@ -79,7 +79,7 @@ pub fn remove(dir: &Path, holder_id: &str) {
 
 /// How long [`nothing_listens`] waits for the connection to be refused: Windows reports a refused
 /// loopback connection only after about two seconds.
-const LISTEN_PROBE: Duration = Duration::from_secs(3);
+const LISTEN_PROBE: Duration = Duration::from_secs(6);
 
 /// Whether nothing listens on the loopback `port` any more: the connection is refused, so the
 /// holder whose file names the port is gone, which a file whose process identity cannot be read

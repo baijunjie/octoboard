@@ -12,9 +12,9 @@ import type { DataAttributes } from "./props";
 /** HeroUI's button variants, by HeroUI's own names. */
 export type ButtonVariant = "primary" | "secondary" | "tertiary" | "outline" | "ghost" | "danger" | "danger-soft";
 
-/** HeroUI's button sizes, and `xs`: the project's extra-small size for compact actions (`docs/ui-standard.md`, "Pointer
- * target size"), 24px high, a 24px square when icon-only, with 12px text and 14px icons (`.app-button--xs`,
- * `Button.css`). */
+/** HeroUI's button sizes, and `xs`: the project's extra-small size for compact actions
+ * (`docs/conventions/ui-standard.md`, "Pointer target size"), 24px high, a 24px square when icon-only, with 12px text
+ * and 14px icons (`.app-button--xs`, `Button.css`). */
 export type ButtonSize = "xs" | "sm" | "md" | "lg";
 
 /** A press of a button: what pressed it, so a caller can tell a keyboard activation from a pointer's. */
@@ -128,10 +128,10 @@ export function Button({ variant, size, type = "button", pending, pendingIndicat
   /** Whether a pending button is dimmed; false keeps its normal opacity while presses remain blocked. */
   dimWhilePending?: boolean;
   /** Why the button cannot act now, which makes it unavailable rather than disabled (see "Buttons" in
-   * `docs/ui-standard.md`): it stays focusable and pressable, reads as `aria-disabled` and in HeroUI's disabled style
-   * with neither hover fill nor press shrink, and has the reason as its description, from a visually hidden copy inside
-   * it, in place of `describedBy`; its name stays the action. A press still reaches `onPress`, which answers it, and
-   * the caller shows the reason as its tooltip. */
+   * `docs/conventions/ui-standard.md`): it stays focusable and pressable, reads as `aria-disabled` and in HeroUI's
+   * disabled style with neither hover fill nor press shrink, and has the reason as its description, from a visually
+   * hidden copy inside it, in place of `describedBy`; its name stays the action. A press still reaches `onPress`, which
+   * answers it, and the caller shows the reason as its tooltip. */
   unavailable?: string;
   /** Marks the button as the current item of a set (`aria-current`). */
   current?: boolean;

@@ -6,6 +6,7 @@ use crate::protocol::{
     SessionKind, SessionStatus,
 };
 use crate::session::term;
+use crate::session_tools::console_instructions::INSTRUCTION_FILE;
 use crate::test_support::code_of;
 use crate::test_support::{
     bare_session, console_with_project_and_accounts, fake_live_session, idle_stand_in,
@@ -544,7 +545,7 @@ async fn a_console_session_launch_writes_its_instruction_files_without_file_link
             },
         )
     );
-    assert_eq!(regular_file("CLAUDE.md"), "@AGENTS.md\n");
+    assert_eq!(regular_file("CLAUDE.md"), format!("@{INSTRUCTION_FILE}\n"));
 }
 
 /// A Claude Code resume takes the instruction as its launch prompt, shaped as a written message

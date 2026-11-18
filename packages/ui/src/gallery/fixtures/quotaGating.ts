@@ -6,6 +6,8 @@ import { describing, type Ui } from "../../fixtures/interact";
 import { accountOf, SAMPLE, accountSharingOf, minutesFromNow, projectOf, projectWith, sessionOf, snapshotState, switchingAccount } from "../../fixtures/builders";
 import { quotaFailure, quotaOf, quotaWindow } from "../../fixtures/quotas";
 
+import { settingsUpdated } from "./liveChanges";
+
 const GROUP = "Sidebar sessions";
 const FOCUS_GROUP = "Focus mode";
 
@@ -399,7 +401,7 @@ export const quotaGatingScenarios: Scenario[] = [
     title: "Switch account, the account turned out disabled",
     description: "The menu offered Client, and it was turned off after the menu was built (here by the steps, as another window would). The dialog shows no Alert and Switch is enabled; pressing it is refused here, and the refusal is an error alert dialog over the switch dialog, saying Account Client is disabled so a session cannot use it, then advising to choose another account or enable this account again; a Manage accounts button beside OK opens Settings on Agent accounts. The switch dialog stays open behind it. An account found not logged in is refused in the same dialog, with the same button.",
     state: switchState([]),
-    steps: [...openSwitchTo("Client"), (ui) => ui.daemonEvents((state) => ({ type: "settings_updated", settings: { ...state.settings, accounts: state.settings.accounts.map((account) => (account.id === "a-client" ? { ...account, disabled: true } : account)) } })), (ui) => ui.confirm()],
+    steps: [...openSwitchTo("Client"), settingsUpdated((settings) => ({ ...settings, accounts: settings.accounts.map((account) => account.id === "a-client" ? { ...account, disabled: true } : account) })), (ui) => ui.confirm()],
   },
   {
     id: "dialog-switch-account-quota-used-up",

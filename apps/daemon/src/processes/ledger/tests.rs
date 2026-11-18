@@ -795,7 +795,9 @@ fn what_the_previous_run_left_waits_while_its_stop_is_held() {
     ledger.hold_previous_run();
     ledger.reconcile();
     ledger.tick();
-    std::thread::sleep(Duration::from_millis(200));
+    // The child sends no acknowledgement when reconciliation leaves it running.
+    const INHERITED_PROCESS_SURVIVAL: Duration = Duration::from_millis(200);
+    std::thread::sleep(INHERITED_PROCESS_SURVIVAL);
     assert!(is_running(left), "what the previous run left was stopped");
     assert!(is_running(child));
     assert_eq!(launch_of(&ledger, child), Some(launch.clone()));
@@ -1216,9 +1218,14 @@ fn a_process_whose_directory_was_removed_is_stopped_after_the_grace() {
     std::fs::remove_dir(&work).unwrap();
     ledger.tick();
     assert!(child_id.is_running(), "stopped before the grace was over");
-    // The ledger measures the grace on the real clock from the tick that first saw the directory
-    // gone, so it is over once this much has passed; a slower run only waits longer.
-    std::thread::sleep(grace);
+    // Move the recorded observation back by the grace the ledger uses.
+    *ledger
+        .scans
+        .lock()
+        .unwrap()
+        .missing_since
+        .get_mut(&child_id)
+        .expect("missing directory observed") -= grace;
     ledger.tick();
     assert_stops_running(child);
 }
@@ -1295,8 +1302,11 @@ fn a_working_directory_that_does_not_answer_does_not_hold_the_scanner() {
     let begun = Instant::now();
     ledger.tick();
     assert!(begun.elapsed() < PATIENCE, "the tick waited for the look");
-    // Past its own deadline, the look still running counts as stuck.
-    std::thread::sleep(Duration::from_millis(150));
+    let reported =
+        table::cwd_report(identity(child)).expect("the child reports its working directory");
+    assert!(crate::session::wait::wait_for(PATIENCE, || ledger
+        .looks
+        .path_is_stuck(reported.path())));
     ledger.tick();
     LOOK_DEADLINE_OVERRIDE.set(None);
     assert_eq!(
@@ -1353,9 +1363,10 @@ fn a_working_directory_report_that_does_not_answer_is_left_out_and_not_read_agai
         }
         break (ledger, reads, release, first);
     };
-    // Past its own deadline, the read still running counts as stuck. The healthy read is
-    // introduced only on the later pass, so its first read gets the whole patience too.
-    std::thread::sleep(Duration::from_millis(550));
+    assert!(crate::session::wait::wait_for(PATIENCE, || ledger
+        .looks
+        .report_is_stuck(stuck)));
+    // The healthy read is introduced on the second pass, so its first read gets the whole patience.
     LOOK_DEADLINE_OVERRIDE.set(Some(PATIENCE));
     let again = ledger.cwds([me, stuck], None);
     LOOK_DEADLINE_OVERRIDE.set(None);

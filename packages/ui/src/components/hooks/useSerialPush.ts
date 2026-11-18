@@ -6,7 +6,7 @@ import { createSerialQueue } from "./serialQueue";
 export function useSerialPush(): (send: () => Promise<unknown>) => void {
   const queueRef = useRef<ReturnType<typeof createSerialQueue> | null>(null);
   return useCallback((send) => {
-    queueRef.current ??= createSerialQueue();
+    if (queueRef.current === null) queueRef.current = createSerialQueue();
     void queueRef.current(send);
   }, []);
 }

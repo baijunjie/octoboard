@@ -29,6 +29,23 @@ const PATIENCE: Duration = Duration::from_secs(5);
 pub(crate) struct CodexThreads;
 
 impl ThreadRegistry for CodexThreads {
+    fn relocation_code(&self, error: &RowError) -> Option<crate::protocol::Code> {
+        use crate::providers::codex::{RELOCATION_CONFIG_UNREADABLE, RELOCATION_HOME_UNLOCATABLE};
+        let code = match error.cause {
+            RowCause::Configuration(cause)
+                if !matches!(
+                    cause,
+                    SharingCause::PermissionDenied | SharingCause::Busy | SharingCause::NoSpace
+                ) =>
+            {
+                RELOCATION_CONFIG_UNREADABLE
+            }
+            RowCause::Unlocatable => RELOCATION_HOME_UNLOCATABLE,
+            _ => return None,
+        };
+        Some(crate::protocol::Code::of_provider(code))
+    }
+
     fn is_database(&self, name: &str) -> bool {
         is_state_database(name)
     }

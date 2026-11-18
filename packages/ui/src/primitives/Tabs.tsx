@@ -93,12 +93,13 @@ export function TabList({ label, fit, ref, className, children }: {
 }
 
 /** Kept on every tab, whichever strip it is in. A hovered tab keeps full opacity where HeroUI dims it, matching both of
- * HeroUI's hover selectors: react-aria's `data-hovered` outlives `:hover` by a frame when the pointer leaves, and dimming
- * in that frame starts an opacity transition that has WKWebView repaint the whole masked strip, shaking every tab's icon
- * and label (an approved exception, `docs/ui-standard.md`'s "Confirmed visual choices"). And every tab keeps its own
- * composited layer, so WKWebView does not shift its rasterized icon and label between pixel rows while the selection
- * indicator moves inside the strip's masked scroller; HeroUI's tab is already `position: relative; z-index: 1`, so the
- * transform's only other effect is that the tab contains its `position: fixed` descendants. */
+ * HeroUI's hover selectors: react-aria's `data-hovered` outlives `:hover` by a frame when the pointer leaves, and
+ * dimming in that frame starts an opacity transition that has WKWebView repaint the whole masked strip, shaking every
+ * tab's icon and label (an approved exception, `docs/conventions/ui-standard.md`'s "Confirmed visual choices"). And
+ * every tab keeps its own composited layer, so WKWebView does not shift its rasterized icon and label between pixel
+ * rows while the selection indicator moves inside the strip's masked scroller; HeroUI's tab is already `position:
+ * relative; z-index: 1`, so the transform's only other effect is that the tab contains its `position: fixed`
+ * descendants. */
 // The new indicator stays in its selected tab's stacking context. SharedElement moves it over other tabs on the way
 // forward, so keep that whole context below the unselected tabs and their labels.
 const TAB_CLASS = "[&:not([data-selected=true]):not([data-disabled=true]):is(:hover,[data-hovered=true])]:opacity-100 transform-[translateZ(0)] ui-selected:z-0";

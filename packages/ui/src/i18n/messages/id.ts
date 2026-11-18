@@ -138,8 +138,6 @@ export const id: Translation<"other"> = {
   "error.recovery.mcpSignOut": "Pastikan server dapat dijangkau, lalu cabut otorisasinya lagi.",
   "error.recovery.addedAgents": "Daftar agen yang ditambahkan tidak sesuai dengan yang diharapkan perubahan ini. Periksa sebelum mengubahnya lagi.",
   "error.recovery.fileBusy": "Tutup program lain yang menggunakan file akun, lalu coba beralih lagi.",
-  "error.recovery.codexConfig": "Pastikan {configToml} akun berupa file TOML yang valid dan dapat dibaca, atau hapus file tersebut, lalu coba beralih lagi.",
-  "error.recovery.sqliteHome": "Atur {sqliteHome} di {configToml} akun, atau {codexSqliteHome} di shell login Anda, ke jalur absolut ({tilde} di awal memerlukan {home} yang sudah diatur), lalu coba beralih lagi.",
   "error.recovery.symlink": "File percakapan berisi tautan simbolis, yang tidak pernah disalin. Pada file yang disebutkan dalam detail, ganti tautan dengan salinan tujuannya, atau hapus jika tidak diperlukan, lalu coba beralih lagi.",
   "error.recovery.notRestoredAutomatic": "Jika Anda memerlukan item lama, salin keluar dari folder yang disebutkan di atas sebelum saat itu.",
   "error.recovery.notRestored": "Jika Anda memerlukan item lama, salin keluar dari folder yang disebutkan di atas sebelum saat itu, lalu coba beralih lagi.",

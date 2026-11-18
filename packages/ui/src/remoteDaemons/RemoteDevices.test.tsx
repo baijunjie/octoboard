@@ -609,7 +609,7 @@ const isDisabled = (element: HTMLElement) => (element as HTMLButtonElement).disa
 it("heads the sidebar with Remote devices and Add remote daemon", async () => {
   const container = await mount();
   // The device's own page has its name for a heading, so this is the sidebar's.
-  expect(container.textContent).toContain("Remote devices");
+  expect(container.querySelector("h2")?.textContent).toBe("Remote devices");
   expect(byLabel(container, "Add remote daemon")).not.toBeNull();
 });
 
@@ -720,7 +720,7 @@ it("shows the next device once the shown one is removed", async () => {
 it("shows the empty state alone as the page, and a compact empty row in the sidebar, which starts Add", async () => {
   list.mockResolvedValue([]);
   const container = await mount();
-  const headings = [...container.querySelectorAll("h1, h2, h3")];
+  const headings = [...container.querySelectorAll("main :is(h1, h2, h3)")];
   expect(headings.map((one) => [one.tagName, one.textContent])).toEqual([["H1", "No remote daemons yet"]]);
   expect(container.textContent).toContain("A remote daemon is the daemon on another computer, reached over SSH.");
   expect(deviceRows(container)).toEqual([]);

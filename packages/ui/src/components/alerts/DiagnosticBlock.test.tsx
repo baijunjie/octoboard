@@ -60,12 +60,12 @@ it("copies the complete original text including indentation, line endings and tr
   expect(container.querySelector('button[aria-label="Copied"]')).not.toBeNull();
 });
 
-it("reads diagnostics left to right unless the text is the user's own, which takes its own direction", () => {
+it("keeps the scrollbar at the physical right while user text can set its own reading direction", () => {
   const diagnostic = mount();
   expect(diagnostic.scroller.getAttribute("dir")).toBe("ltr");
   expect(diagnostic.container.querySelector("pre")!.getAttribute("dir")).toBe("ltr");
   const own = mount({ dir: "auto" });
-  expect(own.scroller.getAttribute("dir")).toBe("auto");
+  expect(own.scroller.getAttribute("dir")).toBe("ltr");
   expect(own.container.querySelector("pre")!.getAttribute("dir")).toBe("auto");
 });
 

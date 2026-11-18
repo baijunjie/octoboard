@@ -36,7 +36,9 @@ export function DiagnosticBlock({ children, labelledBy, dir = "ltr", wrap = fals
   return (
     <Surface variant="secondary" className={`${CODE_SURFACE_CLASS} diagnostic-block relative shrink-0 ${region.ring}`}>
       <FadedScroller
-        dir={dir}
+        // The copy control stays at the physical top right; so does the scrollbar it clears.
+        // CodeBlock sets the text's direction independently, including for wrapped user text.
+        dir="ltr"
         ref={scrollRef}
         region={region}
         className="min-w-0 max-w-full max-h-[40vh] overflow-auto rounded-md [&>.app-code-block]:pr-[calc(var(--diagnostic-copy-gap)+var(--diagnostic-copy-size))]"

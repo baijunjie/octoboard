@@ -13,6 +13,7 @@ import { PaneTitle } from "../components/panel/PaneTitle";
 import { ArchivedSessionMetadata, hasVisibleContext, SessionContextLabel } from "../components/status/SessionMetadata";
 import { TitledControl } from "../components/hint/TitledControl";
 import { FadedScroller } from "../components/scroll/scrollFade";
+import { afterFrames } from "../components/focus/afterFrames";
 import { useLatest } from "../components/hooks/useLatest";
 import type { DialogRequest } from "../dialogs/dialogRequest";
 import { useEscapeWhileTooltipOpen } from "../components/dialog/useEscapeWhileTooltipOpen";
@@ -37,13 +38,11 @@ const PAGE = 30;
 /** The most sessions asked about in one `probe_native_apps` (the daemon judges no more). */
 const NATIVE_APP_PROBE_LIMIT = 200;
 
-/** How long after it opens the view waits to take focus: the menu item that opened it hands focus back a task after its
- * menu closes, and that must not win. */
-export const FOCUS_DELAY_MS = 50;
+/** Frames for the opening menu's deferred focus return to settle. */
+export const OPEN_FOCUS_FRAMES = 2;
 
-/** How long the view waits, after it opens and after a dialog over it opens or closes, before it moves focus lost to the
- * page on to Close. */
-export const FOCUS_FALLBACK_DELAY_MS = 100;
+/** The lost-focus fallback runs after the opening focus and after the dialog's deferred focus return. */
+export const FALLBACK_FOCUS_FRAMES = OPEN_FOCUS_FRAMES + 1;
 
 /** How far an archive view was loaded and scrolled, which Back and Forward put back. */
 export interface ArchiveViewState {
@@ -138,8 +137,7 @@ export function ArchiveView({
   const sentinelRef = useRef<HTMLLIElement>(null);
   const rootRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
-  // The view's own Escape below is a React handler, which an open tooltip's takes the key from.
-  useEscapeWhileTooltipOpen(() => active ? rootRef.current : null, onClose);
+  const onEscape = useEscapeWhileTooltipOpen(() => active ? rootRef.current : null, onClose);
   const more = shown < archived.length;
   // Asked as the view opens, so an application installed or removed since the window connected is found, and for each
   // row as it is listed, whether the application can see its conversation: only rows that have one for an agent that
@@ -189,8 +187,7 @@ export function ArchiveView({
   // menu took it from (`ActionMenu`) a task after it closes, which would otherwise win.
   useEffect(() => {
     if (!active) return;
-    const timer = setTimeout(() => rootRef.current?.focus({ preventScroll: true }), FOCUS_DELAY_MS);
-    return () => clearTimeout(timer);
+    return afterFrames(OPEN_FOCUS_FRAMES, () => rootRef.current?.focus({ preventScroll: true }));
   }, [active]);
 
   // Deleting a row, or all of them, unmounts the button the dialog would hand focus back to, which
@@ -205,7 +202,7 @@ export function ArchiveView({
   useEffect(() => {
     if (!active) return;
     if (dialogOpen && dialogCount.current === null) dialogCount.current = archived.length;
-    const timer = setTimeout(() => {
+    return afterFrames(FALLBACK_FOCUS_FRAMES, () => {
       const before = dialogCount.current;
       if (!dialogOpen) dialogCount.current = null;
       const deleted = !dialogOpen && before !== null && archived.length < before;
@@ -213,8 +210,7 @@ export function ArchiveView({
       if (focused !== document.body && !(deleted && focused === rootRef.current)) return;
       ringForAutomaticFocus();
       closeRef.current?.focus({ preventScroll: true });
-    }, FOCUS_FALLBACK_DELAY_MS);
-    return () => clearTimeout(timer);
+    });
   }, [archived.length, dialogOpen, active]);
 
   const heading = project
@@ -232,12 +228,7 @@ export function ArchiveView({
       data-region="archive"
       aria-label={heading}
       className="absolute inset-0 z-10 flex flex-col bg-panel outline-none"
-      onKeyDown={(e) => {
-        if (active && e.key === "Escape" && !e.defaultPrevented) {
-          e.preventDefault();
-          onClose();
-        }
-      }}
+      onKeyDown={onEscape}
     >
       {/* Where the archive is lives in the top bar's breadcrumb, so the heading names only what it lists; only a clipped heading's tooltip names the place too. */}
       <header className={`${PANE_HEADER_FRAME_CLASS} gap-1 px-(--pane-inset)`}>

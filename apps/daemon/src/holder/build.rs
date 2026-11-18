@@ -214,8 +214,9 @@ fn copy_build(
         }
         // What stands there is not whole (a copy cut short by a removal that met a file in use):
         // it goes before the whole one takes its place.
-        if target.exists() {
-            std::fs::remove_dir_all(&target)?;
+        match std::fs::remove_dir_all(&target) {
+            Err(err) if err.kind() != std::io::ErrorKind::NotFound => return Err(err),
+            _ => {}
         }
         std::fs::rename(&making, &target)
     })();
@@ -464,10 +465,12 @@ mod tests {
             std::thread::spawn(move || {
                 builds.run_from("1.0.0+dd", &source, |exe| {
                     copied.send(exe.to_path_buf()).unwrap();
-                    // The sweep is asked for while the start is under way, and the start ends
-                    // only after it has had its chance to remove the copy.
+                    // Keep the start open while the sweep is asked for.
                     sweeping_signal.recv().unwrap();
-                    std::thread::sleep(std::time::Duration::from_millis(200));
+                    // The sweep thread cannot acknowledge that it is waiting for the copied executable.
+                    const SWEEP_OBSERVATION: std::time::Duration =
+                        std::time::Duration::from_millis(200);
+                    std::thread::sleep(SWEEP_OBSERVATION);
                     exe.is_file()
                 })
             })

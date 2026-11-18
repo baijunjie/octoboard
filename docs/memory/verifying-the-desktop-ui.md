@@ -19,9 +19,8 @@ Hunting a UI defect across the whole app (text landing on half pixels, a style t
 reason to render everything: find the candidates by reading the code first, then render or measure only those, one
 scenario each, a few pages at a time. Rendering every gallery scenario in two languages with six browser pages at once
 has eaten several GB of memory and left orphaned processes behind, and the user asked why it was not done by code
-analysis. A brief that hands such work to a subagent names which scenarios, how many and the maximum number of pages
-open at once — "walk the gallery's scenarios" is read as all of them — and requires every browser and server it
-started to be stopped before it reports.
+analysis. What a brief handing such work to a subagent must name is in `docs/conventions/tests.md`, "The UI state
+gallery and its fixtures"; "walk the gallery's scenarios" is read as all of them.
 
 Changing a shared component's markup, layout or timing widens what the change touches to every surface already
 using it, so those surfaces are inside this narrow scope rather than outside it: making `MarkedPath`'s root a `span`
@@ -66,21 +65,13 @@ build-only Vite plugin changes are not settled there either: the gallery runs Vi
 (`pnpm build:app`). For UI the app does not render yet, build that from a temporary detached worktree
 (`git worktree add --detach`) whose `main.tsx` renders the gallery's scenarios in place of the app.
 
-The gallery's "File viewer" group hands `FileViewer` a fixed subject instead of driving the app, so it carries none of
-what the project browser supplies while running — above all the loader for a change's whole bodies, which is the only
-thing that makes the renderer offer to expand the lines a diff collapsed. A diff's expansion is therefore never
-exercised there, however right the scenario looks: verify it in the "Project pane: Git" group, whose fixture change
-supplies those bodies, and when handing a new change presentation to the `agent-gallery` skill, say that it has to be
-shown in that group.
-
-That group also stands in for the app around the viewer, in both directions, and only running its pages shows a
-mismatch. The contexts the app would provide are wired for that branch alone in `packages/ui/src/gallery/frame.tsx`, so
-a viewer component that starts calling a hook needing one — anything that reaches the daemon, a toast included — throws
-on mount in every scenario of the group, with the type check and the unit tests still green. The other way round, its
-subjects are literals standing in for what the project browser's own hooks build, so a field those hooks fill only
-under a condition (a `ViewerSubject`'s `source`, which only the change reader sets, and only for a comparison) is left
-unset in every fixture that does not meet that condition, read off the hook that builds the subject rather than off
-what the header happens to draw. So open the group's pages for any change to the viewer or to what it depends on.
+A new change presentation is shown in the "Project pane: Git" group (`docs/conventions/tests.md`, "The UI state gallery
+and its fixtures"). That group also stands in for the app around the viewer, and only running its pages shows a
+mismatch: a viewer component that starts calling a hook needing a context the app provides (anything that reaches the
+daemon, a toast included) throws on mount in every scenario of the group, with the type check and the unit tests still
+green, and its subjects are literals, so a field the project browser's hooks fill only under a condition (a
+`ViewerSubject`'s `source`) is unset in every fixture that does not meet it. So open the group's pages for any change to
+the viewer or to what it depends on.
 
 ## Freeze tests as well as application source during final gallery verification
 
@@ -90,26 +81,12 @@ update in the running gallery. Record which source tree the result covers and ke
 ends. If source changes during verification, retain the run as intermediate evidence and verify the final tree after
 it is stable; do not certify it from a sweep that spanned edits.
 
-## A fixture daemon answers as fully as the real one, or the gallery shows a state no daemon sends
+## Look at the website's product preview yourself when it starts drawing on new daemon state
 
-Applies whenever a daemon reply gains a field the UI draws from, and whenever a gallery scenario still shows the old
-behaviour after a fix. The fixture daemon (one module per domain under `packages/ui/src/fixtures/`, merged by
-`createFixtureDaemon` in `fixtureDaemon.ts`, with `fixtureGit.ts` for a project's Git mode) answers every scenario from what that scenario's fixture happens to hold, so a field the fixture
-cannot supply goes out as the real daemon's "not known" value and the UI draws the fallback for it. A complete fix can
-therefore leave every scenario showing what it showed before, with nothing in the type checker or the unit tests to say
-which side is wrong: the viewer's bar for the lines past a diff's last hunk went on claiming more might follow because
-no fixture change carried both sides' whole text for the new line count to be taken from. So before reading a scenario
-as a fix that did not work, check that its fixture can produce the input the fix reads at all. Where a reply gains such
-a field, the fixture has to be taught it as `packages/ui/src/fixtures/README.md`, section "Conventions for teaching the
-fixture daemon a reply", sets out.
-
-The public website's product preview is one more scenario over the same fixture daemon (`createPreviewScenario` in
-`packages/ui/src/website-preview/scenarios.ts`), but it is not among the gallery's scenarios, so neither
-`pnpm gallery:sweep` nor the guard test over the fixture daemon's replies
-(`packages/ui/src/gallery/fixtures/projectGit.test.ts`) reads it, and the `agent-gallery` skill does not keep it in
-step. When a change makes something the preview shows draw on daemon state it did not before, give that scenario the
-state too and look at the preview itself (`pnpm --filter @octoboard/web dev`): left out, the feature renders empty
-there and nothing fails.
+How the fixture daemon is taught a reply, and that the preview scenario (`createPreviewScenario`) gets the same state,
+are in `docs/conventions/tests.md`, "The UI state gallery and its fixtures". Neither `pnpm gallery:sweep`, the guard
+test over the fixture daemon's replies nor the `agent-gallery` skill reads the preview, so look at it itself
+(`pnpm --filter @octoboard/web dev`): left out, the feature renders empty there and nothing fails.
 
 ## A final capture does not verify earlier transient states
 
@@ -123,18 +100,13 @@ count and changed endpoints do not establish coverage. Keep the screen-lock guar
 sampling path long enough to miss the transition. Report the maximum observed sample gap and restrict conclusions
 to the captured frames.
 
-## Settle what `git` writes against real `git` in a throwaway repository
+## Two premises about `git` output that hand-written fixtures got wrong
 
-Applies to `git` output written out by hand rather than taken from a run of `git`: a patch in a gallery change fixture
-or a viewer fixture, an expected patch in a viewer test. Nothing here can see such a literal being wrong — the type
-check sees a string, a unit test compares it against itself, and the gallery renders whatever it says — so it is worth
-no more than the reading of whoever wrote it. Build the case in a throwaway repository, run the command the daemon runs
-for it, and take the output from there.
-
-Two premises had stood in these fixtures as literals for a long time, and both were wrong: that `git` writes zeros in a
-patch's `index` line for a side it read from the worktree disk (it hashes the file; it is `git diff --raw` that writes
-zeros for that side), and that a rename whose content is unchanged has an empty patch (`git` writes the rename's headers
-with no hunk; only a change at one path whose two sides are equal is empty).
+Hand-written `git` output is taken from real `git` (`docs/conventions/tests.md`, "What a test asserts"). Two literals
+had stood in fixtures for a long time, both wrong: `git` does not write zeros in a patch's `index` line for a side it
+read from the worktree (it hashes the file; it is `git diff --raw` that writes zeros for that side), and a rename whose
+content is unchanged does not have an empty patch (`git` writes the rename's headers with no hunk; only a change at one
+path whose two sides are equal is empty).
 
 ## Stage a defect's states in the order it was reported, not in whatever order is easy to reach
 
@@ -158,24 +130,23 @@ The app renders in WKWebView, so a pass in Chrome says nothing: a HeroUI tag's r
 WebKit passed a scripted click in Chrome. Run a browser check of the page in Playwright's `webkit` and drive the pointer
 through `page.mouse` rather than a click dispatched from script. A gallery step's `ui.press` is such a click, with no
 pointer events at all (a virtual press), and a jsdom test dispatches its events by hand, so neither shows what a change
-to a press's pointer handling does to a real mouse press: a field focused early on `pointerdown` passed both and
-closed the list it opened on every real click. The same holds for where focus scrolls a scroller:
-the engines' focus scrolls differ in timing and in what CSS they honour (see the "Focus scrolled to the edge of a
-scroller that fades there" section of `docs/ui-standard.md`), so a `scroll-margin` fix that holds a list still in
-Chrome can leave it jumping in WebKit. Playwright is a pinned devDependency of `packages/ui`,
-so `pnpm install` is all such a check needs from the repository; the dependency downloads no browser of its own, and the
-browser is fetched explicitly with `pnpm exec playwright install webkit`, run from `packages/ui` — from the workspace
-root `pnpm exec playwright` resolves to a machine-global Playwright or to nothing, and would silently fetch the wrong
-revision. Headless WebKit still is not the app for how things paint (it has no GPU compositing), so a rendering defect
-is judged in the real window. Where a change puts text in a constrained layout, include a long text and a CJK one:
-overflow defects there showed only with long text. Judge a colour or a dimming from computed styles or full-resolution
-pixels, not from a downscaled screenshot. A packaged build offers no DOM to measure, so settle a geometry question there
-from ink extents read off a capture at the display's native resolution, allowing for its scale factor (a Retina display
-gives 2 image pixels per CSS pixel), and settle a question of overlap or reachability with a real click at the measured
-point, since a capture only ever shows what is on top. Colours read off such a capture carry the display's own profile,
-so a contrast ratio measured from one differs from the ratio the tokens give by a few tenths, either way: it is good for
-confirming which side of a threshold a pair lands on, and never for correcting a token-derived ratio recorded in the
-stylesheet or the UI standard.
+to a press's pointer handling does to a real mouse press: a field focused early on `pointerdown` passed both and closed
+the list it opened on every real click. The same holds for where focus scrolls a scroller: the engines' focus scrolls
+differ in timing and in what CSS they honour (see the "Focus scrolled to the edge of a scroller that fades there"
+section of `docs/conventions/ui-standard.md`), so a `scroll-margin` fix that holds a list still in Chrome can leave it
+jumping in WebKit. Playwright is a pinned devDependency of `packages/ui`, so `pnpm install` is all such a check needs
+from the repository; the dependency downloads no browser of its own, and the browser is fetched explicitly with
+`pnpm exec playwright install webkit`, run from `packages/ui` — from the workspace root `pnpm exec playwright` resolves
+to a machine-global Playwright or to nothing, and would silently fetch the wrong revision. Headless WebKit still is not
+the app for how things paint (it has no GPU compositing), so a rendering defect is judged in the real window. Where a
+change puts text in a constrained layout, include a long text and a CJK one: overflow defects there showed only with
+long text. Judge a colour or a dimming from computed styles or full-resolution pixels, not from a downscaled screenshot.
+A packaged build offers no DOM to measure, so settle a geometry question there from ink extents read off a capture at
+the display's native resolution, allowing for its scale factor (a Retina display gives 2 image pixels per CSS pixel),
+and settle a question of overlap or reachability with a real click at the measured point, since a capture only ever
+shows what is on top. Colours read off such a capture carry the display's own profile, so a contrast ratio measured from
+one differs from the ratio the tokens give by a few tenths, either way: it is good for confirming which side of a
+threshold a pair lands on, and never for correcting a token-derived ratio recorded in the stylesheet or the UI standard.
 
 When an installed app shows a paint defect that a verification clone does not, compare in the same packaged native
 shell, on the same display and at the same window size before treating the difference as a code result. First
@@ -196,12 +167,8 @@ setting.
 ## Settle a touch gesture through the browser's own touch input, not jsdom or dispatched events
 
 A jsdom test and a gallery step dispatch touch or pointer events straight at an element (`ui.swipe` in
-`packages/ui/src/fixtures/interact.ts` sends plain `Event`s). Neither goes through the browser's gesture handling,
-which is where a gesture breaks. Pointer events are the case in point. Once Chromium starts treating a sideways touch
-as a pan, it sends `pointercancel` after the first `pointermove`, even on a page with nothing to scroll sideways, so a
-pointer-event swipe never reaches its threshold while the tests pass. `touchmove` keeps coming, so detect a finger
-gesture from touch events. Do not reach for `touch-action` to keep pointer events alive: it would also take away
-vertical scrolling.
+`packages/ui/src/fixtures/interact.ts` sends plain `Event`s), so neither goes through the browser's gesture handling,
+which is where a gesture breaks (how to detect one is `docs/conventions/ui-code.md`, "Key handling in code").
 
 To verify a gesture, drive the gallery page in Playwright's Chromium with a context created with
 `isMobile: true, hasTouch: true`. Send the touch over CDP: `Input.dispatchTouchEvent` with `touchStart`, several
@@ -219,12 +186,13 @@ against an agent or against `xterm.js`.
 
 ## Give a network-level probe a positive control the window actually permits
 
-Before interpreting an empty network capture as proof of isolation, check both the window's content security policy
-and its native content rules against the probe's resource type. Use an HTTP(S) image in a Markdown document outside
-the report panel as the positive control, and confirm its request reaches the observer; an
-image in a report page cannot serve, since the page's renderer draws images from `data:` addresses only and requests
-nothing else. See "What a page may contain, and what it cannot do" in `docs/product/report-panel.md`. A fetch, frame or socket refused by policy establishes no network baseline. Where a
-permitted control cannot be generated inside the app, generate one in Safari through the same WebKit networking path.
+Before interpreting an empty network capture as proof of isolation, check both the window's content security policy and
+its native content rules against the probe's resource type. Use an HTTP(S) image in a Markdown document outside the
+report panel as the positive control, and confirm its request reaches the observer; an image in a report page cannot
+serve, since the page's renderer draws images from `data:` addresses only and requests nothing else. See "What a page
+may contain, and what it cannot do" in `docs/product/report-panel.md`. A fetch, frame or socket refused by policy
+establishes no network baseline. Where a permitted control cannot be generated inside the app, generate one in Safari
+through the same WebKit networking path.
 
 ## Prove that no key reached the terminal against an agent that echoes every byte
 

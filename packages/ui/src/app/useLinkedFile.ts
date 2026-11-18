@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 
 import type { ViewedFile } from "../viewer/viewedFile";
 
@@ -10,17 +10,24 @@ export function useLinkedFile({ focusTerminal }: { focusTerminal: () => void }) 
   // the opener gave none or could not take it (its view is gone). Kept across the viewer opening
   // another file from within.
   const linkedReturnFocus = useRef<() => boolean>(undefined);
+  const returnPending = useRef(false);
+  useLayoutEffect(() => {
+    if (linkedFile || !returnPending.current) return;
+    returnPending.current = false;
+    const restoreFocus = linkedReturnFocus.current;
+    linkedReturnFocus.current = undefined;
+    // The viewer's focus scope is gone. Giving focus back in this commit takes precedence over its deferred restore.
+    if (!restoreFocus?.()) focusTerminal();
+  }, [linkedFile, focusTerminal]);
+
   const viewLinkedFile = (file: ViewedFile, returnFocus?: () => boolean) => {
+    returnPending.current = false;
     linkedReturnFocus.current = returnFocus;
     setLinkedFile(file);
   };
   const closeLinkedFile = () => {
+    returnPending.current = true;
     setLinkedFile(undefined);
-    // Back where the click came from, once the viewer has gone and taken its own focus
-    // restoring with it.
-    queueMicrotask(() => {
-      if (!linkedReturnFocus.current?.()) focusTerminal();
-    });
   };
   return { linkedFile, viewLinkedFile, setLinkedFile, closeLinkedFile };
 }

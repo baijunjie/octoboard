@@ -348,7 +348,9 @@ fn a_hang_up_ends_the_reader_of_a_process_still_running() {
     );
     assert!(helper.spawned.pty.write_raw(b"x").is_err());
     assert!(helper.spawned.pty.write_input(&[Input::Enter]).is_err());
-    std::thread::sleep(Duration::from_millis(300));
+    // The child sends no acknowledgement when it receives no terminating signal.
+    const SURVIVAL_WINDOW: Duration = Duration::from_millis(300);
+    std::thread::sleep(SURVIVAL_WINDOW);
     assert_eq!(helper.spawned.child.exited_unreaped(), Some(false));
 
     assert!(helper.spawned.child.kill().delivered());
@@ -365,7 +367,9 @@ fn a_polite_stop_is_followed_by_a_kill() {
 
     let deaf = start("park_deaf", SIZE);
     assert!(deaf.spawned.child.stop(Polite::Terminate).delivered());
-    std::thread::sleep(Duration::from_millis(300));
+    // The child sends no acknowledgement when it receives no terminating signal.
+    const SURVIVAL_WINDOW: Duration = Duration::from_millis(300);
+    std::thread::sleep(SURVIVAL_WINDOW);
     assert_eq!(deaf.spawned.child.exited_unreaped(), Some(false));
     assert!(deaf.spawned.child.kill().delivered());
     deaf.reap();

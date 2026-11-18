@@ -5,7 +5,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { gitChecked, runResult } from "../../../scripts/lib/git.mjs";
 import { holderFloorProblem, parseOptions, refreshProtocolSnapshot, releaseDesktop, versionFiles } from "./release-desktop.mjs";
-import { readTagMessage } from "./release-manifest.mjs";
+import { HOLDER_FLOOR_FILE, readTagMessage } from "./release-manifest.mjs";
 
 import { assertRepositoryEnvironmentCleared } from "../../../scripts/verify/environment.mjs";
 
@@ -25,8 +25,8 @@ function fixture(t) {
   writeFileSync(path.join(root, "apps/desktop/package.json"), '{\n  "name": "desktop",\n  "version": "0.1.0-beta.1"\n}\n');
   writeFileSync(path.join(root, "Cargo.toml"), '[workspace]\nresolver = "2"\n[workspace.package]\nversion = "0.1.0-beta.1"\n');
   writeFileSync(path.join(root, "Cargo.lock"), '# Lockfile\nversion = 4\n\n[[package]]\nname = "octoboard"\nversion = "0.1.0-beta.1"\n\n[[package]]\nname = "octoboardd"\nversion = "0.1.0-beta.1"\n\n[[package]]\nname = "external"\nversion = "0.1.0-beta.1"\n');
-  mkdirSync(path.join(root, "apps/daemon/src/holder"), { recursive: true });
-  writeFileSync(path.join(root, "apps/daemon/src/holder/compat.rs"), 'pub const FLOOR: &str = "0.0.0";\n');
+  mkdirSync(path.dirname(path.join(root, HOLDER_FLOOR_FILE)), { recursive: true });
+  writeFileSync(path.join(root, HOLDER_FLOOR_FILE), "0.0.0\n");
   // The protocol schema of generation 3, and the snapshot of the last release, which carried generation 2 and no schema.
   mkdirSync(path.join(root, "contracts/protocol/released"), { recursive: true });
   for (const name of ["control-input", "terminal-output"]) writeFileSync(path.join(root, `contracts/protocol/${name}.schema.json`), `${JSON.stringify({ "x-octoboard-protocol": { generation: 3 }, name })}\n`);
@@ -40,7 +40,7 @@ function fixture(t) {
   const calls = [];
   const options = { root, version: "0.1.0-beta.2", notes: "## Fixes\n\n- Keep # headings.\n", log: () => {}, toolchainProblems: () => [], run: (name, args, config) => {
     calls.push({ name, args, cwd: config.cwd });
-    if (name === "node" && args.includes("--exact")) return { status: 0, stdout: "test result: ok. 0 passed; 0 failed\ntest result: ok. 1 passed; 0 failed\n" };
+    if (name === "pnpm" && args[0] === "test:rust" && args.includes("--exact")) return { status: 0, stdout: "test result: ok. 0 passed; 0 failed\ntest result: ok. 1 passed; 0 failed\n" };
     if (name !== "git") return { status: 0 };
     return runResult(name, args, { ...config, stdio: ["pipe", "pipe", "pipe"] });
   } };
@@ -192,9 +192,9 @@ test("the holder floor must be the greatest stable release below the new version
   const { root } = fixture(t);
   assert.equal(holderFloorProblem(root, "0.1.0-beta.2", []), null);
   assert.equal(holderFloorProblem(root, "0.1.0-beta.2", ["0.1.0", "0.2.0"]), null);
-  assert.match(holderFloorProblem(root, "0.2.0-beta.1", ["0.1.0"]), /FLOOR to 0\.1\.0/);
+  assert.match(holderFloorProblem(root, "0.2.0-beta.1", ["0.1.0"]), /floor to 0\.1\.0/);
   assert.match(holderFloorProblem(root, "0.3.0", ["0.1.0", "0.2.0"]), /greatest stable release below 0\.3\.0 is 0\.2\.0/);
-  writeFileSync(path.join(root, "apps/daemon/src/holder/compat.rs"), 'pub const FLOOR: &str = "0.1.0";\n');
+  writeFileSync(path.join(root, HOLDER_FLOOR_FILE), "0.1.0\n");
   assert.equal(holderFloorProblem(root, "0.2.0-beta.1", ["0.1.0", "0.2.0"]), null);
   assert.match(holderFloorProblem(root, "0.1.0-beta.2", []), /initial value/);
 });
@@ -233,7 +233,7 @@ test("dirty worktrees and existing local or remote tags are refused without crea
   assert.deepEqual(calls, []);
 });
 
-const isGuard = (name, args) => name === "node" && args.includes("--bin") && args.at(-1).startsWith("protocol::compatibility::");
+const isGuard = (name, args) => name === "pnpm" && args[0] === "test:rust" && args.includes("--bin") && args.at(-1).startsWith("protocol::compatibility::");
 
 test("the protocol guard runs against the previous release's snapshot, before it is refreshed", (t) => {
   const { root, options } = fixture(t);
@@ -254,7 +254,7 @@ test("a protocol break fails before the version commit is made, leaving the snap
   const { root, remote, git, options } = fixture(t);
   const before = git("rev-parse", "HEAD");
   const run = options.run;
-  assert.throws(() => releaseDesktop({ ...options, run: (name, args, config) => (isGuard(name, args) ? { status: 1 } : run(name, args, config)) }), /node scripts\/cargo\.mjs failed/);
+  assert.throws(() => releaseDesktop({ ...options, run: (name, args, config) => (isGuard(name, args) ? { status: 1 } : run(name, args, config)) }), /pnpm test:rust failed/);
   const worktree = path.join(root, ".worktrees/desktop-v0.1.0-beta.2");
   assert.equal(gitChecked(worktree, "rev-parse", "HEAD"), before);
   assert.deepEqual(JSON.parse(readFileSync(path.join(worktree, "contracts/protocol/released/release.json"), "utf8")), { version: "0.1.0-beta.1", generation: 2 });

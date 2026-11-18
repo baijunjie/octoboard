@@ -764,9 +764,9 @@ fn a_failed_swap_restores_the_older_record_and_a_sweep_clears_a_crashs_leftovers
     assert!(!target.join(STAGING).exists());
 }
 /// Where a Codex home keeps its thread database is told wrongly in a way the user can fix:
-/// the cause says which, so a client can word the remedy.
+/// its provider code says which, so a client can word the remedy.
 #[test]
-fn a_thread_record_failure_names_a_cause_the_user_can_fix() {
+fn a_thread_record_failure_names_its_provider_code_or_shared_file_system_cause() {
     let head = Path::new("sessions/2026/10/03/rollout-2026-10-03T00-00-00-x_y.jsonl");
     let point = |target: &Path, env: &[(&str, &str)]| {
         let env = env
@@ -787,27 +787,31 @@ fn a_thread_record_failure_names_a_cause_the_user_can_fix() {
     let invalid = temp_dir("cause-invalid");
     write(&invalid, "config.toml", "sqlite_home = [unterminated");
     let err = point(&invalid, &[]).expect_err("an invalid config.toml");
+    assert_eq!(code_of(&err), "provider.codex.relocation_config_unreadable");
     assert_eq!(
         (
             param_of(&err, "stage").as_str(),
             param_of(&err, "cause").as_str()
         ),
-        ("thread_record", "config_unreadable")
+        ("thread_record", "other")
     );
 
     let unreadable = temp_dir("cause-config-dir");
     std::fs::create_dir(unreadable.join("config.toml")).unwrap();
     let err = point(&unreadable, &[]).expect_err("a config.toml that is a directory");
-    assert_eq!(param_of(&err, "cause"), "config_unreadable");
+    assert_eq!(code_of(&err), "provider.codex.relocation_config_unreadable");
+    assert_eq!(param_of(&err, "cause"), "other");
 
     let relative = temp_dir("cause-relative");
     let err = point(&relative, &[("CODEX_SQLITE_HOME", "state")]).expect_err("relative");
-    assert_eq!(param_of(&err, "cause"), "sqlite_home");
+    assert_eq!(code_of(&err), "provider.codex.relocation_home_unlocatable");
+    assert_eq!(param_of(&err, "cause"), "other");
 
     let tilde = temp_dir("cause-tilde");
     write(&tilde, "config.toml", "sqlite_home = \"~/db\"");
     let err = point(&tilde, &[]).expect_err("a ~ with no HOME");
-    assert_eq!(param_of(&err, "cause"), "sqlite_home");
+    assert_eq!(code_of(&err), "provider.codex.relocation_home_unlocatable");
+    assert_eq!(param_of(&err, "cause"), "other");
 
     let broken = temp_dir("cause-broken");
     write(
@@ -816,6 +820,7 @@ fn a_thread_record_failure_names_a_cause_the_user_can_fix() {
         "not a database, but long enough to be read as one",
     );
     let err = point(&broken, &[]).expect_err("not a database");
+    assert_eq!(code_of(&err), "relocation_failed");
     assert_eq!(param_of(&err, "cause"), "other");
 }
 

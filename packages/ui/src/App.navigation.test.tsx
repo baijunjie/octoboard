@@ -2,6 +2,7 @@
 // What the window shows as it moves between consoles, sessions, focus modes and archive views, through the paths
 // that cross `App`'s own state: the rail, the new-console dialog, the menu bar icon, Back and Forward, and daemon
 // events about what the selection or the aside depends on.
+import { defaultDaemonReply } from "./test/testDaemon";
 import { act } from "react";
 import { expect, it, vi } from "vitest";
 
@@ -75,7 +76,7 @@ const ops = consoleOf("c-ops", "Ops");
 it.each(["before", "after"] as const)("makes the console this window creates current, its broadcast arriving %s the reply", async (order) => {
   const daemon = mountTwoConsoles((daemon, body) => {
     if (body.type === "create_console" && order === "before") applyDaemonEvent(daemon().store, { type: "console_upserted", console: ops });
-    return { type: "ack", id: null };
+    return defaultDaemonReply(body);
   });
   await pressElement(byLabel("New console"));
   type("Name", ops.name);

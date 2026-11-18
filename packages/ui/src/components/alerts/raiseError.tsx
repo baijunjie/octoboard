@@ -1,3 +1,4 @@
+import { t } from "../../i18n/language";
 import { appDataRecovery } from "../../errors/errorRecovery";
 import { errorNotification, type AlertOptions, type NotificationRequest } from "../../store";
 import { errorAlertParts } from "./errorAlertParts";
@@ -7,7 +8,7 @@ import { errorAlerts, type ErrorAlertRequest } from "./errorAlerts";
  * about a session, the session's id, with the name its request carries for a session that may be gone. The alert names
  * the session from the store when it shows (`AlertSessionLines`), not here. */
 export function errorAlertOf(request: NotificationRequest): ErrorAlertRequest {
-  const { title, body, details, remedyInBody, attached } = errorAlertParts(request);
+  const { title, body, details, remedyInBody, attached } = errorAlertParts(t, request);
   return {
     message: request.message,
     session: request.session,

@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 
-const script = fileURLToPath(new URL("../verify.mjs", import.meta.url));
+const script = fileURLToPath(new URL("./verify.mjs", import.meta.url));
 
 test("partial release checks require an explicit valid release group", () => {
   for (const args of [

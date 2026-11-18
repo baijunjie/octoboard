@@ -856,7 +856,9 @@ async fn a_holder_keeps_its_programs_when_the_daemon_link_drops_and_hands_them_t
     drop(daemon);
 
     // Nothing ends it: the program runs on and the holder stays.
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    // Dropping the peer provides no acknowledgement that the holder processed the disconnect.
+    const DISCONNECT_OBSERVATION: Duration = Duration::from_millis(500);
+    tokio::time::sleep(DISCONNECT_OBSERVATION).await;
     assert!(is_running(pid));
     assert!(!holder.task.is_finished());
 
@@ -917,7 +919,9 @@ async fn a_holder_with_no_terminal_exits_when_its_daemon_is_gone_but_not_while_o
     daemon.spawn("t1", programs::sleep(60).term_command()).await;
     daemon.end_terminals().await;
     // A linked daemon that has not asked to drain keeps the holder, whatever it runs.
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    // The holder does not publish a decision to stay up after ending its terminals.
+    const LINKED_HOLDER_OBSERVATION: Duration = Duration::from_millis(300);
+    tokio::time::sleep(LINKED_HOLDER_OBSERVATION).await;
     assert!(!holder.task.is_finished());
     drop(daemon);
     holder.ended().await;
@@ -934,7 +938,6 @@ async fn a_draining_holder_exits_with_its_last_terminal_while_the_daemon_stays_l
         matches!(refused, FromHolder::SpawnFailed { .. }),
         "{refused:?}"
     );
-    tokio::time::sleep(Duration::from_millis(300)).await;
     assert!(!holder.task.is_finished(), "a terminal is still running");
     daemon.end_ids(&["t1"]).await;
     holder.ended().await;
@@ -949,7 +952,9 @@ async fn a_planned_parting_is_what_the_next_welcome_reports_instead_of_a_crash()
     daemon.send(ToHolder::Parting { handover: true }).await;
     daemon.socket.close(None).await.ok();
     drop(daemon);
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    // A parted peer receives no acknowledgement that the holder kept running.
+    const PARTED_HOLDER_OBSERVATION: Duration = Duration::from_millis(300);
+    tokio::time::sleep(PARTED_HOLDER_OBSERVATION).await;
     assert!(!holder.task.is_finished(), "the program is still running");
 
     let mut next = holder.link().await;
@@ -1145,10 +1150,10 @@ async fn a_handover_marks_each_followed_terminal_after_its_output_and_keeps_its_
     let mut later = daemon
         .until(|frame| matches!(frame, Frame::Reply(FromHolder::Written { req: 4, .. })))
         .await;
-    tokio::time::sleep(Duration::from_millis(500)).await;
-    while let Ok(Some(frame)) =
-        tokio::time::timeout(Duration::from_millis(200), daemon.next()).await
-    {
+    // The quiet peer receives no end-of-output frame after a tail is frozen.
+    const FROZEN_TAIL_WINDOW: Duration = Duration::from_millis(700);
+    let until = tokio::time::Instant::now() + FROZEN_TAIL_WINDOW;
+    while let Ok(Some(frame)) = tokio::time::timeout_at(until, daemon.next()).await {
         later.push(frame);
     }
     assert!(output_of(&later, "t1").is_empty(), "{later:?}");

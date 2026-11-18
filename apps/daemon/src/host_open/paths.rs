@@ -10,8 +10,8 @@ use std::sync::atomic::AtomicBool;
 
 use super::{start, OPEN_BOUNDS};
 use crate::platform::open::paths::{
-    directory_launch_for, is_detached, package_probe, package_tree_is_package, path_launch_for,
-    shell_open, text_editor_launch, PathAction,
+    directory_launch, is_detached, package_probe, package_tree_is_package, path_launch, shell_open,
+    text_editor_launch, PathAction,
 };
 use crate::processes::subprocess::run_bounded;
 use crate::protocol::{error_code, CodedError};
@@ -21,14 +21,13 @@ pub fn open(directory: &Path) -> Result<(), anyhow::Error> {
     if let Some(opened) = shell_open(directory) {
         return opened.map_err(|detail| unavailable(&detail));
     }
-    let command = directory_launch_for(std::env::consts::OS, directory, || {
+    let command = directory_launch(directory, || {
         let env = crate::env_shell::cached_snapshot().map_err(|err| format!("{err:#}"))?;
         crate::env_shell::resolve_program("xdg-open", &env)
             .map_err(|_| "xdg-open was not found".to_string())
     })
     .map_err(|detail| unavailable(&detail))?;
-    start(is_detached(std::env::consts::OS, PathAction::Open), command)
-        .map_err(|detail| unavailable(&detail))
+    start(is_detached(PathAction::Open), command).map_err(|detail| unavailable(&detail))
 }
 
 /// Opens a resolved live path, either with its default application or revealed in the file
@@ -36,7 +35,7 @@ pub fn open(directory: &Path) -> Result<(), anyhow::Error> {
 pub fn open_path(path: &Path, reveal: bool) -> Result<(), anyhow::Error> {
     let action = if !reveal {
         PathAction::Open
-    } else if shows_as_folder(std::env::consts::OS, path) {
+    } else if shows_as_folder(path) {
         PathAction::ShowFolder
     } else {
         PathAction::Select
@@ -46,7 +45,7 @@ pub fn open_path(path: &Path, reveal: bool) -> Result<(), anyhow::Error> {
             return opened.map_err(|detail| path_unavailable(reveal, &detail));
         }
     }
-    let command = path_launch_for(std::env::consts::OS, path, action, |binary| {
+    let command = path_launch(path, action, |binary| {
         let env = crate::env_shell::cached_snapshot().map_err(|err| format!("{err:#}"))?;
         crate::env_shell::resolve_program(binary, &env)
             .map_err(|_| format!("{binary} was not found"))
@@ -54,14 +53,12 @@ pub fn open_path(path: &Path, reveal: bool) -> Result<(), anyhow::Error> {
     .map_err(|detail| path_unavailable(reveal, &detail))?;
     // ShowItems and ShowFolders are short D-Bus calls whose failure must reach the client;
     // xdg-open may instead live as long as the application it opens.
-    let detached = is_detached(std::env::consts::OS, action);
+    let detached = is_detached(action);
     start(detached, command)
-        .or_else(
-            |detail| match fallback_launch(std::env::consts::OS, path, reveal, &detail) {
-                Some(command) => start(false, command),
-                None => Err(detail),
-            },
-        )
+        .or_else(|detail| match fallback_launch(path, reveal, &detail) {
+            Some(command) => start(false, command),
+            None => Err(detail),
+        })
         .map_err(|detail| path_unavailable(reveal, &detail))
 }
 
@@ -69,23 +66,18 @@ pub fn open_path(path: &Path, reveal: bool) -> Result<(), anyhow::Error> {
 /// symbolic link is judged by its own entry, so it stays selected whatever it points at. On
 /// macOS a folder Finder treats as a package (`Foo.app`, `Foo.xcodeproj`) is selected too:
 /// `open -a Finder` on one launches it instead of showing it.
-fn shows_as_folder(os: &str, path: &Path) -> bool {
-    std::fs::symlink_metadata(path).is_ok_and(|meta| meta.is_dir()) && !is_package(os, path)
+fn shows_as_folder(path: &Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok_and(|meta| meta.is_dir()) && !is_package(path)
 }
 
-/// Whether macOS types the folder as a package; never on another host. See [`is_package`].
-pub(crate) fn is_macos_package(path: &Path) -> bool {
-    is_package(std::env::consts::OS, path)
-}
-
-/// Whether `os` types the folder as a package, which only macOS does
+/// Whether the host types the folder as a package
 /// ([`package_probe`] has no probe elsewhere). A package is always named with an extension, so a
 /// folder without one is skipped without asking. Spotlight's content type tree is what Finder
 /// itself goes by (a bundle `Info.plist` check misses `.xcodeproj` and the like); when it cannot
 /// be read the folder counts as a package, since selecting it is harmless where opening it may
 /// launch something.
-fn is_package(os: &str, path: &Path) -> bool {
-    let Some(mut command) = package_probe(os, path) else {
+pub(crate) fn is_package(path: &Path) -> bool {
+    let Some(mut command) = package_probe(path) else {
         return false;
     };
     match run_bounded(&mut command, &OPEN_BOUNDS, &AtomicBool::new(false)) {
@@ -103,15 +95,12 @@ const TEXT_SNIFF_BYTES: usize = 8192;
 /// Finder opens a text file no application claims in the default text editor; macOS open only
 /// does so when asked with -t, so a failure for want of a claiming application is retried that
 /// way when the file reads as text.
-fn fallback_launch(os: &str, path: &Path, reveal: bool, detail: &str) -> Option<Command> {
-    let command = text_editor_launch(os, path)?;
-    (!reveal && no_application_claims(detail) && looks_like_text(path)).then_some(command)
-}
-
-/// Whether macOS open failed because Launch Services binds no application to the file's type,
-/// as with an unregistered extension such as `.env.secret`.
-fn no_application_claims(detail: &str) -> bool {
-    detail.contains("Code=-10814")
+fn fallback_launch(path: &Path, reveal: bool, detail: &str) -> Option<Command> {
+    if reveal {
+        return None;
+    }
+    let command = text_editor_launch(path, detail)?;
+    looks_like_text(path).then_some(command)
 }
 
 /// Sniffs the head of a regular file: no NUL byte and valid UTF-8, bar a sequence cut at the end.
@@ -187,6 +176,7 @@ mod tests {
         }
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn only_a_text_file_no_application_claims_is_retried_in_the_text_editor_on_macos() {
         let unclaimed = "No application knows how to open URL file:///a.secret (Error Domain=NSOSStatusErrorDomain Code=-10814 \"kLSApplicationNotFoundErr\")";
@@ -194,7 +184,7 @@ mod tests {
         let text = dir.join("-.env.secret");
         std::fs::write(&text, "TOKEN=é\n").unwrap();
 
-        let command = fallback_launch("macos", &text, false, unclaimed).unwrap();
+        let command = fallback_launch(&text, false, unclaimed).unwrap();
         assert_eq!(command.get_program(), "/usr/bin/open");
         let args: Vec<_> = command.get_args().collect();
         assert_eq!(
@@ -205,12 +195,13 @@ mod tests {
                 text.as_os_str()
             ]
         );
-        assert!(fallback_launch("macos", &text, true, unclaimed).is_none());
-        assert!(fallback_launch("linux", &text, false, unclaimed).is_none());
-        assert!(
-            fallback_launch("macos", &text, false, "The file /a-10814 does not exist.").is_none()
-        );
+        assert!(fallback_launch(&text, true, unclaimed).is_none());
+        assert!(fallback_launch(&text, false, "The file /a-10814 does not exist.").is_none());
+    }
 
+    #[test]
+    fn text_sniffing_checks_only_a_regular_files_head() {
+        let dir = ScratchDir::new("sniff-text");
         let mut cut = vec![b'a'; TEXT_SNIFF_BYTES - 1];
         cut.extend_from_slice("é".as_bytes());
         #[cfg(unix)]
@@ -227,10 +218,10 @@ mod tests {
             if let Some(bytes) = bytes {
                 std::fs::write(&path, bytes).unwrap();
             }
-            let retried = fallback_launch("macos", &path, false, unclaimed).is_some();
+            let retried = looks_like_text(&path);
             assert_eq!(retried, text, "{name}");
         }
-        assert!(fallback_launch("macos", &dir, false, unclaimed).is_none());
+        assert!(!looks_like_text(&dir));
     }
 
     #[test]
@@ -242,12 +233,10 @@ mod tests {
         std::fs::write(&file, "content").unwrap();
         let to_folder = dir.join("to-folder");
         crate::test_support::symlink(&folder, &to_folder).unwrap();
-        for os in ["linux", "macos"] {
-            assert!(shows_as_folder(os, &folder), "{os}");
-            assert!(!shows_as_folder(os, &file), "{os}");
-            assert!(!shows_as_folder(os, &to_folder), "{os}");
-            assert!(!shows_as_folder(os, &dir.join("missing")), "{os}");
-        }
+        assert!(shows_as_folder(&folder));
+        assert!(!shows_as_folder(&file));
+        assert!(!shows_as_folder(&to_folder));
+        assert!(!shows_as_folder(&dir.join("missing")));
     }
 
     #[cfg(target_os = "macos")]
@@ -266,8 +255,8 @@ mod tests {
         let dotted = dir.join("v1.2");
         std::fs::create_dir(&project).unwrap();
         std::fs::create_dir(&dotted).unwrap();
-        assert!(!shows_as_folder("macos", &package));
-        assert!(!shows_as_folder("macos", &project));
+        assert!(!shows_as_folder(&package));
+        assert!(!shows_as_folder(&project));
         // Where Spotlight does not type the folder (indexing off) it is selected, by design.
         let typed = Command::new("/usr/bin/mdls")
             .args(["-raw", "-name", "kMDItemContentTypeTree", "--"])
@@ -275,7 +264,7 @@ mod tests {
             .output()
             .is_ok_and(|out| String::from_utf8_lossy(&out.stdout).contains("public.directory"));
         if typed {
-            assert!(shows_as_folder("macos", &dotted));
+            assert!(shows_as_folder(&dotted));
         }
     }
 

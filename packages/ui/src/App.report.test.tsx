@@ -12,9 +12,9 @@ import { visibility } from "./layout/panelVisibility";
 import { PANE_INSET_MS } from "./layout/paneDockMotion";
 import { consoleOf, markdownContent, pageOf, projectOf, sessionOf, snapshotState } from "./fixtures/builders";
 import { PlatformProvider } from "./platform/react";
-import type { Event, Project } from "./protocol";
+import type { ClientRequestBody, Event, Project } from "./protocol";
 import { applyDaemonEvent, DaemonProvider, type Daemon } from "./store";
-import { testDaemon } from "./test/testDaemon";
+import { defaultDaemonReply, testDaemon } from "./test/testDaemon";
 import { ThemeProvider } from "./preferences/theme";
 import { BROWSER_HOST } from "./test/hosts";
 import { fakeTimers } from "./test/clock";
@@ -56,7 +56,7 @@ function mountApp(narrow = false) {
     sessionOf("s-two", console_.id, project.id, "Second work", "idle"),
     sessionOf("s-none", console_.id, project.id, "No pages", "idle"),
   ];
-  const request = vi.fn(async (_message: unknown) => ({ type: "ack", id: null })) as Daemon["request"] & ReturnType<typeof vi.fn>;
+  const request = vi.fn(async (body: ClientRequestBody) => defaultDaemonReply(body)) as Daemon["request"] & ReturnType<typeof vi.fn>;
   const daemon = testDaemon({
     state: snapshotState({ consoles: [console_], projects: [project], sessions }),
     request,
@@ -204,9 +204,9 @@ it("keeps a session known to have no pages out of the pane through a snapshot", 
 
 it("offers the Report panel when listing a project session's pages fails, so its own failure card can say why", async () => {
   const { request } = mountApp();
-  request.mockImplementation(async (message: unknown) => {
-    if ((message as { type: string }).type === "list_pages") throw new Error("offline");
-    return { type: "ack", id: null };
+  request.mockImplementation(async (body: ClientRequestBody) => {
+    if (body.type === "list_pages") throw new Error("offline");
+    return defaultDaemonReply(body);
   });
   await pressElement(row("First work"));
   expect(toggle("Hide report panel")).not.toBeNull();
@@ -215,15 +215,15 @@ it("offers the Report panel when listing a project session's pages fails, so its
 
 it("clears a failed listing once the store holds a list, so a later snapshot does not bring back an emptied panel", async () => {
   const { request, receive, resnapshot } = mountApp();
-  request.mockImplementation(async (message: unknown) => {
-    if ((message as { type: string }).type === "list_pages") throw new Error("offline");
-    return { type: "ack", id: null };
+  request.mockImplementation(async (body: ClientRequestBody) => {
+    if (body.type === "list_pages") throw new Error("offline");
+    return defaultDaemonReply(body);
   });
   await pressElement(row("First work"));
   expect(toggle("Hide report panel")).not.toBeNull();
 
   // Try again answers, and then every page is deleted; the daemon answers listings from here on.
-  request.mockImplementation(async () => ({ type: "ack", id: null }));
+  request.mockImplementation(async (body: ClientRequestBody) => defaultDaemonReply(body));
   await receive({ type: "page_list", id: null, session_id: "s-one", pages: [pageOf("page-1", "s-one", markdownContent("1"), 0)] });
   await receive({ type: "pages_deleted", session_id: "s-one", pages: ["page-1"] });
   expect(reportCard()).toBeNull();

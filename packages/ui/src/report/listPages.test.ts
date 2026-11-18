@@ -3,9 +3,11 @@ import { expect, it, vi } from "vitest";
 
 import { pageOf } from "../fixtures/builders";
 import { applyDaemonEvent, createStateStore, type Daemon } from "../store";
+import { defaultDaemonReply } from "../test/testDaemon";
+import type { ClientRequestBody } from "../protocol";
 import { listPages } from "./listPages";
 
-const requester = (reply: () => Promise<unknown> = async () => ({ type: "ack", id: null })) => vi.fn(reply) as unknown as Daemon["request"] & ReturnType<typeof vi.fn>;
+const requester = (reply: (body: ClientRequestBody) => Promise<unknown> = async (body) => defaultDaemonReply(body)) => vi.fn(reply) as unknown as Daemon["request"] & ReturnType<typeof vi.fn>;
 
 /** What a window asks with: the request and a store of its own. */
 const daemonOf = (request: Daemon["request"]) => ({ request, store: createStateStore() });

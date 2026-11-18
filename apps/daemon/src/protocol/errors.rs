@@ -186,6 +186,32 @@ impl ProviderOperation {
     }
 }
 
+impl Event {
+    /// The reply to a request the daemon could not read.
+    pub fn unreadable_request(detail: &str) -> Self {
+        Self::from_error(
+            None,
+            &CodedError::raised(
+                error_code::UNREADABLE_REQUEST,
+                format!("unreadable request: {detail}"),
+                &[("detail", detail)],
+            ),
+        )
+    }
+
+    /// The reply to the failure `err`: its own code and params when it is a [`CodedError`], and
+    /// otherwise [`error_code::INTERNAL_ERROR`] carrying the whole context chain.
+    pub fn from_error(id: Option<String>, err: &anyhow::Error) -> Self {
+        let (code, params, message) = error_parts(err);
+        Self::Error {
+            id,
+            code,
+            params,
+            message,
+        }
+    }
+}
+
 /// The `code`, `params` and `message` an `error` reply carries for `err`: a [`CodedError`]'s own,
 /// or, for any other failure, [`error_code::INTERNAL_ERROR`] with the whole context chain as the
 /// message and as the `detail` param.
@@ -278,5 +304,21 @@ mod tests {
         assert_eq!(notice["code"], "launch_failed");
         assert_eq!(notice["params"]["reason"], "why");
         assert_eq!(notice["message"], "English");
+    }
+
+    #[test]
+    fn an_unreadable_request_has_no_id_and_keeps_its_diagnostic() {
+        let response =
+            serde_json::to_value(Event::unreadable_request("unknown request type")).unwrap();
+        assert_eq!(
+            response,
+            serde_json::json!({
+                "type": "error",
+                "id": null,
+                "code": "unreadable_request",
+                "params": { "detail": "unknown request type" },
+                "message": "unreadable request: unknown request type"
+            })
+        );
     }
 }

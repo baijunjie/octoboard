@@ -29,20 +29,19 @@ function AlertMessage({ textId, title, announce, announceKey, announceDelayMs, c
  * Durable failure or warning content shown among other content: one that blocks (a lookup a form makes), one about a
  * whole area laid out top down, or one about the whole view; never a whole subject that failed (`EmptyPanel`) or one at
  * a point (`StatusMark`). It is shown here and nowhere else. The Alert is compact ("Errors shown among other content"
- * in `docs/ui-standard.md`): the `title`, required, saying what happened; `children`, the one short description, which
- * says why rather than repeating the title (inline content only, since `AlertDescription` is a `span`); then `remedy`,
- * the one main thing to do about it, also always visible and also inline content, so the visible copy is at most two
- * sentences in the application's own words; then at its end, where HeroUI's own Alert puts its action, the buttons.
- * `actions` is the recovery: Try again, with the link out of the remedy before it where there is one (Download Git),
- * and `details` everything else, which a Details button opens in a popover: first further explanation in the
- * application's own words (a reason per cause, each cause's own fix, further guidance), then the raw text not written
- * for the reader (the system's own message, a diagnostic block, raw entries); with no `details` there is no Details
- * button. The buttons wrap beneath the text when the Alert is too narrow to hold both, and onto lines of their own
- * when it is too narrow for the buttons side by side.
- * `textId` is the id of the title and the description alone, for a field that is described by what the Alert says and
- * not by its buttons and details (`id` is the whole Alert's).
- * `status` is `warning` for a warning, or a failure that leaves the subject usable. It also carries a warning about
- * the consequence of a choice the user is making, through `ChoiceWarning`.
+ * in `docs/conventions/ui-standard.md`): the `title`, required, saying what happened; `children`, the one short
+ * description, which says why rather than repeating the title (inline content only, since `AlertDescription` is a
+ * `span`); then `remedy`, the one main thing to do about it, also always visible and also inline content, so the
+ * visible copy is at most two sentences in the application's own words; then at its end, where HeroUI's own Alert puts
+ * its action, the buttons. `actions` is the recovery: Try again, with the link out of the remedy before it where there
+ * is one (Download Git), and `details` everything else, which a Details button opens in a popover: first further
+ * explanation in the application's own words (a reason per cause, each cause's own fix, further guidance), then the raw
+ * text not written for the reader (the system's own message, a diagnostic block, raw entries); with no `details` there
+ * is no Details button. The buttons wrap beneath the text when the Alert is too narrow to hold both, and onto lines of
+ * their own when it is too narrow for the buttons side by side. `textId` is the id of the title and the description
+ * alone, for a field that is described by what the Alert says and not by its buttons and details (`id` is the whole
+ * Alert's). `status` is `warning` for a warning, or a failure that leaves the subject usable. It also carries a warning
+ * about the consequence of a choice the user is making, through `ChoiceWarning`.
  *
  * `announce` makes the title and the description (the first sentence, not the `remedy`), and nothing else, an alert,
  * so the failure is spoken once as it appears; it is read as the Alert mounts. A caller passes it for a failure that

@@ -1,5 +1,5 @@
 Folder access
-/Volumes/2TB/Document/Code/App/octoboard
+/Users/example/project
 
 Trust this folder? Codex can read, edit, and run files here, subject to
 Folder settings can run code automatically, even without a model request.

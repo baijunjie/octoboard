@@ -265,7 +265,7 @@ export const connectionScenarios: Scenario[] = [
     title: "Hovering a terminal hyperlink",
     description: "The pointer is on the \"layout notes\" hyperlink: a tooltip names the link's real address, which its text does not say, and the address reads left to right in Arabic too.",
     state: connected("open"),
-    steps: [pickSession, (ui) => ui.wait(400), (ui) => ui.hoverTerminalLink("layout notes")],
+    steps: [pickSession, (ui) => ui.hoverTerminalLink("layout notes")],
   },
   {
     id: "terminal-status-touch-popover",
@@ -293,7 +293,7 @@ export const connectionScenarios: Scenario[] = [
     title: "Hovering a URL the program broke across rows",
     description: "The pointer is on the last row of an address the program broke at the right edge, so the first piece fills the row: the whole address, on every row it spans, is underlined, and clicking opens the full address. The window's width decides where it breaks.",
     state: connected("open"),
-    steps: [pickSession, (ui) => ui.wait(400), (ui) => ui.hoverTerminalUrl("lang=zh-Hans")],
+    steps: [pickSession, (ui) => ui.hoverTerminalUrl("lang=zh-Hans")],
   },
   {
     id: "terminal-broken-url-short-hover",
@@ -302,7 +302,7 @@ export const connectionScenarios: Scenario[] = [
     title: "Hovering a URL broken short of the right edge",
     description: "The pointer is on the last row of the address that stops short of the right edge, so blank cells remain after its first piece. The address above it still fills its row. The link colour covers only the address text, not those blank cells. The underline runs across every row this address spans: on the first row it continues through the blank cells to the right edge, and on the last row it includes the indent and stops at the end of the address. Clicking opens the full address.",
     state: connected("open"),
-    steps: [pickSession, (ui) => ui.wait(400), (ui) => ui.hoverTerminalUrl("account&theme=light")],
+    steps: [pickSession, (ui) => ui.hoverTerminalUrl("account&theme=light")],
   },
   {
     id: "terminal-path-links",

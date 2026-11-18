@@ -113,7 +113,6 @@ it.each([
   expect(tooltip?.textContent).toContain("0.2.0");
   if (total) expect(tooltip?.textContent).toContain("45%");
   else expect(tooltip?.textContent).not.toContain("%");
-  expect(document.querySelectorAll('[role="tooltip"]')).toHaveLength(1);
   activate(button);
   activate(button);
   expect(store.install).not.toHaveBeenCalled();

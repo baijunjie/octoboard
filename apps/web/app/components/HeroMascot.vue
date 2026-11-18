@@ -2,7 +2,7 @@
 defineProps<{ paused?: boolean }>();
 const config = useRuntimeConfig();
 const surface = ref<HTMLElement | null>(null);
-const running = useVisibleMotion(surface);
+const { running } = useVisibleMotion(surface);
 const id = useId();
 const source = `${config.app.baseURL}logo-640.png`;
 const headShape =

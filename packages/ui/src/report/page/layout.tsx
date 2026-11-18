@@ -60,11 +60,11 @@ export function TabsView({ component }: ComponentProps<"tabs">): React.ReactElem
  * (the label's own height keeps a labelled rule from being squeezed). A labelled rule is a `separator` named by its
  * label (its children are presentational, so the name is on the element, not in its text). */
 export function DividerView({ component }: ComponentProps<"divider">): React.ReactElement {
-  if (component.label === undefined) return <hr className="-my-2 border-0 border-t border-separator" />;
+  if (component.label === undefined) return <hr className="-my-2 border-0 hairline-b" />;
   return (
     <div role="separator" aria-label={component.label} className="-my-1 flex items-center gap-3">
       <span aria-hidden="true" className="min-w-0 text-xs text-app-muted align-match-parent [overflow-wrap:anywhere]" dir="auto">{component.label}</span>
-      <span aria-hidden="true" className="h-px min-w-8 flex-1 bg-separator" />
+      <span aria-hidden="true" className="min-w-8 flex-1 hairline-b" />
     </div>
   );
 }

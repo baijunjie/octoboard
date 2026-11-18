@@ -39,6 +39,7 @@ import { TagsInput } from "../components/form/TagsInput";
 import { tagVocabulary } from "../components/form/tagVocabulary";
 import { TextAreaInput } from "../components/form/TextAreaInput";
 import { TextInput } from "../components/form/TextInput";
+import { fieldHasText } from "../components/form/useTrimmedField";
 import { useDetectedAgent } from "./useDetectedAgent";
 import { projectNameDefault } from "./projectNameDefault";
 import { exceedsTextLimit, PROJECT_DESCRIPTION_LIMIT, PROJECT_NAME_LIMIT } from "../components/form/textLength";
@@ -289,7 +290,7 @@ export function ProjectDialog({
   // `name: name || undefined` below means "blank leaves it alone" everywhere else this pattern is
   // used (the field is genuinely optional on creation), but here blanking it out and saving would
   // silently keep the old name instead of doing what the empty field visually suggests.
-  const nameError = addsParent ? undefined : editing && !name.trim() ? t("dialog.nameRequired")
+  const nameError = addsParent ? undefined : editing && !fieldHasText(name) ? t("dialog.nameRequired")
     : exceedsTextLimit(name, PROJECT_NAME_LIMIT, read.name) ? t("daemon.field_too_long.name", { limit: PROJECT_NAME_LIMIT }) : undefined;
   const descriptionError = !addsParent && exceedsTextLimit(description, PROJECT_DESCRIPTION_LIMIT, read.description)
     ? t("daemon.field_too_long.description", { limit: PROJECT_DESCRIPTION_LIMIT }) : undefined;

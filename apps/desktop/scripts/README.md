@@ -37,11 +37,10 @@ in the environment wins.
   `release-linux.mjs`, the daemon's Linux server archive for the host's architecture (below).
 - `release-desktop.mjs` (`pnpm release:version`) — prepares a version commit in an isolated worktree, checks it and
   pushes it with its annotated tag to start release CI (see "Releasing by tag"); `--platforms` makes a version for some
-  of the platforms. It refuses a version while the daemon's holder floor (`FLOOR` in `apps/daemon/src/holder/compat.rs`) is not
-  the greatest stable `desktop-v*` tag below it (`0.0.0` while none is tagged). Its version commit also refreshes the
-  snapshot of the protocol schema in `contracts/protocol/released/`. Its version-file preparation, argument
-  parsing and release orchestration are tested by
-  `release-desktop.test.mjs`.
+  of the platforms. The holder floor in `config/holder-floor.txt` must equal the greatest stable `desktop-v*` tag
+  below the new version (`0.0.0` while none is tagged). The script runs the protocol compatibility test through
+  `pnpm test:rust` before the version commit refreshes the snapshot in `contracts/protocol/released/`.
+  `release-desktop.test.mjs` covers version-file preparation, argument parsing and release orchestration.
 - `tag-message.mjs` — prints the notes or the platforms of a tag message read from standard input, for
   `.github/release-notes.sh`.
 - `sign-update.mjs` (`pnpm sign-update`) — signs the update artifact `pnpm release --no-sign-update` left (the archive on
@@ -60,8 +59,8 @@ in the environment wins.
   layout of each platform's release files and the manifest keys each serves (`releaseLayout`), asset names and
   addresses (including `linuxArchiveName` and `dmgName`), what an existing release needs, version ordering, the
   manifest itself with the build's `holder_floor` and its platform entries), and the one read of the tree it makes, the
-  daemon's `FLOOR` at the release commit (`readHolderFloor`); tested by `release-manifest.test.mjs` through
-  `pnpm test`.
+  holder floor in `config/holder-floor.txt` at the release commit (`readHolderFloor`).
+  `release-manifest.test.mjs` covers these decisions through `pnpm test`.
 - `linux-release.mjs` — the Linux release's pieces: the output directory (`target/linux-release/`), the musl target of
   each architecture, the ELF check that a binary is statically linked, the `.sha256` file helpers and the check of the
   files `publish-release` takes. Tested by `linux-release.test.mjs`.

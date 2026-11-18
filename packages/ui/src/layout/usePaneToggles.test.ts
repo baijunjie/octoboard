@@ -4,7 +4,7 @@ import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
-import { usePaneToggles, type PaneToggles } from "./usePaneToggles";
+import { PEEK_HIDE_DELAY_MS, usePaneToggles, type PaneToggles } from "./usePaneToggles";
 import { fakeTimers } from "../test/clock";
 import { resetAppPreferences } from "../appTestSupport";
 
@@ -110,7 +110,7 @@ it.each([
   act(() => setInteractionModality(modality));
   pane.querySelector("button")!.focus();
   act(() => panes().asidePeek.leave());
-  act(() => void vi.advanceTimersByTime(1000));
+  act(() => void vi.advanceTimersByTime(PEEK_HIDE_DELAY_MS));
   expect(panes().asidePeek.active).toBe(!dismissed);
 });
 

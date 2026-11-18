@@ -3,7 +3,7 @@
 // The UI imports it only through `protocol.ts`, which re-exports it.
 
 /** The protocol generation this file describes; see `hello`. */
-export const PROTOCOL_GENERATION = 6;
+export const PROTOCOL_GENERATION = 5;
 
 /**
  * A named config directory of one agent, kept once for the whole application and referred to by

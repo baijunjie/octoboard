@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use super::*;
 use crate::protocol::AgentId;
@@ -369,7 +369,9 @@ async fn a_report_still_being_applied_when_the_process_exits_decides_how_the_tur
         tokio::time::sleep(std::time::Duration::from_millis(20)).await;
     }
     // Past the exit watcher's poll that sees the process gone.
-    tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
+    // The exit watcher has no signal for reaching the report gate before it can record the exit.
+    const EXIT_WATCH_OBSERVATION: Duration = std::time::Duration::from_secs(1);
+    tokio::time::sleep(EXIT_WATCH_OBSERVATION).await;
     assert_eq!(
         state.session_record("s").unwrap().status,
         SessionStatus::Working,

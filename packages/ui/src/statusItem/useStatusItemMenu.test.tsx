@@ -195,9 +195,10 @@ it("pushes the menu again when a held window's reset time passes, drawing it ful
   });
   await act(async () => {});
   expect(setMenu).toHaveBeenCalledTimes(1);
-  await act(async () => void vi.advanceTimersByTime(9_000));
+  const untilReset = reading.windows[0].resets_at! - start;
+  await act(async () => void vi.advanceTimersByTime(untilReset - 1));
   expect(setMenu).toHaveBeenCalledTimes(1);
-  await act(async () => void vi.advanceTimersByTime(1_000));
+  await act(async () => void vi.advanceTimersByTime(1));
   expect(setMenu).toHaveBeenCalledTimes(2);
   expect(JSON.stringify(setMenu.mock.lastCall![0])).toContain("100% remaining");
 });
@@ -218,10 +219,11 @@ it("pushes the menu again at each whole minute of a reading's age, so the age in
   });
   await act(async () => {});
   expect(setMenu).toHaveBeenCalledTimes(1);
-  await act(async () => void vi.advanceTimersByTime(30_000));
+  const minute = 60_000;
+  await act(async () => void vi.advanceTimersByTime(reading.fetched_at + minute - start));
   expect(setMenu).toHaveBeenCalledTimes(2);
   expect(JSON.stringify(setMenu.mock.lastCall![0])).toContain("updated 1 minute ago");
-  await act(async () => void vi.advanceTimersByTime(60_000));
+  await act(async () => void vi.advanceTimersByTime(minute));
   expect(setMenu).toHaveBeenCalledTimes(3);
   expect(JSON.stringify(setMenu.mock.lastCall![0])).toContain("updated 2 minutes ago");
 });

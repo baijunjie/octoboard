@@ -51,8 +51,7 @@ async function mount(initial: RemoteForward[], withCapability = true) {
     state.forwards = forwards;
     await act(async () => state.listener());
   };
-  const advance = (ms: number) => act(async () => void vi.advanceTimersByTime(ms));
-  return { container, state, stop, open, change, advance };
+  return { container, state, stop, open, change };
 }
 
 const panel = () => document.querySelector<HTMLElement>('[role="dialog"]');
@@ -97,15 +96,16 @@ it("raises the failure of opening a row's address as the alert of an address tha
 });
 
 it("stops a forward with Stop and drops its row when the shell says the list changed, the popover going with the last", async () => {
-  const { container, stop, advance } = await mount([SAME, MOVED]);
+  const { container, stop } = await mount([SAME, MOVED]);
   press(button(container), "touch");
   const stops = () => Array.from(panel()!.querySelectorAll<HTMLButtonElement>("li button")).filter((control) => control.textContent === "Stop");
   expect(stops().map((control) => control.getAttribute("aria-label"))).toEqual(["Stop forwarding port 3000", "Stop forwarding port 5173"]);
   await act(async () => stops()[0].click());
   expect(stop).toHaveBeenCalledExactlyOnceWith(3000);
   // The row leaves with the collection motion, which leaves an inert ghost of it until it has played.
-  await advance(1000);
-  expect(panel()!.querySelectorAll("li:not([data-list-motion-ghost])")).toHaveLength(1);
+  await act(async () => {
+    await vi.waitFor(() => expect(panel()!.querySelectorAll("li:not([data-list-motion-ghost])")).toHaveLength(1));
+  });
   await act(async () => stops()[0].click());
   expect(stop).toHaveBeenLastCalledWith(5173);
   expect(button(container)).toBeNull();
@@ -113,35 +113,40 @@ it("stops a forward with Stop and drops its row when the shell says the list cha
 });
 
 it("hands focus to the next row's Stop, else the previous one's, when a forward is stopped from its focused Stop", async () => {
-  const { container, advance } = await mount([SAME, MOVED]);
+  const { container } = await mount([SAME, MOVED]);
   activate(button(container));
   const stops = () => Array.from(panel()!.querySelectorAll<HTMLButtonElement>("li:not([data-list-motion-ghost]) button")).filter((control) => control.textContent === "Stop");
   act(() => stops()[0].focus());
   await act(async () => stops()[0].click());
-  await advance(1000);
-  expect(stops().map((control) => control.getAttribute("aria-label"))).toEqual(["Stop forwarding port 5173"]);
-  expect(document.activeElement).toBe(stops()[0]);
+  await act(async () => {
+    await vi.waitFor(() => {
+      expect(stops().map((control) => control.getAttribute("aria-label"))).toEqual(["Stop forwarding port 5173"]);
+      expect(document.activeElement).toBe(stops()[0]);
+    });
+  });
 });
 
 it("leaves focus alone when a forward is stopped by a press that did not leave it on Stop", async () => {
-  const { container, advance } = await mount([SAME, MOVED]);
+  const { container } = await mount([SAME, MOVED]);
   activate(button(container));
   const first = panel()!.querySelector<HTMLButtonElement>("li button")!;
   await act(async () => Array.from(panel()!.querySelectorAll<HTMLButtonElement>("li button")).find((control) => control.textContent === "Stop")!.click());
-  await advance(1000);
+  await act(async () => {
+    await vi.waitFor(() => expect(first.isConnected).toBe(false));
+  });
   expect(document.activeElement).not.toBe(Array.from(panel()!.querySelectorAll<HTMLButtonElement>("li button")).find((control) => control.textContent === "Stop"));
-  expect(first.isConnected).toBe(false);
 });
 
 it("leaves focus on a Stop that stays when another row's Stop is pressed", async () => {
-  const { container, advance } = await mount([SAME, MOVED, THIRD]);
+  const { container } = await mount([SAME, MOVED, THIRD]);
   activate(button(container));
   const stops = () => Array.from(panel()!.querySelectorAll<HTMLButtonElement>("li:not([data-list-motion-ghost]) button")).filter((control) => control.textContent === "Stop");
   const kept = stops()[0];
   act(() => kept.focus());
   await act(async () => stops()[2].click());
-  await advance(1000);
-  expect(stops()).toHaveLength(2);
+  await act(async () => {
+    await vi.waitFor(() => expect(stops()).toHaveLength(2));
+  });
   expect(document.activeElement).toBe(kept);
 });
 

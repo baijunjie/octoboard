@@ -30,6 +30,18 @@ use tauri::{AppHandle, Manager};
 use super::RemoteState;
 use crate::diagnostics::diagnostic;
 
+#[cfg(target_os = "macos")]
+mod macos;
+#[cfg(not(target_os = "macos"))]
+mod windows;
+
+#[cfg(target_os = "macos")]
+use macos as platform;
+#[cfg(not(target_os = "macos"))]
+use windows as platform;
+
+use platform::{check_private, create_private_dir, mark_downloaded, private_file_options};
+
 /// The folder of the application's own under the temporary directory the copies are kept in, below
 /// the application's identifier.
 const FOLDER: &str = "remote-files";
@@ -57,7 +69,7 @@ struct Launchable {
 fn launchable_extensions() -> &'static Launchable {
     static LISTS: LazyLock<Launchable> = LazyLock::new(|| {
         serde_json::from_str(include_str!(
-            "../../../../../config/launchable-extensions.json"
+            "../../../../../../config/launchable-extensions.json"
         ))
         .expect("config/launchable-extensions.json is the lists of launchable extensions")
     });
@@ -359,13 +371,8 @@ fn clear_in(root: &Path) -> Option<File> {
     let parent = root.parent()?;
     let lock = create_private_dir(parent, true)
         .and_then(|()| {
-            let mut options = fs::OpenOptions::new();
-            options.write(true).create(true).truncate(false);
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::OpenOptionsExt;
-                options.mode(0o600);
-            }
+            let mut options = private_file_options();
+            options.create(true).truncate(false);
             options.open(parent.join(LOCK_FILE))
         })
         .and_then(|lock| {
@@ -387,32 +394,6 @@ fn clear_in(root: &Path) -> Option<File> {
     }
 }
 
-/// Refuses `root` and the folder above it unless they are real folders of this user's, shut to everyone else:
-/// `ours` is a folder this process just made inside `root`, whose owner is the user the process runs as. The
-/// temporary directory may be shared (on Linux), and another user could have made either folder first. Systems
-/// whose temporary directory is the user's own have nothing to check.
-#[cfg(unix)]
-fn check_private(root: &Path, ours: &Path) -> std::io::Result<()> {
-    use std::os::unix::fs::{MetadataExt, PermissionsExt};
-    let me = fs::symlink_metadata(ours)?.uid();
-    for folder in [root.parent(), Some(root)].into_iter().flatten() {
-        let metadata = fs::symlink_metadata(folder)?;
-        if !metadata.is_dir() || metadata.uid() != me || metadata.permissions().mode() & 0o077 != 0
-        {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::PermissionDenied,
-                format!("{} is not a private folder of this user", folder.display()),
-            ));
-        }
-    }
-    Ok(())
-}
-
-#[cfg(not(unix))]
-fn check_private(_root: &Path, _ours: &Path) -> std::io::Result<()> {
-    Ok(())
-}
-
 /// An id nobody can guess, from the randomness the standard library seeds its hash maps with.
 fn random_id() -> String {
     use std::hash::{BuildHasher, Hasher};
@@ -424,30 +405,9 @@ fn random_id() -> String {
     format!("{:016x}{:016x}", part(), part())
 }
 
-/// Makes the folder `path`, readable by the user alone where the system has such a thing, with the
-/// ones above it that are missing; `recursive` lets one already there pass, otherwise that fails
-/// with `AlreadyExists`.
-fn create_private_dir(path: &Path, recursive: bool) -> std::io::Result<()> {
-    let mut builder = fs::DirBuilder::new();
-    builder.recursive(recursive);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::DirBuilderExt;
-        builder.mode(0o700);
-    }
-    builder.create(path)
-}
-
-/// Creates the file new, readable and writable by the user alone and with no executable bit.
+/// Creates a new, non-executable file with the platform's private-file options.
 fn create_private_file(path: &Path) -> std::io::Result<File> {
-    let mut options = fs::OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    options.open(path)
+    private_file_options().create_new(true).open(path)
 }
 
 /// The name a copy is given: the last component of `name`, with separators, control characters and
@@ -501,53 +461,6 @@ fn cut(name: &str) -> String {
         end -= 1;
     }
     format!("{}{extension}", &name[..end])
-}
-
-/// Marks the copy at `path` as coming from the Internet, for the system's own checks on whatever
-/// opens it: the quarantine attribute on macOS, the Internet zone's stream on Windows.
-#[cfg(target_os = "macos")]
-fn mark_downloaded(path: &Path) -> std::io::Result<()> {
-    use std::ffi::CString;
-    use std::os::unix::ffi::OsStrExt;
-
-    let seconds = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |since| since.as_secs());
-    // The flags (a download the user has not yet approved), the time in hex, the downloading
-    // application and no event id.
-    let value = format!("0083;{seconds:x};Octoboard;");
-    let path = CString::new(path.as_os_str().as_bytes())
-        .map_err(|_| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
-    // SAFETY: the path and the name are NUL-terminated and the value is as long as it says, all
-    // outliving the call.
-    let status = unsafe {
-        libc::setxattr(
-            path.as_ptr(),
-            c"com.apple.quarantine".as_ptr(),
-            value.as_ptr().cast(),
-            value.len(),
-            0,
-            0,
-        )
-    };
-    if status == 0 {
-        Ok(())
-    } else {
-        Err(std::io::Error::last_os_error())
-    }
-}
-
-#[cfg(windows)]
-fn mark_downloaded(path: &Path) -> std::io::Result<()> {
-    let mut stream = path.as_os_str().to_owned();
-    stream.push(":Zone.Identifier");
-    fs::write(stream, "[ZoneTransfer]\r\nZoneId=3\r\n")
-}
-
-/// Nothing marks a download elsewhere: a development build on Linux has no such mechanism.
-#[cfg(not(any(target_os = "macos", windows)))]
-fn mark_downloaded(_path: &Path) -> std::io::Result<()> {
-    Ok(())
 }
 
 /// Whether the calling window holds a remote connection; the page of any other has no daemon files
@@ -1077,16 +990,16 @@ mod tests {
 
     #[test]
     fn the_permission_is_in_the_remote_window_capability_alone() {
-        assert!(include_str!("../../capabilities/remote-window.json")
+        assert!(include_str!("../../../capabilities/remote-window.json")
             .contains("\"allow-remote-files\""));
         for other in [
-            include_str!("../../capabilities/default.json"),
-            include_str!("../../capabilities/remote.json"),
-            include_str!("../../capabilities/flyout.json"),
+            include_str!("../../../capabilities/default.json"),
+            include_str!("../../../capabilities/remote.json"),
+            include_str!("../../../capabilities/flyout.json"),
         ] {
             assert!(!other.contains("allow-remote-files"));
         }
-        let permission = include_str!("../../permissions/remote-files.toml");
+        let permission = include_str!("../../../permissions/remote-files.toml");
         for command in [
             "remote_file_begin",
             "remote_file_write",

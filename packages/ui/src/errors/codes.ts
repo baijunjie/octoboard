@@ -125,8 +125,8 @@ const CORE_CODES = {
   // Those two have a remedy line of their own (`recoveryLine`), which the mark leaves out, and their sentences name the
   // agent, which the daemon does not send for them (it sends the code only): the UI supplies `{agent}` wherever it words
   // them. The two refusals of `update_agent_cli` carry the agent and need no remedy beyond their sentence.
-  agent_cli_latest_failed: { origin: "daemon", detailBlock: true, summaryForDetail: false },
-  agent_cli_latest_unreadable: { origin: "daemon" },
+  agent_cli_latest_failed: { origin: "daemon", recovery: "none", detailBlock: true, summaryForDetail: false },
+  agent_cli_latest_unreadable: { origin: "daemon", recovery: "none" },
   agent_cli_update_failed: { origin: "daemon", recovery: "none", detailBlock: true, recoveryLine: true },
   agent_cli_update_running: { origin: "daemon", recovery: "none" },
   agent_cli_update_timed_out: { origin: "daemon", recovery: "none", recoveryLine: true },
@@ -166,15 +166,15 @@ const CORE_CODES = {
   // The daemon's own update (server form): the check's and the download's failure codes are carried by its status and shown
   // where it is; the five refusals of `check_daemon_update`, `update_daemon` and `restart_daemon` need no remedy beyond their
   // sentence.
-  daemon_update_check_failed: { origin: "daemon" },
-  daemon_update_download_failed: { origin: "daemon" },
+  daemon_update_check_failed: { origin: "daemon", recovery: "none" },
+  daemon_update_download_failed: { origin: "daemon", recovery: "none" },
   daemon_update_installed: { origin: "daemon", recovery: "none" },
   daemon_update_not_writable: { origin: "daemon", recovery: "none", codeParams: ["path"] },
   daemon_update_nothing_to_install: { origin: "daemon", recovery: "none" },
-  daemon_update_replace_failed: { origin: "daemon" },
+  daemon_update_replace_failed: { origin: "daemon", recovery: "none" },
   daemon_update_running: { origin: "daemon", recovery: "none" },
   daemon_update_unavailable: { origin: "daemon", recovery: "none" },
-  daemon_update_unverified: { origin: "daemon" },
+  daemon_update_unverified: { origin: "daemon", recovery: "none" },
   default_account_not_shareable: { origin: "daemon", recovery: "accountNotShareable" },
   directory_unavailable: { origin: "daemon", recovery: "openFileManager", detailBlock: true, noSummary: true },
   directory_unreachable: { origin: "daemon", recovery: "path", codeParams: ["path"], variants: { accountPermissions: { codeParams: ["path"] } }, variantOf: (_params, os) => notMacOS(os) },
@@ -389,7 +389,7 @@ const CORE_CODES = {
   unknown_session: { origin: "daemon", recovery: "session", recordIds: ["session"], nameParams: ["session"] },
   unknown_shell_terminal: { origin: "daemon", recovery: "refresh", recordIds: ["shell_terminal"], nameParams: ["shell_terminal"] },
   unreadable_request: { origin: "daemon", unexpected: "the window sends only requests of the shapes it knows", detailBlock: true },
-  unshared_state_database: { origin: "daemon", codeParams: ["path"], nameParams: ["name"] },
+  unshared_state_database: { origin: "daemon", recovery: "none", codeParams: ["path"], nameParams: ["name"] },
   unsupported_file_type: { origin: "daemon", recovery: "scope", codeParams: ["path"], variants: { unmerged: { codeParams: ["path"] } }, variantOf: (params) => params.file_type === "unmerged" ? "unmerged" : undefined },
   upstream_not_a_remote: { origin: "daemon", recovery: "gitFailure" },
   // Raised by every checked write (a settings control, a form dialog, an import); its `fields` and `versions` params

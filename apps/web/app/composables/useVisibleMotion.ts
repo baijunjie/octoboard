@@ -1,12 +1,14 @@
 /** Run decorative motion only while its surface is visible and motion is allowed. */
 export function useVisibleMotion(target: Ref<HTMLElement | null>) {
   const running = ref(false);
+  const reduced = ref(false);
   let observer: IntersectionObserver | undefined;
   let preference: MediaQueryList | undefined;
   let visible = false;
 
   const update = () => {
-    running.value = visible && !document.hidden && !preference?.matches;
+    reduced.value = preference?.matches ?? false;
+    running.value = visible && !document.hidden && !reduced.value;
   };
   onMounted(() => {
     preference = matchMedia("(prefers-reduced-motion: reduce)");
@@ -20,13 +22,13 @@ export function useVisibleMotion(target: Ref<HTMLElement | null>) {
       observer.observe(target.value);
     } else {
       visible = true;
-      update();
     }
+    update();
   });
   onBeforeUnmount(() => {
     observer?.disconnect();
     preference?.removeEventListener("change", update);
     document.removeEventListener("visibilitychange", update);
   });
-  return running;
+  return { running, reduced };
 }

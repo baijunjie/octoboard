@@ -7,7 +7,7 @@ import { mountForTooltip } from "./components/hint/tooltipTestSupport";
 import { consoleOf, snapshotState } from "./fixtures/builders";
 import { PlatformProvider } from "./platform/react";
 import { DaemonProvider, type Daemon } from "./store";
-import { testDaemon } from "./test/testDaemon";
+import { defaultDaemonReply, testDaemon } from "./test/testDaemon";
 import { ThemeProvider } from "./preferences/theme";
 import { matchesWidthQuery } from "./test/viewport";
 import { BROWSER_HOST } from "./test/hosts";
@@ -43,7 +43,7 @@ it.each(["sidebar", "terminal"] as const)("opens console session settings from t
   const console_ = consoleOf("c-main", "Main");
   const daemon = testDaemon({
     state: snapshotState({ consoles: [console_] }),
-    request: vi.fn(async () => ({ type: "ack", id: null })) as Daemon["request"],
+    request: vi.fn(async (body: Parameters<typeof defaultDaemonReply>[0]) => defaultDaemonReply(body)) as Daemon["request"],
     showNotice: vi.fn(),
   });
   const container = mountForTooltip(
@@ -73,7 +73,7 @@ it("replaces the whole app with the key refused screen, with no retry, once the 
   onTestFinished(() => void vi.unstubAllGlobals());
   const daemon = testDaemon({
     state: snapshotState({ consoles: [consoleOf("c-main", "Main")] }),
-    request: vi.fn(async () => ({ type: "ack", id: null })) as Daemon["request"],
+    request: vi.fn(async (body: Parameters<typeof defaultDaemonReply>[0]) => defaultDaemonReply(body)) as Daemon["request"],
     reconnect: vi.fn(),
   });
   const container = mountForTooltip(

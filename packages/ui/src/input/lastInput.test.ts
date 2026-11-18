@@ -75,30 +75,34 @@ it("keeps the previous input through a virtual press, which a screen reader or a
   expect(interactionIsTouch()).toBe(false);
 });
 
-it("counts a zero-sized press as virtual only off Android, and reads TalkBack's size-1 press as virtual on it", () => {
+it("counts a zero-sized press as virtual only off Android, and reads TalkBack's size-1 press as virtual on it", async () => {
   const userAgent = vi.spyOn(navigator, "userAgent", "get");
   const sized = (init: PointerEventInit) => document.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, ...init }));
   userAgent.mockReturnValue("Mozilla/5.0 (Macintosh)");
+  vi.resetModules();
+  const desktop = await import("./lastInput");
   press("mouse");
   // Off Android a size of 1 is a real pointer's, whatever its pressure.
   sized({ pointerType: "touch", width: 1, height: 1, pressure: 0 });
-  expect(interactionIsTouch()).toBe(true);
+  expect(desktop.interactionIsTouch()).toBe(true);
   userAgent.mockReturnValue("Mozilla/5.0 (Linux; Android 14)");
+  vi.resetModules();
+  const android = await import("./lastInput");
   press("mouse");
   // On Android a zero size is no screen reader's mark, and only TalkBack's exact signature is virtual.
   sized({ pointerType: "touch", width: 0, height: 0 });
-  expect(interactionIsTouch()).toBe(true);
+  expect(android.interactionIsTouch()).toBe(true);
   press("mouse");
   sized({ pointerType: "touch", width: 1, height: 1, pressure: 0 });
-  expect(interactionIsTouch()).toBe(true);
+  expect(android.interactionIsTouch()).toBe(true);
   sized({ pointerType: "mouse", width: 1, height: 1, pressure: 0, detail: 1 });
-  expect(interactionIsTouch()).toBe(false);
+  expect(android.interactionIsTouch()).toBe(false);
   sized({ pointerType: "touch", width: 4, height: 4 });
-  expect(interactionIsTouch()).toBe(true);
+  expect(android.interactionIsTouch()).toBe(true);
   sized({ pointerType: "mouse", width: 1, height: 1, pressure: 0, detail: 0 });
-  expect(interactionIsTouch()).toBe(true);
+  expect(android.interactionIsTouch()).toBe(true);
   sized({ pointerType: "", width: 0, height: 0 });
-  expect(interactionIsTouch()).toBe(true);
+  expect(android.interactionIsTouch()).toBe(true);
 });
 
 it("sees a key a handler on window's capture phase stops, so a keyboard close still shows the ring", () => {

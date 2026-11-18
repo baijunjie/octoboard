@@ -71,8 +71,8 @@ write each out separately.
 
     A new exception is added only as such a helper, with its reason, waiting through `waitOnRealClock`
     (`packages/ui/src/test/clock.ts`), which tests never call directly. Daemon tests that drive a real child process
-    follow the real-process rules in `docs/memory/writing-daemon-tests.md` (the patience window, the short-timeout
-    override getters), not a fake clock.
+    follow the real-process rules in `docs/conventions/tests.md`, "Daemon tests" (the patience window, the
+    short-timeout override getters), not a fake clock.
   - **Let React commit between timers.** In a `packages/ui` component test, advance the fake clock inside `act`, and
     where more than one timer is pending while React renders, one timer per step
     (`await act(async () => { await vi.advanceTimersToNextTimerAsync(); })`), so what one timer did is committed
@@ -87,7 +87,7 @@ write each out separately.
     assert after it. Known sources: a containing react-aria `FocusScope` puts focus back one frame after it leaves the
     scope; `useDialog` refocuses 500 ms after mount when focus is on the dialog or `<body>` (`trackMountRefocus()`,
     armed after the dialog mounts); the tooltip warm-up and the status region's first write are in
-    `docs/memory/writing-automated-tests.md`.
+    `docs/conventions/tests.md`, "UI component tests (jsdom)".
   - **Leave nothing running.** A test that faked timers runs out its pending timers and asserts `vi.getTimerCount()`
     is 0 before restoring real ones; teardown is bound to the test with `onTestFinished`. In `packages/ui`,
     `fakeTimers()` does all of this.

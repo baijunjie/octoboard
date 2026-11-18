@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { expect, it } from "vitest";
+import { expect, it, onTestFinished } from "vitest";
 
 import { QR_QUIET_ZONE, QrCode, qrPath } from "./QrCode";
 
@@ -27,7 +27,9 @@ it("draws exactly the dark modules in one path", () => {
 
 it("is a labelled image with a white square, a quiet zone of four modules and crisp edges", async () => {
   const container = document.createElement("div");
-  await act(async () => createRoot(container).render(<QrCode rows={ROWS} label="QR code of the connection details" />));
+  const root = createRoot(container);
+  onTestFinished(() => { act(() => root.unmount()); });
+  await act(async () => root.render(<QrCode rows={ROWS} label="QR code of the connection details" />));
   const svg = container.querySelector("svg")!;
   expect(svg.getAttribute("role")).toBe("img");
   expect(svg.getAttribute("aria-label")).toBe("QR code of the connection details");

@@ -441,7 +441,9 @@ pub(crate) fn carry_out(
             }
         }
         if let Err(err) = trash(&root) {
-            if root.exists() {
+            if !std::fs::symlink_metadata(&root)
+                .is_err_and(|err| err.kind() == std::io::ErrorKind::NotFound)
+            {
                 left.push(failed(item, format!("{err:#}")));
             }
             continue;

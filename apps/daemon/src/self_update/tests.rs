@@ -2354,16 +2354,18 @@ mod hardening {
 
     #[tokio::test]
     async fn a_forced_check_asked_for_during_work_runs_when_it_ends() {
+        use futures_util::FutureExt;
+
         let (state, _installation, _dir) = enabled("harden-recheck", newer_host());
         let claim = state.daemon_update.begin_check(&state, false).unwrap();
         assert!(state.daemon_update.begin_check(&state, true).is_none());
         assert!(
-            tokio::time::timeout(
-                Duration::from_millis(50),
-                state.daemon_update.again.notified()
-            )
-            .await
-            .is_err(),
+            state
+                .daemon_update
+                .again
+                .notified()
+                .now_or_never()
+                .is_none(),
             "nothing is woken while the work runs"
         );
         drop(claim);
@@ -2374,12 +2376,12 @@ mod hardening {
         let claim = state.daemon_update.begin_check(&state, true).unwrap();
         assert!(state.daemon_update.begin_check(&state, false).is_none());
         drop(claim);
-        assert!(tokio::time::timeout(
-            Duration::from_millis(50),
-            state.daemon_update.again.notified()
-        )
-        .await
-        .is_err());
+        assert!(state
+            .daemon_update
+            .again
+            .notified()
+            .now_or_never()
+            .is_none());
     }
 
     #[tokio::test]

@@ -2,6 +2,7 @@ import { consoleAccount } from "../accounts/accountInheritance";
 import { defaultAccountName, listedAgents, servedAgents } from "../agents/agents";
 import { providerShortName } from "../agents/providers";
 import type { Translate } from "../i18n/catalog";
+import { ellipsize } from "../i18n/displayColumns";
 import { isolate } from "../i18n/isolate";
 import type { Language } from "../i18n/languages";
 import type { StatusItemSubmenuDraft, StatusItemSubmenuDraftItem } from "../platform";
@@ -15,6 +16,9 @@ import { accountQuotaOf } from "../accounts/accountQuotaOf";
 import { agentIconKey } from "./statusItemIconKeys";
 
 const MINUTE = 60_000;
+// Leave room for the plan, status and age beside the name in the native menu.
+const MAX_ACCOUNT_NAME_COLUMNS = 40;
+const MAX_ACCOUNT_TITLE_COLUMNS = 60;
 
 /** When the submenus next read differently for the clock alone, at or after `now`: the earliest reset time still
  * ahead among `quotas`' windows (the window is then drawn full) or the next whole minute of a reading's age, which
@@ -66,16 +70,24 @@ function windowParts(t: Translate, source: StatusItemQuotaSource, naming: QuotaN
  * then per window a row (the shell draws its bar), or a single note when there is nothing current to show.
  * The 5-hour window and the account-wide weekly one are one two-layer item, as in Settings. */
 function accountLines(t: Translate, source: StatusItemQuotaSource, agent: Agent, { account, disabled }: QuotaRow): StatusItemSubmenuDraftItem[] {
-  const name = account ? isolate(account.name) : defaultAccountName(t, source.defaultAccountNames, agent);
+  const name = account?.name ?? defaultAccountName(t, source.defaultAccountNames, agent);
   const quota = accountQuotaOf(source.accountQuotas, agent, account?.id ?? null);
-  const planned = quota?.plan ? t("statusItem.quota.account", { account: name, plan: planLabel(agent, quota.plan) }) : name;
+  const withPlan = (name: string) => {
+    const label = account ? isolate(name) : name;
+    return quota?.plan ? t("statusItem.quota.account", { account: label, plan: planLabel(agent, quota.plan) }) : label;
+  };
+  const planned = withPlan(name);
+  const title = ellipsize(withPlan(ellipsize(name, MAX_ACCOUNT_NAME_COLUMNS)), MAX_ACCOUNT_TITLE_COLUMNS);
   // A turned-off account is listed only while the selected session runs on it, and says so last, after its quota
   // state, as the rail's row puts its badge after the rest.
   const marked = (header: string) => disabled ? t("statusItem.quota.accountDisabled", { account: header, disabled: t("accountChoice.disabled.reason") }) : header;
-  if (!quota) return [{ kind: "header", title: marked(planned) }, { kind: "note", text: t("quota.loading") }];
+  const visibleTitle = ellipsize(marked(title), MAX_ACCOUNT_TITLE_COLUMNS);
+  const fullLabel = marked(planned);
+  const header = { kind: "header" as const, title: visibleTitle, ...(visibleTitle === fullLabel ? {} : { label: fullLabel }) };
+  if (!quota) return [header, { kind: "note", text: t("quota.loading") }];
   // An entry with no windows is unavailable whether or not it says why, which the menu does not, except for an
   // account that is not logged in: a state to be told in a word, not a failure.
-  if (quota.windows.length === 0) return [{ kind: "header", title: marked(planned) }, { kind: "note", text: t(isNotLoggedIn(quota.unavailable) ? "statusItem.quota.notLoggedIn" : "quota.unavailable") }];
+  if (quota.windows.length === 0) return [header, { kind: "note", text: t(isNotLoggedIn(quota.unavailable) ? "statusItem.quota.notLoggedIn" : "quota.unavailable") }];
   const naming = quotaNaming(quota, source.providers);
   const exhausted = exhaustedQuotaWindow(quota, source.now) !== undefined;
   const statusTitle = marked(exhausted ? t("statusItem.quota.accountUsedUp", { account: planned }) : planned);
@@ -85,7 +97,7 @@ function accountLines(t: Translate, source: StatusItemQuotaSource, agent: Agent,
   const justNow = isJustNow(quota.fetched_at, source.now);
   const lines: StatusItemSubmenuDraftItem[] = [{
     kind: "header",
-    title: planned,
+    title,
     ...(disabled ? { suffix: t("accountChoice.disabled.reason") } : {}),
     ...(exhausted ? { status: { label: t("quota.usedUp") } } : {}),
     detail: justNow ? t("quota.updatedNow") : t("quota.updated", { age }),

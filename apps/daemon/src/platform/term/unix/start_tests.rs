@@ -215,7 +215,7 @@ fn plain_probe(dir: &ScratchDir, containment: Option<&Containment>) -> Probe {
 }
 
 fn canonical(path: impl AsRef<Path>) -> PathBuf {
-    std::fs::canonicalize(path.as_ref()).expect("the path exists")
+    crate::hostfs::canonical(path).expect("the path exists")
 }
 
 /// The process leads a session of its own, in a process group of its own, with the terminal as

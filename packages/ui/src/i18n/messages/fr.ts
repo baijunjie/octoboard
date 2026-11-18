@@ -138,8 +138,6 @@ export const fr: Translation<"one" | "many" | "other"> = {
   "error.recovery.mcpSignOut": "Vérifiez que le serveur est joignable, puis révoquez de nouveau l’autorisation.",
   "error.recovery.addedAgents": "La liste des agents ajoutés ne correspond pas à l’état attendu pour cette modification. Vérifiez-la avant de la modifier de nouveau.",
   "error.recovery.fileBusy": "Fermez les autres programmes utilisant les fichiers du compte, puis réessayez le changement.",
-  "error.recovery.codexConfig": "Faites du {configToml} du compte un fichier TOML valide et lisible, ou retirez-le, puis réessayez le changement.",
-  "error.recovery.sqliteHome": "Définissez {sqliteHome} dans le {configToml} du compte, ou {codexSqliteHome} dans votre shell de connexion, sur un chemin absolu. Un {tilde} initial nécessite que {home} soit défini. Réessayez ensuite le changement.",
   "error.recovery.symlink": "Les fichiers de conversation contiennent un lien symbolique, qui n’est jamais copié. Dans les fichiers indiqués dans les détails, remplacez-le par une copie de sa cible ou retirez-le s’il est inutile, puis réessayez le changement.",
   "error.recovery.notRestoredAutomatic": "Si vous avez besoin de l’ancien élément, copiez-le hors du dossier indiqué ci-dessus avant cette échéance.",
   "error.recovery.notRestored": "Si vous avez besoin de l’ancien élément, copiez-le hors du dossier indiqué ci-dessus avant cette échéance, puis réessayez le changement.",

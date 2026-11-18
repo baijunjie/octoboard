@@ -2,8 +2,8 @@
 //! cache and checks around the lists. Nothing is hard-coded per version: how a provider's list is
 //! read is the provider's own ([`ModelCatalogue`], returned by `AgentProvider::catalogue`; the
 //! implementations are `crate::adapter::<provider>::models`, which also say what each provider
-//! offers and how it was measured, in the "Model and reasoning effort" note of the provider's
-//! section in `docs/agent-cli-reference.md`).
+//! offers and how it was measured, in `docs/agent-cli-reference.md`, "Model and reasoning effort"
+//! under the provider's section).
 //!
 //! A catalogue belongs to an account, so a command that lists models runs in the login-shell
 //! snapshot with the provider's configuration-directory variable pointed at the account's
@@ -552,16 +552,15 @@ mod tests {
     #[test]
     fn a_failures_ttl_runs_from_after_the_command_not_before_it() {
         let cache = ModelCache::default();
-        let start = Instant::now();
-        // The slow load stands in for a command that ran into its timeout.
+        // The supplied freshness instant is one TTL before the load returns.
+        let start = Instant::now() - FAILED_TTL;
         cache.get_or_load_at(start, AgentId::GROK, None, || {
-            std::thread::sleep(Duration::from_millis(400));
             Listing::unavailable(unreadable(AgentId::GROK))
         });
-        // Past `FAILED_TTL` counted from the start, but inside it counted from the return.
+        // Past the expiry counted from the supplied instant, inside the TTL from the actual load.
         let mut reran = false;
         cache.get_or_load_at(
-            start + FAILED_TTL + Duration::from_millis(200),
+            start + FAILED_TTL + FAILED_TTL / 2,
             AgentId::GROK,
             None,
             || {

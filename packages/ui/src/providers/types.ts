@@ -52,6 +52,8 @@ export interface ProviderPresentation<Id extends string = string, Messages exten
   /** The command a session of the provider authorizes a local MCP server that needs sign-in with (`/mcp`), for a
    * provider whose servers Octoboard cannot sign in itself. */
   readonly mcpSessionSignIn?: string;
+  /** Literal references used in this provider's recovery messages, drawn as inline code. */
+  readonly recoveryReferences?: Readonly<Record<string, string>>;
   /** What the UI knows of each error or notice code the provider's descriptor declares (`provider.<id>.<code>`), by
    * code: the same record the core codes have (`CodeRecord` in `errors/codes.ts`, which this layer cannot import: the
    * registry there checks the merged records against it). The code's words are among `messages`, under the code

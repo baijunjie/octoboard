@@ -165,8 +165,10 @@ pub struct ProviderDescriptor {
     pub layout: &'static AgentLayout,
     /// The names at the top of a project that mark it as set up for this provider.
     pub detection: DetectionMarkers,
-    /// The instruction file the provider reads out of its working directory, matched by exact
-    /// spelling (see "Injecting Octoboard into each agent" in `docs/agent-cli-reference.md`).
+    /// Session marker variables removed from an inherited login-shell environment.
+    /// Enumerate measured markers; user configuration and authentication must survive.
+    pub inherited_session_vars: &'static [&'static str],
+    /// The instruction file read from the working directory, matched by exact spelling.
     pub instruction_file: &'static str,
     /// What a line of [`Self::instruction_file`] starts with, followed by the path of a file beside
     /// it, for the provider to read that file's text in the line's place; `None` where the provider

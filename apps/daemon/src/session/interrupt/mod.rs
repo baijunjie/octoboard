@@ -4,8 +4,8 @@
 //! instructions.
 //!
 //! The key differs per agent, and the wrong one does harm. The measurements are in
-//! `docs/agent-cli-reference.md`, sections "## Claude Code", "## Codex" and "## Grok Build"
-//! (each one's "Keys that interrupt a turn"):
+//! `docs/agent-cli-reference.md`, sections "Claude Code", "Codex" and "Grok Build" (each one's
+//! "Keys that interrupt a turn"):
 //!
 //! - Claude Code and Codex stop on one Esc. Ctrl-C is never sent to either: at an idle Codex it
 //!   exits, and a single one arms Claude Code's "press again to exit". A second Esc is never sent
@@ -682,16 +682,9 @@ fn press(
             && !next_turn
             && input_before.is_some()
             && title.stops() == before.stops;
-        // For Claude Code a prompt its hook reports after the key is the cancelled turn ended once
-        // the title has shown the cancel (its stop count has moved, about 70 ms after the Esc; the
-        // `idle` report that stands in for it on 2.1.322 comes about 80 ms after): the hook also
-        // opens a turn and sets `Working` at once, so neither the end count nor the status moves.
-        // Without the title it proves nothing, as the hook also fires for a message queued
-        // mid-turn, before the cancel has landed. Only for Claude Code: Codex's prompt hook fires
-        // when a message is steered, before the cancel; for Grok Build it is not measured when its
-        // hook fires for a message queued mid-turn, and its cancel is told by `StopCancelled`, or
-        // by its title when no hook fires. The title gate is measured only for Claude Code.
-        let prompted = live.agent == AgentId::CLAUDE
+        let prompted = crate::adapter::provider(live.agent)
+            .screen()
+            .prompt_after_title_stop_ends_turn()
             && live.prompts_sent() != before.prompts
             && title.stops() != before.stops;
         let ended =

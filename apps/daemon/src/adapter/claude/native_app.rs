@@ -21,7 +21,7 @@ const LOG_FILE: &str = "open-in-app.log";
 /// The last `limit` bytes of the file `path`, nothing when it cannot be read.
 fn tail_of(path: &std::path::Path, limit: usize) -> Vec<u8> {
     use std::io::{Read, Seek, SeekFrom};
-    let Ok(mut file) = std::fs::File::open(path) else {
+    let Ok(mut file) = crate::hostfs::open_regular(path) else {
         return Vec::new();
     };
     let length = file.metadata().map_or(0, |meta| meta.len());

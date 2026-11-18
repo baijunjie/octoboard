@@ -1,7 +1,7 @@
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import { FIXTURE_AGENTS, FIXTURE_PROVIDERS } from "../../fixtures/fixtureProviders";
 import { providerLabel } from "../../agents/providers";
-import { type Session, type SessionContext } from "../../protocol";
+import { type Console, type Project, type Session, type SessionContext } from "../../protocol";
 import type { Ui } from "../../fixtures/interact";
 import type { Scenario } from "../scenario";
 import { accountOf, consoleOf, contextOf, gitStatusOf, minutesAgo, projectOf, projectWith, sessionOf, snapshotState, switchingAccount } from "../../fixtures/builders";
@@ -127,7 +127,7 @@ const state = snapshotState({
 // The same workspace under a console whose name no header fits, for the long-names scenario alone.
 const longNameState = {
   ...state,
-  consoles: new Map([...state.consoles!].map(([id, item]) => [id, id === console_.id ? { ...item, name: "Release console مرحبا 東京 UnbrokenConsoleNameForProductionCompatibilityReview" } : item] as const)),
+  consoles: new Map<string, Console>([...state.consoles!].map(([id, item]) => [id, id === console_.id ? { ...item, name: "Release console مرحبا 東京 UnbrokenConsoleNameForProductionCompatibilityReview" } : item] as const)),
 };
 
 // The long-names workspace with the long-named project and the short-named one both pushing, the first
@@ -144,7 +144,7 @@ const pushingGroupsState = {
 // hidden. Keep the hierarchy and empty-state scenarios on their smaller original workspace.
 const scrollingFocusState = {
   ...state,
-  sessions: new Map([
+  sessions: new Map<string, Session>([
     ...state.sessions!,
     ...Array.from({ length: 6 }, (_, i) => {
       const session = sessionOf(`s-scroll-unbound-${i}`, console_.id, project.id, `Review search improvement ${i + 1}`, "idle", i === 0 ? { pinned: true } : {});
@@ -214,8 +214,8 @@ const combinedState = {
     accountOf("a-release", "claude", "Production release coordination and regression review account", "/Users/dev/.claude-regression"),
   ] },
   // The project's own setting is what a card with nothing observed or overridden follows.
-  projects: new Map([...scrollingFocusState.projects!].map(([id, item]) => [id, id === project.id ? projectWith(item, { launch: { claude: { model: "sonnet", effort: "medium" } } }) : item])),
-  sessions: new Map([...scrollingFocusState.sessions].map(([id, session]) => [id, {
+  projects: new Map<string, Project>([...scrollingFocusState.projects!].map(([id, item]) => [id, id === project.id ? projectWith(item, { launch: { claude: { model: "sonnet", effort: "medium" } } }) : item])),
+  sessions: new Map<string, Session>([...scrollingFocusState.sessions].map(([id, session]) => [id, {
     ...session,
     ...observedLaunches[id],
     context: id === "s-1" ? contextOf(30) : id === coordinator.id ? contextOf(65) : id === "s-2" ? contextOf(90) : id === "s-coordinator-1" ? coordinator.context : session.context,
@@ -234,13 +234,13 @@ const combinedState = {
 // agent's defaults, so the tooltip's model and effort both read Default.
 const removedAccountState = {
   ...state,
-  sessions: new Map([...state.sessions!].map(([id, session]) => [id, id === coordinator.id ? { ...session, account_id: "a-removed", config_dir: REMOVED_ACCOUNT_DIR, model: null, effort: null } : session])),
+  sessions: new Map<string, Session>([...state.sessions!].map(([id, session]) => [id, id === coordinator.id ? { ...session, account_id: "a-removed", config_dir: REMOVED_ACCOUNT_DIR, model: null, effort: null } : session])),
 };
 
 // The sidebar row of Rework the result ranking, which runs under Work, reports the model and effort it ran with.
 const observedModelState = {
   ...state,
-  sessions: new Map([...state.sessions!].map(([id, session]) => [id, id === coordinator.id ? { ...session, observed_model: "claude-opus-5-5", observed_effort: "high" } : session])),
+  sessions: new Map<string, Session>([...state.sessions!].map(([id, session]) => [id, id === coordinator.id ? { ...session, observed_model: "claude-opus-5-5", observed_effort: "high" } : session])),
 };
 
 // "Add idempotency keys" is a Claude session. A session's context size comes with a window only once its agent
@@ -248,7 +248,7 @@ const observedModelState = {
 // line settings); the tooltip that draws a usage bar is the same for every agent that does report it.
 const withContext = (context: SessionContext) => ({
   ...scrollingFocusState,
-  sessions: new Map([...scrollingFocusState.sessions].map(([id, session]) => [id, id === "s-1" ? { ...session, context } : session])),
+  sessions: new Map<string, Session>([...scrollingFocusState.sessions].map(([id, session]) => [id, id === "s-1" ? { ...session, context } : session])),
 });
 const limitContextState = withContext({ tokens: 90_227, window: 200_000, used_percent: 45 });
 const warningContextState = withContext({ tokens: 126_450, window: 200_000, used_percent: 63 });
@@ -258,7 +258,7 @@ const dangerContextState = withContext({ tokens: 182_400, window: 200_000, used_
 // dormant session and a paused one, which rank ahead of every Done card.
 const runningInBackgroundState = {
   ...scrollingFocusState,
-  sessions: new Map([
+  sessions: new Map<string, Session>([
     ...scrollingFocusState.sessions,
     ["s-query-working", sessionOf("s-query-working", console_.id, project.id, "Optimize the query plan", "working", { started_at: minutesAgo(5) })],
     ["s-query-dormant", sessionOf("s-query-dormant", console_.id, project.id, "Review the background agents", "dormant", { started_at: minutesAgo(6) })],
@@ -271,8 +271,8 @@ const addIdempotencyKeys = (ui: Ui) => ui.session(ui.t("session.displayTitle", {
 
 const hierarchyState = {
   ...state,
-  projects: new Map([...state.projects!].map(([id, item]) => [id, id === project.id ? { ...item, pinned: true } : item])),
-  sessions: new Map([
+  projects: new Map<string, Project>([...state.projects!].map(([id, item]) => [id, id === project.id ? { ...item, pinned: true } : item])),
+  sessions: new Map<string, Session>([
     ...[...state.sessions!].map(([id, session]) => {
       const row = id === "s-3b" ? { ...session, pinned: true, locked: true }
         : id === "s-3" ? { ...session, pinned: true }
@@ -311,7 +311,7 @@ const stripExtra = [
 // `hub1`'s own card in its focus mode: locked, with a context-size badge beside its agent. `s-1` is locked too.
 const consoleFocusState = {
   ...scrollingFocusState,
-  sessions: new Map([
+  sessions: new Map<string, Session>([
     ...[...scrollingFocusState.sessions].map(([id, session]) => [
       id,
       // `hub3` works itself, but its only bound session is idle with a watcher still running, and background work
@@ -333,7 +333,7 @@ const consoleFocusState = {
 // sessions for the project, two of them with a context size, are what its heading menu previews.
 const projectArchiveInConsoleState = {
   ...consoleFocusState,
-  sessions: new Map([
+  sessions: new Map<string, Session>([
     ...[...consoleFocusState.sessions].map(([id, session]) => [
       id,
       id === "s-coordinator-archived" ? { ...session, context: contextOf(65) }
@@ -715,7 +715,7 @@ export const focusScenarios: Scenario[] = [
     group: GROUP,
     category: "exceptional",
     title: "New session from console focus, the console session archived meanwhile",
-    state: { ...state, sessions: new Map([...state.sessions!].map(([id, session]) => [id, id === hub1.id ? { ...session, title: "Release coordinator مرحبا 東京 UnbrokenOwnerNameForProductionCompatibilityReview", terminal_title: "Review release readiness مرحبا 東京" } : session])) },
+    state: { ...state, sessions: new Map<string, Session>([...state.sessions!].map(([id, session]) => [id, id === hub1.id ? { ...session, title: "Release coordinator مرحبا 東京 UnbrokenOwnerNameForProductionCompatibilityReview", terminal_title: "Review release readiness مرحبا 東京" } : session])) },
     preferences: { sidebarConsole: console_.id, sidebarFocus: `consoleSession:${hub1.id}` },
     description: "The fixed console session was archived from another window while New session was open. The dialog itself turns into a failure modal: a danger icon in the header, the title Cannot open a session, a sentence naming the unavailable owner, and OK as its only footer button, which takes focus, with a close button in the header that does what OK does (Escape and a click outside do nothing). The focus view and its New session went with the archived session, so OK hands focus to the sidebar's first control, New console session, rather than leaving it on the page.",
     steps: [

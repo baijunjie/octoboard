@@ -1,6 +1,6 @@
 //! How Claude Code's screens read: its dialogs, its input box between two horizontal rules and its
 //! draft stash, its folder-trust confirmation, the glyphs its terminal title starts with, and its
-//! interrupt key. The measurements are in `docs/agent-cli-reference.md`, section "## Claude Code".
+//! interrupt key. The measurements are in `docs/agent-cli-reference.md`, section "Claude Code".
 
 use crate::adapter::{LaunchPlan, LaunchSpec};
 use crate::session::dialogs::{DialogKind, DialogPattern, WrittenMessage};
@@ -64,8 +64,8 @@ impl ScreenReader for ClaudeScreen {
         }
     }
 
-    /// Measured on 2.1.310 under "Keys that interrupt a turn" in `docs/agent-cli-reference.md`:
-    /// the interrupt clears a prompt Claude Code put back with it.
+    /// Measured on 2.1.310 in `docs/agent-cli-reference.md`, "Keys that interrupt a turn" under
+    /// "Claude Code": the interrupt clears a prompt Claude Code put back with it.
     fn clears_input_box_with_ctrl_u(&self) -> bool {
         true
     }
@@ -84,6 +84,12 @@ impl ScreenReader for ClaudeScreen {
 
     fn title_cancel(&self) -> Option<TitleCancel> {
         Some(TitleCancel::BackAtPrompt)
+    }
+
+    // The prompt hook alone also fires for a message queued mid-turn. A stopped title
+    // proves the cancel landed before that prompt (measured on 2.1.322).
+    fn prompt_after_title_stop_ends_turn(&self) -> bool {
+        true
     }
 
     fn interrupt(&self) -> Option<&'static Interrupt> {

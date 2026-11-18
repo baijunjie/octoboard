@@ -393,6 +393,7 @@ fn stop_waits_through_the_free_lock_of_a_handover_for_the_successor_and_stops_it
         .with_service_manager(false);
     handing_over.note_handover_in(&data).unwrap();
     let stop = command(&home, "stop");
+    // The CLI only reports when it returns; it does not publish its handover wait.
     std::thread::sleep(HALF_WAY);
     let mut stand_in = StandIn::start_after(
         &home,
@@ -461,8 +462,10 @@ fn stop_leaves_a_daemon_that_records_another_predecessor_running() {
         let mut stop = command(&home, "stop");
         // The daemon that handed over runs, with its note, while `stop` looks, and the other daemon
         // takes the lock and records itself only once `stop` has been seen waiting.
+        // The CLI only reports when it returns; it does not publish its handover wait.
         std::thread::sleep(HALF_WAY);
         let mut stand_in = StandIn::start_held_after(&home, recorded);
+        // The CLI only reports when it returns; it does not publish its handover wait.
         std::thread::sleep(HALF_WAY);
         assert!(
             stop.running(),
@@ -510,6 +513,7 @@ fn stop_leaves_a_daemon_that_is_not_the_service_managed_successor_running() {
     exited.note_handover_in(&data).unwrap();
     let renewal = Renewal::start(exited, data);
     let mut stop = command(&home, "stop");
+    // The CLI only reports when it returns; it does not publish its handover wait.
     std::thread::sleep(HALF_WAY);
     assert!(
         stop.running(),
@@ -544,11 +548,13 @@ fn status_waits_through_the_free_lock_of_a_handover_for_the_successor() {
     handing_over.note_handover_in(&data).unwrap();
     let mut status = command(&home, "status");
     // Still waiting with the lock free after the note.
+    // The CLI only reports when it returns; it does not publish its handover wait.
     std::thread::sleep(HALF_WAY);
     assert!(status.running(), "it answered with the lock free");
     let mut stand_in = StandIn::start_held(&home);
     // And still waiting with the lock held and no record, which only a note of the handover the
     // command saw justifies.
+    // The CLI only reports when it returns; it does not publish its handover wait.
     std::thread::sleep(HALF_WAY);
     assert!(
         status.running(),
@@ -583,6 +589,7 @@ fn status_does_not_wait_on_an_unrecorded_daemon_once_the_handover_note_is_gone()
     let _stand_in = StandIn::start_held(&home);
     let mut status = command(&home, "status");
     // Waiting while the note stands.
+    // The CLI only reports when it returns; it does not publish its handover wait.
     std::thread::sleep(HALF_WAY);
     assert!(status.running(), "it answered while the note stood");
     std::fs::remove_file(data.join("daemon.handover")).unwrap();

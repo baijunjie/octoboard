@@ -16,9 +16,9 @@ use rusqlite::Connection;
 /// schema of a released version raises this by one and appends the step from that version to
 /// [`MIGRATIONS`], and the released version's schema is kept as `schema/v{N}.sql` and listed in the
 /// test-only `PAST_SCHEMAS`, for the test that migrates a database built from each and compares the
-/// result with a fresh one. A version that builds of main have written counts as released, so it is
-/// added to rather than changed in place.
-pub(super) const SCHEMA_VERSION: i64 = 6;
+/// result with a fresh one. A version is released once a `desktop-v*` tag is on a commit that carries
+/// it; prerelease tags count.
+pub(super) const SCHEMA_VERSION: i64 = 5;
 
 /// The `application_id` of an Octoboard database, "OCTB" in ASCII, written into the file's header
 /// when it is created, so that a SQLite file of another program is told apart from one of ours.
@@ -73,16 +73,9 @@ pub(super) const MIGRATIONS: &[&str] = &[
          created_at INTEGER NOT NULL
      );
      CREATE INDEX pages_session_id ON pages (session_id);",
-    // 4 to 5: the setting that has the desktop application's daemon serve a browser on its owner
-    // socket (Allow remote access), and the port it serves a browser at on Windows; and the
-    // language the daemon held for every window and every session becomes the agent language alone,
-    // the interface language having moved to the clients.
+    // 4 to 5: Allow remote access and the browser port on Windows.
     "ALTER TABLE settings ADD COLUMN allow_remote_access INTEGER NOT NULL DEFAULT 0;
-     ALTER TABLE settings ADD COLUMN remote_access_port INTEGER;
-     ALTER TABLE settings RENAME COLUMN interface_language TO agent_language;",
-    // 5 to 6: the language is one setting again, held by the daemon for every window and every
-    // session, so the column is `interface_language` once more and keeps the value it holds.
-    "ALTER TABLE settings RENAME COLUMN agent_language TO interface_language;",
+     ALTER TABLE settings ADD COLUMN remote_access_port INTEGER;",
 ];
 
 /// Every table, index and trigger of the current schema.
@@ -575,20 +568,33 @@ fn checkpoint(path: &Path) -> Result<()> {
 
 /// `<name>` next to `path` if neither it nor any of its [`SIDECARS`] exists, otherwise the first
 /// free `<name>-<n>`, counting from 2, so nothing already there is overwritten.
-fn unused_name(path: &Path, name: &str) -> PathBuf {
-    let taken = |candidate: &Path| {
-        candidate.exists()
-            || SIDECARS
-                .iter()
-                .any(|suffix| sidecar(candidate, suffix).exists())
-    };
+fn unused_name(path: &Path, name: &str) -> std::io::Result<PathBuf> {
     let mut candidate = path.with_file_name(name);
     let mut attempt = 1;
-    while taken(&candidate) {
+    while !name_is_free(&candidate)? {
         attempt += 1;
         candidate = path.with_file_name(format!("{name}-{attempt}"));
     }
-    candidate
+    Ok(candidate)
+}
+
+fn name_is_free(path: &Path) -> std::io::Result<bool> {
+    for candidate in std::iter::once(path.to_path_buf())
+        .chain(SIDECARS.iter().map(|suffix| sidecar(path, suffix)))
+    {
+        if entry_exists(&candidate)? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+fn entry_exists(path: &Path) -> std::io::Result<bool> {
+    match std::fs::symlink_metadata(path) {
+        Ok(_) => Ok(true),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(err) => Err(err),
+    }
 }
 
 /// Renames the pre-release database at `path` to `<name>.superseded-<Unix seconds>` beside it
@@ -602,7 +608,8 @@ fn move_aside(path: &Path) -> Result<()> {
     let moved_aside = unused_name(
         path,
         &format!("{}.superseded-{}", file_name(path), crate::time::now_secs()),
-    );
+    )
+    .with_context(|| format!("finding a free name beside {}", path.display()))?;
     let moving = |from: &Path, to: &Path| {
         std::fs::rename(from, to).with_context(|| {
             format!(
@@ -614,7 +621,7 @@ fn move_aside(path: &Path) -> Result<()> {
     };
     for suffix in SIDECARS {
         let from = sidecar(path, suffix);
-        if from.exists() {
+        if entry_exists(&from)? {
             moving(&from, &sidecar(&moved_aside, suffix))?;
         }
     }
@@ -643,7 +650,8 @@ fn migrate(path: &Path, version: i64, steps: &[&str]) -> Result<()> {
     {
         Some(existing) => existing,
         None => {
-            let backup = backup_path(path, version);
+            let backup = backup_path(path, version)
+                .with_context(|| format!("finding a backup name for {}", path.display()))?;
             write_backup(path, &backup).with_context(|| {
                 format!(
                     "backing up the database {} to {} before migrating it",
@@ -745,13 +753,13 @@ fn write_backup(path: &Path, backup: &Path) -> Result<()> {
 /// Where the backup of the database at `path`, at schema version `version`, goes: next to it as
 /// `<name>.pre-v<version>`, with the time added when an earlier backup already has that name, so
 /// no backup is overwritten.
-fn backup_path(path: &Path, version: i64) -> PathBuf {
+fn backup_path(path: &Path, version: i64) -> std::io::Result<PathBuf> {
     let name = format!("{}.pre-v{version}", file_name(path));
     let candidate = path.with_file_name(&name);
-    if candidate.exists() {
-        unused_name(path, &format!("{name}-{}", crate::time::now_secs()))
+    if name_is_free(&candidate)? {
+        Ok(candidate)
     } else {
-        candidate
+        unused_name(path, &format!("{name}-{}", crate::time::now_secs()))
     }
 }
 
@@ -917,7 +925,6 @@ mod tests {
         include_str!("schema/v2.sql"),
         include_str!("schema/v3.sql"),
         include_str!("schema/v4.sql"),
-        include_str!("schema/v5.sql"),
     ];
 
     /// The files next to `path` that are backups from before a migration.
@@ -1065,6 +1072,15 @@ mod tests {
         }
 
         let store = Store::open(&path).expect("migrated");
+        assert_eq!(user_version(&store.lock()).unwrap(), 5);
+        assert!(!store.allow_remote_access().unwrap());
+        assert_eq!(store.remote_access_port().unwrap(), None);
+        let backup = backups(&path);
+        assert_eq!(backup.len(), 1);
+        assert_eq!(
+            user_version(&Connection::open(&backup[0]).unwrap()).unwrap(),
+            4
+        );
         assert_eq!(store.interface_language().unwrap().as_deref(), Some("ja"));
         let settings = store.get_settings().unwrap();
         assert_eq!(settings.interface_language.as_deref(), Some("ja"));
@@ -1072,37 +1088,6 @@ mod tests {
             settings.auto_pull_repositories,
             "the row's other values stay"
         );
-    }
-
-    /// Migrating a version 5 database, whose language column was the agent language, makes that
-    /// value the one language again, and the remote access settings it holds stay.
-    #[test]
-    fn migrating_a_version_5_database_makes_its_agent_language_the_language() {
-        let path = temp_db("migrate-language-v5");
-        {
-            let conn = Connection::open(&path).expect("version 5 database");
-            conn.execute_batch(PAST_SCHEMAS[4])
-                .expect("version 5 schema");
-            conn.pragma_update(None, "user_version", 5)
-                .expect("version");
-            conn.pragma_update(None, "application_id", APPLICATION_ID)
-                .expect("application id");
-            conn.execute_batch(
-                "INSERT INTO settings (id, auto_pull_repositories, agent_language,
-                                       allow_remote_access, remote_access_port)
-                 VALUES ('singleton', 1, 'de', 1, 4000);",
-            )
-            .expect("settings");
-        }
-
-        let store = Store::open(&path).expect("migrated");
-        assert_eq!(store.interface_language().unwrap().as_deref(), Some("de"));
-        assert_eq!(
-            store.get_settings().unwrap().interface_language.as_deref(),
-            Some("de")
-        );
-        assert!(store.allow_remote_access().unwrap());
-        assert_eq!(store.remote_access_port().unwrap(), Some(4000));
     }
 
     /// Migrating a version 4 database adds Allow remote access, off, and the browser port, unset,
@@ -1534,11 +1519,11 @@ mod tests {
     fn a_taken_name_is_not_overwritten() {
         let path = temp_db("unused-name");
         let name = "octoboard.db.superseded-7";
-        assert_eq!(unused_name(&path, name), path.with_file_name(name));
+        assert_eq!(unused_name(&path, name).unwrap(), path.with_file_name(name));
         std::fs::write(path.with_file_name(name), b"earlier").unwrap();
         std::fs::write(path.with_file_name("octoboard.db.superseded-7-2-wal"), b"").unwrap();
         assert_eq!(
-            unused_name(&path, name),
+            unused_name(&path, name).unwrap(),
             path.with_file_name("octoboard.db.superseded-7-3")
         );
         assert_eq!(
@@ -1548,6 +1533,25 @@ mod tests {
     }
 
     /// Moving aside a second pre-release database keeps the first copy as it was.
+    #[cfg(unix)]
+    #[test]
+    fn an_unreadable_backup_location_is_not_a_free_name() {
+        let dir = crate::test_support::ScratchDir::new("backup-bad-parent");
+        let parent = dir.join("not-a-directory");
+        std::fs::write(&parent, b"occupied").unwrap();
+        assert!(backup_path(&parent.join("octoboard.db"), 1).is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_dangling_symlink_reserves_the_backup_name() {
+        let dir = crate::test_support::ScratchDir::new("backup-link");
+        let path = dir.join("octoboard.db");
+        let taken = backup_path(&path, 1).unwrap();
+        crate::test_support::symlink(dir.join("missing"), &taken).unwrap();
+        assert_ne!(backup_path(&path, 1).unwrap(), taken);
+    }
+
     #[test]
     fn moving_aside_again_keeps_the_earlier_copy() {
         let path = temp_db("pre-release-twice");

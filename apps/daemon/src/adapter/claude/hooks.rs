@@ -49,6 +49,34 @@ fn task_ids(prompt: &str) -> Vec<String> {
 }
 
 impl HookInterpreter for ClaudeHooks {
+    fn starts_conversation(&self, event: &str) -> bool {
+        event == "UserPromptSubmit"
+    }
+
+    fn edit_targets(&self, payload: &Value) -> (Vec<String>, Option<std::path::PathBuf>) {
+        let cwd = payload
+            .get("cwd")
+            .and_then(Value::as_str)
+            .map(std::path::PathBuf::from);
+        let input = payload.get("tool_input");
+        let Some(input) = input else {
+            return (Vec::new(), cwd);
+        };
+        let paths = ["file_path", "notebook_path"]
+            .into_iter()
+            .filter_map(|key| input.get(key)?.as_str())
+            .filter(|path| !path.is_empty())
+            .map(str::to_owned)
+            .collect();
+        (paths, cwd)
+    }
+
+    fn deny_edit(&self, reason: &str) -> Option<Value> {
+        Some(serde_json::json!({"hookSpecificOutput": {
+            "hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": reason
+        }}))
+    }
+
     fn status(&self, event: &str, payload: &Value) -> Option<SessionStatus> {
         match event {
             "SessionStart" => Some(SessionStatus::Idle),

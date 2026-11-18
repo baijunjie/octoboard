@@ -494,26 +494,23 @@ mod tests {
 
     #[tokio::test]
     async fn reads_past_the_concurrency_bound_wait_and_then_run() {
-        let (lane, _control, mut content) = lane(Gate::new(1, 1 << 20), 8);
-        let release = Arc::new(AtomicBool::new(false));
-        let second_started = Arc::new(AtomicBool::new(false));
-        lane.submit(Some("a".into()), None, 1024, held(release.clone(), "a"))
-            .await;
-        let started = second_started.clone();
-        lane.submit(Some("b".into()), None, 1024, move |_| {
-            started.store(true, Ordering::Relaxed);
-            Ok(ack("b"))
+        let gate = Arc::new(Gate::new(1, 1 << 20));
+        let reading = gate.reads.clone().try_acquire_owned().unwrap();
+        let (control, _control_rx) = mpsc::channel(8);
+        let (content, mut reply) = mpsc::channel(8);
+        let lane = Arc::new(Lane::new(gate, 8, 1 << 20, control, content));
+        let started = Arc::new(AtomicBool::new(false));
+        let second_started = started.clone();
+        lane.submit(Some("read".into()), None, 1024, move |_| {
+            second_started.store(true, Ordering::Relaxed);
+            Ok(ack("read"))
         })
         .await;
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        assert!(
-            !second_started.load(Ordering::Relaxed),
-            "ran past the bound"
-        );
-        release.store(true, Ordering::Relaxed);
-        let mut answered = [next(&mut content).await.text, next(&mut content).await.text];
-        answered.sort();
-        assert!(answered[0].contains("\"a\"") && answered[1].contains("\"b\""));
+        crate::test_support::runtime_settled().await;
+        assert!(!started.load(Ordering::Relaxed), "ran past the bound");
+        drop(reading);
+        assert!(next(&mut reply).await.text.contains("\"read\""));
+        assert!(started.load(Ordering::Relaxed));
     }
 
     #[tokio::test]

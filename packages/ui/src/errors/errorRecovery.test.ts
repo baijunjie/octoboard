@@ -38,6 +38,8 @@ it.each([
   ["git_switch_failed", "gitSwitchFailure"], ["git_restore_failed", "gitRestoreFailure"], ["git_operation_in_progress", "none"], ["push_in_progress", "none"],
   ["terminal_unavailable", "openTerminal"], ["directory_unavailable", "openFileManager"], ["path_open_failed", "openDefaultApplication"],
   ["sharing_resume_failed", "none"], ["message_acceptance_unconfirmed", "none"], ["message_refused", "none"], ["terminal_input_lost", "none"], ["trust_not_carried_over", "none"], ["account_sharing_repair_failed", "none"],
+  ["provider.codex.relocation_config_unreadable", "provider.codex.relocation_config_unreadable.remedy"],
+  ["provider.codex.relocation_home_unlocatable", "provider.codex.relocation_home_unlocatable.remedy"],
   ["provider.codex.login_busy", "none"], ["provider_unsupported", "none"], ["login_already_running", "none"], ["login_not_running", "none"],
   ["reset_credit_in_progress", "none"], ["reset_credit_timed_out", "none"], ["reset_credit_failed", "resetCredit"], ["reset_credit_not_signed_in", "resetCreditLogin"],
 ])("classifies the known domain code %s with its specific remedy", (code, recovery) => {

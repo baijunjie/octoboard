@@ -138,8 +138,6 @@ export const de: Translation<"one" | "other"> = {
   "error.recovery.mcpSignOut": "Stelle sicher, dass der Server erreichbar ist, und widerrufe die Autorisierung dann erneut.",
   "error.recovery.addedAgents": "Die Liste der hinzugefügten Agenten entspricht nicht dem für diese Änderung erwarteten Stand. Prüfe sie vor einer weiteren Änderung.",
   "error.recovery.fileBusy": "Schließe andere Programme, die die Dateien des Kontos verwenden, und versuche den Wechsel erneut.",
-  "error.recovery.codexConfig": "Stelle sicher, dass {configToml} des Kontos eine lesbare Datei mit gültigem TOML ist, oder entferne sie. Versuche den Wechsel dann erneut.",
-  "error.recovery.sqliteHome": "Setze {sqliteHome} in der {configToml} des Kontos oder {codexSqliteHome} in deiner Login-Shell auf einen absoluten Pfad. Ein führendes {tilde} erfordert, dass {home} gesetzt ist. Versuche den Wechsel dann erneut.",
   "error.recovery.symlink": "Die Gesprächsdateien enthalten einen symbolischen Link, der nie kopiert wird. Ersetze ihn in den in den Details genannten Dateien durch eine Kopie seines Ziels oder entferne ihn, falls er nicht benötigt wird. Versuche den Wechsel dann erneut.",
   "error.recovery.notRestoredAutomatic": "Falls du das ältere Objekt brauchst, kopiere es vorher aus dem oben genannten Ordner.",
   "error.recovery.notRestored": "Falls du das ältere Objekt brauchst, kopiere es vorher aus dem oben genannten Ordner und versuche den Wechsel erneut.",

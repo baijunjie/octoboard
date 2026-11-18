@@ -5,9 +5,10 @@ import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { ChromeButton } from "../shell/ChromeButton";
 import { AsidePane } from "./AsidePane";
+import { PANE_INSET_MS } from "./paneDockMotion";
 import { PANE_ID } from "./paneOverlay";
 import type { PanePeek } from "./usePaneToggles";
-import { fakeTimers } from "../test/clock";
+import { FAKE_FRAME_MS, fakeTimers, runOutTimers } from "../test/clock";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -114,7 +115,7 @@ it("keeps the pane when the pointer goes from a card into the pane's padding, wh
   const pane = placePane();
   leavePane(pane);
   move(1430);
-  wait(1000);
+  runOutTimers();
   expect(hide).not.toHaveBeenCalled();
 });
 
@@ -123,7 +124,7 @@ it("does not count a move on the aside's toggle as leaving, though the top bar i
   placePane();
   const icon = toggle.firstElementChild!;
   for (const x of [1200, 1201]) act(() => void icon.dispatchEvent(pointer("pointermove", { clientX: x, clientY: 20 })));
-  wait(1000);
+  runOutTimers();
   expect(peek.leave).not.toHaveBeenCalled();
   expect(hide).not.toHaveBeenCalled();
   // Off the toggle, in the same bar, the card is left.
@@ -142,7 +143,7 @@ it("keeps watching after the pointer went outside and came back onto the card, a
   move(1200);
   leavePane(pane);
   move(1430);
-  wait(1000);
+  runOutTimers();
   expect(hide).not.toHaveBeenCalled();
 });
 
@@ -170,9 +171,9 @@ it("keeps a pane whose fade in left a pointerleave behind, with the pointer stil
   const { hide } = mount(true);
   const pane = placePane();
   // The card's edge clears the pointer as it arrives, near the end of the 240ms fade.
-  wait(230);
+  wait(PANE_INSET_MS - FAKE_FRAME_MS);
   leavePane(pane);
-  wait(1000);
+  runOutTimers();
   expect(hide).not.toHaveBeenCalled();
 });
 
@@ -201,13 +202,13 @@ it("keeps the bridge below a toggle in both directions, independently of tooltip
     tooltip.setAttribute("role", "tooltip");
     if (tooltipShown) document.body.appendChild(tooltip);
     move(1216, 38);
-    wait(1000);
+    runOutTimers();
     expect(hide).not.toHaveBeenCalled();
     enterPane(pane);
     move(1216, 60);
     leavePane(pane);
     move(1216, 38);
-    wait(1000);
+    runOutTimers();
     expect(hide).not.toHaveBeenCalled();
     tooltip.remove();
   }

@@ -1383,7 +1383,9 @@ fn a_link_opened_again_after_a_handover_leaves_the_terminal_it_handed_over_unlin
         );
         std::thread::sleep(Duration::from_millis(20));
     }
-    std::thread::sleep(Duration::from_millis(300));
+    // The child records input asynchronously and emits no end-of-input marker.
+    const DUPLICATE_ANSWER_WINDOW: Duration = Duration::from_millis(300);
+    std::thread::sleep(DUPLICATE_ANSWER_WINDOW);
     let input = std::fs::read(&heard).expect("what the program heard");
     assert_eq!(occurrences(&input, answer), 1, "{input:?}");
     // The cursor position is left to the next daemon, which replays it from the tail.
@@ -1524,7 +1526,9 @@ async fn a_planned_parting_leaves_a_holder_that_cannot_be_linked_to_running() {
     })
     .await
     .unwrap();
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    // The holder process does not acknowledge the decision to leave it running.
+    const HOLDER_SURVIVAL_WINDOW: Duration = Duration::from_millis(500);
+    tokio::time::sleep(HOLDER_SURVIVAL_WINDOW).await;
     assert!(
         crate::test_support::is_running(stand_in.pid as i32),
         "the holder was ended"

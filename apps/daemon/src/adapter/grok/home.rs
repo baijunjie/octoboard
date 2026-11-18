@@ -415,7 +415,12 @@ fn write_hooks(farm: &Path, hook_script: &Path, guard: Option<&GuardHook<'_>>) -
     // The cross-project guard decides an edit before it runs, so it is a group of its own beside
     // the status hook, and without `failClosed`: a guard that cannot decide stays silent.
     if let Some(guard) = guard {
-        add_guard_group(&mut hooks, GUARD_MATCHER, &guard.script.to_string_lossy());
+        add_guard_group(
+            &mut hooks,
+            "PreToolUse",
+            GUARD_MATCHER,
+            &guard.script.to_string_lossy(),
+        );
     }
     let document = json!({ "hooks": hooks });
     std::fs::write(

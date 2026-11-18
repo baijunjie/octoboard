@@ -55,7 +55,7 @@ function useStickyExitFade(ref: RefObject<HTMLElement | null>, enabled = true): 
     };
     // A scroll's virtualizer can commit its new positions after the event's other listeners ran.
     const schedule = () => {
-      frame ??= requestAnimationFrame(() => { frame = undefined; measure(); });
+      if (frame === undefined) frame = requestAnimationFrame(() => { frame = undefined; measure(); });
     };
     const mutation = new MutationObserver(watch);
     mutation.observe(scroller, { childList: true, subtree: true });

@@ -82,13 +82,14 @@ fn guard_args(list: &str) -> [Arg<'_>; 3] {
 /// timeout and no `failClosed`, so a guard that cannot decide stays silent.
 pub fn add_guard_group(
     hooks: &mut serde_json::Map<String, serde_json::Value>,
+    event: &str,
     matcher: &str,
     command: &str,
 ) {
     hooks
-        .get_mut("PreToolUse")
+        .get_mut(event)
         .and_then(serde_json::Value::as_array_mut)
-        .expect("PreToolUse is registered")
+        .expect("guard event is registered")
         .push(serde_json::json!({
             "matcher": matcher,
             "hooks": [{

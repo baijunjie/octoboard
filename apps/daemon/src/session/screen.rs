@@ -96,6 +96,12 @@ pub trait ScreenReader: Send + Sync {
         None
     }
 
+    /// Whether a new prompt hook together with a newly stopped title proves that the
+    /// interrupted turn ended. Unmeasured providers make no such inference.
+    fn prompt_after_title_stop_ends_turn(&self) -> bool {
+        false
+    }
+
     /// Whether a terminal title says the provider is waiting on the user for something no hook
     /// announces.
     fn title_needs_user(&self, _title: &str) -> bool {
@@ -200,9 +206,23 @@ mod tests {
             assert!(crate::session::title_activity::shown(AgentId::TEST, glyph, false).is_none());
         }
         assert!(!screen.title_needs_user("anything"));
+        assert!(!screen.prompt_after_title_stop_ends_turn());
         assert!(screen.user_action_title().is_none());
         assert!(screen.title_cancel().is_none());
         assert!(screen.interrupt().is_none());
+    }
+
+    #[test]
+    fn a_prompt_after_a_stopped_title_ends_a_turn_only_for_the_measured_reader() {
+        assert!(provider(AgentId::CLAUDE)
+            .screen()
+            .prompt_after_title_stop_ends_turn());
+        for agent in [AgentId::CODEX, AgentId::GROK, AgentId::TEST] {
+            assert!(
+                !provider(agent).screen().prompt_after_title_stop_ends_turn(),
+                "{agent:?}"
+            );
+        }
     }
 
     /// The default trust screen is never sighted and holds messages for a hook up to the hook

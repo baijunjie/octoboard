@@ -33,7 +33,7 @@
    as they rise, from 1.6 times the large Z where one enters to 0.3 where it leaves (a speck by then). Three copies
    run the same loop a third of a period apart (`-second`, `-third`: the same animation with a negative delay), so
    a new Z enters at the bottom left as the top one leaves. Full opacity throughout, so the glyph keeps the 3:1
-   contrast a state indicator needs at every frame (docs/ui-standard.md, "Contrast"); a copy is wholly
+   contrast a state indicator needs at every frame (docs/conventions/ui-standard.md, "Contrast"); a copy is wholly
    outside the glyph's box at both ends, so its jump back to the start is never seen, and the svg clips it as it
    crosses the edges (`overflow-hidden`), so nothing leaves the slot.
 
@@ -52,7 +52,7 @@
    A kept shortfall, by the user's decision: each Z's stroke shrinks with it, so on a 1x display a Z in the upper
    half of its rise (below about 0.8 times the large one) renders under the 3:1 a state indicator needs, fading
    further as it dwindles to the exit speck; on a 2x display only that speck does. The large Z stays at full
-   contrast. See "Conformance level and exceptions" in docs/ui-standard.md. */
+   contrast. See "Conformance level and exceptions" in docs/conventions/ui-standard.md. */
 @keyframes status-scroll {
   0% { transform: translate(-16.500px, 16.500px) scale(1.6000); }
   2.5% { transform: translate(-14.745px, 14.745px) scale(1.5344); }

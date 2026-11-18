@@ -22,7 +22,7 @@ pub const CONFIGURATION_FORMAT: &str = "octoboard-configuration";
 /// Raised when a change makes a reader of a released version misread a document: a field removed
 /// or given another meaning. A field added, which a reader that does not know it ignores, does not raise it.
 ///
-/// A version that builds of main have written counts as released: it is added to, never changed in place.
+/// A version is released once a `desktop-v*` tag is on a commit that carries it; prerelease tags count.
 ///
 /// An import reads this version and, through the steps of `config_document::upgrade`, every older
 /// one from the first released; it refuses any other. Version changes and upgrade steps are written
@@ -30,10 +30,9 @@ pub const CONFIGURATION_FORMAT: &str = "octoboard-configuration";
 /// version, and raising it past a released version adds the step that upgrades a document of that
 /// version, so an export made by the release stays importable. Version 1 is what the beta releases
 /// wrote; 2 moved the Agent accounts settings into the accounts region and dropped an account's
-/// sharing flag; 3 dropped the sidebar order setting; 4 (written by builds of main) split
-/// the language into `interface_language`, the client's, and `agent_language`, the daemon's; 5
-/// holds one `interface_language` again, so a document of 4 has its `agent_language` folded into it.
-pub const CONFIGURATION_VERSION: u32 = 5;
+/// sharing flag; 3 dropped the sidebar order setting; 4 keeps the one language as
+/// `interface_language`, so a document of 3 already has the current shape.
+pub const CONFIGURATION_VERSION: u32 = 4;
 
 #[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

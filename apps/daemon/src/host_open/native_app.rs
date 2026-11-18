@@ -5,7 +5,7 @@
 
 use std::path::Path;
 
-use crate::platform::open::native_app::url_launch_for;
+use crate::platform::open::native_app::url_launch;
 use crate::platform::open::paths::shell_open;
 
 /// Opens `url` with the application registered for its scheme. `Err` is the reason it could not be.
@@ -14,6 +14,6 @@ pub fn open_url(url: &str) -> Result<(), String> {
         // The shell words its failures for a file or a folder, which a link is neither.
         return opened.map_err(|_| "no application opened the link".to_string());
     }
-    let command = url_launch_for(std::env::consts::OS, url)?;
+    let command = url_launch(url)?;
     super::start(false, command)
 }

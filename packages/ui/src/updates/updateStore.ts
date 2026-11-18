@@ -1,3 +1,4 @@
+import { startPeriodicSweep } from "../components/hooks/periodicSweep";
 import { UpdaterError, type AvailableUpdate, type UpdateChannel, type UpdaterCapability, type UpdateProgress } from "../platform";
 
 /** How long after launch the first automatic check waits, so it never competes with the window opening. */
@@ -305,19 +306,10 @@ export function createUpdateStore({
     onRestartRequested: base.onRestartRequested,
     start(firstCheckDelayMs = FIRST_CHECK_DELAY_MS) {
       if (firstCheckDelayMs === null) return () => {};
-      let interval: ReturnType<typeof setInterval> | undefined;
       // The switch is read at each check, so turning it off stops the checks without stopping the timer.
-      const automatic = () => {
+      return startPeriodicSweep(() => {
         if (getAutoCheck()) void check("automatic");
-      };
-      const first = setTimeout(() => {
-        automatic();
-        interval = setInterval(automatic, CHECK_INTERVAL_MS);
-      }, firstCheckDelayMs);
-      return () => {
-        clearTimeout(first);
-        clearInterval(interval);
-      };
+      }, CHECK_INTERVAL_MS, firstCheckDelayMs);
     },
   };
 }

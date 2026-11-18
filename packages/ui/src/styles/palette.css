@@ -64,3 +64,19 @@
   --color-panel-hover: var(--panel-hover);
   --color-panel-selected: var(--panel-selected);
 }
+
+/* An account that is used up draws its bars in a neutral grey instead of the provider's colour, so it recedes beside the
+   accounts that can still be used; its "Limit reached" badge says why, beside the name on the rail
+   (`AccountNameLine`) and after the bar in the accounts table (`AccountUsageCell`). The grey is the muted text's hue,
+   a step fainter than the provider colours on their track. `--meter-used-up-fill` is the one definition of that grey,
+   which the menu bar icon's menu reads back for its own bars. */
+:root,
+.light,
+[data-theme="light"] {
+  --meter-used-up-fill: oklch(0.61 0.0138 285.94);
+}
+
+.dark,
+[data-theme="dark"] {
+  --meter-used-up-fill: oklch(0.56 0.015 286.067);
+}

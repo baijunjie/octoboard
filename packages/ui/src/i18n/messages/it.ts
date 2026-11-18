@@ -138,8 +138,6 @@ export const it: Translation<"one" | "many" | "other"> = {
   "error.recovery.mcpSignOut": "Assicurati che il server sia raggiungibile, poi revoca di nuovo l’autorizzazione.",
   "error.recovery.addedAgents": "L’elenco degli agenti aggiunti non corrisponde allo stato previsto per questa modifica. Controllalo prima di modificarlo di nuovo.",
   "error.recovery.fileBusy": "Chiudi gli altri programmi che usano i file dell’account, quindi riprova il cambio.",
-  "error.recovery.codexConfig": "Rendi {configToml} dell’account un file TOML valido e leggibile, oppure rimuovilo, quindi riprova il cambio.",
-  "error.recovery.sqliteHome": "Imposta {sqliteHome} nel {configToml} dell’account, o {codexSqliteHome} nella shell di login, su un percorso assoluto. Un {tilde} iniziale richiede che {home} sia definito. Quindi riprova il cambio.",
   "error.recovery.symlink": "I file della conversazione contengono un link simbolico, che non viene mai copiato. Nei file indicati nei dettagli, sostituiscilo con una copia della destinazione o rimuovilo se non serve, quindi riprova il cambio.",
   "error.recovery.notRestoredAutomatic": "Se ti serve l’elemento precedente, copialo fuori dalla cartella indicata prima di quel momento.",
   "error.recovery.notRestored": "Se ti serve l’elemento precedente, copialo fuori dalla cartella indicata prima di quel momento e riprova il cambio.",

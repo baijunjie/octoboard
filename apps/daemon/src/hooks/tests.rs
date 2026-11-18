@@ -1080,3 +1080,12 @@ fn only_claude_code_and_grok_build_report_tool_call_changes() {
         }
     }
 }
+
+#[test]
+fn a_provider_with_no_hook_interpreter_does_not_infer_edit_targets_or_a_denial() {
+    let hooks = of(AgentId::TEST);
+    let payload = json!({ "cwd": "/work", "tool_input": { "file_path": "/foreign/file" } });
+    assert_eq!(hooks.edit_targets(&payload), (Vec::new(), None));
+    assert_eq!(hooks.deny_edit("refused"), None);
+    assert!(!hooks.starts_conversation("UserPromptSubmit"));
+}

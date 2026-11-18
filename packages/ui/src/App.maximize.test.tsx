@@ -14,7 +14,7 @@ import { isolate } from "./i18n/isolate";
 import { PlatformProvider } from "./platform/react";
 import type { Project } from "./protocol";
 import { DaemonProvider, type Daemon } from "./store";
-import { testDaemon } from "./test/testDaemon";
+import { defaultDaemonReply, testDaemon } from "./test/testDaemon";
 import { ThemeProvider } from "./preferences/theme";
 import { BROWSER_HOST } from "./test/hosts";
 import { fakeTimers } from "./test/clock";
@@ -59,7 +59,7 @@ function mountApp() {
   const sessions = [sessionOf("s-site", console_.id, project.id, "Fix header", "idle"), sessionOf("s-console", console_.id, undefined, "Plan release", "idle"), sessionOf("s-old", console_.id, project.id, "Old work", "archived")];
   const daemon = testDaemon({
     state: snapshotState({ consoles: [console_], projects: [project], sessions }),
-    request: vi.fn(async () => ({ type: "ack", id: null })) as Daemon["request"],
+    request: vi.fn(async (body: Parameters<typeof defaultDaemonReply>[0]) => defaultDaemonReply(body)) as Daemon["request"],
   });
   mountForTooltip(
     <PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}>

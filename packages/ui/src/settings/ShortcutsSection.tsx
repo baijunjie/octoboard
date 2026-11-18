@@ -254,8 +254,9 @@ function ShortcutRow({
                 data-shortcut-change=""
                 size="sm"
                 variant="ghost"
-                // An approved departure from HeroUI (`docs/ui-standard.md`, "Do not change how a HeroUI component looks"): the ghost button
-                // draws no fill of its own, so only the key caps show; hover and press darken the caps themselves.
+                // An approved departure from HeroUI (`docs/conventions/ui-standard.md`, "Do not change how a HeroUI
+                // component looks"): the ghost button draws no fill of its own, so only the key caps show; hover and
+                // press darken the caps themselves.
                 className="h-auto min-h-6 min-w-0 justify-self-end rounded-md p-0 whitespace-normal [--button-bg-hover:transparent] [--button-bg-pressed:transparent]"
                 label={actionLabel}
                 // Never left undefined: an empty value keeps the tooltip, which repeats the name, from being read as
@@ -263,7 +264,7 @@ function ShortcutRow({
                 describedBy={[bindingDescriptionId, problem && problemId].filter(Boolean).join(" ")}
                 onPress={() => onRecord(id)}
               >
-                <BindingKbd binding={binding} className="transition-colors in-ui-hovered:bg-(--default-hover) in-ui-hovered:text-foreground in-ui-pressed:bg-(--default-hover) in-ui-pressed:text-foreground" />
+                <BindingKbd binding={binding} className="motion-safe:transition-colors in-ui-hovered:bg-(--default-hover) in-ui-hovered:text-foreground in-ui-pressed:bg-(--default-hover) in-ui-pressed:text-foreground" />
               </Button>
             </TitledControl>
           </>

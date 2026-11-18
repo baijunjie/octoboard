@@ -13,14 +13,14 @@ use super::browse::{
     BranchInfo, BrowseEntry, ChangeEntry, ChangeGroup, CommitChanges, ComparisonEndpoint,
     ContentSource, FileContent, ProjectSourceInfo, SideRead, UpstreamInfo,
 };
-use super::codes::{error_code, Code};
+use super::codes::Code;
 use super::configuration::{
     ConfigurationDocument, DocumentSettings, ImportFailure, ImportItem, ImportItemState,
     ImportedAccounts, ImportedConsole, InspectedAccounts, InspectedConsole, InspectedSettings,
     SettingsSection,
 };
 use super::daemon_update::DaemonUpdateStatus;
-use super::errors::{error_parts, params, Params};
+use super::errors::{params, Params};
 use super::fields::is_true;
 use super::history::{ConversationLocation, HistoryMessage, SessionRecordPresence};
 use super::host::HostInfo;
@@ -778,32 +778,6 @@ pub enum Event {
         params: Params,
         message: String,
     },
-}
-
-impl Event {
-    /// The reply to a request the daemon could not read.
-    pub fn unreadable_request(detail: &str) -> Self {
-        Self::Error {
-            id: None,
-            code: error_code::UNREADABLE_REQUEST,
-            params: params(&[("detail", detail)]),
-            message: format!("unreadable request: {detail}"),
-        }
-    }
-
-    /// The reply to the failure `err`: its own code and params when it is a [`CodedError`], and
-    /// otherwise [`error_code::INTERNAL_ERROR`] carrying the whole context chain.
-    ///
-    /// [`CodedError`]: super::CodedError
-    pub fn from_error(id: Option<String>, err: &anyhow::Error) -> Self {
-        let (code, params, message) = error_parts(err);
-        Self::Error {
-            id,
-            code,
-            params,
-            message,
-        }
-    }
 }
 
 /// Something a session's user has to be told, as a coded message. Carried from where it is found to

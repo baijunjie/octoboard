@@ -299,13 +299,13 @@ it("never asks a key check of a connection that is up or a client that was close
   expect(keyCheck).not.toHaveBeenCalled();
 });
 
-it("refuses a daemon of generation 5, the one before the language was held as one setting again", () => {
+it("refuses a daemon of generation 4, as released in desktop-v0.1.0-beta.6", () => {
   const client = newClient();
   const states: string[] = [];
   client.onConnectionChange((state) => states.push(state));
   const socket = FakeSocket.last;
   open(socket);
-  socket.receive(hello(5));
+  socket.receive(hello(4));
   expect(states.at(-1)).toBe("incompatible");
 });
 

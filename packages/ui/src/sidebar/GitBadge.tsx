@@ -84,18 +84,18 @@ function GitNotFoundMark({ project, error, onRetried }: { project: string; error
  * scrolls downward during a fast-forward. Both scroll inside a fixed count-arrow-sized clip.
  * The ahead/behind counts are likewise never colour alone.
  *
- * A failed check is a failure mark (`StatusMark`, "How a mark is drawn and opened" in `docs/ui-standard.md`) at the
- * badge's start, standing in for the idle glyph: a button named in the application's own words, whose popover holds
- * the reason, the remedy and, last, Git's or the system's own text, which is shown nowhere else. A failure the daemon
- * gives a code (`error_code`: a `git` that cannot be found) is worded as the error alerts word it instead, with its
- * remedy's link (Download Git) and Try again last (`GitNotFoundMark`), whose outcome goes to `onRetried`. While a
- * check, a pull or a push runs, the refresh glyph takes its place (`gitFailureShown`), and it comes back when that run
- * ends unless a check in it succeeded. It stands outside the tooltip's trigger, since a mark is a popover and never
- * also a tooltip, and outside the `aria-hidden` box below. In a sidebar row it is a tab stop of its own, as the row's
- * other buttons are, and its press (react-aria's, which keeps the click to itself) does not reach the row, which would
- * fold the project. When it goes away while it or its popover holds focus (a check starting, or succeeding), focus
- * goes to `returnFocusTo` (itself when it is a tab stop, else its first button), as for any control a state change
- * removes.
+ * A failed check is a failure mark (`StatusMark`, "How a mark is drawn and opened" in
+ * `docs/conventions/ui-standard.md`) at the badge's start, standing in for the idle glyph: a button named in the
+ * application's own words, whose popover holds the reason, the remedy and, last, Git's or the system's own text, which
+ * is shown nowhere else. A failure the daemon gives a code (`error_code`: a `git` that cannot be found) is worded as
+ * the error alerts word it instead, with its remedy's link (Download Git) and Try again last (`GitNotFoundMark`), whose
+ * outcome goes to `onRetried`. While a check, a pull or a push runs, the refresh glyph takes its place
+ * (`gitFailureShown`), and it comes back when that run ends unless a check in it succeeded. It stands outside the
+ * tooltip's trigger, since a mark is a popover and never also a tooltip, and outside the `aria-hidden` box below. In a
+ * sidebar row it is a tab stop of its own, as the row's other buttons are, and its press (react-aria's, which keeps the
+ * click to itself) does not reach the row, which would fold the project. When it goes away while it or its popover
+ * holds focus (a check starting, or succeeding), focus goes to `returnFocusTo` (itself when it is a tab stop, else its
+ * first button), as for any control a state change removes.
  *
  * The rest of the badge is one `IndicatorTooltip` (hover only, so it adds no tab stop to its row)
  * whose rich facts mirror the accessible-name sentence: one tooltip for the glyph, the branch and

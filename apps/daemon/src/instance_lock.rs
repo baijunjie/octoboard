@@ -151,18 +151,19 @@ mod tests {
         let dir = ScratchDir::new("acquire-probe");
         let path = dir.join("daemon.lock");
         let held = crate::platform::fs::try_lock_file_shared(&path).expect("the probe's lock");
-        let hold = Duration::from_millis(50);
+        // The OS gives the probe no signal that another thread has tried its lock.
+        const PROBE_HOLD: Duration = ACQUIRE_STEP.saturating_mul(2);
         // Before the holder starts, so its hold is all inside the wait.
         let began = Instant::now();
         let holder = std::thread::spawn(move || {
-            std::thread::sleep(hold);
+            std::thread::sleep(PROBE_HOLD);
             drop(held);
         });
         let taken = lock_waiting(&path, Duration::from_secs(30), Duration::from_millis(5));
         let waited = began.elapsed();
         holder.join().unwrap();
         assert!(taken.is_ok(), "the lock was free after the moment");
-        assert!(waited >= hold, "the lock was taken while it was held");
+        assert!(waited >= PROBE_HOLD, "the lock was taken while it was held");
     }
 
     /// A daemon holds the lock throughout: a start is still refused, after the wait.

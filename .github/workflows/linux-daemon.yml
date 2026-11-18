@@ -31,7 +31,7 @@ jobs:
       - uses: ./.github/actions/rust-cache
         with:
           profile: linux-check
-      - run: cargo clippy --locked --all-targets -p octoboardd -- -D warnings
+      - run: node scripts/cargo.mjs clippy --locked -p octoboardd
 
   # The suite on glibc, in a privileged container with a cgroup namespace of its own, whose hierarchy
   # `.github/daemon-cgroup-tests.sh` hands to a test user; `OCTOBOARD_REQUIRE_CGROUP=1` there fails a test that would
@@ -89,7 +89,7 @@ jobs:
       - uses: ./.github/actions/rust-cache
         with:
           profile: linux-musl
-      - run: /usr/bin/time -v cargo test --locked -p octoboardd --target ${{ matrix.target }}
+      - run: /usr/bin/time -v node scripts/cargo.mjs test --locked -p octoboardd --target ${{ matrix.target }}
         env:
           CC_x86_64_unknown_linux_musl: musl-gcc
           CC_aarch64_unknown_linux_musl: musl-gcc

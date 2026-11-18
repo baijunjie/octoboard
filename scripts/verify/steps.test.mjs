@@ -7,7 +7,7 @@ const steps = (files) => checkSteps(planScope(files));
 const labels = (files) => steps(files).map((step) => step.label);
 
 test("affected consumers are combined without unrelated checks, light steps first", () => {
-  assert.deepEqual(labels(["scripts/verify/lock.mjs"]), ["identity check", "verify lint", "verify tests", "ui lint", "ui type check", "ui tests"]);
+  assert.deepEqual(labels(["scripts/verify/lock.mjs"]), ["identity check", "provider-neutral core", "verify lint", "verify tests", "ui lint", "ui type check", "ui tests"]);
   const combined = labels(["packages/ui/src/App.tsx", "apps/desktop/scripts/bundle.mjs"]);
   assert.ok(combined.includes("ui tests"));
   assert.ok(combined.includes("desktop script tests"));
@@ -31,7 +31,7 @@ test("web builds precede output tests", () => {
 test("--full lists every consumer's steps, light steps before heavy ones", () => {
   const full = checkSteps({ mode: "full" });
   assert.deepEqual(full.map((step) => step.label), [
-    "identity check", "verify lint", "verify tests", "ui lint", "ui type check", "web lint", "web type check", "web locales", "desktop lint",
+    "identity check", "provider-neutral core", "verify lint", "verify tests", "ui lint", "ui type check", "web lint", "web type check", "web locales", "desktop lint",
     "desktop script tests", "rustfmt check", "ui tests", "web build", "web tests", "rust clippy", "rust tests",
   ]);
   const firstHeavy = full.findIndex((step) => step.heavy);
@@ -52,12 +52,12 @@ test("UI reruns remain narrowed and release checks exclude website and gallery s
   const ui = steps(["packages/ui/src/App.tsx"]).find((step) => step.label === "ui tests");
   assert.deepEqual(ui.rerun(["packages/ui/src/a/X.test.tsx"]), [["pnpm", "--filter", "@octoboard/ui", "test", "src/a/X.test.tsx"]]);
   const release = checkSteps({ mode: "release" });
-  assert.deepEqual(release.map((step) => step.label), ["identity check", "application lint", "application type check", "desktop script tests", "rustfmt check", "application UI tests", "rust clippy", "rust tests", "windows cross-check"]);
-  assert.ok(release[1].cmd.includes("**/src/gallery/**"));
-  assert.ok(release[1].cmd.includes("**/src/fixtures/**"));
-  assert.ok(release[2].cmd.includes("typecheck:app"));
-  assert.ok(release[5].cmd.includes("test:app"));
-  assert.ok(release.slice(5).every((step) => step.heavy));
+  assert.deepEqual(release.map((step) => step.label), ["identity check", "provider-neutral core", "application lint", "application type check", "desktop script tests", "rustfmt check", "application UI tests", "rust clippy", "rust tests", "windows cross-check"]);
+  assert.ok(release[2].cmd.includes("**/src/gallery/**"));
+  assert.ok(release[2].cmd.includes("**/src/fixtures/**"));
+  assert.ok(release[3].cmd.includes("typecheck:app"));
+  assert.ok(release[6].cmd.includes("test:app"));
+  assert.ok(release.slice(6).every((step) => step.heavy));
 });
 
 test("the UI build runs only for the scope that names it", () => {
@@ -72,9 +72,9 @@ test("release groups together run every release check with identical commands an
   const windows = checkSteps({ mode: "release", group: "windows" });
   const commands = (items) => [...new Set(items.map((step) => JSON.stringify(step.cmd)))].sort();
   assert.deepEqual(commands([...frontend, ...native, ...windows]), commands(all));
-  assert.deepEqual(frontend.map((step) => step.label), ["identity check", "application lint", "application type check", "application UI tests"]);
-  assert.deepEqual(native.map((step) => step.label), ["identity check", "desktop script tests", "rustfmt check", "rust clippy", "rust tests"]);
-  assert.deepEqual(windows.map((step) => step.label), ["identity check", "windows cross-check"]);
+  assert.deepEqual(frontend.map((step) => step.label), ["identity check", "provider-neutral core", "application lint", "application type check", "application UI tests"]);
+  assert.deepEqual(native.map((step) => step.label), ["identity check", "provider-neutral core", "desktop script tests", "rustfmt check", "rust clippy", "rust tests"]);
+  assert.deepEqual(windows.map((step) => step.label), ["identity check", "provider-neutral core", "windows cross-check"]);
   assert.throws(() => checkSteps({ mode: "release", group: "unknown" }), /Unknown release check group/);
 });
 

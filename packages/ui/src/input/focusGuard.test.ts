@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 // Loaded first, as `main.tsx` loads it, so every listener below is registered after the guard's.
 import "./focusGuard";
-import { expect, it, onTestFinished, vi } from "vitest";
-import { afterQueuedWork } from "../test/clock";
+import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
+import { fakeTimers, FAKE_FRAME_MS } from "../test/clock";
 
 // Past the frame of a press and the tick after it, where the guard disarms.
-const afterGuard = () => new Promise((resolve) => requestAnimationFrame(() => void afterQueuedWork().then(resolve)));
+const afterGuard = () => vi.runOnlyPendingTimersAsync().then(() => vi.runOnlyPendingTimersAsync());
+
+beforeEach(() => fakeTimers());
 
 function hasFocus(value: boolean) {
   const spy = vi.spyOn(document, "hasFocus").mockReturnValue(value);
@@ -101,9 +103,9 @@ it("stays armed through a second press that comes before it disarms", async () =
   window.addEventListener("blur", heard);
   onTestFinished(() => window.removeEventListener("blur", heard));
   press();
-  await new Promise((resolve) => requestAnimationFrame(resolve));
+  await vi.advanceTimersByTimeAsync(FAKE_FRAME_MS);
   press();
-  await afterQueuedWork();
+  await vi.advanceTimersByTimeAsync(0);
   window.dispatchEvent(new FocusEvent("blur"));
   expect(heard).not.toHaveBeenCalled();
   await afterGuard();

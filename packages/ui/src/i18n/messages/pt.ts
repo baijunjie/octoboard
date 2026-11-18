@@ -137,8 +137,6 @@ export const pt: Translation<"one" | "many" | "other"> = {
   "error.recovery.mcpSignOut": "Verifique se o servidor está acessível e revogue a autorização novamente.",
   "error.recovery.addedAgents": "A lista de agentes adicionados está diferente do esperado para esta alteração. Verifique-a antes de alterá-la novamente.",
   "error.recovery.fileBusy": "Feche outros programas que estejam usando os arquivos da conta e tente a troca novamente.",
-  "error.recovery.codexConfig": "Transforme o {configToml} da conta em um arquivo TOML válido e legível ou remova-o. Depois, tente a troca novamente.",
-  "error.recovery.sqliteHome": "Defina {sqliteHome} no {configToml} da conta, ou {codexSqliteHome} no seu shell de login, como um caminho absoluto (um {tilde} inicial exige que {home} esteja definido). Depois, tente a troca novamente.",
   "error.recovery.symlink": "Os arquivos da conversa contêm um link simbólico, que nunca é copiado. Nos arquivos indicados nos detalhes, substitua-o por uma cópia do destino ou remova-o se não for necessário. Depois, tente a troca novamente.",
   "error.recovery.notRestoredAutomatic": "Se precisar do item mais antigo, copie-o da pasta indicada acima antes desse momento.",
   "error.recovery.notRestored": "Se precisar do item mais antigo, copie-o da pasta indicada acima antes desse momento e tente a troca novamente.",

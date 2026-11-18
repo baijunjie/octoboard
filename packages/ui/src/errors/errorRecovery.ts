@@ -20,7 +20,7 @@ export type ErrorRecovery =
   | "sessionBranches" | "projectBranches" | "lostMessages" | "sharingLostMessages" | "unsentMessage" | "submitRetry" | "unresumable" | "resetCredit" | "resetCreditLogin" | "availability" | "addedAgents" | "agentNotAdded" | "quotaUsedUp" | "accountDisabled" | "accountNotSignedIn"
   | "fileChanging" | "pathLinkAmbiguous" | "pathLinkLaunchable" | "pathLinkNotPrivate" | "forwardRefused"
   | "mcpSignIn" | "mcpSignInTimedOut" | "mcpSignOut"
-  | "fileBusy" | "codexConfig" | "sqliteHome" | "symlink" | "notRestored" | "notRestoredAutomatic"
+  | "fileBusy" | "symlink" | "notRestored" | "notRestoredAutomatic"
   | "accountNotShareable" | "accountSharing" | "accountBusy" | "accountChanging" | "sharingStop" | "ownerChanging" | "ownerMoved"
   | "diskSpaceNoRetry" | "accessNoRetry" | "appDataAccess" | "appDataDiskSpace" | "appDataAccessNoRetry" | "appDataDiskSpaceNoRetry" | "appDataOther" | "appDataOtherNoRetry" | "unlockOriginal" | "waitOriginal" | "stopSessionsNoRetry" | "archiveOriginal" | "handoffBothRunning"
   | "none";
@@ -59,8 +59,7 @@ export type ErrorClassification = { kind: "actionable"; recovery: ErrorRecovery 
 /** The remedy of a conversation move that failed for a cause the daemon names, as `relocationCause` reads it; `other`
  * names none. */
 const RELOCATION_CAUSE_RECOVERY: Record<RelocationCause, ErrorRecovery | undefined> = {
-  permission_denied: "access", busy: "fileBusy", no_space: "diskSpace", config_unreadable: "codexConfig",
-  sqlite_home: "sqliteHome", symlink: "symlink", not_restored: "notRestored", other: undefined,
+  permission_denied: "access", busy: "fileBusy", no_space: "diskSpace", symlink: "symlink", not_restored: "notRestored", other: undefined,
 };
 
 /** The remedy of a `source_unavailable` by its `cause`, as `sourceUnavailableCause` reads it. */

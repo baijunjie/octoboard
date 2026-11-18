@@ -349,7 +349,7 @@ fn launch(
     env: HashMap<String, String>,
     display: DisplaySeed,
 ) -> Result<Arc<ShellProcess>> {
-    if !cwd.is_dir() {
+    if crate::hostfs::require_directory(cwd).is_err() {
         // The terminal backend may fall back to the home directory for a cwd that does not exist.
         return Err(CodedError::raised(
             error_code::DIRECTORY_UNREACHABLE,

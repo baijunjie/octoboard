@@ -285,6 +285,8 @@ export interface Ui {
   /** Opens the context menu of the scroll region named `name` (as `tabToRegion` finds it) at its centre, for a
    * region that is not a pressable control, such as the file viewer's text surfaces. */
   contextMenuRegion: (name: Matcher) => Promise<void>;
+  /** Waits for a control to be rendered without focusing or activating it. */
+  waitForControl: (matcher: Matcher) => Promise<void>;
   /** Waits until the code frame named `name` (a scroll region, as `tabToRegion` finds it) has drawn its highlighted
    * code: the renderer draws it a moment after the frame is there, and a step that selects the code (Select All)
    * before then selects nothing. Fails if the frame never draws any, which also catches one that holds plain text. */
@@ -959,6 +961,9 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
         await wait(POLL_MS);
       }
       throw new Error(`No scroll region named ${String(matcher)}: check the name, and for a region that exists only while its content overflows (a dialog's body, the startup screen's message) that the window is short enough for that`);
+    },
+    async waitForControl(matcher) {
+      await waitFor(() => find(matcher), `No control matching ${String(matcher)} appeared`);
     },
     async codeDrawn(matcher) {
       await waitFor(() => {

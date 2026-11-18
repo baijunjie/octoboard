@@ -1,5 +1,10 @@
 import { useState } from "react";
 
+/** A required field may start with stored text, which the input preserves until the user edits it. */
+export function fieldHasText(value: string): boolean {
+  return /\S/u.test(value);
+}
+
 /**
  * What a single-line field shows apart from what its form holds: the form always gets the value
  * with its leading and trailing whitespace removed, while the field keeps what was typed until it

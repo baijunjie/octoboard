@@ -831,10 +831,7 @@ pub(crate) fn request_restart(_id: &ProcessIdentity) -> Sent {
 pub(crate) fn leave_session() {}
 
 /// No child is told by its pid alone: `None`, as for a child already reaped.
-#[allow(
-    dead_code,
-    reason = "only a test of the Codex transport asks it on Windows"
-)]
+#[allow(dead_code, reason = "only a transport test asks it on Windows")]
 pub(crate) fn unreaped_state(_pid: ProcessId) -> Option<Unreaped> {
     None
 }

@@ -11,7 +11,7 @@ onlyBuiltDependencies:
 # (`@asamuzakjp/dom-selector`) builds a new bidi-js instance for every `dir="auto"` element it checks, which
 # parses the whole Unicode bidi table again: 13-19 % of the CPU of the UI's dialog tests. The patch shares one
 # instance.
-# TODO: drop the patch once jsdom depends on a dom-selector release that shares one bidi-js instance.
+# Keep the patch while jsdom's selector engine creates a bidi-js instance per direction check.
 patchedDependencies:
   '@asamuzakjp/dom-selector@9.2.4': patches/@asamuzakjp__dom-selector@9.2.4.patch
 

@@ -1,4 +1,5 @@
 import type { Agent } from "../protocol";
+import type { Daemon } from "./connection";
 import { setNativeApps } from "./actions";
 import { useDaemon, useDaemonStore } from "./react";
 
@@ -20,15 +21,17 @@ export function useNativeAppUnseen(session: string): boolean {
 export function useNativeAppsRefresh(): (sessions?: readonly string[]) => void {
   const { request, store } = useDaemon();
   return (sessions = []) => {
-    void (async () => {
-      try {
-        const reply = await request({ type: "probe_native_apps", sessions: [...sessions] });
-        // A stand-in daemon that answers every request alike says nothing of the applications.
-        // Only the sessions the daemon judged are recorded, those it found seen and those it found unseen.
-        if (reply?.type === "native_apps") setNativeApps(store, reply.agents, [...reply.sessions_seen, ...(reply.sessions_unseen ?? [])], reply.sessions_seen);
-      } catch {
-        // Background upkeep nobody asked for: the next probe tries again.
-      }
-    })();
+    void refreshNativeApps(request, store, sessions);
   };
+}
+
+async function refreshNativeApps(request: Daemon["request"], store: Daemon["store"], sessions: readonly string[]): Promise<void> {
+  try {
+    const reply = await request({ type: "probe_native_apps", sessions: [...sessions] });
+    // A stand-in daemon that answers every request alike says nothing of the applications.
+    // Only the sessions the daemon judged are recorded, those it found seen and those it found unseen.
+    if (reply?.type === "native_apps") setNativeApps(store, reply.agents, [...reply.sessions_seen, ...(reply.sessions_unseen ?? [])], reply.sessions_seen);
+  } catch {
+    // Background upkeep nobody asked for: the next probe tries again.
+  }
 }

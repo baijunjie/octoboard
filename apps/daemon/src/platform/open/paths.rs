@@ -1,7 +1,7 @@
 //! The commands that open a project directory or a live path with the host's own applications,
-//! or reveal one in its file manager. Which one a host takes is chosen by an OS name passed in
-//! (`std::env::consts::OS` at the call site), so every host's choice is tested on any machine;
-//! what may be opened, and starting the command, are the caller's. Windows opens a file or a folder
+//! or reveal one in its file manager. This module chooses the launcher for the running host.
+//! The OS-parameterized helpers let tests check every host's launcher on any machine.
+//! What may be opened, and starting the command, are the caller's. Windows opens a file or a folder
 //! through the shell's own call rather than a command ([`shell_open`]) and reveals through
 //! `explorer.exe`.
 
@@ -19,7 +19,15 @@ pub enum PathAction {
     ShowFolder,
 }
 
-pub fn path_launch_for(
+pub fn path_launch(
+    path: &Path,
+    action: PathAction,
+    resolve: impl FnOnce(&str) -> Result<String, String>,
+) -> Result<Command, String> {
+    path_launch_for(std::env::consts::OS, path, action, resolve)
+}
+
+fn path_launch_for(
     os: &str,
     path: &Path,
     action: PathAction,
@@ -119,7 +127,11 @@ fn explorer_select_argument(path: &Path) -> Option<std::ffi::OsString> {
 /// Whether the launcher `path_launch_for` or `directory_launch_for` gives for `action` is started
 /// detached instead of waited for: one that lives as long as the application it opens (`xdg-open`),
 /// or whose exit status says nothing about whether it worked (`explorer.exe` exits 1 on success).
-pub fn is_detached(os: &str, action: PathAction) -> bool {
+pub fn is_detached(action: PathAction) -> bool {
+    is_detached_for(std::env::consts::OS, action)
+}
+
+fn is_detached_for(os: &str, action: PathAction) -> bool {
     match os {
         "linux" => action == PathAction::Open,
         "windows" => true,
@@ -278,7 +290,14 @@ fn file_uri(path: &Path) -> String {
     uri
 }
 
-pub fn directory_launch_for(
+pub fn directory_launch(
+    directory: &Path,
+    resolve: impl FnOnce() -> Result<String, String>,
+) -> Result<Command, String> {
+    directory_launch_for(std::env::consts::OS, directory, resolve)
+}
+
+fn directory_launch_for(
     os: &str,
     directory: &Path,
     resolve: impl FnOnce() -> Result<String, String>,
@@ -302,7 +321,11 @@ pub fn directory_launch_for(
 /// whose name has no extension: a package is always named with one, so such a folder is skipped
 /// without asking, and `None` on any `os` but macOS, which alone has packages. Its output goes to
 /// [`package_tree_is_package`].
-pub fn package_probe(os: &str, path: &Path) -> Option<Command> {
+pub fn package_probe(path: &Path) -> Option<Command> {
+    package_probe_for(std::env::consts::OS, path)
+}
+
+fn package_probe_for(os: &str, path: &Path) -> Option<Command> {
     if os != "macos" {
         return None;
     }
@@ -323,8 +346,13 @@ pub fn package_tree_is_package(tree: &str) -> bool {
 
 /// The macOS command that opens `path` in the default text editor, which `open` only does when
 /// asked with `-t`; `None` on any other OS.
-pub fn text_editor_launch(os: &str, path: &Path) -> Option<Command> {
-    if os != "macos" {
+pub fn text_editor_launch(path: &Path, detail: &str) -> Option<Command> {
+    text_editor_launch_for(std::env::consts::OS, path, detail)
+}
+
+fn text_editor_launch_for(os: &str, path: &Path, detail: &str) -> Option<Command> {
+    // Launch Services reports kLSApplicationNotFoundErr for a file type with no default opener.
+    if os != "macos" || !detail.contains("Code=-10814") {
         return None;
     }
     let mut command = Command::new("/usr/bin/open");
@@ -443,11 +471,11 @@ mod tests {
         let directory = directory_launch_for("windows", path, || panic!("no lookup")).unwrap();
         assert_eq!(directory.get_program(), "explorer.exe");
         for action in [PathAction::Open, PathAction::Select, PathAction::ShowFolder] {
-            assert!(is_detached("windows", action));
+            assert!(is_detached_for("windows", action));
         }
-        assert!(is_detached("linux", PathAction::Open));
-        assert!(!is_detached("linux", PathAction::Select));
-        assert!(!is_detached("macos", PathAction::Open));
+        assert!(is_detached_for("linux", PathAction::Open));
+        assert!(!is_detached_for("linux", PathAction::Select));
+        assert!(!is_detached_for("macos", PathAction::Open));
     }
 
     #[test]
@@ -520,7 +548,7 @@ mod tests {
     #[test]
     fn the_text_editor_launch_is_macos_open_with_t() {
         let path = Path::new("/work/-.env.secret");
-        let command = text_editor_launch("macos", path).unwrap();
+        let command = text_editor_launch_for("macos", path, "Code=-10814").unwrap();
         assert_eq!(command.get_program(), "/usr/bin/open");
         assert_eq!(
             command.get_args().collect::<Vec<_>>(),
@@ -530,14 +558,14 @@ mod tests {
                 path.as_os_str()
             ]
         );
-        assert!(text_editor_launch("linux", path).is_none());
+        assert!(text_editor_launch_for("linux", path, "Code=-10814").is_none());
     }
 
     #[test]
     fn a_folder_without_an_extension_is_not_asked_about_and_a_tree_is_read_for_a_package() {
-        assert!(package_probe("macos", Path::new("/work/folder")).is_none());
-        assert!(package_probe("macos", Path::new("/work/Foo.xcodeproj")).is_some());
-        assert!(package_probe("linux", Path::new("/work/Foo.xcodeproj")).is_none());
+        assert!(package_probe_for("macos", Path::new("/work/folder")).is_none());
+        assert!(package_probe_for("macos", Path::new("/work/Foo.xcodeproj")).is_some());
+        assert!(package_probe_for("linux", Path::new("/work/Foo.xcodeproj")).is_none());
         assert!(package_tree_is_package(
             "(\n    \"com.apple.package\",\n    \"public.directory\"\n)"
         ));

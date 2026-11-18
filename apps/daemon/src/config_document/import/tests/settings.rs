@@ -1136,96 +1136,56 @@ async fn the_interface_language_is_carried_and_an_unknown_setting_is_ignored() {
     assert!(target.store.auto_pull_repositories().unwrap());
 }
 
-/// A version 4 document, of a build that split the language into the client's and the daemon's,
-/// carries the daemon's as `agent_language`: its upgrade makes that the one language, whatever the
-/// client's own `interface_language` was, and an import sets it. A version 3 document already
-/// carries the one language as `interface_language`.
+/// A version 3 document carries the one language under its current key. Parsing, inspecting and
+/// importing keep its settings, including values outside the language's section.
 #[tokio::test]
-async fn an_older_documents_language_is_the_one_language() {
-    let (target, _target_dir) = app_state("import-older-language");
-    let sections = || ApplyOptions {
-        settings: vec![SettingsSection::General],
-        accounts: None,
-        consoles: false,
-        clone_dir: false,
-        agents: None,
-    };
-    let split = serde_json::json!({
-        "format": "octoboard-configuration",
-        "version": 4,
-        "settings": { "interface_language": "fr", "agent_language": "de" },
-        "consoles": [],
-    });
-    let imported = apply(&target, &split, Vec::new(), sections())
-        .await
-        .unwrap();
-    assert_eq!(
-        target.store.interface_language().unwrap().as_deref(),
-        Some("de")
-    );
-    let echoed = imported.settings_applied.unwrap();
-    assert_eq!(echoed.interface_language.as_deref(), Some("de"));
-
-    let older = serde_json::json!({
+async fn a_version_3_document_keeps_its_language_and_settings_through_import() {
+    let older = json!({
         "format": "octoboard-configuration",
         "version": 3,
-        "settings": { "interface_language": "ko" },
+        "settings": { "interface_language": "ko", "auto_pull_repositories": true },
         "consoles": [],
     });
-    apply(&target, &older, Vec::new(), sections())
-        .await
-        .unwrap();
+    let parsed = parse(&older).unwrap();
+    assert_eq!(parsed.version, 4);
+    let settings = parsed.settings.unwrap();
+    assert_eq!(settings.interface_language.as_deref(), Some("ko"));
+    assert_eq!(settings.auto_pull_repositories, Some(true));
+
+    let (target, _target_dir) = app_state("import-v3-language");
+    target.store.set_interface_language("ja").unwrap();
+    let inspection = inspect(&target, &older).await.unwrap();
+    assert_eq!(
+        inspection.settings_sections,
+        [SettingsSection::General, SettingsSection::Git]
+    );
+    let settings = inspection.settings.unwrap();
+    assert!(settings.auto_pull_repositories);
+    assert!(!settings.current_auto_pull_repositories);
+
+    let imported = apply(
+        &target,
+        &older,
+        Vec::new(),
+        ApplyOptions {
+            settings: inspection.settings_sections,
+            accounts: None,
+            consoles: false,
+            clone_dir: false,
+            agents: None,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(imported.settings_error.is_none());
+    let echoed = imported.settings_applied.unwrap();
+    assert_eq!(echoed.interface_language.as_deref(), Some("ko"));
+    assert_eq!(echoed.auto_pull_repositories, Some(true));
     assert_eq!(
         target.store.interface_language().unwrap().as_deref(),
         Some("ko")
     );
-}
-
-/// The upgrade of a version 4 document makes its `agent_language` the `interface_language` and
-/// drops the key, keeps the `interface_language` where there is no agent language (or a null
-/// one), and changes nothing else; a version 3 document is left as it was.
-#[test]
-fn a_version_4_documents_agent_language_becomes_its_interface_language() {
-    let upgraded = |version: u32, settings: serde_json::Value| {
-        let mut raw = serde_json::json!({
-            "format": "octoboard-configuration",
-            "version": version,
-            "settings": settings,
-            "consoles": [],
-        })
-        .as_object()
-        .unwrap()
-        .clone();
-        crate::config_document::upgrade::upgrade(&mut raw, version);
-        assert_eq!(raw["version"], json!(CONFIGURATION_VERSION));
-        raw["settings"].clone()
-    };
-    assert_eq!(
-        upgraded(
-            4,
-            json!({ "interface_language": "fr", "agent_language": "de" })
-        ),
-        json!({ "interface_language": "de" })
-    );
-    assert_eq!(
-        upgraded(4, json!({ "agent_language": "de" })),
-        json!({ "interface_language": "de" })
-    );
-    assert_eq!(
-        upgraded(
-            4,
-            json!({ "interface_language": "fr", "agent_language": null })
-        ),
-        json!({ "interface_language": "fr" })
-    );
-    assert_eq!(
-        upgraded(4, json!({ "keep_awake": true })),
-        json!({ "keep_awake": true })
-    );
-    assert_eq!(
-        upgraded(3, json!({ "interface_language": "ko" })),
-        json!({ "interface_language": "ko" })
-    );
+    assert!(target.store.auto_pull_repositories().unwrap());
 }
 
 /// The values only a client holds (appearance, Markdown style, running in the background, the menu

@@ -139,8 +139,6 @@ export const ja: Translation<"other"> = {
   "error.recovery.mcpSignOut": "サーバーに接続できる状態か確認してから、もう一度認証を解除してください。",
   "error.recovery.addedAgents": "追加済みのエージェント一覧が、この変更の前提と異なります。一覧を確認してから、再度変更してください。",
   "error.recovery.fileBusy": "このアカウントのファイルを使用しているほかのプログラムを閉じ、切り替えを再試行してください。",
-  "error.recovery.codexConfig": "このアカウントの {configToml} を読み取り可能で正しい TOML 形式のファイルにするか、取り除いてから、切り替えを再試行してください。",
-  "error.recovery.sqliteHome": "このアカウントの {configToml} 内の {sqliteHome}、またはログインシェルの {codexSqliteHome} を絶対パスに設定し、切り替えを再試行してください。{tilde} で始まる場合は {home} の設定が必要です。",
   "error.recovery.symlink": "会話のファイルにシンボリックリンクが含まれています。シンボリックリンクはコピーされません。詳細に記載されたファイルで、リンク先の内容のコピーに置き換えるか、不要であれば取り除いてから、切り替えを再試行してください。",
   "error.recovery.notRestoredAutomatic": "以前の項目が必要な場合は、それまでに上記のフォルダからコピーしておいてください。",
   "error.recovery.notRestored": "以前の項目が必要な場合は、それまでに上記のフォルダからコピーしておき、切り替えを再試行してください。",

@@ -700,44 +700,70 @@ async fn a_no_process_session_is_told_of_its_new_owner_when_it_next_starts() {
     assert_eq!(state.store.owner_notice_pending("replaced").unwrap(), 0);
 }
 
-/// A launch that fails delivers nothing and keeps the notice owed, and a launch that is not a
-/// Claude Code resume delivers it through the queue once the agent takes input.
+/// A failed launch keeps the notice owed. A successful launch sends it in the resume prompt
+/// if the provider takes an instruction there, or queues it for delivery once it takes input.
 #[tokio::test]
-async fn a_failed_launch_keeps_the_notice_and_a_queued_launch_delivers_it() {
+async fn a_failed_launch_keeps_the_notice_and_a_resumed_launch_delivers_it() {
     use SessionStatus::Idle;
+    let takes_prompt = |agent: AgentId| {
+        agent
+            .descriptor()
+            .capabilities
+            .delivery
+            .resume_instruction_as_launch_prompt
+    };
+    let with_prompt = AgentId::ALL
+        .into_iter()
+        .find(|agent| takes_prompt(*agent))
+        .unwrap();
     let (state, _dir, _live) = binding_fixture(
         "owner-notice-launch",
-        vec![
-            console_session("hub", Idle),
-            no_process_with_conversation("claude", AgentId::CLAUDE, "hub"),
-            no_process_with_conversation("codex", AgentId::CODEX, "hub"),
-        ],
+        std::iter::once(console_session("hub", Idle))
+            .chain(
+                AgentId::ALL
+                    .into_iter()
+                    .map(|agent| no_process_with_conversation(agent.wire_name(), agent, "hub")),
+            )
+            .collect(),
         &["hub"],
     );
-    for id in ["claude", "codex"] {
-        release_session(&state, id, None, None).unwrap();
+    for agent in AgentId::ALL {
+        release_session(&state, agent.wire_name(), None, None).unwrap();
     }
 
-    relaunch_stand_in(&state, "claude", true)
+    let id = with_prompt.wire_name();
+    relaunch_stand_in(&state, id, true)
         .await
         .expect_err("the launch fails");
-    assert_eq!(state.store.owner_notice_pending("claude").unwrap(), 1);
-    assert!(state.take_queued("claude").is_empty());
+    assert_eq!(state.store.owner_notice_pending(id).unwrap(), 1);
+    assert!(state.take_queued(id).is_empty());
     assert_eq!(
-        state.store.get_session("claude").unwrap().unwrap().status,
+        state.store.get_session(id).unwrap().unwrap().status,
         SessionStatus::Interrupted
     );
-    let (prompt, _) = relaunch_stand_in(&state, "claude", false).await.unwrap();
-    assert!(prompt.unwrap().contains("you have no parent session now"));
 
-    let (prompt, queued) = relaunch_stand_in(&state, "codex", false).await.unwrap();
-    assert!(prompt.is_none());
-    assert_eq!(queued.len(), 1);
-    assert!(
-        queued[0].contains("you have no parent session now"),
-        "{queued:?}"
-    );
-    assert_eq!(state.store.owner_notice_pending("codex").unwrap(), 0);
+    for agent in AgentId::ALL {
+        let id = agent.wire_name();
+        let (prompt, queued) = relaunch_stand_in(&state, id, false).await.unwrap();
+        if takes_prompt(agent) {
+            assert!(
+                prompt.unwrap().contains("you have no parent session now"),
+                "{agent:?}"
+            );
+        } else {
+            assert!(prompt.is_none(), "{agent:?}: {prompt:?}");
+            assert_eq!(queued.len(), 1, "{agent:?}: {queued:?}");
+            assert!(
+                queued[0].contains("you have no parent session now"),
+                "{agent:?}: {queued:?}"
+            );
+        }
+        assert_eq!(
+            state.store.owner_notice_pending(id).unwrap(),
+            0,
+            "{agent:?}"
+        );
+    }
 }
 
 /// The parting note of an owner that releases a session that is not running is kept with the

@@ -11,6 +11,7 @@ use std::process::{Command, Stdio};
 use serde_json::{json, Value};
 
 use super::*;
+use crate::protocol::AgentId;
 use crate::test_support::ScratchDir;
 
 const TOOL: &str = "mcp__octoboard__request_session";
@@ -34,6 +35,7 @@ fn guarded(name: &str, root: &Path) -> GuardedProject {
 
 fn list(own: &[&Path], projects: Vec<GuardedProject>, shared: &[&Path]) -> GuardList {
     GuardList {
+        agent: Some(crate::protocol::AgentId::CLAUDE),
         tool: TOOL.to_string(),
         own: own.iter().map(|root| text(root)).collect(),
         repository: None,
@@ -130,6 +132,13 @@ impl Pair {
     fn list(&self) -> GuardList {
         list(&[&self.own], vec![guarded("Beta", &self.other)], &[])
     }
+
+    fn list_for(&self, agent: AgentId) -> GuardList {
+        GuardList {
+            agent: Some(agent),
+            ..self.list()
+        }
+    }
 }
 
 // -- what is denied -------------------------------------------------------------
@@ -166,24 +175,53 @@ fn a_write_into_the_sessions_own_project_or_outside_every_project_passes() {
 }
 
 #[test]
-fn the_target_is_read_from_each_field_the_agents_name_it_in() {
+fn each_provider_reads_its_own_file_edit_fields() {
     let pair = pair();
     let target = text(&pair.other.join("file.txt"));
-    let cwd = text(&pair.own);
-    let shapes = [
-        json!({ "cwd": cwd, "tool_input": { "file_path": target } }),
-        json!({ "cwd": cwd, "tool_input": { "notebook_path": target } }),
-        json!({ "cwd": cwd, "tool_input": { "path": target } }),
-        json!({ "cwd": cwd, "tool_input": { "target_notebook": target } }),
-        json!({ "cwd": cwd, "toolInput": { "file_path": target } }),
-        json!({ "cwd": cwd, "toolInput": { "path": target } }),
-        json!({ "cwd": cwd, "toolInput": { "target_notebook": target } }),
-    ];
-
-    for shape in shapes {
-        let reason = denial(decide_for(&pair.list(), &shape)).unwrap_or_else(|| panic!("{shape}"));
-        assert_reason(&reason, &target, "Beta", TOOL);
+    for (agent, inputs, fields) in [
+        (
+            AgentId::CLAUDE,
+            vec!["tool_input"],
+            vec!["file_path", "notebook_path"],
+        ),
+        (
+            AgentId::GROK,
+            vec!["tool_input", "toolInput"],
+            vec!["file_path", "notebook_path", "path", "target_notebook"],
+        ),
+    ] {
+        for input in inputs {
+            for field in &fields {
+                let shape = json!({ "cwd": text(&pair.own), (input): { (*field): target } });
+                let reason = denial(decide_for(&pair.list_for(agent), &shape))
+                    .unwrap_or_else(|| panic!("{agent:?}: {shape}"));
+                assert_reason(&reason, &target, "Beta", TOOL);
+            }
+        }
     }
+}
+
+#[test]
+fn an_unmeasured_provider_or_an_old_list_does_not_guess_an_edit_format() {
+    let pair = pair();
+    let payload = write_payload(&pair.other.join("file.txt"), &pair.own);
+    assert_eq!(decide_for(&pair.list_for(AgentId::TEST), &payload), None);
+    let mut old = pair.list();
+    old.agent = None;
+    assert_eq!(decide_for(&old, &payload), None);
+    let mut json = serde_json::to_value(pair.list()).unwrap();
+    json.as_object_mut().unwrap().remove("agent");
+    let old: GuardList = serde_json::from_value(json).unwrap();
+    assert_eq!(decide_for(&old, &payload), None);
+}
+
+#[test]
+fn a_payload_is_not_read_as_another_providers_format() {
+    let pair = pair();
+    let payload = json!({ "cwd": text(&pair.own), "toolInput": { "path": text(&pair.other.join("file.txt")) } });
+    assert_eq!(decide_for(&pair.list_for(AgentId::CLAUDE), &payload), None);
+    assert_eq!(decide_for(&pair.list_for(AgentId::CODEX), &payload), None);
+    assert!(denial(decide_for(&pair.list_for(AgentId::GROK), &payload)).is_some());
 }
 
 #[test]
@@ -209,6 +247,7 @@ fn a_relative_target_is_resolved_against_the_payloads_directory() {
 #[test]
 fn every_file_an_apply_patch_names_is_judged_against_the_payloads_directory() {
     let pair = pair();
+    let list = pair.list_for(AgentId::CODEX);
     let other_file = text(&pair.other.join("file.txt"));
     let patch = |lines: &[String]| {
         json!({
@@ -229,7 +268,7 @@ fn every_file_an_apply_patch_names_is_judged_against_the_payloads_directory() {
         "*** Update File: ../other/file.txt".to_string(),
     ] {
         let payload = patch(&[own_update.clone(), header.clone()]);
-        let reason = denial(decide_for(&pair.list(), &payload));
+        let reason = denial(decide_for(&list, &payload));
         assert!(
             reason.is_some_and(|reason| reason.contains("\"Beta\"")),
             "{header}"
@@ -243,20 +282,20 @@ fn every_file_an_apply_patch_names_is_judged_against_the_payloads_directory() {
             text(&pair.other.join("indented.txt"))
         ),
     ]);
-    assert!(denial(decide_for(&pair.list(), &indented)).is_some());
+    assert!(denial(decide_for(&list, &indented)).is_some());
     // A move's destination counts, although the file moved is the session's own.
     let moved = patch(&[
         own_update.clone(),
         format!("*** Move to: {}", text(&pair.other.join("moved.txt"))),
     ]);
-    assert!(denial(decide_for(&pair.list(), &moved)).is_some());
+    assert!(denial(decide_for(&list, &moved)).is_some());
     // The other project's file named after the session's own ones is still found.
     let last = patch(&[
         own_update.clone(),
         "*** Add File: own-two.txt".to_string(),
         format!("*** Update File: {}", text(&pair.other.join("last.txt"))),
     ]);
-    let reason = denial(decide_for(&pair.list(), &last)).expect("denied");
+    let reason = denial(decide_for(&list, &last)).expect("denied");
     assert!(reason.contains("last.txt"), "{reason}");
 
     // A patch inside the session's own project, and a shell command, pass.
@@ -265,9 +304,9 @@ fn every_file_an_apply_patch_names_is_judged_against_the_payloads_directory() {
         "*** Add File: new.txt".to_string(),
         "*** Move to: moved.txt".to_string(),
     ]);
-    assert_eq!(decide_for(&pair.list(), &own_only), None);
+    assert_eq!(decide_for(&list, &own_only), None);
     let shell = json!({ "cwd": text(&pair.own), "tool_input": { "command": "ls ../other" } });
-    assert_eq!(decide_for(&pair.list(), &shell), None);
+    assert_eq!(decide_for(&list, &shell), None);
 }
 
 #[test]
@@ -604,6 +643,7 @@ fn a_long_project_or_tool_name_is_not_cut() {
     let project = long_name("project ", 200);
     let tool = format!("mcp__{}__request_session", long_name("x", 100));
     let list = GuardList {
+        agent: Some(crate::protocol::AgentId::CLAUDE),
         tool: tool.clone(),
         projects: vec![guarded(&project, &pair.other)],
         ..pair.list()
@@ -754,8 +794,12 @@ fn run_child(list_file: &Path, payload: &str, env: &[(&str, &Path)]) -> Ran {
 }
 
 fn written_list(pair: &Pair) -> PathBuf {
+    written_list_for(pair, AgentId::CLAUDE)
+}
+
+fn written_list_for(pair: &Pair, agent: AgentId) -> PathBuf {
     let file = pair.root.join("guard-list.json");
-    std::fs::write(&file, serde_json::to_vec(&pair.list()).unwrap()).unwrap();
+    std::fs::write(&file, serde_json::to_vec(&pair.list_for(agent)).unwrap()).unwrap();
     file
 }
 
@@ -871,7 +915,7 @@ fn a_payload_without_a_directory_goes_by_the_workspace_root_grok_gives() {
     let payload = json!({ "toolInput": { "path": "../other/file.txt" } }).to_string();
 
     let ran = run_child(
-        &written_list(&pair),
+        &written_list_for(&pair, AgentId::GROK),
         &payload,
         &[("GROK_WORKSPACE_ROOT", &pair.own)],
     );
@@ -882,7 +926,7 @@ fn a_payload_without_a_directory_goes_by_the_workspace_root_grok_gives() {
     // From the other project's own root, the same relative name leads into the session's own.
     let payload = json!({ "toolInput": { "path": "../own/file.txt" } }).to_string();
     let ran = run_child(
-        &written_list(&pair),
+        &written_list_for(&pair, AgentId::GROK),
         &payload,
         &[("GROK_WORKSPACE_ROOT", &pair.other)],
     );

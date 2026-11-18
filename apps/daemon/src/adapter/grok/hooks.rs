@@ -35,6 +35,37 @@ use crate::protocol::{AgentId, BackgroundTask, SessionStatus};
 pub(super) struct GrokHooks;
 
 impl HookInterpreter for GrokHooks {
+    fn starts_conversation(&self, event: &str) -> bool {
+        event == "UserPromptSubmit"
+    }
+
+    fn edit_targets(&self, payload: &Value) -> (Vec<String>, Option<std::path::PathBuf>) {
+        let cwd = payload
+            .get("cwd")
+            .and_then(Value::as_str)
+            .map(std::path::PathBuf::from)
+            .or_else(|| std::env::var_os("GROK_WORKSPACE_ROOT").map(std::path::PathBuf::from));
+        let input = ["tool_input", "toolInput"]
+            .into_iter()
+            .find_map(|key| payload.get(key));
+        let Some(input) = input else {
+            return (Vec::new(), cwd);
+        };
+        let paths = ["file_path", "notebook_path", "path", "target_notebook"]
+            .into_iter()
+            .filter_map(|key| input.get(key)?.as_str())
+            .filter(|path| !path.is_empty())
+            .map(str::to_owned)
+            .collect();
+        (paths, cwd)
+    }
+
+    fn deny_edit(&self, reason: &str) -> Option<Value> {
+        Some(serde_json::json!({"hookSpecificOutput": {
+            "hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": reason
+        }}))
+    }
+
     fn status(&self, event: &str, payload: &Value) -> Option<SessionStatus> {
         match event {
             "SessionStart" => Some(SessionStatus::Idle),

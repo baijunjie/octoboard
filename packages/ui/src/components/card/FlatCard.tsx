@@ -22,7 +22,7 @@ const InBlocksContext = createContext(false);
  *   against a band or the card's edge, and none is drawn against the header, since it is drawn below an item only.
  *
  * Only the header and the band run the card's full width. See "Hand-built rows and cards" and "Where a groove goes" in
- * docs/ui-standard.md.
+ * docs/conventions/ui-standard.md.
  */
 function FlatCardRoot({ children }: { children: React.ReactNode }): React.ReactElement {
   const headingId = useId();

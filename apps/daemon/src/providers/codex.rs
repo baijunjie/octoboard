@@ -29,6 +29,13 @@ pub const NATIVE_PROGRAM_MISSING: ProviderCode =
 /// ends. No `params`.
 pub const MESSAGES_HELD: ProviderCode = ProviderCode::notice("provider.codex.messages_held");
 
+/// Relocation cannot read the target account's configuration. Params: path, stage, cause, detail.
+pub const RELOCATION_CONFIG_UNREADABLE: ProviderCode =
+    ProviderCode::error("provider.codex.relocation_config_unreadable");
+/// Relocation cannot determine the thread database directory. Params: path, stage, cause, detail.
+pub const RELOCATION_HOME_UNLOCATABLE: ProviderCode =
+    ProviderCode::error("provider.codex.relocation_home_unlocatable");
+
 impl AgentId {
     pub const CODEX: AgentId = AgentId(DESCRIPTOR.id);
 }
@@ -95,6 +102,7 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         own: &[".codex"],
         generic: &["AGENTS.md", ".agents"],
     },
+    inherited_session_vars: &[],
     instruction_file: "AGENTS.md",
     instruction_import_prefix: None,
     tool_name_prefix: "mcp__",
@@ -168,6 +176,8 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         },
     ],
     codes: &[
+        RELOCATION_CONFIG_UNREADABLE,
+        RELOCATION_HOME_UNLOCATABLE,
         LOGIN_BUSY,
         UNARCHIVE_FAILED,
         NATIVE_PROGRAM_MISSING,
@@ -213,16 +223,20 @@ mod tests {
         use super::super::ProviderCodeKind::{Error, Notice};
         assert_eq!(
             [
+                RELOCATION_CONFIG_UNREADABLE.kind,
+                RELOCATION_HOME_UNLOCATABLE.kind,
                 LOGIN_BUSY.kind,
                 UNARCHIVE_FAILED.kind,
                 NATIVE_PROGRAM_MISSING.kind,
                 MESSAGES_HELD.kind
             ],
-            [Error, Error, Error, Notice]
+            [Error, Error, Error, Error, Error, Notice]
         );
         assert_eq!(
             DESCRIPTOR.codes,
             [
+                RELOCATION_CONFIG_UNREADABLE,
+                RELOCATION_HOME_UNLOCATABLE,
                 LOGIN_BUSY,
                 UNARCHIVE_FAILED,
                 NATIVE_PROGRAM_MISSING,

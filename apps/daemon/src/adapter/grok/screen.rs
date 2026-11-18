@@ -1,6 +1,6 @@
-//! How Grok Build's screens read: its dialogs, its composer drawn as a box of its own and its
-//! draft stash, its folder-trust confirmation, its terminal title, and its interrupt key. The
-//! measurements are in `docs/agent-cli-reference.md`, section "## Grok Build".
+//! How Grok Build's screens read: its dialogs, its composer drawn as a box of its own and its draft
+//! stash, its folder-trust confirmation, its terminal title, and its interrupt key. The
+//! measurements are in `docs/agent-cli-reference.md`, section "Grok Build".
 
 use crate::adapter::{AgentVersion, LaunchPlan, LaunchSpec};
 use crate::session::dialogs::{DialogKind, DialogPattern, WrittenMessage};
@@ -34,8 +34,8 @@ impl ScreenReader for GrokScreen {
         })
     }
 
-    /// Measured on 1.0.70 under "Keys that interrupt a turn" in `docs/agent-cli-reference.md`:
-    /// the interrupt clears a draft with it mid-turn, before its Ctrl-C.
+    /// Measured on 1.0.70 in `docs/agent-cli-reference.md`, "Keys that interrupt a turn" under
+    /// "Grok Build": the interrupt clears a draft with it mid-turn, before its Ctrl-C.
     fn clears_input_box_with_ctrl_u(&self) -> bool {
         true
     }

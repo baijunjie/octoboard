@@ -10,7 +10,7 @@ use std::cmp::Ordering;
 /// while this is not the greatest stable `desktop-v*` tag below the new version (`0.0.0` while
 /// there is none), so the first release after a stable release moves it to that stable release,
 /// in a commit of its own, first.
-pub const FLOOR: &str = "0.0.0";
+pub const FLOOR: &str = include_str!("../../../../config/holder-floor.txt").trim_ascii();
 
 /// A version as semantic versioning orders it: the numbers first, then a prerelease before the
 /// release it leads up to, its dot-separated identifiers one by one (numbers as numbers and below

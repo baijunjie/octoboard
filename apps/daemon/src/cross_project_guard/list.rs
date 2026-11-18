@@ -23,6 +23,9 @@ const LIST_FILE: &str = "cross-project-guard.json";
 /// lead to rather than by their text.
 #[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GuardList {
+    /// The provider that interprets payloads and writes refusal responses. Old lists fail open.
+    #[serde(default)]
+    pub agent: Option<crate::protocol::AgentId>,
     /// The session's agent's own qualified name of `request_session`, which the refusal names.
     pub tool: String,
     /// The roots of the session's own project: where it wins over another project's root that
@@ -92,6 +95,7 @@ pub async fn for_session(state: &Arc<AppState>, session: &Session) -> Result<Opt
         .map(|Project { name, path, .. }| GuardedProject { name, root: path })
         .collect();
     Ok(Some(GuardList {
+        agent: Some(session.agent),
         tool: qualified_tool_name(session.agent, "request_session"),
         own: vec![project.path],
         repository: repository.map(|repository| path_text(repository)),

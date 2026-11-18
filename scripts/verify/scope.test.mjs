@@ -43,6 +43,7 @@ const CASES = [
   ["eslint.config.mjs", JS],
   ["packages/ui/eslint.layers.mjs", JS],
   ["package.json", ALL_PACKAGES],
+  ["config/holder-floor.txt", ["verify", "desktop", "daemon"]],
   ["scripts/lib/env.mjs", ["verify", "ui", "desktop"], ["ui"]],
   ["scripts/lib/env.d.mts", ["verify", "ui", "desktop"]],
   ["scripts/lib/git.mjs", ["verify", "ui", "desktop"], ["ui"]],

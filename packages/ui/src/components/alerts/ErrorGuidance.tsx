@@ -1,3 +1,5 @@
+import { providerPresentation } from "../../providers/registry";
+
 import type { ReactElement } from "react";
 
 import { providerLabel } from "../../agents/providers";
@@ -69,10 +71,9 @@ export function recoveryParams<V = never>(t: Translate, mark?: RecoveryMarks<V>)
     terminal: t("common.terminal"), reopen: t("sidebar.session.reopen"), viewArchive: t("sidebar.archive.consoleSessions"), newSession: t("sidebar.focus.newSession"), retry: t("connection.retry"), browse: t("common.browse"), unlock: t("sidebar.session.unlock"), changeModel: t("sidebar.session.changeModel"),
     shareDefaultConfig: t("settings.accounts.sharing.label"), accountsPath: pathText(accountsSteps),
     worktreeList: "git worktree list", branchList: "git branch",
-    configToml: "config.toml", sqliteHome: "sqlite_home", codexSqliteHome: "CODEX_SQLITE_HOME", tilde: "~", home: "HOME",
   };
   if (!mark) return values;
-  return Object.fromEntries(Object.entries(values).map(([name, value]) => [name, name === "accountsPath" ? mark.path(accountsSteps) : mark.reference(value, ["pathVar", "enter", "worktreeList", "branchList", "configToml", "sqliteHome", "codexSqliteHome", "tilde", "home"].includes(name))]));
+  return Object.fromEntries(Object.entries(values).map(([name, value]) => [name, name === "accountsPath" ? mark.path(accountsSteps) : mark.reference(value, ["pathVar", "enter", "worktreeList", "branchList"].includes(name))]));
 }
 
 /** Whether `recovery` is worded by a provider's module (`provider.<id>.<code>.remedy`). */
@@ -84,7 +85,9 @@ function isProviderRemedy(recovery: ErrorRecovery): recovery is ProviderRemedy {
  * name is the module's, with no served label needed. */
 function ProviderRemedyGuidance({ remedy }: { remedy: ProviderRemedy }): ReactElement {
   const t = useT();
-  const params = { ...recoveryParams(t, RICH_MARKS), agent: <InlineReference dir="auto" wrap>{providerLabel(t, [], remedy.split(".")[1])}</InlineReference> };
+  const references = providerPresentation(remedy.split(".")[1])?.recoveryReferences ?? {};
+  const marked = Object.fromEntries(Object.entries(references).map(([key, value]) => [key, RICH_MARKS.reference(value, true)]));
+  const params = { ...recoveryParams(t, RICH_MARKS), ...marked, agent: <InlineReference dir="auto" wrap>{providerLabel(t, [], remedy.split(".")[1])}</InlineReference> };
   return <Message id={remedy as MessageKey} params={params as never} />;
 }
 

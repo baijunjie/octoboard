@@ -128,8 +128,8 @@ export function EntryStatus({ entry }: { entry: StatusEntry }): React.ReactEleme
 export type Shown = ReturnType<typeof useSubmitValidation>["shown"];
 
 /** A labelled path or URL on a line of its own, shown as plain monospace text (see the "References in copy use
- * `InlineReference`" section of docs/ui-standard.md). It is a pair of cells of a `dl` laid out as a two-column
- * grid. */
+ * `InlineReference`" section of docs/conventions/ui-standard.md). It is a pair of cells of a `dl` laid out as a
+ * two-column grid. */
 export function Field({ label, value, mark }: {
   label: string;
   value: string;
@@ -147,10 +147,10 @@ export function Field({ label, value, mark }: {
   );
 }
 
-/** A directory on a line of its own, led by a folder icon in place of a label repeated on every row. The icon is a
- * mark that nothing else on screen names, so it is a named image (`label`) with the same words as its tooltip. Kept
- * shortfall, marked here as "A tooltip on a mark that is not a control" in docs/ui-standard.md asks: a sighted user
- * working from the keyboard reaches no tooltip, so the folder's name reaches them nowhere. */
+/** A directory on a line of its own, led by a folder icon in place of a label repeated on every row. The icon is a mark
+ * that nothing else on screen names, so it is a named image (`label`) with the same words as its tooltip. Kept
+ * shortfall, marked here as "A tooltip on a mark that is not a control" in docs/conventions/ui-standard.md asks: a
+ * sighted user working from the keyboard reaches no tooltip, so the folder's name reaches them nowhere. */
 export function DirectoryLine({ label, value }: { label: string; value: string }): React.ReactElement {
   return (
     <div className="flex items-start gap-1.5 text-sm">

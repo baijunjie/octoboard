@@ -94,7 +94,9 @@ impl Fixture {
 
     /// Nothing was sent to the worker and no report reached the owner.
     async fn nothing_came_of_the_wait(&self, name: &str) {
-        tokio::time::sleep(SHORT * 5).await;
+        // A canceled retry on the worker PTY has no output or completion event.
+        const UNSENT_RETRY_WINDOW: Duration = SHORT.saturating_mul(5);
+        tokio::time::sleep(UNSENT_RETRY_WINDOW).await;
         let heard = self.worker_output();
         assert!(!heard.contains("retrying automatically"), "{name}: {heard}");
         let heard = hub_heard(&self.state, &self.hub).await;
@@ -470,6 +472,8 @@ async fn an_end_before_the_wait_starts_keeps_it_from_starting() {
     );
 
     fixture.owner_gets_the_failed_report().await;
-    tokio::time::sleep(SHORT * 5).await;
+    // The stand-in cannot acknowledge a retry it did not receive after the failure.
+    const UNSENT_RETRY_WINDOW: Duration = SHORT.saturating_mul(5);
+    tokio::time::sleep(UNSENT_RETRY_WINDOW).await;
     assert!(!fixture.worker_output().contains("retrying automatically"));
 }

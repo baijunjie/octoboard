@@ -369,22 +369,25 @@ be passed on every launch, because after a compaction the snapshot is re-rendere
 Passing `--system-prompt-snapshot off` inverts this, at the price of the role vanishing from any launch that omits it
 and of prompt-cache replay.
 
-**Model and reasoning effort**: `--model <id>` and `--effort <level>`, both global flags, so they work alongside
+### Model and reasoning effort
+
+The model is passed as `--model <id>` and the effort as `--effort <level>`, both global flags, so they work alongside
 `--resume`. They sit at the end of the flag list, after `--append-system-prompt`, so nothing non-flag follows a
 list-valued flag such as `--mcp-config`. On a model that does not support `max` or `xhigh`, Claude Code **silently
-lowers the level to `high`** rather than refusing it.
-The level a reply ran at is always on record: each main-transcript assistant line carries it as a top-level `effort`,
-also when nothing sets one — every such line of 155 transcripts written by 2.1.286 to 2.1.304, on a `settings.json`
-with no `effortLevel`.
+lowers the level to `high`** rather than refusing it. The level a reply ran at is always on record: each main-transcript
+assistant line carries it as a top-level `effort`, also when nothing sets one — every such line of 155 transcripts
+written by 2.1.286 to 2.1.304, on a `settings.json` with no `effortLevel`.
 
-**Discovering models** (Claude Code 2.1.296, the account catalogue read off disk on 2.1.317): there is **no `models`
-subcommand**, but there is a real alias layer. `fable`, `opus`, `sonnet` and `haiku` resolve to the newest member of
-each family through the catalogue Claude Code fetches from its server (fable-5-1, opus-5-5, sonnet-5-5 and haiku-5-5
-when measured), so no version has to be written down. `best` means "the top model if the account has it, else Opus", but
-it falls back to Opus **without checking that the account may use Opus**, so it is not safe to rely on: a Pro account
-measured here has both `fable` and `opus` disabled. A model the account cannot use is **refused** at launch with `Model
-'X' is not currently available for your account.` followed by the catalogue's notice. `latest` is a reserved word and
-**not an alias**; `mythos` has no alias. The list Octoboard offers is therefore the four strings `fable`, `opus`,
+### Discovering models
+
+Measured on Claude Code 2.1.296, the account catalogue read off disk on 2.1.317: there is **no `models` subcommand**,
+but there is a real alias layer. `fable`, `opus`, `sonnet` and `haiku` resolve to the newest member of each family
+through the catalogue Claude Code fetches from its server (fable-5-1, opus-5-5, sonnet-5-5 and haiku-5-5 when measured),
+so no version has to be written down. `best` means "the top model if the account has it, else Opus", but it falls back
+to Opus **without checking that the account may use Opus**, so it is not safe to rely on: a Pro account measured here
+has both `fable` and `opus` disabled. A model the account cannot use is **refused** at launch with
+`Model 'X' is not currently available for your account.` followed by the catalogue's notice. `latest` is a reserved word
+and **not an alias**; `mythos` has no alias. The list Octoboard offers is therefore the four strings `fable`, `opus`,
 `sonnet`, `haiku`, best first, and an unset setting launches with the first of them the account may use, unless Claude
 Code's own configuration names a model (below). `--effort` takes `low`, `medium`, `high`, `xhigh` and `max`, and a level
 the resolved model lacks is silently lowered, so no level is ever refused.
@@ -410,23 +413,27 @@ usage credits on Pro."; an enabled one may carry a notice too, a usage warning, 
 entry says `entitled: false`; that `apiName` is the catalogue row's `id` is an assumption, unverified because no
 measured account has an entry. `additionalModelOptionsCache` is not reliable and is ignored.
 
-**Claude Code's own model configuration** (Claude Code's documented settings, not measured here): with no `--model`,
-Claude Code takes the model from `ANTHROPIC_MODEL` in its environment, else the `model` of the merged settings files,
-whose precedence from highest is the managed settings, the project's `.claude/settings.local.json`, the project's
-`.claude/settings.json` and the user's `<config dir>/settings.json`. A settings file's `env` block is applied to Claude
-Code's environment, so an `ANTHROPIC_MODEL` in it outranks any `model`; Octoboard reads it from the same files, higher
-file first. The managed settings are `managed-settings.json` and the `*.json` files of `managed-settings.d/` (merged in
-the order of their names, after the base file) in `/Library/Application Support/ClaudeCode` on macOS and
-`/etc/claude-code` on Linux; policy delivered through an MDM profile or the claude.ai console is in no file and cannot
-be seen. Octoboard counts any of these as the model being set upstream: it then passes no `--model`, so that Claude Code
-applies it (a `--model` would override all of them). Only when none names a model does the launch pass the first usable
-alias. The account-level sources (the user's settings, `ANTHROPIC_MODEL` in the login-shell snapshot or a settings `env`
-block, the managed settings) are also what the listing's `default_model` reports, as the raw string, with
+### Claude Code's own model configuration
+
+From Claude Code's documented settings, not measured here: with no `--model`, Claude Code takes the model from
+`ANTHROPIC_MODEL` in its environment, else the `model` of the merged settings files, whose precedence from highest is
+the managed settings, the project's `.claude/settings.local.json`, the project's `.claude/settings.json` and the user's
+`<config dir>/settings.json`. A settings file's `env` block is applied to Claude Code's environment, so an
+`ANTHROPIC_MODEL` in it outranks any `model`; Octoboard reads it from the same files, higher file first. The managed
+settings are `managed-settings.json` and the `*.json` files of `managed-settings.d/` (merged in the order of their
+names, after the base file) in `/Library/Application Support/ClaudeCode` on macOS and `/etc/claude-code` on Linux;
+policy delivered through an MDM profile or the claude.ai console is in no file and cannot be seen. Octoboard counts any
+of these as the model being set upstream: it then passes no `--model`, so that Claude Code applies it (a `--model` would
+override all of them). Only when none names a model does the launch pass the first usable alias. The account-level
+sources (the user's settings, `ANTHROPIC_MODEL` in the login-shell snapshot or a settings `env` block, the managed
+settings) are also what the listing's `default_model` reports, as the raw string, with
 `default_model_source: configured`; the project's are known only at launch, so a session in a project that sets a model
 can run another one than a picker showed. Known gap: a managed `availableModels` allowlist is not read, so a launch with
 a best-available alias it excludes is refused by Claude Code.
 
-**Permission mode** (Claude Code 2.1.303): `--permission-mode <mode>` is a global flag, so it works alongside `--resume`
+### Permission mode
+
+Measured on Claude Code 2.1.303: `--permission-mode <mode>` is a global flag, so it works alongside `--resume`
 (including `bypassPermissions` with the `--settings` key, which showed no warning on a resume). The listed values are
 `acceptEdits`, `auto`, `bypassPermissions`, `manual`, `dontAsk` and `plan`; `default` is still accepted and equals
 `manual`, and is what the hooks and the transcript report. `manual` exists only from 2.1.200, so Octoboard passes
@@ -452,17 +459,21 @@ a best-available alias it excludes is refused by Claude Code.
   `auto`), then `Notification` `permission_prompt`. A tool call the classifier blocks shows no prompt: `PreToolUse` and
   then `Stop`, with no `PermissionRequest` and no `PostToolUse`.
 
-**Permission mode on resume without an explicit flag** (native implementation inspected in 2.1.274 and 2.1.319).
-An interactive direct resume can restore a stored mode instead of simply reading the account's current default.
-It does not restore stored `bypassPermissions`; restoring `auto` depends on current availability, and a stored Manual
-mode can yield to a configured default. The newer implementation separately restores an unexited plan on an interactive
-resume when no explicit mode or fork was requested; the older implementation lacks that path. An explicit
-`--permission-mode` prevents the saved mode from replacing the launch's selection. These are source observations,
-not additional runtime probes. The official [permission mode on resume](https://code.claude.com/docs/en/sessions#permission-mode-on-resume)
-reference documents the conditions for direct terminal resume, the picker, `/resume` and non-interactive resume.
+### Permission mode on resume without an explicit flag
 
-**Dialogs at a resume and in an idle session** (2.1.307, read from the executable and reproduced with fake
-subscription credentials against a local stub). None runs a hook, and `idle_prompt` is not sent while one is up.
+Native implementation inspected in 2.1.274 and 2.1.319. An interactive direct resume can restore a stored mode instead
+of simply reading the account's current default. It does not restore stored `bypassPermissions`; restoring `auto`
+depends on current availability, and a stored Manual mode can yield to a configured default. The newer implementation
+separately restores an unexited plan on an interactive resume when no explicit mode or fork was requested; the older
+implementation lacks that path. An explicit `--permission-mode` prevents the saved mode from replacing the launch's
+selection. These are source observations, not additional runtime probes. The official [permission mode on
+resume](https://code.claude.com/docs/en/sessions#permission-mode-on-resume) reference documents the conditions for
+direct terminal resume, the picker, `/resume` and non-interactive resume.
+
+### Dialogs at a resume and in an idle session
+
+Measured on 2.1.307, read from the executable and reproduced with fake subscription credentials against a local stub.
+None runs a hook, and `idle_prompt` is not sent while one is up.
 
 - **"Resume this conversation?" at launch.** After `--resume` or `--continue` with **no prompt on the command line**,
   Claude Code can ask before the first prompt, at the same moment `SessionStart` with `resume` fires: "This
@@ -490,80 +501,88 @@ What Octoboard does about the dialogs above and the screens below, the notice th
 the computer-use access request and the views of background agents, is in "Messages held until a session can take them"
 in `docs/product/message-delivery.md`.
 
-**A notice that waits for Enter** (2.1.308): in `auto` mode with `ANTHROPIC_BASE_URL` pointing elsewhere, the first
-classifier call of a session raised "We're changing auto mode to no longer charge for classifier requests …" mid-turn,
-ending "Enter to continue · Esc to cancel" (the rewind dialog's footer too), with no hook. A message written then was
-lost: its Enter dismissed the notice and the text went nowhere.
+### A notice that waits for Enter
 
-**"Make auto mode your default permission mode?"** (2.1.310, read from the executable and reproduced with a fake key
-against a local stub). Offered once per launch while the config directory's `.claude.json` has no
-`hasSeenAutoDefaultNudge`, its user settings set `permissions.defaultMode` to anything but `auto` (a fresh directory,
-with none set, never shows it), no project, local, flag (`--settings`) or policy settings set a default mode, auto mode
-is available for the model, and the server flag `tengu_maple_pier` is on. Whatever `--permission-mode` the launch
-passes does not matter. It comes up under the transcript in place of the prompt box about 50–170 ms after the box
-draws, or about 20 ms after the first turn's `Stop` when the launch carried a prompt; while a draft is in the input it
-waits, behind a row reading "Claude has a question for you — it shows once you send or clear what you're typing.".
-Body text, then unnumbered rows "Yes, set auto mode as my default permission mode" (focused) and "No, keep <mode>"
-("manual mode", "accept edits"), and **no footer**. No hook fires before, during or after it. A bracketed paste is
-dropped and a CR picks the focused row; an Enter within 150 ms of it mounting is ignored. Yes switches the session to
-auto, writes `permissions.defaultMode: "auto"` into the user settings and sets `hasSeenAutoDefaultNudge`; No and Esc
-only set `hasSeenAutoDefaultNudge`.
+Measured on 2.1.308: in `auto` mode with `ANTHROPIC_BASE_URL` pointing elsewhere, the first classifier call of a session
+raised "We're changing auto mode to no longer charge for classifier requests …" mid-turn, ending "Enter to continue ·
+Esc to cancel" (the rewind dialog's footer too), with no hook. A message written then was lost: its Enter dismissed the
+notice and the text went nowhere.
 
-**The computer-use access request** (read from the 2.1.325 executable and a user's screenshot, not reproduced). The
-built-in computer-use MCP server's `request_access` raises "Computer Use wants to control these apps" (the same title
-for one app) from inside the running tool call: `PreToolUse` has already moved the session to working, no
-`PermissionRequest` comes, and the title glyph goes back to `✳` while it waits. Below the reason and the apps it shows
-"N other apps will be hidden while Claude works." and two options, "Deny, and tell Claude what to do differently (esc)"
-(focused by default) and "Allow for this session (N app[s])", with printable keys off; the screenshot's footer reads
-"Enter to confirm · Esc to cancel". A paste is dropped and an Enter picks the focused option. When Accessibility or
-Screen Recording is not granted it shows "Computer Use needs macOS permissions" in its place, in the same frame, with
-each permission's state, "Grant the missing permissions in System Settings, then select 'Try again'." and rows "Open
-System Settings → Accessibility", "Open System Settings → Screen Recording" and "Try again" (read from the executable
-only; its footer is taken to be the same). Claude Code may take a moment after the answer to show its turn running again
-(not measured).
+### "Make auto mode your default permission mode?"
 
-**Views of background agents** (2.1.307, reproduced against a local stub). A turn that starts an `Agent` with
-`run_in_background` adds a task list under the prompt box — a filled `⏺ main` row and a row per agent — and the hint
-"↓ to manage". With the footer focused (a hint row of its own: "↑/↓ to select", or "Enter to view · x to stop" while an
-agent's row is selected) a paste is dropped and a CR opens the agent's view. **In that view** the conversation area
-shows the subagent's transcript, the `❯` prompt box stays (its placeholder reads "Message @<agent type>…"), and the main
-row turns hollow, `◯ main`; on 2.1.309, selecting that row without leaving the view marks it `❯ ◯ main` and shows no
-hint (seen in a user's screenshot, not reproduced). Text sent there goes to the subagent, with no `UserPromptSubmit`;
-sent to a finished agent it resumes it. The view stays up after the agent finishes. No single key leaves it safely: Esc
-in the input stops a running agent, Ctrl+C kills it, and ← at an empty input opens the agents view; ↓ to the main row
-and Enter returns to the conversation with the footer still focused. **The agents view** (`claude agents`, ← at an empty
-prompt, hinted as "← for agents" for the first ten seconds) moves the conversation into a background session forked
-under a new session id, starts a transient `claude daemon`, and shows "New sessions: …", "0 awaiting input · 1 working ·
-0 completed" and "describe a task for a new session": a paste and CR there start another session with that text.
+Measured on 2.1.310, read from the executable and reproduced with a fake key against a local stub. Offered once per
+launch while the config directory's `.claude.json` has no `hasSeenAutoDefaultNudge`, its user settings set
+`permissions.defaultMode` to anything but `auto` (a fresh directory, with none set, never shows it), no project, local,
+flag (`--settings`) or policy settings set a default mode, auto mode is available for the model, and the server flag
+`tengu_maple_pier` is on. Whatever `--permission-mode` the launch passes does not matter. It comes up under the
+transcript in place of the prompt box about 50–170 ms after the box draws, or about 20 ms after the first turn's `Stop`
+when the launch carried a prompt; while a draft is in the input it waits, behind a row reading "Claude has a question
+for you — it shows once you send or clear what you're typing.". Body text, then unnumbered rows "Yes, set auto mode as
+my default permission mode" (focused) and "No, keep <mode>" ("manual mode", "accept edits"), and **no footer**. No hook
+fires before, during or after it. A bracketed paste is dropped and a CR picks the focused row; an Enter within 150 ms of
+it mounting is ignored. Yes switches the session to auto, writes `permissions.defaultMode: "auto"` into the user
+settings and sets `hasSeenAutoDefaultNudge`; No and Esc only set `hasSeenAutoDefaultNudge`.
+
+### The computer-use access request
+
+Read from the 2.1.325 executable and a user's screenshot, not reproduced. The built-in computer-use MCP server's
+`request_access` raises "Computer Use wants to control these apps" (the same title for one app) from inside the running
+tool call: `PreToolUse` has already moved the session to working, no `PermissionRequest` comes, and the title glyph goes
+back to `✳` while it waits. Below the reason and the apps it shows "N other apps will be hidden while Claude works." and
+two options, "Deny, and tell Claude what to do differently (esc)" (focused by default) and "Allow for this session (N
+app[s])", with printable keys off; the screenshot's footer reads "Enter to confirm · Esc to cancel". A paste is dropped
+and an Enter picks the focused option. When Accessibility or Screen Recording is not granted it shows "Computer Use
+needs macOS permissions" in its place, in the same frame, with each permission's state, "Grant the missing permissions
+in System Settings, then select 'Try again'." and rows "Open System Settings → Accessibility", "Open System Settings →
+Screen Recording" and "Try again" (read from the executable only; its footer is taken to be the same). Claude Code may
+take a moment after the answer to show its turn running again (not measured).
+
+### Views of background agents
+
+Measured on 2.1.307, reproduced against a local stub. A turn that starts an `Agent` with `run_in_background` adds a task
+list under the prompt box — a filled `⏺ main` row and a row per agent — and the hint "↓ to manage". With the footer
+focused (a hint row of its own: "↑/↓ to select", or "Enter to view · x to stop" while an agent's row is selected) a
+paste is dropped and a CR opens the agent's view. **In that view** the conversation area shows the subagent's
+transcript, the `❯` prompt box stays (its placeholder reads "Message @<agent type>…"), and the main row turns hollow,
+`◯ main`; on 2.1.309, selecting that row without leaving the view marks it `❯ ◯ main` and shows no hint (seen in a
+user's screenshot, not reproduced). Text sent there goes to the subagent, with no `UserPromptSubmit`; sent to a finished
+agent it resumes it. The view stays up after the agent finishes. No single key leaves it safely: Esc in the input stops
+a running agent, Ctrl+C kills it, and ← at an empty input opens the agents view; ↓ to the main row and Enter returns to
+the conversation with the footer still focused. **The agents view** (`claude agents`, ← at an empty prompt, hinted as "←
+for agents" for the first ten seconds) moves the conversation into a background session forked under a new session id,
+starts a transient `claude daemon`, and shows "New sessions: …", "0 awaiting input · 1 working · 0 completed" and
+"describe a task for a new session": a paste and CR there start another session with that text.
 `CLAUDE_CODE_DISABLE_AGENT_VIEW=1` (setting `disableAgentView`) removes the agents view and its hint and leaves the
 subagent view.
 
-**Keys that interrupt a turn** (2.1.310, in a PTY with a real account). One Esc stops a turn, about 160 ms after it
-while the model writes; what that leaves in the transcript and the title is under "A user interrupt emits no hook
-event" above, and an Esc before the model has shown anything puts the prompt back in the input box. Esc during a tool,
-with a message typed into the queue meanwhile, interrupts the turn and then takes the queued message as a new turn,
-whose `UserPromptSubmit` had fired when it was queued; a message queued while the model was still writing was also
-seen taken into the running turn before the Esc. Text typed into the input box mid-turn stays there after the Esc. An
-Esc written in the same write as a bracketed paste still worked. Ctrl-C mid-turn interrupts as Esc does, but a single
-Ctrl-C at the prompt arms "Press Ctrl-C again to exit". Ctrl-U deletes one line of the input box a press, and at the
-start of a line the line break before it, so a three-line prompt took six presses to empty; the box then shows
-"Ctrl+Y to paste deleted text". A fresh session's empty box shows a placeholder such as `❯ Try "refactor <filepath>"`,
-which reads like text.
+### Keys that interrupt a turn
 
-**How the global config file is saved, and what a kill leaves behind** (2.1.316, read from the executable; the write
-count measured). `.claude.json` is saved under a lock on `<file>.lock`, retried with a backoff of about 0.2 to 4 seconds
-a try; when the lock cannot be had, the save goes ahead unlocked. The save writes `<file>.tmp.<pid>.<12 hex digits>`
-(created exclusively), syncs it to disk, closes it and renames it over `<file>`. Every error it can catch removes the
-temporary file, a failed rename included, which falls back to writing `<file>` in place. So a temporary file is left
-behind only by a process that dies between creating it and the rename: an empty one when it died before the write, a
-complete copy of the config when it died after it. Nothing removes such leftovers later, so they accumulate beside
-`.claude.json` in each configuration directory. The file is saved often, startup included: one print-mode run in a
-fresh configuration directory saved it nine times within about 160 ms, the last about 15 ms after its deferred startup
-work began, which is the moment a short headless run answers. A process that saves on exit is likewise exposed to a
-kill. On `SIGTERM` or `SIGINT` Claude Code runs its own shutdown, which races its cleanup against two seconds and then
-exits; a failsafe timer forces the exit after at least five seconds (more when a `SessionEnd` hook has a longer timeout).
-Several processes sharing one configuration directory do not by themselves leave temporary files: each names its own,
-and the rename within one directory is atomic.
+Measured on 2.1.310, in a PTY with a real account. One Esc stops a turn, about 160 ms after it while the model writes;
+what that leaves in the transcript and the title is under "A user interrupt emits no hook event" above, and an Esc
+before the model has shown anything puts the prompt back in the input box. Esc during a tool, with a message typed into
+the queue meanwhile, interrupts the turn and then takes the queued message as a new turn, whose `UserPromptSubmit` had
+fired when it was queued; a message queued while the model was still writing was also seen taken into the running turn
+before the Esc. Text typed into the input box mid-turn stays there after the Esc. An Esc written in the same write as a
+bracketed paste still worked. Ctrl-C mid-turn interrupts as Esc does, but a single Ctrl-C at the prompt arms "Press
+Ctrl-C again to exit". Ctrl-U deletes one line of the input box a press, and at the start of a line the line break
+before it, so a three-line prompt took six presses to empty; the box then shows "Ctrl+Y to paste deleted text". A fresh
+session's empty box shows a placeholder such as `❯ Try "refactor <filepath>"`, which reads like text.
+
+### How the global config file is saved, and what a kill leaves behind
+
+Read from the 2.1.316 executable; the write count measured. `.claude.json` is saved under a lock on `<file>.lock`,
+retried with a backoff of about 0.2 to 4 seconds a try; when the lock cannot be had, the save goes ahead unlocked. The
+save writes `<file>.tmp.<pid>.<12 hex digits>` (created exclusively), syncs it to disk, closes it and renames it over
+`<file>`. Every error it can catch removes the temporary file, a failed rename included, which falls back to writing
+`<file>` in place. So a temporary file is left behind only by a process that dies between creating it and the rename: an
+empty one when it died before the write, a complete copy of the config when it died after it. Nothing removes such
+leftovers later, so they accumulate beside `.claude.json` in each configuration directory. The file is saved often,
+startup included: one print-mode run in a fresh configuration directory saved it nine times within about 160 ms, the
+last about 15 ms after its deferred startup work began, which is the moment a short headless run answers. A process that
+saves on exit is likewise exposed to a kill. On `SIGTERM` or `SIGINT` Claude Code runs its own shutdown, which races its
+cleanup against two seconds and then exits; a failsafe timer forces the exit after at least five seconds (more when a
+`SessionEnd` hook has a longer timeout). Several processes sharing one configuration directory do not by themselves
+leave temporary files: each names its own, and the rename within one directory is atomic.
 
 ## Codex
 
@@ -759,88 +778,100 @@ session can take them" in `docs/product/message-delivery.md`.
 **Two visible side effects of passing any `-c` override**: it forces embedded mode, so the TUI carries a permanent
 `⚠ 1 warning` badge explaining that command-line overrides require it, and the session is invisible to `codex agents`.
 
-**Model and reasoning effort**: the model has a flag, `-m <model>`; the effort has **none** and is reachable only as the
-config override `-c model_reasoning_effort=<level>`. Octoboard passes both as `-c` overrides (`-c model="<id>"`) so the
-two are set the same way, ahead of the positional task, which Codex takes last. Codex **rejects an effort the chosen
-model does not advertise**, with an error specific to that model, rather than lowering it.
+### Model and reasoning effort
 
-**Discovering models** (Codex 0.160.0): Codex has **no alias, family or "latest" indirection**, so a model is only ever
-its catalogue slug. `codex debug models` prints the catalogue as JSON, `{"models": [...]}`, after refreshing it over
-the network (about 600 KB, because every entry carries its full instructions); `--bundled` skips the refresh and prints
-the built-in fallback. The fields that matter per entry: `slug` (what `-c model=` takes), `display_name`, `visibility`
-(`list` or `hide`; hidden entries are internal or retired and not for a picker), `priority` (ascending is display
-order), and `supported_reasoning_levels`, a list of `{effort, description}` whose `effort` values are exactly what
+The model has a flag, `-m <model>`; the effort has **none** and is reachable only as the config override
+`-c model_reasoning_effort=<level>`. Octoboard passes both as `-c` overrides (`-c model="<id>"`) so the two are set the
+same way, ahead of the positional task, which Codex takes last. Codex **rejects an effort the chosen model does not
+advertise**, with an error specific to that model, rather than lowering it.
+
+### Discovering models
+
+Measured on Codex 0.160.0: Codex has **no alias, family or "latest" indirection**, so a model is only ever its catalogue
+slug. `codex debug models` prints the catalogue as JSON, `{"models": [...]}`, after refreshing it over the network
+(about 600 KB, because every entry carries its full instructions); `--bundled` skips the refresh and prints the built-in
+fallback. The fields that matter per entry: `slug` (what `-c model=` takes), `display_name`, `visibility` (`list` or
+`hide`; hidden entries are internal or retired and not for a picker), `priority` (ascending is display order), and
+`supported_reasoning_levels`, a list of `{effort, description}` whose `effort` values are exactly what
 `model_reasoning_effort` accepts for that model (a level set can include ones Claude Code has no word for, such as
 `ultra`), with `default_reasoning_level`. **The server's answer arrives sorted by `priority`; the bundled fallback does
 not** (it was observed in an unrelated order), so sort it yourself. The command reads `CODEX_HOME`, so a catalogue is
 that account's. **An unknown slug is not rejected at launch**: the session boots and fails only at its first turn, which
 is why a list that is wrong cannot be left to the launch to catch.
 
-**The effort a turn runs at when nothing sets one** (Codex 0.162.1, read off existing records on 2026-10-20, no turn
-spent): a rollout's `turn_context` payload carries the effort the configuration resolved to, and **leaves the `effort`
-key out** when no layer sets `model_reasoning_effort` — 335 such records on the account measured, none carrying `null`.
-Codex then runs the model at its catalogue entry's `default_reasoning_level`. The catalogue is cached per account as
-`models_cache.json` in `CODEX_HOME`, in the `{"models": [...]}` shape `codex debug models` prints, next to `fetched_at`,
-`client_version`, `etag` and `identity`. The default is the account's, not the model's alone: the same day,
-`gpt-6.1-sol` defaulted to `medium` on one account and to `low` on another. That this is the level actually run is
-corroborated rather than read off a request: in 35 sessions whose turn contexts left the effort out, each subagent Codex
-spawned was recorded in a `SubAgentActivity` item with `reasoning_effort` `medium`, that account's default, and not with
-the entry's `multi_agent_reasoning_effort` (`xhigh`). Which configuration layers a turn context reflects was measured
-with `codex doctor --json`, whose `config.load` check names the effective `model` but not the effort (the project layer
-is under "Project configuration layering" above): a top-level `profile` key in `config.toml` makes the configuration
-fail to load (`invalid data`) — `--profile <name>` on this version layers `$CODEX_HOME/<name>.config.toml` instead.
+### The effort a turn runs at when nothing sets one
 
-**Keys that interrupt a turn** (0.163.0, in a PTY with a real account). One Esc stops a turn: the `Interrupt` hook
-fires 20–130 ms later, the screen shows "■ Conversation interrupted", the composer is left empty (the prompt is not put
-back) and the rollout records `turn_aborted`. A message submitted mid-turn is steered into the running turn: it fires a
-`UserPromptSubmit` with the turn's own `turn_id`, and an Esc after it ends the turn with that message unanswered. Ctrl-C
-mid-turn interrupts the same way, but Ctrl-C at the prompt exits Codex ("To continue this session, run: codex resume
-…"). At the prompt one Esc shows "esc again to edit previous message" and a second opens the transcript rewind
-("Browsing transcript … ↵ rewind · esc back"). An Esc written in the same write as a bracketed paste breaks the paste:
-its text lands in the composer behind a literal `[200~`. With Octoboard's title items (`activity`, `thread-name`,
-`project-name`) the activity item is a braille spinner while a turn runs, and the title is back to the project or thread
-name once the Esc has landed.
+Read off existing records of Codex 0.162.1 on 2026-10-20, no turn spent: a rollout's `turn_context` payload carries the
+effort the configuration resolved to, and **leaves the `effort` key out** when no layer sets `model_reasoning_effort` —
+335 such records on the account measured, none carrying `null`. Codex then runs the model at its catalogue entry's
+`default_reasoning_level`. The catalogue is cached per account as `models_cache.json` in `CODEX_HOME`, in the
+`{"models": [...]}` shape `codex debug models` prints, next to `fetched_at`, `client_version`, `etag` and `identity`.
+The default is the account's, not the model's alone: the same day, `gpt-6.1-sol` defaulted to `medium` on one account
+and to `low` on another. That this is the level actually run is corroborated rather than read off a request: in 35
+sessions whose turn contexts left the effort out, each subagent Codex spawned was recorded in a `SubAgentActivity` item
+with `reasoning_effort` `medium`, that account's default, and not with the entry's `multi_agent_reasoning_effort`
+(`xhigh`). Which configuration layers a turn context reflects was measured with `codex doctor --json`, whose
+`config.load` check names the effective `model` but not the effort (the project layer is under "Project configuration
+layering" above): a top-level `profile` key in `config.toml` makes the configuration fail to load (`invalid data`) —
+`--profile <name>` on this version layers `$CODEX_HOME/<name>.config.toml` instead.
 
-**Keys that clear the composer** (0.167.1, measured 2026-11-15 on macOS: the ordinary TUI in a PTY of 100 by 40, no
-private app server, a scratch `CODEX_HOME` with a fake key and a local stand-in for its inference API that never
-answers, so a submitted prompt keeps a turn running; launched with `--dangerously-bypass-hook-trust`,
-`check_for_update_on_startup=false`, Octoboard's `tui.terminal_title` and `notice.hide_rate_limit_model_nudge=true`).
-Ctrl-U deletes from the cursor back to the start of its line, and at the start of a line the line break before it, so
-a three-line paste took five presses to empty, each press changing the composer on the screen; a line wrapped over three
-rows went in one press, as did a collapsed paste (`[Pasted Content 2400 chars]`, the placeholder a 2,400-character
-bracketed paste is shown as) together with the text before it on its line. With the cursor moved back into a line, a
-press left the text after the cursor, and a second press, at the start of the first line, changed nothing. On an empty
-composer it does nothing: no hint, no exit. Mid-turn it clears the same way and the turn runs on ("Working" kept
-counting, and no "Conversation interrupted" was shown), and Codex stayed up throughout. No undo hint is shown. End
-(`ESC[F`) moves the cursor to the end of its own line only, idle and mid-turn, after which a press clears that whole
-line; with the cursor on an earlier line of a multi-line draft the lines below are left, and Ctrl-End (`ESC[1;5F`) did
-not move the cursor at all, so no key was found that puts the cursor at the end of the whole draft.
-On Windows the same held (0.166.0, native ARM64, measured 2026-11-16 on Windows 11 ARM64 with the same scratch home
-and stand-in, through `node-pty`'s pseudoconsole on the inbox console host, its default, rather than the daemon's own
-with the bundled one): each press deleted back to the start of the line, three lines written as one burst of keys (line
-feeds between them) took five presses, a 2,400-character burst of keys showed as `[Pasted Content 2400 chars]` and went
-in one press, a bracketed paste of the same 2,400 characters showed and cleared the same way, a press mid-turn cleared
-the composer with the turn running on, and Codex stayed up.
+### Keys that interrupt a turn
 
-**An MCP server's environment and secret headers can come from Codex's own environment.** Besides `command`, `args`,
-`env`, `url` and `http_headers`, a server under `mcp_servers.<key>` accepts `cwd`, `env_vars` (names of variables
-forwarded from Codex's own environment to a stdio server), `env_http_headers` (a header name mapped to the variable
-holding its value) and `bearer_token_env_var`; all four were accepted by 0.163.0 in a scratch `CODEX_HOME`, listed by
-`codex mcp list`. `env_vars` cannot rename a variable: the server receives it under the name Codex holds it by. What a
-server does with them at run time, and whether commands Codex runs for its model see the same variables, was not
-measured.
+Measured on 0.163.0, in a PTY with a real account. One Esc stops a turn: the `Interrupt` hook fires 20–130 ms later, the
+screen shows "■ Conversation interrupted", the composer is left empty (the prompt is not put back) and the rollout
+records `turn_aborted`. A message submitted mid-turn is steered into the running turn: it fires a `UserPromptSubmit`
+with the turn's own `turn_id`, and an Esc after it ends the turn with that message unanswered. Ctrl-C mid-turn
+interrupts the same way, but Ctrl-C at the prompt exits Codex ("To continue this session, run: codex resume …"). At the
+prompt one Esc shows "esc again to edit previous message" and a second opens the transcript rewind ("Browsing transcript
+… ↵ rewind · esc back"). An Esc written in the same write as a bracketed paste breaks the paste: its text lands in the
+composer behind a literal `[200~`. With Octoboard's title items (`activity`, `thread-name`, `project-name`) the activity
+item is a braille spinner while a turn runs, and the title is back to the project or thread name once the Esc has
+landed.
 
-**Codex copies its whole environment into files** (0.166.0 and 0.167, macOS and Linux). Every exported variable of the
-process lands in the shell snapshots under `$CODEX_HOME/shell_snapshots/` (mode 0644 under the usual umask) and in
-`logs_2.sqlite`, so nothing secret can be handed to Codex in a variable. The commands its model runs get that
-environment through `shell_environment_policy`, whose default excludes (names matching `*KEY*`, `*SECRET*`, `*TOKEN*`)
-are off unless `ignore_default_excludes = false` is set, in the user's or the project's `.codex/config.toml`; with them
-on, a variable so named is dropped on its own, `GIT_CONFIG_KEY_<n>` included while its `GIT_CONFIG_COUNT` stays, which
-fails every git ("missing config key").
+### Keys that clear the composer
 
-**A job a command starts in the background ends with the command** (0.167, macOS). A plain `nohup … &` from a command
-the model runs is gone once that command finishes; a job meant to outlive it has to be started in a session of its own
-(`setsid`).
+Measured on 0.167.1 on 2026-11-15, macOS: the ordinary TUI in a PTY of 100 by 40, no private app server, a scratch
+`CODEX_HOME` with a fake key and a local stand-in for its inference API that never answers, so a submitted prompt keeps
+a turn running; launched with `--dangerously-bypass-hook-trust`, `check_for_update_on_startup=false`, Octoboard's
+`tui.terminal_title` and `notice.hide_rate_limit_model_nudge=true`. Ctrl-U deletes from the cursor back to the start of
+its line, and at the start of a line the line break before it, so a three-line paste took five presses to empty, each
+press changing the composer on the screen; a line wrapped over three rows went in one press, as did a collapsed paste
+(`[Pasted Content 2400 chars]`, the placeholder a 2,400-character bracketed paste is shown as) together with the text
+before it on its line. With the cursor moved back into a line, a press left the text after the cursor, and a second
+press, at the start of the first line, changed nothing. On an empty composer it does nothing: no hint, no exit. Mid-turn
+it clears the same way and the turn runs on ("Working" kept counting, and no "Conversation interrupted" was shown), and
+Codex stayed up throughout. No undo hint is shown. End (`ESC[F`) moves the cursor to the end of its own line only, idle
+and mid-turn, after which a press clears that whole line; with the cursor on an earlier line of a multi-line draft the
+lines below are left, and Ctrl-End (`ESC[1;5F`) did not move the cursor at all, so no key was found that puts the cursor
+at the end of the whole draft. On Windows the same held (0.166.0, native ARM64, measured 2026-11-16 on Windows 11 ARM64
+with the same scratch home and stand-in, through `node-pty`'s pseudoconsole on the inbox console host, its default,
+rather than the daemon's own with the bundled one): each press deleted back to the start of the line, three lines
+written as one burst of keys (line feeds between them) took five presses, a 2,400-character burst of keys showed as
+`[Pasted Content 2400 chars]` and went in one press, a bracketed paste of the same 2,400 characters showed and cleared
+the same way, a press mid-turn cleared the composer with the turn running on, and Codex stayed up.
+
+### An MCP server's environment and secret headers can come from Codex's own environment
+
+Besides `command`, `args`, `env`, `url` and `http_headers`, a server under `mcp_servers.<key>` accepts `cwd`, `env_vars`
+(names of variables forwarded from Codex's own environment to a stdio server), `env_http_headers` (a header name mapped
+to the variable holding its value) and `bearer_token_env_var`; all four were accepted by 0.163.0 in a scratch
+`CODEX_HOME`, listed by `codex mcp list`. `env_vars` cannot rename a variable: the server receives it under the name
+Codex holds it by. What a server does with them at run time, and whether commands Codex runs for its model see the same
+variables, was not measured.
+
+### Codex copies its whole environment into files
+
+Measured on 0.166.0 and 0.167, macOS and Linux. Every exported variable of the process lands in the shell snapshots
+under `$CODEX_HOME/shell_snapshots/` (mode 0644 under the usual umask) and in `logs_2.sqlite`, so nothing secret can be
+handed to Codex in a variable. The commands its model runs get that environment through `shell_environment_policy`,
+whose default excludes (names matching `*KEY*`, `*SECRET*`, `*TOKEN*`) are off unless `ignore_default_excludes = false`
+is set, in the user's or the project's `.codex/config.toml`; with them on, a variable so named is dropped on its own,
+`GIT_CONFIG_KEY_<n>` included while its `GIT_CONFIG_COUNT` stays, which fails every git ("missing config key").
+
+### A job a command starts in the background ends with the command
+
+Measured on 0.167, macOS. A plain `nohup … &` from a command the model runs is gone once that command finishes; a job
+meant to outlive it has to be started in a session of its own (`setsid`).
 
 ## Grok Build
 
@@ -993,47 +1024,15 @@ the dashboard summary line, the session title, and a prediction of the user's ne
 routed on its own through a `[model.<name>]` entry carrying its own `base_url` (and `api_key`), without the
 `endpoints.models_base_url` that moves every model's.
 
-**Model and reasoning effort**: `--model <id>` and `--reasoning-effort <level>`, placed after the `--rules` pair and
-before the positional task. In a fullscreen TUI (1.0.62), startup alone persists these as `[models] default` and
+### Model and reasoning effort
+
+The model is passed as `--model <id>` and the effort as `--reasoning-effort <level>`, placed after the `--rules` pair
+and before the positional task. In a fullscreen TUI (1.0.62), startup alone persists these as `[models] default` and
 `default_reasoning_effort`; a headless `-p` run did not. An explicit `/model other-local high` changed both keys in the
 TUI. A launch's own model chosen again cannot be told from its startup save. The per-session `GROK_HOME` keeps
-`config.toml` as a real copy; what Octoboard carries from it, and why the model passed at launch and the effort are
-left out, is under "Grok itself rewrites the per-session `config.toml` copy" in "Sharing a configuration directory
-between accounts".
-
-**Theme** (Grok Build 1.0.62, from `grok --help`, the strings in the executable and Grok's own theming guide): there is
-**no `--theme` flag**. The environment variable `GROK_THEME` (or `LC_GROK_THEME`) forces a theme and outranks
-`config.toml`'s `[ui] theme`. The values include `groknight` (the default, dark: its backgrounds are near-black
-greys), `grokday` (light greys with dark text), `tokyonight`, `rosepine-moon`, `oscura-midnight`, `terminal` (the
-terminal's own colours) and `auto`. On a local macOS desktop `auto` follows the system appearance
-(`AppleInterfaceStyle`), not the terminal's background, and picks the `auto_light_theme` / `auto_dark_theme` themes
-(`grokday` / `groknight` by default). A dark theme on a light terminal leaves the cells Grok paints with the terminal's
-default colour showing through as light holes between dark bands.
-
-With `GROK_THEME=groknight`, `grokday` or `auto`, fullscreen startup left `[ui] theme` unchanged, including leaving
-the key absent when it was absent initially (1.0.62, scratch homes, fake API key and a local model stub). A model
-change also left it unchanged. Explicit `/theme tokyonight` and `/theme grokday` saved those names even with
-`GROK_THEME=grokday`; selecting the environment's own theme is still an explicit save. So a saved `[ui] theme` is
-always the user's choice, and Octoboard carries it without filtering out the injected name (see "Grok itself rewrites
-the per-session `config.toml` copy").
-
-**Discovering models** (Grok Build 1.0.50): Grok has **no alias or "latest" indirection** either. `grok models` prints
-to stdout the login line, a blank line, `Default model: <id>`, a blank line, `Available models:` and then one bullet
-line per model, `  * <id> (default)` for the default and `  - <id>` for the others, in the order Grok shows them. It
-carries no display name and no effort levels. It also refreshes `models_cache.json` in the config directory
-(`GROK_HOME`), a JSON object with `fetched_at`, `grok_version`, `etag` and `models`, a map **keyed by model id**; each
-value's `info` carries `name` (the display name), `hidden`, `supports_reasoning_effort`, `reasoning_effort` (the
-default) and `reasoning_efforts`, a list of `{id, value, label, description, default}` whose `value` is what
-`--reasoning-effort` takes (the level set differs per model: the oldest of the four measured lacked `xhigh`). Octoboard
-takes the id list from the text, which is the one Grok itself shows, and the names, efforts and `hidden` flag from the
-file; the file alone would do for the data but only exists after Grok has run in that home, and the text is what
-refreshes it. The cache is per account (its `identity` differs). **An unknown id is refused loudly at launch** with
-`Couldn't set model '<id>'.`, the opposite of Codex's silent deferred failure.
-
-**The id a turn records is not one of the ids `grok models` prints** (1.0.52). With nothing set, a session runs the
-`config.toml` default — `grok-4.7` on the account measured — while its own session record and usage file name the
-served model `grok-4.7-build`. So the id to match a turn against the list Octoboard offers is the configured one, not
-the one the records carry.
+`config.toml` as a real copy; what Octoboard carries from it, and why the model passed at launch and the effort are left
+out, is under "Grok itself rewrites the per-session `config.toml` copy" in "Sharing a configuration directory between
+accounts".
 
 The effort is on record as well: the session directory's `summary.json` carried `reasoning_effort` in each of the 114
 summaries on the account measured (installed build 1.0.62 on 2026-10-20; a summary names no version), including
@@ -1042,81 +1041,128 @@ sessions that ran a level other than the `config.toml` `[models] default_reasoni
 configuration reference says `default_reasoning_effort` applies to "the default model", and whether it also applies to
 a model chosen with `--model` was not measured.
 
-**Hooks that never come, and screens after an error** (1.0.67, scratch `GROK_HOME`, fake key, local stub). On a launch
-and on `--resume <id>` with no prompt, `SessionStart` (with `source` `load` on a resume) arrives 0.5–1.0 s after the
-start, and right after the folder-trust confirmation is accepted. With `allow_managed_hooks_only = true` in Grok's
-requirements no hook of Octoboard's runs at all, so nothing marks the session started; a write before `SessionStart`
-was buffered and submitted. After a usage-limit error (the stub answering HTTP 402) Grok fires `Notification` with
-type `agent_error` and `StopFailure`, then draws "You hit your weekly limit." with "1 (○) Upgrade tier", "2 (○) Buy
-more credits", "3 (○) Try Again" and "↑/↓ navigate · y copy Enter :submit / Shift+x :dismiss": a paste and CR closed it
-with no `UserPromptSubmit` and opened the browser on a purchase page. The modal is on screen before those hooks reach
-a hook command. "3" (or the arrows and Enter) retries, firing `UserPromptSubmit` with the original prompt; Shift+x
-dismisses it with no hook and leaves the input free. An HTTP 429 shows "Rate limited | Retrying (attempt 1)…" and
-"Queued · Enter to send now", and a paste there was queued, not lost; Grok retries once, honouring `retry-after`, and
-when that retry is refused too it fires `agent_error` and `StopFailure` (`error` `rate_limit`) with an inline "Retry
-failed" line, no modal, and submits a queued prompt by itself. An HTTP 400 fires the same two hooks (`error`
-`invalid_request`, as for the 402) with an inline line and no modal; a single HTTP 500 is retried with no hook.
-How Octoboard holds its writes around these hooks and screens is in "Messages held until a session can take them" in
-`docs/product/message-delivery.md`.
+### Theme
 
-**The usage-limit screen again** (1.0.77, scratch `GROK_HOME` and `HOME`, fake key, `[endpoints] models_base_url` and
-`xai_api_base_url` both pointed at a local stub; with only the first set, the key probe went to xAI, failed, and Grok
-began its grok.com device sign-in). A 402 fires `UserPromptSubmit`, `Notification` `agent_error` and `StopFailure`
-(`error` `invalid_request`) with no automatic retry, and `updates.jsonl` records the turn as `turn_completed` with `stop_reason`
-`error` and "status 402" in its result. The modal reads as in 1.0.67, each option followed by a description ("Resubmit
-the last prompt once you have usage again" for Try Again), but its own last row is "↑/↓ navigate · y copy" with
-"Enter:submit" at its right, and the dismiss key moved to the bottom bar: "Tab:next answer │ Esc:scrollback │
-Shift+x:dismiss". Option 1 is highlighted first. In the one sample taken, the `agent_error` hook reached its command
-before the modal was on screen, unlike 1.0.67. Try Again, by "3" or by the arrows and Enter, shows "Trying again…" and
-fires `UserPromptSubmit` with the original prompt and a new `promptId`; a retry refused again fires `agent_error` and
-`StopFailure` and redraws the modal, and one that succeeds ends with `Stop` (`end_turn`). Each retry writes its own
-`user_message_chunk` and `turn_completed`. Shift+x dismisses it with no hook. Esc moves the focus to the scrollback:
-the modal stays drawn, the bottom bar becomes "Tab/Space:question │ Ctrl+e:collapse thinking │ Ctrl+x:shortcuts", and
-Shift+x does nothing until Tab brings the focus back. `idle_prompt` came 60 s after the `StopFailure` with the modal
-still up. The 400 and 429 cases behaved as in 1.0.67. Choosing 1 or 2, or Enter on the first highlight, was not tried
-on this build, since on 1.0.67 it opened a purchase page.
+Measured on Grok Build 1.0.62, from `grok --help`, the strings in the executable and Grok's own theming guide: there is
+**no `--theme` flag**. The environment variable `GROK_THEME` (or `LC_GROK_THEME`) forces a theme and outranks
+`config.toml`'s `[ui] theme`. The values include `groknight` (the default, dark: its backgrounds are near-black greys),
+`grokday` (light greys with dark text), `tokyonight`, `rosepine-moon`, `oscura-midnight`, `terminal` (the terminal's own
+colours) and `auto`. On a local macOS desktop `auto` follows the system appearance (`AppleInterfaceStyle`), not the
+terminal's background, and picks the `auto_light_theme` / `auto_dark_theme` themes (`grokday` / `groknight` by default).
+A dark theme on a light terminal leaves the cells Grok paints with the terminal's default colour showing through as
+light holes between dark bands.
 
-**Keys that interrupt a turn** (1.0.70, in a PTY against a local stand-in for its inference API). Esc does not stop a
-turn; Ctrl-C does. While the model streams, Ctrl-C fires `StopCancelled` (`reason` `user_interrupt`) 50–190 ms later
-and the screen shows "Turn cancelled by user". Before the first token arrives it fires no hook at all — no
-`StopCancelled` and no `Stop`; the `idle_prompt` notification came about a minute later — and puts the prompt back in
-the composer, and the title drops its braille spinner 16 ms after the key; the spinner stays through tool calls. With
-text in the composer, Ctrl-C clears the text and the turn runs on; a second Ctrl-C then cancels it. Ctrl-C at the
-prompt asks to be pressed again to quit. During a blocking shell command with a message queued, Ctrl-C fired
-`StopCancelled` and the queued message was submitted 4 ms later. Ctrl-U deletes one line of the composer a press, at the
-start of a line the line break before it, and a line wrapped over two rows in one press; the composer then shows "Input
-cleared · ctrl+z to undo". Not measured: Ctrl-C with the subagents' cancel-turn panel up, and at a permission card.
+With `GROK_THEME=groknight`, `grokday` or `auto`, fullscreen startup left `[ui] theme` unchanged, including leaving
+the key absent when it was absent initially (1.0.62, scratch homes, fake API key and a local model stub). A model
+change also left it unchanged. Explicit `/theme tokyonight` and `/theme grokday` saved those names even with
+`GROK_THEME=grokday`; selecting the environment's own theme is still an explicit save. So a saved `[ui] theme` is
+always the user's choice, and Octoboard carries it without filtering out the injected name (see "Grok itself rewrites
+the per-session `config.toml` copy").
 
-**Leader mode leaves the TUI's stop to a `SIGKILL` of the leader, so every launch passes `--no-leader`** (1.0.70, in a
-PTY as a session of its own, scratch `GROK_HOME`, fake key, local stand-in for its inference API). Grok's user guide
-documents leader mode as `--leader` or `[cli] use_leader = true` (off by default), and `--no-leader` as forcing a local
-agent; `grok --help` lists neither for the TUI, only `--leader-socket`, but the TUI accepts `--no-leader` on 1.0.41,
-1.0.67 and 1.0.70 (`--no-leader --version` exits 0 where an unknown flag exits 2), and the parser never takes it as
-another option's value, so its place on the line does not matter. With `use_leader = true` the TUI starts `grok agent
-leader --no-exit-on-disconnect …` in a process group of its own but in the TUI's session, listening on
-`$GROK_HOME/leader.sock`, and is only its client; Grok's hooks then run from the leader. A socket path too long for a
-Unix socket fails to bind, and the TUI then never draws. Sent `SIGTERM` mid-turn, the TUI exited at once with status 0
-and fired no hook, while the leader logged "kept session resident across client disconnect (live work)", stayed in the
-exited TUI's session without a terminal, ran the turn on, fired its `end_turn` `Stop` with the turn's `promptId` 114 s
-later, when the held request was answered, and kept running until signalled itself, when it fired the `shutdown` pair.
-Octoboard's stop does not let it get that far: the leader is neither in the TUI's process group nor reached by the
-`SIGTERM`, but the sweep of an exited agent's session `SIGKILL`s it at once. Sweeping the session that way as soon as the
-TUI exited fired no hook at all, mid-turn or in the 135 s after, skipped the "shutdown: flushing session"
-Grok logs on a signal it handles, and left `leader.sock` behind. The same launch line with `--no-leader` and `use_leader
-= true` started no leader and no socket, and `SIGTERM` mid-turn fired `Stop` and `SessionEnd` with `reason` `shutdown`
-from the TUI itself, which exited with status 0, and nothing in the 135 s after; so did a `--resume`. With a leader
-already running on the same socket, a `--no-leader` TUI did not connect to it (nothing new in its `leader.log`). Neither
+### Discovering models
+
+Measured on Grok Build 1.0.50: Grok has **no alias or "latest" indirection** either. `grok models` prints to stdout the
+login line, a blank line, `Default model: <id>`, a blank line, `Available models:` and then one bullet line per model,
+`  * <id> (default)` for the default and `  - <id>` for the others, in the order Grok shows them. It carries no display
+name and no effort levels. It also refreshes `models_cache.json` in the config directory (`GROK_HOME`), a JSON object
+with `fetched_at`, `grok_version`, `etag` and `models`, a map **keyed by model id**; each value's `info` carries `name`
+(the display name), `hidden`, `supports_reasoning_effort`, `reasoning_effort` (the default) and `reasoning_efforts`, a
+list of `{id, value, label, description, default}` whose `value` is what `--reasoning-effort` takes (the level set
+differs per model: the oldest of the four measured lacked `xhigh`). Octoboard takes the id list from the text, which is
+the one Grok itself shows, and the names, efforts and `hidden` flag from the file; the file alone would do for the data
+but only exists after Grok has run in that home, and the text is what refreshes it. The cache is per account (its
+`identity` differs). **An unknown id is refused loudly at launch** with `Couldn't set model '<id>'.`, the opposite of
+Codex's silent deferred failure.
+
+### The id a turn records is not one of the ids `grok models` prints
+
+Measured on 1.0.52. With nothing set, a session runs the `config.toml` default — `grok-4.7` on the account measured —
+while its own session record and usage file name the served model `grok-4.7-build`. So the id to match a turn against
+the list Octoboard offers is the configured one, not the one the records carry.
+
+### Hooks that never come, and screens after an error
+
+Measured on 1.0.67, scratch `GROK_HOME`, fake key, local stub. On a launch and on `--resume <id>` with no prompt,
+`SessionStart` (with `source` `load` on a resume) arrives 0.5–1.0 s after the start, and right after the folder-trust
+confirmation is accepted. With `allow_managed_hooks_only = true` in Grok's requirements no hook of Octoboard's runs at
+all, so nothing marks the session started; a write before `SessionStart` was buffered and submitted. After a usage-limit
+error (the stub answering HTTP 402) Grok fires `Notification` with type `agent_error` and `StopFailure`, then draws "You
+hit your weekly limit." with "1 (○) Upgrade tier", "2 (○) Buy more credits", "3 (○) Try Again" and "↑/↓ navigate · y
+copy Enter :submit / Shift+x :dismiss": a paste and CR closed it with no `UserPromptSubmit` and opened the browser on a
+purchase page. The modal is on screen before those hooks reach a hook command. "3" (or the arrows and Enter) retries,
+firing `UserPromptSubmit` with the original prompt; Shift+x dismisses it with no hook and leaves the input free. An HTTP
+429 shows "Rate limited | Retrying (attempt 1)…" and "Queued · Enter to send now", and a paste there was queued, not
+lost; Grok retries once, honouring `retry-after`, and when that retry is refused too it fires `agent_error` and
+`StopFailure` (`error` `rate_limit`) with an inline "Retry failed" line, no modal, and submits a queued prompt by
+itself. An HTTP 400 fires the same two hooks (`error` `invalid_request`, as for the 402) with an inline line and no
+modal; a single HTTP 500 is retried with no hook. How Octoboard holds its writes around these hooks and screens is in
+"Messages held until a session can take them" in `docs/product/message-delivery.md`.
+
+### The usage-limit screen again
+
+Measured on 1.0.77, scratch `GROK_HOME` and `HOME`, fake key, `[endpoints] models_base_url` and `xai_api_base_url` both
+pointed at a local stub; with only the first set, the key probe went to xAI, failed, and Grok began its grok.com device
+sign-in. A 402 fires `UserPromptSubmit`, `Notification` `agent_error` and `StopFailure` (`error` `invalid_request`) with
+no automatic retry, and `updates.jsonl` records the turn as `turn_completed` with `stop_reason` `error` and "status 402"
+in its result. The modal reads as in 1.0.67, each option followed by a description ("Resubmit the last prompt once you
+have usage again" for Try Again), but its own last row is "↑/↓ navigate · y copy" with "Enter:submit" at its right, and
+the dismiss key moved to the bottom bar: "Tab:next answer │ Esc:scrollback │ Shift+x:dismiss". Option 1 is highlighted
+first. In the one sample taken, the `agent_error` hook reached its command before the modal was on screen, unlike
+1.0.67. Try Again, by "3" or by the arrows and Enter, shows "Trying again…" and fires `UserPromptSubmit` with the
+original prompt and a new `promptId`; a retry refused again fires `agent_error` and `StopFailure` and redraws the modal,
+and one that succeeds ends with `Stop` (`end_turn`). Each retry writes its own `user_message_chunk` and
+`turn_completed`. Shift+x dismisses it with no hook. Esc moves the focus to the scrollback: the modal stays drawn, the
+bottom bar becomes "Tab/Space:question │ Ctrl+e:collapse thinking │ Ctrl+x:shortcuts", and Shift+x does nothing until
+Tab brings the focus back. `idle_prompt` came 60 s after the `StopFailure` with the modal still up. The 400 and 429
+cases behaved as in 1.0.67. Choosing 1 or 2, or Enter on the first highlight, was not tried on this build, since on
+1.0.67 it opened a purchase page.
+
+### Keys that interrupt a turn
+
+Measured on 1.0.70, in a PTY against a local stand-in for its inference API. Esc does not stop a turn; Ctrl-C does.
+While the model streams, Ctrl-C fires `StopCancelled` (`reason` `user_interrupt`) 50–190 ms later and the screen shows
+"Turn cancelled by user". Before the first token arrives it fires no hook at all — no `StopCancelled` and no `Stop`; the
+`idle_prompt` notification came about a minute later — and puts the prompt back in the composer, and the title drops its
+braille spinner 16 ms after the key; the spinner stays through tool calls. With text in the composer, Ctrl-C clears the
+text and the turn runs on; a second Ctrl-C then cancels it. Ctrl-C at the prompt asks to be pressed again to quit.
+During a blocking shell command with a message queued, Ctrl-C fired `StopCancelled` and the queued message was submitted
+4 ms later. Ctrl-U deletes one line of the composer a press, at the start of a line the line break before it, and a line
+wrapped over two rows in one press; the composer then shows "Input cleared · ctrl+z to undo". Not measured: Ctrl-C with
+the subagents' cancel-turn panel up, and at a permission card.
+
+### Leader mode leaves the TUI's stop to a `SIGKILL` of the leader, so every launch passes `--no-leader`
+
+Measured on 1.0.70, in a PTY as a session of its own, scratch `GROK_HOME`, fake key, local stand-in for its inference
+API. Grok's user guide documents leader mode as `--leader` or `[cli] use_leader = true` (off by default), and
+`--no-leader` as forcing a local agent; `grok --help` lists neither for the TUI, only `--leader-socket`, but the TUI
+accepts `--no-leader` on 1.0.41, 1.0.67 and 1.0.70 (`--no-leader --version` exits 0 where an unknown flag exits 2), and
+the parser never takes it as another option's value, so its place on the line does not matter. With `use_leader = true`
+the TUI starts `grok agent leader --no-exit-on-disconnect …` in a process group of its own but in the TUI's session,
+listening on `$GROK_HOME/leader.sock`, and is only its client; Grok's hooks then run from the leader. A socket path too
+long for a Unix socket fails to bind, and the TUI then never draws. Sent `SIGTERM` mid-turn, the TUI exited at once with
+status 0 and fired no hook, while the leader logged "kept session resident across client disconnect (live work)", stayed
+in the exited TUI's session without a terminal, ran the turn on, fired its `end_turn` `Stop` with the turn's `promptId`
+114 s later, when the held request was answered, and kept running until signalled itself, when it fired the `shutdown`
+pair. Octoboard's stop does not let it get that far: the leader is neither in the TUI's process group nor reached by the
+`SIGTERM`, but the sweep of an exited agent's session `SIGKILL`s it at once. Sweeping the session that way as soon as
+the TUI exited fired no hook at all, mid-turn or in the 135 s after, skipped the "shutdown: flushing session" Grok logs
+on a signal it handles, and left `leader.sock` behind. The same launch line with `--no-leader` and `use_leader = true`
+started no leader and no socket, and `SIGTERM` mid-turn fired `Stop` and `SessionEnd` with `reason` `shutdown` from the
+TUI itself, which exited with status 0, and nothing in the 135 s after; so did a `--resume`. With a leader already
+running on the same socket, a `--no-leader` TUI did not connect to it (nothing new in its `leader.log`). Neither
 `grok models`, `grok -p` nor `grok login --device-auth` started a leader with `use_leader = true`, and `models` and `-p`
 did not connect to a running one; the quota reading runs `grok agent --no-leader stdio`. Not established: whether a
 `requirements.toml` pin of `cli.use_leader`, which Grok's configuration reference allows, outranks `--no-leader`; a
 `[cli] use_leader = true` in the scratch home's `requirements.toml` did not turn leader mode on at all, so it could not
 be tested.
 
-**Grok scans Claude Code's configuration by default.** The `[compat.claude]` table of Grok's `config.toml` has five
-boolean cells, `skills`, `rules` (which covers `CLAUDE.md`), `agents`, `mcps` and `hooks`, each defaulting to true, and
-each overridden by an environment variable `GROK_CLAUDE_<CELL>_ENABLED` (`true` or `false`); Grok's user guide shipped
-under `~/.grok/docs/` and the 1.0.70 executable both name them, and like cells exist for Cursor (`GROK_CURSOR_*`) and
-Codex (`GROK_CODEX_*`). That the variable outranks the file is what the guide states.
+### Grok scans Claude Code's configuration by default
+
+The `[compat.claude]` table of Grok's `config.toml` has five boolean cells, `skills`, `rules` (which covers
+`CLAUDE.md`), `agents`, `mcps` and `hooks`, each defaulting to true, and each overridden by an environment variable
+`GROK_CLAUDE_<CELL>_ENABLED` (`true` or `false`); Grok's user guide shipped under `~/.grok/docs/` and the 1.0.70
+executable both name them, and like cells exist for Cursor (`GROK_CURSOR_*`) and Codex (`GROK_CODEX_*`). That the
+variable outranks the file is what the guide states.
 
 Measured on **Grok Build 1.0.77** with `grok inspect --json` and `grok -p` under a scratch `HOME` and `GROK_HOME`
 (logged in through `GROK_AUTH_PATH`):
@@ -1144,9 +1190,10 @@ registered under the key `k` exposes its tool `t` as `mcp__k__t` on Claude Code 
 already running by the time the TUI is drawn. So whether an injected server was accepted is observable without a prompt
 ever being submitted.
 
-**Terminal titles and the titles in an agent's own records.** Each agent sends its title with OSC 0/2 and decorates it
-(raw strings observed with Codex 0.163, Claude Code 2.1.301 and Grok Build 1.0.52, `proj` being the working directory's
-name):
+### Terminal titles and the titles in an agent's own records
+
+Each agent sends its title with OSC 0/2 and decorates it (raw strings observed with Codex 0.163, Claude Code 2.1.301 and
+Grok Build 1.0.52, `proj` being the working directory's name):
 
 - Codex — items joined by ` | `, the project last: `proj` at startup, `⠧ ⠧ | proj` and `⠙ | proj` while working, `[ ! ]
   Action Required | proj` at an approval, `Explain pseudo terminal | proj` once the thread is named, and an empty title
@@ -1172,8 +1219,10 @@ name):
   and `⠋ - Waiting for response… - Explain in one sentence what a pseudo te… - grok` while working, `Explain in one
   sentence what a pseudo te… - grok` when idle. The session directory's `summary.json` holds `generated_title`.
 
-**What the user said, in an agent's own record**, beyond the user lines one would expect (observed on Claude Code
-2.1.295–2.1.302, Codex 0.162.1 and Grok Build 1.0.62):
+### What the user said, in an agent's own record
+
+An agent's record holds more than the user lines one would expect (observed on Claude Code 2.1.295–2.1.302, Codex
+0.162.1 and Grok Build 1.0.62):
 
 - Claude Code — a message typed while the model is working is recorded only as an `attachment` line with
   `attachment.type` `queued_command` and `attachment.origin.kind` `human`, the text in `attachment.prompt` (a string or
@@ -1192,9 +1241,10 @@ name):
   `synthetic_reason` `compaction_meta` opening "This session is being continued from a previous conversation"; another
   `compaction_meta` line carries the user info and rules.
 
-**Subagent events** carry join traps that make them unusable as if they were the session's own. Octoboard drops them
-from the session's status, and registers Claude Code's `SubagentStart` and `SubagentStop` only for the background-task
-list:
+### Subagent events
+
+Subagent events carry join traps that make them unusable as if they were the session's own. Octoboard drops them from
+the session's status, and registers Claude Code's `SubagentStart` and `SubagentStop` only for the background-task list:
 
 - Claude Code — `SubagentStop` also fires for internal helper agents, which are the ones with an empty `agent_type`.
   Measured on 2.1.303:
@@ -1746,8 +1796,9 @@ and the process killed; one Grok Build login completed on its own (see below).
   `codex login` was left running to the end.
 - **Grok Build** was not left waiting, as every run opened a browser page. How long it waits is unknown.
 
-**Before a login, on the quota path.** The same probes as in "Plan quota" below, against a directory that does not
-exist and one created empty:
+### Before a login, on the quota path
+
+The same probes as in "Plan quota" below, against a directory that does not exist and one created empty:
 
 - **Claude Code does not tell the two apart, and recreates a missing directory.** Both the probe and `claude auth
   status` create the directory (`.claude.json`, `backups/`, and for the probe `plugins/` and `sessions/`) and then
@@ -2241,7 +2292,7 @@ fixed system pairs such as `/private/tmp` and `/tmp` count as equivalent.
 - **Not measured:** leaving `plans/` unshared, which keeps the auto-allow but means an in-progress plan file does not
   follow a conversation resumed under another account.
 
-**Residue the probes leave outside the scratch directory.**
+### Residue the probes leave outside the scratch directory
 
 - **Grok** writes lock-slot files to `/tmp/grok-file-lock-<uid>/` whatever `TMPDIR` says.
 - **Claude Code** creates per-working-directory temp directories in `/tmp/claude-<uid>/` despite `TMPDIR`. Its first
@@ -2252,14 +2303,16 @@ fixed system pairs such as `/private/tmp` and `/tmp` count as equivalent.
   --managed-daemon` (parent pid 1), which outlives the TUI and copies about 323 MB into that home's `packages/`. Its
   sockets in `/tmp/codex-daemon-<uid>/` are removed on exit.
 
-**Not verified.** Claude Code: the model's retry of a refused Edit or Write on the link's target; synced-skill buckets
-across accounts; whether the history lock is shared across accounts; the retention prune of `history.jsonl` (it never
-ran, even in a control); loading of `workflows/`, `themes/`, `hooks/`, `agent-memory/` and `loop.md` through a link;
-the install refusal for a symlinked `plugins/`; Claude Code 2.1.274. Codex: a link on a future `state_6.sqlite`;
-`plugins/`, `agents/`, `themes/`, `hooks.json` through a link; whether rollouts reference `generated_images/`; a rule's
-effect on a real tool call; whether a daemon holding a thread notices another home changing the shared row; `prompts/`
-on other versions. Grok: two processes on one session; loading of `personas/`, `workflows/`, `lsp.json`,
-`settings.json`, `sandbox.toml`, `statusline.sh`.
+### Not verified
+
+Claude Code: the model's retry of a refused Edit or Write on the link's target; synced-skill buckets across accounts;
+whether the history lock is shared across accounts; the retention prune of `history.jsonl` (it never ran, even in a
+control); loading of `workflows/`, `themes/`, `hooks/`, `agent-memory/` and `loop.md` through a link; the install
+refusal for a symlinked `plugins/`; Claude Code 2.1.274. Codex: a link on a future `state_6.sqlite`; `plugins/`,
+`agents/`, `themes/`, `hooks.json` through a link; whether rollouts reference `generated_images/`; a rule's effect on a
+real tool call; whether a daemon holding a thread notices another home changing the shared row; `prompts/` on other
+versions. Grok: two processes on one session; loading of `personas/`, `workflows/`, `lsp.json`, `settings.json`,
+`sandbox.toml`, `statusline.sh`.
 
 ## Codex resume from aged rollouts
 
@@ -2660,27 +2713,30 @@ in `docs/product/per-agent-launch-specifics.md`.
   the config directory in effect). Octoboard reads it, rather than matching the stderr line, because on a PTY stderr is
   the rendered UI, and matching rendered text would need a VT emulator in the daemon (see "Claude Code" in
   `docs/product/per-agent-launch-specifics.md` for what it reads and when it warns).
-- **Each agent reads a different instruction filename, matched by exact spelling.** Claude Code reads `CLAUDE.md` and
-  `CLAUDE.local.md`, and falls back to a project's `AGENTS.md` only when the project has no `CLAUDE.md` (2.1.319; see
-  "Claude Code" above), so beside a `CLAUDE.md` it does not read `AGENTS.md` on its own; a line `@AGENTS.md` in `CLAUDE.md` imports it, with
-  no confirmation for a file inside the working directory (its "Allow external CLAUDE.md file imports?" dialog is for
-  files outside it), and the request then carries a block for each file with the text once (Claude Code 2.1.319, `-p`
-  with Octoboard's `--settings`, `--append-system-prompt` and `--mcp-config` against a local stub); where it must be
-  shown a project's `AGENTS.md`, `--append-system-prompt-file` lands it in the system prompt. Codex reads `AGENTS.md`. Grok reads
-  `AGENTS.md`, `Agents.md`, `CLAUDE.md`, `Claude.md` and `CLAUDE.local.md`, and on a case-sensitive volume loads every
-  matching spelling present. No agent accepts an all-lowercase name. Folder trust, not a git repository, is what
-  gates Grok's instruction files: in a trusted folder that is not a repository Grok reads `AGENTS.md` and `CLAUDE.md`
-  from the working directory alone (Grok's own guide says outside a repository only the working directory is read),
-  and an untrusted one loads neither (measured on Grok Build 1.0.52). Its project *hooks* are the part that still
-  needs a git root. Grok loads one file reached by two names once when the second is a symlink to the first, and a
-  pair of separate identical files twice, a hard-linked pair included; a `CLAUDE.md` holding the line `@AGENTS.md`
-  reaches the model as that line, not expanded (Grok Build 1.0.77, `grok inspect --json` and a local stub). Codex
-  0.166.0 reads only `AGENTS.md` beside any `CLAUDE.md` (`codex debug prompt-input`). So a console's working directory
-  holds one `AGENTS.md` and a relative symlink `CLAUDE.md -> AGENTS.md`, or, where the host makes no file links, a
-  `CLAUDE.md` holding `@AGENTS.md`, and every agent's console session reads the same text once. Claude Code follows the
-  symlink, and replacing the target by a temporary file and an atomic rename leaves the link working, with the next
-  launch seeing the new content (Claude Code 2.1.300). The file's text therefore names the tools without any agent's
-  prefix, since each agent shows them under its own.
+- **Each agent reads a different instruction filename, matched by exact spelling.** Claude Code reads
+  `CLAUDE.md` and `CLAUDE.local.md`, and falls back to a project's `AGENTS.md` only when the project has no
+  `CLAUDE.md` (2.1.319; see "Claude Code" above), so beside a `CLAUDE.md` it does not read `AGENTS.md` on its
+  own; a line `@AGENTS.md` in `CLAUDE.md` imports it, with no confirmation for a file inside the working
+  directory (its "Allow external CLAUDE.md file imports?" dialog is for files outside it), and the request
+  then carries a block for each file with the text once (Claude Code 2.1.319, `-p` with Octoboard's
+  `--settings`, `--append-system-prompt` and `--mcp-config` against a local stub); where it must be shown a
+  project's `AGENTS.md`, `--append-system-prompt-file` lands it in the system prompt. Codex reads `AGENTS.md`.
+  Grok reads `AGENTS.md`, `Agents.md`, `CLAUDE.md`, `Claude.md` and `CLAUDE.local.md`, and on a case-sensitive
+  volume loads every matching spelling present. No agent accepts an all-lowercase name. Folder trust, not a
+  git repository, is what gates Grok's instruction files: in a trusted folder that is not a repository Grok
+  reads `AGENTS.md` and `CLAUDE.md` from the working directory alone (Grok's own guide says outside a
+  repository only the working directory is read), and an untrusted one loads neither (measured on Grok Build
+  1.0.52). Its project *hooks* are the part that still needs a git root. Grok loads one file reached by two
+  names once when the second is a symlink to the first, and a pair of separate identical files twice, a
+  hard-linked pair included; a `CLAUDE.md` holding the line `@AGENTS.md` reaches the model as that line, not
+  expanded (Grok Build 1.0.77, `grok inspect --json` and a local stub). Codex 0.166.0 reads only `AGENTS.md`
+  beside any `CLAUDE.md` (`codex debug prompt-input`). So a console's working directory holds the canonical
+  content in `octoboard-instructions.md`, with each provider's declared instruction filename a relative
+  symlink to it. Where the host makes no file links, `CLAUDE.md` imports `@octoboard-instructions.md` and
+  `AGENTS.md` holds a copy. Every agent's console session reads the same text once. Claude Code follows the
+  symlink, and replacing the target by a temporary file and an atomic rename leaves the link working, with the
+  next launch seeing the new content (Claude Code 2.1.300). The file's text therefore names the tools without
+  any agent's prefix, since each agent shows them under its own.
 - **Each agent hands the instruction file to the model whole.** Custom tags and Markdown headings arrive intact, with
   nothing escaped, reformatted or truncated; only the framing around the file differs. Claude Code puts it in the first
   user message, inside a system reminder, after "Contents of …/CLAUDE.md (project instructions…)". Codex puts it in a

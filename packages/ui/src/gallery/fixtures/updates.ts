@@ -6,6 +6,8 @@ import type { Scenario } from "../scenario";
 import { withCliStatus } from "../../fixtures/fixtureAgentClis";
 import { FIXTURE_DAEMON_INSTALL_STARTED_AT, FIXTURE_DAEMON_VERSION, SAMPLE, agentCliStatusOf, agentCliUpdateOf, daemonUpdateOf, minutesAgo, sessionOf, shellTerminalOf, snapshotState } from "../../fixtures/builders";
 
+import { daemonGreeted, daemonUpdateStatusUpdated } from "./liveChanges";
+
 const GROUP = "Updates";
 
 const { console: console_, web, sessions } = SAMPLE;
@@ -258,7 +260,7 @@ export const updateScenarios: Scenario[] = [
     state: browserQuiet(daemonUpdateOf()),
     steps: [
       openSession,
-      (ui) => ui.daemonEvents({ type: "hello", generation: PROTOCOL_GENERATION, daemon_version: "0.2.0" }),
+      daemonGreeted(PROTOCOL_GENERATION, "0.2.0"),
     ],
   },
   {
@@ -407,14 +409,13 @@ export const updateScenarios: Scenario[] = [
     steps: [
       openSession,
       downloadAndInstall,
-      (ui) => ui.daemonEvents({
-        type: "daemon_update_status_updated",
-        status: daemonUpdateOf({
+      daemonUpdateStatusUpdated(() =>
+        daemonUpdateOf({
           available: daemonOffer,
           last_check: foundOffer,
           install: { state: "failed", started_at: FIXTURE_DAEMON_INSTALL_STARTED_AT, finished_at: Date.now(), error: "daemon_update_replace_failed", detail: REPLACE_FAILED },
         }),
-      }),
+      ),
     ],
   },
   {

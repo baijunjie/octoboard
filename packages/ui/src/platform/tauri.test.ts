@@ -786,9 +786,10 @@ describe("the remote daemons", () => {
     invoke.mockImplementation(async (command: string) => (command === "remote_page_requested_take" ? true : undefined));
     const listener = vi.fn();
     const undo = tauriPlatform().remoteDaemons!.onPageRequested(listener);
-    await afterQueuedWork();
-    expect(listeners.has("remote-page-requested")).toBe(true);
-    expect(listener).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => {
+      expect(listeners.has("remote-page-requested")).toBe(true);
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
     // Nothing asked for is not passed on.
     invoke.mockImplementation(async () => false);
     listeners.get("remote-page-requested")!({ payload: undefined });

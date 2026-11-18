@@ -73,74 +73,16 @@ fn read_list(file: &Path) -> Option<GuardList> {
 /// The decision the agent reads for the payload: `Some` only to deny.
 fn decide(list: &GuardList, payload: &[u8]) -> Option<Value> {
     let payload: Value = serde_json::from_slice(payload).ok()?;
-    let targets = target_paths(&payload);
+    let hooks = crate::adapter::provider(list.agent?).hooks();
+    let (targets, cwd) = hooks.edit_targets(&payload);
     if targets.is_empty() {
         return None;
     }
-    let cwd = payload_cwd(&payload);
     let places = Places::of(list);
     let refused = targets
         .into_iter()
         .find_map(|target| places.refuse(&absolute(&target, cwd.as_deref())?))?;
-    Some(serde_json::json!({
-        "hookSpecificOutput": {
-            "hookEventName": "PreToolUse",
-            "permissionDecision": "deny",
-            "permissionDecisionReason": reason(&refused, &list.tool),
-        }
-    }))
-}
-
-/// The directory relative targets are resolved against: the payload's `cwd`, and for a Grok
-/// payload that lacks it the workspace root Grok gives its hooks in the environment.
-fn payload_cwd(payload: &Value) -> Option<PathBuf> {
-    match payload.get("cwd").and_then(Value::as_str) {
-        Some(cwd) => Some(PathBuf::from(cwd)),
-        None => std::env::var_os("GROK_WORKSPACE_ROOT").map(PathBuf::from),
-    }
-}
-
-/// The paths the tool call writes, as the payload names them. Claude Code's file-edit tools name
-/// one in `file_path`, and `NotebookEdit` in `notebook_path`. Grok sends its fields in both
-/// cases (`tool_input` and `toolInput`) and names the file in `path` as well, and a notebook in
-/// `target_notebook`. Codex's `apply_patch` carries the patch text in `command`, which names every
-/// file it touches in its headers.
-fn target_paths(payload: &Value) -> Vec<String> {
-    let Some(input) = ["tool_input", "toolInput"]
-        .into_iter()
-        .find_map(|key| payload.get(key))
-    else {
-        return Vec::new();
-    };
-    let mut paths: Vec<String> = ["file_path", "notebook_path", "path", "target_notebook"]
-        .into_iter()
-        .filter_map(|key| input.get(key)?.as_str())
-        .map(str::to_owned)
-        .collect();
-    if let Some(patch) = input.get("command").and_then(Value::as_str) {
-        paths.extend(patch_paths(patch));
-    }
-    paths.retain(|path| !path.is_empty());
-    paths
-}
-
-/// The files an `apply_patch` patch names in its headers, a move's destination included.
-/// `command` is also a shell command's text in other tools; the header prefixes are what tell a
-/// patch, and a command that merely contains one has no line starting with it.
-fn patch_paths(patch: &str) -> impl Iterator<Item = String> + '_ {
-    const HEADERS: [&str; 4] = [
-        "*** Update File: ",
-        "*** Add File: ",
-        "*** Delete File: ",
-        "*** Move to: ",
-    ];
-    patch.lines().filter_map(|line| {
-        let line = line.trim_start();
-        HEADERS
-            .iter()
-            .find_map(|header| line.strip_prefix(header))
-            .map(|path| path.trim().to_owned())
-    })
+    hooks.deny_edit(&reason(&refused, &list.tool))
 }
 
 /// `target` resolved against the payload's working directory, written one way but in the case the

@@ -107,9 +107,7 @@ pub fn resolve_project_directory(
     let git = BrowseGit::new(git);
     let scope = scope_for(&record, worktree, &git, &AtomicBool::new(false))?;
     let canonical = live::resolve(&scope.canonical, &rel)?;
-    if !canonical.is_dir() {
-        return Err(crate::hostfs::not_a_directory(&canonical));
-    }
+    crate::hostfs::require_directory(&canonical)?;
     Ok(canonical)
 }
 

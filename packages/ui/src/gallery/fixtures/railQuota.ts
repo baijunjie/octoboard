@@ -6,7 +6,7 @@ import { describing, type Step } from "../../fixtures/interact";
 import type { FixtureError } from "../../fixtures/sampleFiles";
 import type { Scenario } from "../scenario";
 import { accountOf, SAMPLE, minutesAgo, snapshotState } from "../../fixtures/builders";
-import { accountAdded, accountRemoved, agentAvailability } from "./liveChanges";
+import { accountAdded, accountRemoved, agentAvailability, updateAccountQuota } from "./liveChanges";
 import { USED_UP_MIX, manyClaudeAccounts, quotaFailure, quotaOf, quotaWindow, PERSONAL_RESET_CREDITS, resetCreditOf, resetCreditsOf } from "../../fixtures/quotas";
 
 const GROUP = "Window layout";
@@ -621,14 +621,11 @@ export const railQuotaScenarios: Scenario[] = [
     state: resetCreditsOn("a-codex"),
     steps: [
       ...redeemFromPanel("Personal"),
-      (ui) => ui.daemonEvents((state) => ({
-        type: "account_quotas_updated",
-        account_quotas: state.accountQuotas.map((quota) => {
-          if (quota.agent !== "codex" || quota.account !== "a-codex") return quota;
-          const { reset_credits: _, ...unspent } = quota;
-          return unspent;
-        }),
-      })),
+      updateAccountQuota("codex", "a-codex", (quota) => {
+        if (!quota) return undefined;
+        const { reset_credits: _, ...unspent } = quota;
+        return unspent;
+      }),
     ],
   },
   {

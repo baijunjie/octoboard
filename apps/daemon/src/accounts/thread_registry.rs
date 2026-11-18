@@ -60,6 +60,11 @@ pub(crate) struct Repoint {
 /// The errors are SQLite's, which the database's callers turn into a cause for the user
 /// (`SharingCause::of_database`).
 pub(crate) trait ThreadRegistry: Send + Sync {
+    /// A provider-specific relocation failure, when the generic file-system cause is insufficient.
+    fn relocation_code(&self, _error: &RowError) -> Option<crate::protocol::Code> {
+        None
+    }
+
     /// Whether `name`, an entry of a configuration directory, is one of the provider's thread
     /// databases, of any schema generation and catalogued as a shared item or not.
     fn is_database(&self, name: &str) -> bool;

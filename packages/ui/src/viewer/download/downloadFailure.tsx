@@ -47,8 +47,10 @@ export function raiseDownloadFailure(t: Translate, name: string, failure: unknow
         if (hostOs === "windows") {
           const number = /\(os error (\d+)\)/.exec(failure.message)?.[1];
           const message = failure.message.replace(/\(os error (\d+)\)/, "(error $1)");
+          // Leave failures without a known recovery to the classifier, which can report them as unexpected.
           return raiseError(new Error(message), { title, recovery: number === undefined ? undefined : WINDOWS_ERRNO[number] });
         }
+        // Unrecognised native errors are deliberately unexpected. Known signatures get the classifier's remedy.
         return raiseError(new Error(failure.message), { title });
       }
       // The parts that arrived are not the whole file: it changed while it was copied.

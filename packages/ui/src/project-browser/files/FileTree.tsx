@@ -143,7 +143,7 @@ export function FileTree({
   // hands only to the chevron. So a collapsed directory, whose rows are not built, holds one
   // stand-in row that is never on screen (a collapsed row's children are not rows of the tree), the
   // same object every time. It costs the tree's `aria-rowcount` one row per collapsed directory.
-  // TODO: drop the stand-ins once react-aria-components hands `hasChildItems` (`expandable`) to `useTreeItem`.
+  // The stand-ins are needed until `useTreeItem` can base row expansion on `hasChildItems`.
   const standIns = useMemo(() => new Map<string, TreeNode[]>(), []);
   const childrenOf = (node: Extract<TreeNode, { type: "directory" }>): TreeNode[] => {
     if (node.children.length > 0) return node.children;

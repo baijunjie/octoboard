@@ -25,10 +25,10 @@ daemon's own; see [`../processes/ledger/README.md`](../processes/ledger/README.m
   talking (the file's module doc states the rule).
 - `registry.rs` — the owner-only `<holder id>.json` a holder is found by (`paths::holders_dir`; the directory is passed
   in, so tests use their own). It holds the port, the secret the link is opened with and the holder process's identity.
-- `compat.rs` — which holders a daemon adopts, by semantic version: `FLOOR` up to the daemon's own. `FLOOR` is the
-  previous stable release, and `apps/desktop/scripts/release-desktop.mjs` refuses a release while it is not the greatest
-  stable `desktop-v*` tag below the new version. The protocol is kept compatible within that promised range; `FLOOR`
-  only moves by that previous-stable release rule, never to admit a change that breaks the protocol.
+- `compat.rs` — which holders a daemon adopts, by semantic version: `FLOOR` up to the daemon's own. The daemon
+  compiles the floor from `config/holder-floor.txt`, which the release scripts use to validate and publish the new
+  release. It must be the greatest stable `desktop-v*` tag below the new version (`0.0.0` before the first stable
+  release). The protocol stays compatible within that range.
 - `quit_targets.rs` — the application's quit record (`application-quit`, `paths::application_quit_record`): its
   versioned JSON, the start's reconcile of it (unscoped to scoped) and the targets still to resolve; "How it works" has
   the rules.

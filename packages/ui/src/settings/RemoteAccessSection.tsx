@@ -121,8 +121,9 @@ export function RemoteAccessSection(): React.ReactElement {
   }
 
   const openRemoteLoginSettings = async () => {
+    if (!remoteLogin) return;
     try {
-      await remoteLogin?.openSystemSettings();
+      await remoteLogin.openSystemSettings();
     } catch (cause) {
       raiseError(new ActionableError(t(sshServer.openFailed, sshParams("openFailed", false)), "none", { cause }), {
         title: t("settings.remoteAccess.remoteLogin.openFailedTitle"),

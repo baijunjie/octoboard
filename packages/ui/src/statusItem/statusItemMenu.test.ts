@@ -200,6 +200,27 @@ describe("buildStatusItemMenu quota submenus", () => {
     expect(submenu!.quota_weekly_remaining).toBeUndefined();
   });
 
+  it("shortens account names in native menu headings by display columns", () => {
+    const name = "長".repeat(60);
+    const work = accountOf("work", "claude", `${name} Work`, "/work");
+    const [submenu] = buildQuotaSubmenus(t, source({
+      accounts: [work],
+      defaultAccountNames: { claude: `${name} Default` },
+      agentAvailability: available("claude"),
+    }));
+    const headers = submenu.items.filter((item) => item.kind === "header");
+    expect(headers).toHaveLength(2);
+    for (const header of headers) {
+      expect(header.title).toContain("…");
+      expect(displayColumns(header.title)).toBeLessThan(displayColumns(name));
+      expect(header.label).toContain(name);
+    }
+    expect(headers.map((header) => header.label)).toEqual(expect.arrayContaining([
+      expect.stringContaining(`${name} Default`),
+      expect.stringContaining(`${name} Work`),
+    ]));
+  });
+
   it("lists quota accounts in the saved order with the default account movable", () => {
     const work: Account = accountOf("work", "claude", "Work", "/work");
     const [submenu] = buildQuotaSubmenus(t, source({ accounts: [work], accountOrder: { claude: ["work", null] }, agentAvailability: available("claude") }));

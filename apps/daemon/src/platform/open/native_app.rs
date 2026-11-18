@@ -16,7 +16,11 @@ pub fn url_scheme_handled(scheme: &str) -> bool {
 /// The command that opens `url` with the application registered for its scheme on `os`: macOS
 /// `open`, with the URL as one argument after the end of options. `Err` for a host that has none
 /// (Windows opens through the shell's own call instead, and no other host reports an application).
-pub fn url_launch_for(os: &str, url: &str) -> Result<Command, String> {
+pub fn url_launch(url: &str) -> Result<Command, String> {
+    url_launch_for(std::env::consts::OS, url)
+}
+
+fn url_launch_for(os: &str, url: &str) -> Result<Command, String> {
     match os {
         "macos" => {
             let mut command = Command::new("/usr/bin/open");

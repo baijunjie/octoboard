@@ -2,11 +2,9 @@
 //! session follows, then the user's own text for the console. Only the text is built here; where it
 //! is written is not.
 //!
-//! **One instruction file serves every agent.** The working directory holds `AGENTS.md`, and
-//! `CLAUDE.md` is a symlink to it. Claude Code reads the latter, Codex the former, and Grok, once
-//! the folder is trusted (which Octoboard's confirmation presses for a console session), reads
-//! both, loading a symlinked pair once. That is why the file names the tools without a prefix:
-//! each agent shows the same tools under its own.
+//! One instruction file serves every agent. The working directory holds Octoboard's canonical
+//! content file, exposed under each provider's declared instruction filename by a link, an import
+//! or a copy. The text names tools without a prefix because each provider presents its own.
 
 use crate::protocol::AgentId;
 
@@ -348,7 +346,7 @@ pub fn console_session_instructions(user_prompt: Option<&str>, options: &RoleOpt
 
 /// The file every agent's console session is pointed to, which holds the instructions themselves;
 /// a provider that reads another spelling is given a symlink to it.
-pub(crate) const INSTRUCTION_FILE: &str = "AGENTS.md";
+pub(crate) const INSTRUCTION_FILE: &str = "octoboard-instructions.md";
 
 /// The instruction file a console session of this agent is pointed to, read out of its working
 /// directory: the one its descriptor names.

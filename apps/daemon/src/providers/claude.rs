@@ -66,6 +66,26 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         generic: &[],
     },
     // Claude Code reads only this spelling, not `AGENTS.md`.
+    inherited_session_vars: &[
+        "AI_AGENT",
+        "CLAUDECODE",
+        "CLAUDE_CODE_BRIDGE_MCP_CARRIER",
+        "CLAUDE_CODE_BRIDGE_OWNER_ACCOUNT_UUID",
+        "CLAUDE_CODE_BRIDGE_OWNER_ORG_UUID",
+        "CLAUDE_CODE_CHILD_SESSION",
+        "CLAUDE_CODE_ENTRYPOINT",
+        "CLAUDE_CODE_ENVIRONMENT_KIND",
+        "CLAUDE_CODE_EXECPATH",
+        "CLAUDE_CODE_MESSAGING_SOCKET",
+        "CLAUDE_CODE_MESSAGING_TOKEN",
+        "CLAUDE_CODE_SESSION_ATTENDED",
+        "CLAUDE_CODE_SESSION_ID",
+        "CLAUDE_CODE_SSE_PORT",
+        "CLAUDE_CODE_WORKER_EPOCH",
+        "CLAUDE_EFFORT",
+        "CLAUDE_PID",
+        "CLAUDE_PROJECT_DIR",
+    ],
     instruction_file: "CLAUDE.md",
     // A line `@AGENTS.md` loads that file's text, with no confirmation for a file inside the
     // working directory (Claude Code 2.1.319).

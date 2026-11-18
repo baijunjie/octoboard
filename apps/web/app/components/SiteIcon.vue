@@ -14,7 +14,8 @@ defineProps<{
     | "plus"
     | "minus"
     | "arrow-right"
-    | "arrow-bend-up-left";
+    | "arrow-bend-up-left"
+    | "arrow-counter-clockwise";
 }>();
 </script>
 
@@ -75,5 +76,8 @@ defineProps<{
 }
 .icon-arrow-bend-up-left {
   mask: url("../assets/icons/arrow-bend-up-left.svg") center / contain no-repeat;
+}
+.icon-arrow-counter-clockwise {
+  mask: url("../assets/icons/arrow-counter-clockwise.svg") center / contain no-repeat;
 }
 </style>

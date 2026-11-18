@@ -9,10 +9,8 @@ const SCROLL_LABELS = new Map<string, keyof PrimitiveLabels["scrollTabs"]>([
   ["Scroll tabs right", "right"],
 ]);
 
-/** TODO: replace this render adapter when HeroUI exposes localized scroll-button names. Its
- * list container currently offers no button props and bypasses react-aria's locale. Change only
- * the names of the native buttons it renders, keeping its scrolling, refs and styles intact. The names
- * are the application's (`PrimitiveLabels`); without them, HeroUI's own stay. */
+/** Localizes HeroUI's scroll buttons without changing their scrolling, refs or styles. HeroUI's list container
+ * exposes no button props and bypasses React Aria's locale. When the application supplies no names, HeroUI's stay. */
 export function useTabScrollLabels(): (children: React.ReactNode) => React.ReactNode {
   const labels = usePrimitiveLabels()?.scrollTabs;
   return (children) => labels ? Children.map(children, (child) => {

@@ -1,86 +1,32 @@
 # Keeping the UI responsive in WebKit
 
-## A style change that reaches the whole document is expensive in the app's WebKit
+The rules (no per-interaction change on `<html>`, `<body>` or `#root`, the hidden sibling after `#root`, no interleaved
+layout reads, the observers on an eased element, the overlay `inert` toggle, the rightmost compound of a CSS rule,
+easing the real property, the terminal's fit) are in `docs/conventions/ui-code.md`, "Performance in the app's WebKit",
+and `docs/conventions/ui-components.md`, "Styling mechanisms". What they leave to judgement and measurement:
 
-The app's WKWebView recalculates style many times slower per element than Chrome, so anything that happens per
-interaction (opening or closing an overlay, hovering, dragging, an update per daemon event) must not change an
-attribute, class, inline style or custom property on `<html>`, `<body>` or `#root`, nor change which structural
-pseudo-classes (`:last-child`, `:first-child`, `:nth-*`) `#root` or another large subtree's root matches: Tailwind's
-`space-y-*` and `divide-y` select on `:last-child`, so such a change restyles everything under it. Put interaction
-state on the narrowest element that needs it.
+## Judge an interaction's cost as restyle cost times forced passes, and make the restyle cheap first
 
-That is why each HTML entry of `packages/ui` keeps a permanent hidden sibling after `#root`: overlays are portalled to
-the end of `<body>`, and without it the first one mounting and the last one unmounting flip `#root`'s `:last-child`.
-A new HTML entry needs the same sibling.
+Each synchronous layout read after a DOM change runs the pending restyle there and then, so an interaction whose
+components each change the DOM and then measure (a pane switch re-measuring its fades, scrollers and FLIP animations)
+pays the full restyle once per read. Cheapening the restyle shrinks every pass at once. Once nothing of ours restyles
+the document, React Aria's `inert` toggle on each modal overlay is what is left of a menu's open and close; the only
+levers then are fewer elements under `#root` and cheaper style recalculation per element.
 
-A synchronous layout read (`offsetHeight`, `getBoundingClientRect`, `scrollHeight`, `getComputedStyle`, and
-`getAnimations()`, which brings style up to date before it answers) made after a DOM change runs the pending restyle
-there and then, so an interaction whose components each change the DOM and then measure it (a pane switch re-measuring
-its fades, scrollers and FLIP animations) pays the full restyle once per read, not once per frame. Judge an
-interaction's cost as restyle cost times the number of forced passes; make the restyle cheap first, since that shrinks
-every pass at once.
+## Unwrapping a `:where()` changes what the rule beats
 
-Animating an element's size turns every `ResizeObserver` on it or inside it into a per-frame callback. Before easing a
-size (as `Dialog`'s height ease does), check those observers: one whose write reaches past its own element — the toast
-clearance's custom property on `<html>` — skips while the element has running animations and measures once their
-`finished` promises settle (`animationend` is not sent for an animation made with `element.animate()`). Ask
-`getAnimations()` once per wait rather than on every report, and a frame after the report, since an observer can be
-told of the change before the animation easing it exists.
+Moving a `:where()` off the rightmost compound gives the rule the weight of what was inside it: a tag-only compound
+still loses to a utility class on the element, but one carrying a pseudo-class or an attribute now beats it, so check
+what the rule is meant to lose to.
 
-One whole-document restyle per overlay is not ours to remove: every modal overlay — each HeroUI `Dropdown`, `Popover`
-and `Modal` in `packages/ui`, `ActionMenu` included — has React Aria set `inert` on everything outside it, `#root`
-included, on open and take it off on close (`ariaHideOutside` with `shouldUseInert` hardcoded, so not the cheap
-`aria-hidden`). Once nothing of ours restyles the document, that toggle is what is left of a menu's open and close in
-WebKit. Do not chase it with `isNonModal`: that skips the `inert` walk but also stops a press outside from closing the
-overlay. Nor patch `node_modules` or remove `HTMLElement.prototype.inert`. The only levers left are fewer elements
-under `#root` and cheaper style recalculation per element.
+## Measure latency only in the system WKWebView
 
-## Keep a tag, class or id on the rightmost compound of every CSS rule
+Playwright's headless WebKit reports style-recalculation cost several times too low and Chrome lower still, so a cause
+that dominates in the app can look negligible in both: never conclude from either that styling is not the bottleneck.
 
-WebKit files each style rule under the id, class or tag of its rightmost compound selector and, for an element, tries
-only the rules filed under what that element has. A rule whose rightmost compound has none of the three — only
-`:where()`, `:is()`, `:not()`, another pseudo-class, or `*` — is tried against every element on every style
-recalculation, so a hundred such rules made each restyle of a large region an order of magnitude slower in the app
-while Chrome and Playwright's WebKit showed only a fraction of it. This applies to any CSS written or generated for
-`packages/ui`: stylesheets, Tailwind arbitrary variants, and plugins or packages that emit CSS.
-
-- Keep a tag, class or id in the rightmost compound. `:where()` goes around ancestors or as a suffix on that compound
-  — `:where(.prose) pre:where(:not(.not-prose, .not-prose *))`, never `.prose :where(pre)`. Unwrapping a `:where()`
-  gives the rule the weight of what was inside it: a tag-only compound still loses to a utility class on the element,
-  but one carrying a pseudo-class or an attribute now beats it, so check what the rule is meant to lose to.
-- `@tailwindcss/typography` is loaded only through `packages/ui/typography.mjs`, never as the bare plugin: its default
-  output is exactly this shape, 133 rules of it.
-- After adding a stylesheet, a CSS-emitting plugin or package, or a selector-heavy variant, count the rules in the
-  built `packages/ui/dist/assets/*.css` whose rightmost compound starts with `:where(`, `:is(` or `:not(`, or is a
-  bare `*`, against the count before. About 150 remain from HeroUI component states, toasts, Tailwind's
-  `space-y`/`divide-y` and the typography plugin's sibling and child shapes; a jump of dozens is the thing to fix.
-
-## Ease the real property, and keep the terminal's fit out of a layout ease
-
-In the app's WKWebView, a running transition of a registered custom property (`@property`) jumps to its end value
-whenever any stylesheet is rewritten rather than appended to (a `<style>` element's text replaced, or `insertRule`),
-while a transition of an ordinary property such as `width` keeps running; Chrome shows neither. xterm's DOM renderer
-rewrites its dimensions `<style>` on every fit of the terminal, so in this app such an ease running while the
-terminal is resized snaps to its end after a frame or two.
-
-- To animate a value, transition the real property on each element that needs it, as the docked columns' clips and
-  the title bar's start segment transition `width`. Do not ease a registered custom property, not even to share one
-  value between several elements.
-- A layout animation that changes the terminal's size has to be counted in the `resizing` prop `App` passes to
-  `TerminalPane`, which holds the fit until the ease ends and then fits once. A fit on every frame rebuilds xterm's
-  dimension styles each time, a full restyle in WebKit (about 28 ms a frame against 16 ms without).
-
-## Measure UI latency in the system WKWebView; Playwright's WebKit and Chrome under-report it
-
-Only the system WKWebView the app runs in gives real style-recalculation cost. Playwright's headless WebKit reports
-it several times too low and Chrome lower still, so a cause that dominates in the app can look negligible in both:
-never conclude from either that styling is not the bottleneck.
-
-- To judge a change's latency, run `pnpm bench:wkwebview` in `packages/ui` on the base and on the branch, on the same
-  machine with nothing else busy, and compare the two tables; `packages/ui/scripts/wkbench/README.md` (sections
-  "Running it" and "Reading the tables") has the options and what each column means.
+- `pnpm bench:wkwebview` (base against branch, same machine, nothing else busy) is the measure;
+  `packages/ui/scripts/wkbench/README.md`, "Running it" and "Reading the tables", has the options and columns.
 - Its `--engine webkit|chromium` runs are only a coarse before-against-after ratio, and its Chrome CPU profiles
   (`--profile`) only say which code spends the time, never how long the app takes.
-- Never point it at the user's own daemon: its scenarios drive that daemon's sessions (the `idle` one renames them),
-  and its fixtures create consoles and sessions and trust folders. Leave `--port` out so it starts its own throwaway
-  one, or pass it only for a daemon you started yourself on a scratch `HOME`.
+- Its scenarios rename sessions, create consoles and sessions and trust folders: leave `--port` out so it starts its own
+  throwaway daemon, or pass it only for a daemon you started yourself on a scratch `HOME`.

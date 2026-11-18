@@ -11,6 +11,13 @@ const names = {
 // Native English menu summaries: https://learn.chatgpt.com/docs/permission-modes
 // Other locales translate that wording; separate help explains app-specific scope and session behaviour.
 const en = {
+  "provider.codex.relocation_config_unreadable": "The conversation was copied into {path}, but the target account's record of the thread could not be updated: {detail}. The session stays on the account it had.",
+  "provider.codex.relocation_config_unreadable.summary": "The conversation was copied into {path}, but the target account's record of the thread could not be updated.",
+  "provider.codex.relocation_config_unreadable.remedy": "Make the account's {configToml} a readable file of valid TOML, or remove it, then try the switch again.",
+  "provider.codex.relocation_home_unlocatable": "The conversation was copied into {path}, but the target account's record of the thread could not be updated: {detail}. The session stays on the account it had.",
+  "provider.codex.relocation_home_unlocatable.summary": "The conversation was copied into {path}, but the target account's record of the thread could not be updated.",
+  "provider.codex.relocation_home_unlocatable.remedy": "Set {sqliteHome} in the account's {configToml}, or {codexSqliteHome} in your login shell, to an absolute path (a leading {tilde} needs {home} to be set), then try the switch again.",
+
   "provider.codex.trustCaution":
     "Trusting lets {agent} load this project's own configuration, hooks and command rules, which can run code even without a model request. This confirmation does not change {agent}'s sandbox or approval policy, though the project's own configuration can.",
   "provider.codex.trustScope":
@@ -50,6 +57,13 @@ const en = {
 } as const;
 
 const arMessages = {
+  "provider.codex.relocation_config_unreadable": "نُسخت المحادثة إلى {path}، لكن تعذر تحديث سجل المحادثة في الحساب الهدف: {detail}. تبقى الجلسة على حسابها السابق.",
+  "provider.codex.relocation_config_unreadable.summary": "نُسخت المحادثة إلى {path}، لكن تعذر تحديث سجل المحادثة في الحساب الهدف.",
+  "provider.codex.relocation_config_unreadable.remedy": "اجعل {configToml} الخاص بالحساب ملف TOML صالحاً وقابلاً للقراءة، أو أزله، ثم حاول التبديل مجدداً.",
+  "provider.codex.relocation_home_unlocatable": "نُسخت المحادثة إلى {path}، لكن تعذر تحديث سجل المحادثة في الحساب الهدف: {detail}. تبقى الجلسة على حسابها السابق.",
+  "provider.codex.relocation_home_unlocatable.summary": "نُسخت المحادثة إلى {path}، لكن تعذر تحديث سجل المحادثة في الحساب الهدف.",
+  "provider.codex.relocation_home_unlocatable.remedy": "عيّن {sqliteHome} في {configToml} الخاص بالحساب، أو {codexSqliteHome} في صدفة تسجيل الدخول، إلى مسار مطلق (يتطلب {tilde} في البداية تعيين {home})، ثم حاول التبديل مجدداً.",
+
   "provider.codex.trustCaution": "تسمح الثقة لـ {agent} بتحميل إعدادات هذا المشروع وخطافاته وقواعد أوامره، التي يمكنها تشغيل شيفرة حتى دون طلب من النموذج. لا يغيّر هذا التأكيد بيئة العزل أو سياسة الموافقة في {agent}، لكن إعدادات المشروع نفسها قد تغيّرهما.",
   "provider.codex.trustScope": "يسجّل {agent} الثقة لجذر مستودع {git} الذي يحتوي على هذا المجلد. في حالة المجلد الفرعي أو شجرة العمل المرتبطة، يشمل ذلك نطاقاً أوسع من هذا المشروع.",
   "provider.codex.setting.approval_reviewer.heading": "الموافقة على الأذونات",
@@ -87,6 +101,13 @@ const arMessages = {
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const deMessages = {
+  "provider.codex.relocation_config_unreadable": "Das Gespräch wurde nach {path} kopiert, aber der Gesprächseintrag des Zielkontos konnte nicht aktualisiert werden: {detail}. Die Sitzung behält ihr bisheriges Konto.",
+  "provider.codex.relocation_config_unreadable.summary": "Das Gespräch wurde nach {path} kopiert, aber der Gesprächseintrag des Zielkontos konnte nicht aktualisiert werden.",
+  "provider.codex.relocation_config_unreadable.remedy": "Stelle sicher, dass {configToml} des Kontos eine lesbare Datei mit gültigem TOML ist, oder entferne sie. Versuche den Wechsel dann erneut.",
+  "provider.codex.relocation_home_unlocatable": "Das Gespräch wurde nach {path} kopiert, aber der Gesprächseintrag des Zielkontos konnte nicht aktualisiert werden: {detail}. Die Sitzung behält ihr bisheriges Konto.",
+  "provider.codex.relocation_home_unlocatable.summary": "Das Gespräch wurde nach {path} kopiert, aber der Gesprächseintrag des Zielkontos konnte nicht aktualisiert werden.",
+  "provider.codex.relocation_home_unlocatable.remedy": "Setze {sqliteHome} in der {configToml} des Kontos oder {codexSqliteHome} in deiner Login-Shell auf einen absoluten Pfad. Ein führendes {tilde} erfordert, dass {home} gesetzt ist. Versuche den Wechsel dann erneut.",
+
   "provider.codex.trustCaution": "Wenn du vertraust, darf {agent} die eigene Konfiguration, Hooks und Befehlsregeln dieses Projekts laden. Diese können auch ohne Modellanfrage Code ausführen. Diese Bestätigung ändert weder die Sandbox noch die Genehmigungsrichtlinie von {agent}. Die eigene Projektkonfiguration kann dies jedoch tun.",
   "provider.codex.trustScope": "{agent} speichert das Vertrauen für das Wurzelverzeichnis des {git}-Repositorys, das diesen Ordner enthält. Bei einem Unterordner oder verknüpften Worktree umfasst dies mehr als dieses Projekt.",
   "provider.codex.setting.approval_reviewer.heading": "Berechtigungsgenehmigung",
@@ -124,6 +145,13 @@ const deMessages = {
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const esMessages = {
+  "provider.codex.relocation_config_unreadable": "Se copió la conversación en {path}, pero no se pudo actualizar el registro del hilo en la cuenta de destino: {detail}. La sesión conserva su cuenta anterior.",
+  "provider.codex.relocation_config_unreadable.summary": "Se copió la conversación en {path}, pero no se pudo actualizar el registro del hilo en la cuenta de destino.",
+  "provider.codex.relocation_config_unreadable.remedy": "Haz que {configToml} de la cuenta sea un archivo TOML válido y legible, o quítalo, y vuelve a intentar el cambio.",
+  "provider.codex.relocation_home_unlocatable": "Se copió la conversación en {path}, pero no se pudo actualizar el registro del hilo en la cuenta de destino: {detail}. La sesión conserva su cuenta anterior.",
+  "provider.codex.relocation_home_unlocatable.summary": "Se copió la conversación en {path}, pero no se pudo actualizar el registro del hilo en la cuenta de destino.",
+  "provider.codex.relocation_home_unlocatable.remedy": "Establece {sqliteHome} en {configToml} de la cuenta, o {codexSqliteHome} en tu shell de inicio de sesión, en una ruta absoluta. Un {tilde} inicial requiere que {home} esté definido. Después, vuelve a intentar el cambio.",
+
   "provider.codex.trustCaution": "Confiar permite que {agent} cargue la configuración, los hooks y las reglas de comandos propios de este proyecto, que pueden ejecutar código incluso sin una solicitud al modelo. Esta confirmación no cambia el entorno aislado ni la política de aprobación de {agent}, aunque la configuración del proyecto sí puede hacerlo.",
   "provider.codex.trustScope": "{agent} registra la confianza en la raíz del repositorio de {git} que contiene esta carpeta. Para una subcarpeta o un worktree enlazado, esto abarca más que este proyecto.",
   "provider.codex.setting.approval_reviewer.heading": "Aprobación de permisos",
@@ -161,6 +189,13 @@ const esMessages = {
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const frMessages = {
+  "provider.codex.relocation_config_unreadable": "La conversation a été copiée dans {path}, mais l’enregistrement du fil dans le compte cible n’a pas pu être actualisé : {detail}. La session conserve son compte précédent.",
+  "provider.codex.relocation_config_unreadable.summary": "La conversation a été copiée dans {path}, mais l’enregistrement du fil dans le compte cible n’a pas pu être actualisé.",
+  "provider.codex.relocation_config_unreadable.remedy": "Faites du {configToml} du compte un fichier TOML valide et lisible, ou retirez-le, puis réessayez le changement.",
+  "provider.codex.relocation_home_unlocatable": "La conversation a été copiée dans {path}, mais l’enregistrement du fil dans le compte cible n’a pas pu être actualisé : {detail}. La session conserve son compte précédent.",
+  "provider.codex.relocation_home_unlocatable.summary": "La conversation a été copiée dans {path}, mais l’enregistrement du fil dans le compte cible n’a pas pu être actualisé.",
+  "provider.codex.relocation_home_unlocatable.remedy": "Définissez {sqliteHome} dans le {configToml} du compte, ou {codexSqliteHome} dans votre shell de connexion, sur un chemin absolu. Un {tilde} initial nécessite que {home} soit défini. Réessayez ensuite le changement.",
+
   "provider.codex.trustCaution": "Faire confiance permet à {agent} de charger la configuration, les hooks et les règles de commande propres à ce projet, qui peuvent exécuter du code même sans requête au modèle. Cette confirmation ne change ni le bac à sable ni la politique d’approbation de {agent}, mais la configuration du projet peut le faire.",
   "provider.codex.trustScope": "{agent} enregistre la confiance pour la racine du dépôt {git} contenant ce dossier. Pour un sous-dossier ou un worktree lié, cela couvre davantage que ce projet.",
   "provider.codex.setting.approval_reviewer.heading": "Approbation des autorisations",
@@ -198,6 +233,13 @@ const frMessages = {
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const hiMessages = {
+  "provider.codex.relocation_config_unreadable": "बातचीत {path} में कॉपी हो गई, लेकिन लक्ष्य अकाउंट में थ्रेड का रिकॉर्ड अपडेट नहीं हो सका: {detail}। सेशन अपने पुराने अकाउंट पर ही रहता है।",
+  "provider.codex.relocation_config_unreadable.summary": "बातचीत {path} में कॉपी हो गई, लेकिन लक्ष्य अकाउंट में थ्रेड का रिकॉर्ड अपडेट नहीं हो सका।",
+  "provider.codex.relocation_config_unreadable.remedy": "अकाउंट की {configToml} को पढ़ने योग्य, सही TOML फ़ाइल बनाएँ या उसे हटाएँ, फिर अकाउंट बदलने की कोशिश करें।",
+  "provider.codex.relocation_home_unlocatable": "बातचीत {path} में कॉपी हो गई, लेकिन लक्ष्य अकाउंट में थ्रेड का रिकॉर्ड अपडेट नहीं हो सका: {detail}। सेशन अपने पुराने अकाउंट पर ही रहता है।",
+  "provider.codex.relocation_home_unlocatable.summary": "बातचीत {path} में कॉपी हो गई, लेकिन लक्ष्य अकाउंट में थ्रेड का रिकॉर्ड अपडेट नहीं हो सका।",
+  "provider.codex.relocation_home_unlocatable.remedy": "अकाउंट की {configToml} में {sqliteHome}, या लॉगिन शेल में {codexSqliteHome}, को पूरा पाथ दें (शुरुआत में {tilde} हो तो {home} सेट होना ज़रूरी है), फिर अकाउंट बदलने की कोशिश करें।",
+
   "provider.codex.trustCaution": "भरोसा करने पर {agent} इस प्रोजेक्ट की अपनी कॉन्फ़िगरेशन, हुक और कमांड नियम लोड कर सकता है, जो मॉडल के अनुरोध के बिना भी कोड चला सकते हैं। यह पुष्टि {agent} की सैंडबॉक्स या मंज़ूरी नीति नहीं बदलती, हालाँकि प्रोजेक्ट की अपनी कॉन्फ़िगरेशन उन्हें बदल सकती है।",
   "provider.codex.trustScope": "{agent} इस फ़ोल्डर वाली {git} रिपॉज़िटरी के रूट के लिए भरोसा दर्ज करता है। सबफ़ोल्डर या लिंक किए गए वर्कट्री के लिए इसका दायरा इस प्रोजेक्ट से बड़ा होता है।",
   "provider.codex.setting.approval_reviewer.heading": "अनुमति की मंज़ूरी",
@@ -235,6 +277,13 @@ const hiMessages = {
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const idMessages = {
+  "provider.codex.relocation_config_unreadable": "Percakapan disalin ke {path}, tetapi catatan utas di akun tujuan tidak dapat diperbarui: {detail}. Sesi tetap menggunakan akun sebelumnya.",
+  "provider.codex.relocation_config_unreadable.summary": "Percakapan disalin ke {path}, tetapi catatan utas di akun tujuan tidak dapat diperbarui.",
+  "provider.codex.relocation_config_unreadable.remedy": "Pastikan {configToml} akun berupa file TOML yang valid dan dapat dibaca, atau hapus file tersebut, lalu coba beralih lagi.",
+  "provider.codex.relocation_home_unlocatable": "Percakapan disalin ke {path}, tetapi catatan utas di akun tujuan tidak dapat diperbarui: {detail}. Sesi tetap menggunakan akun sebelumnya.",
+  "provider.codex.relocation_home_unlocatable.summary": "Percakapan disalin ke {path}, tetapi catatan utas di akun tujuan tidak dapat diperbarui.",
+  "provider.codex.relocation_home_unlocatable.remedy": "Atur {sqliteHome} di {configToml} akun, atau {codexSqliteHome} di shell login Anda, ke jalur absolut ({tilde} di awal memerlukan {home} yang sudah diatur), lalu coba beralih lagi.",
+
   "provider.codex.trustCaution": "Memercayai folder mengizinkan {agent} memuat konfigurasi, hook, dan aturan perintah proyek ini sendiri, yang dapat menjalankan kode bahkan tanpa permintaan model. Konfirmasi ini tidak mengubah sandbox atau kebijakan persetujuan {agent}, meskipun konfigurasi proyek sendiri dapat mengubahnya.",
   "provider.codex.trustScope": "{agent} mencatat kepercayaan untuk akar repositori {git} yang berisi folder ini. Untuk subfolder atau worktree tertaut, cakupannya lebih luas dari proyek ini.",
   "provider.codex.setting.approval_reviewer.heading": "Persetujuan izin",
@@ -272,6 +321,13 @@ const idMessages = {
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const itMessages = {
+  "provider.codex.relocation_config_unreadable": "La conversazione è stata copiata in {path}, ma il record del thread nell’account di destinazione non è stato aggiornato: {detail}. La sessione mantiene l’account precedente.",
+  "provider.codex.relocation_config_unreadable.summary": "La conversazione è stata copiata in {path}, ma il record del thread nell’account di destinazione non è stato aggiornato.",
+  "provider.codex.relocation_config_unreadable.remedy": "Rendi {configToml} dell’account un file TOML valido e leggibile, oppure rimuovilo, quindi riprova il cambio.",
+  "provider.codex.relocation_home_unlocatable": "La conversazione è stata copiata in {path}, ma il record del thread nell’account di destinazione non è stato aggiornato: {detail}. La sessione mantiene l’account precedente.",
+  "provider.codex.relocation_home_unlocatable.summary": "La conversazione è stata copiata in {path}, ma il record del thread nell’account di destinazione non è stato aggiornato.",
+  "provider.codex.relocation_home_unlocatable.remedy": "Imposta {sqliteHome} nel {configToml} dell’account, o {codexSqliteHome} nella shell di login, su un percorso assoluto. Un {tilde} iniziale richiede che {home} sia definito. Quindi riprova il cambio.",
+
   "provider.codex.trustCaution": "L’attendibilità consente a {agent} di caricare la configurazione, gli hook e le regole dei comandi propri di questo progetto, che possono eseguire codice anche senza una richiesta al modello. Questa conferma non modifica la sandbox o la politica di approvazione di {agent}, anche se la configurazione del progetto può farlo.",
   "provider.codex.trustScope": "{agent} registra l’attendibilità per la radice del repository {git} che contiene questa cartella. Per una sottocartella o un worktree collegato, l’ambito è più ampio di questo progetto.",
   "provider.codex.setting.approval_reviewer.heading": "Approvazione dei permessi",
@@ -309,6 +365,13 @@ const itMessages = {
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const jaMessages = {
+  "provider.codex.relocation_config_unreadable": "会話を {path} にコピーしましたが、移行先アカウントのスレッド記録を更新できませんでした: {detail}。セッションは元のアカウントに残ります。",
+  "provider.codex.relocation_config_unreadable.summary": "会話を {path} にコピーしましたが、移行先アカウントのスレッド記録を更新できませんでした。",
+  "provider.codex.relocation_config_unreadable.remedy": "このアカウントの {configToml} を読み取り可能で正しい TOML 形式のファイルにするか、取り除いてから、切り替えを再試行してください。",
+  "provider.codex.relocation_home_unlocatable": "会話を {path} にコピーしましたが、移行先アカウントのスレッド記録を更新できませんでした: {detail}。セッションは元のアカウントに残ります。",
+  "provider.codex.relocation_home_unlocatable.summary": "会話を {path} にコピーしましたが、移行先アカウントのスレッド記録を更新できませんでした。",
+  "provider.codex.relocation_home_unlocatable.remedy": "このアカウントの {configToml} 内の {sqliteHome}、またはログインシェルの {codexSqliteHome} を絶対パスに設定し、切り替えを再試行してください。{tilde} で始まる場合は {home} の設定が必要です。",
+
   "provider.codex.trustCaution": "信頼すると、{agent} がこのプロジェクト自身の設定、フック、コマンドルールを読み込みます。これらは、モデルからのリクエストがなくてもコードを実行する場合があります。この確認自体は {agent} のサンドボックスや承認ポリシーを変更しませんが、プロジェクトの設定が変更する場合はあります。",
   "provider.codex.trustScope": "{agent} は、このフォルダを含む {git} リポジトリのルートに対して信頼を記録します。サブフォルダやリンクされたワークツリーの場合は、このプロジェクトより広い範囲が対象です。",
   "provider.codex.setting.approval_reviewer.heading": "権限の承認",
@@ -346,6 +409,13 @@ const jaMessages = {
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const koMessages = {
+  "provider.codex.relocation_config_unreadable": "대화를 {path}에 복사했지만 대상 계정의 스레드 기록을 갱신하지 못했습니다: {detail}. 세션은 원래 계정에 남아 있습니다.",
+  "provider.codex.relocation_config_unreadable.summary": "대화를 {path}에 복사했지만 대상 계정의 스레드 기록을 갱신하지 못했습니다.",
+  "provider.codex.relocation_config_unreadable.remedy": "계정의 {configToml}을(를) 읽을 수 있는 올바른 TOML 파일로 수정하거나 제거한 후 전환을 다시 시도해 주세요.",
+  "provider.codex.relocation_home_unlocatable": "대화를 {path}에 복사했지만 대상 계정의 스레드 기록을 갱신하지 못했습니다: {detail}. 세션은 원래 계정에 남아 있습니다.",
+  "provider.codex.relocation_home_unlocatable.summary": "대화를 {path}에 복사했지만 대상 계정의 스레드 기록을 갱신하지 못했습니다.",
+  "provider.codex.relocation_home_unlocatable.remedy": "계정의 {configToml}에 있는 {sqliteHome} 또는 로그인 셸의 {codexSqliteHome}을(를) 절대 경로로 설정한 후 전환을 다시 시도해 주세요. {tilde}(으)로 시작하려면 {home}이(가) 설정되어 있어야 합니다.",
+
   "provider.codex.trustCaution": "신뢰하면 {agent}에서 이 프로젝트 자체 설정, 훅 및 명령 규칙을 로드합니다. 이는 모델 요청 없이도 코드를 실행할 수 있습니다. 이 확인 자체는 {agent}의 샌드박스나 승인 정책을 변경하지 않지만 프로젝트 자체 설정은 변경할 수 있습니다.",
   "provider.codex.trustScope": "{agent}에서는 이 폴더가 포함된 {git} 저장소의 루트에 신뢰를 기록합니다. 하위 폴더나 연결된 작업 트리인 경우 이 프로젝트보다 넓은 범위를 포함합니다.",
   "provider.codex.setting.approval_reviewer.heading": "권한 승인",
@@ -383,6 +453,13 @@ const koMessages = {
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const ptMessages = {
+  "provider.codex.relocation_config_unreadable": "A conversa foi copiada para {path}, mas não foi possível atualizar o registro da conversa na conta de destino: {detail}. A sessão permanece na conta anterior.",
+  "provider.codex.relocation_config_unreadable.summary": "A conversa foi copiada para {path}, mas não foi possível atualizar o registro da conversa na conta de destino.",
+  "provider.codex.relocation_config_unreadable.remedy": "Transforme o {configToml} da conta em um arquivo TOML válido e legível ou remova-o. Depois, tente a troca novamente.",
+  "provider.codex.relocation_home_unlocatable": "A conversa foi copiada para {path}, mas não foi possível atualizar o registro da conversa na conta de destino: {detail}. A sessão permanece na conta anterior.",
+  "provider.codex.relocation_home_unlocatable.summary": "A conversa foi copiada para {path}, mas não foi possível atualizar o registro da conversa na conta de destino.",
+  "provider.codex.relocation_home_unlocatable.remedy": "Defina {sqliteHome} no {configToml} da conta, ou {codexSqliteHome} no seu shell de login, como um caminho absoluto (um {tilde} inicial exige que {home} esteja definido). Depois, tente a troca novamente.",
+
   "provider.codex.trustCaution": "Confiar permite que {agent} carregue as configurações, os hooks e as regras de comandos deste projeto, que podem executar código mesmo sem uma solicitação do modelo. Esta confirmação não altera o sandbox nem a política de aprovação de {agent}, mas as configurações do projeto podem alterá-los.",
   "provider.codex.trustScope": "{agent} registra a confiança para a raiz do repositório {git} que contém esta pasta. Para uma subpasta ou worktree vinculado, isso abrange mais do que este projeto.",
   "provider.codex.setting.approval_reviewer.heading": "Aprovação de permissões",
@@ -420,6 +497,13 @@ const ptMessages = {
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const ruMessages = {
+  "provider.codex.relocation_config_unreadable": "Разговор скопирован в {path}, но обновить запись потока в целевой учётной записи не удалось: {detail}. Сеанс остаётся на прежней учётной записи.",
+  "provider.codex.relocation_config_unreadable.summary": "Разговор скопирован в {path}, но обновить запись потока в целевой учётной записи не удалось.",
+  "provider.codex.relocation_config_unreadable.remedy": "Сделайте {configToml} учётной записи доступным для чтения файлом с корректным TOML или удалите его, затем повторите переключение.",
+  "provider.codex.relocation_home_unlocatable": "Разговор скопирован в {path}, но обновить запись потока в целевой учётной записи не удалось: {detail}. Сеанс остаётся на прежней учётной записи.",
+  "provider.codex.relocation_home_unlocatable.summary": "Разговор скопирован в {path}, но обновить запись потока в целевой учётной записи не удалось.",
+  "provider.codex.relocation_home_unlocatable.remedy": "Укажите в {sqliteHome} файла {configToml} учётной записи или в {codexSqliteHome} вашей оболочки входа абсолютный путь (для начального {tilde} требуется заданный {home}), затем повторите переключение.",
+
   "provider.codex.trustCaution": "Доверие позволяет {agent} загружать собственные конфигурацию, хуки и правила команд проекта, которые могут запускать код даже без запроса модели. Это подтверждение не меняет песочницу или политику одобрения {agent}, хотя конфигурация самого проекта может их менять.",
   "provider.codex.trustScope": "{agent} сохраняет доверие к корню репозитория {git}, содержащего эту папку. Для вложенной папки или связанного рабочего дерева область шире этого проекта.",
   "provider.codex.setting.approval_reviewer.heading": "Одобрение разрешений",
@@ -457,6 +541,13 @@ const ruMessages = {
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const thMessages = {
+  "provider.codex.relocation_config_unreadable": "คัดลอกการสนทนาไปยัง {path} แล้ว แต่อัปเดตระเบียนเธรดในบัญชีปลายทางไม่ได้: {detail} เซสชันยังอยู่ในบัญชีเดิม",
+  "provider.codex.relocation_config_unreadable.summary": "คัดลอกการสนทนาไปยัง {path} แล้ว แต่อัปเดตระเบียนเธรดในบัญชีปลายทางไม่ได้",
+  "provider.codex.relocation_config_unreadable.remedy": "แก้ {configToml} ของบัญชีให้เป็นไฟล์ TOML ที่ถูกต้องและอ่านได้ หรือเอาออก แล้วลองสลับอีกครั้ง",
+  "provider.codex.relocation_home_unlocatable": "คัดลอกการสนทนาไปยัง {path} แล้ว แต่อัปเดตระเบียนเธรดในบัญชีปลายทางไม่ได้: {detail} เซสชันยังอยู่ในบัญชีเดิม",
+  "provider.codex.relocation_home_unlocatable.summary": "คัดลอกการสนทนาไปยัง {path} แล้ว แต่อัปเดตระเบียนเธรดในบัญชีปลายทางไม่ได้",
+  "provider.codex.relocation_home_unlocatable.remedy": "ตั้งค่า {sqliteHome} ใน {configToml} ของบัญชี หรือ {codexSqliteHome} ในล็อกอินเชลล์ เป็นพาธสัมบูรณ์ แล้วลองสลับอีกครั้ง หากขึ้นต้นด้วย {tilde} ต้องตั้งค่า {home} ด้วย",
+
   "provider.codex.trustCaution": "การเชื่อถือจะเปิดให้ {agent} โหลดการกำหนดค่า ฮุก และกฎคำสั่งของโปรเจ็กต์นี้ ซึ่งอาจเรียกใช้โค้ดได้แม้โมเดลไม่ได้ร้องขอ การยืนยันนี้ไม่เปลี่ยนแซนด์บ็อกซ์หรือนโยบายการอนุมัติของ {agent} แต่การกำหนดค่าของโปรเจ็กต์อาจเปลี่ยนได้",
   "provider.codex.trustScope": "{agent} บันทึกความเชื่อถือที่รากของที่เก็บ {git} ซึ่งมีโฟลเดอร์นี้อยู่ สำหรับโฟลเดอร์ย่อยหรือเวิร์กทรีที่เชื่อมโยง ขอบเขตนี้จะกว้างกว่าโปรเจ็กต์นี้",
   "provider.codex.setting.approval_reviewer.heading": "การอนุมัติสิทธิ์",
@@ -494,6 +585,13 @@ const thMessages = {
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const trMessages = {
+  "provider.codex.relocation_config_unreadable": "Konuşma {path} konumuna kopyalandı ancak hedef hesabın konuşma kaydı güncellenemedi: {detail}. Oturum önceki hesabında kalır.",
+  "provider.codex.relocation_config_unreadable.summary": "Konuşma {path} konumuna kopyalandı ancak hedef hesabın konuşma kaydı güncellenemedi.",
+  "provider.codex.relocation_config_unreadable.remedy": "Hesabın {configToml} dosyasını geçerli TOML içeren okunabilir bir dosya hâline getirin veya kaldırın, ardından geçişi yeniden deneyin.",
+  "provider.codex.relocation_home_unlocatable": "Konuşma {path} konumuna kopyalandı ancak hedef hesabın konuşma kaydı güncellenemedi: {detail}. Oturum önceki hesabında kalır.",
+  "provider.codex.relocation_home_unlocatable.summary": "Konuşma {path} konumuna kopyalandı ancak hedef hesabın konuşma kaydı güncellenemedi.",
+  "provider.codex.relocation_home_unlocatable.remedy": "Hesabın {configToml} dosyasındaki {sqliteHome} değerini veya giriş kabuğunuzdaki {codexSqliteHome} değerini mutlak bir yol olarak ayarlayın (başta {tilde} varsa {home} ayarlanmış olmalıdır), ardından geçişi yeniden deneyin.",
+
   "provider.codex.trustCaution": "Güvenmek, {agent} için bu projenin kendi yapılandırmasını, kancalarını ve komut kurallarını yüklemeye izin verir. Bunlar model isteği olmadan da kod çalıştırabilir. Bu onay, {agent} korumalı alanını veya onay politikasını değiştirmez; ancak projenin kendi yapılandırması bunları değiştirebilir.",
   "provider.codex.trustScope": "{agent}, güveni bu klasörün bulunduğu {git} deposunun kökü için kaydeder. Alt klasör veya bağlı çalışma ağacı kullanılıyorsa bu, projenin dışını da kapsar.",
   "provider.codex.setting.approval_reviewer.heading": "İzin onayı",
@@ -531,6 +629,13 @@ const trMessages = {
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const viMessages = {
+  "provider.codex.relocation_config_unreadable": "Đã sao chép hội thoại vào {path} nhưng không cập nhật được bản ghi luồng của tài khoản đích: {detail}. Phiên vẫn ở tài khoản cũ.",
+  "provider.codex.relocation_config_unreadable.summary": "Đã sao chép hội thoại vào {path} nhưng không cập nhật được bản ghi luồng của tài khoản đích.",
+  "provider.codex.relocation_config_unreadable.remedy": "Đảm bảo {configToml} của tài khoản là tệp TOML hợp lệ có thể đọc, hoặc gỡ bỏ tệp, rồi thử chuyển lại.",
+  "provider.codex.relocation_home_unlocatable": "Đã sao chép hội thoại vào {path} nhưng không cập nhật được bản ghi luồng của tài khoản đích: {detail}. Phiên vẫn ở tài khoản cũ.",
+  "provider.codex.relocation_home_unlocatable.summary": "Đã sao chép hội thoại vào {path} nhưng không cập nhật được bản ghi luồng của tài khoản đích.",
+  "provider.codex.relocation_home_unlocatable.remedy": "Đặt {sqliteHome} trong {configToml} của tài khoản, hoặc {codexSqliteHome} trong shell đăng nhập thành đường dẫn tuyệt đối ({tilde} ở đầu cần có {home}), rồi thử chuyển lại.",
+
   "provider.codex.trustCaution": "Tin cậy cho phép {agent} tải cấu hình, hook và quy tắc lệnh riêng của dự án này; chúng có thể chạy mã ngay cả khi không có yêu cầu từ mô hình. Xác nhận này không thay đổi sandbox hay chính sách chấp thuận của {agent}, nhưng cấu hình riêng của dự án có thể thay đổi chúng.",
   "provider.codex.trustScope": "{agent} ghi quyền tin cậy cho thư mục gốc của kho lưu trữ {git} chứa thư mục này. Với thư mục con hoặc cây làm việc liên kết, phạm vi này rộng hơn dự án hiện tại.",
   "provider.codex.setting.approval_reviewer.heading": "Chấp thuận quyền",
@@ -568,6 +673,13 @@ const viMessages = {
 } as const satisfies { readonly [K in keyof typeof en]: string };
 
 const zhHans = {
+  "provider.codex.relocation_config_unreadable": "对话已复制到 {path}，但无法更新目标账户中该会话线程的记录：{detail}。会话仍在原账户上。",
+  "provider.codex.relocation_config_unreadable.summary": "对话已复制到 {path}，但无法更新目标账户中该会话线程的记录。",
+  "provider.codex.relocation_config_unreadable.remedy": "请检查该账户的 {configToml}，确保文件可读且 TOML 格式正确，或将其移除，然后再次尝试切换。",
+  "provider.codex.relocation_home_unlocatable": "对话已复制到 {path}，但无法更新目标账户中该会话线程的记录：{detail}。会话仍在原账户上。",
+  "provider.codex.relocation_home_unlocatable.summary": "对话已复制到 {path}，但无法更新目标账户中该会话线程的记录。",
+  "provider.codex.relocation_home_unlocatable.remedy": "请将该账户 {configToml} 中的 {sqliteHome}，或登录 shell 中的 {codexSqliteHome}，设为绝对路径（以 {tilde} 开头时需要设置 {home}），然后再次尝试切换。",
+
   "provider.codex.trustCaution":
     "信任后，{agent} 会加载此项目自身的配置、钩子和命令规则，即使没有模型请求，它们也可能运行代码。此确认本身不会改变 {agent} 的沙盒和审批策略，但项目自身的配置可以更改这些设置。",
   "provider.codex.trustScope":
@@ -607,6 +719,13 @@ const zhHans = {
 } as const;
 
 const zhHantMessages = {
+  "provider.codex.relocation_config_unreadable": "對話已複製到 {path}，但無法更新目標帳號中此工作階段執行緒的記錄：{detail}。工作階段仍在原帳號上。",
+  "provider.codex.relocation_config_unreadable.summary": "對話已複製到 {path}，但無法更新目標帳號中此工作階段執行緒的記錄。",
+  "provider.codex.relocation_config_unreadable.remedy": "請檢查此帳號的 {configToml}，確保檔案可讀且 TOML 格式正確，或將其移除，然後再次嘗試切換。",
+  "provider.codex.relocation_home_unlocatable": "對話已複製到 {path}，但無法更新目標帳號中此工作階段執行緒的記錄：{detail}。工作階段仍在原帳號上。",
+  "provider.codex.relocation_home_unlocatable.summary": "對話已複製到 {path}，但無法更新目標帳號中此工作階段執行緒的記錄。",
+  "provider.codex.relocation_home_unlocatable.remedy": "請將此帳號 {configToml} 中的 {sqliteHome}，或登入 shell 中的 {codexSqliteHome}，設為絕對路徑（以 {tilde} 開頭時需要設定 {home}），然後再次嘗試切換。",
+
   "provider.codex.trustCaution": "信任後，{agent} 會載入此專案自身的設定、掛鉤和指令規則，即使沒有模型請求，它們也可能執行程式碼。此確認本身不會改變 {agent} 的沙盒和核准策略，但專案自身的設定可以更改這些設定。",
   "provider.codex.trustScope": "{agent} 會為此資料夾所在 {git} 儲存庫的根目錄記錄信任。如果此專案是子資料夾或連結的工作樹，範圍會超出此專案。",
   "provider.codex.setting.approval_reviewer.heading": "權限核准",
@@ -660,7 +779,10 @@ export const codex = {
   settingReferences: {
     claude_compatibility: { claudeMd: "CLAUDE.md" },
   },
+  recoveryReferences: { configToml: "config.toml", sqliteHome: "sqlite_home", codexSqliteHome: "CODEX_SQLITE_HOME", tilde: "~", home: "HOME" },
   codes: {
+    "provider.codex.relocation_config_unreadable": { origin: "daemon", recovery: "provider.codex.relocation_config_unreadable.remedy", detailBlock: true, codeParams: ["path"] },
+    "provider.codex.relocation_home_unlocatable": { origin: "daemon", recovery: "provider.codex.relocation_home_unlocatable.remedy", detailBlock: true, codeParams: ["path"] },
     "provider.codex.login_busy": { origin: "daemon", recovery: "none", recoveryLine: true },
     "provider.codex.messages_held": { origin: "daemon" },
     "provider.codex.native_program_missing": { origin: "daemon", recovery: "none", recoveryLine: true },

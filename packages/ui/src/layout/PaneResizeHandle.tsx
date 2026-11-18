@@ -10,9 +10,9 @@ import { ResizeSeparator } from "../components/panel/ResizeSeparator";
  * the end for the sidebar, whose edge is its end one, toward the start for the aside. The
  * pointer and the arrow keys work in physical directions, so `ResizeSeparator` turns it into
  * +1 (right) or -1 (left) for the direction in force. `offset` is how far the pane's own edge is
- * from the window's: the sidebar starts where the left rail ends, the aside is flush with
- * the window. The docked sidebar's handle sits on the physical right of its seam, clear of either
- * scroller's right-hand scrollbar. The docked aside's handle shares the terminal gutter outside the cards' edge.
+ * from the window's: the sidebar starts where the rail ends, the aside is flush with the window.
+ * The docked sidebar's handle sits on the end side of its seam, clear of the sidebar scrollbar.
+ * The docked aside's handle shares the terminal gutter outside the cards' edge.
  * Floating handles sit in their gap. */
 const SIDES = {
   sidebar: {
@@ -22,7 +22,7 @@ const SIDES = {
     grow: 1,
     centre: "0px",
     appearance: "line",
-    layout: "hidden sidebar-docked:block w-1.5 translate-x-[3px] [&>div]:ml-0 [&>div]:mr-auto",
+    layout: "hidden sidebar-docked:block w-1.5 translate-x-[3px] rtl:-translate-x-[3px] [&>div]:ms-0 [&>div]:me-auto",
   },
   aside: {
     label: "pane.resizeAside",

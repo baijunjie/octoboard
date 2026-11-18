@@ -785,13 +785,23 @@ it.each([
   ["permission_denied", "Check the folder’s file permissions"],
   ["no_space", "Free space on the disk"],
   ["busy", "Close other programs using the account's files"],
-  ["config_unreadable", "readable file of valid TOML"],
-  ["sqlite_home", "to an absolute path"],
   ["symlink", "contain a symbolic link"],
   ["not_restored", "copy it out of the folder named above"],
 ])("treats a conversation move that failed for %s as something to fix, not as a bug", async (cause, remedy) => {
   const stage = cause === "not_restored" ? "kept_staging" : cause === "symlink" ? "copy" : "thread_record";
   const failure = new CodedError("raw", "relocation_failed", { path: "/t", stage, cause, detail: "the system's own words", kept_in: "/t/.octoboard-switch/x" });
+  const { visible, details } = await failedBatch({ a: failure });
+  expect(visible).toContain(remedy);
+  expect(visible).not.toContain("Report issue");
+  expect(visible).not.toContain("the system's own words");
+  expect(details!.textContent).toContain("the system's own words");
+});
+
+it.each([
+  ["provider.codex.relocation_config_unreadable", "readable file of valid TOML"],
+  ["provider.codex.relocation_home_unlocatable", "to an absolute path"],
+])("uses the provider's remedy for %s while keeping diagnostics in Details", async (code, remedy) => {
+  const failure = new CodedError("raw", code, { path: "/t", stage: "thread_record", cause: "other", detail: "the system's own words" });
   const { visible, details } = await failedBatch({ a: failure });
   expect(visible).toContain(remedy);
   expect(visible).not.toContain("Report issue");

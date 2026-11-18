@@ -11,7 +11,7 @@
 //! prompt, and the glyph turns to `✳` within a tenth of a second of the Esc. From 2.1.322, once the
 //! terminal answers its OSC 7501 support query, it drops the glyphs and reports `working` and
 //! `idle` instead, the `idle` about 80 ms after the Esc, which the title activity takes in their
-//! place (`title_activity`). See `docs/agent-cli-reference.md`, section "## Claude Code".
+//! place (`title_activity`). See `docs/agent-cli-reference.md`, section "Claude Code".
 //!
 //! **Grok Build.** Ctrl-C pressed before the first token arrives fires no hook either (1.0.70,
 //! against a stand-in inference server): no `StopCancelled`, no `Stop`, and the prompt goes back
@@ -23,7 +23,7 @@
 //! title is no hook, a `Stop` that still comes for that turn closes it as its own end after all
 //! ([`AppState::end_turn_off_title`]): Grok's hooks are commands, and a slow start of one can bring
 //! a turn's `Stop` after the title that follows it. See `docs/agent-cli-reference.md`, section
-//! "## Grok Build".
+//! "Grok Build".
 //!
 //! The title is back at the prompt when every turn ends too, and for Claude Code whenever a
 //! permission prompt or a question waits on the user, tens of milliseconds after the hook that

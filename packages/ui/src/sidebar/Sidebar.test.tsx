@@ -106,7 +106,7 @@ it("announces a project filter's empty result once, clears it when matches retur
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
-  act(() => void vi.advanceTimersByTime(100));
+  runOutTimers();
   type("missing");
   expect(container.textContent).toContain("No matching projects");
   const status = container.querySelector('[role="status"]');
@@ -146,25 +146,28 @@ it("announces a project filter's empty result once, clears it when matches retur
 /** Mounts the sidebar in `first`'s focus mode with focus on the control `pick` finds, then moves it
  * to `next`'s, as pressing that control does; returns what holds focus once the handoff has run,
  * and whether the control that held it is still in the document. */
-function focusAfterMove(first: FocusTarget, pick: (nav: HTMLElement) => HTMLElement | null, next: FocusTarget): { active: Element | null; pickedConnected: boolean } {
+async function focusAfterMove(first: FocusTarget, pick: (nav: HTMLElement) => HTMLElement | null, next: FocusTarget, destination: string): Promise<{ active: Element | null; pickedConnected: boolean }> {
   const { container, root, render } = mountSidebar({ focus: first });
   const picked = pick(container.querySelector("nav")!);
   act(() => picked?.focus());
   render({ focus: next });
   // Focus fell to the body with the control that held it, as in a browser.
   (document.activeElement as HTMLElement | null)?.blur();
-  act(() => void vi.advanceTimersByTime(100));
+  await act(async () => {
+    await vi.waitFor(() => expect(document.activeElement?.matches(destination)).toBe(true));
+  });
   const active = document.activeElement;
   const pickedConnected = picked?.isConnected ?? false;
   act(() => root.unmount());
   return { active, pickedConnected };
 }
 
-it("hands lost focus to the new current chip when one console session's focus mode gives way to another's", () => {
-  const { active, pickedConnected } = focusAfterMove(
+it("hands lost focus to the new current chip when one console session's focus mode gives way to another's", async () => {
+  const { active, pickedConnected } = await focusAfterMove(
     { consoleSession: hub1 },
     (nav) => nav.querySelector<HTMLElement>("[role=group] button:not([data-switch-current])"),
     { consoleSession: hub2 },
+    "[data-switch-current]",
   );
   expect(active?.getAttribute("aria-label")).toBe(`${isolate("Hub 2")}, Done`);
   expect(active?.hasAttribute("data-switch-current")).toBe(true);
@@ -172,11 +175,12 @@ it("hands lost focus to the new current chip when one console session's focus mo
   expect(pickedConnected).toBe(false);
 });
 
-it("goes to the way out of focus mode when a project's focus mode gives way to a console session's", () => {
-  const { active } = focusAfterMove(
+it("goes to the way out of focus mode when a project's focus mode gives way to a console session's", async () => {
+  const { active } = await focusAfterMove(
     { project: web },
     (nav) => nav.querySelector<HTMLElement>("button[aria-label^='Enter focus mode for']"),
     { consoleSession: hub1 },
+    "[data-focus-exit]",
   );
   expect(active?.hasAttribute("data-focus-exit")).toBe(true);
 });
@@ -362,7 +366,7 @@ it("keeps the card when the pointer goes from its toggle down through the gap ab
   // for a move, then in the gap, which cancels the slide-away the bar's move armed.
   onContent(120, 38);
   onContent(120, 44);
-  wait(1000);
+  runOutTimers();
   expect(hide).not.toHaveBeenCalled();
 });
 
@@ -371,7 +375,7 @@ it("keeps the card when the pointer moves 3px from it into the gap above it", ()
   onContent(120, 51);
   leavePane();
   onContent(120, 48 - 3);
-  wait(1000);
+  runOutTimers();
   expect(hide).not.toHaveBeenCalled();
 });
 
@@ -379,7 +383,7 @@ it("keeps the card while the pointer rests on a console's avatar on the rail, an
   const { peek, hide, onAvatar, onContent } = mountPeeking();
   onAvatar(24, 100);
   onAvatar(25, 101);
-  wait(1000);
+  runOutTimers();
   expect(peek.leave).not.toHaveBeenCalled();
   expect(hide).not.toHaveBeenCalled();
   onContent(24, 300);

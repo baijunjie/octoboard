@@ -30,6 +30,8 @@ use std::time::{Duration, Instant};
 
 use anyhow::Result;
 
+use crate::time::now_millis;
+
 type Env = HashMap<String, String>;
 
 /// How long [`Cache::launch`] serves a capture without insisting on a fresh one. Every launch that
@@ -54,6 +56,7 @@ const BACKGROUND_RETAKE_FLOOR: Duration = Duration::from_secs(60);
 struct Capture {
     env: Env,
     taken_at: Instant,
+    taken_at_ms: i64,
     /// The `PATH` directories that existed when it was taken. A version manager's per-shell
     /// directory (fnm's multishell one) that has since been removed leaves a `PATH` entry the
     /// agent cannot resolve a binary through, and the age bound alone would not notice.
@@ -73,6 +76,7 @@ impl Capture {
         Self {
             env,
             taken_at: Instant::now(),
+            taken_at_ms: now_millis(),
             path_dirs,
         }
     }
@@ -89,7 +93,14 @@ impl Capture {
 /// A failed attempt by a scheduled caller, and when it was made.
 struct Failure {
     message: String,
-    at: Instant,
+    at_ms: i64,
+}
+
+/// Treat a wall clock that has moved backwards as a stale entry.
+fn scheduled_age(at_ms: i64, now_ms: i64) -> Option<Duration> {
+    let elapsed = u64::try_from(now_ms.checked_sub(at_ms)?).ok()?;
+    let age = Duration::from_millis(elapsed);
+    (age < SCHEDULED_MAX_AGE).then_some(age)
 }
 
 #[derive(Default)]
@@ -210,16 +221,19 @@ impl Cache {
                     age: capture.age(),
                 }),
             Policy::Scheduled => {
-                if let Some(capture) = capture.filter(|capture| capture.age() < SCHEDULED_MAX_AGE) {
+                let now_ms = now_millis();
+                if let Some((capture, age)) = capture.and_then(|capture| {
+                    scheduled_age(capture.taken_at_ms, now_ms).map(|age| (capture, age))
+                }) {
                     return Some(Servable {
                         outcome: Ok(capture.env.clone()),
-                        age: capture.age(),
+                        age,
                     });
                 }
                 stored
                     .failure
                     .as_ref()
-                    .filter(|failure| failure.at.elapsed() < SCHEDULED_MAX_AGE)
+                    .filter(|failure| scheduled_age(failure.at_ms, now_ms).is_some())
                     .map(|failure| Servable {
                         outcome: Err(failure.message.clone()),
                         age: Duration::MAX,
@@ -248,7 +262,7 @@ impl Cache {
                         .expect("shell env cache lock poisoned")
                         .failure = Some(Failure {
                         message: format!("{err:#}"),
-                        at: Instant::now(),
+                        at_ms: now_millis(),
                     });
                 }
                 Err(err)
@@ -290,6 +304,7 @@ mod tests {
     fn aged(env: Env, age: Duration) -> Capture {
         let mut capture = Capture::new(env);
         capture.taken_at = Instant::now() - age;
+        capture.taken_at_ms -= i64::try_from(age.as_millis()).unwrap();
         capture
     }
 
@@ -370,13 +385,40 @@ mod tests {
         assert!(cache.scheduled(fails).is_err());
         // The failure is remembered: a snapshot that would now work is not taken.
         assert!(cache.scheduled(works).is_err());
-        cache.stored.lock().unwrap().failure.as_mut().unwrap().at =
-            Instant::now() - SCHEDULED_MAX_AGE;
+        cache.stored.lock().unwrap().failure.as_mut().unwrap().at_ms -=
+            i64::try_from(SCHEDULED_MAX_AGE.as_millis()).unwrap();
         assert!(cache.scheduled(works).is_ok());
         // Served from the capture, well past what a launch would accept.
         cache.stored.lock().unwrap().capture =
             Some(aged(env_with_path("/"), SCHEDULED_MAX_AGE / 2));
         assert!(cache.scheduled(fails).is_ok());
+    }
+
+    #[test]
+    fn a_capture_and_failure_from_before_a_clock_change_expire() {
+        let cache = Cache::new();
+        fn fails() -> Result<Env> {
+            bail!("fresh snapshot failed")
+        }
+        fn works() -> Result<Env> {
+            Ok(env_with_path("/"))
+        }
+
+        cache.store(&env_with_path("/"));
+        cache
+            .stored
+            .lock()
+            .unwrap()
+            .capture
+            .as_mut()
+            .unwrap()
+            .taken_at_ms = i64::MAX;
+        assert_eq!(
+            cache.scheduled(fails).unwrap_err().to_string(),
+            "fresh snapshot failed"
+        );
+        cache.stored.lock().unwrap().failure.as_mut().unwrap().at_ms = i64::MAX;
+        assert!(cache.scheduled(works).is_ok());
     }
 
     #[test]

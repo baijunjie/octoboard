@@ -25,8 +25,6 @@ macro_rules! notice_prefix {
         "Message from Octoboard"
     };
 }
-pub(crate) use notice_prefix;
-
 /// [`notice_prefix!`] as a value.
 pub(crate) const NOTICE_PREFIX: &str = notice_prefix!();
 
@@ -382,6 +380,17 @@ pub(crate) fn continue_prompt_after(note: &str, ended: Option<&str>) -> String {
         Some(ended) => format!("{note}\n\n{ended}\n\n{CONTINUE_AFTER_NOTICE}"),
         None => format!("{note}\n\n{CONTINUE_AFTER_NOTICE}"),
     }
+}
+
+/// The approval outcome starts a turn whose result the caller may already have received.
+pub(crate) const OUTCOME_OPENING: &str = concat!(notice_prefix!(), ": this concerns your");
+
+/// The outcome written into the caller's session when its tool call may have stopped waiting.
+pub(crate) fn session_request_outcome(tool: &str, note: &str) -> String {
+    format!(
+        "{OUTCOME_OPENING} `{tool}` call. {note} If that call already returned this, there is nothing \
+         more to do about it."
+    )
 }
 
 /// How [`restart_ended_notice`] begins, specific to it so that the turn it opens can be credited

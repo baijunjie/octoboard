@@ -4,7 +4,7 @@ import { getInteractionModality } from "react-aria/private/interactions/useFocus
 import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { DetailsButton } from "../components/alerts/DetailsButton";
-import { HOVER_CLOSE_DELAY_MS } from "../components/hint/hintPopover";
+import { HOVER_CLOSE_DELAY_MS, HOVER_OPEN_DELAY_MS } from "../components/hint/hintPopover";
 import { activate, enter, leave, press, mountForTooltip } from "../components/hint/tooltipTestSupport";
 import { CodedError } from "../errors/codedError";
 import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
@@ -96,16 +96,18 @@ it.each([
 });
 
 it("sends a project's row to its project, and a console session's row to that console session, once the popover has gone", async () => {
-  const { container, onOpen, advance } = await mount(COUNTS);
+  const { container, onOpen } = await mount(COUNTS);
   press(button(container), "touch");
   act(() => panel()!.querySelector<HTMLButtonElement>('button[aria-label*="App"]')!.click());
-  await advance(1000);
-  expect(onOpen).toHaveBeenLastCalledWith({ project: project.id });
+  await act(async () => {
+    await vi.waitFor(() => expect(onOpen).toHaveBeenLastCalledWith({ project: project.id }));
+  });
   expect(panel()).toBeNull();
   press(button(container), "touch");
   act(() => panel()!.querySelector<HTMLButtonElement>('button[aria-label*="Hub"]')!.click());
-  await advance(1000);
-  expect(onOpen).toHaveBeenLastCalledWith({ consoleSession: hub.id });
+  await act(async () => {
+    await vi.waitFor(() => expect(onOpen).toHaveBeenLastCalledWith({ consoleSession: hub.id }));
+  });
 });
 
 it("focuses the first row when the keyboard opens it", async () => {
@@ -148,7 +150,9 @@ it("announces a refresh failure that arrives while the popover is open, and not 
   expect(panel()!.querySelector("[role=alert]")).toBeNull();
 
   press(document.querySelector("[data-rail-processes-panel] li button")!, "touch");
-  await advance(1000);
+  await act(async () => {
+    await vi.waitFor(() => expect(panel()).toBeNull());
+  });
   answer.failing = false;
   await advance(POLL_MS.background);
   press(button(container), "touch");
@@ -177,15 +181,16 @@ it("keeps the popover open while the refresh failure's Details are open, and Esc
   await advance(0);
   expect(railPanel()).not.toBeNull();
   escape(details()!.querySelector('[role="dialog"]')!);
-  await advance(1000);
-  expect(details()).toBeNull();
+  await act(async () => {
+    await vi.waitFor(() => expect(details()).toBeNull());
+  });
   expect(railPanel()).not.toBeNull();
 });
 
 it("keeps a hover-opened popover while a press is in the Details of its refresh failure, and Escape closes them first", async () => {
   const { container, answer, advance } = await mount(COUNTS);
   enter(button(container));
-  await advance(500);
+  await advance(HOVER_OPEN_DELAY_MS);
   expect(railPanel()).not.toBeNull();
   answer.failing = true;
   await advance(POLL_MS.live);
@@ -197,8 +202,9 @@ it("keeps a hover-opened popover while a press is in the Details of its refresh 
   expect(details()).not.toBeNull();
   expect(railPanel()).not.toBeNull();
   escape(details()!.querySelector('[role="dialog"]')!);
-  await advance(1000);
-  expect(details()).toBeNull();
+  await act(async () => {
+    await vi.waitFor(() => expect(details()).toBeNull());
+  });
   expect(railPanel()).not.toBeNull();
 });
 
@@ -237,7 +243,7 @@ const detailsButton = (scope: ParentNode) => Array.from(scope.querySelectorAll("
 /** Opens the hover-form popover with its refresh failure showing and the failure's Details pressed open. */
 async function hoverOpenWithDetails(mounted: Awaited<ReturnType<typeof mount>>) {
   enter(button(mounted.container));
-  await mounted.advance(500);
+  await mounted.advance(HOVER_OPEN_DELAY_MS);
   mounted.answer.failing = true;
   await mounted.advance(POLL_MS.live);
   press(detailsButton(railPanel()!), "mouse");
@@ -250,8 +256,9 @@ it("hands focus to the rail button when a hover-opened popover closes with focus
   await hoverOpenWithDetails(mounted);
   act(() => details()!.querySelector<HTMLElement>('[role="dialog"]')!.focus());
   escape(details()!.querySelector('[role="dialog"]')!);
-  await mounted.advance(1000);
-  expect(details()).toBeNull();
+  await act(async () => {
+    await vi.waitFor(() => expect(details()).toBeNull());
+  });
   act(() => detailsButton(railPanel()!).focus());
   leave(button(mounted.container));
   await mounted.advance(HOVER_CLOSE_DELAY_MS * 2);
@@ -267,7 +274,9 @@ it("leaves focus alone when it was claimed elsewhere by the time a closing popov
   await hoverOpenWithDetails(mounted);
   act(() => details()!.querySelector<HTMLElement>('[role="dialog"]')!.focus());
   escape(details()!.querySelector('[role="dialog"]')!);
-  await mounted.advance(1000);
+  await act(async () => {
+    await vi.waitFor(() => expect(details()).toBeNull());
+  });
   act(() => detailsButton(railPanel()!).focus());
   leave(button(mounted.container));
   // Closing the popover queues the handoff; the next control takes the focus before it runs.
@@ -287,9 +296,12 @@ it("keeps a hover-opened popover up past the grace while its Details are, and cl
   await mounted.advance(HOVER_CLOSE_DELAY_MS * 5);
   expect(railPanel()).not.toBeNull();
   escape(details()!.querySelector('[role="dialog"]')!);
-  await mounted.advance(1000);
-  expect(details()).toBeNull();
-  expect(railPanel()).toBeNull();
+  await act(async () => {
+    await vi.waitFor(() => expect(details()).toBeNull());
+  });
+  // Commit the Details close before the hover grace sees that it can dismiss the parent.
+  await mounted.advance(HOVER_CLOSE_DELAY_MS);
+  await vi.waitFor(() => expect(railPanel()).toBeNull());
 });
 
 it("is not held open by a Details popover opened elsewhere", async () => {
@@ -298,7 +310,7 @@ it("is not held open by a Details popover opened elsewhere", async () => {
   await advance(0);
   expect(details()).not.toBeNull();
   enter(button(container));
-  await advance(500);
+  await advance(HOVER_OPEN_DELAY_MS);
   expect(railPanel()).not.toBeNull();
   leave(button(container));
   await advance(HOVER_CLOSE_DELAY_MS * 5);
@@ -321,13 +333,16 @@ it("leaves focus in a Details popover opened elsewhere alone when the last proce
 it("does not hand focus to the rail button when a row is pressed, since the jump lands it", async () => {
   const { container, onOpen, advance } = await mount(COUNTS);
   enter(button(container));
-  await advance(500);
+  await advance(HOVER_OPEN_DELAY_MS);
   const row = railPanel()!.querySelector<HTMLButtonElement>("li button")!;
   act(() => row.focus());
   press(row, "mouse");
-  await advance(1000);
-  expect(railPanel()).toBeNull();
-  expect(onOpen).toHaveBeenCalledTimes(1);
+  await act(async () => {
+    await vi.waitFor(() => {
+      expect(railPanel()).toBeNull();
+      expect(onOpen).toHaveBeenCalledTimes(1);
+    });
+  });
   expect(document.activeElement).not.toBe(button(container));
 });
 
@@ -335,13 +350,16 @@ it("takes focus back to the rail button when a pressed row's project or session 
   const { container, onOpen, advance } = await mount(COUNTS);
   onOpen.mockReturnValueOnce(false);
   enter(button(container));
-  await advance(500);
+  await advance(HOVER_OPEN_DELAY_MS);
   const row = railPanel()!.querySelector<HTMLButtonElement>("li button")!;
   act(() => row.focus());
   press(row, "mouse");
-  await advance(1000);
-  expect(railPanel()).toBeNull();
-  expect(onOpen).toHaveBeenCalledTimes(1);
+  await act(async () => {
+    await vi.waitFor(() => {
+      expect(railPanel()).toBeNull();
+      expect(onOpen).toHaveBeenCalledTimes(1);
+    });
+  });
   expect(document.activeElement).toBe(button(container));
 });
 
@@ -360,7 +378,7 @@ function openModalPopover(owner?: string) {
 it("closes at once when a status mark's popover opened elsewhere on the page comes up, and not for one opened from inside", async () => {
   const { container, advance } = await mount(COUNTS);
   enter(button(container));
-  await advance(500);
+  await advance(HOVER_OPEN_DELAY_MS);
   expect(railPanel()).not.toBeNull();
   const inside = openModalPopover("rail-processes");
   await advance(0);

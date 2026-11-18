@@ -35,6 +35,17 @@ use crate::protocol::{BackgroundTask, SessionStatus};
 /// a hook at all: the process exit is observed directly, and whether it means archived or
 /// interrupted is not the agent's to say.
 pub trait HookInterpreter: Send + Sync {
+    /// File paths this tool-call payload may edit, and the working directory for relative paths.
+    /// An unrecognised payload touches nothing.
+    fn edit_targets(&self, _payload: &Value) -> (Vec<String>, Option<std::path::PathBuf>) {
+        (Vec::new(), None)
+    }
+
+    /// The provider's refusal response for an edit, or none when no response format is known.
+    fn deny_edit(&self, _reason: &str) -> Option<Value> {
+        None
+    }
+
     /// What this event says about the session's status, or `None` when it says nothing Octoboard
     /// tracks.
     fn status(&self, _event: &str, _payload: &Value) -> Option<SessionStatus> {
@@ -53,10 +64,9 @@ pub trait HookInterpreter: Send + Sync {
     ///
     /// It is the prompt submission that creates the record, not the process starting — which is
     /// also where Codex's own session id comes from, since its thread is created lazily on that
-    /// first submission. By default the event named `UserPromptSubmit`, which every measured
-    /// provider fires for a submitted prompt.
-    fn starts_conversation(&self, event: &str) -> bool {
-        event == "UserPromptSubmit"
+    /// first submission. No event starts a conversation unless the provider declares it.
+    fn starts_conversation(&self, _event: &str) -> bool {
+        false
     }
 
     /// The text the prompt submission ([`Self::starts_conversation`]) submitted, as the user or

@@ -507,8 +507,7 @@ fn claude_on_the_parsed_screen_is_pressed_with_a_down_and_an_enter() {
 
     answer(&live).expect("answered");
 
-    std::thread::sleep(Duration::from_millis(500));
-    assert_eq!(sent(&received), answer_keys());
+    assert_input_through_marker(&live, &received, &answer_keys());
 }
 
 /// With the cursor moved to "Yes" before the press, the parsed screen still shows the screen up,
@@ -538,8 +537,7 @@ fn claude_on_the_parsed_screen_is_not_pressed_with_the_cursor_moved() {
 
     let err = answer(&live).expect_err("refused");
     assert!(err.to_string().contains("starts on"), "{err}");
-    std::thread::sleep(Duration::from_millis(300));
-    assert_eq!(sent(&received), b"j", "no key of Octoboard's");
+    assert_input_through_marker(&live, &received, b"j");
 }
 
 /// The Down goes in and the parsed screen never shows the cursor move, so the Enter is withheld.
@@ -569,8 +567,7 @@ fn claude_on_the_parsed_screen_withholds_the_enter_when_the_cursor_does_not_move
     );
     // The Down may still be on its way through the PTY when the short wait runs out.
     assert!(wait_for(PATIENCE, || sent(&received) == DOWN));
-    std::thread::sleep(Duration::from_millis(300));
-    assert_eq!(sent(&received), DOWN, "no Enter was sent");
+    assert_input_through_marker(&live, &received, DOWN);
 }
 
 /// After the Enter, Claude Code on a slow machine blanks the screen and draws its next one seconds
@@ -615,8 +612,7 @@ fn codex_on_the_parsed_screen_is_pressed_with_an_enter_and_nothing_else() {
 
     answer(&live).expect("pressed");
 
-    std::thread::sleep(Duration::from_millis(500));
-    assert_eq!(sent(&received), ENTER);
+    assert_input_through_marker(&live, &received, ENTER);
 }
 
 /// Codex's screen without its glyph is still pressed where the parsed screen shows the option that
@@ -649,8 +645,7 @@ fn codex_on_the_parsed_screen_is_pressed_by_its_inverse_video_without_a_glyph() 
 
     answer(&live).expect("pressed");
 
-    std::thread::sleep(Duration::from_millis(500));
-    assert_eq!(sent(&received), ENTER);
+    assert_input_through_marker(&live, &received, ENTER);
 }
 
 /// A Codex screen the person answers in the terminal lets the messages held for the session

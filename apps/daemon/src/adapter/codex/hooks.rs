@@ -20,6 +20,51 @@ use crate::protocol::SessionStatus;
 pub(super) struct CodexHooks;
 
 impl HookInterpreter for CodexHooks {
+    fn starts_conversation(&self, event: &str) -> bool {
+        event == "UserPromptSubmit"
+    }
+
+    fn edit_targets(&self, payload: &Value) -> (Vec<String>, Option<std::path::PathBuf>) {
+        let cwd = payload
+            .get("cwd")
+            .and_then(Value::as_str)
+            .map(std::path::PathBuf::from);
+        let input = payload.get("tool_input");
+        let Some(input) = input else {
+            return (Vec::new(), cwd);
+        };
+        let paths = input
+            .get("command")
+            .and_then(Value::as_str)
+            .map(|patch| {
+                const HEADERS: [&str; 4] = [
+                    "*** Update File: ",
+                    "*** Add File: ",
+                    "*** Delete File: ",
+                    "*** Move to: ",
+                ];
+                patch
+                    .lines()
+                    .filter_map(|line| {
+                        HEADERS
+                            .iter()
+                            .find_map(|header| line.trim_start().strip_prefix(header))
+                    })
+                    .map(str::trim)
+                    .filter(|path| !path.is_empty())
+                    .map(str::to_owned)
+                    .collect()
+            })
+            .unwrap_or_default();
+        (paths, cwd)
+    }
+
+    fn deny_edit(&self, reason: &str) -> Option<Value> {
+        Some(serde_json::json!({"hookSpecificOutput": {
+            "hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": reason
+        }}))
+    }
+
     fn status(&self, event: &str, _payload: &Value) -> Option<SessionStatus> {
         match event {
             // No `SessionStart` arm. Measured for its `startup` source only: Codex defers it to the

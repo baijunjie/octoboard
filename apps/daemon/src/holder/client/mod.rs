@@ -1129,7 +1129,7 @@ impl Holders {
             holders = targets.len(),
             "an ordinary stop follows the planned stop; the holders handed over are ended with what they run"
         );
-        // TODO: a holder asked to end kills its programs, and the output since each terminal's
+        // A holder asked to end kills its programs, and the output since each terminal's
         // mark goes with it. Ending marked terminals politely, with their tails handed back for
         // the previews, needs a holder request that does not exist yet.
         // At once, each on a thread of its own: each may take the whole grace.

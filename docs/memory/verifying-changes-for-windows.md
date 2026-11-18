@@ -91,15 +91,6 @@ its own tests then pin. Call the Windows function on a Windows machine and compa
 `Add-Type` P/Invoke, with a probe value set in `HKCU\Environment` only for the duration of the call. That answers it
 without signing out, which on a shared machine also ends whatever runs in that desktop session.
 
-## On a Windows runner, call System32's `tar.exe` by its full path
-
-Applies to a script that extracts an archive with `tar` and can run in a GitHub Actions Windows job. Those jobs here run
-in Git Bash (`shell: bash`), which puts its own GNU tar first on the PATH at every start: it reads no zip and takes the
-`D:` of an absolute path for a remote host, so a bare `tar` that works on a Windows machine and on macOS fails there.
-`scripts/fetch-conpty.mjs` names `%SystemRoot%\System32\tar.exe` for this reason, as `update-archive.mjs` names
-`/usr/bin/tar` on macOS. Adding a directory with `$GITHUB_PATH` does not get ahead of Git Bash's own: Git Bash puts its
-directories first at every start, after the runner has set the PATH.
-
 ## Prove what another Windows user can see as that user, through its own logon
 
 Applies when a Windows check has to show that another standard user cannot get a key the daemon or a session's helper

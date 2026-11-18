@@ -1304,7 +1304,7 @@ async fn waiting_for_the_updates_ends_when_they_do_or_at_their_deadline() {
 
     // An update that outlasts its deadline holds the wait only until then.
     let mut inner = clis.lock();
-    inner.held.entry(AgentId::CLAUDE).or_default().updating =
+    inner.held.get_mut(AgentId::CLAUDE).updating =
         Some(Instant::now() + Duration::from_millis(100));
     drop(inner);
     let began = Instant::now();
@@ -1700,4 +1700,34 @@ fn the_registrys_reply_is_read_for_its_version_and_nothing_else_passes() {
             "{reply:?}"
         );
     }
+}
+
+#[tokio::test]
+async fn cli_statuses_cover_registered_providers_in_registry_order_after_each_is_observed() {
+    let (state, _dir) = crate::test_support::app_state("cli-provider-order");
+    assert!(state.agent_clis.statuses().is_empty());
+    for agent in AgentId::ALL.into_iter().rev() {
+        state.agent_clis.record(
+            &state,
+            AgentCliStatus {
+                agent,
+                installed_version: Some(format!("version-{}", agent.wire_name())),
+                install_method: CliInstallMethod::Unknown,
+                latest_version: None,
+                latest_error: None,
+                latest_detail: None,
+                checked_at: 1,
+                update: None,
+            },
+        );
+    }
+    assert_eq!(
+        state
+            .agent_clis
+            .statuses()
+            .iter()
+            .map(|status| status.agent)
+            .collect::<Vec<_>>(),
+        AgentId::ALL.to_vec()
+    );
 }

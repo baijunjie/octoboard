@@ -374,7 +374,7 @@ function TreeList({ trees, acting, offersKeep, onStop, onKeep, labelledBy }: {
  * the rows' buttons can be told apart. An open confirmation makes them unavailable. A tree the daemon says cannot be
  * kept (`isUnkeepable`) leaves Keep focusable but unavailable, with the reason as its tooltip and description: it
  * stays long enough for a user to look at it, so it says why, and a press explains rather than acts, raising the
- * refusal the daemon would answer a keep with (see "Buttons" in `docs/ui-standard.md`). */
+ * refusal the daemon would answer a keep with (see "Buttons" in `docs/conventions/ui-standard.md`). */
 function TreeRow({ tree, acting, offersKeep, onStop, onKeep }: {
   tree: ProcessTree;
   acting: boolean;
@@ -390,7 +390,8 @@ function TreeRow({ tree, acting, offersKeep, onStop, onKeep }: {
     else onKeep();
   };
   // In dark the Stop label is short of 4.5:1 on this card, a shortfall kept by the user's decision (see the
-  // `--panel-row` comment in styles/surfaces.css and docs/ui-standard.md, "Conformance level and exceptions").
+  // `--panel-row` comment in styles/surfaces.css and docs/conventions/ui-standard.md, "Conformance level and
+  // exceptions").
   return (
     <div className="group flex min-w-0 flex-col gap-1 rounded-lg bg-(--panel-row) px-3 py-2 shadow-(--panel-shadow)">
       <ProcessCommand tree={tree} />

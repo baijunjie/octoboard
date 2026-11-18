@@ -376,8 +376,9 @@ act: project paths can reveal user and folder names; an import may not find a ma
 
 When location matters, distinguish the environment where sessions run from the interface the user is viewing.
 Installation and project-directory instructions concern the session environment; clipboard access, file downloads,
-notifications and keyboard-shortcut preferences concern the current interface. Do not use an unqualified "this
-machine" or "your device" for server-side files or tools.
+notifications and keyboard-shortcut preferences concern the current interface. Do not use an unqualified "this machine"
+or "your device" for server-side files or tools. A section that exists only in the desktop window (Remote access) may
+say "this computer".
 
 Use the shared platform adapter and its capabilities for differences in what the user must do, such as opening
 system notification settings versus browser site settings. Desktop versus browser is not itself a local-versus-remote
@@ -1107,7 +1108,7 @@ a shortcut with nothing to do does not turn a ring on where focus already is.
 
 Every control has an accessible name: its visible text, or an `aria-label` when it has none.
 
-- An icon beside a name is `aria-hidden="true"`.
+- An icon beside a name is `aria-hidden="true"`; a `lucide-react` icon already carries it, so none is written for it.
 - An icon that is the only carrier of a meaning gets `role="img"` and an `aria-label`.
 - A control carrying visible text *and* a name of its own has the visible text inside the name, verbatim, numbers
   included (WCAG 2.2 A 2.5.3), so that saying what is on screen reaches it by voice. A separator of collapsed lines is
@@ -1323,7 +1324,8 @@ where it was, and the next Escape closes the popup as usual. A tooltip with a tr
 takes the key while it is open; the anchored shape, which has none, takes it itself, but only while it is shown and
 only when focus is inside the react-aria popover its anchor sits in, so a tooltip still waiting out its delay leaves
 the key to the popup. Outside such a popup the key goes on: a dialog closes with whatever tooltip is open in it (see
-`useEscapeWhileTooltipOpen` in `packages/ui/src/dialogs/`), and the agent's terminal still takes it as an interrupt.
+`useEscapeWhileTooltipOpen` in `packages/ui/src/components/dialog/`), and the agent's terminal still takes it as an
+interrupt.
 A combo box keeps focus in its input, outside its list, so an anchored tooltip in the list would close with it; none
 of its options carries one.
 

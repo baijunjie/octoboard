@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { TEST_AGENTS, TEST_PROVIDERS } from "../../test/testProviders";
 import { act } from "react";
 import { expect, it, vi } from "vitest";
 
@@ -7,7 +8,6 @@ import { CodedError } from "../../errors/codedError";
 import { errorAlerts } from "../../components/alerts/errorAlerts";
 import { availabilityOf as servedAvailability } from "../../fixtures/fixtureProviders";
 import type { Account, Agent, AgentAvailability, ClientRequestBody } from "../../protocol";
-import { TEST_PROVIDERS } from "../../test/testProviders";
 import { mountHost } from "../../test/mountHost";
 import { testDaemon } from "../../test/testDaemon";
 import { AccountDialog } from "./AccountDialog";
@@ -54,14 +54,14 @@ const submit = () =>
   act(async () => Array.from(document.body.querySelectorAll("button")).find((b) => b.textContent === "Save")!.click());
 
 const availabilityOf = (unavailable: Agent) => new Map(
-  (["claude", "codex", "grok"] as Agent[]).map((agent): [Agent, AgentAvailability] => [agent, { agent, availability: agent === unavailable ? "unavailable" : "available", default_account_dir: null }]),
+  TEST_AGENTS.map((agent): [Agent, AgentAvailability] => [agent, { agent, availability: agent === unavailable ? "unavailable" : "available", default_account_dir: null }]),
 );
 
 it("lists every added agent as selectable when adding, naming the ones known to be missing", async () => {
   render(undefined, () => Promise.resolve(), availabilityOf("codex"));
   await act(async () => document.body.querySelector<HTMLElement>('[data-slot="select-trigger"]')!.click());
   const options = Array.from(document.body.querySelectorAll('[role="option"]'));
-  expect(options.map((o) => o.textContent)).toEqual(["Claude Code", "Codex, Not installed", "Grok Build", "Test Agent"]);
+  expect(options.map((o) => o.textContent)).toEqual(TEST_PROVIDERS.map(({ id, label }) => id === "codex" ? `${label}, Not installed` : label));
   expect(options.some((o) => o.hasAttribute("data-disabled") || o.getAttribute("aria-disabled") === "true")).toBe(false);
 });
 

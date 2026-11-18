@@ -73,7 +73,7 @@ const INHERITING: &[&str] = &["x-terminal-emulator", "xterm"];
 /// The launch for `os`. `resolve` maps a program name to its absolute path, for the Linux list;
 /// macOS does not use it, because Terminal.app is reached through `/usr/bin/open`. A pure function
 /// over those two, so the choice is unit-tested without starting a terminal.
-pub fn launch_for(
+fn launch_for(
     os: &str,
     directory: &Path,
     resolve: impl Fn(&str) -> Option<String>,
@@ -159,6 +159,14 @@ pub fn launch_for(
 /// looks a terminal up at all: macOS reaches Terminal.app through `/usr/bin/open` and never asks
 /// for one, so a snapshot that cannot be taken does not stand in its way.
 pub fn host_launch(
+    directory: &Path,
+    snapshot: impl FnOnce() -> Result<HashMap<String, String>, String>,
+    resolve: impl Fn(&str, &HashMap<String, String>) -> Option<String>,
+) -> Result<Launch, String> {
+    host_launch_for(std::env::consts::OS, directory, snapshot, resolve)
+}
+
+fn host_launch_for(
     os: &str,
     directory: &Path,
     snapshot: impl FnOnce() -> Result<HashMap<String, String>, String>,
@@ -173,7 +181,7 @@ pub fn host_launch(
 /// The launch for `os` where programs are looked up on one shell snapshot's `PATH`. `resolve` maps
 /// a program name through that snapshot. The snapshot's own error is returned unchanged, and "no
 /// emulator" comes only from [`launch_for`] after a snapshot that ran.
-pub fn snapshot_launch(
+fn snapshot_launch(
     os: &str,
     directory: &Path,
     snapshot: Result<HashMap<String, String>, String>,
@@ -333,14 +341,14 @@ mod tests {
         let failed = || Err("the login shell did not finish".to_string());
         let anything = |_: &str, _: &HashMap<String, String>| Some("/usr/bin/kitty".to_string());
         assert_eq!(
-            host_launch("macos", Path::new("/work/app"), failed, anything)
+            host_launch_for("macos", Path::new("/work/app"), failed, anything)
                 .unwrap()
                 .program,
             "/usr/bin/open"
         );
         for os in ["linux", "windows"] {
             assert_eq!(
-                host_launch(os, Path::new("/work/app"), failed, anything).unwrap_err(),
+                host_launch_for(os, Path::new("/work/app"), failed, anything).unwrap_err(),
                 "the login shell did not finish",
                 "{os}"
             );

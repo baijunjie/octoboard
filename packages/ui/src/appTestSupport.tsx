@@ -16,7 +16,7 @@ import { PlatformProvider } from "./platform/react";
 import type { Event, ClientRequestBody } from "./protocol";
 import { applyDaemonEvent, DaemonHostAnnouncement, DaemonProvider, type Daemon, type State } from "./store";
 import { ThemeProvider } from "./preferences/theme";
-import { testDaemon } from "./test/testDaemon";
+import { defaultDaemonReply, testDaemon } from "./test/testDaemon";
 import { matchesWidthQuery } from "./test/viewport";
 import { partSelector } from "./primitives";
 import { BROWSER_HOST } from "./test/hosts";
@@ -60,8 +60,8 @@ export function stubWindow(width = 1400): void {
   });
 }
 
-/** A daemon whose store starts at `state` and whose requests `answer` replies to: an ack by default. */
-export function fakeDaemon(state: Partial<State>, answer: (body: ClientRequestBody) => unknown = () => ({ type: "ack", id: null })): Daemon {
+/** A daemon whose store starts at `state` and whose requests `answer` replies to: empty replies for ambient reads by default. */
+export function fakeDaemon(state: Partial<State>, answer: (body: ClientRequestBody) => unknown = defaultDaemonReply): Daemon {
   return testDaemon({
     state,
     request: vi.fn(async (body: ClientRequestBody) => answer(body)) as Daemon["request"],

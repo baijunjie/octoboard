@@ -207,14 +207,14 @@ test("a manifest carries the build's holder floor, which must be a version", () 
   assert.throws(() => buildManifest({ ...base, holderFloor: "latest" }), /not a semantic version/);
 });
 
-test("the holder floor is read from the daemon's constant, and a tree without one has none", () => {
+test("the holder floor is read from shared config and must name a stable version", () => {
   const root = mkdtempSync(path.join(os.tmpdir(), "octoboard-floor-"));
   try {
-    mkdirSync(path.join(root, "apps/daemon/src/holder"), { recursive: true });
     const file = path.join(root, HOLDER_FLOOR_FILE);
-    writeFileSync(file, 'pub const FLOOR: &str = "0.1.0";\n');
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, "0.1.0\n");
     assert.equal(readHolderFloor(root), "0.1.0");
-    writeFileSync(file, "// no constant\n");
+    writeFileSync(file, "0.1.0-beta.1\n");
     assert.equal(readHolderFloor(root), undefined);
   } finally {
     rmSync(root, { recursive: true, force: true });

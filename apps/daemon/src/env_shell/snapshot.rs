@@ -35,47 +35,8 @@ pub const SNAPSHOT_ONLY_VARS: &[&str] = &[
     "TERM_SESSION_ID",
 ];
 
-/// Variables that mark *this process* as running inside an agent session. A daemon started from
-/// within such a session would otherwise hand them to every agent it spawns, and the agent takes
-/// them at face value: Claude Code turns transcript saving off and stops applying
-/// `--permission-mode`, with no error anywhere.
-///
-/// Enumerated, because prefix matching is the wrong axis and fails in both directions. It strips
-/// too much — `GROK_CODE_XAI_API_KEY`, `GROK_HOME`, `CODEX_HOME` and `CLAUDE_CODE_USE_BEDROCK` are
-/// user settings, and dropping the first of those stops a key-authenticated session from starting
-/// at all, with a failure that looks like a login problem. And it strips too little — a Claude Code
-/// session also exports `CLAUDE_PID` and `CLAUDE_EFFORT`, which match neither `CLAUDECODE` nor
-/// `CLAUDE_CODE_`. The two sets are not separable by name, so this list is what was observed inside
-/// live sessions; extend it the same way, by dumping `env` inside a session rather than by guessing
-/// a pattern.
-///
-/// Stripping these does not disturb authentication: credentials live in the macOS Keychain, so
-/// `claude auth status` still reports a logged-in account with the markers removed. A login failure
-/// is the obvious thing to blame this filter for, and re-adding the variables to "fix" it would
-/// reintroduce the original bug.
+/// Octoboard's own session markers, stripped when a daemon inherits a session's shell.
 pub const INHERITED_SESSION_VARS: &[&str] = &[
-    "AI_AGENT",
-    "CLAUDECODE",
-    "CLAUDE_CODE_BRIDGE_MCP_CARRIER",
-    "CLAUDE_CODE_BRIDGE_OWNER_ACCOUNT_UUID",
-    "CLAUDE_CODE_BRIDGE_OWNER_ORG_UUID",
-    "CLAUDE_CODE_CHILD_SESSION",
-    "CLAUDE_CODE_ENTRYPOINT",
-    "CLAUDE_CODE_ENVIRONMENT_KIND",
-    "CLAUDE_CODE_EXECPATH",
-    "CLAUDE_CODE_MESSAGING_SOCKET",
-    "CLAUDE_CODE_MESSAGING_TOKEN",
-    "CLAUDE_CODE_SESSION_ATTENDED",
-    "CLAUDE_CODE_SESSION_ID",
-    "CLAUDE_CODE_SSE_PORT",
-    "CLAUDE_CODE_WORKER_EPOCH",
-    "CLAUDE_EFFORT",
-    "CLAUDE_PID",
-    "CLAUDE_PROJECT_DIR",
-    "GROK_HOOK_EVENT",
-    "GROK_HOOK_NAME",
-    "GROK_SESSION_ID",
-    "GROK_WORKSPACE_ROOT",
     "OCTOBOARD_DAEMON_CREDENTIAL_PATH",
     // Earlier builds put the key itself, and then its file as `OCTOBOARD_DAEMON_KEY_FILE`, in a
     // session's environment; a daemon started from inside such a session must not pass them on.
@@ -88,7 +49,10 @@ pub const INHERITED_SESSION_VARS: &[&str] = &[
 
 /// True when a variable marks the daemon's own agent session rather than the user's environment.
 pub fn is_filtered(key: &str) -> bool {
-    SNAPSHOT_ONLY_VARS.contains(&key) || INHERITED_SESSION_VARS.contains(&key)
+    SNAPSHOT_ONLY_VARS.contains(&key)
+        || INHERITED_SESSION_VARS.contains(&key)
+        || crate::providers::descriptors()
+            .any(|descriptor| descriptor.inherited_session_vars.contains(&key))
 }
 
 /// Takes the user's login-shell environment, with the filtered variables already removed and
@@ -198,6 +162,40 @@ mod tests {
         ] {
             assert!(!env.contains_key(name), "{name}");
             assert!(is_filtered(name), "{name}");
+        }
+    }
+
+    #[test]
+    fn every_providers_declared_session_markers_are_filtered_without_losing_user_settings() {
+        let settings = [
+            "CODEX_HOME",
+            "CLAUDE_CONFIG_DIR",
+            "CLAUDE_CODE_USE_BEDROCK",
+            "GROK_HOME",
+            "GROK_CODE_XAI_API_KEY",
+        ];
+        let mut raw = HashMap::from_iter(
+            settings
+                .into_iter()
+                .map(|key| (key.to_string(), "user-value".to_string())),
+        );
+        for descriptor in crate::providers::descriptors() {
+            for key in descriptor.inherited_session_vars {
+                raw.insert(key.to_string(), "session-marker".to_string());
+            }
+        }
+        let env = settled(Ok(raw)).expect("settled");
+        for descriptor in crate::providers::descriptors() {
+            for key in descriptor.inherited_session_vars {
+                assert!(!env.contains_key(*key), "{key}");
+            }
+        }
+        for key in settings {
+            assert_eq!(
+                env.get(key).map(String::as_str),
+                Some("user-value"),
+                "{key}"
+            );
         }
     }
 

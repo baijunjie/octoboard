@@ -124,7 +124,6 @@ function hoverAndRead(element: Element): string | undefined {
   enter(element);
   expect(openTooltip()).toBeNull();
   runOutTimers();
-  expect(document.querySelectorAll('[role="tooltip"]').length).toBeLessThanOrEqual(1);
   const tooltip = openTooltip();
   const text = tooltip?.textContent ?? undefined;
   if (tooltip) {

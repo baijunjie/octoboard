@@ -1,5 +1,4 @@
-// The renderer of every kind of component a page can hold, in one map keyed by the kind's `type`. A kind the protocol
-// adds to `Component` is a type error here until it has its entry, and a kind of a later milestone is one entry more.
+// The renderers are keyed by component type. Every new protocol `Component` needs a renderer here.
 import React from "react";
 
 import type { Component } from "../../protocol";

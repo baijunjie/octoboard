@@ -49,10 +49,11 @@ async fn a_completion_notification_does_not_publish_a_plain_idle_before_the_turn
 #[tokio::test]
 async fn only_claude_codes_task_notification_prompt_counts_as_a_completion_notice() {
     let prompt = br#"{"hook_event_name": "UserPromptSubmit", "prompt": "<task-notification><task-id>b1</task-id></task-notification>"}"#;
-    for (agent, counted) in [
-        (AgentId::CLAUDE, 1),
-        (AgentId::CODEX, 0),
-        (AgentId::TEST, 0),
+    for (agent, counted, starts_conversation) in [
+        (AgentId::CLAUDE, 1, true),
+        (AgentId::CODEX, 0, true),
+        (AgentId::GROK, 0, true),
+        (AgentId::TEST, 0, false),
     ] {
         let (state, dir) = app_state("server-completion-notice-count");
         state
@@ -64,14 +65,15 @@ async fn only_claude_codes_task_notification_prompt_counts_as_a_completion_notic
         state.store.insert_session(&session).unwrap();
         apply_hook(&state, "s", prompt);
         assert_eq!(state.completion_notices("s"), counted, "{agent:?}");
-        // The prompt itself was processed as a conversation start for every agent.
-        assert!(
+        // The built-ins declare prompt submission; an unmeasured provider claims no event.
+        assert_eq!(
             state
                 .store
                 .get_session("s")
                 .unwrap()
                 .unwrap()
                 .has_conversation,
+            starts_conversation,
             "{agent:?}"
         );
     }

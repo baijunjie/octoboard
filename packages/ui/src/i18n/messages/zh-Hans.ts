@@ -146,8 +146,6 @@ export const zhHans: Translation<"other"> = {
   "error.recovery.mcpSignOut": "请确认服务器可访问，然后再次撤销授权。",
   "error.recovery.addedAgents": "已添加的智能体列表与此次更改所依据的不一致。请先查看，再重新更改。",
   "error.recovery.fileBusy": "请关闭其他正在使用该账户文件的程序，然后再次尝试切换。",
-  "error.recovery.codexConfig": "请检查该账户的 {configToml}，确保文件可读且 TOML 格式正确，或将其移除，然后再次尝试切换。",
-  "error.recovery.sqliteHome": "请将该账户 {configToml} 中的 {sqliteHome}，或登录 shell 中的 {codexSqliteHome}，设为绝对路径（以 {tilde} 开头时需要设置 {home}），然后再次尝试切换。",
   "error.recovery.symlink": "对话文件中含有符号链接，不会被复制。请在详情所列文件中，将它替换为其所指内容的副本，或在不需要时将其移除，然后再次尝试切换。",
   "error.recovery.notRestoredAutomatic": "如果需要那个较早的条目，请在此之前从上面所列文件夹中复制出来。",
   "error.recovery.notRestored": "如果需要那个较早的条目，请在此之前从上面所列文件夹中复制出来，然后再次尝试切换。",

@@ -19,9 +19,9 @@ which resets the dev app's `octoboard.*` preferences (hence port 5175 for `pnpm 
   and `chrome=1` as needed, and, for a file-viewer scenario, `markdown=tailwind|github|newsprint|latex` (it stands over
   the scenario's own `preferences.markdownStyle`).
 - `frame.tsx` renders the real `App` under `AppRoot` (`src/AppRoot.tsx`, the provider tree `main.tsx` and the website
-  preview share) over a fixture daemon in place of the WebSocket one, and leaves out what only a native shell does. `prepare.ts` sets the app's stored
-  preferences from the URL and the scenario before the app's modules load, so nothing the frame imports earlier may read
-  a stored preference at load (the same holds for `fixtures/index.ts` and `updaterFixture.ts`). The two choices the
+  preview share) over a fixture daemon in place of the WebSocket one, and leaves out what only a native shell does.
+  `prepare.ts` sets the app's stored preferences from the URL and the scenario before the app's modules load (what may
+  be imported before it is in `docs/conventions/tests.md`, "The UI state gallery and its fixtures"). The two choices the
   desktop shell holds (a scenario's `shellSettings`) are not stored: the frame sets them on their preference objects
   once the app's modules are loaded.
 - A `Scenario` (`scenario.ts`, extending `Fixture` in `packages/ui/src/fixtures/fixture.ts`) is a starting `state`,
@@ -70,10 +70,10 @@ which resets the dev app's `octoboard.*` preferences (hence port 5175 for `pnpm 
   fixture pages through the store's `applyDaemonEvent`. `node scripts/gallery-report-focus.mjs <gallery-origin>`, run in
   `packages/ui`, drives the checks of where focus goes when a report page is replaced by a newer one, against a served gallery;
   `scripts/gallery-chip-geometry.mjs` is a standalone check of the same kind. Both are run by hand.
-- `src/gallery/preview/` is git-ignored, so it exists per checkout: every `.ts` or `.tsx` file directly in it (not in a
-  subdirectory) must default-export a `Scenario[]`, which `fixtures/index.ts` appends to `SCENARIOS`; anything else goes
-  in a subdirectory. Those scenarios are listed, swept and held by the gallery's tests in that checkout only. Such files
-  import fixtures from their own modules, never from `fixtures/index.ts` (an import cycle).
+- `src/gallery/preview/` is git-ignored, so it exists per checkout: `fixtures/index.ts` appends to `SCENARIOS` the
+  `Scenario[]` that every `.ts` or `.tsx` file directly in it (not in a subdirectory) default-exports. Those scenarios
+  are listed, swept and held by the gallery's tests in that checkout only. What the files may import and what else goes
+  in the directory is in `docs/conventions/tests.md`, "The UI state gallery and its fixtures".
 
 ## Preview widths
 
@@ -88,51 +88,41 @@ uses compact spacing, and desktop presentation starts at 1024px. Pane docking is
 space required by the open columns. A scenario with `minWidth` raises a narrower selection to that minimum,
 so a view that only exists in a docked window remains docked; the numeric field shows the actual preview width.
 
-Nothing in `packages/ui/src/fixtures/` or `packages/ui/src/website-preview/` imports this directory (enforced by the
-`no-restricted-imports` blocks in `eslint.config.mjs`). How the fixture daemon answers, and the rules for teaching it a
-new reply, are in [`../fixtures/README.md`](../fixtures/README.md).
+Nothing in `packages/ui/src/fixtures/` or `packages/ui/src/website-preview/` imports this directory (enforced by
+`packages/ui/eslint.layers.mjs`, spread into `eslint.config.mjs`). How the fixture daemon answers, and the rules for
+teaching it a new reply, are in [`../fixtures/README.md`](../fixtures/README.md).
 
-## Conventions for writing scenarios
+## Writing scenarios
 
-- **Where.** Scenarios live in `fixtures/` (the file for their area, or a new file listed in `fixtures/index.ts`).
-  `group` is one of the titles in `GROUPS` (`fixtures/groups.ts`); a new group gets the icon its heading carries. The
-  required `category` is `"normal"` (expected UI, including empty, loading and platform-limited views) or
-  `"exceptional"` (deliberate failures, validation errors, refusals, conflicts), chosen by the view being confirmed
-  rather than by the component or file name. Keep failed subjects out of normal navigation.
-- **State.** `state` is built with `snapshotState` from `fixtures/builders.ts`. Build consoles and projects with
-  `consoleWith` and `projectWith`, or give the `Map` its type (`new Map<string, Console>(...)`): an object built by
-  spreading into an un-annotated `new Map([...])`, `.map(([id, x]) => [id, { ...x, … }])` included, is not checked for
-  leftover keys, so a renamed or removed protocol field survives in the fixture and the scenario silently shows the
-  wrong state. Helpers for staged state (`switchingAccount`, `accountSharingOf`, `branchItemOf`, `worktreeItemOf`,
-  `effectiveProviderSettings`) are in `builders.ts`; reset-credit readings are built with `resetCreditOf` and
+The rules for writing a scenario (what one shows, where it lives, how its state and steps are written, widths, copy,
+daemon errors) are in `docs/conventions/tests.md`, "The UI state gallery and its fixtures". What the fields do in the
+gallery:
+
+- **Category and group.** `group` is one of the titles in `GROUPS` (`fixtures/groups.ts`); a new group gets the icon its
+  heading carries. The required `category` is `"normal"` (expected UI, including empty, loading and platform-limited
+  views) or `"exceptional"` (deliberate failures, validation errors, refusals, conflicts), chosen by the view being
+  confirmed rather than by the component or file name; failed subjects stay out of normal navigation.
+- **State helpers.** Helpers for staged state (`switchingAccount`, `accountSharingOf`, `branchItemOf`, `worktreeItemOf`,
+  `effectiveProviderSettings`) are in `fixtures/builders.ts`; reset-credit readings are built with `resetCreditOf` and
   `resetCreditsOf` (`fixtures/quotas.ts`). A scenario's `state.settings.provider_settings` holds the user's explicit
   choices of provider settings, as the daemon stores them; the window is told the value in effect.
-- **Steps.** State that lives in a component rather than the store (a dialog, the archive view, the selected session) is
-  reached with the shortest `steps`, which press controls by name as a user would (`ui.press(ui.t("rail.settings"))`).
-  The step driver's helpers (`ui.pressTab`, `ui.confirm`, `ui.contextMenu`, `ui.touchPress`, `ui.tapTopBarStatus`,
-  `ui.swipe`, `ui.hoverStatusMark`, `ui.touchPressStatusMark`, `ui.openGitFailure`, `ui.showPanel`, `ui.closeDrawer`,
-  `ui.pressWithModifier`, and so on) are documented on the `Ui` interface in `fixtures/interact.ts`. A raw-text
-  disclosure of an error alert is opened with `ui.press(ui.t("error.diagnostics"))`.
-- **Widths.** Steps run at any width the page's width control picks (the frame reloads at the chosen width), so they
-  name controls as they would in a docked window. A session row or rail control that sits only in the sidebar's closed
-  drawer (inert while the sidebar floats for the rows, at 768px and narrower for the rail) makes the lookup press the drawer's toggle
-  first. A panel of the right pane is not reached so: at 768px and narrower the panels float, none is open and a closed one is
-  not in the page, so a step that presses a control in one calls `ui.showPanel("files" | "terminal" | "report")` after
-  selecting the session. Where a session pick leaves the drawer up over the terminal area the target is in (the floating
-  sidebar, above 768 px while it cannot dock or is hidden), follow the pick with `ui.closeDrawer()`.
-- **Width and height fields.** Write no `width` unless the window itself is part of the scenario (the page opens at
-  1440). A copy of a scenario made to open the drawer first, or because its layout differs at a width, earns nothing:
-  choose the width with the control, and write the pointer ("choose 560px to see the rows stack") in the description of
-  the scenario that shows the state. Set a `width` only where the target can be reached only in a band of widths the
-  default is outside of and steps cannot get there at whatever width the control picks (a swipe, or the open drawer card
-  itself, where pressing the drawer's toggle is fine because the open drawer is the target:
-  `focus-console-session-drawer`, `focus-project-drawer`); pick a width inside that band and say in the title or
-  description what it buys. What exists only from a breakpoint up (a card floated in by hovering a toggle, above 768 px;
-  a docked pane's width grip and Maximize panel, from the width its visible panes need) states `minWidth` instead, the
-  narrowest window it exists in, which a width chosen with the control or by `--width` is raised to; a scenario carries
-  one or the other, and a comment beside `minWidth` says why. Write a `height` only where a step needs the window too
-  short for a dialog's body, which then scrolls (`ui.tabToRegion` finds none in a tall window). A chosen width stays on
-  scenarios that carry none, and is dropped on picking one that carries its own.
+- **Step helpers.** The step driver's helpers (`ui.pressTab`, `ui.confirm`, `ui.contextMenu`, `ui.touchPress`,
+  `ui.tapTopBarStatus`, `ui.swipe`, `ui.hoverStatusMark`, `ui.touchPressStatusMark`, `ui.openGitFailure`,
+  `ui.showPanel`, `ui.closeDrawer`, `ui.pressWithModifier`, and so on) are documented on the `Ui` interface in
+  `fixtures/interact.ts`. A raw-text disclosure of an error alert is opened with `ui.press(ui.t("error.diagnostics"))`.
+- **Widths.** Steps run at any width the page's width control picks (the frame reloads at the chosen width). A session
+  row or rail control that sits only in the sidebar's closed drawer (inert while the sidebar floats for the rows, at
+  768px and narrower for the rail) makes the lookup press the drawer's toggle first. A panel of the right pane is not
+  reached so: at 768px and narrower the panels float, none is open and a closed one is not in the page, so a step that
+  presses a control in one calls `ui.showPanel("files" | "terminal" | "report")` after selecting the session. Where a
+  session pick leaves the drawer up over the terminal area the target is in (the floating sidebar, above 768 px while it
+  cannot dock or is hidden), follow the pick with `ui.closeDrawer()`.
+- **Width and height fields.** The page opens at 1440 unless a scenario writes a `width`. `minWidth` is the narrowest
+  window the scenario exists in (a card floated in by hovering a toggle, above 768 px; a docked pane's width grip and
+  Maximize panel, from the width its visible panes need), which a width chosen with the control or by `--width` is
+  raised to; a scenario carries one or the other. A chosen width stays on scenarios that carry none, and is dropped on
+  picking one that carries its own. A `height` is for a step that needs the window too short for a dialog's body, which
+  then scrolls (`ui.tabToRegion` finds none in a tall window).
 - **Held modifier.** `held: true` opens a scenario with the shortcut modifier held, for a view that exists only while it
   is held: the new-session "+" buttons' quick form. The viewer can still choose Released with the page's Modifier
   control; like a width, that choice stays on scenarios that carry none and is dropped on picking one that carries its
@@ -142,21 +132,14 @@ new reply, are in [`../fixtures/README.md`](../fixtures/README.md).
   matcher accepting the plain and the quick one), so the scenario still opens.
 - **Markdown style.** The style chosen with the Markdown style control carries over to viewer scenarios that set no
   `preferences.markdownStyle` and is dropped on picking a viewer scenario that sets its own.
-- **Live changes.** They are written with the builders in `fixtures/liveChanges.ts` (`accountAdded`, `accountRemoved`,
-  `agentAvailability`, `terminalOpened`, `terminalClosed`, `pagePushed`, `latestPageDeleted`, `allPagesDeleted`), not
-  raw `daemonEvents` steps; add a builder there for another kind of collection.
-- **Copy.** Steps name a control in the language the window is in, so copy is never written out: controls through
-  `ui.t`, a session row through `ui.session`, a change row through `ui.changeRow`. A name that is not copy (a branch, a
-  file, a title the fixture sets) is a plain string or a test of the name; a matcher is never a regular expression.
-  `fixtures/fixtures.test.ts` fails a step that names a control by the English text of a message another language's
-  catalog translates, bare or filled, and a test of the name that takes a name followed by the English catalog's
-  separator and refuses the language's own (a literal comma and space, where `zh-Hans` writes `，`). A custom test of the
-  name that stands for copy must be built from the helpers, and may be given a description with `describing(...)` (what
-  a failed step reports).
-- **Daemon errors.** A scenario that answers a request with a daemon error on purpose uses the code the real daemon
-  sends for that request in that situation, taken from its handler and `apps/daemon/PROTOCOL.md`, not one that merely
-  sounds right: the UI words each code its own way, so `list_dir` refused with `permission_denied` instead of the
-  `directory_unreadable` the daemon sends for an unreadable directory shows copy the app never shows.
+- **Live changes.** The builders in `fixtures/liveChanges.ts` are `accountAdded`, `accountRemoved`, `agentAvailability`,
+  `terminalOpened`, `terminalClosed`, `pagePushed`, `latestPageDeleted` and `allPagesDeleted`.
+- **Copy.** Steps name a control in the language the window is in: controls through `ui.t`, a session row through
+  `ui.session`, a change row through `ui.changeRow`. `fixtures/fixtures.test.ts` fails a step that names a control by
+  the English text of a message another language's catalog translates, bare or filled, and a test of the name that takes
+  a name followed by the English catalog's separator and refuses the language's own (a literal comma and space, where
+  `zh-Hans` writes `，`). A custom test of the name that stands for copy must be built from the helpers, and may be given
+  a description with `describing(...)` (what a failed step reports).
 - **Held to rules by tests.** `fixtures/fixtures.test.ts` (copy and catalog rules above, groups),
   `fixtures/projectGit.test.ts` (every fixture repository read is answered), `fixtures/configuration.test.ts` (written
   import results follow the daemon's rules; the fixture daemon refuses an import result that does not follow from what

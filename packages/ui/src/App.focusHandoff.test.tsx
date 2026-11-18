@@ -3,7 +3,9 @@
 // for that runs after each of their own renders (`useFocusHandoff`): the terminal pane (with its history's owner
 // line), the update notice and the connection banner. Each case drives the removal by what removes the control in
 // the app, so the handoff is shown to run, not only to land in the right place once it does.
+import { defaultDaemonReply } from "./test/testDaemon";
 import { act } from "react";
+import { fakeTimers } from "./test/clock";
 import { expect, it, onTestFinished, vi } from "vitest";
 
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
@@ -57,7 +59,7 @@ it("hands focus on an archived session's owner link to its history when the owne
   const owner = sessionOf("s-owner", console_.id, undefined, "Release captain", "archived");
   const archived = sessionOf("s-old", console_.id, project.id, "Old fix", "archived", { bound_to: owner.id });
   const daemon = fakeDaemon(snapshotState({ consoles: [console_], projects: [project], sessions: [owner, archived, live] }), (body) =>
-    body.type === "read_session_history" ? { type: "session_history", id: null, messages: [{ speaker: "user", text: "Hello", turn: 1 }] } : { type: "ack", id: null });
+    body.type === "read_session_history" ? { type: "session_history", id: null, messages: [{ speaker: "user", text: "Hello", turn: 1 }] } : defaultDaemonReply(body));
   mountApp(daemon);
   await pressElement(byLabel(`Actions for project ${isolate(project.name)}`));
   await pressMenuItem("View archive");
@@ -79,7 +81,7 @@ it("hands focus on an archived session's owner link to its history when a projec
   const owner = sessionOf("s-coordinator", console_.id, project.id, "Release coordinator", "interrupted");
   const archived = sessionOf("s-old", console_.id, project.id, "Old fix", "archived", { bound_to: owner.id });
   const daemon = fakeDaemon(snapshotState({ consoles: [console_], projects: [project], sessions: [owner, archived, live] }), (body) =>
-    body.type === "read_session_history" ? { type: "session_history", id: null, messages: [{ speaker: "user", text: "Hello", turn: 1 }] } : { type: "ack", id: null });
+    body.type === "read_session_history" ? { type: "session_history", id: null, messages: [{ speaker: "user", text: "Hello", turn: 1 }] } : defaultDaemonReply(body));
   mountApp(daemon);
   await pressElement(byLabel(`Actions for project ${isolate(project.name)}`));
   await pressMenuItem("View archive");
@@ -110,11 +112,13 @@ it("hands focus on the terminal's creation action to the top bar when another wi
 
 it("hands focus on the update notice's Later to the agent terminal as the notice goes", async () => {
   stubWindow();
+  fakeTimers();
   const updater: UpdaterCapability = { currentVersion: async () => "0.1.0", check: async () => ({ version: "0.2.0" }), install: async () => {} };
   const daemon = fakeDaemon(snapshotState({ consoles: [console_], projects: [project], sessions: [live] }));
   mountApp(daemon, { platform: { kind: "browser", host: BROWSER_HOST, updater }, wrap: (app) => <UpdatesProvider firstCheckDelayMs={0}>{app}</UpdatesProvider> });
   await pressElement(row(live.title));
-  await vi.waitFor(() => expect(document.querySelector("[data-region=update]")).not.toBeNull(), { timeout: 2000 });
+  await act(async () => { await vi.advanceTimersToNextTimerAsync(); });
+  expect(document.querySelector("[data-region=update]")).not.toBeNull();
   const later = byLabel("Later", document.querySelector("[data-region=update]")!);
   act(() => later!.focus());
 
@@ -212,7 +216,7 @@ async function mountFocusedHistory(modality: "keyboard" | "pointer") {
   withModality(modality);
   const archived = sessionOf("s-old", console_.id, project.id, "Old fix", "archived");
   const daemon = fakeDaemon(snapshotState({ consoles: [console_, other], projects: [project], sessions: [archived, live] }), (body) =>
-    body.type === "read_session_history" ? { type: "session_history", id: null, messages: [{ speaker: "user", text: "Hello", turn: 1 }] } : { type: "ack", id: null });
+    body.type === "read_session_history" ? { type: "session_history", id: null, messages: [{ speaker: "user", text: "Hello", turn: 1 }] } : defaultDaemonReply(body));
   mountApp(daemon);
   await pressElement(byLabel(`Actions for project ${isolate(project.name)}`));
   await pressMenuItem("View archive");

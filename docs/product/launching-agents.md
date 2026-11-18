@@ -190,15 +190,19 @@ These are the user's choices carried to the agent, separate from the injected ca
 
 ### The console session's instruction file
 
-Octoboard writes one instruction file into the console's working directory, `AGENTS.md`, with `CLAUDE.md` beside it as
-a relative symbolic link to it; a regular `CLAUDE.md` found there is replaced by the link. Where the host makes no file
-links (Windows without Developer Mode, not elevated), `CLAUDE.md` is instead a regular file holding the single line
-`@AGENTS.md`, which Claude Code expands into the text, replacing a link an earlier run left; a host that makes links
-again gets the link back. Claude Code reads `CLAUDE.md`, Codex reads `AGENTS.md`, and Grok Build reads both and loads
-the text once, from the linked pair or past the import line, which it takes as written — a console's working
-directory is not a git repository, and Grok reads the instruction files there once the folder is trusted, which
-Octoboard's press of a console session's trust confirmation sees to (see `docs/product/folder-trust.md`). So console
-sessions of every agent, running together or not, read the same text, and the file names Octoboard's tools without any
+Octoboard writes the shared instruction text into `octoboard-instructions.md` in the console's working directory,
+then exposes it under each agent's instruction filename. On a host that makes file links, `CLAUDE.md` and `AGENTS.md`
+are relative symbolic links to that file. A regular file or a link to another target at either name is replaced.
+Where the host makes no file links (Windows without Developer Mode, not elevated), `CLAUDE.md` is instead a regular
+file holding the single line `@octoboard-instructions.md`, which Claude Code expands into the text, and `AGENTS.md`
+holds a copy of the full text. Each write refreshes that copy. A host that gains or loses file links gets the form it
+can use, replacing the files or links left there.
+
+Claude Code reads `CLAUDE.md`, Codex reads `AGENTS.md`, and Grok Build reads both: with links it loads the shared text
+once, and without them it reads the full copy and takes the import line as written. A console's working directory is
+not a git repository, and Grok reads the instruction files there once the folder is trusted, which Octoboard's press
+of a console session's trust confirmation sees to (see `docs/product/folder-trust.md`). Console sessions of every
+agent, running together or not, read the same instruction text, and the file names Octoboard's tools without any
 agent's prefix. Each console session's role description points it to the file by the name its own agent reads.
 
 The file holds the console session's role (see the console session in `docs/product/hub-orchestration.md`) in two

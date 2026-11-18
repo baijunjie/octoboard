@@ -477,31 +477,23 @@ where
     }
 }
 
-/// How an approval's outcome written into the caller's session opens, which is what tells the turn
-/// it starts from any other.
-const OUTCOME_OPENING: &str = concat!(texts::notice_prefix!(), ": this concerns your");
-
 /// The message that tells a caller's session what became of its call of `tool`, the note being the
 /// call's own, for a caller whose agent gave up on the call without any signal reaching Octoboard.
 pub(crate) fn outcome_message(agent: AgentId, tool: &str, note: &str) -> String {
-    format!(
-        "{OUTCOME_OPENING} `{}` call. {note} If that call already returned this, there is nothing \
-         more to do about it.",
-        qualified_tool_name(agent, tool)
-    )
+    texts::session_request_outcome(&qualified_tool_name(agent, tool), note)
 }
 
 /// Writes an approval's outcome into the caller's session through the delivery every message takes.
 /// The turn the message starts is credited as reported: it only reads an outcome the caller already
 /// has from the call's result, and would otherwise reach its owner as a synthesised report.
 pub(crate) async fn tell_the_caller(state: &Arc<AppState>, caller_id: &str, message: String) {
-    state.credit_turn_opened_by(caller_id, OUTCOME_OPENING.to_string());
+    state.credit_turn_opened_by(caller_id, texts::OUTCOME_OPENING.to_string());
     if let Err(err) =
         delivery::write_message_off_runtime(state, caller_id, message, WhenBlocked::Queue).await
     {
         // One that may have arrived keeps the credit, or its turn would be reported twice.
         if !crate::messaging::delivery::acceptance_uncertain(&err) {
-            state.clear_turn_credit(caller_id, OUTCOME_OPENING);
+            state.clear_turn_credit(caller_id, texts::OUTCOME_OPENING);
         }
         tracing::debug!(
             session = %caller_id,

@@ -8,6 +8,8 @@ Where to start, by question:
 - What is it built with, and where is the code? The [project map](project-map.md), then the end's structure doc under
   "Code" below.
 - Where does new code go, and which helper must it use? The end's structure doc.
+- What rules must code follow? The coding conventions below; they are binding, so read the ones a change touches before
+  designing it.
 - How does one module work? The `README.md` beside the module, linked from its structure doc.
 - What does the product do? The product docs below. Why is it built this way? [Architecture](architecture.md).
 - How should I work in this project? The development memory below.
@@ -338,8 +340,6 @@ Where to start, by question:
   decisions, known pitfalls and the data model.
 - [Agent CLI reference](agent-cli-reference.md) — facts about the three agent CLIs themselves: hooks, payloads,
   injection, config directories and plan quota.
-- [UI standard](ui-standard.md) — the bar `packages/ui` is held to: accessibility, the confirmed visual and
-  interaction conventions, and the rules that follow from them.
 - [VoiceOver verification cases](voiceover-cases.md) — real-device VoiceOver results kept as reusable cases.
 
 ## Code
@@ -358,95 +358,103 @@ Where to start, by question:
 - [Tooling structure](structure/tooling.md) — the workspaces and toolchains, `pnpm verify` scoping, git hooks, CI
   workflows and repository configuration, and where new scripts and checks go.
 
+## Coding conventions
+
+Binding rules for code, one home per rule; the structure docs keep placement and the shared entry points.
+
+- [Provider-neutral core](conventions/provider-neutral-core.md) — agent-specific facts and behaviour live in the
+  provider, generic code branches on declared capabilities, how to add a missing capability or interface method, and how
+  to check a change for agent knowledge in generic code.
+- [Daemon](conventions/daemon.md) — Rust and daemon code in general: modules and layering, state, store, timing and
+  concurrency, agent accounts.
+- [Daemon processes and I/O](conventions/daemon-processes-and-io.md) — processes, blocking work, paths and files, git
+  from the daemon, writing text into a session, platform differences.
+- [Error codes](conventions/error-codes.md) — coded failures and notices, provider codes, and how the UI maps and words
+  them.
+- [Protocol and contracts](conventions/protocol-and-contracts.md) — wire types, protocol changes, versions and
+  compatibility, generated bindings and schema, store schema and migrations, settings and the agents' MCP tools.
+- [UI code](conventions/ui-code.md) — React and TypeScript in `packages/ui`: the React Compiler, stores, reading daemon
+  state, requests, focus and key handling in code, performance in WebKit.
+- [UI components](conventions/ui-components.md) — the wrapper layer, HeroUI and React Aria, shared components, dialogs
+  and fields, styling mechanisms, with pointers to the UI standard's component rules.
+- [UI standard](conventions/ui-standard.md) — the bar `packages/ui` is held to: accessibility, the confirmed visual and
+  interaction conventions, and the rules that follow from them.
+- [Internationalization in code](conventions/i18n-in-code.md) — catalogs, keys, `useT`, `Translate` and `<Message>`,
+  interpolation, plurals and text direction in code, for the UI and the website.
+- [Desktop shell](conventions/desktop-shell.md) — Tauri shell code in `apps/desktop/`.
+- [Website](conventions/website.md) — Nuxt website code in `apps/web/`.
+- [Comments](conventions/comments.md) — the project's comment rules beyond the `agent-docs` skill: what a comment may
+  refer to and how `TODO` is written.
+- [Tests](conventions/tests.md) — where tests sit, what they assert, time, jsdom component tests, daemon tests, Windows
+  and Linux runs, the UI state gallery and its fixtures.
+- [Tooling](conventions/tooling.md) — scripts, `pnpm verify`, hooks, CI, dependencies, and what ESLint and rustfmt
+  enforce.
+
 ## Development memory
 
-- [Adding a daemon error code](memory/adding-a-daemon-error-code.md) — classifying a new daemon error code in the UI in
-  the same change, and sending a condition the daemon finds on its own as a coded notice about its session.
-- [Adding a dependency](memory/adding-a-dependency.md) — which `package.json` group a package belongs in when the UI
-  bundle ships it.
-- [Adding a reason an account cannot be used](memory/adding-a-reason-an-account-cannot-be-used.md) — every place that
-  picks or accepts an account must check a new reason.
-- [Adding a user setting](memory/adding-a-user-setting.md) — exposing a new setting to agents' settings tools and the
-  configuration export, and the flags of a new provider setting.
-- [Building a feature for several agents](memory/building-a-feature-for-several-agents.md) — prefer a solution that
-  works for Claude Code, Codex and Grok Build alike; when handling one agent specially is still justified.
+- [Adding a reason an account cannot be used](memory/adding-a-reason-an-account-cannot-be-used.md) — the file-by-file
+  list of places that pick or accept an account, and how to re-measure an account reading in scratch homes before it
+  refuses work.
+- [Adding a user setting](memory/adding-a-user-setting.md) — which settings still travel in a configuration export: only
+  turning one on that itself changes files outside ~/.octoboard/ keeps it out.
+- [Building a feature for several agents](memory/building-a-feature-for-several-agents.md) — agent-specific handling
+  lives in the provider behind a capability or interface method, and a design every agent can use comes first.
 - [Building and launching the app for verification](memory/building-and-launching-the-app-for-verification.md) —
   building, launching and isolating the real app and its daemon sidecar to verify a change.
-- [Building on HeroUI and react-aria](memory/building-on-heroui-and-react-aria.md) — pitfalls of HeroUI 3 and react-aria
-  components: state attributes, context, tabs, lists and tooltips.
-- [Changing the agents' MCP tools](memory/changing-the-agents-mcp-tools.md) — adding, changing or auditing the MCP tools
-  and role texts from the agent's side: descriptions against results, parity with the UI, the agents' typical tasks.
+- [Building on HeroUI and react-aria](memory/building-on-heroui-and-react-aria.md) — where HeroUI and react-aria defects
+  can be seen when a DOM-only jsdom test passes: real hover, the Switch tooltip, tab switching, double effect runs, a
+  late tab stop.
+- [Changing the agents' MCP tools](memory/changing-the-agents-mcp-tools.md) — auditing tool coverage by walking the
+  descriptions through every task agents do, not by matching features to tool names.
 - [Catching a branch up with its target](memory/catching-a-branch-up-with-its-target.md) — which branch is the target,
   and why a guarded pushed branch is merged, not rebased.
 - [Committing alongside other agents](memory/committing-alongside-other-agents.md) — several agents in one worktree
   share one index: stage your paths only right before committing and check the index holds nothing else.
 - [Driving and reading the real app window](memory/driving-and-reading-the-real-app-window.md) — scripting and
   inspecting the live window without touching the user's work, and what a probe can prove.
-- [Fading the edge of a scroller](memory/fading-the-edge-of-a-scroller.md) — the single module every faded scroller
-  takes its fade from.
-- [Focus and key handling in the UI](memory/focus-and-key-handling-in-the-ui.md) — keeping focus from dropping, Escape
-  and key handlers, top layers and the shortcut registry.
-- [Handling paths and files in the daemon](memory/handling-paths-and-files-in-the-daemon.md) — treating hook-reported
-  paths as untrusted, destructive acts, reading project and git-directory files safely, and telling directories apart
-  by device and inode.
+- [Fading the edge of a scroller](memory/fading-the-edge-of-a-scroller.md) — declaring scrollers the coverage check
+  cannot see, and jsdom's `ResizeObserver` stub.
+- [Focus and key handling in the UI](memory/focus-and-key-handling-in-the-ui.md) — where jsdom and the gallery miss
+  focus and key defects, which press to test a dialog under, and reading Escape and top-layer symptoms.
 - [Isolating agent CLI probes](memory/isolating-agent-cli-probes.md) — keeping a probe of an agent CLI or a live session
   off the user's configuration, accounts and data, and what a scratch daemon on Windows does not keep apart.
-- [Keeping the UI responsive in WebKit](memory/keeping-the-ui-responsive-in-webkit.md) — avoiding document-wide style
-  cost, writing cheap CSS rules, and measuring latency in the system WKWebView.
-- [Line wrapping](memory/line-wrapping.md) — the widths committed text is wrapped at, and why an edit re-wraps the whole
-  paragraph.
-- [Measuring build and test speed](memory/measuring-build-and-test-speed.md) — judging a speed change by CPU time, and
-  what to avoid when making checks cheaper.
+- [Keeping the UI responsive in WebKit](memory/keeping-the-ui-responsive-in-webkit.md) — judging cost as restyle times
+  forced passes, the specificity trap in unwrapping `:where()`, and measuring latency only in WKWebView.
+- [Measuring build and test speed](memory/measuring-build-and-test-speed.md) — judging a speed change by CPU time
+  measured back to back, what to avoid when making checks cheaper, and profiling a slow UI test file before splitting
+  it.
 - [Probing the agent CLIs](memory/probing-agent-clis.md) — establishing what an agent CLI actually does: which install,
   oracles, positive controls and out-of-band proof.
-- [Raising an error alert in the UI](memory/raising-an-error-alert-in-the-ui.md) — passing a title, raising
-  UI-detected failures as `ActionableError`, the remedy of a failed write to the application's own data, and settling
-  what a daemon failure arrives as against a real daemon.
-- [Reading daemon state in the UI](memory/reading-daemon-state-in-the-ui.md) — selectors, effect dependencies, polling
-  deduplication and event ordering when reading daemon state.
-- [Running git from the daemon](memory/running-git-from-the-daemon.md) — building `git` commands in the daemon:
-  environment, deadlines, flags, ref names and test fixtures.
-- [Sending browse requests from the UI](memory/sending-browse-requests-from-the-ui.md) — bounding the window's
-  outstanding browse requests under the daemon's budget.
-- [Styling the UI](memory/styling-the-ui.md) — keeping HeroUI's look and the Tailwind, class-name, spacing and divider
-  rules that bite, and stopping transitions inside a collapsed disclosure.
-- [UI text and reading direction](memory/ui-text-and-reading-direction.md) — routing user-read strings through the
-  catalog and laying out by reading direction.
+- [Raising an error alert in the UI](memory/raising-an-error-alert-in-the-ui.md) — reproducing a daemon failure with a
+  real daemon on a throwaway `HOME` before keying a remedy or fixture to it.
+- [Reading daemon state in the UI](memory/reading-daemon-state-in-the-ui.md) — what to suspect first when
+  `App.renderCounts.test.tsx` breaks, and rewriting merged code that reads the whole `sessions` map.
+- [Running git from the daemon](memory/running-git-from-the-daemon.md) — `read` for a status-only diff, symptoms of a
+  git run outside `git::run`, and checking git fixtures by removing what they depend on.
+- [Styling the UI](memory/styling-the-ui.md) — styling project content inside a HeroUI component, and diagnosing a
+  transition that never ends or text a pixel off.
 - [Verifying behaviour in the desktop app](memory/verifying-the-desktop-ui.md) — how narrow to keep a verification, and
-  gallery, fixture and capture pitfalls.
-- [Verifying changes for Windows](memory/verifying-changes-for-windows.md) — cross-checking, cross-linking and
-  running the tests of Rust changes for Windows from a Mac, confirming Windows behaviour as a standard user on that
-  user's own desktop, and measuring what Windows itself does through its own API.
-- [What goes on the window material](memory/what-goes-on-the-window-material.md) — which chrome may sit on the
-  translucent window material.
-- [Writing automated tests](memory/writing-automated-tests.md) — keeping tests lean, checking a test by breaking its
-  rule, the test-only fourth provider (never hard-code the provider list), replaying committed agent captures, and the
-  jsdom test pitfalls.
-- [Writing daemon tests](memory/writing-daemon-tests.md) — fixtures that are real processes: sharing one exec'd script,
-  bounding waits by `PATIENCE` and waiting for the condition itself, signal windows in fixtures, stand-in markers,
-  seeded model lists, keeping tests off the real agent CLI and the user's live data directory, testing budgets by
-  lowering them.
-- [Writing daemon tests for Windows](memory/writing-daemon-tests-for-windows.md) — what passes on the Mac and fails on
-  native Windows CI: canonical and host paths, names Windows git cannot hold, console stand-ins that are not Unix
-  terminals, byte-compared committed files.
-- [Writing daemon code](memory/writing-daemon-code.md) — which session state is stored and which lives in memory, where
-  live state lives, store writes, raising versions only between releases, timing, linting, and provider interface
-  defaults that claim nothing.
-- [Running processes and blocking work in the daemon](memory/running-processes-and-blocking-work-in-the-daemon.md) —
-  capping blocking threads in per-entity passes, keeping process starts off per-launch, per-hook and per-sweep paths,
-  ending what an agent CLI started by its session, no login-shell snapshot from a process with a controlling terminal,
-  and long work that must not hold the daemon's stop on a thread of its own with idle-bounded reads.
-- [Verifying the daemon on Linux](memory/verifying-the-daemon-on-linux.md) — running the daemon's tests in a Linux
-  container, verifying under systemd and a real SSH login in a container with systemd as PID 1, proving with a
+  gallery, preview, fixture, git-output, WebKit, touch and capture pitfalls.
+- [Verifying changes for Windows](memory/verifying-changes-for-windows.md) — cross-checking, cross-linking and running
+  the tests of Rust changes for Windows from a Mac, confirming Windows behaviour as a standard user on that user's own
+  desktop, and measuring what Windows itself does through its own API.
+- [Writing automated tests](memory/writing-automated-tests.md) — producing a tool's failure for real, the load proof,
+  `fakeTimers()` faking animation frames, and reading a `window is not defined` crash.
+- [Writing daemon tests](memory/writing-daemon-tests.md) — reading a failure that only shows in a parallel run before
+  changing a timeout, and techniques the daemon test rules call for.
+- [Writing daemon code](memory/writing-daemon-code.md) — moving aside a developer database left behind by an amended
+  unreleased schema, and late clippy warnings in test code.
+- [Verifying the daemon on Linux](memory/verifying-the-daemon-on-linux.md) — running the daemon's tests and clippy in a
+  Linux container with plain cargo, verifying under systemd and a real SSH login with systemd as PID 1, proving with a
   second user's scan that no key reaches another user, and testing the self-update end to end against a local HTTPS
-  origin with a throwaway signing key.
-- [Writing desktop shell code](memory/writing-desktop-shell-code.md) — main-thread queuing, native hooks into Tauri
-  internals and native menu width.
+  origin.
+- [Writing desktop shell code](memory/writing-desktop-shell-code.md) — checking every native hook after a Tauri raise,
+  and checking event state by changing it while a page loads.
 - [Writing screen-reader announcements and focus moves](memory/writing-screen-reader-announcements-and-focus-moves.md) —
-  choosing a passing case in `voiceover-cases.md` before writing, so no new listening pass is needed.
-- [Writing text into a session](memory/writing-text-into-a-session.md) — how the daemon adds text or keys to a session's
-  input safely and diagnoses unsent messages.
-- [Writing UI code under the React Compiler](memory/writing-ui-code-under-the-react-compiler.md) — what a render may
-  read, checking the compiler's log and keeping list-row identity.
-- [Writing UI dialogs and fields](memory/writing-ui-dialogs-and-fields.md) — confirmations, error blocks, field
-  validation, placeholders and dialog scrolling.
+  which VoiceOver case rules to read before claiming a match, and what to do when none matches.
+- [Writing text into a session](memory/writing-text-into-a-session.md) — the waits the per-message bound leaves
+  unbounded, and diagnosing a message left unsent from inside the write.
+- [Writing UI code under the React Compiler](memory/writing-ui-code-under-the-react-compiler.md) — running
+  `compiler:bailouts` on the changed files and reading its list, not its exit status.
+- [Writing UI dialogs and fields](memory/writing-ui-dialogs-and-fields.md) — finding which fields throw on HeroUI
+  typography, and checking a `Select` note that appears late.

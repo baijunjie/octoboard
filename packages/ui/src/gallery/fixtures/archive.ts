@@ -1,6 +1,7 @@
 import { DEFAULT_SETTINGS } from "../../store/defaultSettings";
 import { FIXTURE_AGENTS } from "../../fixtures/fixtureProviders";
 import type { Ui } from "../../fixtures/interact";
+import type { Session } from "../../protocol";
 import type { Scenario } from "../scenario";
 import { archiveProject as project, archivedCoordinator, boundArchived, boundConsoleSession, console_, otherConsoleSession, otherOwnerArchived, unboundArchived, underArchivedCoordinator } from "../../fixtures/archiveSessions";
 import { accountOf, branchItemOf, contextOf, minutesAgo, projectOf, sessionOf, snapshotState, worktreeItemOf } from "../../fixtures/builders";
@@ -114,7 +115,7 @@ const archiveState = {
     ],
   },
   projects: new Map([...state.projects!, [boundProject.id, boundProject]]),
-  sessions: new Map([
+  sessions: new Map<string, Session>([
     ...state.sessions!,
     ...Array.from(deleteState.sessions!, ([id, session]) => [id, { ...session, terminal_title: preservedTaskTitles[session.id] ?? session.terminal_title, project_id: session.project_id === null ? null : boundProject.id, account_id: session.id === otherOwnerArchived.id ? "a-long" : session.id === unboundArchived.id ? "a-release" : session.account_id, title: session.id === otherOwnerArchived.id ? "Archived session bound elsewhere with a long title for the archive menu, covering release coordination across all production environments and regional deployment pipelines" : session.id === unboundArchived.id ? "Coordinate the next regional deployment across all production pipelines and review customer support migration records before the scheduled release" : session.title }] as const),
   ]),

@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { errorAlertParts } from "../alerts/errorAlertParts";
+import { useT } from "../../i18n/react";
 import { ActionableError } from "../../errors/actionableError";
 import { errorAlerts, type AcknowledgementView } from "../alerts/errorAlerts";
 import { errorNotification } from "../../store";
@@ -12,11 +13,12 @@ import { errorNotification } from "../../store";
  * closed, or, for a dialog reused across subjects, until `resetKey` changes. Structured errors retain the metadata
  * needed to render names in the explanation. */
 export function useFailureWhenBlocked(blocked: boolean, message: string | ActionableError, title: string, resetKey?: string): AcknowledgementView | undefined {
+  const t = useT();
   const [held, setHeld] = useState<{ key: string | undefined; failure: AcknowledgementView }>();
   let current = held?.key === resetKey ? held : undefined;
   if (blocked && !current) {
     const request = errorNotification(typeof message === "string" ? new ActionableError(message, "none") : message, { title: undefined });
-    const { body, details, remedyInBody, attached } = errorAlertParts(request);
+    const { body, details, remedyInBody, attached } = errorAlertParts(t, request);
     const view = errorAlerts.view({ message: request.message, error: request.error, title, content: body, attached, details, remedyInBody });
     if (view.classification.kind !== "actionable") throw new Error("An ActionableError classified as unexpected");
     current = { key: resetKey, failure: { ...view, classification: view.classification } };

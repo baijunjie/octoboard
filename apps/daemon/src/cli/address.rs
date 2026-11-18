@@ -215,7 +215,7 @@ fn rotate_owner_key(owner: &Owner, key: &str, data: &Path) -> Result<i32> {
 /// lifetime, and a probe holds it for a moment), so `running` is asked again afterwards: `None`
 /// when a daemon holds the lock by then, which the caller rotates through instead.
 fn rotate_without_daemon(data: &Path, running: impl Fn() -> Result<bool>) -> Result<Option<i32>> {
-    if !data.is_dir() {
+    if crate::hostfs::require_directory(data).is_err() {
         eprintln!("{}", not_running());
         return Ok(Some(NOT_RUNNING));
     }

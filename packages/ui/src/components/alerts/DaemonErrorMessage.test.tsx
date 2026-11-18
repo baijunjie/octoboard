@@ -15,6 +15,7 @@ import { RecoveryGuidance, recoveryParams } from "./ErrorGuidance";
 import { errorPresentation, hasCodeParams } from "../../errors/errorPresentation";
 import { ActionableError } from "../../errors/actionableError";
 import { useDialogAction } from "../dialog/dialogHooks";
+import { LANGUAGES } from "../../i18n/languages";
 import { currentLanguage, setLanguage } from "../../i18n/language";
 import { announceDaemonHost } from "../../i18n/platformTerms";
 import { createStateStore, DaemonProvider, type Daemon } from "../../store";
@@ -599,6 +600,20 @@ it.each([
   const container = mount(<DaemonProvider value={testDaemon()}><RecoveryGuidance recovery={remedy} /></DaemonProvider>);
   expect(container.textContent).toContain(text);
   expect(container.textContent).not.toMatch(/\{\w+\}/);
+});
+
+it.each([
+  ["provider.codex.relocation_config_unreadable.remedy", ["config.toml"]],
+  ["provider.codex.relocation_home_unlocatable.remedy", ["sqlite_home", "config.toml", "CODEX_SQLITE_HOME", "~", "HOME"]],
+] as const)("renders provider-owned references in %s in every language", (remedy, references) => {
+  const container = mount(<RecoveryGuidance recovery={remedy} />);
+  for (const language of LANGUAGES) {
+    act(() => setLanguage(language));
+    expect(container.textContent).not.toMatch(/\{\w+\}/);
+    const marked = [...container.querySelectorAll("[data-inline-reference]")].map((chip) => chip.textContent);
+    expect(marked).toHaveLength(references.length);
+    expect(marked).toEqual(expect.arrayContaining([...references]));
+  }
 });
 
 it("retains a named quota window as a rich name and a plain isolated value", () => {

@@ -36,6 +36,7 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         own: &[".test-agent"],
         generic: &[],
     },
+    inherited_session_vars: &["OCTOBOARD_TEST_SESSION_MARKER"],
     instruction_file: "TEST_AGENT.md",
     instruction_import_prefix: None,
     tool_name_prefix: "mcp__",

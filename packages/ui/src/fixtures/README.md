@@ -3,7 +3,7 @@
 The stand-in for a daemon and a machine, shared by the UI state gallery (`packages/ui/src/gallery/`), the website
 preview (`packages/ui/src/website-preview/`) and the application tests. It runs the real `App` with no daemon behind it.
 It is excluded from the production type check and from release verification, and imports nothing from
-`packages/ui/src/gallery/` (enforced by `eslint.config.mjs`).
+`packages/ui/src/gallery/` (enforced by `packages/ui/eslint.layers.mjs`).
 
 ## How it works
 
@@ -59,8 +59,7 @@ It is excluded from the production type check and from release verification, and
 
 The fixture stands on the daemon's side of the protocol, so a reply it sends must be one the real daemon could send.
 
-- Write a fixture daemon handler only for a request some scenario sends, and delete one left unused: no scenario renders
-  its reply and no guard test reads it, so it is an unfaithful reply nothing can catch.
+- Which requests get a handler is in `docs/conventions/tests.md`, "The UI state gallery and its fixtures".
 - When a reply gains a field the UI draws from, teach the fixture daemon the condition the real daemon fills the field
   under, and give every scenario's fixture what that condition needs, scenarios that answer with an error included (an
   unfilled field there is a state the real daemon never sends). Take the condition from the daemon's own code and tests

@@ -418,6 +418,26 @@ mod tests {
         assert!(peak <= 2, "{peak} at once");
     }
 
+    /// Keep the earlier look alive through the new pass's first poll, then let it finish.
+    async fn release_after_poll<T>(
+        guard: Arc<()>,
+        pass: impl std::future::Future<Output = T>,
+    ) -> T {
+        let mut guard = Some(guard);
+        let mut pass = std::pin::pin!(pass);
+        std::future::poll_fn(|cx| {
+            let polled = pass.as_mut().poll(cx);
+            if guard.take().is_some() {
+                assert!(
+                    polled.is_pending(),
+                    "returned while the earlier look was still held"
+                );
+            }
+            polled
+        })
+        .await
+    }
+
     /// The paths that were stuck and the ones that were not share the cap: waiting for the stuck
     /// ones does not let both groups together take more threads than it allows.
     #[tokio::test]
@@ -431,23 +451,18 @@ mod tests {
         for path in &paths[..3] {
             stalled.record(super::lexical_key(path), Arc::downgrade(&guard));
         }
-        let ending = tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            drop(guard);
-        });
         let busy = Arc::new(AtomicUsize::new(0));
         let peak = Arc::new(AtomicUsize::new(0));
         let (counting, highest) = (busy.clone(), peak.clone());
-        let found = looked_within_stuck(&stalled, paths, waiting(PATIENCE), move |_| {
+        let pass = looked_within_stuck(&stalled, paths, waiting(PATIENCE), move |_| {
             let now = counting.fetch_add(1, Ordering::SeqCst) + 1;
             highest.fetch_max(now, Ordering::SeqCst);
             std::thread::sleep(Duration::from_millis(50));
             counting.fetch_sub(1, Ordering::SeqCst);
             Some(())
-        })
-        .await;
+        });
+        let found = release_after_poll(guard, pass).await;
         LOOKS_AT_ONCE_OVERRIDE.with(|cap| cap.set(None));
-        ending.await.unwrap();
         assert_eq!(found.len(), 6, "every path is looked at");
         let peak = peak.load(Ordering::SeqCst);
         assert!(peak <= 2, "{peak} at once");
@@ -479,19 +494,14 @@ mod tests {
         assert!(unended.is_empty(), "still stuck at the deadline");
         assert!(started.elapsed() >= Duration::from_millis(140));
 
-        let ending = tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_millis(100)).await;
-            drop(guard);
-        });
-        let waited =
+        let pass =
             looked_within_stuck(
                 &stalled,
                 vec![path.clone()],
                 waiting(PATIENCE),
                 |_| Some(()),
-            )
-            .await;
-        ending.await.unwrap();
+            );
+        let waited = release_after_poll(guard, pass).await;
         assert!(
             waited.contains_key(&path),
             "looked at once the stuck look ended"

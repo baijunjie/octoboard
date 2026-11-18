@@ -9,19 +9,19 @@ import { interactionIsTouch, ringForAutomaticFocus } from "../input/lastInput";
  * to a control that is gone takes a frame or more to close. */
 const MAX_FRAMES_TO_WAIT = 30;
 
-/** Hands focus to `target` when a render hides or unmounts the element that held it inside the `dialog` (a search
- * that stops matching a row once the language changes, a setting changed from another window), instead of letting it
- * fall to `<body>`. The user did not ask for the move, so the ring follows the last input (see "Focus moved by a
- * change the user did not make" in `docs/ui-standard.md`). After a tap the destination is `touchTarget` instead, as a
- * move into a text field raises the on-screen keyboard; it may return `"pending"` for an element not attached yet,
- * and the rescue keeps waiting. The check runs after every render of the caller, and waits for focus to actually be
- * on the page: a popover that closes with the change gives focus back to the control a frame later, and only finding
- * that gone leaves it there. Focus that has gone elsewhere in the dialog is left alone, as is a destination made
- * unreachable by a modal in front. The one exception is `fallback`, the control the dialog's focus scope falls back
- * to (its first one): while the wait is on, focus landing there is the scope catching the fall, not the user's choice,
- * so it counts as fallen. Once focus has landed the destination becomes the held element, so a later re-match that
- * hides it is rescued too; when the wait gives up the held element is forgotten, so a stale one cannot fire a late
- * rescue on an unrelated render.
+/** Hands focus to `target` when a render hides or unmounts the element that held it inside the `dialog` (a search that
+ * stops matching a row once the language changes, a setting changed from another window), instead of letting it fall to
+ * `<body>`. The user did not ask for the move, so the ring follows the last input (see "Focus moved by a change the
+ * user did not make" in `docs/conventions/ui-standard.md`). After a tap the destination is `touchTarget` instead, as a
+ * move into a text field raises the on-screen keyboard; it may return `"pending"` for an element not attached yet, and
+ * the rescue keeps waiting. The check runs after every render of the caller, and waits for focus to actually be on the
+ * page: a popover that closes with the change gives focus back to the control a frame later, and only finding that gone
+ * leaves it there. Focus that has gone elsewhere in the dialog is left alone, as is a destination made unreachable by a
+ * modal in front. The one exception is `fallback`, the control the dialog's focus scope falls back to (its first one):
+ * while the wait is on, focus landing there is the scope catching the fall, not the user's choice, so it counts as
+ * fallen. Once focus has landed the destination becomes the held element, so a later re-match that hides it is rescued
+ * too; when the wait gives up the held element is forgotten, so a stale one cannot fire a late rescue on an unrelated
+ * render.
  *
  * This is the last fallback, after the sections' own handoffs (`useSectionRefocus`, `handFocusOnceClosed`). It relies
  * on their passive effects and frame registrations running before this one's, which holds because the sections are

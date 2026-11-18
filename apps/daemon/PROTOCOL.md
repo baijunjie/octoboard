@@ -251,7 +251,7 @@ file of the embedded browser UI needs none (see "Who may connect").
 
 ### Versions and compatibility
 
-The first frame on every control connection is `hello`, `{"type": "hello", "generation": 6, "daemon_version":
+The first frame on every control connection is `hello`, `{"type": "hello", "generation": 5, "daemon_version":
 "0.1.0"}`: the protocol generation the daemon speaks and its release version. Its shape is frozen across generations, so
 a client of any generation can read it: fields may be added to it, never removed or given another meaning. The
 terminal socket has no hello; the control socket's speaks for the daemon.
@@ -1872,15 +1872,15 @@ fallback is per agent rather than per model, and a catalogue can be incomplete, 
 promise: the agent can still refuse a level this model does not advertise, or quietly lower it (Claude Code lowers one
 its resolved model does not support, so for it an entry is a level accepted, not one honoured).
 
-Per agent (the measured CLI facts are in the "Model and reasoning effort" note of each agent's section, "Claude Code",
-"Codex" and "Grok Build", in `docs/agent-cli-reference.md`):
+Per agent (the measured CLI facts are in `docs/agent-cli-reference.md`, "Model and reasoning effort" under each agent's
+section, "Claude Code", "Codex" and "Grok Build"):
 
 - **Claude Code** is always answered, with no subprocess: `fable`, `opus`, `sonnet`, `haiku`, best first, each resolved
   by Claude Code itself to the newest model of its family. The account's catalogue, which Claude Code caches on disk
-  (see "Discovering models" in `docs/agent-cli-reference.md`), supplies each entry's `version`, `available` and
-  `efforts` (`low`, `medium`, `high`, `xhigh`, `max` where it has none); with no catalogue to read, the four are still
-  listed with those two fields left out. The retired `best` alias is not listed, and a stored `best` is read as no
-  model.
+  (see `docs/agent-cli-reference.md`, "Discovering models" under "Claude Code"), supplies each entry's `version`,
+  `available` and `efforts` (`low`, `medium`, `high`, `xhigh`, `max` where it has none); with no catalogue to read, the
+  four are still listed with those two fields left out. The retired `best` alias is not listed, and a stored `best` is
+  read as no model.
 - **Codex** runs `codex debug models` and keeps the entries whose `visibility` is `list`, by ascending `priority`;
   `id` is the `slug`, `name` the `display_name`, `efforts` the `supported_reasoning_levels` (the agent's set when the
   entry has none that can be read; an empty array is none).
@@ -2569,17 +2569,14 @@ DocumentAccount   { name, directory, disabled: bool }
   not know, or a `version` that is not between 1 and the current one, before creating anything. Version changes and
   upgrade steps are written only between released versions: a change no release has carried is made in place, at the
   current `version`, and raising `version` past a released one adds the step that upgrades a document of that version.
-  Four steps exist. 1 to 2: the five settings of the Agent accounts section (the three switches, `agent_tags` and
+  Three steps exist. 1 to 2: the five settings of the Agent accounts section (the three switches, `agent_tags` and
   `provider_settings`) move from `settings` into `accounts.agent_settings` (a document that has them but no accounts
   region gets one with no agents, so they are kept, and an import applies them with the accounts), an account's
   `share_default_config` is dropped, and what version 1 never carried (`settings.default_clone_dir`, a default account's
   `disabled`, and `accounts.agent_settings` of a document with no `settings`) is written `null`, which leaves this
   machine's value as it is. 2 to 3: `settings.sidebar_order_by_status` is dropped, as a client keeps the sidebar's sort
   itself. 3 to 4: nothing changes in a document of 3, which already carries the one language as
-  `settings.interface_language`; version 4 was written only by a build that never reached a release, which split the
-  language into the client's `interface_language` and the daemon's `agent_language`. 4 to 5: a document that carries an
-  `agent_language` has it become `settings.interface_language`, the one language, whatever `interface_language` was
-  beside it, and the `agent_language` key is dropped (a null one is dropped and leaves `interface_language` as it was).
+  `settings.interface_language`.
   `exported_by` records the Octoboard version that produced the document, for diagnosing one that misbehaves; an import
   never reads it and it takes no part in `version`. Each agent's settings are nested: a console's `accounts`, `launch`
   and `project_session_launch` and a project's `accounts` and `launch` are objects keyed by agent, and an agent's entry
@@ -4202,8 +4199,9 @@ adapter injects through `--settings`, reports the context window Claude Code gav
 nothing. Answers `200` with an empty body, or `400` for a body that does not parse or a `window` of 0. The window is
 held in memory for the session and stored with its context (`Session.context`) once the session's records show a
 size; the reporter ignores the answer. The command then runs the status line the user's and the project's own
-settings files configure, read again on every run, with the same stdin, and passes its output and exit status on;
-with none configured it prints nothing.
+settings files configure, read again on every run, with the same stdin. It passes on the exit status and stdout,
+and keeps the first 64 KiB of stderr. A run that takes over five seconds or produces more than 64 KiB of stdout
+is stopped and exits 1. With none configured it prints nothing.
 
 ## The daemon's standard input — what the application tells it
 

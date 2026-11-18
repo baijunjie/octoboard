@@ -25,6 +25,8 @@ Paths in this doc that do not start with `apps/` or `packages/` are relative to 
 
 ## Dependency direction
 
+The rules behind these edges are in `docs/conventions/website.md`, "Imports and dependencies".
+
 - The website depends on `@octoboard/ui` (`workspace:*`) and imports from it, by package name, only what its `exports`
   map names: the language list (`@octoboard/ui/languages`), the language matcher (`@octoboard/ui/match-language`), the
   preview's `postMessage` contract (`@octoboard/ui/preview-messages`) and the agent marks (`@octoboard/ui/agent-marks`);
@@ -49,16 +51,18 @@ Paths in this doc that do not start with `apps/` or `packages/` are relative to 
   renderer share; the install script itself is `public/install.sh`.
 - A homepage section, feature group or workflow item: `seo/page-outline.ts`, so the Vue app and the Markdown renderer
   stay in step; its component under `app/components/`.
-- Icons are local SVGs in `app/assets/icons/`, drawn by `app/components/SiteIcon.vue`. Platform and GitHub brand icons
-  come from Font Awesome Free 6.7.2 and keep their embedded attribution; other UI icons come from Phosphor. The diagram
-  glyphs of `app/components/FeatureGlyph.vue` are Lucide icons from `@lucide/vue`. A new local icon goes there from Font
-  Awesome Free or Phosphor; the licence and attribution files of all three are in `public/licenses/`
-  (`font-awesome-free.txt`, `phosphor-icons.txt`, `lucide-icons.txt`); the agent marks of `AgentMark.vue` are LobeHub's
-  (MIT), with their licence in `lobehub-icons.txt` beside them.
-- Anything both `nuxt.config.ts` and the Vue app need goes in `seo/` as a plain `.ts` module; a file in Nuxt's `shared/`
-  is externalized and breaks `nuxt generate`.
+- Icons are local SVGs in `app/assets/icons/`, drawn by `app/components/SiteIcon.vue`; platform and GitHub brand icons
+  come from Font Awesome Free 6.7.2 and keep their embedded attribution, other UI icons from Phosphor, the diagram
+  glyphs of `app/components/FeatureGlyph.vue` from Lucide (`@lucide/vue`) and the agent marks of `AgentMark.vue` from
+  LobeHub; the licence files of the sources are in `public/licenses/`, and adding an icon is in
+  `docs/conventions/website.md`, "Icons".
+- Anything both `nuxt.config.ts` and the Vue app need goes in `seo/` (the reason is in `docs/conventions/website.md`,
+  "Imports and dependencies").
 
 ## Shared entry points
+
+The rows are the helper list; the rule to use them in place of the lower level is in `docs/conventions/website.md`,
+"Where content is defined".
 
 | Need | Entry point |
 |---|---|

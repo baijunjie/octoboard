@@ -2,6 +2,7 @@
 // Where focus goes as the archive view, which covers the agent terminal's area and leaves the terminal mounted
 // beneath it, opens, closes and is left for a session or for Back: the terminal under the view is inert while it is
 // open, so focus meant for the terminal lands on the view until the view has gone.
+import { defaultDaemonReply } from "./test/testDaemon";
 import { act } from "react";
 import { expect, it, vi } from "vitest";
 
@@ -44,7 +45,7 @@ function mount({ window, sessions = [archived, live], consoles = [console_], pla
   stubWindow();
   window?.();
   const daemon = fakeDaemon(snapshotState({ consoles, projects: [project], sessions }), (body) =>
-    body.type === "read_session_history" ? { type: "session_history", id: null, messages: [{ speaker: "user", text: "Hello", turn: 1 }] } : { type: "ack", id: null });
+    body.type === "read_session_history" ? { type: "session_history", id: null, messages: [{ speaker: "user", text: "Hello", turn: 1 }] } : defaultDaemonReply(body));
   mountApp(daemon, platform ? { platform } : undefined);
   return daemon;
 }

@@ -10,6 +10,7 @@ use std::time::Duration;
 use anyhow::Result;
 
 use super::AppState;
+use crate::blocking_pass::each_blocking;
 use crate::session::LiveSession;
 
 /// How long a shutdown waits, for all its sessions together, for the hook events already queued
@@ -63,13 +64,7 @@ impl AppState {
         self.settle_sessions(&sessions).await;
         self.interrupt_records(&sessions);
         self.attribute_before_ending().await;
-        let handles: Vec<_> = sessions
-            .into_iter()
-            .map(|live| self.spawn_end(live))
-            .collect();
-        for handle in handles {
-            let _ = handle.await;
-        }
+        self.end_sessions(sessions).await;
         self.await_late_ends().await;
         self.end_held_launches().await;
     }
@@ -96,49 +91,33 @@ impl AppState {
             live.held_at()
                 .is_some_and(|at| left.contains(&at.holder_id))
         });
-        // First, and all at once.
-        let keeping: Vec<_> = own
+        // Keep the screens before ending any holder or asking a program to stop.
+        let keeping = own
             .iter()
-            .map(|live| {
-                let (state, live) = (self.clone(), live.clone());
-                tokio::task::spawn_blocking(move || {
-                    // Frozen now, as its end would freeze it: the frozen screen is final, so its
-                    // reader is not waited for.
-                    live.freeze_output();
-                    if let Some(frozen) = live.frozen_output() {
-                        state.keep_saved_output(&live.id, &frozen);
-                    }
-                })
-            })
-            .chain(with_holder.iter().map(|live| {
-                let (state, live) = (self.clone(), live.clone());
-                // A handed-over terminal's reader stops at its mark, and is waited for a moment
-                // to get there: what it read up to there is the screen.
-                tokio::task::spawn_blocking(move || state.save_output(&live))
-            }))
+            .map(|live| (live.clone(), false))
+            .chain(with_holder.iter().map(|live| (live.clone(), true)))
             .collect();
-        for kept in keeping {
-            let _ = kept.await;
-        }
+        let state = self.clone();
+        each_blocking(keeping, move |(live, handed_over)| {
+            if handed_over {
+                // The reader stops at the handover mark and has a bounded wait to get there.
+                state.save_output(&live);
+            } else {
+                live.freeze_output();
+                if let Some(frozen) = live.frozen_output() {
+                    state.keep_saved_output(&live.id, &frozen);
+                }
+            }
+        })
+        .await;
         self.settle_sessions(&sessions).await;
         self.interrupt_records(&sessions);
         self.attribute_before_ending().await;
         let ending_left = tokio::task::spawn_blocking(end_left);
-        let handles: Vec<_> = own.into_iter().map(|live| self.spawn_end(live)).collect();
-        for handle in handles {
-            let _ = handle.await;
-        }
+        self.end_sessions(own).await;
         let _ = ending_left.await;
-        let ending: Vec<_> = with_holder
-            .into_iter()
-            .map(|live| {
-                let ledger = Arc::clone(&self.process_ledger);
-                tokio::task::spawn_blocking(move || ledger.end_launch(&live.launch_id))
-            })
-            .collect();
-        for ended in ending {
-            let _ = ended.await;
-        }
+        let ledger = Arc::clone(&self.process_ledger);
+        each_blocking(with_holder, move |live| ledger.end_launch(&live.launch_id)).await;
         // An ordinary stop that cut the planned stop short before the handover began has the
         // launches registered after its listing ended late, as `stop_all_sessions` has: their
         // ends are waited for here too.
@@ -164,10 +143,11 @@ impl AppState {
         let _ = tokio::task::spawn_blocking(move || ledger.scan_before_ending()).await;
     }
 
-    /// Ends the session `live` as a stop ends it ([`Self::end_as_stopped`]), on a blocking thread.
-    fn spawn_end(self: &Arc<Self>, live: Arc<LiveSession>) -> tokio::task::JoinHandle<()> {
+    /// Ends the sessions in a bounded pass and waits for their stop-critical output and
+    /// process cleanup. The terminal stop, reader drain and process sweep bound their own waits.
+    async fn end_sessions(self: &Arc<Self>, sessions: Vec<Arc<LiveSession>>) {
         let state = self.clone();
-        tokio::task::spawn_blocking(move || state.end_as_stopped(&live))
+        each_blocking(sessions, move |live| state.end_as_stopped(&live)).await;
     }
 
     /// Ends the session `live` as a stop ends it. **Blocks**: `terminate` waits out the graceful

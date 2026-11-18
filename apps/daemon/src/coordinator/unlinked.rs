@@ -430,8 +430,8 @@ fn interrupt(state: &Arc<AppState>, session: &str, launch: Option<&str>, run_dir
         state.process_ledger.end_launch(launch);
     }
     let scratch: PathBuf = run_dir.join(session);
-    if scratch.is_dir() {
-        if let Err(err) = std::fs::remove_dir_all(&scratch) {
+    if let Err(err) = std::fs::remove_dir_all(&scratch) {
+        if err.kind() != std::io::ErrorKind::NotFound {
             tracing::warn!(session, %err, "removing the session's scratch directory failed");
         }
     }

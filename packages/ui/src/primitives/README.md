@@ -2,9 +2,9 @@
 
 The one place in the application that imports `@heroui/react`, `@heroui/styles`, `react-aria-components`, `react-aria`
 and the `@react-aria/*`, `@react-stately/*` and `@react-types/*` packages. Everything else — feature code and the
-project's own composite components alike — uses what this layer exports. The rule and its reasons are in
-[`docs/ui-standard.md`](../../../../docs/ui-standard.md), "Third-party UI components come through the wrapper layer";
-lint enforces it (`packages/ui/eslint.layers.mjs`).
+project's own composite components alike — uses what this layer exports. The rule is in
+`docs/conventions/ui-components.md`, "The wrapper layer" (its reasons in `docs/conventions/ui-standard.md`, "Third-party
+UI components come through the wrapper layer"); lint enforces it (`packages/ui/eslint.layers.mjs`).
 
 It is the bottom layer of `src/`: every other directory, the pure layers included, may import it, and it imports
 nothing else of the application — only the third-party libraries and React. What a wrapper needs from the application
@@ -13,13 +13,13 @@ import.
 
 ## Using it
 
-Import from the entry point, `primitives` (its `index.ts`), never from a file inside it. A component that
-has no wrapper yet gets one here first, in the same change that uses it.
+The entry point is `primitives` (its `index.ts`). The rules for using the layer are in
+`docs/conventions/ui-components.md`, "The wrapper layer".
 
-Code that has to find a component's part in the DOM (a focus hand-off, a measurement, a test fixture's target) uses
-`partSelector` (`parts.ts`), never the library's `data-slot` names or classes; a part not listed there is added to it.
-Where the application writes such a part itself (a tag drawn outside a tag group, a group's error message), the layer
-draws it (`StaticTag`, `GroupFieldError`), marks and all.
+`partSelector` (`parts.ts`) lists the parts of a component that code outside the layer needs to find in the DOM (a focus
+hand-off, a measurement, a test fixture's target); a part not listed there is added to it. Where the application writes
+such a part itself (a tag drawn outside a tag group, a group's error message), the layer draws it (`StaticTag`,
+`GroupFieldError`), marks and all.
 
 ## Writing a wrapper
 
@@ -35,11 +35,11 @@ draws it (`StaticTag`, `GroupFieldError`), marks and all.
   through (`Tabs.List`, `Popover.Trigger`): define the type the project needs here, and convert at the wrapper. So
   replacing the library changes only this directory.
 - **Appearance stays HeroUI's.** Render HeroUI's own component and pick its look through its variants and slots, as
-  `docs/ui-standard.md` requires; a wrapper adds no styling the standard does not already approve.
+  `docs/conventions/ui-standard.md` requires; a wrapper adds no styling the standard does not already approve.
 - **A treatment the standard approves lives in the wrapper.** A fix or approved departure that every instance of the
-  component needs (a WebKit compositing treatment, a size the standard confirms) is applied by the wrapper, with its
-  CSS in an adjacent stylesheet and a comment naming the heading of `docs/ui-standard.md` or the reason it rests on.
-  It is removed from call sites and the global stylesheet's rule bodies. A treatment that only some uses need is a
+  component needs (a WebKit compositing treatment, a size the standard confirms) is applied by the wrapper, with its CSS
+  in an adjacent stylesheet and a comment naming the heading of `docs/conventions/ui-standard.md` or the reason it rests
+  on. It is removed from call sites and the global stylesheet's rule bodies. A treatment that only some uses need is a
   prop of the wrapper, not a class each call site repeats.
 - **Hooks and utilities.** A `react-aria` hook the application uses is wrapped by a project hook with the project's
   arguments and results (`useKeyboardModality`, `useFocusVisibleProps`, `useObjectRef`, `useTooltipState`). A utility
@@ -54,7 +54,6 @@ draws it (`StaticTag`, `GroupFieldError`), marks and all.
   (makes an element of the caller's own the panel of a tab, under the ids react-aria gave the tab),
   `settleUnknownModality` (reads react-aria's private interaction modality to settle an unknown one) and
   `scrollTreeAndRender` (scrolls a `Tree` by script and has its virtualizer render the rows in view at once).
-  Application code never listens for a react-aria event, sets its attributes on a wrapper's node or synthesises its key events.
 - **The library's DOM markers and states are read through the layer.** `itemKeyOf` / `itemKeySelector` (a collection
   item's key), `topLayerProps` / `closestTopLayer` / `clearTopLayer` and `liveAnnouncerProps` (what a modal's hiding of
   the page leaves out), `menuOfTrigger` (the open menu a trigger's button labels), `disabledGroupProps` (marks a group
@@ -82,7 +81,7 @@ draws it (`StaticTag`, `GroupFieldError`), marks and all.
   the modal's busy state, and a new interactive wrapper does the same (a pending action passes `exempt`). A container
   (`ListBox`, `Tree`, `TagGroup`, `ColorSwatchPicker`) leaves it to its items and buttons, which take it. A control
   drawn without a wrapper reads `useBusy` and renders itself unavailable. Never `inert`: assistive technology still
-  reads the disabled controls. A call site does not disable its own controls for a busy dialog.
+  reads the disabled controls.
 - **Tests sit beside the wrapper**, covering what it adds or translates (prop mapping, a treatment, focus or press
   behaviour it must keep); the component's own behaviour is HeroUI's to test. `testSupport.tsx` holds the helpers they
   share (`mount`, `pressWithMouse`), self-contained like the rest of the layer.
@@ -90,5 +89,5 @@ draws it (`StaticTag`, `GroupFieldError`), marks and all.
   among themselves; a consumer has no use for it. So are `UnfilteredMenu` (`MenuFilter.tsx`) and `setPointerModality`
   (`focus.ts`), which `Menu.tsx` and `MenuFilter.tsx` use between themselves.
 
-Tests and test support, the gallery, the shared fixtures and the website preview may import the libraries directly;
-they are not application source.
+The exemptions from the import rule (tests and test support, the gallery, the shared fixtures and the website preview)
+are listed in `docs/conventions/ui-components.md`, "The wrapper layer".

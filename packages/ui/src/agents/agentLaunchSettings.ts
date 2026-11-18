@@ -1,8 +1,7 @@
 // How each agent takes a model and an effort, and what it does with one it cannot honour, is in
-// the "Model and reasoning effort" note of each agent's section ("Claude Code", "Codex",
-// "Grok Build") in docs/agent-cli-reference.md. What the console and project dialogs offer is not
-// kept here: the daemon lists it when the dialog asks (`list_agent_models`), so it cannot go stale
-// in this source.
+// docs/agent-cli-reference.md, "Model and reasoning effort" under each agent's section ("Claude Code", "Codex",
+// "Grok Build"). What the console and project dialogs offer is not kept here: the daemon lists it when the dialog asks
+// (`list_agent_models`), so it cannot go stale in this source.
 
 import type { CompatibilityChanges } from "./launchCompatibility";
 import type { Translate } from "../i18n/catalog";

@@ -15,7 +15,7 @@ type Document = Map<String, Value>;
 
 /// The steps that bring a document up one version: `STEPS[n - OLDEST_VERSION]` takes a document of
 /// version `n` to `n + 1`.
-const STEPS: [fn(&mut Document); 4] = [from_v1, from_v2, from_v3, from_v4];
+const STEPS: [fn(&mut Document); 3] = [from_v1, from_v2, from_v3];
 
 /// Upgrades `document`, of `version`, to the current version, which it then names. The caller has
 /// checked that `version` lies between [`OLDEST_VERSION`] and [`CONFIGURATION_VERSION`].
@@ -105,20 +105,3 @@ fn from_v2(document: &mut Document) {
 /// Version 3 to 4. A document of 3 already carries the one language as `settings.interface_language`,
 /// which is where the current version reads it, so there is nothing to change.
 fn from_v3(_document: &mut Document) {}
-
-/// Version 4 to 5.
-///
-/// - A build that split the language wrote the daemon's as `settings.agent_language` and the
-///   client's own as `settings.interface_language`. The current version has the one language,
-///   `interface_language`, so a document that carries an `agent_language` has it become the
-///   `interface_language` (the language the daemon held is the one the user is to see, as before
-///   the split), and the key goes.
-fn from_v4(document: &mut Document) {
-    if let Some(Value::Object(settings)) = document.get_mut("settings") {
-        if let Some(language) = settings.remove("agent_language") {
-            if !language.is_null() {
-                settings.insert("interface_language".to_string(), language);
-            }
-        }
-    }
-}

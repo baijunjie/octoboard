@@ -7,6 +7,7 @@ use crate::protocol::{
     ProjectSource, RequestBody,
 };
 use crate::session_tools;
+use crate::session_tools::console_instructions::INSTRUCTION_FILE;
 use crate::store::LOCAL_HOST_ID;
 use std::path::Path;
 
@@ -148,7 +149,7 @@ async fn a_console_is_created_and_updated_where_the_host_makes_no_file_links() {
         )
     };
     assert_eq!(regular_file("AGENTS.md"), text("Be brief."));
-    assert_eq!(regular_file("CLAUDE.md"), "@AGENTS.md\n");
+    assert_eq!(regular_file("CLAUDE.md"), format!("@{INSTRUCTION_FILE}\n"));
     assert_eq!(regular_file("TEST_AGENT.md"), text("Be brief."));
 
     handle(
@@ -168,7 +169,7 @@ async fn a_console_is_created_and_updated_where_the_host_makes_no_file_links() {
     .await
     .unwrap();
     assert_eq!(regular_file("AGENTS.md"), text("Answer in French."));
-    assert_eq!(regular_file("CLAUDE.md"), "@AGENTS.md\n");
+    assert_eq!(regular_file("CLAUDE.md"), format!("@{INSTRUCTION_FILE}\n"));
     assert_eq!(regular_file("TEST_AGENT.md"), text("Answer in French."));
 }
 

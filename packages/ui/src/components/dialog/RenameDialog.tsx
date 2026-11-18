@@ -4,6 +4,7 @@ import { useT } from "../../i18n/react";
 import { Dialog } from "./Dialog";
 import { useDialogAction, useSubmitValidation } from "./dialogHooks";
 import { TextInput } from "../form/TextInput";
+import { fieldHasText } from "../form/useTrimmedField";
 import { exceedsTextLimit } from "../form/textLength";
 
 /** The one-field dialog that renames a session or a project: the caller says what the field is
@@ -37,7 +38,7 @@ export function RenameDialog({
   const [value, setValue] = useState(initialValue);
   const { busy, run } = useDialogAction(undefined, errorTitle);
   const { shown, attempt } = useSubmitValidation();
-  const valueError = !value.trim() ? requiredMessage
+  const valueError = !fieldHasText(value) ? requiredMessage
     : characterLimit !== undefined && exceedsTextLimit(value, characterLimit, initialValue) ? tooLongMessage : undefined;
 
   const submit = () => {

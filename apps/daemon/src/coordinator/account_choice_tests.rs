@@ -26,12 +26,13 @@ use std::sync::Arc;
 async fn opening_a_session_is_refused_when_its_resolved_agent_is_unavailable() {
     let (state, dir) = crate::test_support::app_state("coordinator-open-session-agent-unavailable");
     let workdir = console_workdir_in(&dir);
+    let default_agent = AgentId::ALL[0];
     state
         .store
-        .insert_console(&console(AgentId::CLAUDE, &workdir))
+        .insert_console(&console(default_agent, &workdir))
         .unwrap();
     state.set_agent_availability(
-        [AgentId::CLAUDE, AgentId::CODEX]
+        AgentId::ALL
             .into_iter()
             .map(|agent| crate::protocol::AgentAvailability {
                 agent,
@@ -40,10 +41,9 @@ async fn opening_a_session_is_refused_when_its_resolved_agent_is_unavailable() {
             })
             .collect(),
     );
-    for (chosen, expected) in [
-        (None, AgentId::CLAUDE),
-        (Some(AgentId::CODEX), AgentId::CODEX),
-    ] {
+    let choices = std::iter::once((None, default_agent))
+        .chain(AgentId::ALL.into_iter().map(|agent| (Some(agent), agent)));
+    for (chosen, expected) in choices {
         let err = open_session(
             &state,
             OpenRequest {

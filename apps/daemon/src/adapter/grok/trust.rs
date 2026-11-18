@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 
+use crate::adapter::files::{read_regular_text, LARGE_FILE_LIMIT};
 use crate::protocol::trust_reason;
 use crate::session::trust::{CarryFailure, TrustCarrier};
 use crate::session::wait::{wait_for, POLL};
@@ -88,7 +89,7 @@ fn carry(carried: &CarriedTrust) -> std::result::Result<(), CarryFailure> {
 /// The entry Grok has written for the folder into the session's copy of its store, as its own
 /// text, once it says the folder is trusted.
 fn recorded_entry(carried: &CarriedTrust) -> Option<String> {
-    let text = std::fs::read_to_string(&carried.session_store).ok()?;
+    let text = read_regular_text(&carried.session_store, LARGE_FILE_LIMIT).ok()?;
     let span = entry_span(&text, &carried.folder)?;
     let mut entry = text[span].to_string();
     if !entry.ends_with('\n') {
@@ -135,7 +136,7 @@ fn merge_into_user_store(
     // A store the user keeps elsewhere and links to is written where it really is.
     let target = crate::hostfs::canonical(&carried.user_store)
         .unwrap_or_else(|_| carried.user_store.clone());
-    let current = match std::fs::read_to_string(&target) {
+    let current = match read_regular_text(&target, LARGE_FILE_LIMIT) {
         Ok(text) => text,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => String::new(),
         Err(err) => return Err(CarryFailure::io(err)),

@@ -96,14 +96,7 @@ pub fn repoint_thread_row(
     )
 }
 
-/// Why a conversation could not be moved, in the words of the wire's `cause` param on
-/// `relocation_failed`: the file system's own causes ([`SharingCause`]), which a user can act on,
-/// and the ones of this move alone — `config_unreadable` (the provider's configuration that says
-/// where its thread registry is cannot be read or understood), `sqlite_home` (where that registry
-/// is cannot be told; the word names Codex's setting, the first provider to have such a
-/// registry), `symlink` (a record holds a symbolic link, which is not copied) and `not_restored`
-/// (an older item could not be put back). `other` is everything else. Not found and conflicts are
-/// told only as `other`.
+/// The file-system cause a user can act on when a conversation copy fails.
 fn cause_of_io(err: &io::Error) -> &'static str {
     narrowed(SharingCause::of(err))
 }
@@ -121,11 +114,8 @@ fn narrowed(cause: SharingCause) -> &'static str {
 /// The wire word for why the account's row of the thread was not pointed (see [`cause_of_io`]).
 fn cause_of_row(err: &RowError) -> &'static str {
     match err.cause {
-        RowCause::Configuration(cause) => match narrowed(cause) {
-            "other" => "config_unreadable",
-            cause => cause,
-        },
-        RowCause::Unlocatable => "sqlite_home",
+        RowCause::Configuration(cause) => narrowed(cause),
+        RowCause::Unlocatable => "other",
         RowCause::Registry(cause) => narrowed(cause),
     }
 }
@@ -159,7 +149,9 @@ fn repoint_within(
         .map_err(|err| {
             let detail = err.to_string();
             CodedError::raised(
-                error_code::RELOCATION_FAILED,
+                registry
+                    .relocation_code(&err)
+                    .unwrap_or(error_code::RELOCATION_FAILED),
                 format!(
                     "the conversation was copied but {}'s record of the thread was not \
                      updated: {detail}",

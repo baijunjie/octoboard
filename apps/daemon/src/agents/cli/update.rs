@@ -158,7 +158,8 @@ pub(super) fn run_update(
         .agent_clis
         .lock()
         .statuses
-        .get(&prepared.agent)
+        .get(prepared.agent)
+        .as_ref()
         .and_then(|status| status.update.as_ref().map(|update| update.started_at))
         .unwrap_or_else(now_millis);
     let ran = run_update_tool(&prepared.command, &prepared.shell_env, timeout, output);
@@ -182,7 +183,8 @@ pub(super) fn run_update(
             .agent_clis
             .lock()
             .statuses
-            .get(&prepared.agent)
+            .get(prepared.agent)
+            .as_ref()
             .cloned();
         held.unwrap_or_else(|| prepared.found.clone())
     } else {

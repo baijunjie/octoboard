@@ -4,10 +4,11 @@
 import { act, StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { getInteractionModality } from "react-aria/private/interactions/useFocusVisible";
-import { afterEach, beforeEach, onTestFinished, vi } from "vitest";
+import { afterEach, beforeEach, expect, onTestFinished, vi } from "vitest";
 
 import type { Account, AccountSharing, Settings } from "../../protocol";
 import type { State } from "../../store";
+import { FIXTURE_AGENTS } from "../../fixtures/fixtureProviders";
 import { TestHost } from "../../test/TestHost";
 import { AccountsNavigationContext } from "./AccountsNavigationContext";
 import { AgentAccountsSection } from "./AgentAccountsSection";
@@ -47,7 +48,7 @@ beforeEach(() => {
   animate.mockClear();
   request.mockReset().mockResolvedValue({});
   readMcpInventory.mockReset().mockReturnValue(new Promise(() => {}));
-  settings.added_agents = ["claude", "codex", "grok"];
+  settings.added_agents = [...FIXTURE_AGENTS];
   consoles.clear();
   projects.clear();
   sessions.clear();
@@ -178,7 +179,7 @@ async function openAccountDialog(container: ParentNode, id: string, entry: strin
   const open = document.body.querySelector<HTMLElement>('[role="dialog"] button[aria-label="Close"]');
   if (open) {
     await act(async () => open.click());
-    await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0))));
+    await vi.waitFor(() => expect(document.activeElement?.closest("[data-account-row], [role=tab]")).toBeTruthy());
   }
   await openRowMenu(container, id);
   const item = [...document.querySelectorAll<HTMLElement>("[role=menuitem]")].find((candidate) => candidate.textContent === entry)!;

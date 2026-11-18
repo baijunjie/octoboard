@@ -40,9 +40,7 @@ language only when the daemon holds one; every other one is in every document wh
 **General**
 
 - **Language**, under `interface_language`: the tag of the language the exporting daemon holds, which every window of
-  it shows (see "The language the daemon holds" in `docs/product/language.md`). A document of version 4 that carries an
-  `agent_language` is read with that as its language (see "Versions" in
-  `docs/product/configuration-export-and-import.md`).
+  it shows (see "The language the daemon holds" in `docs/product/language.md`).
 - **Resume sessions on start** (see that section in `docs/product/general-settings.md`), under `resume_sessions_on_start`. The
   review's line for turning it on says that Octoboard will then resume every interrupted session each time it starts,
   including ones interrupted before it last stopped. A document from a build without the setting has no such key, and

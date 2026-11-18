@@ -137,8 +137,6 @@ export const vi: Translation<"other"> = {
   "error.recovery.mcpSignOut": "Đảm bảo máy chủ truy cập được, rồi thu hồi quyền một lần nữa.",
   "error.recovery.addedAgents": "Danh sách tác tử đã thêm khác với dự kiến của thay đổi này. Kiểm tra trước khi thay đổi lần nữa.",
   "error.recovery.fileBusy": "Đóng các chương trình khác đang sử dụng tệp của tài khoản rồi thử chuyển lại.",
-  "error.recovery.codexConfig": "Đảm bảo {configToml} của tài khoản là tệp TOML hợp lệ có thể đọc, hoặc gỡ bỏ tệp, rồi thử chuyển lại.",
-  "error.recovery.sqliteHome": "Đặt {sqliteHome} trong {configToml} của tài khoản, hoặc {codexSqliteHome} trong shell đăng nhập thành đường dẫn tuyệt đối ({tilde} ở đầu cần có {home}), rồi thử chuyển lại.",
   "error.recovery.symlink": "Các tệp hội thoại chứa liên kết tượng trưng và liên kết này không bao giờ được sao chép. Trong các tệp nêu ở phần chi tiết, thay liên kết bằng bản sao đích của nó, hoặc gỡ bỏ nếu không cần, rồi thử chuyển lại.",
   "error.recovery.notRestoredAutomatic": "Nếu cần mục cũ, sao chép mục ra khỏi thư mục nêu bên trên trước thời điểm đó.",
   "error.recovery.notRestored": "Nếu cần mục cũ, sao chép mục ra khỏi thư mục nêu bên trên trước thời điểm đó rồi thử chuyển lại.",

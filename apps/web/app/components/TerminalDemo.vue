@@ -46,7 +46,7 @@ const lines: Line[] = [
   },
   { window: 0, kind: "cmd", text: linuxCommandParts.start },
   { window: 0, kind: "out", text: `octoboardd listening on 127.0.0.1:${port} with key 3f9c…` },
-  { window: 0, kind: "out", text: `Octoboard started: pid 4242, http://127.0.0.1:${port}` },
+  { window: 0, kind: "out", text: `${config.public.appName} started: pid 4242, http://127.0.0.1:${port}` },
   { window: 0, kind: "cmd", text: linuxCommandParts.address },
   { window: 0, kind: "out", text: `http://127.0.0.1:${port}/?key=3f9c…` },
   {
@@ -90,31 +90,44 @@ const windowLines = windows.map((_, w) =>
 );
 
 // Rendered complete, so that without scripting or with reduced motion the final state is what shows.
-const typed = ref(lines.map((line) => (line.kind === "cmd" ? line.text.length : 0)));
-const shown = ref(lines.map(() => true));
+const completeTyped = lines.map((line) => (line.kind === "cmd" ? line.text.length : 0));
+const completeShown = lines.map(() => true);
+const typed = ref(completeTyped);
+const shown = ref(completeShown);
 const visible = ref([true, true, true]);
 const cursor = ref(-1);
 const playing = ref(false);
-const reduced = ref(false);
 const root = ref<HTMLElement | null>(null);
+const { running, reduced } = useVisibleMotion(root);
 let timer: ReturnType<typeof setInterval> | undefined;
-let observer: IntersectionObserver | undefined;
-let inView = false;
 let step = 0;
 let waited = 0;
 let chars = 0;
 let lead = 0;
 let delay = 0;
 
-// The clock runs only while the demo plays, is on screen and its tab is visible; the position is kept in between.
-function sync() {
-  const run = playing.value && inView && !document.hidden;
-  if (run && timer === undefined) timer = setInterval(tick, 30);
-  else if (!run && timer !== undefined) {
-    clearInterval(timer);
-    timer = undefined;
-  }
+function stopClock() {
+  clearInterval(timer);
+  timer = undefined;
 }
+
+// Visibility suspends the clock without changing where the demo is in its script.
+watch([playing, running], ([requested, allowed]) => {
+  if (requested && allowed) {
+    if (timer === undefined) timer = setInterval(tick, 30);
+  } else {
+    stopClock();
+  }
+});
+watch(reduced, (reduce) => {
+  if (!reduce) return;
+  playing.value = false;
+  typed.value = completeTyped;
+  shown.value = completeShown;
+  visible.value = [true, true, true];
+  cursor.value = -1;
+});
+
 function advance() {
   step++;
   waited = 0;
@@ -131,7 +144,6 @@ function tick() {
   const current = steps[step];
   if (!current) {
     playing.value = false;
-    sync();
     return;
   }
   if (current.kind === "wait") {
@@ -174,29 +186,11 @@ function play() {
   lead = 7;
   delay = 0;
   playing.value = true;
-  sync();
 }
 onMounted(() => {
-  reduced.value = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (reduced.value) return;
-  if ("IntersectionObserver" in window && root.value) {
-    observer = new IntersectionObserver(([entry]) => {
-      inView = entry?.isIntersecting ?? true;
-      sync();
-    });
-    observer.observe(root.value);
-  } else {
-    inView = true;
-  }
-  document.addEventListener("visibilitychange", sync);
-  play();
+  if (!reduced.value) play();
 });
-onBeforeUnmount(() => {
-  playing.value = false;
-  sync();
-  observer?.disconnect();
-  document.removeEventListener("visibilitychange", sync);
-});
+onBeforeUnmount(stopClock);
 </script>
 
 <template>
@@ -220,9 +214,7 @@ onBeforeUnmount(() => {
             :title="t('downloadDemoReplayLabel')"
             @click="play"
           >
-            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-              <path d="M3 8a5 5 0 1 0 1.6-3.7M3 2.5v3h3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
-            </svg>
+            <SiteIcon name="arrow-counter-clockwise" class="replay-icon" />
           </button>
         </div>
         <p class="demo-step" aria-hidden="true"><span class="demo-step-number">{{ String(w + 1).padStart(2, "0") }}</span>{{ t(win.caption) }}</p>
@@ -230,7 +222,7 @@ onBeforeUnmount(() => {
           <div v-for="{ line, index: i } in windowLines[w]" :key="i" class="demo-line" :class="`is-${line.kind}`">
             <template v-if="line.kind !== 'out'">
               <span class="demo-prompt" :class="{ 'is-waiting': line.kind === 'cmd' ? typed[i] === 0 && cursor !== i : !shown[i] }">{{ line.prompt ?? win.prompt }}</span>
-              <span>{{ line.text.slice(0, typed[i]) }}</span><span v-if="cursor === i" class="demo-cursor" /><span class="demo-rest">{{ line.text.slice(typed[i]) }}</span>
+              <span>{{ line.text.slice(0, typed[i]) }}</span><span v-if="cursor === i" class="demo-cursor" :class="{ 'is-paused': !running }" /><span class="demo-rest">{{ line.text.slice(typed[i]) }}</span>
             </template>
             <span v-else :class="{ 'demo-rest': !shown[i] }">{{ line.text }}</span>
           </div>
@@ -338,6 +330,10 @@ onBeforeUnmount(() => {
   cursor: pointer;
   transition: color 200ms;
 }
+.replay-icon {
+  width: 14px;
+  height: 14px;
+}
 .demo-replay:hover {
   color: var(--text);
 }
@@ -395,6 +391,9 @@ onBeforeUnmount(() => {
   height: 1.15em;
   background: #e4e4e6;
   animation: demo-blink 1.06s steps(1) infinite;
+}
+.demo-cursor.is-paused::after {
+  animation-play-state: paused;
 }
 .is-browser img {
   display: block;

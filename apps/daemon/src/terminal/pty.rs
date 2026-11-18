@@ -1447,7 +1447,9 @@ mod tests {
 
         owner.0.write(b"marker\r\n").expect("the write");
         assert!(heard("marker").contains("marker"));
-        std::thread::sleep(std::time::Duration::from_millis(200));
+        // The PTY reader has no signal for a probe that was never written.
+        const UNSOLICITED_PROBE_WINDOW: std::time::Duration = std::time::Duration::from_millis(200);
+        std::thread::sleep(UNSOLICITED_PROBE_WINDOW);
         let before = heard("marker");
         assert!(!before.contains("?6c"), "{before:?}");
 
@@ -1806,7 +1808,9 @@ mod tests {
             stopping.stop(Polite::Terminate);
             stopped.send(()).expect("stop returned");
         });
-        std::thread::sleep(std::time::Duration::from_millis(100));
+        // The stop thread provides no signal while it waits for cleanup to finish.
+        const BLOCKED_STOP_WINDOW: std::time::Duration = std::time::Duration::from_millis(100);
+        std::thread::sleep(BLOCKED_STOP_WINDOW);
         let stop_returned_while_hook_held = stop_returned.try_recv().is_ok();
         release.send(()).expect("release cleanup");
         assert!(
@@ -2300,7 +2304,10 @@ mod tests {
         wait_until("the program never heard the cursor position", || {
             std::fs::read(&heard).unwrap_or_default().contains(&b'R')
         });
-        std::thread::sleep(std::time::Duration::from_millis(300));
+        // The child records replies asynchronously and does not acknowledge that no others were written.
+        const DUPLICATE_CURSOR_REPORT_WINDOW: std::time::Duration =
+            std::time::Duration::from_millis(300);
+        std::thread::sleep(DUPLICATE_CURSOR_REPORT_WINDOW);
         let input = std::fs::read(&heard).expect("what the program heard");
         assert_eq!(
             input.iter().filter(|&&byte| byte == b'R').count(),

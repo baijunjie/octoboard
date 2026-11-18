@@ -38,19 +38,20 @@ directory, `hooks/`, `lib/`) runs as the `verify` package's tests.
    release plan; it requires `--release` and cannot be combined with `--full` or `--quick`. Without a group, `--release`
    still selects every application check.
 3. **Steps** (`steps.mjs`). Every non-`unread` plan, including release and quick plans, checks generated identity fields
-   against `config/app.json` without writing (`scripts/sync-identity.mjs --check`). A package selects its other steps
-   (lint, type check, locales, tests, build, script tests; both Rust crates always run together). Light steps run first
-   and heavy ones (UI tests, Rust builds and tests, the website build) last, and a failure stops the run. The website
-   build runs before its SEO tests, which read the generated output. `--release` runs the application checks:
-   application lint, production UI type check, application UI tests, desktop script tests, rustfmt, clippy, Rust
-   tests and the Windows cross-check (`pnpm check:windows`: both crates, all targets, through `cargo xwin`, and a link of the daemon's executable once its check passes). Local
-   `release:version` runs the complete plan with `--fresh --head <release-commit>` before tagging, then scoped push
-   verification can reuse matching passes. The release groups partition those same commands; each also runs the
-   identity check. The optional hosted workflow runs the frontend and native groups independently, with separate Linux
-   and Windows jobs (see "Hosted application checks"); the windows group is local only, since its toolchain
-   (cargo-xwin, the `x86_64-pc-windows-msvc` target, LLVM's clang, the downloaded MSVC CRT and Windows SDK) is
-   not on the hosted macOS runner. A machine missing any of it fails the step before compiling, with a message naming
-   each missing piece and how to install it; the check never accepts the SDK license itself (see
+   against `config/app.json` without writing (`scripts/sync-identity.mjs --check`) and searches the production core for
+   provider knowledge (`provider-neutral.mjs`, below). A package selects its other steps (lint, type check, locales,
+   tests, build, script tests; both Rust crates always run together). Light steps run first and heavy ones (UI tests,
+   Rust builds and tests, the website build) last, and a failure stops the run. The website build runs before its SEO
+   tests, which read the generated output. `--release` runs the application checks: application lint, production UI type
+   check, application UI tests, desktop script tests, rustfmt, clippy, Rust tests and the Windows cross-check (`pnpm
+   check:windows`: both crates, all targets, through `cargo xwin`, and a link of the daemon's executable once its check
+   passes). Local `release:version` runs the complete plan with `--fresh --head <release-commit>` before tagging, then
+   scoped push verification can reuse matching passes. The release groups partition those same commands; each also runs
+   the identity and provider-neutral core checks. The optional hosted workflow runs the frontend and native groups
+   independently, with separate Linux and Windows jobs (see "Hosted application checks"); the windows group is local
+   only, since its toolchain (cargo-xwin, the `x86_64-pc-windows-msvc` target, LLVM's clang, the downloaded MSVC CRT and
+   Windows SDK) is not on the hosted macOS runner. A machine missing any of it fails the step before compiling, with a
+   message naming each missing piece and how to install it; the check never accepts the SDK license itself (see
    `scripts/lib/windows-toolchain.mjs`).
 4. **Reuse** (`stamp.mjs`, `tree.mjs`, `rerun.mjs`). `tree.mjs` fingerprints the working copy (tracked and untracked,
    non-ignored files, taken through a scratch index). A pass is recorded in the common git directory, keyed by that tree
@@ -71,6 +72,33 @@ directory, `hooks/`, `lib/`) runs as the `verify` package's tests.
    (`UI_READERS`), and Markdown a crate reads runs the reading modules' tests (`RUST_MARKDOWN_READERS`). A run that
    needs one crate keeps `--workspace` and selects that crate's test targets (`CRATES`), so it reuses the workspace
    build. Narrowed steps are never recorded as a pass of the whole.
+
+## Provider-neutral core search
+
+`provider-neutral.mjs` is a light step in every non-`unread` plan, including quick and release plans and each release
+group. It checks all production source in the daemon and UI, rather than only changed lines, and reports the original
+file, line and matching source with exit status 1 for a violation. Run it alone with
+`node scripts/verify/provider-neutral.mjs`.
+
+The search covers Rust, JavaScript, TypeScript, TSX and CSS. It looks for known agent ids, agent names in wording,
+agent-specific files, directories, environment variables, CLI flags, URL schemes and hook events. Descriptors and UI
+presentation modules under their respective `src/providers/` directories are outside the core; a daemon
+`adapter/<id>/` directory is excluded only when a corresponding descriptor file exists. Shared adapter helpers remain
+in scope.
+
+Tests and test fixtures are excluded by their file and directory conventions, as are the UI's root `src/gallery/`,
+`src/fixtures/` and `src/website-preview/` directories. Comments are ignored. Rust test-only items and external modules
+are excluded only where `cfg(test)` or a necessary `test` conjunct proves they are absent from production; an
+`any(test, unix)` item stays in scope. Strings remain searchable, including template strings and Rust raw strings.
+
+`EXCEPTIONS` lists exact source lines, file paths and reasons. Its only entries are the three built-in adapter
+registration lines in `apps/daemon/src/adapter/mod.rs`: the registry is the permitted place to associate an id with its
+adapter. A nearby branch or another line in the same file is not excepted. New exceptions need a reason and the same
+precise scope. The vocabulary is a mechanical guard alongside review, not an interpreter of arbitrary code.
+
+`provider-neutral.test.mjs` covers the scope, test exclusions, exact exceptions and a regression that invokes the CLI
+on a generic agent-id branch and checks its failing exit status. Run it with
+`node --test scripts/verify/provider-neutral.test.mjs`.
 
 ## Git environment boundary
 
@@ -104,8 +132,8 @@ does not call this workflow or wait for its results, except that its `linux-daem
 
 | Job | Runner | Command and scope |
 |---|---|---|
-| `frontend` | `ubuntu-latest` | `pnpm verify --release --release-group frontend --fresh`: identity, application lint, production UI type check and application UI tests. |
-| `native` | `macos-26` | `pnpm verify --release --release-group native --fresh`: identity, desktop script tests, rustfmt, clippy for the workspace and all targets, and both Rust crates' tests. |
+| `frontend` | `ubuntu-latest` | `pnpm verify --release --release-group frontend --fresh`: identity, provider-neutral core search, application lint, production UI type check and application UI tests. |
+| `native` | `macos-26` | `pnpm verify --release --release-group native --fresh`: identity, provider-neutral core search, desktop script tests, rustfmt, clippy for the workspace and all targets, and both Rust crates' tests. |
 | `linux-check` | `ubuntu-latest` | `node scripts/cargo.mjs check --locked`: compile both crates (compilation only) with the Linux prerequisites installed. |
 | `linux-daemon` | `ubuntu-24.04`, `ubuntu-24.04-arm` | `.github/workflows/linux-daemon.yml`: clippy on the daemon, its whole test suite on glibc in a privileged container with a writable cgroup v2 hierarchy, and its tests on musl for x86_64 and aarch64, the targets the Linux release links statically. It also gates Linux releases. |
 | `windows-check`, `windows-bundle` | `windows-latest` | Native Windows checks and the unsigned installer build (see the [tooling overview](../../docs/structure/tooling.md)); the local release plan's windows group also cross-checks the same crates from the Mac. |
@@ -138,11 +166,8 @@ retention and timing measurements are documented in the [Rust cache module](../.
   `RUST_MARKDOWN_READERS`; the tests fail with the file to name. A file outside the UI package that a UI test reads runs
   the full UI suite in a quick run until `UI_READERS` names its readers; the tests fail when an entry leaves a reader
   out.
-- A script that other packages import is named in the matching rule (`scripts/lib/git.mjs`, `scripts/lib/env.mjs`,
-  `lock.mjs`). One they only run, `heavy.mjs`, selects the verify package alone, as `scope.mjs` explains.
-- A test that creates a temporary Git repository calls `assertRepositoryEnvironmentCleared` at module startup before
-  any Git operation. A hook launcher uses `withoutRepositoryEnvironment` for its verification child; changing the
-  working directory alone does not isolate a Git fixture.
+- A script that other packages import or only run, and a test that creates a temporary Git repository: the rules are in
+  `docs/conventions/tooling.md`, "Scripts".
 
 ## External interfaces
 
@@ -157,3 +182,5 @@ retention and timing measurements are documented in the [Rust cache module](../.
 - `lock.mjs`: `acquireSlot`, `HELD_ENV`; `stamp.mjs`: `readStamp`, `recordPass`; `rerun.mjs`: the failed-file record;
   `tree.mjs`: `workingTree`.
 - `environment.mjs`: `withoutRepositoryEnvironment`, `assertRepositoryEnvironmentCleared`.
+- `provider-neutral.mjs`: `checkProviderNeutral` searches a repository's production core; `violations` checks one
+  source file against the vocabulary and precise exceptions.

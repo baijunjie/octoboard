@@ -29,9 +29,9 @@ export function RemoteDevicesSidebar(): React.ReactElement {
   return (
     <>
       <div className={`${PANE_HEADER_FRAME_CLASS} gap-2 px-(--pane-inset)`}>
-        <RowLabel title={t("remoteDevices.label")}>
-          <span className="text-base font-semibold">{t("remoteDevices.label")}</span>
-        </RowLabel>
+        <h2 className="min-w-0 flex-1 text-base font-semibold">
+          <RowLabel title={t("remoteDevices.label")} className="block">{t("remoteDevices.label")}</RowLabel>
+        </h2>
         <RowIconGroup>
           <RowIconButton icon={Plus} label={t("remoteDaemons.add")} onPress={startAdd} />
         </RowIconGroup>

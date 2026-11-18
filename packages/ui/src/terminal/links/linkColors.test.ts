@@ -2,6 +2,7 @@
 import type { Terminal } from "@xterm/xterm";
 import { expect, it, vi } from "vitest";
 
+import { fakeTimers, FAKE_FRAME_MS } from "../../test/clock";
 import { TerminalLinkColors } from "./linkColors";
 
 /** Enough of xterm to place decorations: a buffer of text lines, markers that follow their line. */
@@ -48,38 +49,39 @@ function fakeTerminal(lines: string[]) {
       return decoration;
     },
   };
-  const frame = () => new Promise((resolve) => requestAnimationFrame(resolve));
-  const update = async () => {
+  const update = () => {
     writeListeners.forEach((listener) => listener());
-    await frame();
+    vi.advanceTimersByTime(FAKE_FRAME_MS);
   };
   return { term: term as unknown as Terminal, lines, markers, decorations, update, bufferListeners };
 }
 
-it("keeps a decoration for a link whose line moved, instead of placing it again", async (context) => {
+it("keeps a decoration for a link whose line moved, instead of placing it again", (context) => {
+  fakeTimers();
   const { term, lines, markers, decorations, update } = fakeTerminal(["", "see http://a.dev/x", ""]);
   const colors = new TerminalLinkColors(term);
   context.onTestFinished(() => colors.dispose());
-  await update();
+  update();
   expect(decorations).toHaveLength(1);
 
   // The buffer is trimmed by one line: the link is on line 0 now, and its marker followed it.
   lines.shift();
   markers[0].line--;
-  await update();
+  update();
   expect(decorations).toHaveLength(1);
   expect(decorations[0].isDisposed).toBe(false);
 });
 
 
-it("rebuilds decorations on buffer switches and removes them after repaint or disposal", async (context) => {
+it("rebuilds decorations on buffer switches and removes them after repaint or disposal", (context) => {
+  fakeTimers();
   const { term, lines, markers, decorations, update, bufferListeners } = fakeTerminal(["http://a.dev/x"]);
   const colors = new TerminalLinkColors(term);
   context.onTestFinished(() => colors.dispose());
-  await update();
+  update();
   Object.assign(term.buffer.active, { type: "alternate" });
   bufferListeners.forEach((listener) => listener());
-  await update();
+  update();
   expect(decorations).toHaveLength(2);
   expect(decorations[0].isDisposed).toBe(true);
   expect(markers[0].isDisposed).toBe(true);
@@ -88,16 +90,16 @@ it("rebuilds decorations on buffer switches and removes them after repaint or di
   expect(markers).toHaveLength(1);
   const alternateMarker = decorations[1].marker;
   lines[0] = "plain text";
-  await update();
+  update();
   expect(decorations[1].isDisposed).toBe(true);
   lines[0] = "http://a.dev/x";
-  await update();
+  update();
   colors.dispose();
   expect(decorations[2].isDisposed).toBe(true);
   expect(alternateMarker.isDisposed).toBe(true);
   const request = vi.spyOn(window, "requestAnimationFrame");
-  await update();
-  // Only the test's own frame remains; the disposed colourizer no longer listens for output.
-  expect(request).toHaveBeenCalledTimes(1);
+  update();
+  // The disposed colourizer no longer listens for output.
+  expect(request).not.toHaveBeenCalled();
   request.mockRestore();
 });

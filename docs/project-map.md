@@ -1,7 +1,7 @@
 # Project Map
 
-Top-level map of the code: what is built with what, and which structure doc answers where things are and which rules new
-code follows.
+Top-level map of the code: what is built with what, and which structure doc answers where things are and which shared
+entry points new code must use.
 
 Octoboard is a monorepo that orchestrates AI coding agents (Claude Code, Codex, Grok Build) on a developer's machine.
 Everything revolves around one daemon; every client reaches it only through the WebSocket/HTTP protocol in
@@ -39,6 +39,10 @@ the schema to (see "Versions and compatibility" in `apps/daemon/PROTOCOL.md`).
 
 Each doc holds that end's directory map, its dependency direction, where new code goes, and the shared entry points new
 code must use.
+
+The coding rules new code must follow are not in these docs: the binding ones are in `docs/conventions/`, and the
+documentation index, `docs/README.md`, "Coding conventions", lists them. The structure docs point to them where a rule
+applies.
 
 - [Daemon](structure/daemon.md) — `apps/daemon/` ([README](../apps/daemon/README.md)): `octoboardd`, the core of the
   system; owns every agent process and all of Octoboard's data.

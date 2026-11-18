@@ -1,6 +1,6 @@
 //! The content of a report page: a tree of components a session pushes with `show_page`, which the
 //! store keeps and the panel renders, and the submission a form on it comes back with. See
-//! "Page content" in `apps/daemon/PROTOCOL.md`.
+//! `Page.content` under "Records" in `apps/daemon/PROTOCOL.md`.
 //!
 //! The types here are the wire form. [`kinds`] holds, in one table, each kind of component with
 //! its JSON Schema, which is what `show_page` enforces and what the guide tool hands an agent;

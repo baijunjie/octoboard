@@ -92,7 +92,7 @@
      lighter still: a secondary button's `--control-fill` (L 0.33) stays a step off it, where it vanished on
      a card of its own colour, and a danger-soft label reads 4.47:1 on it (4.2:1 with the button hovered),
      the lighter the card the lower. That shortfall in dark is kept by the user's decision; see
-     docs/ui-standard.md, "Conformance level and exceptions". */
+     docs/conventions/ui-standard.md, "Conformance level and exceptions". */
   --panel-row: oklch(0.29 0.006 286);
   /* Dark: `--app-muted` holds 4.69:1 on the hover fill and 4.65:1 on the selected one. */
   --panel-row-hover: oklch(1 0 0 / 0.045);
@@ -149,7 +149,7 @@
 
    A tooltip or popover is portalled to the end of `<body>`, outside the pane or dialog that carries
    this class, so the shared tooltip and popover components carry it themselves (see "Confirmed
-   visual choices" in docs/ui-standard.md). Everything a dialog, the pane or such a tooltip or
+   visual choices" in docs/conventions/ui-standard.md). Everything a dialog, the pane or such a tooltip or
    popover draws from `--default` takes the fills: a secondary button, a tab list, a ghost button's
    hover, a toggle button, a search field and a select in their secondary variant (a control on the
    pane itself takes the default variant, which does not draw from these), and the file viewer's
@@ -218,7 +218,7 @@
 
 /* The one palette the application keeps beside HeroUI's: the secondary text colour, the help purple, and
    the tints built from them in `palette.css`. Every other colour is HeroUI's own token, read where it is drawn
-   (docs/ui-standard.md's "One definition per semantic colour"). `--app-muted` is HeroUI's `--muted`
+   (docs/conventions/ui-standard.md's "One definition per semantic colour"). `--app-muted` is HeroUI's `--muted`
    in dark and a step darker in light, where `--muted` is 3.70:1 on a selected sidebar row and this is
    4.62:1. `--help` is Tailwind's purple 500, the base of `--tint-help-*`. */
 :root {

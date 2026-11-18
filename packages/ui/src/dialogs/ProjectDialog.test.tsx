@@ -441,6 +441,15 @@ it("keeps an example on the populated and cleared required edited project name",
   expect(input("Name").placeholder).toBe("Ex. Website");
 });
 
+it("reports a stored whitespace-only project name at its field before saving", async () => {
+  const sent = render({ ...stored, name: "   " });
+  expect(input("Name").value).toBe("   ");
+  await click(buttonText("Save"));
+  expect(input("Name").getAttribute("aria-invalid")).toBe("true");
+  expect(document.body.querySelector('[data-slot="field-error"] [role="alert"]')?.textContent).toBe("Name is required.");
+  expect(sentOf(sent, "update_project")).toBeUndefined();
+});
+
 // The directory browser opens over this dialog, whose focus containment stays on: a path field focused before the
 // browser's focus scope is set up reads to it as focus escaping, is pulled back to Browse, and the browser's dialog then
 // takes focus itself. A press without a pointer leaves the move back to a frame later, by when this dialog is inert.

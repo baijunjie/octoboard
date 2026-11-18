@@ -8,7 +8,7 @@ import { consoleOf, projectOf, sessionOf, snapshotState } from "./fixtures/build
 import { PlatformProvider } from "./platform/react";
 import type { Account } from "./protocol";
 import { DaemonProvider, type Daemon } from "./store";
-import { testDaemon } from "./test/testDaemon";
+import { defaultDaemonReply, testDaemon } from "./test/testDaemon";
 import { ThemeProvider } from "./preferences/theme";
 import { BROWSER_HOST, IS_MAC } from "./test/hosts";
 import { matchesWidthQuery } from "./test/viewport";
@@ -51,7 +51,7 @@ function mountWith(incomplete: boolean) {
   });
   const daemon = testDaemon({
     state,
-    request: vi.fn(async () => ({ type: "ack", id: null })) as Daemon["request"],
+    request: vi.fn(async (body: Parameters<typeof defaultDaemonReply>[0]) => defaultDaemonReply(body)) as Daemon["request"],
     showNotice: vi.fn(),
   });
   daemon.store.setState({ settings: { ...daemon.store.getState().settings, accounts: [account(incomplete)] } });

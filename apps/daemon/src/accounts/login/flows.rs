@@ -238,7 +238,8 @@ impl Flow {
 
 /// The last non-empty line of the file at `path`; empty while it is missing.
 pub(crate) fn last_line_of(path: &Path) -> String {
-    std::fs::read_to_string(path)
+    const URL_LOG_LIMIT: usize = 64 * 1024;
+    crate::hostfs::read_regular_text(path, URL_LOG_LIMIT)
         .ok()
         .and_then(|text| {
             text.lines()

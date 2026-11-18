@@ -43,7 +43,7 @@ export function pathLinkRefusedCause(raw: string | undefined): PathLinkRefusedCa
   return PATH_LINK_REFUSED_CAUSES.find((cause) => cause === raw) ?? "other";
 }
 
-const RELOCATION_CAUSES = ["permission_denied", "busy", "no_space", "config_unreadable", "sqlite_home", "symlink", "not_restored", "other"] as const;
+const RELOCATION_CAUSES = ["permission_denied", "busy", "no_space", "symlink", "not_restored", "other"] as const;
 
 /** The `cause` of a `relocation_failed`: why a conversation move did not complete. */
 export type RelocationCause = (typeof RELOCATION_CAUSES)[number];

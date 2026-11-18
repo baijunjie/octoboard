@@ -14,6 +14,7 @@ import { useDialogAction, useRefocusIfLost, useSubmitValidation } from "../../co
 import { useDirectoryBrowse } from "../../components/dialog/DirectoryPicker";
 import { OptionSelect } from "../../components/form/OptionSelect";
 import { TextInput } from "../../components/form/TextInput";
+import { fieldHasText } from "../../components/form/useTrimmedField";
 import { isAbsoluteOrHome } from "../../format/hostPath";
 import type { MessageKey } from "../../i18n/catalog";
 import { isolate } from "../../i18n/isolate";
@@ -115,7 +116,7 @@ export function AccountDialog({
     : "");
   const directoryBrowse = useDirectoryBrowse(configDir, setConfigDir);
 
-  const collision = name.trim() === "" && renameDefault
+  const collision = renameDefault && !fieldHasText(name)
     ? undefined
     : nameCollision(name, agent, accounts, renameDefault ? null : defaultAccountName(t, defaultNames, agent), editing?.id);
   const nameError = !name && !renameDefault

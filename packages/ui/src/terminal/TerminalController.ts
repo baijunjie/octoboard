@@ -119,12 +119,6 @@ export interface TerminalControllerHandlers {
   };
 }
 
-/** Whether xterm forces a selection under mouse reporting with Option (`macOptionClickForcesSelection`)
- * rather than Shift: xterm counts only these platforms as macOS, not an iPhone or an iPad in its
- * mobile mode. */
-export const OPTION_FORCES_SELECTION =
-  typeof navigator !== "undefined" && ["Macintosh", "MacIntel", "MacPPC", "Mac68K"].includes(navigator.platform);
-
 /** The terminal's font: a monospace stack with CJK coverage, since these agents render box-drawing
  * TUIs and sometimes CJK status text, and the default `courier-new` xterm.js falls back to has
  * neither. */

@@ -1133,8 +1133,7 @@ async fn repointing_or_deleting_an_account_drops_its_quota_reading() {
     assert!(state.account_quotas.list().is_empty());
 }
 
-/// A non-absolute directory is refused with nothing saved; a directory that does not exist at
-/// all is accepted — the two rules this milestone changes about a config directory.
+/// Account configuration requires an absolute path and accepts a directory that does not exist.
 #[tokio::test]
 async fn a_non_absolute_account_dir_is_refused_and_a_non_existent_one_is_accepted() {
     let (state, _dir) = crate::test_support::app_state("coordinator-account-dir-rules");

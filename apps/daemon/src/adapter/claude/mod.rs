@@ -187,7 +187,12 @@ impl ClaudeProvider {
         // group of its own beside theirs: Claude Code runs every matching group, and the status
         // hooks must see every tool call.
         if let Some(guard) = &spec.guard {
-            add_guard_group(&mut hooks, GUARD_MATCHER, &guard_command(guard));
+            add_guard_group(
+                &mut hooks,
+                "PreToolUse",
+                GUARD_MATCHER,
+                &guard_command(guard),
+            );
         }
         // Octoboard's own tools are not a decision to put to the user: each is something the
         // session was told to do, and a prompt for every one would make orchestration unusable.

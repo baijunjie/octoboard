@@ -1,6 +1,6 @@
 //! How Codex's screens read: its dialogs, its composer above its status footer, its folder-trust
 //! confirmation, its terminal title, and its interrupt key. The measurements are in
-//! `docs/agent-cli-reference.md`, section "## Codex".
+//! `docs/agent-cli-reference.md`, section "Codex".
 
 use crate::platform::names::PathStyle;
 use crate::session::dialogs::{DialogKind, DialogPattern, WrittenMessage};

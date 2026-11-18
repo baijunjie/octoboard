@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React, { act, useState } from "react";
-import { describe, expect, it, onTestFinished, vi } from "vitest";
+import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { FIRST_WRITE_DELAY_MS } from "../../components/announce/StatusAnnouncer";
 import { isolate } from "../../i18n/isolate";
@@ -12,11 +12,14 @@ import type { ChangeViewState } from "./changeView";
 import { changeItems, commitItems, commitKey, commitScope, directoryKey, sectionKey } from "./changes";
 import { HEADING_HEIGHT } from "./changeSectionHeading";
 import { ROW_HEIGHT } from "../treeRow";
+import { settleFrames } from "../../components/dialog/dialogTestSupport";
 import { fakeTimers, runOutTimers } from "../../test/clock";
 import { focusAtRemoval } from "../../test/focusAtRemoval";
 import { useFocusHandoff } from "../../components/focus/useFocusHandoff";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+beforeEach(() => fakeTimers());
 
 const items = changeItems([change("staged", "src/utils/alpha.ts"), change("staged", "src/beta.ts"), change("unstaged", "src/beta.ts"), change("unstaged", "docs/alpha.md")]);
 
@@ -41,13 +44,8 @@ const press = (element: HTMLElement, key: string) =>
 /** The same key on whatever holds focus now, for a walk of several steps. */
 const pressOn = (key: string) => press(document.activeElement as HTMLElement, key);
 /** Lets the frames a fold needs to settle pass: the focus react-aria moves and the heading taking
- * it back both run after the renders that take the rows away (`keepHeadingFocus`, two frames after
- * the press). It counts frames rather than waiting a time, which a stall of the event loop can let
- * expire together with the first frame, before the second is even requested. */
-const settle = () =>
-  act(async () => {
-    for (let frame = 0; frame < 2; frame++) await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-  });
+ * it back both run after the renders that take the rows away (`keepHeadingFocus`). */
+const settle = () => settleFrames(2);
 
 it("shows every row when nothing narrows them", () => {
   const { container } = render();
@@ -75,7 +73,6 @@ it("says so when no file name matches", () => {
 });
 
 it("announces that nothing matches, and only when something is typed", () => {
-  fakeTimers();
   const statusText = (container: HTMLElement) => container.querySelector("[role=status]")?.textContent;
   const typed = render({ filter: "zzz" });
   act(() => void vi.advanceTimersByTime(FIRST_WRITE_DELAY_MS));
@@ -366,7 +363,6 @@ describe("Collapse all commits and focus", () => {
   });
 
   it.each(["tree", "flat"] as const)("brings a commit row the list has not rendered into view and focuses it before the fold, in the %s layout", (layout) => {
-    fakeTimers();
     // Two commits of thirty changes each, in a list a hundred pixels tall: scrolled to the end, the second commit's row
     // is far above what the virtualizer renders.
     const many = (hash: string, name: string) => ({ commit: hash.repeat(10), parent: null, subject: name, changes: Array.from({ length: 30 }, (_, i) => committedChange(`${name}/f${i}.ts`)) });

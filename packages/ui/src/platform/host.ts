@@ -1,10 +1,14 @@
 /**
  * What the UI takes from the machine it runs on, declared by the shell instead of inferred from the user agent. The
- * desktop shell reports them in the window's `host` query parameter (`host_facts.rs`); a browser derives only the
- * operating system and the shortcut modifier, and has none of the rest (`browserHost`).
+ * desktop shell reports them in the window's `host` query parameter (`host_facts.rs`); a browser derives the operating system
+ * and input facts, and supplies no native capabilities (`browserHost`).
  */
 export type HostFacts = {
   os: "macos" | "windows" | "linux";
+  /** Android's TalkBack represents a virtual press as a 1px mouse press. */
+  isAndroid?: boolean;
+  /** The modifier xterm uses to force selection under mouse reporting, Option on macOS by default. */
+  xtermSelectionModifier?: "alt" | "shift";
   /** The primary shortcut modifier. */
   modifier: "meta" | "control";
   /** What the top bar must keep clear: the window controls floated over it at its leading or trailing edge, or nothing. */
@@ -43,13 +47,19 @@ const TERMS: Record<HostFacts["os"], HostFacts["terms"]> = {
 };
 
 /**
- * A browser's facts: the system and the modifier from the platform the browser names (an Apple keyboard, an iPhone
- * or an iPad included, has ⌘ as its modifier), and nothing of what a shell provides.
+ * A browser's system and input facts from the platform it names (an iPhone or iPad uses ⌘ for shortcuts),
+ * with Android identified by the user agent for TalkBack's pointer events.
  */
-export function browserHost(platform: string = typeof navigator === "undefined" ? "" : navigator.platform): HostFacts {
+export function browserHost(
+  platform: string = globalThis.navigator?.platform ?? "",
+  userAgent: string = globalThis.navigator?.userAgent ?? "",
+): HostFacts {
   const os = /Mac|iPhone|iPad/.test(platform) ? "macos" : /Win/.test(platform) ? "windows" : "linux";
   return {
     os,
+    isAndroid: /Android/i.test(userAgent),
+    // xterm treats an iPhone or iPad in mobile mode like other non-Mac platforms for selection.
+    xtermSelectionModifier: /^(Macintosh|MacIntel|MacPPC|Mac68K)$/.test(platform) ? "alt" : "shift",
     modifier: os === "macos" ? "meta" : "control",
     chrome: "none",
     translucent: false,
@@ -99,7 +109,9 @@ export function hostFromQuery(search: string): HostFacts | undefined {
     (Object.keys(OPTIONS) as (keyof typeof OPTIONS)[]).every((key) => oneOf(OPTIONS[key], facts[key])) &&
     (Object.keys(TERM_OPTIONS) as (keyof typeof TERM_OPTIONS)[]).every((key) => oneOf(TERM_OPTIONS[key], terms?.[key])) &&
     ["translucent", "appMenu", "badge", "runInBackground", "keepAwake", "launchAtLogin", "permissionsPane"].every((key) => typeof facts[key] === "boolean") &&
-    (facts.trafficLightInset === undefined || typeof facts.trafficLightInset === "number");
+    (facts.trafficLightInset === undefined || typeof facts.trafficLightInset === "number") &&
+    (facts.isAndroid === undefined || typeof facts.isAndroid === "boolean") &&
+    (facts.xtermSelectionModifier === undefined || oneOf(["alt", "shift"], facts.xtermSelectionModifier));
   return valid ? (facts as unknown as HostFacts) : undefined;
 }
 

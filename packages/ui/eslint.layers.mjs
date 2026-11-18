@@ -85,10 +85,11 @@ const ROOT_PRODUCTION_IMPORT = { regex: "^\\./(?:fixtures|gallery)(?:/|$)", mess
 const notIntoApp = (depth) => ({ ...notInto(depth, ["app"], APP_MESSAGE), caseSensitive: true });
 
 // The third-party UI libraries that reach the application only through the wrapper layer, `src/primitives/`
-// (docs/ui-standard.md, "Third-party UI components come through the wrapper layer"). The rule is typescript-eslint's
-// `no-restricted-imports`, not the core one the blocks above replace among themselves, so it holds alongside them. Like
-// them it sees import and export declarations, not `import("…")` calls or type expressions. Tests and test support, the
-// gallery, the shared fixtures and the website preview are not application source and may import the libraries.
+// (docs/conventions/ui-standard.md, "Third-party UI components come through the wrapper layer"). The rule is
+// typescript-eslint's `no-restricted-imports`, not the core one the blocks above replace among themselves, so it holds
+// alongside them. Like them it sees import and export declarations, not `import("…")` calls or type expressions. Tests
+// and test support, the gallery, the shared fixtures and the website preview are not application source and may import
+// the libraries.
 const WRAPPED_LIBRARIES = [
   "@heroui/react", "@heroui/react/*", "@heroui/styles", "@heroui/styles/*",
   "react-aria-components", "react-aria-components/*", "react-aria", "react-aria/*",

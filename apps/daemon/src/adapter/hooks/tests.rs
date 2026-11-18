@@ -107,7 +107,7 @@ fn the_guard_group_is_added_after_the_status_group_of_pre_tool_use() {
     );
     hooks.insert("Stop".to_string(), serde_json::json!([{ "hooks": [] }]));
 
-    super::add_guard_group(&mut hooks, "Edit|Write", "the-guard");
+    super::add_guard_group(&mut hooks, "PreToolUse", "Edit|Write", "the-guard");
 
     assert_eq!(
         hooks["PreToolUse"],
@@ -120,4 +120,16 @@ fn the_guard_group_is_added_after_the_status_group_of_pre_tool_use() {
         ])
     );
     assert_eq!(hooks["Stop"], serde_json::json!([{ "hooks": [] }]));
+}
+
+#[test]
+fn the_guard_group_uses_the_event_the_provider_supplies() {
+    let mut hooks = serde_json::Map::from_iter([
+        ("BeforeEdit".to_string(), serde_json::json!([])),
+        ("AfterEdit".to_string(), serde_json::json!([])),
+    ]);
+    super::add_guard_group(&mut hooks, "BeforeEdit", "Edit", "guard");
+    assert_eq!(hooks["BeforeEdit"].as_array().unwrap().len(), 1);
+    assert_eq!(hooks["BeforeEdit"][0]["hooks"][0]["command"], "guard");
+    assert!(hooks["AfterEdit"].as_array().unwrap().is_empty());
 }

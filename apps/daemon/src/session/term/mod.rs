@@ -123,7 +123,7 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
     } = request;
     let session_id = session_id.as_str();
     let cwd = cwd.as_path();
-    if !cwd.is_dir() {
+    if crate::hostfs::require_directory(cwd).is_err() {
         // The terminal backend may fall back to the home directory for a cwd that does not exist,
         // which would silently start a write-capable agent in `$HOME`.
         return Err(CodedError::raised(
@@ -145,8 +145,10 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
     };
 
     let scratch = paths::session_scratch(session_id);
-    if scratch.exists() {
-        std::fs::remove_dir_all(&scratch).ok();
+    if let Err(err) = std::fs::remove_dir_all(&scratch) {
+        if err.kind() != std::io::ErrorKind::NotFound {
+            return Err(err).with_context(|| format!("clearing {}", scratch.display()));
+        }
     }
     std::fs::create_dir_all(&scratch).with_context(|| format!("creating {}", scratch.display()))?;
 

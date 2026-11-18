@@ -1,4 +1,4 @@
-import { type Account, type AccountQuota, type Agent, type AgentAvailability, type Event as DaemonEvent, type Page, type Session, type ShellTerminal } from "../../protocol";
+import { type Account, type AccountQuota, type Agent, type AgentAvailability, type Event as DaemonEvent, type Page, type Session, type Settings, type ShellTerminal, type DaemonUpdateStatus } from "../../protocol";
 import { FIXTURE_AGENTS } from "../../fixtures/fixtureProviders";
 import { accountQuotaOf } from "../../accounts/accountQuotaOf";
 import type { Step } from "../../fixtures/interact";
@@ -142,3 +142,28 @@ export function latestPageDeleted(id: string, label: string, session: string): L
 export function allPagesDeleted(id: string, label: string, session: string): LiveChange {
   return { id, label, steps: [pagesDeleted(session, (held) => held)] };
 }
+
+/** Replaces the reading of one account, leaving the other readings in their original order. */
+export const updateAccountQuota = (agent: Agent, account: string | null, update: (reading: AccountQuota | undefined) => AccountQuota | undefined): Step => (ui) =>
+  ui.daemonEvents((state) => {
+    const held = accountQuotaOf(state.accountQuotas, agent, account);
+    const quota = update(held);
+    if (!quota) return null;
+    return { type: "account_quotas_updated", account_quotas: held ? state.accountQuotas.map((reading) => reading === held ? quota : reading) : [...state.accountQuotas, quota] };
+  });
+
+/** Applies a record change as another daemon client would see it. */
+export const sessionUpdated = (session: Session): Step => (ui) =>
+  ui.daemonEvents({ type: "session_upserted", session });
+
+/** Publishes the settings after a change made in another window. */
+export const settingsUpdated = (update: (settings: Settings) => Settings): Step => (ui) =>
+  ui.daemonEvents((state) => ({ type: "settings_updated", settings: update(state.settings) }));
+
+/** Greets the window as a replacement daemon. */
+export const daemonGreeted = (generation: number, daemonVersion: string): Step => (ui) =>
+  ui.daemonEvents({ type: "hello", generation, daemon_version: daemonVersion });
+
+/** Publishes an update status after the daemon's installer advances. */
+export const daemonUpdateStatusUpdated = (status: () => DaemonUpdateStatus): Step => (ui) =>
+  ui.daemonEvents({ type: "daemon_update_status_updated", status: status() });

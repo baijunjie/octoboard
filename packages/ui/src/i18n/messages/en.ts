@@ -172,8 +172,6 @@ export const en = {
   "error.recovery.mcpSignOut": "Make sure the server is reachable, then sign out again.",
   "error.recovery.addedAgents": "The list of added agents is not as this change expected. Check it before changing it again.",
   "error.recovery.fileBusy": "Close other programs using the account's files, then try the switch again.",
-  "error.recovery.codexConfig": "Make the account's {configToml} a readable file of valid TOML, or remove it, then try the switch again.",
-  "error.recovery.sqliteHome": "Set {sqliteHome} in the account's {configToml}, or {codexSqliteHome} in your login shell, to an absolute path (a leading {tilde} needs {home} to be set), then try the switch again.",
   "error.recovery.symlink": "The conversation files contain a symbolic link, which is never copied. Replace it with a copy of what it points to, or remove it if it is not needed, in the files named in the details, then try the switch again.",
   "error.recovery.notRestoredAutomatic": "If you need the older item, copy it out of the folder named above before then.",
   "error.recovery.notRestored": "If you need the older item, copy it out of the folder named above before then, and try the switch again.",

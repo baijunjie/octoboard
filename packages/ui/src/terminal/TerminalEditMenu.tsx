@@ -10,7 +10,7 @@ import { useT } from "../i18n/react";
 import { useDaemon } from "../store";
 import { usePlatform } from "../platform/react";
 import type { PathLinkTarget } from "./links/pathLinks";
-import { OPTION_FORCES_SELECTION, type TerminalController } from "./TerminalController";
+import type { TerminalController } from "./TerminalController";
 import { raiseError } from "../components/alerts/raiseError";
 
 /** Editing works on xterm's buffer and input pipeline, never on its hidden textarea's value. */
@@ -20,7 +20,8 @@ export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId }:
   sessionId: string;
 }): React.ReactElement {
   const t = useT();
-  const { clipboard } = usePlatform();
+  const { clipboard, host } = usePlatform();
+  const optionForcesSelection = (host.xtermSelectionModifier ?? (host.os === "macos" ? "alt" : "shift")) === "alt";
   // The host's file manager and applications are this machine's only where the daemon shares it.
   const { isLocal } = useDaemon();
   const currentSession = useLatest(sessionId);
@@ -85,7 +86,7 @@ export function TerminalEditMenu({ controllerRef, contextTargetRef, sessionId }:
         ...(openIn.length > 0 ? [{ label: t("common.openIn"), icon: SquareArrowOutUpRight, items: openIn }, "separator" as const] : []),
         {
           label: t("terminal.copy"), icon: Copy, disabled: !selection,
-          reason: !selection && mouseReporting ? { state: t(OPTION_FORCES_SELECTION ? "terminal.copyHint.mac" : "terminal.copyHint") } : undefined,
+          reason: !selection && mouseReporting ? { state: t(optionForcesSelection ? "terminal.copyHint.mac" : "terminal.copyHint") } : undefined,
           onClick: () => { void copyText(selection, { clipboard }).catch((cause: unknown) => raiseError(new ActionableError(t("common.copyFailedCause"), "clipboardTerminalCopy", { cause }), { title: t("terminal.copyFailed") })); },
         },
         {

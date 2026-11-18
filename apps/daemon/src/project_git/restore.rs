@@ -53,6 +53,7 @@ fn restore(path: &Path, project: &str, git: &Runner) -> anyhow::Result<()> {
             b"--porcelain=v2",
             b"--branch",
             b"--untracked-files=no",
+            b"--ignore-submodules=all",
         ],
         Access::Read,
     )?;

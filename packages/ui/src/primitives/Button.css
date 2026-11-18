@@ -26,7 +26,7 @@
 }
 
 /* Pending content keeps its flex items and width; its id still names the button while hidden.
-   See docs/ui-standard.md, "Buttons". */
+   See docs/conventions/ui-standard.md, "Buttons". */
 .app-button__content {
   display: contents;
 }

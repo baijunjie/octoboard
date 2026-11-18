@@ -113,6 +113,16 @@ impl Looks {
         pass.found
     }
 
+    #[cfg(test)]
+    pub(super) fn path_is_stuck(&self, path: &Path) -> bool {
+        self.paths.is_stuck(path)
+    }
+
+    #[cfg(test)]
+    pub(super) fn report_is_stuck(&self, id: Identity) -> bool {
+        self.reports.is_stuck(&id)
+    }
+
     /// Every path a look was asked for, for a test.
     #[cfg(test)]
     #[cfg_attr(

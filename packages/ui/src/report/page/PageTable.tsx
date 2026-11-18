@@ -116,7 +116,7 @@ export function TableView({ component }: ComponentProps<"table">): React.ReactEl
             <table className="w-full border-collapse text-sm">
               {component.caption !== undefined && <caption className="sr-only">{component.caption}</caption>}
               <thead>
-                <tr className="border-b border-separator bg-default/40">
+                <tr className="hairline-b bg-default/40">
                   {component.columns.map((column, index) => {
                     const active = sortable && sorting?.column === index;
                     const Arrow = active ? (sorting.descending ? ArrowDown : ArrowUp) : ChevronsUpDown;
@@ -148,7 +148,7 @@ export function TableView({ component }: ComponentProps<"table">): React.ReactEl
                     </td>
                   </tr>
                 ) : shown.map((row, rowIndex) => (
-                  <tr key={rowIndex} className="border-b border-separator last:border-b-0">
+                  <tr key={rowIndex} className="hairline-b last:border-b-0">
                     {component.columns.map((_, index) => {
                       const cell = row[index];
                       return (

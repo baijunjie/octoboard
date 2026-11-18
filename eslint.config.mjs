@@ -11,6 +11,8 @@ const javascript = ["**/*.{js,mjs,cjs}"];
 const typescript = ["**/*.{ts,tsx,mts,cts}", "**/*.vue"];
 const source = [...javascript, ...typescript];
 
+const unusedVariables = ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_" }];
+
 export default defineConfig(
   globalIgnores([
     "**/node_modules/**",
@@ -38,14 +40,14 @@ export default defineConfig(
   },
   { files: ["scripts/**/*.mjs", "apps/*/scripts/**/*.mjs", "packages/*/scripts/**/*.mjs", "eslint.config.mjs"], languageOptions: { globals: globals.node } },
   { files: ["packages/ui/src/report/pageBridge.js"], languageOptions: { globals: { DOMPurify: "readonly" } } },
-  { files: javascript, extends: [js.configs.recommended] },
+  { files: javascript, extends: [js.configs.recommended], rules: { "no-unused-vars": unusedVariables } },
   {
     files: typescript,
     extends: [js.configs.recommended, tseslint.configs.recommended],
     rules: {
       // TypeScript resolves types and Nuxt auto-imports during the separate type check.
       "no-undef": "off",
-      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_" }],
+      "@typescript-eslint/no-unused-vars": unusedVariables,
     },
   },
   {

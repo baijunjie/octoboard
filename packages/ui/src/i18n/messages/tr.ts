@@ -138,8 +138,6 @@ export const tr: Translation<"one" | "other"> = {
   "error.recovery.mcpSignOut": "Sunucuya erişilebildiğinden emin olun, ardından yetkiyi yeniden kaldırın.",
   "error.recovery.addedAgents": "Eklenen ajanların listesi, bu değişikliğin beklediği durumdan farklı. Yeniden değiştirmeden önce kontrol edin.",
   "error.recovery.fileBusy": "Hesabın dosyalarını kullanan diğer programları kapatıp geçişi yeniden deneyin.",
-  "error.recovery.codexConfig": "Hesabın {configToml} dosyasını geçerli TOML içeren okunabilir bir dosya hâline getirin veya kaldırın, ardından geçişi yeniden deneyin.",
-  "error.recovery.sqliteHome": "Hesabın {configToml} dosyasındaki {sqliteHome} değerini veya giriş kabuğunuzdaki {codexSqliteHome} değerini mutlak bir yol olarak ayarlayın (başta {tilde} varsa {home} ayarlanmış olmalıdır), ardından geçişi yeniden deneyin.",
   "error.recovery.symlink": "Konuşma dosyalarında hiçbir zaman kopyalanmayan bir sembolik bağlantı var. Ayrıntılarda adı verilen dosyalardaki bağlantıyı, işaret ettiği öğenin kopyasıyla değiştirin veya gerekmiyorsa kaldırın, ardından geçişi yeniden deneyin.",
   "error.recovery.notRestoredAutomatic": "Eski öğeye ihtiyacınız varsa o zamana kadar yukarıda adı verilen klasörün dışına kopyalayın.",
   "error.recovery.notRestored": "Eski öğeye ihtiyacınız varsa o zamana kadar yukarıda adı verilen klasörün dışına kopyalayın, ardından geçişi yeniden deneyin.",

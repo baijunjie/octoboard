@@ -230,12 +230,8 @@ mod tests {
         );
     }
 
-    /// Nothing here mints, stores or removes an account: `determine` never touches `AppState` or
-    /// its `Store` at all (it is pure over a snapshot), and publishing its result through
-    /// `AppState::set_agent_availability` leaves the account table exactly as it was — the one way
-    /// this milestone could break every existing user. Seeds one account per agent first, so
-    /// "removes nothing" is actually exercised rather than checked against a table that was
-    /// already empty.
+    /// Publishing `determine`'s result through `AppState::set_agent_availability` must preserve the
+    /// account table. Seed one account per agent so the test can detect removal as well as writes.
     #[test]
     fn determining_availability_creates_or_removes_no_account() {
         let (state, _dir) = crate::test_support::app_state("availability-mints-no-account");

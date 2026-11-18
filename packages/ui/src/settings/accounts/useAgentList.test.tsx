@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { act } from "react";
 import { expect, it, onTestFinished, vi } from "vitest";
 
-import type { Agent } from "../../protocol";
+import { TEST_AGENTS } from "../../test/testProviders";
 import { mountHost } from "../../test/mountHost";
 import { testDaemon } from "../../test/testDaemon";
 import { useAgentList } from "./useAgentList";
@@ -12,7 +12,7 @@ import { useAgentList } from "./useAgentList";
 
 const request = vi.fn(() => Promise.resolve({}) as Promise<never>);
 
-const ADDED: Agent[] = ["claude", "codex", "grok"];
+const ADDED = TEST_AGENTS;
 
 function mount() {
   const entry = document.body.appendChild(document.createElement("button"));
@@ -35,12 +35,13 @@ it("gives the moved tab its focus back once the strip follows the new order, ahe
   const { list, entry, tab, order } = mount();
   // The menu that asked for the move has closed with its focus: nothing holds it.
   act(() => (document.activeElement as HTMLElement).blur());
-  act(() => list.current!.move("claude", 1));
-  expect(order()).toEqual(["codex", "claude", "grok"]);
-  expect(document.activeElement).toBe(tab("claude"));
+  const [first, second, third, ...rest] = ADDED;
+  act(() => list.current!.move(first, 1));
+  expect(order()).toEqual([second, first, third, ...rest]);
+  expect(document.activeElement).toBe(tab(first));
   expect(document.activeElement).not.toBe(entry);
   // Used once: a later change of the order leaves focus where it is.
-  act(() => tab("grok").focus());
-  act(() => list.current!.move("codex", 1));
-  expect(document.activeElement).toBe(tab("grok"));
+  act(() => tab(third).focus());
+  act(() => list.current!.move(second, 1));
+  expect(document.activeElement).toBe(tab(third));
 });

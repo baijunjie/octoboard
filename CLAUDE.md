@@ -64,26 +64,37 @@ call for are dispatched as the workflow, their skills and the rules below say, a
 
 <!-- setup-agent:subagents:end -->
 
-## Provider-neutral core
+## Coding conventions
 
-- Anything that differs between agents (Claude Code, Codex, Grok Build) lives in that agent's provider: in the daemon,
-  its descriptor (`apps/daemon/src/providers/<id>.rs`) for facts and declared capabilities and its adapter
-  (`apps/daemon/src/adapter/<id>/`) for behavior; in the UI, its presentation module
-  (`packages/ui/src/providers/<id>.ts`) for names, marks and `provider.<id>.*` copy, and a code only one provider
-  raises is that provider's code. Generic code never branches on which agent it is (`AgentId::CLAUDE`,
-  `agent === "codex"`) and never hard-codes an agent's CLI flags, URL schemes, files, directories or environment
-  variables: it reads the descriptor and branches on declared capabilities, or calls the provider's interface. When
-  the difference has no capability or interface method yet, add one. The full rule is in `docs/structure/daemon.md`
-  and `docs/structure/ui.md`, "Where new code goes".
-- Check this before designing a feature that behaves differently per agent, not only at review.
-- A brief to a subagent or a session whose work touches agent differences states this rule and says where each
-  agent-specific piece goes; a brief that prescribes per-agent behavior without saying where it lives invites the
-  branch in generic code.
+- The coding conventions in `docs/conventions/` (listed in `docs/README.md`, "Coding conventions") are binding: code
+  follows them, and a change that breaks one is not done unless the user accepts it as an exception. Read the ones a
+  change touches before designing it, not only at review; where one seems wrong for the case, report back instead of
+  deviating.
+- The rule most often broken is the provider-neutral core (`docs/conventions/provider-neutral-core.md`): anything that
+  differs between agents lives in that agent's provider, and generic code never branches on which agent it is. Check it
+  before designing a feature that behaves differently per agent.
+- A brief to a subagent or a session that writes or reviews code names the convention docs that apply and says where
+  each piece of code goes; for work touching agent differences, which provider holds each agent-specific piece. A brief
+  that prescribes behavior without saying where it lives invites a broken rule.
 
 ## Repository checks
 
 - Do not add `--no-verify`, set skip environment variables (such as `REVERT_GATE_SKIP`), or change the hook
   configuration to get around the repository's checks or Octoboard's revert gate.
+- Run Rust and UI tests, clippy and the Windows cross-check only through the package scripts, never `cargo test`,
+  `cargo clippy` or `vitest` directly: `pnpm test:rust [cargo arguments]`, `pnpm clippy:rust`, `pnpm check:windows`,
+  `pnpm --filter @octoboard/ui test [<file>]`, `pnpm --filter @octoboard/ui test:related <files>` and
+  `pnpm --filter @octoboard/ui test:app`. They wait for the machine-wide heavy-step slot `pnpm verify` uses
+  (`scripts/verify/heavy.mjs`), so sessions testing at once queue instead of running the machine out of memory; a wait
+  message names what holds the slot. The wait can take minutes, so run them with a long timeout or in the background.
+- Before committing, the `pre-commit` hook runs `scripts/hooks/format-staged.mjs` (the same as `pnpm format:staged`):
+  format only staged supported source files, preserving unstaged edits. A partial commit (`git commit <paths>`) is
+  refused; stage the files and commit without paths. A checkout without the script (a branch older than the hook)
+  gets a warning and the stage is skipped; a missing `node_modules` fails it with a hint to run `pnpm install`. Do not
+  run a whole-repository formatter as a delivery step. `pnpm install` in the main working copy, on the main branch,
+  installs the hooks (`.githooks/auto-install.sh`); after hook changes have landed in the main branch, run it there
+  again to refresh them (`pnpm hooks:install` does the same explicitly; run it on the main branch, since it installs
+  the checkout's own `hook.sh`).
 
 <!-- setup-agent:workflow:begin -->
 
@@ -196,17 +207,11 @@ the earlier steps do not run them separately (the related tests a step runs to c
   `git config branch.<name>.targetBranch <target branch>`, so the checks measure the branch against its own target
   (`pnpm verify --quick` from the local target, the pre-push hook a new branch from the remote one) instead of
   guessing it from the remote HEAD.
-- Within "Change check": when this round's changes touch the UI (components, styles, UI copy and catalogs, how an
-  error or a state is shown), also dispatch the `ui-checker` subagent, in parallel with `change-checker`, handing it
-  the changed files, the requirement and the trade-offs the user settled (including any rule of the UI standard or
-  the copy conventions this round changes), the gallery scenarios that show the changed states, and the address of
-  any gallery this checkout is serving; work through its findings as `agent-change-check` does with
-  `change-checker`'s, and re-dispatch it until it passes.
-- UI copy: where `docs/ui-standard.md` and the `knowledge-i18n-copy` skill disagree, the UI standard wins (a name
-  referenced within copy is an `InlineReference`, not quoted). Whoever writes or translates UI copy reads both.
-- Within "Documentation update": `docs/ui-standard.md`, the UI standard, has no writer subagent of its own — you
-  maintain it yourself, from what the change turned up and from what a writer subagent hands back as belonging to it.
-  Skip it when this round's changes touch nothing it states.
+- UI copy: where `docs/conventions/ui-standard.md` and the `knowledge-i18n-copy` skill disagree, the UI standard wins (a
+  name referenced within copy is an `InlineReference`, not quoted). Whoever writes or translates UI copy reads both.
+- Within "Documentation update": `docs/conventions/ui-standard.md`, the UI standard, has no writer subagent of its own —
+  you maintain it yourself, from what the change turned up and from what a writer subagent hands back as belonging to
+  it. Skip it when this round's changes touch nothing it states.
 - Timing override for "Formatting and checks", including the pre-merge flow and other skills' verification baselines: by
   the user's explicit workflow choice, routine development completion and local merges do not run the full checks.
   Before a local merge only, once the branch is aligned with its target branch and right before merging, run the quick
@@ -217,20 +222,6 @@ the earlier steps do not run them separately (the related tests a step runs to c
   checking, and tests never read. The full checks, builds and full test suites included, run only before pushing. Checks
   used specifically to establish a changed rule while implementing it remain appropriate; neither they nor the quick
   check replace push verification.
-- Run Rust and UI tests, clippy and the Windows cross-check only through the package scripts, never `cargo test`,
-  `cargo clippy` or `vitest` directly: `pnpm test:rust [cargo arguments]`, `pnpm clippy:rust`, `pnpm check:windows`,
-  `pnpm --filter @octoboard/ui test [<file>]` and `pnpm --filter @octoboard/ui test:related <files>`. They wait for
-  the machine-wide heavy-step slot `pnpm verify` uses (`scripts/verify/heavy.mjs`), so sessions testing at once queue
-  instead of running the machine out of memory; a wait message names what holds the slot. The wait can take minutes,
-  so run them with a long timeout or in the background.
-- Before committing, the `pre-commit` hook runs `scripts/hooks/format-staged.mjs` (the same as `pnpm format:staged`):
-  format only staged supported source files, preserving unstaged edits. A partial commit (`git commit <paths>`) is
-  refused; stage the files and commit without paths. A checkout without the script (a branch older than the hook)
-  gets a warning and the stage is skipped; a missing `node_modules` fails it with a hint to run `pnpm install`. Do not
-  run a whole-repository formatter as a delivery step. `pnpm install` in the main working copy, on the main
-  branch, installs the hooks (`.githooks/auto-install.sh`); after hook changes have landed in the main branch, run
-  it there again to refresh them (`pnpm hooks:install` does the same explicitly; run it on the main branch, since it installs the
-  checkout's own `hook.sh`).
 - Before pushing, the `pre-push` hook runs the checks through `scripts/hooks/pre-push.mjs` and
   `pnpm verify`. It measures from each actual destination's advertised remote commit to the exact pushed commit,
   including all unpushed local changes; a newly created branch is measured from its merge base with the live remote

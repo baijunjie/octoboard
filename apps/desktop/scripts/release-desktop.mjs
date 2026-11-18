@@ -73,11 +73,11 @@ function stableTaggedVersions(root) {
 // release below `version` (the initial value when there is none). `tagged` lists the stable versions already tagged.
 export function holderFloorProblem(root, version, tagged) {
   const floor = readHolderFloor(root);
-  if (floor === undefined) return `${HOLDER_FLOOR_FILE} has no FLOOR constant to check.`;
+  if (floor === undefined) return `${HOLDER_FLOOR_FILE} has no stable version to check.`;
   const below = tagged.filter((found) => compareVersions(found, version) < 0).sort(compareVersions);
   const wanted = below.at(-1) ?? INITIAL_HOLDER_FLOOR;
   if (floor === wanted) return null;
-  return `The holder floor in ${HOLDER_FLOOR_FILE} is ${floor}, but the greatest stable release below ${version} is ${wanted}${below.length === 0 ? " (the initial value: none is tagged)" : ""}. Set FLOOR to ${wanted} in its own commit first.`;
+  return `The holder floor in ${HOLDER_FLOOR_FILE} is ${floor}, but the greatest stable release below ${version} is ${wanted}${below.length === 0 ? " (the initial value: none is tagged)" : ""}. Set the floor to ${wanted} in its own commit first.`;
 }
 
 export function parseOptions(args, cwd = process.cwd()) {
@@ -95,7 +95,11 @@ export function parseOptions(args, cwd = process.cwd()) {
   return { version: positionals[0], notes, platforms: parsePlatforms(values.platforms), dryRun: values["dry-run"] };
 }
 
-export function releaseDesktop({ root, version, notes, platforms = parsePlatforms(), dryRun = false, run = runResult, log = console.log, toolchainProblems = windowsToolchainProblems }) {
+function releaseCommand(name, args, options) {
+  return name === "git" ? gitResult(options, ...args) : runResult(name, args, options);
+}
+
+export function releaseDesktop({ root, version, notes, platforms = parsePlatforms(), dryRun = false, run = releaseCommand, log = console.log, toolchainProblems = windowsToolchainProblems }) {
   const git = (...args) => gitChecked(root, ...args);
   const cleanMain = () => {
     if (git("branch", "--show-current") !== "main") throw new Error("Run the release from the main worktree on main.");
@@ -163,7 +167,7 @@ export function releaseDesktop({ root, version, notes, platforms = parsePlatform
     command(worktree, "pnpm", ["install", "--frozen-lockfile"]);
     // The guard runs against the snapshot of the previous release first: once the snapshot is refreshed it compares the
     // schema with itself, so the commits main carries since the last release are only checked here.
-    const guard = command(worktree, "node", ["scripts/cargo.mjs", "test", "--bin", "octoboardd", "--", "--exact", PROTOCOL_GUARD_TEST], { stdio: ["ignore", "pipe", "inherit"] });
+    const guard = command(worktree, "pnpm", ["test:rust", "--bin", "octoboardd", "--", "--exact", PROTOCOL_GUARD_TEST], { stdio: ["ignore", "pipe", "inherit"] });
     log(guard);
     // Cargo succeeds when a filter matches no test, so a renamed guard would otherwise pass silently.
     const passed = [...(guard ?? "").matchAll(/^test result: ok\. (\d+) passed/gm)].reduce((sum, match) => sum + Number(match[1]), 0);

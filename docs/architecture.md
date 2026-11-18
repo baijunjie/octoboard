@@ -111,16 +111,16 @@ with no status and no automatic reporting.
 A client — the desktop application's window, or a browser — is only that: it renders terminals, shows status and
 forwards input.
 
-The UI is not part of the desktop shell. It is its own package, built once, which the desktop shell bundles and loads and
-which also runs in a plain browser; that is what the server form rests on — a Linux server has no shell and offers the
-same UI to a browser. To keep one build working in both places, the UI reaches native capabilities (the quit flow and
-exit heartbeat, system notifications, the Dock badge, the native window's own appearance and visibility, the window
+The UI is not part of the desktop shell. It is its own package, built once, which the desktop shell bundles and loads
+and which also runs in a plain browser; that is what the server form rests on — a Linux server has no shell and offers
+the same UI to a browser. To keep one build working in both places, the UI reaches native capabilities (the quit flow
+and exit heartbeat, system notifications, the Dock badge, the native window's own appearance and visibility, the window
 chrome the top bar must keep clear, the app menu's items and the menu bar icon's menu) only through a platform adapter
-chosen at startup, with a Tauri implementation and a browser one; in a browser a capability that is not there means
-the feature is absent, not an error (copying instead falls back to the browser's selection copy). It finds the daemon
-without Tauri as well: by an address handed to it, or at the origin it was loaded from. Its state is one store fed by
-the daemon client's events, readable outside React too. The phone's browser is not a design target — the native mobile
-apps have their own UI.
+chosen at startup, with a Tauri implementation and a browser one; in a browser a capability that is not there means the
+feature is absent, not an error (copying instead falls back to the browser's selection copy; the rule is in
+`docs/conventions/desktop-shell.md`, "What the shell carries"). It finds the daemon without Tauri as well: by an address
+handed to it, or at the origin it was loaded from. Its state is one store fed by the daemon client's events, readable
+outside React too. The phone's browser is not a design target — the native mobile apps have their own UI.
 
 **A browser is a client Octoboard does not control, and it grants two of the capabilities the UI is built on only to a
 secure context**: the Notifications API, which the raised hand's notification goes through, and the async Clipboard
@@ -160,7 +160,7 @@ terminal. These choices are not visible from any one module:
   previous stable release up to its own build and ends any other with its programs: a session whose helpers could not
   reach the new daemon would be silently broken. The protocol ignores message types and fields it does not know, so
   builds within that range keep talking; it is kept compatible within that promised range, and the range's floor only
-  moves by the previous-stable release rule (`apps/daemon/src/holder/compat.rs`).
+  moves by the previous-stable release rule, set in `config/holder-floor.txt`.
 - **Helpers reach the daemon through their holder.** A session's hooks, MCP bridge, git gate and status line get the
   holder's port and a key per launch, which stay valid as long as the holder, and the holder relays to whichever
   daemon is linked. Reports wait for a daemon; a call its caller waits on waits up to a deadline that covers an
@@ -213,16 +213,17 @@ protocol, carried through SSH. What any client of that protocol must implement �
 and null fields, the key, and the protocol generation the daemon's first frame states — is PROTOCOL.md's "What every
 client implements".
 
-**Constraint: access from another machine goes through SSH.** Anyone who reaches the daemon can start agents and type
-into their terminals, or open a shell terminal and run any command, as the daemon's own user. It therefore binds to
-loopback only, in both forms, and the access guard (`access.rs`) with the per-launch key keeps out web pages on other
-sites and pages served from `localhost`. Another machine reaches it only through SSH — the owner's forward of the
-browser socket for a browser, the application's own tunnel for the application — so SSH does the authentication and encryption, and the
-daemon gains no external surface, TLS or device credential of its own. A device is let in by its SSH key and revoked by
-removing that key (a connection already open lasts until it drops); such a key identifies a device of the owner's, never
-a person: the daemon stays one user's, and every client is that user. What the daemon must still provide is a way for
-its owner, logged in as its user, to obtain its address and key, including for a daemon a service manager runs:
-`octoboardd address`.
+#### Constraint: access from another machine goes through SSH
+
+Anyone who reaches the daemon can start agents and type into their terminals, or open a shell terminal and run any
+command, as the daemon's own user. It therefore binds to loopback only, in both forms, and the access guard
+(`access.rs`) with the per-launch key keeps out web pages on other sites and pages served from `localhost`. Another
+machine reaches it only through SSH. The owner forwards the browser socket for a browser, and the application makes
+its own tunnel, so SSH handles authentication and encryption. The daemon gains no external surface, TLS or device
+credential of its own. A device is let in by its SSH key and revoked by removing that key. A connection already open
+lasts until it drops. Each key identifies a device of the owner's, and the daemon runs as that one user for every
+client. The daemon provides `octoboardd address` for its owner to obtain its address and key, including for a daemon
+run by a service manager.
 
 **Other users of the same machine share its loopback.** The key is what keeps their processes out, so it reaches only
 the daemon's own Unix user: no key the daemon or a holder accepts is in any process's arguments, which every user can
@@ -254,33 +255,29 @@ confirmations, settings and sessions would each need an owner and an authorizati
 The desktop form runs on macOS and Windows and the server form on Linux, from one daemon code base. These decisions keep
 it that way, with the reasons that are not visible in the code.
 
-- **Every OS-specific token lives under the daemon's `platform` layer**, and under per-platform modules of the desktop
-  crate; a test enforces it (`docs/structure/daemon.md`, "OS-specific tokens"). Scattered OS code cannot be audited, and
-  a rule a test can check cannot erode. The Windows port was built by moving each piece behind a neutral signature on
-  macOS first with behaviour unchanged, so the existing suites verified each extraction on a platform that already
-  worked, and with a Windows compile check from the first step, so the signatures were shaped against a real second
-  target before any Windows code was written.
-- **Business code branches on a declared fact, never on the OS.** Where behaviour must differ by host, the platform
-  layer states a fact and business code reads it, the rule providers already follow with declared capabilities:
-  `HostFacts` (the host's OS, path style, file links and the words it uses) goes to clients in the snapshot, the desktop
-  shell reports the client's own to the UI, and `TermFacts` describes the terminal backend. A fact belongs to whatever
-  decides, which need not be the OS: `TermFacts` is the facts of the console host that started, because Windows has two
-  of them. A needed branch on the OS in business code means the platform signature was wrong, and the signature is what
-  gets fixed.
-- **A trait appears only where a test needs a fake.** Platform modules are chosen at module level, as the process-table
-  reader always was, so a platform has no dynamic dispatch and no second implementation to keep in step.
+- **OS-specific code is gathered in one place.** The rule is in `docs/conventions/daemon-processes-and-io.md`, "Platform
+  differences". Scattered OS code cannot be audited, and a rule a test can check cannot erode. The Windows port was
+  built by moving each piece behind a neutral signature on macOS first with behaviour unchanged, so the existing suites
+  verified each extraction on a platform that already worked, and with a Windows compile check from the first step, so
+  the signatures were shaped against a real second target before any Windows code was written.
+- **Business code reads a declared fact rather than the OS** (`docs/conventions/daemon-processes-and-io.md`, "Platform
+  differences"). Where behaviour must differ by host, the platform layer states a fact and business code reads it, as
+  providers already do with declared capabilities: `HostFacts` (the host's OS, path style, file links and the words it
+  uses) goes to clients in the snapshot, the desktop shell reports the client's own to the UI, and `TermFacts` describes
+  the terminal backend. A fact belongs to whatever decides, which need not be the OS: `TermFacts` is the facts of the
+  console host that started, because Windows has two of them.
+- **Platform modules are chosen at module level**, as the process-table reader always was, so a platform has no dynamic
+  dispatch and no second implementation to keep in step; a trait appears only where a test needs a fake (same section).
 - **Semantics over bytes.** Where the host renders the stream (Windows' system console host), terminal state is read
-  from the parsed screen, the title event and the agent's hooks, and where the stream is the program's own bytes each
-  reader keeps what it reads today. The daemon's own writes into a terminal are semantic inputs (a paste, a key) that
-  each backend encodes. The stream of the system's console host is its repaint of a screen, not the program's bytes:
-  titles collapse and repeats drop, the alternate screen is not passed, frames between two paints are lost, and a phrase
-  is split by cursor moves, so only the parsed screen holds what is drawn.
-- **One normalisation point per boundary for paths.** Paths on the wire are made and validated in one place
-  (`platform::names`); an absolute path of the daemon's host travels in that host's native spelling with the host's path
-  style announced once in the snapshot, and clients only show it or split it for display; the UI has one path module. A
-  name is its bytes in the host's native encoding, which on Windows is the WTF-8 of the UTF-16 name, so a name with an
-  unpaired surrogate survives the trip. A Windows host shows full paths and never `~`: it is a PowerShell habit that
-  Windows' own tools do not share.
+  from the parsed screen rather than the bytes, and the daemon's own writes into a terminal are semantic inputs that
+  each backend encodes (`docs/conventions/daemon-processes-and-io.md`, "Platform differences" and "Writing text into a
+  session"). The stream of the system's console host is its repaint of a screen, not the program's bytes: titles
+  collapse and repeats drop, the alternate screen is not passed, frames between two paints are lost, and a phrase is
+  split by cursor moves, so only the parsed screen holds what is drawn.
+- **One normalisation point per boundary for paths** (`docs/conventions/daemon-processes-and-io.md`, "Paths and files").
+  Clients only show a host path or split it for display. A name is its bytes in the host's native encoding, which on
+  Windows is the WTF-8 of the UTF-16 name, so a name with an unpaired surrogate survives the trip. A Windows host never
+  shows `~`: it is a PowerShell habit that Windows' own tools do not share.
 - **The data directory is `%USERPROFILE%\.octoboard` on Windows**, the same place relative to the home as `~/.octoboard`
   elsewhere. The agents keep `~/.claude` and `~/.codex` under the home on Windows too, so one rule covers every host and
   nothing is split between `%APPDATA%` and `%LOCALAPPDATA%`.
@@ -295,10 +292,9 @@ it that way, with the reasons that are not visible in the code.
   Nothing was measured on Windows 10 or on x64 hardware. Windows builds are x64 only, and on Windows on Arm the app and
   the daemon run under emulation. Git for Windows is a requirement, since both Claude Code and Codex need it for their
   own shell tooling and Octoboard's git hooks run under its `sh`.
-- **Windows is checked from a Mac and on a Windows runner.** `pnpm check:windows` cross-checks both crates through
-  `cargo xwin` against the MSVC target and links the daemon's executable, and the `windows-check` job of `quality.yml` lints and tests them natively on
-  `windows-latest`; a `windows-bundle` job builds the unsigned installer as the release builds it. Spikes and debugging
-  run in a Windows 11 virtual machine, and a native x64 machine is what a release is spot-checked on.
+- **Windows is checked from a Mac and on a Windows runner.** The local commands are in `docs/conventions/tooling.md`,
+  "Running tests, lint and checks", and the hosted jobs in `docs/structure/tooling.md`, "Hosted Windows checks". Spikes
+  and debugging run in a Windows 11 virtual machine, and a native x64 machine is what a release is spot-checked on.
 
 ### The two Windows console hosts
 
@@ -404,9 +400,10 @@ Claude Code alike, and the agent still took input and gave output through the ho
   because Codex exports nothing to an MCP child and Grok's `{{session_id}}` templating does not work; a token issued per
   launch and dropped with the process means a local process that guesses the port cannot reach the tools, and the
   daemon resolves the calling session from the token rather than from an argument.
-- **Structure in tool arguments, natural language in content.** Agents are not asked to emit JSON in reply text, where
-  it mixes with prose and code fences; tool arguments are validated against a schema by the agent runtime. Fields a
-  program acts on (status, open items) are arguments; what an agent must understand (the brief, a summary) stays prose.
+- **Structure in tool arguments, natural language in content** (`docs/conventions/protocol-and-contracts.md`, "Wire
+  types and generated files"). JSON in reply text mixes with prose and code fences, while tool arguments are validated
+  against a schema by the agent runtime. Fields a program acts on (status, open items) are arguments; what an agent must
+  understand (the brief, a summary) stays prose.
 - **Reporting is not forced.** Blocking the stop through the `Stop` hook works (verified on Claude Code and Codex), but
   every gated turn shows an error-styled `Stop hook error` line that `suppressOutput` does not suppress, and the model
   sometimes reads the injected demand as prompt injection and refuses — too costly for a product meant to feel calm. So
@@ -463,16 +460,16 @@ Each has an established solution unless noted; any outstanding manual verificati
   `PATH` entry can point at a per-shell-instance directory) and retakes one in the background for the next launch,
   because the login shell's serial chain of execs can take seconds; with none valid it waits for a fresh one. The
   snapshot taken once per daemon start to work out which agents are available (`src/agents/availability.rs`) is the
-  first one a launch can reuse. The daemon spawns the agent directly rather than inside a shell.
+  first one a launch can reuse. The daemon spawns the agent directly rather than inside a shell
+  (`docs/conventions/daemon-processes-and-io.md`, "Processes").
 - **The snapshot must be filtered, not only taken.** The shell passes the daemon's own environment through, so a daemon
   started from inside an agent session would hand that session's identity to every agent it launches. On Claude Code
   that silently turns transcript saving off and makes `--permission-mode` not apply. Stripping the markers does not
   disturb authentication, which lives in the macOS Keychain. The markers are enumerated, never matched by prefix, and
-  stripped regardless of which agent is being launched. Build the list by dumping `env` inside a live session of each
-  agent and stripping what is there and only there: `GROK_CODE_XAI_API_KEY`, `GROK_HOME`, `CODEX_HOME` and
-  `CLAUDE_CODE_USE_BEDROCK` are user settings that a prefix match would drop.
+  stripped regardless of which agent is being launched; how the list is built is in
+  `docs/conventions/daemon-processes-and-io.md`, "Processes".
 - **Terminal data does not go through Tauri IPC.** High-frequency output would pay serialization overhead, and it would
-  break the constraint above. The frontend connects to the daemon over WebSocket directly.
+  break the constraint above (`docs/conventions/desktop-shell.md`, "What the shell carries").
 - **Sidecar signing.** The bundled daemon must be signed and notarized with the application or Gatekeeper blocks it.
   Credential access is not a concern: an agent launched from the bundle reaches the user's Keychain login normally,
   because a Keychain ACL is evaluated against the agent binary's own signature rather than its parent's.
@@ -513,11 +510,11 @@ Each has an established solution unless noted; any outstanding manual verificati
 - **WebView differences.** Tauri uses the system WebView (WKWebView on macOS, WebView2 on Windows). There is no Linux shell to pick one:
   Linux is the server form, reached from the desktop application or from whichever browser the user has, which the UI
   treats as a plain browser like any other.
-- **Windows refuses to replace or delete a file another process holds open.** Unless the holder opened it with
-  delete sharing, a rename over it or a removal fails with a sharing violation, where Unix would unlink the name and let
-  the holder keep its file. A dying process can hold its files a moment after it is reported gone, so cleanup that runs
-  at start (the data directory's `run/`) tolerates the violation and leaves the file for the next start, and code that
-  replaces a file in place must expect the failure on Windows rather than treat it as a broken disk.
+- **Windows refuses to replace or delete a file another process holds open.** Unless the holder opened it with delete
+  sharing, a rename over it or a removal fails with a sharing violation, where Unix would unlink the name and let the
+  holder keep its file. A dying process can hold its files a moment after it is reported gone, so cleanup that runs at
+  start (the data directory's `run/`) tolerates the violation and leaves the file for the next start, and code that
+  replaces a file in place must expect the failure (`docs/conventions/daemon-processes-and-io.md`, "Paths and files").
 - **File links on Windows need Developer Mode or elevation.** A directory alias is a junction, which any user can make,
   but a file symlink needs the `SeCreateSymbolicLinkPrivilege` that only Developer Mode or an elevated process grants.
   The daemon probes once per run whether it can make one (`platform::fs::file_links_available`) and announces it as the
@@ -639,19 +636,16 @@ write-ahead log checkpointed into it first and any sidecar files moved with it; 
 while a fresh database starts. An older file is copied aside as `<name>.pre-v<N>` and brought up to date by the steps in
 `MIGRATIONS`, one per version, all in one transaction, so a failure leaves it as it was. A file of a newer version or
 one below 1, one marked as another application's, or one that is not SQLite, is refused and left untouched. Version
-changes and migration code are written only between released versions: a schema change no release has carried is made in
-place, at the current version; a change to a released schema raises the version and adds the step from the released one,
-whose schema is kept for the migration tests.
+changes and migration code are written only between released versions (`docs/conventions/protocol-and-contracts.md`,
+"Versions and compatibility" and "Store schema").
 
 - What belongs to one provider of a console or a project (its account, account-default flag, launch model and effort)
-  is a row of a child table keyed by the owner and the provider, not a column, so a provider is added without a
-  schema change; rows of a provider this build does not register are kept and left out of loads.
+  is kept per provider so that a provider is added without a schema change; the rule is in
+  `docs/conventions/protocol-and-contracts.md`, "Store schema".
 - `Session.id` is Octoboard's own and `agent_session_id` the agent's. They are separate because some agents cannot
   pre-allocate an id.
-- A session row is never written back whole from a copy read earlier. Its fields change on tasks of their own — hooks,
-  renames, archives, the exit watcher, account switches — so each change writes only its own columns, and a change of
-  status that must not undo another is a conditional write: a status the agent reports never moves a session out of
-  `interrupted` or `archived`, and the process ending never moves it out of `archived`.
+- A session row's fields change on tasks of their own — hooks, renames, archives, the exit watcher, account switches —
+  so it is written column by column, never whole (`docs/conventions/daemon.md`, "State").
 - `Session.bound_to` is the id of a session's parent — a console session or a project coordinator of the same project —
   or unset for an independent session. `open_session` sets it to the creating session; `transfer_session` changes the
   parent; `bind_to_session` sets a parent for an independent project coordinator; and `release_session` clears it and
@@ -659,11 +653,10 @@ whose schema is kept for the migration tests.
   as its parent keeps its children and its ability to manage them. `Session.role` (`coordinator` or `worker`, stored and
   sent to clients and MCP records, separately from the parent id) preserves that capability even when it has no
   children; a project session created under a console session starts as a coordinator, and one created under a project
-  coordinator as a worker. Capability checks use `Session::is_worker()`, which reads the stored role, so every write
-  that sets or clears `bound_to` writes the role with it: a console session and a session with no parent are always
-  coordinators. A project session reporting to another project session is always a worker, so orchestration has at most
-  two levels of reporting relationships. Reports route directly to the parent id because a console may hold several
-  console sessions at once.
+  coordinator as a worker. Capability checks read the stored role, so it is written together with `bound_to`
+  (`docs/conventions/daemon.md`, "State"). A project session reporting to another project session is always a worker, so
+  orchestration has at most two levels of reporting relationships. Reports route directly to the parent id because a
+  console may hold several console sessions at once.
 - `Session.colour` and `Session.ordinal` are set only for a console session: a badge colour from a fixed palette,
   assigned on creation and never reused while still in use among the console's other console sessions, and a
   per-console ordinal that is one past the highest ever handed out there — kept on the console record itself

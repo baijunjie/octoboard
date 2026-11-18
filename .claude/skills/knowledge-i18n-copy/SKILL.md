@@ -484,38 +484,20 @@ are now wrong or it leaves out one thing, the meaning has changed.
 - **Languages**: 17 languages — `ar`, `de`, `en`, `es`, `fr`, `hi`, `id`, `it`, `ja`, `ko`, `pt`, `ru`, `th`, `tr`,
   `vi`, `zh-Hans`, `zh-Hant`; all 17 have complete catalogs.
   (`packages/ui/src/i18n/languages.ts`; `docs/product/language.md`, "What is translated so far")
-- **Source language**: the English catalog is the source every other language is translated from, and the type of
-  every message key and its placeholders is read off it. (`packages/ui/src/i18n/messages/en.ts`;
-  `packages/ui/src/i18n/catalog.ts`)
-- **Missing-translation fallback**: `en` — a language without a catalog, or a message a catalog lacks, renders in
-  English. (`packages/ui/src/i18n/languages.ts`, `FALLBACK_LANGUAGE`; `packages/ui/src/i18n/catalog.ts`, `CATALOGS`)
-- **Resources and commands**: catalogs are TypeScript modules in `packages/ui/src/i18n/messages/<language>.ts`,
-  registered in `CATALOGS`; placeholders are named `{name}`, and a count-dependent message is a plural object by CLDR
-  category. `pnpm --filter ./packages/ui typecheck` fails on a translated catalog missing a message or plural category;
-  `pnpm --filter ./packages/ui test src/i18n` (`catalog.test.ts`, also run by the package's `build`) checks plural
-  categories and that each translation keeps the English placeholders. (`packages/ui/src/i18n/catalog.ts`;
-  `packages/ui/src/i18n/catalog.test.ts`; `packages/ui/package.json`)
-- **How UI code uses the catalog**: a component looks messages up through `useT()`; the module-level `t()` is only for
-  code outside React. A helper that returns display text takes the `Translate` function as its first parameter, and a
-  module-level table stores a `PlainMessageKey`, looked up at render. A sentence with a variable part is one message
-  with a `{placeholder}`, never fragments joined in code; markup inside a sentence goes through `<Message id params>`;
-  a count-dependent message is a plural message selected by `count`. Two whole sentences shown in one paragraph are
-  joined by `common.sentenceSeparator` (a space in en, nothing in zh-Hans), never a hard-coded space, or by one catalog
-  message holding both as placeholders, whose text between them is the language's to say. Either way the separator
-  must not end up as a text node of its own that is only whitespace, which VoiceOver drops, running the two sentences
-  together: put it in the same text node as the sentence after it. `<Message>` does this itself when the parameter
-  after the separator is a string or another `<Message>` whose own text starts with text; one that is any other
-  element leaves the separator a node of its own. (`packages/ui/src/i18n/react.tsx`;
-  `packages/ui/src/i18n/catalog.ts`; `packages/ui/src/i18n/messages/en.ts`; `docs/voiceover-cases.md`)
+- **Catalogs and how code uses them**: the English catalog is the source every other language is translated from, a
+  language without a catalog or a message a catalog lacks renders in English, and the catalog files, keys,
+  placeholders, plurals, the `useT`, `Translate` and `<Message>` lookups and `common.sentenceSeparator` are code
+  rules in `docs/conventions/i18n-in-code.md`: "What is translated, and where it lives", "Looking messages up", "Keys"
+  and "Placeholders, numbers and plurals". Copy is written to fit them: a sentence with a variable part is one message,
+  and two whole sentences in a paragraph are written to be joined by the separator.
 - **Glossary**: zh-Hans follows Apple's zh-Hans macOS terminology with the fixed terms 控制台 console, 会话 session,
   控制台会话 console session, 项目会话 project session, 智能体 agent, 移交 handoff, 转移 transfer (of branches, process
   trees or a parent), one half-width space between Chinese and Latin text,
   numbers or placeholders, and full-width punctuation in Chinese sentences, parentheses included (`（{detail}）`).
   (`packages/ui/src/i18n/messages/zh-Hans.ts`, the catalog's doc comment)
-- **App name and other app-level facts**: the single source is `config/app.json`. Copy writes the product name as the
-  global placeholder `{appName}`, which `format` and `<Message>` fill from that file without the caller passing it;
-  never write the name as a literal, and never translate it. (`config/app.json`; `packages/ui/src/i18n/catalog.ts`;
-  `docs/product/language.md`, "What follows the language")
+- **App name and other app-level facts**: copy writes the product name as the global placeholder `{appName}`, never as
+  a literal, and never translates it; how the placeholder is filled is in `docs/conventions/i18n-in-code.md`,
+  "Placeholders, numbers and plurals". (`docs/product/language.md`, "What follows the language")
 - **Exempt text**: text aimed at the agents — the console session's instructions, tool descriptions and replies,
   prompts injected into a launch — stays English and is not UI copy; a report page is content the console session's
   model wrote and is not localized. (`docs/product/language.md`, "What follows the language")
@@ -545,12 +527,12 @@ are now wrong or it leaves out one thing, the meaning has changed.
 - **Input placeholders**: an optional input names the default or empty state it takes when left empty, and a
   multi-value field's input, once its list holds an item, invites adding another; neither is an example. This
   replaces "Input placeholders" above for those inputs. (the "Input placeholders" section of
-  `docs/ui-standard.md`)
+  `docs/conventions/ui-standard.md`)
 - **Empty-state copy**: an empty state's title carries no punctuation at all, a comma inside it included, which is
   stricter than the "Empty-state titles" rule above; what the title cannot hold goes in the line under it, and a
   state said in one breath somewhere else — a notice over content shown anyway, a live region speaking for a panel
   hidden from screen readers — is a `.sentence` message of its own rather than the two joined in code. (the "An empty
-  state is a glyph, a heading, and what fills it" section of `docs/ui-standard.md`)
+  state is a glyph, a heading, and what fills it" section of `docs/conventions/ui-standard.md`)
 - **Per-language rules beyond the generic tables**: these extend "Register per language" (its "Button form" column),
   "Simplified Chinese" and "Pitfalls in other languages" above.
   - ko: requests use 해 주세요 only in explanatory sentences, never on a button (buttons are nouns, per the "Button form"
@@ -594,7 +576,7 @@ are now wrong or it leaves out one thing, the meaning has changed.
   - A load failure also carries a warning icon; its wording is the one "Errors" above already gives.
   - A button never takes in-progress text: while its action runs it keeps its own label and shows a spinner before it
     (an icon-only button's spinner replaces its icon), so "In-progress states" applies to status lines and banners
-    only, and no catalog carries a pending variant of a button's label (`docs/ui-standard.md`, "Buttons").
+    only, and no catalog carries a pending variant of a button's label (`docs/conventions/ui-standard.md`, "Buttons").
   - A search field's placeholder is the standard word "Search" in each language (zh-Hans 搜索), shared through the one
     catalog key `common.search`; its accessible label names what is searched ("Search settings").
 
@@ -605,7 +587,7 @@ are now wrong or it leaves out one thing, the meaning has changed.
   single string, so the "two strings to change together" warning under "Capitalization" has nothing to match here. The
   optional control under the message settles what Confirm does rather than gating it, and Enter submits even from that
   control, so the Confirm label and the control's own label must each read correctly with it left untouched.
-  (`packages/ui/src/components/dialog/ConfirmDialog.tsx`; `docs/ui-standard.md`, "Keyboard")
+  (`packages/ui/src/components/dialog/ConfirmDialog.tsx`; `docs/conventions/ui-standard.md`, "Keyboard")
 - **Codex usage limit resets**: the copy for a Codex account's usage limit resets follows Codex's own wording rather
   than terms of our own: "usage limit reset(s)" for the credit, "Redeem reset" for the command and the confirmation's
   title, "Use reset" for its Confirm, "Usage reset" once used. The title and Confirm deliberately use different verbs,

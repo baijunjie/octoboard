@@ -26,6 +26,7 @@ pub const DEFAULT_SSH_PORT: u16 = 22;
 
 /// The host key files tried, in the order the application's SSH client prefers their algorithms,
 /// so that the fingerprint printed is the one the host shows it.
+const HOST_KEY_LIMIT: usize = 16 * 1024;
 const HOST_KEY_FILES: [&str; 3] = [
     "ssh_host_ed25519_key.pub",
     "ssh_host_ecdsa_key.pub",
@@ -112,7 +113,7 @@ pub fn fingerprint_of_line(line: &str) -> Option<String> {
 /// in the order of [`HOST_KEY_FILES`]; `None` when none does.
 pub fn host_key_fingerprint(dir: &Path) -> Option<String> {
     HOST_KEY_FILES.iter().find_map(|file| {
-        let text = std::fs::read_to_string(dir.join(file)).ok()?;
+        let text = crate::hostfs::read_regular_text(&dir.join(file), HOST_KEY_LIMIT).ok()?;
         text.lines().find_map(fingerprint_of_line)
     })
 }

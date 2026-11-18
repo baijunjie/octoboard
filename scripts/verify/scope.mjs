@@ -131,7 +131,9 @@ export const RULES = [
   { match: ["scripts/fetch-conpty.mjs", "scripts/fetch-conpty.test.mjs"], consumers: ["verify", "desktop"], why: "fetches the bundled ConPTY the Windows daemon tests and CI run on, tested with the scripts; the desktop Windows release scripts and the installer hooks test import it (`windows-release.mjs` and `installer-hooks.test.mjs` take the installer layout from it), so their tests run too" },
   { match: [".githooks/"], consumers: ["verify"], why: "the hook entry point is exercised by the pre-push tests; nothing else reads it" },
   { match: [".gitignore"], consumers: ["verify"], why: "decides which files the working-tree snapshot (`tree.mjs`) counts; no other check reads it" },
-  { match: ["config/"], consumers: ALL_PACKAGES, builds: ["ui"], why: "`config/app.json` is the product identity every package reads, and `vite.config.ts` bakes it into the UI build" },
+  { match: [/^config\/(?!holder-floor\.txt$)/], consumers: ALL_PACKAGES, builds: ["ui"], why: "`config/app.json` is the product identity every package reads, and `vite.config.ts` bakes it into the UI build" },
+
+  { match: ["config/holder-floor.txt"], consumers: ["verify", "desktop", "daemon"], why: "the daemon compiles in the holder floor and the desktop release scripts read it for validation and publishing" },
 
   // Nothing local reads these. Listed so that they do not fall through to "unknown".
   { match: ["docs/", ".claude/", ".agents/", ".codex/", "assets/branding/", ".github/", "CLAUDE.md", "AGENTS.md"], consumers: [], why: "documentation, agent files, brand assets and CI definitions are read by no local check" },

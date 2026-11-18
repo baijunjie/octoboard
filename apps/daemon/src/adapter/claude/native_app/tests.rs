@@ -63,7 +63,12 @@ fn the_cli_is_asked_to_resume_the_conversation_in_the_desktop_app() {
         "{seen}"
     );
     assert!(
-        seen.contains(&format!("cwd={}\n", cwd.canonicalize().unwrap().display())),
+        seen.lines()
+            .filter_map(|line| line.strip_prefix("cwd="))
+            .any(|reported| {
+                crate::hostfs::canonical(reported).unwrap()
+                    == crate::hostfs::canonical(&cwd).unwrap()
+            }),
         "{seen}"
     );
     assert!(

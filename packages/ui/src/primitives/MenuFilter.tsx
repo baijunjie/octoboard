@@ -24,13 +24,13 @@ export function UnfilteredMenu({ children }: { children: React.ReactNode }): Rea
   return <MenuFilterContext.Provider value={false}>{children}</MenuFilterContext.Provider>;
 }
 
-// The filter field's row reads as the menu's own first row rather than a form control set into it, the user's
-// confirmed decision (a departure from HeroUI's search field look, see "Conformance level and exceptions" in
-// `docs/ui-standard.md`): no fill, border or focus ring (the caret shows where typing goes), its glyph and text on the
-// columns of the items' icons and labels, and a rule under it. The popover is the scroller, so the row sticks to its top
-// on the popover's own fill. The menu's 6px padding and the items' 10px start padding and 12px gap put the search glyph
-// and the text on those columns; the input takes the rest of the row, and the clear button's glyph ends as far from the
-// popover's end edge as the search glyph starts from its start edge.
+// The filter field's row reads as the menu's own first row rather than a form control set into it, the user's confirmed
+// decision (a departure from HeroUI's search field look, see "Conformance level and exceptions" in
+// `docs/conventions/ui-standard.md`): no fill, border or focus ring (the caret shows where typing goes), its glyph and
+// text on the columns of the items' icons and labels, and a rule under it. The popover is the scroller, so the row
+// sticks to its top on the popover's own fill. The menu's 6px padding and the items' 10px start padding and 12px gap
+// put the search glyph and the text on those columns; the input takes the rest of the row, and the clear button's glyph
+// ends as far from the popover's end edge as the search glyph starts from its start edge.
 const FILTER_ROW_CLASS = [
   "sticky top-0 z-10 bg-(--overlay) px-1.5 pt-1.5 pb-1 border-b border-(--separator)",
   "[&_[data-slot=search-field-group]]:h-9 [&_[data-slot=search-field-group]]:gap-0 [&_[data-slot=search-field-group]]:ps-2.5 [&_[data-slot=search-field-group]]:pe-1.25",

@@ -447,7 +447,9 @@ mod tests {
         assert!(status.success());
         drop(process);
         // Long enough for a kill sent on the drop to have landed.
-        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        // A child that receives no kill signal cannot acknowledge that the drop spared it.
+        const HELPER_SURVIVAL_WINDOW: std::time::Duration = std::time::Duration::from_millis(200);
+        tokio::time::sleep(HELPER_SURVIVAL_WINDOW).await;
         assert!(
             is_running(helper),
             "the helper of a CLI that exited was killed"

@@ -236,20 +236,21 @@ which the Linux release archive ships and the website's `install.sh` installs wi
 - `src/coordinator/` — what each control-socket request does to the stored records and which host-role work it triggers:
   `mod.rs` the dispatcher, then one file per request family (`consoles`, `projects`, `open`, `resume`, `launch`,
   `restart` (what the restarts of a session's process share: `run` drives the stop and relaunch of an account switch and
-  a model change, the other helpers also serve a sharing change), `bindings` (binding a session to an owner, for the MCP `bind_to_session` tool and the user's `bind_session`
-  request alike), `lifecycle` (archiving, deleting, and a
-  session's own archive when its work is finished: `lifecycle/finished.rs`), `handoff`, `native_app` (opening a stopped session's conversation in its agent's desktop
-  application, `open_session_in_app`, and the `probe_native_apps` answer: which agents' applications are installed and
-  which sessions' conversations they can see), `account_switch`,
-  `model_change`, `account_sharing`, `accounts`, `settings`, `pages` (a session's page list and a form's submission),
-  `processes` (listing, stopping and keeping the process trees a client sees), `messages`, `auto_switch` (moving a
-  session off an account whose usage limit stopped a turn; lower layers reach it through `AppState`'s hooks), `validate`
-  for the checks of request text fields; the requests that edit settings, a console, a project or an account carry
-  `base_versions` and run through `settings::update_settings_checked`, `consoles::update_console_checked`,
+  a model change, the other helpers also serve a sharing change), `bindings` (binding a session to an owner, for the MCP
+  `bind_to_session` tool and the user's `bind_session` request alike), `lifecycle` (archiving, deleting, and a session's
+  own archive when its work is finished: `lifecycle/finished.rs`), `handoff`, `native_app` (opening a stopped session's
+  conversation in its agent's desktop application, `open_session_in_app`, and the `probe_native_apps` answer: which
+  agents' applications are installed and which sessions' conversations they can see), `account_switch`, `model_change`,
+  `account_sharing`, `accounts`, `settings`, `pages` (a session's page list and a form's submission), `processes`
+  (listing, stopping and keeping the process trees a client sees), `messages`, `auto_switch` (moving a session off an
+  account whose usage limit stopped a turn; lower layers reach it through `AppState`'s hooks), `validate` for the checks
+  of request text fields; the requests that edit settings, a console, a project or an account carry `base_versions` and
+  run through `settings::update_settings_checked`, `consoles::update_console_checked`,
   `projects::update_project_checked` and `accounts::update_account_requested`, which check under
-  `AppState::checked_write`), plus `console_workdir.rs` (a console's working directory: its instruction file written
-  into it, and its removal), `exit_watch.rs` (the exit watcher every launch starts, and `unregister_live`), `adopt.rs`
-  (at start, matches the terminals the holders kept running with the store: a session's is adopted into a rebuilt
+  `AppState::checked_write`), plus `console_workdir.rs` (a console's working directory: the canonical
+  `octoboard-instructions.md` content exposed under each provider's declared instruction filename by a link, import or
+  copy, and its removal), `exit_watch.rs` (the exit watcher every launch starts, and `unregister_live`), `adopt.rs` (at
+  start, matches the terminals the holders kept running with the store: a session's is adopted into a rebuilt
   `LiveSession` and watched like a launch of the daemon's own, with its messages going through the private server its
   holder kept running as the terminal's companion, where the provider's `rebuild_launch` links to it again; a shell
   terminal's is put back, any other is ended; its module doc has the rules), `unlinked.rs` (what a holder that cannot be
@@ -294,10 +295,11 @@ which the Linux release archive ships and the website's `install.sh` installs wi
 - `src/cross_project_guard/` — keeping a project session to its own project, in two layers behind the Agent behavior
   setting `keep_sessions_in_own_project`: the edit layer, where `list.rs` builds the launch's list (other registered
   projects' roots, the session's own roots and repository, the shared directories) and writes it into the session's
-  scratch directory, and `hook.rs` is `guard-hook`, which decides one `PreToolUse` payload from that list; and the git
-  layer, where `repository.rs` judges whether the repository a session's git is updating belongs to another registered
-  project, which `session_git_hooks/gate_inputs.rs` sends the hook. The adapters inject the edit layer
-  (`adapter/hooks.rs`, below).
+  scratch directory with the session's provider id, and `hook.rs` is `guard-hook`, which asks that provider's
+  `HookInterpreter` for the payload's edit paths and working directory, checks them against the list, and asks the
+  interpreter to word a refusal; and the git layer, where `repository.rs` judges whether the repository a session's git
+  is updating belongs to another registered project, which `session_git_hooks/gate_inputs.rs` sends the hook. The
+  adapters inject the edit layer (`adapter/hooks.rs`, below).
 - `src/revert_gate/` — the revert gate engine run in-process by `gate-hook`: `local.rs` decides a ref update, `push.rs`
   a push, `report.rs` words a rejection, `content.rs` the content criteria, `git.rs` the gate's own `git`.
 - `src/config_document/` — export and import of the configuration document that carries state between devices, selectable by Settings section (`protocol::SettingsSection`) and, for accounts, by agent (`import/accounts.rs`)
@@ -330,14 +332,14 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   `bindings.rs` (the read-only walks over which session is bound to which) and `refusals.rs` (the locked and archived
   refusals every operation on a session shares).
 - `src/agents/` — what the daemon knows about each agent CLI apart from launching it: availability (`availability.rs`;
-  `redetermine` judges one agent again after an update changed what its binary resolves to), `cli/` (the installed
-  CLI's version, how it was installed, the latest version published, and its update, described in "Agent CLI versions"
-  of `PROTOCOL.md`: `install.rs` tells the install method from the binary's path and builds the update command from the
+  `redetermine` judges one agent again after an update changed what its binary resolves to), `cli/` (the installed CLI's
+  version, how it was installed, the latest version published, and its update, described in "Agent CLI versions" of
+  `PROTOCOL.md`: `install.rs` tells the install method from the binary's path and builds the update command from the
   provider's `CliPackaging`, `latest.rs` reads the latest version, with the npm registry lookup behind the `Registry`
   seam, through the proxy of the user's shell environment, `mod.rs` holds the statuses (`AgentClis`, in
-  `AppState::agent_clis`; runtime state, never stored) and the check orchestration, `update.rs` runs an update with its
-  output in a file under `paths::agent_cli_updates_dir`, so that an update still running when the daemon ends is not
-  broken by it, and words the failure), `models.rs` (the
+  `AppState::agent_clis`; runtime state, never stored, with statuses and running claims held in `PerAgent`) and the
+  check orchestration, `update.rs` runs an update with its output in a file under `paths::agent_cli_updates_dir`, so
+  that an update still running when the daemon ends is not broken by it, and words the failure), `models.rs` (the
   `ModelCatalogue` interface a provider lists its models through, with the cache, the command runner and the checks
   around the lists), launch settings (`launch_settings.rs`: the model, effort and compatibility values a launch level
   holds, and their checks and normalization), `json_rpc.rs` (reading JSON-RPC replies, shared by Codex's app server and
@@ -347,25 +349,27 @@ which the Linux release archive ships and the website's `install.sh` installs wi
 
 - `src/accounts/` — accounts: `ops.rs` (`AccountOps`, what `AgentProvider::accounts` gives: a provider's quota probe,
   kick, sign-in email, reset credits, sign-in flow, MCP inventory reader, MCP server sign-in, shareable configuration
-  items and plugin registries, thread registry), `background_cli.rs` (an agent CLI run for an account in the
-  background, shared by the login and the MCP server sign-in: the `Process` it runs in, killed with its whole session
-  when ended early, the `Line`s it says, and `SigningIn`, the count under the account's directory that refuses a
-  change of its sharing), `mcp_inventory.rs` (an account's MCP servers and platform connectors read through the
-  agent's CLI: the `McpInventoryReader` interface, and one reading per account at a time with later requests joining
-  it, keyed by the account's directory too, and the helpers the readers share to map a failed query to an
-  unavailability; Codex's reader is `adapter/codex/mcp_inventory.rs`, Claude Code's `adapter/claude/mcp_inventory.rs`,
-  Grok's `adapter/grok/mcp_inventory.rs`), `mcp_sign_in.rs` (signing an account in to and out of an MCP server through the
+  items and plugin registries, thread registry), `background_cli.rs` (an agent CLI run for an account in the background,
+  shared by the login and the MCP server sign-in: the `Process` it runs in, killed with its whole session when ended
+  early, the `Line`s it says, and `SigningIn`, the count under the account's directory that refuses a change of its
+  sharing), `mcp_inventory.rs` (an account's MCP servers and platform connectors read through the agent's CLI: the
+  `McpInventoryReader` interface, and one reading per account at a time with later requests joining it, keyed by the
+  account's directory too, and the helpers the readers share to map a failed query to an unavailability; Codex's reader
+  is `adapter/codex/mcp_inventory.rs`, Claude Code's `adapter/claude/mcp_inventory.rs`, Grok's
+  `adapter/grok/mcp_inventory.rs`), `mcp_sign_in.rs` (signing an account in to and out of an MCP server through the
   agent's own commands: the `McpServerAuth` interface, the runs held in `McpServerAuths`, one per account and server,
-  and `request`, which starts or joins one; Codex's is `adapter/codex/mcp_auth.rs`), `quotas/` (plan quota read from the agent's CLI, poller, judgement, kicks, reset credits; `probe.rs`
-  the `QuotaProbe` interface with the conversation it runs, `reset_credit.rs` the `ResetCredits` interface,
-  `observation.rs` telling a window that is counting from one that has not begun by how its reported reset time moves
-  across readings, for every agent), `login/`
-  (background sign-in; `flows.rs` the `LoginFlow` interface with the `Flow` it drives and, for a provider whose sign-in only one login can use, the code a second is refused with), `dirs.rs`, `relocate.rs` (copying a session's record into another account's directory for a
-  switch), `thread_registry.rs` (the `ThreadRegistry` interface of a provider's thread database, shared by the switch's copy
-  and the shared configuration, with `RowError`, the failure of one row carrying a cause every provider's registry shares; Codex's is `adapter/codex/threads.rs`),
-  `trash.rs`, `choice/` (which agent and account a session opens with: `mod.rs` resolving a session's own, `started.rs`
-  one a session starts for another, `automatic.rs` automatic selection and the order of an agent's accounts,
-  `standing.rs` whether and why an account cannot open one, `refusals.rs` the refusals of one that cannot).
+  and `request`, which starts or joins one; Codex's is `adapter/codex/mcp_auth.rs`), `quotas/` (plan quota read from the
+  agent's CLI, poller, judgement, kicks, reset credits; `probe.rs` the `QuotaProbe` interface with the conversation it
+  runs, `reset_credit.rs` the `ResetCredits` interface, `observation.rs` telling a window that is counting from one that
+  has not begun by how its reported reset time moves across readings, for every agent), `login/` (background sign-in;
+  `flows.rs` the `LoginFlow` interface with the `Flow` it drives and, for a provider whose sign-in only one login can
+  use, the code a second is refused with), `dirs.rs`, `relocate.rs` (copying a session's record into another account's
+  directory for a switch), `thread_registry.rs` (the `ThreadRegistry` interface of a provider's thread database, shared
+  by the switch's copy and the shared configuration, with `RowError`, the failure of one row carrying a shared cause,
+  and `relocation_code` for a provider's own relocation refusal; Codex's is `adapter/codex/threads.rs`), `trash.rs`,
+  `choice/` (which agent and account a session opens with: `mod.rs` resolving a session's own, `started.rs` one a
+  session starts for another, `automatic.rs` automatic selection and the order of an agent's accounts, `standing.rs`
+  whether and why an account cannot open one, `refusals.rs` the refusals of one that cannot).
 - [`src/accounts/shared_config/`](../../apps/daemon/src/accounts/shared_config/README.md) — an account sharing its
   agent's default configuration directory.
 
@@ -396,9 +400,10 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   opens an agent's desktop application at a URL its scheme names); probing, reading (`read`, the one way a click on a file shows it) and opening the paths a terminal shows, where `path_links/resolve.rs` is the one
   place that decides what a link may reach and what is only shown rather than launched.
 - `src/env_shell/` — the user's real shell environment agents are launched with (the host's login-shell snapshot from
-  `platform::shell`, less the variables that mark an agent session, kept under the freshness rules of `cache.rs`), and
-  resolving a binary on it into what starts it (`resolve_binary`, over `platform::shell::resolve_binary`), and the
-  proxy it names for a host (`proxy_for` in `proxy.rs`, which the npm registry lookup and the update's downloads go through).
+  `platform::shell`, filtered by `snapshot.rs` using Octoboard's own markers and every descriptor's
+  `inherited_session_vars`, kept under the freshness rules of `cache.rs`), and resolving a binary on it into what starts
+  it (`resolve_binary`, over `platform::shell::resolve_binary`), and the proxy it names for a host (`proxy_for` in
+  `proxy.rs`, which the npm registry lookup and the update's downloads go through).
 - `src/self_update/` — the server form's self-update (see "Daemon updates" in `PROTOCOL.md`): `mod.rs` holds the status on
   `AppState::daemon_update`, `task.rs` the scheduled check and the work each request starts (`check_daemon_update`,
   `update_daemon`, `restart_daemon`), `check.rs` and `manifest.rs` the release manifest, `fetch.rs` the HTTP behind the
@@ -466,58 +471,61 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   which client's answer to a query passed through to clients reaches the program, `query_log.rs` the log of how long the
   queries an agent's host waits on took to be answered, `input_class.rs` input that is only the terminal's own protocol
   traffic, `plain_text.rs` output without its escape sequences, `shell/` project shell terminals).
-- `src/session/` — one running agent process (`LiveSession`; `LiveSession::host_renders` says whether its titles
-  come off the parsed screen's title changes and a provider's placeholder reads as an empty input box), input and
-  message-write gates (`LiveSession::takes_automatic_keys` is the one check an automatic key or message goes in under; the daemon's own writes,
-  a message's paste and Enter, the stash, interrupt and trust keys, are `platform::term::Input` values; a client's
-  keystrokes and query replies go in raw), `term/` launch and writing a message into the process (through a
-  `MessageTransport` where the launch started the provider's own server, otherwise the guarded bracketed-paste write
-  (`send_message_with_id` says which way it went, a `Route`); a transport also starts the server's queue and says what
-  came of it (`start_queue` gives a `QueueStart`: nothing waited, how many started, how many wait behind messages someone
-  else queued, or that it could not be told); `PrivateServer`, how a launch starts that server through a `ServerHost`,
-  `LaunchPlan::private_server`, with `StartedServer` and `TransportEvents`, which `register_live` attaches so a transport
-  can retry its queue, hand over the notice that messages are held and the code of that notice once they went in (the
-  state layer only broadcasts them), and end the terminal when the server dies; `UncertainSubmission`, the error of a
-  write whose acceptance is unknown, which holds the session's later messages; `RefusedByAgent`, the error of a message
-  the agent's own queue refused outright, which fails that message to its sender, coded `message_refused`, while the
-  queue behind it goes on, and `HeldByServer`, that of a message the server holds back for now; `AfterExit`, the work a launch leaves for once its process has exited: `LaunchPlan::after_exit`;
-  `before_scratch_removal`, what a launch and an adopted session both do once the process is reaped: stop the transport and run
-  `AfterExit`), `draft.rs` (a mirror of the keys typed into the input, matching the prompts the agent reports
-  submitted, with `KeyTiming`, when and what kind of keys went in, kept apart from it), `draft_hold.rs` (the release of the hold typed
-  keys keep on Octoboard's messages, and the checks a message written past the draft's grace waits on, none of them
-  without end: `settle_input`, `release_draft_hold`, `schedule_draft_release` on `LiveSession`), `draft_clear.rs`
-  (clearing a user's draft with Ctrl-U past the grace period, so that an automatic message is written alone and the
-  text handed back in a `draft_discarded` notice: `LiveSession::write_after_clearing`; where the box cannot be cleared
-  the message's wait is bounded by `UNCLEARABLE_DRAFT_WAIT`, kept per message under its queue id, after which the message
-  goes into the box as it stands, the clients told in a `message_sent_with_draft` notice, and a box that stays unreadable
-  gets a `message_waits_on_input` notice; `LiveSession::write_message_into_box` in `mod.rs` is that write, told what the
-  box holds by `BoxIs`: read, cleared or unclearable), `input_box_clear.rs` (the run of Ctrl-U presses on a provider's input box,
-  each seen on the screen before the next, which that clear and an interrupt's clearing of the prompt share),
-  `output_pace.rs` (whether the parsed screen shows a
-  whole frame, from the agent's recent output), `paste_apart.rs` (submitting a message whose Enter has to wait until the
-  agent has taken its paste; `NotSubmitted`),
-  `pasted_image.rs` (an image the user pasted into the terminal, written as a file under the process's scratch directory
-  (`PtyCore::scratch_dir`) for the agent to read by path: the `save_pasted_image` request, answered by `pasted_image_saved`),
-  `swap.rs` (the stash of the draft around a message, the hold on the input while it is recovered, which
-  a bound ends so that a message is not held without end, and `write_message_input_as`, the queue's write of a message
-  under its id), `input_box.rs`, `dialogs.rs`, `trust/` folder-trust confirmations (`carry.rs` the `TrustCarrier` interface of a provider that records the trust in
-  a per-session home; `screen.rs` reads a provider's screen off the recent output, or off the parsed screen where
-  `TermFacts::host_renders` says the output is the host's repaint, `TrustState::reads_screen`; there Codex's watch ends
-  at its composer rather than its title, and Claude Code's readiness, otherwise its bracketed paste after the first
-  hook, also comes with its input box drawn after `SessionStart`, `on_session_start`), `interrupt/`, `title_activity.rs` (what
-  a terminal title says about a turn), `turn_reading.rs` (one reading of whether the agent is in a turn, from its title or
-  reported status, the dialog sighting and the hooks' status, which the interrupt key, the title's cancel watch and the
-  draft's lone-Esc timing each combine their own way: `LiveSession::turn_reading`, `TurnReading`), `title_interrupt.rs` (a cancel that left no other trace, read off the title),
-  `usage_limit.rs` (where the process stands with the hold on Octoboard's writes after a usage-limit stop: judging, held or free; per process, so a new process starts free), `wait.rs` (polling a condition, `wait_for`, and waiting for a session's output to go quiet, `wait_quiet`),
-  `program_status.rs` (the session's status, turns and pause taken from the root status record the program reports
-  through OSC 7501, only for an agent whose provider has no status integration).
-  `screen.rs` is the `ScreenReader` trait, how one provider's terminal screens, input box and title read, which
-  `AgentProvider::screen` gives (`NoScreen` is the default that recognises nothing; `user_action_title` is the title
-  text a provider shows when only the user can act; `input_placeholder` the hint an empty input box shows; `clears_input_box_with_ctrl_u` and `collapsed_paste` what
-  a provider's Ctrl-U does to its box and the placeholder it shows for a long paste; `Interrupt` how a provider's turn is interrupted, including the
-  wording of messages left waiting in its own queue past a cancel); the modules above keep only what is
-  done with a reading (the dialogs are kept as `DialogPattern` and `DialogKind`), and read it through the session's
-  provider.
+- `src/session/` — one running agent process (`LiveSession`; `LiveSession::host_renders` says whether its titles come
+  off the parsed screen's title changes and a provider's placeholder reads as an empty input box), input and
+  message-write gates (`LiveSession::takes_automatic_keys` is the one check an automatic key or message goes in under;
+  the daemon's own writes, a message's paste and Enter, the stash, interrupt and trust keys, are `platform::term::Input`
+  values; a client's keystrokes and query replies go in raw), `term/` launch and writing a message into the process
+  (through a `MessageTransport` where the launch started the provider's own server, otherwise the guarded
+  bracketed-paste write (`send_message_with_id` says which way it went, a `Route`); a transport also starts the server's
+  queue and says what came of it (`start_queue` gives a `QueueStart`: nothing waited, how many started, how many wait
+  behind messages someone else queued, or that it could not be told); `PrivateServer`, how a launch starts that server
+  through a `ServerHost`, `LaunchPlan::private_server`, with `StartedServer` and `TransportEvents`, which
+  `register_live` attaches so a transport can retry its queue, hand over the notice that messages are held and the code
+  of that notice once they went in (the state layer only broadcasts them), and end the terminal when the server dies;
+  `UncertainSubmission`, the error of a write whose acceptance is unknown, which holds the session's later messages;
+  `RefusedByAgent`, the error of a message the agent's own queue refused outright, which fails that message to its
+  sender, coded `message_refused`, while the queue behind it goes on, and `HeldByServer`, that of a message the server
+  holds back for now; `AfterExit`, the work a launch leaves for once its process has exited: `LaunchPlan::after_exit`;
+  `before_scratch_removal`, what a launch and an adopted session both do once the process is reaped: stop the transport
+  and run `AfterExit`), `draft.rs` (a mirror of the keys typed into the input, matching the prompts the agent reports
+  submitted, with `KeyTiming`, when and what kind of keys went in, kept apart from it), `draft_hold.rs` (the release of
+  the hold typed keys keep on Octoboard's messages, and the checks a message written past the draft's grace waits on,
+  none of them without end: `settle_input`, `release_draft_hold`, `schedule_draft_release` on `LiveSession`),
+  `draft_clear.rs` (clearing a user's draft with Ctrl-U past the grace period, so that an automatic message is written
+  alone and the text handed back in a `draft_discarded` notice: `LiveSession::write_after_clearing`; where the box
+  cannot be cleared the message's wait is bounded by `UNCLEARABLE_DRAFT_WAIT`, kept per message under its queue id,
+  after which the message goes into the box as it stands, the clients told in a `message_sent_with_draft` notice, and a
+  box that stays unreadable gets a `message_waits_on_input` notice; `LiveSession::write_message_into_box` in `mod.rs` is
+  that write, told what the box holds by `BoxIs`: read, cleared or unclearable), `input_box_clear.rs` (the run of Ctrl-U
+  presses on a provider's input box, each seen on the screen before the next, which that clear and an interrupt's
+  clearing of the prompt share), `output_pace.rs` (whether the parsed screen shows a whole frame, from the agent's
+  recent output), `paste_apart.rs` (submitting a message whose Enter has to wait until the agent has taken its paste;
+  `NotSubmitted`), `pasted_image.rs` (an image the user pasted into the terminal, written as a file under the process's
+  scratch directory (`PtyCore::scratch_dir`) for the agent to read by path: the `save_pasted_image` request, answered by
+  `pasted_image_saved`), `swap.rs` (the stash of the draft around a message, the hold on the input while it is
+  recovered, which a bound ends so that a message is not held without end, and `write_message_input_as`, the queue's
+  write of a message under its id), `input_box.rs`, `dialogs.rs`, `trust/` folder-trust confirmations (`carry.rs` the
+  `TrustCarrier` interface of a provider that records the trust in a per-session home; `screen.rs` reads a provider's
+  screen off the recent output, or off the parsed screen where `TermFacts::host_renders` says the output is the host's
+  repaint, `TrustState::reads_screen`; there Codex's watch ends at its composer rather than its title, and Claude Code's
+  readiness, otherwise its bracketed paste after the first hook, also comes with its input box drawn after
+  `SessionStart`, `on_session_start`), `interrupt/`, `title_activity.rs` (what a terminal title says about a turn),
+  `turn_reading.rs` (one reading of whether the agent is in a turn, from its title or reported status, the dialog
+  sighting and the hooks' status, which the interrupt key, the title's cancel watch and the draft's lone-Esc timing each
+  combine their own way: `LiveSession::turn_reading`, `TurnReading`), `title_interrupt.rs` (a cancel that left no other
+  trace, read off the title), `usage_limit.rs` (where the process stands with the hold on Octoboard's writes after a
+  usage-limit stop: judging, held or free; per process, so a new process starts free), `wait.rs` (polling a condition,
+  `wait_for`, and waiting for a session's output to go quiet, `wait_quiet`), `program_status.rs` (the session's status,
+  turns and pause taken from the root status record the program reports through OSC 7501, only for an agent whose
+  provider has no status integration). `screen.rs` is the `ScreenReader` trait, how one provider's terminal screens,
+  input box and title read, which `AgentProvider::screen` gives (`NoScreen` is the default that recognises nothing;
+  `prompt_after_title_stop_ends_turn` declares whether a new prompt after a stopped title proves an interrupt landed;
+  `user_action_title` is the title text a provider shows when only the user can act; `input_placeholder` the hint an
+  empty input box shows; `clears_input_box_with_ctrl_u` and `collapsed_paste` what a provider's Ctrl-U does to its box
+  and the placeholder it shows for a long paste; `Interrupt` how a provider's turn is interrupted, including the wording
+  of messages left waiting in its own queue past a cancel); the modules above keep only what is done with a reading (the
+  dialogs are kept as `DialogPattern` and `DialogKind`), and read it through the session's provider.
 - `src/titles/` — the title a session shows, from the agent's records, the terminal title and the first prompt.
 - [`src/processes/ledger/`](../../apps/daemon/src/processes/ledger/README.md) — attributing, listing, stopping, keeping
   and carrying over the processes an agent launch started.
@@ -658,17 +666,16 @@ which the Linux release archive ships and the website's `install.sh` installs wi
 
 ### Agent records, hooks, adapters and MCP
 
-- `src/providers/` — the provider registry, the facts about each agent provider that do not depend on running it. `mod.rs`
-  holds the registry (`REGISTRY`, one line per provider), `AgentId` (re-exported by `protocol`, generated for clients as `Agent`: a `Copy`
-  handle on a registered provider's id that only the registry makes, so an unregistered id is refused when
-  deserialized; `AgentId::ALL` lists them in registry order and each provider's file declares its own constant),
-  `ProviderDescriptor` (id, names, install page, binary,
-  layout, the markers that detect a project set up for it, instruction file, tool-name prefix, ask-question tool,
-  `Capabilities` (status line, reset credits, per-session trust, configuration sharing, the URL scheme of its desktop
-  application `native_app_scheme`, the delivery quirks),
-  `quota_windows` (`QuotaWindowNaming`, which windows the provider has and what its own interface calls them),
-  `model_display` (`ModelDisplay`, how its model ids are shown), whether other providers can be made compatible
-  with it, its `settings` schema and its error and notice `codes`) and `descriptors()`
+- `src/providers/` — the provider registry, the facts about each agent provider that do not depend on running it.
+  `mod.rs` holds the registry (`REGISTRY`, one line per provider), `AgentId` (re-exported by `protocol`, generated for
+  clients as `Agent`: a `Copy` handle on a registered provider's id that only the registry makes, so an unregistered id
+  is refused when deserialized; `AgentId::ALL` lists them in registry order and each provider's file declares its own
+  constant), `ProviderDescriptor` (id, names, install page, binary, layout, the markers that detect a project set up for
+  it, inherited session marker variables, instruction file, tool-name prefix, ask-question tool, `Capabilities` (status
+  line, reset credits, per-session trust, configuration sharing, the URL scheme of its desktop application
+  `native_app_scheme`, the delivery quirks), `quota_windows` (`QuotaWindowNaming`, which windows the provider has and
+  what its own interface calls them), `model_display` (`ModelDisplay`, how its model ids are shown), whether other
+  providers can be made compatible with it, its `settings` schema and its error and notice `codes`) and `descriptors()`
   in the registry's order. A `SettingDescriptor` declares one user setting of the provider: a choice (some choices
   needing confirmation; unset follows the account's own configuration) or a switch (on or off by default), whether a
   configuration export carries it (`exported`), whether the agents' `get_settings` shows it (`shown_to_agents`), and
@@ -676,16 +683,18 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   overridable: `SettingDescriptor::overridable`, asked through `ProviderDescriptor::is_overridable` and
   `overridable_settings`, is the one rule for which settings a console, a project or a session may hold its own value
   for); `ProviderSettings` and `SettingValue` are the values in effect, and the provider reads its own from
-  `LaunchSpec.settings`. A `ProviderCode`
-  is a code only that provider raises, named `provider.<id>.<code>` and declared as a `pub const` of its file; `claude.rs`, `codex.rs` and `grok.rs` are one descriptor each, and `test_provider.rs` is the provider only the tests
-  register (its behavior is `src/adapter/test_provider.rs`); `layout.rs` is the `AgentLayout` struct (where an agent keeps its
-  files) and its lookup; each provider's own `LAYOUT` and the file-name constants only its logic uses are in its file. It is a layer of its own below `protocol`,
-  so every layer can read a descriptor; `protocol/providers.rs` serves them to clients as `ProviderInfo` in `snapshot`.
+  `LaunchSpec.settings`. A `ProviderCode` is a code only that provider raises, named `provider.<id>.<code>` and declared
+  as a `pub const` of its file; `claude.rs`, `codex.rs` and `grok.rs` are one descriptor each, and `test_provider.rs` is
+  the provider only the tests register (its behavior is `src/adapter/test_provider.rs`); `layout.rs` is the
+  `AgentLayout` struct (where an agent keeps its files) and its lookup; each provider's own `LAYOUT` and the file-name
+  constants only its logic uses are in its file. It is a layer of its own below `protocol`, so every layer can read a
+  descriptor; `protocol/providers.rs` serves them to clients as `ProviderInfo` in `snapshot`.
 - `src/hooks/` — the `HookInterpreter` trait each provider reads its hook events with (including which event starts a
-  conversation and which prompts are the agent's own completion notices or self-sent), what is common to every
+  conversation and which prompts are the agent's own completion notices or self-sent, and the cross-project guard's
+  `edit_targets` and `deny_edit`, whose defaults read no paths and produce no refusal), what is common to every
   provider's payloads, the per-session ordered queue of events, and applying an event through the session's provider's
-  interpreter (`apply.rs`, which also has the provider's record store arm the record watch the interpreter asks
-  for, and starts the session's own server queue when a turn is cancelled).
+  interpreter (`apply.rs`, which also has the provider's record store arm the record watch the interpreter asks for, and
+  starts the session's own server queue when a turn is cancelled).
 - `src/keep_awake/` — Prevent sleep: the task `main` starts that holds the host awake (through `platform::sleep`) while
   `Settings.keep_awake` is on and either `keep_awake_when` is `always` or a session is working (the UI's `sessionIsWorking`,
   kept from the session events), releases at once when that turns false, and reports whether it holds
@@ -704,55 +713,60 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   putting a session back at its prompt after a watch finding); every pass over a
   record goes through `line_file.rs`.
 - `src/adapter/` — the behavior of each provider behind one trait, `AgentProvider` (its descriptor, the launch plan,
-  refusing an account that cannot be launched, the installed version, reading the titles it shows, its hook
-  interpreter, its record store, its screen reader, its accounts (`accounts()`, `AccountOps`), its model catalogue
-  (`catalogue()`, `ModelCatalogue`), how its CLI is installed and updated (`cli_packaging()`, `CliPackaging`, defined in
-  `mod.rs`, read by `agents/cli/`), whether its hooks and signals give its sessions their status
-  (`has_status_integration()`; where not, `session/program_status.rs` takes it from the program's own reports), its status line (`status_line()`, `StatusLine`, defined in `mod.rs`), how its desktop application is asked to show a conversation
-  (`native_app()`, `NativeApp`, defined in `mod.rs`, with `native_app_unavailable`, the refusal it raises; implemented by
-  `claude/native_app.rs` and `codex/native_app.rs`) and what it
-  offers a provider made compatible with it (`compatibility_source()`, `CompatibilitySource`, defined in `mod.rs`: the
-  MCP servers, skill directories and prompt files it has and the instructions to read the rest of its configuration;
-  `LaunchSpec::compatibility_sources` holds one source per compatibility switch that is on, looked up with
-  `LaunchSpec::compatibility_source(agent)` and resolved by `compatibility_sources_of`)), registered by
-  `adapter::provider(agent)` and implemented by `ClaudeProvider`, `CodexProvider` and `GrokProvider` in `claude/`,
-  `codex/` and `grok/` (each provider's `hooks.rs` there is its `HookInterpreter`, and `records.rs` its
-  `RecordStore`, with `conversation.rs` and `switch_continue.rs` its readings of a conversation and of how its last
-  turn ended, and `screen.rs` its `ScreenReader`; `claude/stash.rs` is Claude Code's stash keybinding gate; `claude/compatibility.rs` and `codex/compatibility.rs` (each with
-  `compatibility.md`, the instruction text) are Claude Code's and Codex's `CompatibilitySource`; `claude/compatibility_consumer.rs`
-  and `grok/compatibility_consumer.rs` are Claude Code and Grok Build taking a source's servers, skills and prompts into
+  refusing an account that cannot be launched, the installed version, reading the titles it shows, its hook interpreter,
+  its record store, its screen reader, its accounts (`accounts()`, `AccountOps`), its model catalogue (`catalogue()`,
+  `ModelCatalogue`), how its CLI is installed and updated (`cli_packaging()`, `CliPackaging`, defined in `mod.rs`, read
+  by `agents/cli/`), whether its hooks and signals give its sessions their status (`has_status_integration()`; where
+  not, `session/program_status.rs` takes it from the program's own reports), its status line (`status_line()`,
+  `StatusLine`, defined in `mod.rs`), how its desktop application is asked to show a conversation (`native_app()`,
+  `NativeApp`, defined in `mod.rs`, with `native_app_unavailable`, the refusal it raises; implemented by
+  `claude/native_app.rs` and `codex/native_app.rs`) and what it offers a provider made compatible with it
+  (`compatibility_source()`, `CompatibilitySource`, defined in `mod.rs`: the MCP servers, skill directories and prompt
+  files it has and the instructions to read the rest of its configuration; `LaunchSpec::compatibility_sources` holds one
+  source per compatibility switch that is on, looked up with `LaunchSpec::compatibility_source(agent)` and resolved by
+  `compatibility_sources_of`)), registered by `adapter::provider(agent)` and implemented by `ClaudeProvider`,
+  `CodexProvider` and `GrokProvider` in `claude/`, `codex/` and `grok/` (each provider's `hooks.rs` there is its
+  `HookInterpreter`, and `records.rs` its `RecordStore`, with `conversation.rs` and `switch_continue.rs` its readings of
+  a conversation and of how its last turn ended, and `screen.rs` its `ScreenReader`; `claude/stash.rs` is Claude Code's
+  stash keybinding gate; `claude/compatibility.rs` and `codex/compatibility.rs` (each with `compatibility.md`, the
+  instruction text) are Claude Code's and Codex's `CompatibilitySource`; `claude/compatibility_consumer.rs` and
+  `grok/compatibility_consumer.rs` are Claude Code and Grok Build taking a source's servers, skills and prompts into
   their own launch (Claude Code's through the launch's `--mcp-config` and a plugin directory, Grok's by editing its
-  per-session copy of `config.toml`; `grok/compatibility_tests.rs` is the latter's tests); `compatibility_offer.rs` is what those
-  consumers share (translating a source's MCP servers, keeping literal secrets in environment variables, linking offered
-  skill and prompt files);
-  `claude/transcript_watch.rs` is the Claude Code rejection and interrupt watch, `claude/status_line.rs` its
-  `StatusLine`, `codex/native_binary.rs` the native program of a package-manager-installed Codex that a shim
-  launches (the one built for the machine's native architecture when it ships several, as on ARM64 Windows), `codex/rollout_watch.rs`
-  the Codex failed-turn watch and `codex/rollout_files.rs` Codex's rollout file-name and segment-chain rules;
-  `models.rs` is a provider's `ModelCatalogue`, and `accounts.rs` its `AccountOps` with the parts `quota.rs`
-  (`QuotaProbe`), `login.rs` (`LoginFlow`) and `shared_config.rs` (the items it shares); Codex also has
-  `reset_credit.rs` (`ResetCredits`), `threads.rs` (its `ThreadRegistry`), `unarchive.rs` (its unarchiving of a rollout),
-  `app_server.rs` (the app-server start and handshake every account-level use of `codex app-server` shares: the quota
-  probe, reset credit, login and MCP inventory reading, which starts it with `CODEX_INVENTORY_APP_SERVER_ARGS`, Apps
-  and plugins left on; a session's private server reuses only its handshake messages, `initialize_params` and
-  `initialized`), `private_server.rs` (the `PrivateServerPlan` a Codex
-  launch of 0.166.0 or later carries as its `PrivateServer`: the server's overrides, the arguments of the terminal that
-  attaches to it with `--remote`, the permission preset a resume applies) and `transport/` (its `CodexTransport`, the
-  session's `MessageTransport`, in `mod.rs`: identifying the session's conversation, delivering a message to Codex's
-  own queue, loading the conversation again when Codex unloaded it, starting the queue after a cancel, and the notice
-  that messages are held, `held_notice`, coded `provider.codex.messages_held`; `rpc.rs` the JSON-RPC stream, the
-  endpoint a client and the terminal connect to, and `Rpc` (its stream is a `platform::ipc::Connection`); `server.rs`
-  starting the server through the launch's `ServerHost` (the endpoint it listens on, the arguments and readiness it
-  asks), and watching it exit; `CodexTransport::adopt` links to the server a holder kept running with an adopted terminal; the transport
-  names no OS; `resume.rs` what a
-  remote resume needs of the server, the trust of the generated hooks and the `thread/resume` that applies the
-  permission preset), `mcp_auth.rs` (its `McpServerAuth`: `codex mcp login` and `codex mcp logout`); Codex, Claude
-  Code and Grok also have `mcp_inventory.rs` (their `McpInventoryReader`: Codex's over the app server, Claude Code's over
-  `claude auth status` and `claude mcp list`, Grok's over `grok mcp list` and `grok mcp doctor`, servers only), and Grok `trust.rs` (its `TrustCarrier`)); `mod.rs` holds the shared launch/resume flow, `hooks.rs` the hook URL, command and script (the command and script name the session's key file, not the key) and the cross-project guard's command, script and `PreToolUse` group (`guard_command`, `write_guard_script`, `add_guard_group`; Claude Code registers the command in its JSON hooks, Grok Build the script in its JSON hooks, Codex the script in its launch overrides), and `account_cli.rs` the account
-  directories, commands and short queries (running an agent CLI as an account, also one that leaves what it started running), and `files.rs` the bounded reads of the
-  files an adapter reads, with `project_dirs` (the directories whose project configuration is layered) (`codex/claude_mcp.rs`
-  only translates a compatibility source's MCP servers into Codex's launch overrides). The instruction file, tool-name prefix, ask-question tool and detection markers are read from the
-  descriptors by `session_tools/`, `coordinator/console_workdir.rs` and `agents/detect.rs`.
+  per-session copy of `config.toml`; `grok/compatibility_tests.rs` is the latter's tests); `compatibility_offer.rs` is
+  what those consumers share (translating a source's MCP servers, keeping literal secrets in environment variables,
+  linking offered skill and prompt files); `claude/transcript_watch.rs` is the Claude Code rejection and interrupt
+  watch, `claude/status_line.rs` its `StatusLine`, `codex/native_binary.rs` the native program of a
+  package-manager-installed Codex that a shim launches (the one built for the machine's native architecture when it
+  ships several, as on ARM64 Windows), `codex/rollout_watch.rs` the Codex failed-turn watch and `codex/rollout_files.rs`
+  Codex's rollout file-name and segment-chain rules; `models.rs` is a provider's `ModelCatalogue`, and `accounts.rs` its
+  `AccountOps` with the parts `quota.rs` (`QuotaProbe`), `login.rs` (`LoginFlow`) and `shared_config.rs` (the items it
+  shares); Codex also has `reset_credit.rs` (`ResetCredits`), `threads.rs` (its `ThreadRegistry`), `unarchive.rs` (its
+  unarchiving of a rollout), `app_server.rs` (the app-server start and handshake every account-level use of `codex
+  app-server` shares: the quota probe, reset credit, login and MCP inventory reading, which starts it with
+  `CODEX_INVENTORY_APP_SERVER_ARGS`, Apps and plugins left on; a session's private server reuses only its handshake
+  messages, `initialize_params` and `initialized`), `private_server.rs` (the `PrivateServerPlan` a Codex launch of
+  0.166.0 or later carries as its `PrivateServer`: the server's overrides, the arguments of the terminal that attaches
+  to it with `--remote`, the permission preset a resume applies) and `transport/` (its `CodexTransport`, the session's
+  `MessageTransport`, in `mod.rs`: identifying the session's conversation, delivering a message to Codex's own queue,
+  loading the conversation again when Codex unloaded it, starting the queue after a cancel, and the notice that messages
+  are held, `held_notice`, coded `provider.codex.messages_held`; `rpc.rs` the JSON-RPC stream, the endpoint a client and
+  the terminal connect to, and `Rpc` (its stream is a `platform::ipc::Connection`); `server.rs` starting the server
+  through the launch's `ServerHost` (the endpoint it listens on, the arguments and readiness it asks), and watching it
+  exit; `CodexTransport::adopt` links to the server a holder kept running with an adopted terminal; the transport names
+  no OS; `resume.rs` what a remote resume needs of the server, the trust of the generated hooks and the `thread/resume`
+  that applies the permission preset), `mcp_auth.rs` (its `McpServerAuth`: `codex mcp login` and `codex mcp logout`);
+  Codex, Claude Code and Grok also have `mcp_inventory.rs` (their `McpInventoryReader`: Codex's over the app server,
+  Claude Code's over `claude auth status` and `claude mcp list`, Grok's over `grok mcp list` and `grok mcp doctor`,
+  servers only), and Grok `trust.rs` (its `TrustCarrier`)); `mod.rs` holds the shared launch/resume flow, `hooks.rs` the
+  hook URL, command and script (the command and script name the session's key file, not the key) and the cross-project
+  guard's command, script and JSON group (`guard_command`, `write_guard_script`, `add_guard_group`, whose event name is
+  passed by the provider; Claude Code registers the command in its JSON hooks, Grok Build the script in its JSON hooks,
+  Codex the script in its launch overrides), and `account_cli.rs` the account directories, commands and short queries
+  (running an agent CLI as an account, also one that leaves what it started running), and `files.rs` the bounded reads
+  of the files an adapter reads, with `project_dirs` (the directories whose project configuration is layered)
+  (`codex/claude_mcp.rs` only translates a compatibility source's MCP servers into Codex's launch overrides). The
+  instruction file, tool-name prefix, ask-question tool and detection markers are read from the descriptors by
+  `session_tools/`, `coordinator/console_workdir.rs` and `agents/detect.rs`.
 - `src/session_tools/` — the static description of the Octoboard MCP tools and what sessions are told of them:
   `catalogue/` the tool catalogue (`mod.rs` which tools a role sees, then one file per tool family and `schemas.rs`
   the shared schema builders), `role.rs` the role description, `console_instructions.rs` the console session's
@@ -777,8 +791,8 @@ which the Linux release archive ships and the website's `install.sh` installs wi
 Enforced by the test `layering_tests::every_top_level_module_depends_only_downward_or_as_listed` in
 `src/layering_tests/` (`pnpm test:rust -p octoboardd layering_tests`). Its `LAYERS` and `UPWARD` constants
 (`layering_tests/mod.rs`; the scanner is `layering_tests/scan.rs`) are the source of truth; the two tables below keep in
-step with them, and an edge that must point upward is added to `UPWARD` and to the allow-list table together, with its
-reason.
+step with them. The rule and what to do with an edge that must point upward are in `docs/conventions/daemon.md`,
+"Modules and entry points".
 
 The rule: every top-level module sits in one layer, and a module may use its own layer and the layers below it. An edge
 (a `crate::` path in production code, in a `use` or inline, from the module the file sits in to the module the path
@@ -794,13 +808,12 @@ module, a file under `#![cfg(test)]`, and any item, variant, match arm, field or
 holds only in tests (`cfg(test)`, `cfg(all(test, …))`, `cfg(any(test, all(test, …)))`) are left out. The scan is
 lexical: comments and literals are blanked; a name a `use` brings in is followed through the file, but a child module's
 `use super::*` inheriting a parent's import is not; a glob import counts as the import of its module; what a macro
-expands to is not seen; a module's file is found only as `<name>.rs` or `<name>/mod.rs` and `#[path = …]` is not followed,
-so a `#[path]` module's file is reported as unreached and fails the test on every OS (a per-host alternative module is
-declared `mod x_stub;` and renamed with `use x_stub as x;` under `cfg`, as `src/platform/proc/mod.rs` does for
-`cgroup_stub`); methods and fields reached through a value are not paths and are not seen, so an entry for a
-type admits everything the type exposes; and a test-only field of a tuple struct or variant whose type holds a comma
-inside angle brackets (`HashMap<K, V>`) is cut short at that comma, so the rest of its type is read as production code,
-which can only add an edge, never hide one.
+expands to is not seen; a module's file is found only as `<name>.rs` or `<name>/mod.rs` and `#[path = …]` is not
+followed, so a `#[path]` module's file is reported as unreached and fails the test on every OS (the form a per-host
+alternative takes instead is in `docs/conventions/daemon.md`, "Modules and entry points"); methods and fields reached
+through a value are not paths and are not seen, so an entry for a type admits everything the type exposes; and a
+test-only field of a tuple struct or variant whose type holds a comma inside angle brackets (`HashMap<K, V>`) is cut
+short at that comma, so the rest of its type is read as production code, which can only add an edge, never hide one.
 
 `platform` is a foundation module that uses nothing else in the crate: the same test fails on an edge from it to any other
 top-level module or to an item of the crate root, whatever the layer of the target. The OS-token rule below reads the
@@ -834,10 +847,10 @@ same scan.
 ### OS-specific tokens
 
 Enforced by the test `layering_tests::os_tokens_appear_only_in_the_platform_layer` (the check is
-`layering_tests/os_tokens.rs`, the scan is the same `layering_tests/scan.rs` pass, so "production code" means exactly what
-it means for the dependency rule). Every OS-specific token belongs under `src/platform/`; anywhere else in production code
-it fails the test. The rule has no exceptions. The tokens, by the kind name
-the test reports:
+`layering_tests/os_tokens.rs`, the scan is the same `layering_tests/scan.rs` pass, so "production code" means exactly
+what it means for the dependency rule). The test fails on an OS-specific token anywhere in production code outside
+`src/platform/`; the rule and its reasons are in `docs/conventions/daemon-processes-and-io.md`, "Platform differences".
+The tokens, by the kind name the test reports:
 
 | Kind | Token |
 |---|---|
@@ -852,112 +865,93 @@ the test reports:
 | `symlink` | the identifiers `symlink`, `symlink_file` and `symlink_dir`; `symlink_metadata`, `is_symlink` and `read_link` are portable and not listed |
 | `canonicalize` | the identifier `canonicalize`, so `std::fs::canonicalize` and `Path::canonicalize` alike: one OS call |
 
-The scan is lexical, like the dependency rule's: comments and literal contents are blanked (a `/bin/sh` in a comment does
-not count); a macro's expansion is not seen; and a bare `metadata.mode()` with no arguments is not a site by itself,
-because `alacritty_terminal`'s `Term::mode()` has the same shape, but the octal mask it is read with is one. Test code is
-exempt, exactly as for the dependency rule, yet it must still build on every OS: test-only code that needs a Unix call is
-gated by `cfg` or kept out of the shared tests.
+The scan is lexical, like the dependency rule's: comments and literal contents are blanked (a `/bin/sh` in a comment
+does not count); a macro's expansion is not seen; and a bare `metadata.mode()` with no arguments is not a site by
+itself, because `alacritty_terminal`'s `Term::mode()` has the same shape, but the octal mask it is read with is one.
+Test code is exempt, exactly as for the dependency rule.
 
-The rule has no exceptions and no allow-list: a site outside `platform` fails the test with its `file:line` and token. A
-new site is never excused: it goes under `platform`.
+The test has no allow-list: a site outside `platform` fails with its `file:line` and token.
 
 ## Source rules
 
 Tests in `src/layering_tests/` (the checks are `layering_tests/source_rules.rs`) that read every `.rs` file under `src`,
 test sources included, with comments removed and string literals kept (the shell scripts tests run are literals). Each
-names the sanctioned place for what it bans and has no allow-list of sites; a violation fails with its `file:line`.
+names the sanctioned place for what it bans and has no allow-list of sites; a violation fails with its `file:line`. The
+rule each one holds and its sanctioned form are in `docs/conventions/daemon-processes-and-io.md`, "Processes" (the first
+two) and "Paths and files" (the third).
 
-- `a_window_change_trap_is_written_only_in_the_test_support_helper`: a shell `trap` for `WINCH` (the
-  word on a line after `trap `, as in a script a test runs) appears only in `test_support/resize.rs`; a mention of
-  `SIGWINCH` in Rust code is not one and passes. Bash 5 clears a signal's pending count once its trap has run, so a trap that does work
-  (reading the size) loses a resize that arrives meanwhile; a script reports a size with
-  `test_support::resize::reports_size`, whose trap only sets a variable that the loop reads.
+- `a_window_change_trap_is_written_only_in_the_test_support_helper`: a shell `trap` for `WINCH` (the word on a line
+  after `trap `, as in a script a test runs) appears only in `test_support/resize.rs`; a mention of `SIGWINCH` in Rust
+  code is not one and passes.
 - `a_process_is_ended_on_windows_only_where_it_is_then_waited_for`: `TerminateProcess(` is called only in
-  `platform/proc/windows.rs` and `platform/proc/crash/windows.rs` (each waits, bounded, until the process handle is
-  signalled). Anything else, test support included, ends a process through
-  `platform::proc` (`end_and_wait` for the cleanup of a start that failed, the sweeps otherwise);
-  `test_support::kill` waits through it.
+  `platform/proc/windows.rs` and `platform/proc/crash/windows.rs`.
 - `a_temporary_file_is_named_after_the_whole_name_of_the_file_it_becomes`: no `with_extension("partial")`, `"tmp"`,
-  `"temp"`, `"new"`, `"staging"` and no `with_extension` given the process id. A temporary beside `path` is
-  `platform::names::with_suffix(path, ".partial")`, which appends to the whole file name, so `starter.plain` and
-  `starter.background` never share one.
+  `"temp"`, `"new"`, `"staging"` and no `with_extension` given the process id.
 
 ## Where new code goes
 
+Where a file goes. The rules the code in it follows are in the convention docs, which the bullets point to; the index of
+them is `docs/README.md`, "Coding conventions".
+
 - A new control-socket request: its types in `src/protocol/` (and `PROTOCOL.md`), its handler under `src/coordinator/`
   reached from the dispatcher in `mod.rs`; regenerate `packages/ui/src/protocol.generated.ts` and the schema in
-  `contracts/protocol/` by running the `protocol::bindings` and `protocol::schema` tests with
-  `OCTOBOARD_WRITE_BINDINGS=1` (the same tests fail when the files are stale). A wire type derives `JsonSchema`
-  beside `TS` (both under `cfg(test)`), and a doc comment on it or its field is the description native clients read; a
-  field whose Rust type says less than the protocol narrows both renderings, and `protocol::crosscheck` fails when it
-  narrows only one. It follows
-  the conventions in `PROTOCOL.md`'s "What every client implements" section (naming, tri-state update fields, wire paths,
-  and what raises the protocol generation).
+  `contracts/protocol/` as `docs/conventions/protocol-and-contracts.md`, "Wire types and generated files" says, and
+  follow its "The envelope and field conventions".
 - A new code the daemon names a failure or notice by: a `pub const` of the matching module in `src/protocol/codes.rs`
-  (the only place a core `Code` is made); the UI needs its record and wording in the same change. A code only one
-  provider raises is a `ProviderCode` const in `src/providers/<id>.rs`, listed in that descriptor's `codes`; its record
-  and wording go in the provider's presentation module in the UI.
+  (the only place a core `Code` is made); a code only one provider raises is a `ProviderCode` const in
+  `src/providers/<id>.rs`, listed in that descriptor's `codes`. The UI's record and wording go in the same change (the
+  UI's side: the UI structure doc). The rules, including store code's `Result`, are in
+  `docs/conventions/error-codes.md`, "Daemon codes" and "Provider codes".
 - A new provider: its descriptor in `src/providers/<id>.rs` and its behavior in `src/adapter/<id>/`, plus one line in
-  each registry (`REGISTRY` in `src/providers/mod.rs`, `PROVIDERS` in `src/adapter/mod.rs`); everything keyed by provider
-  (`protocol::PerAgent`, the store's per-provider tables) covers the new one without a change, and the UI adds its
-  presentation module (see the UI structure doc).
+  each registry (`REGISTRY` in `src/providers/mod.rs`, `PROVIDERS` in `src/adapter/mod.rs`); everything keyed by
+  provider (`protocol::PerAgent`, the store's per-provider tables) covers the new one without a change, and the UI adds
+  its presentation module (see the UI structure doc). The rule is in `docs/conventions/provider-neutral-core.md`, "The
+  rule".
 - A new setting of one provider: declared in the provider's descriptor (`settings`) and read by the provider from
-  `LaunchSpec.settings`; the store, the wire (`provider_settings`, `set_provider_setting`), the configuration document,
-  the MCP `get_settings` tool and the UI's provider settings follow the schema, so none of them changes. A switch that
-  declares `compatibility_with` is also held per console, project and session, validated and shown from the same
-  declaration.
-- A new MCP tool: the catalogue in `src/session_tools/catalogue/`, its dispatch in `src/mcp/dispatch.rs` and the tool
-  in a file of `src/mcp/tools/`; it calls the coordinator or reporting function the control socket uses rather than
-  reimplementing it.
+  `LaunchSpec.settings`; the store (`src/store/provider_settings.rs`), the wire (`provider_settings`,
+  `set_provider_setting`), the configuration document, the MCP `get_settings` tool and the UI's provider settings read
+  the declaration (the rule: `docs/conventions/provider-neutral-core.md`, "Daemon"). A switch that declares
+  `compatibility_with` is also held per console, project and session, validated and shown from the same declaration.
+- A new MCP tool: the catalogue in `src/session_tools/catalogue/`, its dispatch in `src/mcp/dispatch.rs` and the tool in
+  a file of `src/mcp/tools/` (the rules: `docs/conventions/protocol-and-contracts.md`, "MCP tools and the MCP
+  contract").
 - A new kind of report-page component: a type and a row of `KINDS` in `src/protocol/page_content/` (with its arms in
   the accessors of `Component` and, for an input field or a submitter, in `rules.rs`), and a topic entry in
   `src/session_tools/page_guide.rs`; the UI's renderer registry fails type checking until it has its renderer (see the
   UI structure doc).
-- A new table or column: version changes and migration code are written only between released versions. While the schema
-  version has not been released, change `SCHEMA` in `src/store/schema.rs` in place, with no version bump or new step (a
-  step that already brings a released version up to it is amended instead). Changing the schema of a released version
-  raises `SCHEMA_VERSION`, appends the step from the released version to `MIGRATIONS`, and keeps that version's schema
-  as `src/store/schema/v{N}.sql` (the migration tests build a database from every past one). Either way, edit the file
-  of its table family. A database at an older version is backed up as `octoboard.db.pre-v{N}` and migrated; `PRAGMA
-  application_id` marks Octoboard's databases. What belongs to one provider of a console or a project is a row of a
-  child table keyed by the owner and the provider (`console_providers`, `console_launches`, `project_providers`), not a
-  column; rows of a provider this build does not register are kept and left out of loads. A plain boolean application
-  setting is one line of the `bool_settings!` table in `src/store/settings.rs`. The compatibility switches a console's
-  launch settings, a project and a session hold are the one exception: a JSON `compatibility` column beside `model` and
-  `effort` on `console_launches`, `project_providers` and `sessions`, keyed by setting id, so a new overridable setting
-  needs no column.
-- Store code returns the store's `Result` (`src/store/failure.rs`), and a rusqlite error must reach `?` as itself:
-  wrapping it into `anyhow` first (`.context()`, `anyhow::Error::from`) skips the classification. A caller outside the
-  store that returns a store result as `anyhow` unwraps it with `Ok(store.x()?)`. The classification is in the store
-  and not where `error_parts` builds the reply on purpose: the daemon also opens the agents' own SQLite files (Codex's
-  state database), whose failures must not be reported as Octoboard's data folder.
-- State derived at run time from sessions, claims and processes belongs on `AppState` (`src/state/`), not in a stored
-  record.
-- A record that a form edits (the settings, a console, a project, an account in the settings) reaches clients only
-  through `AppState::publish_settings`, `publish_console` and `publish_project` (`broadcast_settings` is the first),
-  which read it under the publication lock and stamp its field versions; a `settings_updated`, `console_upserted` or
-  `project_upserted` event sent through `AppState::broadcast` fails a debug assertion. A new field of such a record that
-  a form edits is added to the paths in `src/state/field_versions/paths.rs` (for the settings, `SETTINGS_FIELDS`, which
-  `SettingsChanges::paths` pairs with its flags, a test checking the pairing).
-  A new write of those records that takes `base_versions` goes through `AppState::checked_write` and holds its guard
-  until the change is published.
+- A new table or column: `SCHEMA` in `src/store/schema.rs`, in the file of its table family, and, for each released
+  version, `src/store/schema/v{N}.sql` with its step in `MIGRATIONS` (the migration tests build a database from every
+  past one); when each is touched is in `docs/conventions/protocol-and-contracts.md`, "Versions and compatibility" and
+  "Store schema", which also say where per-provider data and a plain boolean setting go. A database at an older version
+  is backed up as `octoboard.db.pre-v{N}` and migrated; `PRAGMA application_id` marks Octoboard's databases.
+- State derived at run time from sessions, claims and processes: on `AppState` (`src/state/`), not in a stored record
+  (which state may live there is in `docs/conventions/daemon.md`, "State").
+- A record that a form edits (the settings, a console, a project, an account in the settings): versioned in
+  `src/state/field_versions/` (paths in `paths.rs`) and `src/state/field_versions.rs` (the guarded write and the
+  publishers `AppState::publish_settings`, `publish_console` and `publish_project`); the rules for publishing it and for
+  a new field are in `docs/conventions/protocol-and-contracts.md`, "The envelope and field conventions".
 - What is specific to one provider lives in the provider: its descriptor (`src/providers/<id>.rs`) for its facts and
-  declared capabilities, and its behavior (`src/adapter/<id>/`), including its accounts (quota, sign-in, reset
-  credits, shared configuration, thread registry), model catalogue, status line and trust carrying. Code that works
-  for any provider reads the descriptor's fields and branches on the capabilities it declares, or calls the
-  provider's interface, never on which provider it is.
+  declared capabilities, and its behavior (`src/adapter/<id>/`), including its accounts (quota, sign-in, reset credits,
+  shared configuration, thread registry), model catalogue, status line and trust carrying. What generic code may and may
+  not do about it is in `docs/conventions/provider-neutral-core.md`.
 - Tests sit beside the code they test (`tests.rs`, `*_tests.rs`); shared fixtures come from `src/test_support/`
   (`mod.rs` re-exports `scratch.rs`, `app.rs`, `stand_in.rs`, `processes.rs`, `git.rs` for repositories, `sessions.rs`,
-  `owner_team.rs` and `screens.rs` for the terminal screens of a usage limit, and holds `code_of` and `param_of`, the code and a param of a coded error). A test that depends on time goes through `src/test_support/clock.rs` (`tasks_idle` and `runtime_settled`/`runtime_advanced` on a paused tokio clock, `next_millisecond` for the named wait on the wall clock).
+  `owner_team.rs` and `screens.rs` for the terminal screens of a usage limit, and holds `code_of` and `param_of`, the
+  code and a param of a coded error), and `src/test_support/clock.rs` holds the helpers for a clock (`tasks_idle` and
+  `runtime_settled`/`runtime_advanced` on a paused tokio clock, `next_millisecond` for the named wait on the wall
+  clock). How tests are written is in `docs/conventions/tests.md`, "Where tests sit", "Time in tests" and "Daemon
+  tests".
 
 ## Shared entry points
 
-New code uses these rather than a second implementation. None is enforced by a check unless stated.
+New code uses these rather than a second implementation. None is enforced by a check unless stated. The rows are the
+helper list; the rules for using them, including the ones that go beyond "use it", are in `docs/conventions/daemon.md`,
+"Modules and entry points" and the convention docs it points to.
 
 | Need | Entry point |
 |---|---|
-| Run `git` in a user's repository or against their remote | `src/git/run.rs`: a family's `Runner` (`UserGit` with the call site's `Policy` and `Limits`; `read`, `write`, and `write_remote` for a command that may reach a remote) and `GitError`, the one error type. A command that reaches a remote is built with `remote_command` so the user's own ssh applies (`src/git/env.rs`). Get the user's `git` from `HostTools::get().git_for(Pace)` (`src/host_tools.rs`): a lookup a person triggers is `Pace::Person`, which looks once more with a fresh login-shell snapshot where `git` is not found; anything repeating (a sweep, a poll, an MCP tool, background cleanup) is `Pace::Scheduled`, which never takes a login shell per call. A project's own repository goes through `project_git::project_git(state, pace)`. Browse reads use `IsolatedGit` (`src/git/isolated.rs`) from `isolated_git` (scheduled) or, for a browse request carrying `asked_by_person`, `isolated_git_per_request`. The revert gate's own `src/revert_gate/git.rs`, which runs inside the user's hook, is the one exception |
-| Change or end a terminal, or remove what one works in, from an operation a planned stop must not interleave with | take `AppState::admit_change` at the operation's shared entry point, before it changes a record or touches the disk, and keep the admission until done (`src/state/handover_barrier.rs`); once the barrier is raised it refuses with `daemon_shutting_down` |
+| Run `git` in a user's repository or against their remote | `src/git/run.rs`: a family's `Runner` (`UserGit` with the call site's `Policy` and `Limits`; `read`, `write`, and `write_remote` for a command that may reach a remote) and `GitError`, the one error type. A command that reaches a remote is built with `remote_command` (`src/git/env.rs`). The user's `git` comes from `HostTools::get().git_for(Pace)` (`src/host_tools.rs`; `Pace::Person` or `Pace::Scheduled`). A project's own repository goes through `project_git::project_git(state, pace)`. Browse reads use `IsolatedGit` (`src/git/isolated.rs`) from `isolated_git` or, for a browse request carrying `asked_by_person`, `isolated_git_per_request`. The revert gate's own `src/revert_gate/git.rs`, which runs inside the user's hook, is not run through it (the rules: `docs/conventions/daemon-processes-and-io.md`, "Git from the daemon") |
+| Change or end a terminal, or remove what one works in, from an operation a planned stop must not interleave with | `AppState::admit_change` (`src/state/handover_barrier.rs`); once the barrier is raised it refuses with `daemon_shutting_down` |
 | Replace a file whole | `hostfs::replace::replace_file` (`src/hostfs/replace.rs`) |
 | Read from the disk within a bound | `hostfs::read_bounded` (with cancel), `read_regular` / `open_regular` for files the project does not own (`src/hostfs/mod.rs`); a project's files go through `browse::live` |
 | Read an agent's record | `src/records/line_file.rs`, the bounded line reader (also what record watches use) |
@@ -968,9 +962,9 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Listen on a private channel for a child process, and connect to it | `platform::ipc` (`PrivateListen`, `Address`, `Connection`); the caller owns what travels over it (Codex's is `src/adapter/codex/transport/`); a provider's private server for a launch goes through `terminal::server_host`, which makes the `PrivateListen` where the daemon runs the server |
 | Run a provider's private server for a launch (in the daemon, or in the holder that outlives it) | `ServerHost` (`src/terminal/server_host.rs`), given by `terminal::backend::Helpers::server_host` to `PrivateServer::start`; the holder side is its companions ([README](../../apps/daemon/src/holder/README.md)); a provider links to the server a holder kept through `AgentProvider::rebuild_launch` |
 | Start a terminal and its program for the daemon (it lives in a holder, or in this process where none is installed) | `terminal::backend::start` with `Helpers::issue` for the launch's helper credentials (`src/terminal/backend.rs`); the lifecycle around it is `terminal::pty::PtyCore`. `platform::term::spawn` is what the local backend and the holder itself call |
-| Whether a session's agent is in a turn, before acting on it | `LiveSession::turn_reading` and `TurnReading` (`src/session/turn_reading.rs`): a new consumer adds a method there that says which way it errs, rather than combining the title's activity, the dialog sighting and the hooks' status itself |
+| Whether a session's agent is in a turn, before acting on it | `LiveSession::turn_reading` and `TurnReading` (`src/session/turn_reading.rs`), which combine the title's activity, the dialog sighting and the hooks' status (the rule: `docs/conventions/daemon-processes-and-io.md`, "Writing text into a session") |
 | Write the daemon's own paste or key into a terminal | `platform::term` (`Pty::write_input` with `Input`), which a held terminal answers over the link (`holder::client::HeldTerminal`) |
-| Give a helper process the launch key | never in its arguments: a file for the `octoboardd` helpers that take `--key-file` (`src/key_file.rs`: `write` makes it owner-only, `read` reads it), the same file for the git hook helpers, whose path the `OCTOBOARD_DAEMON_CREDENTIAL_PATH` variable carries (`src/session_git_hooks/`; no variable the git hooks need has `KEY`, `SECRET` or `TOKEN` in its name, which an agent's filter strips where its default excludes are on); the key itself is never in an environment, which agents write into files; Claude Code's own HTTP hook URL carries it inside the owner-only settings file (`src/adapter/claude/`) |
+| Give a helper process the launch key | a file for the `octoboardd` helpers that take `--key-file` (`src/key_file.rs`: `write` makes it owner-only, `read` reads it), the same file for the git hook helpers, whose path the `OCTOBOARD_DAEMON_CREDENTIAL_PATH` variable carries (`src/session_git_hooks/`); Claude Code's own HTTP hook URL carries the key inside the owner-only settings file (`src/adapter/claude/`); where the key may not be is in `docs/conventions/daemon-processes-and-io.md`, "Processes" |
 | Read a request's body before any answer goes out, the body limit and its `413` | `src/request_body.rs` (`drain_unread`, outermost; `buffer`, inside the guard); the daemon's router and a holder's listener layer them |
 | Check a request's Origin and Host, compare a key, make a key | `src/request_guard.rs` (`headers_allowed`, `key_matches`, `same_secret`, `generate_key`); the daemon's guard is `src/server/access.rs`, and a holder's helper routes use it too |
 | Run an agent's CLI as an account for a short query | `src/adapter/account_cli.rs`: `query` (admits the run, held to `Bounds::agent_query`), `AdmittedCommand::run`, `run_leaving_descendants` for a CLI that hands its work to an application that must outlive it, and `run_query` only where the account's directory is already held (a sign-in); `failure_detail` words a failure |
@@ -979,7 +973,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Where an agent keeps its files | the descriptor's `layout` (`AgentLayout`, `src/providers/layout.rs`; each provider's value is its `LAYOUT` in `src/providers/<id>.rs`) |
 | A provider's settings, and the codes only it raises | the descriptor's `settings` and `codes` (`src/providers/mod.rs`); stored by `src/store/provider_settings.rs` |
 | Which settings a console, a project or a session may hold its own value for | `SettingDescriptor::overridable` is the rule; `ProviderDescriptor::is_overridable`, `overridable_settings` and `known_compatibility` (`src/providers/mod.rs`) query it or filter held values; requests are checked by `check_compatibility` (`src/agents/launch_settings.rs`) |
-| The provider settings a launch reads (the application-wide values with the switches some launch level holds on top) | `coordinator::launch::launch_provider_settings` for a session, `provider_settings_with_compatibility` for a chain not yet a session (`src/coordinator/launch.rs`); never `Store::provider_settings_of` directly for a launch |
+| The provider settings a launch reads (the application-wide values with the switches some launch level holds on top) | `coordinator::launch::launch_provider_settings` for a session, `provider_settings_with_compatibility` for a chain not yet a session (`src/coordinator/launch.rs`) |
 | Refuse an operation a provider does not offer (sign-in, MCP server sign-in, kick, reset credits, configuration sharing) | `CodedError::require_offered` (`src/protocol/errors.rs`), giving `provider_unsupported` |
 | What a provider offers one made compatible with it (MCP servers, skills, prompts, instructions) | `CompatibilitySource` (`src/adapter/mod.rs`), reached through `LaunchSpec::compatibility_source` (the sources are set by `adapter::compatibility_sources_of`); Claude Code's is `src/adapter/claude/compatibility.rs`, Codex's `src/adapter/codex/compatibility.rs` |
 | A consumer's use of a compatibility source (translating its MCP servers, keeping secrets off argv, linking skills and prompts) | `src/adapter/compatibility_offer.rs`; each consumer's own part is its `compatibility_consumer.rs` |
@@ -1010,7 +1004,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Write a session's launch overrides (model, effort, compatibility switches) | `Store::set_session_launch` or `set_session_launch_unless_archived` (`src/store/sessions.rs`, through its one guarded writer), published to clients by `AppState::set_session_launch` (`src/state/sessions.rs`) |
 | Change a session's model, effort and compatibility switches; resume checks | `coordinator::model_change::set_session_model`; `coordinator::resume::check_can_resume` and `locate_conversation` |
 | Drop a live session | `coordinator::exit_watch::unregister_live`, which runs `AppState::remove_live` and `after_live_removed` around withdrawing the session's request |
-| Keep a missing `git`'s `binary_not_found` through to a reply or a `GitStatus` (never flatten the error to a string first) | `project_git::no_git_or` for an action that words its other failures itself; `StepFailure::no_git` for a step recorded on a `GitStatus` (`src/project_git/mod.rs`) |
+| Keep a missing `git`'s `binary_not_found` through to a reply or a `GitStatus` | `project_git::no_git_or` for an action that words its other failures itself; `StepFailure::no_git` for a step recorded on a `GitStatus` (`src/project_git/mod.rs`) |
 | Re-read projects when a session's git moves refs | `project_git::ref_moves::moved` |
 | Cap a pass of blocking per-entity work | `blocking_pass::each_blocking` from async code; from a thread with no runtime, a pass waited for only until a deadline, with a stuck key skipped while it is stuck: `blocking_pass::within_deadline` (the async sibling for paths is `hostfs::place::looked_within`) |
 | Read the system's process table | `src/platform/proc_table/` (`ledger/table.rs` and `terminal/shell/busy.rs` read through it) |
@@ -1019,7 +1013,7 @@ New code uses these rather than a second implementation. None is enforced by a c
 | Call the running daemon from another process (CLI modes, git hook modes, the MCP stdio bridge) | `src/loopback.rs` (`post`, `connect`, `exchange`; a non-2xx answer is an error whose status `error_status` and body `error_body` give) |
 | Store free text trimmed, blank as unset | `text::trimmed_or_none` |
 | Read the clock; format a timestamp | `src/time.rs` (`now_millis`, `now_micros`, `now_secs`, the RFC 3339, compact and readable stamps) |
-| Send the settings, a console or a project to clients | `AppState::publish_settings` (or `broadcast_settings`), `publish_console`, `publish_project` (`src/state/field_versions.rs`): the only route, as they stamp the field versions; `AppState::broadcast` of those events fails a debug assertion |
+| Send the settings, a console or a project to clients | `AppState::publish_settings` (or `broadcast_settings`), `publish_console`, `publish_project` (`src/state/field_versions.rs`), which stamp the field versions |
 | Refuse a write based on a field another client changed since | `AppState::checked_write` with a `RecordKey` (`src/state/field_versions.rs`), taken by `update_settings_checked`, `update_console_checked`, `update_project_checked` and `update_account_requested` and held until the change is published; it raises `write_conflict` |
 | Poll a condition, or wait for a session's output to go quiet | `src/session/wait.rs` (`wait_for`, `wait_quiet`) |
 | Resolve the user's shell environment and binaries | `src/env_shell/` (`resolve_binary`; `capture_failed` words the refusal of a request that needed the environment and could not take it) |

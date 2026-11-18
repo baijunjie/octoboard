@@ -43,9 +43,9 @@ export function ConsoleHeader({ handlers, current }: { handlers: SidebarHandlers
     // The list under this header is inset twice — the scroll area, then each heading and row — so
     // the end padding matches that and this menu lines up with the rows' menus.
     <div ref={headerRef} className={`${PANE_HEADER_FRAME_CLASS} gap-2 px-(--pane-inset)`}>
-      <RowLabel title={current.name}>
-        <span className="text-base font-semibold">{current.name}</span>
-      </RowLabel>
+      <h2 className="min-w-0 flex-1 text-base font-semibold">
+        <RowLabel title={current.name} className="block">{current.name}</RowLabel>
+      </h2>
       <RowIconGroup>
         <NewSessionButton
           shortcut

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 
+import { startPeriodicSweep } from "../components/hooks/periodicSweep";
 import { useDaemon, useDaemonStore, type State } from "../store";
 
 /** How often every console's projects are re-checked. A constant, not a setting. */
@@ -39,9 +40,7 @@ export function useGitStatusSchedule(): void {
         });
       }
     };
-    sweep();
-    const interval = setInterval(sweep, REFRESH_INTERVAL_MS);
-    return () => clearInterval(interval);
+    return startPeriodicSweep(sweep, REFRESH_INTERVAL_MS);
   }, [connectionState, snapshotEpoch, request, store]);
 
   useEffect(() => {

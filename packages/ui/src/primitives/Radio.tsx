@@ -20,8 +20,8 @@ export function RadioGroup({ label, labelDir, labelClassName, hideLabel, value, 
   /** Marks the group invalid, which shows the `FieldError` among its children. */
   invalid?: boolean;
   /** Says the group needs a choice (`aria-required`). HeroUI draws a required mark after the group's label and its
-   * options' labels; the application draws none (`docs/ui-standard.md`, "Confirmed visual choices": report page fields draw no required
-   * mark), so the group hides those marks. */
+   * options' labels; the application draws none (`docs/conventions/ui-standard.md`, "Confirmed visual choices": report
+   * page fields draw no required mark), so the group hides those marks. */
   required?: boolean;
   variant?: FieldVariant;
   className?: string;

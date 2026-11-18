@@ -266,7 +266,10 @@ impl JsonFile {
         if self.0 == Some(signature) || metadata.len() > JSON_FILE_LIMIT {
             return None;
         }
-        let value = serde_json::from_slice(&std::fs::read(path).ok()?).ok()?;
+        let value = serde_json::from_slice(
+            &crate::hostfs::read_regular(path, JSON_FILE_LIMIT as usize).ok()?,
+        )
+        .ok()?;
         self.0 = Some(signature);
         Some(value)
     }
@@ -673,6 +676,23 @@ fn scan(agent: AgentId, path: &Path, cursor: &mut Cursor) -> std::io::Result<()>
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[cfg(unix)]
+    #[test]
+    fn a_json_record_must_be_a_regular_file() {
+        let dir = crate::test_support::ScratchDir::new("json-record-kind");
+        let path = dir.join("record.json");
+        crate::test_support::mkfifo(&path);
+        let mut reader = JsonFile::default();
+        assert!(reader.read(&path).is_none());
+
+        std::fs::remove_file(&path).unwrap();
+        std::fs::write(&path, br#"{"title":"A record"}"#).unwrap();
+        assert_eq!(
+            reader.read(&path),
+            Some(serde_json::json!({"title": "A record"}))
+        );
+    }
 
     #[test]
     fn collector_backfills_archives_publishes_changes_and_refreshes_resumed_sources() {

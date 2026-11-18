@@ -3,6 +3,7 @@
 // `usePaneLayout` calls once per `App` render; a hook it shares with its own hooks, `useT` among them, would count
 // those hooks' calls too. Each child is counted through a stand-in for its module that calls the real component as a
 // function, so every execution of its body counts, whether `App` or its own state brought it about.
+import { defaultDaemonReply } from "./test/testDaemon";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished, vi } from "vitest";
@@ -97,7 +98,7 @@ function mountApp() {
   fakeTimers({ now: Date.UTC(2026, 9, 28, 12) });
   stubWindow();
   const daemon: Daemon = fakeDaemon(snapshotState({ consoles: [main, second], projects: [site, api], sessions: [fix, plan, old, elsewhere] }), (body: ClientRequestBody) =>
-    body.type === "list_processes" ? { type: "processes_listed", id: null, trees: [] } : { type: "ack", id: null });
+    body.type === "list_processes" ? { type: "processes_listed", id: null, trees: [] } : defaultDaemonReply(body));
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   act(() => root.render(<PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}><ThemeProvider><DaemonProvider value={daemon}><App /></DaemonProvider></ThemeProvider></PlatformProvider>));

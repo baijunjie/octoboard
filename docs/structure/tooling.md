@@ -1,7 +1,8 @@
 # Tooling and repository configuration
 
 How the repository is built, checked and released, outside the code of any one end. The product ends are described in
-[`daemon.md`](daemon.md), [`ui.md`](ui.md), [`desktop.md`](desktop.md) and [`web.md`](web.md).
+[`daemon.md`](daemon.md), [`ui.md`](ui.md), [`desktop.md`](desktop.md) and [`web.md`](web.md). The rules for the
+scripts, the checks, the dependencies and the single sources of configuration are in `docs/conventions/tooling.md`.
 
 ## Workspaces and toolchains
 
@@ -13,23 +14,25 @@ How the repository is built, checked and released, outside the code of any one e
   root. `patchedDependencies` in `pnpm-workspace.yaml`
   registers the patches in `patches/` (currently one for jsdom's selector engine, used by the UI's tests).
 - **Cargo workspace** (`Cargo.toml`, `Cargo.lock`, `rust-toolchain.toml`, `rustfmt.toml`): members `apps/daemon` and
-  `apps/desktop/src-tauri`, built into one `target/`. The workspace `version` is the application's version and must
-  equal `version` in `apps/desktop/package.json`; the desktop crate's `build.rs` fails the build when they differ, and the UI's `vite.config.ts` builds the same version in, so `scripts/verify/scope.mjs` also routes `apps/desktop/package.json` to the UI.
-  `rust-toolchain.toml` pins the one toolchain used locally and in CI, and the workspace `rust-version` matches it.
+  `apps/desktop/src-tauri`, built into one `target/`. The workspace `version` is the application's version, which
+  `apps/desktop/package.json` carries too; the desktop crate's `build.rs` fails the build when they differ, and the UI's
+  `vite.config.ts` builds the same version in, so `scripts/verify/scope.mjs` also routes `apps/desktop/package.json` to
+  the UI. `rust-toolchain.toml` pins the toolchain used locally and in CI.
 - `eslint.config.mjs` — the repository-wide lint and format rules (JavaScript, TypeScript, TSX, Vue), including the UI's
   import-layering blocks, which live in `packages/ui/eslint.layers.mjs` (see [`ui.md`](ui.md)); `pnpm format` runs it
   with `--fix --fix-type layout` and `cargo fmt`.
 - `config/app.json` — the single source for product identity, repository and issue-report destinations, author and
   support contacts, website address, the default server port (`defaultServerPort`), license and copyright year. Read by
-  the UI (`packages/ui/src/appConfig.ts`), the website (`apps/web/nuxt.config.ts`, `apps/web/seo/downloads.ts`) and
-  both Cargo crates' `build.rs` (the daemon's turns the port into `octoboardd start`'s default); the website's
-  `install-script.test.ts` pins the install script's and the example systemd unit's port to it; copies the toolchain requires elsewhere are
-  checked against it (the UI's `appConfig.test.ts`, the build scripts). `author.name` is the only editable source of
-  the author name. After changing it or `copyrightYear`, run `pnpm identity:sync` to regenerate the tracked `LICENSE`
-  copyright line and `Cargo.toml` workspace authors; builds and installation do not rewrite these outputs.
+  the UI (`packages/ui/src/appConfig.ts`), the website (`apps/web/nuxt.config.ts`, `apps/web/seo/downloads.ts`) and both
+  Cargo crates' `build.rs` (the daemon's turns the port into `octoboardd start`'s default); the website's
+  `install-script.test.ts` pins the install script's and the example systemd unit's port to it; copies the toolchain
+  requires elsewhere are checked against it (the UI's `appConfig.test.ts`, the build scripts). `pnpm identity:sync`
+  regenerates the tracked `LICENSE` copyright line and `Cargo.toml` workspace authors from it (when to run it:
+  `docs/conventions/tooling.md`, "Dependencies and single sources of configuration"); builds and installation do not
+  rewrite these outputs.
 - `config/launchable-extensions.json` — the lists of file extensions the system launches or acts on rather than shows, the one
   source of that security judgement: read by the daemon (`apps/daemon/src/platform/open/mod.rs`), the desktop shell
-  (`apps/desktop/src-tauri/src/remote/files.rs`) and the UI (`packages/ui/src/launchable.ts`).
+  (`apps/desktop/src-tauri/src/remote/files/mod.rs`) and the UI (`packages/ui/src/launchable.ts`).
 - `.env.local.example`, `.env.secret.example` — the templates of the gitignored machine-local and release-credential
   files. `scripts/lib/env.mjs` is the reader; it reads `.env.secret` and `.env.local`.
 - `assets/branding/` — brand source artwork that no app serves. `.claude/` holds the agent skills and subagent
@@ -40,7 +43,7 @@ How the repository is built, checked and released, outside the code of any one e
 | Path | Role |
 |---|---|
 | `scripts/lib/git.mjs`, `scripts/lib/env.mjs` | The one way repository scripts run `git` (and other commands), and the shared env-file reader |
-| `scripts/verify.mjs`, [`scripts/verify/`](../../scripts/verify/README.md) | `pnpm verify`: selects and runs the checks a change calls for |
+| `scripts/verify.mjs`, [`scripts/verify/`](../../scripts/verify/README.md) | `pnpm verify`: selects and runs the checks a change calls for, including the provider-neutral core search (`provider-neutral.mjs`) |
 | `scripts/hooks/` | The staged formatter (`format-staged.mjs`), AI attribution check (`commit-msg.mjs`) and push verifier (`pre-push.mjs`), with their tests beside them (see the hooks' README; the pre-push stage takes its baseline from `remoteTargetBase` in `scripts/verify/changes.mjs`); `scripts/pre-push.mjs` and `scripts/format-staged.mjs` are forwarding stubs for hook copies installed before the move |
 | `scripts/cargo.mjs` | `pnpm test:rust`, `pnpm clippy:rust` (both reached through `scripts/verify/heavy.mjs`, which waits for the heavy-step slot first), the Linux CI `cargo check` and `pnpm check:windows` (a `cargo xwin` cross-check for Windows: both crates gate, all targets, tests included, and once the daemon checks clean its executable is also linked with `cargo xwin build`, which a compile check never reaches; the desktop crate is only checked; `pnpm verify --release` runs it before every release tag; the `windows-check` CI job on a Windows runner runs this script with `-p` to check, lint and test the desktop crate natively, and lints and tests the daemon with `cargo` directly): both crates in one cargo invocation, without needing the daemon sidecar (the one place that empties `bundle.externalBin` and `bundle.resources`) |
 | `scripts/lib/windows-toolchain.mjs` | The toolchain `pnpm check:windows` needs, checked before it runs and before `release:version` prepares a version: cargo-xwin, the `x86_64-pc-windows-msvc` target, LLVM's clang first on the PATH (Homebrew's is moved there) and the downloaded MSVC CRT and Windows SDK; it names how to install each missing piece and never accepts the SDK license itself |
@@ -69,6 +72,8 @@ in the [desktop scripts README](../../apps/desktop/scripts/README.md).
 
 ## Dependency direction
 
+The rules behind these edges are in `docs/conventions/tooling.md`, "Scripts".
+
 - Repository scripts depend on nothing in the product code. The desktop scripts (`apps/desktop/scripts/`) import
   `scripts/lib/env.mjs` and `scripts/lib/git.mjs`, the UI's gallery sweep imports `scripts/verify/lock.mjs`, and the
   UI's test scripts run `scripts/verify/heavy.mjs`.
@@ -77,10 +82,10 @@ in the [desktop scripts README](../../apps/desktop/scripts/README.md).
 ## Where new code goes
 
 - A new repository-level command is a script in `scripts/` run through a root `package.json` script; code shared by
-  scripts goes in `scripts/lib/`, and scripts that run `git` use `scripts/lib/git.mjs`, and a script that another package imports is named in the matching `scope.mjs` rule.
+  scripts goes in `scripts/lib/` (the rules: `docs/conventions/tooling.md`, "Scripts").
 - A new check or workspace package follows the verification README's "Changing it".
-- A new fact about product identity goes in `config/app.json`, with a check on any copy the toolchain forces elsewhere.
-- A dependency patch goes in `patches/` and `patchedDependencies`.
+- A new fact about product identity goes in `config/app.json`; a dependency patch in `patches/` and
+  `patchedDependencies` (the rules: `docs/conventions/tooling.md`, "Dependencies and single sources of configuration").
 
 ## Shared entry points
 
@@ -90,7 +95,7 @@ in the [desktop scripts README](../../apps/desktop/scripts/README.md).
 | Read env files with environment precedence | `scripts/lib/env.mjs` |
 | Update or check generated author fields | `pnpm identity:sync` writes the tracked outputs; `pnpm identity:check` checks for drift without writing |
 | Run the checks a change calls for | `pnpm verify` ([`scripts/verify/`](../../scripts/verify/README.md)) |
-| Format staged files | `pnpm format:staged` (the pre-commit hook), never a whole-repository formatter as a delivery step |
+| Format staged files | `pnpm format:staged` (the pre-commit hook) |
 
 Checks that hold this area: `pnpm identity:check`, the `scripts/**/*.test.mjs` tests, the UI's `appConfig.test.ts`, and
 the release workflow's validation of the tag, the Apple secrets and `Cargo.lock` and its `sign` job's check of the update key, and `publish-release.mjs`'s check of every update signature.

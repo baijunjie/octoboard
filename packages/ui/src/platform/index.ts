@@ -7,7 +7,7 @@ export { ConfigurationFileError } from "./configurationFileError";
 export { UpdaterError } from "./updaterError";
 export { LinkForwardError } from "./linkForwardError";
 export { RemoteFileError } from "./remoteFileError";
-export type { HostFacts } from "./host";
+export { readHost, type HostFacts } from "./host";
 export { daemonIdentity, remoteDaemonName, windowKind, type WindowKind } from "./windowKind";
 
 /**
