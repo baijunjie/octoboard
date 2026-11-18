@@ -663,6 +663,32 @@ describe("an account's actions menu", () => {
     expect(removeDialog().querySelector('[role="alert"]')?.textContent).toContain("The directory is your home folder");
   });
 
+  it.each([
+    ["signing_in", 1],
+    ["unreadable", 2],
+    ["from_a_newer_daemon", 2],
+  ])("asks about the directory again after a trash failure caused by %s, as %i inspections in all", async (cause, total) => {
+    const alerts = document.body.appendChild(document.createElement("div"));
+    const alertsRoot = createRoot(alerts);
+    onTestFinished(() => act(() => alertsRoot.unmount()));
+    act(() => alertsRoot.render(<ErrorAlerts />));
+    request.mockImplementation(((body: { type: string }) => {
+      if (body.type === "inspect_account_trash") return Promise.resolve({ type: "account_trash_inspected", id: null, outcome: { status: "ok" } });
+      if (body.type === "delete_account") return Promise.reject(new CodedError("refused", "account_directory_trash_failed", { path: "/a", detail: "x", cause }));
+      return Promise.resolve({});
+    }) as never);
+    const { container } = mount();
+    await openRemoval(container);
+    await act(async () => trashOption().click());
+    expect(inspections()).toBe(1);
+    await act(async () => buttonNamed(removeDialog(), "Remove")!.click());
+    const failure = [...document.querySelectorAll('[role="alertdialog"]')].find((dialog) => buttonNamed(dialog, "OK"))!;
+    expect(failure).toBeDefined();
+    await act(async () => buttonNamed(failure, "OK")!.click());
+    await settleFrames();
+    expect(inspections()).toBe(total);
+  });
+
   it("does not ask about the directory again when removing is refused for running sessions", async () => {
     inspectionAnswers({ status: "ok" });
     const { container } = mount();

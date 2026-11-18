@@ -419,16 +419,87 @@ it("stops listening to the shell once it is gone", async () => {
   expect(undoOpened).toHaveBeenCalledOnce();
 });
 
-it("survives the shell failing a choice or the dismissal, which it can do nothing about", async () => {
-  choose.mockRejectedValueOnce(new Error("gone"));
-  close.mockRejectedValueOnce(new Error("gone"));
+const alertIn = (container: ParentNode) => container.querySelector<HTMLElement>("[role=alert]");
+
+it("shows no Alert for a choice or a close the shell took, nor for opening and closing a quota row", async () => {
   const container = await mount();
   await press(rowNamed(container, "Fix the tests"));
+  await press(rowNamed(container, "Claude"));
+  await key(rowNamed(container, "Claude"), "Escape");
+  await press(rowNamed(container, "Claude"));
+  await press(rowNamed(container, "Claude"));
   const row = rowNamed(container, "Fix the tests");
   act(() => row.focus());
   await key(row, "Escape");
   expect(choose).toHaveBeenCalledOnce();
   expect(close).toHaveBeenCalledOnce();
+  expect(alertIn(container)).toBeNull();
+  expect(container.textContent).not.toContain("Could not");
+});
+
+it("tells of a choice the shell could not be handed, announced, at the top of the flyout, and keeps the menu usable", async () => {
+  choose.mockRejectedValueOnce(new Error("gone"));
+  const container = await mount();
+  await press(rowNamed(container, "Fix the tests"));
+  const alert = alertIn(container)!;
+  expect(alert.textContent).toBe("Could not carry out the choice");
+  expect(container.textContent).toContain("Try again. If it keeps happening, restart the app.");
+  // The first thing in the flyout's content, above the tab strip.
+  expect(container.querySelector(".w-max")!.firstElementChild!.contains(alert)).toBe(true);
+
+  // The menu answers still: a second choice reaches the shell, and the focus can move.
+  await press(rowNamed(container, "Quit completely"));
+  expect(choose).toHaveBeenLastCalledWith("quit");
+  const opener = rowNamed(container, "Claude");
+  await press(opener);
+  expect(opener.getAttribute("aria-expanded")).toBe("true");
+  act(() => opener.focus());
+  expect(document.activeElement).toBe(opener);
+});
+
+it("speaks a choice that fails again in the same words anew", async () => {
+  choose.mockRejectedValue(new Error("gone"));
+  onTestFinished(() => { choose.mockReset().mockImplementation(async () => {}); });
+  const container = await mount();
+  await press(rowNamed(container, "Fix the tests"));
+  const first = alertIn(container)!;
+  await press(rowNamed(container, "Fix the tests"));
+  const second = alertIn(container)!;
+  expect(second.textContent).toBe("Could not carry out the choice");
+  expect(container.querySelectorAll("[role=alert]")).toHaveLength(1);
+  expect(second).not.toBe(first);
+  expect(first.isConnected).toBe(false);
+});
+
+it("words the Alert by what failed last, a choice or an Esc, with the shell's rejection handled", async () => {
+  choose.mockRejectedValueOnce(new Error("gone"));
+  close.mockRejectedValueOnce(new Error("gone"));
+  const container = await mount();
+  await press(rowNamed(container, "Fix the tests"));
+  expect(alertIn(container)!.textContent).toBe("Could not carry out the choice");
+  const row = rowNamed(container, "Fix the tests");
+  act(() => row.focus());
+  await key(row, "Escape");
+  expect(alertIn(container)!.textContent).toBe("Could not close the menu");
+  expect(container.textContent).toContain("Try again. If it keeps happening, restart the app.");
+  expect(container.textContent).not.toContain("Could not carry out the choice");
+  expect(choose).toHaveBeenCalledOnce();
+  expect(close).toHaveBeenCalledOnce();
+});
+
+it("keeps the Alert until the shell shows the flyout again, which clears it", async () => {
+  choose.mockRejectedValueOnce(new Error("gone"));
+  const container = await mount();
+  await press(rowNamed(container, "Fix the tests"));
+  // Neither a newer model, another tab nor a later success clears it.
+  await act(async () => pushModel(MODEL));
+  await press(tabs(container)[1]);
+  await press(rowNamed(container, "Quit completely"));
+  expect(alertIn(container)).not.toBeNull();
+  await act(async () => open({ chosen: 0 }));
+  expect(alertIn(container)).toBeNull();
+  expect(container.textContent).not.toContain("Could not");
+  expect(container.textContent).not.toContain("Try again");
 });
 
 it("names a quota header by its parts joined as a list, and a bar's row by the label it was given", async () => {

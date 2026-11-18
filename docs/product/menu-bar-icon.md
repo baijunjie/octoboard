@@ -319,7 +319,11 @@ completely. The tabs stand on a rule that runs across the flyout, the chosen tab
 tab's waiting dot follows its name. It opens beside the notification area, against the edge the taskbar sits on and
 inside the screen's work area, with the tab of the window focused last chosen, else This PC's; opening it asks for a
 fresh quota reading, and a change waits while it is open, as on macOS. It closes on a choice, on Esc, on a click outside
-it or on the icon, and when it loses the focus. From the keyboard the focus starts on the chosen tab (on the first line
+it or on the icon, and when it loses the focus. When a choice or an Esc cannot be handed to the application at all, the
+flyout stays open instead and shows an error at its top, above the tabs, saying that the choice could not be carried
+out (or, for Esc, that the menu could not be closed) and to try again, restarting the app if it keeps happening; the
+error is announced as it appears, again on each further failure, and stays until the flyout is next shown. From the
+keyboard the focus starts on the chosen tab (on the first line
 when there is only one daemon); Left and Right move between tabs, Down or Tab from a tab to the first line that can be
 chosen, Up from the first line back to the chosen tab, Up and Down between lines, Enter chooses, and Narrator reads each
 line by the name the macOS menu gives it. It follows Octoboard's appearance, which by default is Windows' light or dark

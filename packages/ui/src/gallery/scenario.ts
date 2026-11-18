@@ -83,6 +83,9 @@ export interface TrayFlyoutFixture {
   /** The version a known newer release has, which the Check for updates line then names; without it the line only
    * offers the check. */
   updateVersion?: string;
+  /** The shell cannot be handed a choice: the flyout's `choose` rejects, as it does when the shell is unreachable, so a
+   * chosen line leaves the flyout open with the error Alert at its top. */
+  chooseFails?: true;
 }
 
 /** What the desktop shell's updater answers, for a window that can update itself: the Settings rows and the

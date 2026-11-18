@@ -120,4 +120,14 @@ export const trayFlyoutScenarios: Scenario[] = [
       "No remote daemon is connected, so there is no strip of tabs, only This PC's lines; the keyboard focus starts on the first line. The Check for updates line names the newer version a check found instead (Version 2.1.0 available); a download in progress words it the same way, in one line.",
     trayFlyout: { tabs: [thisPc], updateVersion: "2.1.0" },
   },
+  {
+    ...common,
+    id: "tray-flyout-choice-failed",
+    category: "exceptional",
+    title: "Flyout whose choice could not be handed to the shell",
+    description:
+      "A line was chosen and the shell could not be told: the flyout stays open, with an error Alert at its top, above the tab strip, which stays until the flyout is next shown. Look at how it fits the flyout's width (its text wraps at the 420px maximum), its margins, and how it sits against the tab strip and the lines below; it has no buttons, as the window is too small for the error dialog. Pressing Esc when the shell cannot close the flyout shows the same Alert under the title Could not close the menu.",
+    trayFlyout: { tabs: [thisPc, staging, buildServer], chooseFails: true },
+    steps: [(ui) => ui.press(ui.t("settings.updates.check"))],
+  },
 ];

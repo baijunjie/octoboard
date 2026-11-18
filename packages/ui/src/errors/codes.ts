@@ -1,6 +1,6 @@
 import { EXAMPLE_CONVERSATION_ID } from "../agents/conversationId";
 import { CodedError, type MessageParams } from "./codedError";
-import { pathLinkRefusedCause } from "./causes";
+import { accountTrashFailedCause, pathLinkRefusedCause } from "./causes";
 import { PROVIDER_CODES } from "../agents/providers";
 import type { ErrorRecovery } from "./errorRecovery";
 import type { PlatformHost } from "../i18n/platformTerms";
@@ -103,7 +103,7 @@ const CORE_CODES = {
   account_directory_shared: { origin: "daemon", causeOnly: true, variants: { account: { nameParams: ["name"] }, project: { nameParams: ["name"] } }, variantOf: (params) => params.kind === "account" || params.kind === "default_account" || params.kind === "project" ? params.kind : undefined },
   // Removing an account with its directory, and a login refused because the account is being removed
   // (`causeOnly`): the alert says only why it was refused or failed, never what to do.
-  account_directory_trash_failed: { origin: "daemon", causeOnly: true, detailBlock: true, variantOf: (params) => ["unanswered", "unreadable", "other_unlooked", "signing_in"].includes(params.cause) ? params.cause : undefined },
+  account_directory_trash_failed: { origin: "daemon", causeOnly: true, detailBlock: true, variantOf: (params) => accountTrashFailedCause(params.cause) },
   account_disabled: { origin: "daemon", recovery: "accountDisabled", defaultAccountParams: ["account"], nameParams: ["account"] },
   account_has_running_sessions: { origin: "daemon", causeOnly: true, nameParams: ["name"] },
   account_in_use: { origin: "daemon", recovery: "accountBusy", nameParams: ["name"], variants: { signingIn: { nameParams: ["name"] }, both: { nameParams: ["name"] } }, variantOf: (params) => params.signing_in !== "true" ? undefined : /^[1-9]\d*$/.test(params.sessions ?? "") ? "both" : "signingIn" },

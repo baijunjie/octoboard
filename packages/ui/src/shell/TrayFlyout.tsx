@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
+import { ErrorAlert } from "../components/alerts/ErrorAlert";
 import { FadedScroller } from "../components/scroll/scrollFade";
 import { isolate } from "../i18n/isolate";
 import { textDirection } from "../i18n/languages";
@@ -19,6 +20,10 @@ const TAB_CLASS = `gap-2 px-2 forced-colors:ui-selected:underline forced-colors:
  * closes the open one first, then the flyout. The shell shows the window and sizes it to what this page reports
  * (`setSize`); when it shows it, `onOpened` selects the tab to start on, collapses what was open and puts the focus on
  * that tab, or on the first line where there is no tab strip.
+ *
+ * A choice or a close the shell could not be asked for leaves the flyout open with an Alert at its top, which stays
+ * until the flyout is next shown: the window is too small for the error alert dialog, and the shell, which acts on the
+ * choice, never heard of it ("Where an error is shown" in `docs/conventions/ui-standard.md`).
  */
 export function TrayFlyout(): React.ReactElement {
   const { trayFlyout } = usePlatform();
@@ -31,6 +36,8 @@ export function TrayFlyout(): React.ReactElement {
   const [selected, setSelected] = useState<string>();
   const [expanded, setExpanded] = useState<string>();
   const [opening, setOpening] = useState(0);
+  // What could not be handed to the shell, and the attempt, so a repeat in the same words is spoken again.
+  const [failure, setFailure] = useState<{ action: "choose" | "close"; attempt: number }>();
   const [tabs, setTabs] = useState<ReadonlyMap<string, HTMLElement>>(new Map());
   const content = useRef<HTMLDivElement>(null);
   const panel = useRef<HTMLDivElement>(null);
@@ -53,6 +60,7 @@ export function TrayFlyout(): React.ReactElement {
         const held = heldModel.current;
         if (held) setSelected(held.tabs[chosen]?.key ?? held.tabs[0]?.key);
         setExpanded(undefined);
+        setFailure(undefined);
         setOpening((count) => count + 1);
       }),
     ];
@@ -108,6 +116,8 @@ export function TrayFlyout(): React.ReactElement {
     }
   }, [expanded]);
 
+  const failed = (action: "choose" | "close") => () => setFailure((held) => ({ action, attempt: (held?.attempt ?? 0) + 1 }));
+
   const collapse = () => {
     const open = expanded;
     if (!open) return;
@@ -133,7 +143,7 @@ export function TrayFlyout(): React.ReactElement {
       event.preventDefault();
       event.stopPropagation();
       if (expanded) collapse();
-      else void trayFlyout?.close().catch(() => {});
+      else void trayFlyout?.close().catch(failed("close"));
     } else if (target?.closest("[role=tablist]") && !event.shiftKey && (event.key === "ArrowDown" || event.key === "Tab")) {
       handOn(entryLine());
     } else if (strip && current && event.key === "ArrowUp" && target?.closest("[role=menuitem]") === topLine()) {
@@ -175,13 +185,22 @@ export function TrayFlyout(): React.ReactElement {
 
   const choose = (id: string) => {
     if (id.startsWith(openerId(""))) setExpanded((open) => (open === id ? undefined : id));
-    else void trayFlyout?.choose(id).catch(() => {});
+    else void trayFlyout?.choose(id).catch(failed("choose"));
   };
 
   return (
     <FadedScroller className="h-dvh overflow-x-hidden bg-background text-foreground" onKeyDownCapture={onKeyDownCapture} onKeyDown={onKeyDown}>
       {/* 300 to 420px wide, which is what the shell is told: the page never scrolls sideways. */}
       <div ref={content} className="w-max min-w-75 max-w-105 border border-separator">
+        {failure && (
+          <ErrorAlert
+            className="m-2"
+            title={t(failure.action === "choose" ? "trayFlyout.chooseFailed" : "trayFlyout.closeFailed")}
+            remedy={t("trayFlyout.failedRemedy")}
+            announce
+            announceKey={failure.attempt}
+          />
+        )}
         {strip && (
           <Tabs variant="underline" selectedKey={current.key} onSelectionChange={(key) => { setSelected(key); setExpanded(undefined); }}>
             {/* Spanning the panel, so the strip's rule runs to its edge; the tabs keep their content width. */}

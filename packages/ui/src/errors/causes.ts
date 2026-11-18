@@ -52,3 +52,14 @@ export type RelocationCause = (typeof RELOCATION_CAUSES)[number];
 export function relocationCause(raw: string | undefined): RelocationCause {
   return RELOCATION_CAUSES.find((cause) => cause === raw) ?? "other";
 }
+
+const ACCOUNT_TRASH_FAILED_CAUSES = ["unanswered", "unreadable", "other_unlooked", "signing_in"] as const;
+
+/** The `cause` of an `account_directory_trash_failed`: why an account's directory was not moved to the Trash. */
+export type AccountTrashFailedCause = (typeof ACCOUNT_TRASH_FAILED_CAUSES)[number];
+
+/** `raw` as an `account_directory_trash_failed` cause: none, and one this client does not know, are `undefined`, a
+ * move that failed for no reason the client can name, worded by the code's own key. */
+export function accountTrashFailedCause(raw: string | undefined): AccountTrashFailedCause | undefined {
+  return ACCOUNT_TRASH_FAILED_CAUSES.find((cause) => cause === raw);
+}

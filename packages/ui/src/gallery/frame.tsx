@@ -153,13 +153,16 @@ function galleryPlatform(): ReturnType<typeof selectPlatform> {
       },
     }),
     ...(trayFlyoutModel && {
-      // The shell's side of the flyout: the model it built, and nothing to size, choose or close.
+      // The shell's side of the flyout: the model it built, and nothing to size, choose or close (a choice refused for a
+      // scenario that says `chooseFails`).
       trayFlyout: {
         model: async () => trayFlyoutModel,
         onModel: () => () => {},
         onOpened: () => () => {},
         setSize: async () => {},
-        choose: async () => {},
+        choose: async () => {
+          if (scenario?.trayFlyout?.chooseFails) throw new Error("gallery: the shell did not take the choice");
+        },
         close: async () => {},
       },
     }),

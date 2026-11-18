@@ -1,5 +1,6 @@
 import React, { useEffect, useId, useState } from "react";
 
+import { accountTrashFailedCause } from "../../errors/causes";
 import { CodedError } from "../../errors/codedError";
 import { ErrorAlert } from "../../components/alerts/ErrorAlert";
 import { FailureAlert } from "../../components/alerts/FailureAlert";
@@ -71,7 +72,7 @@ const DIRECTORY_REFUSALS = new Set(["account_directory_shared", "account_directo
 
 /** Whether the inspection is asked again after the removal was refused with `err`: not for a login that did not end
  * (`signing_in`), which the inspection does not look at, so asking again would only repeat an answer it gave before. */
-const asksAgain = (err: CodedError): boolean => DIRECTORY_REFUSALS.has(err.code) && err.params.cause !== "signing_in";
+const asksAgain = (err: CodedError): boolean => DIRECTORY_REFUSALS.has(err.code) && !(err.code === "account_directory_trash_failed" && accountTrashFailedCause(err.params.cause) === "signing_in");
 
 /** Why the directory cannot be moved to the Trash, said only as the cause, or nothing when `outcome` has none. */
 function trashRefusal(outcome: AccountTrashOutcome | undefined): React.ReactElement | undefined {

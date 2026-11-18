@@ -1594,6 +1594,10 @@ Where an error or a warning is shown follows from how it arises, not from the sc
 
 Rules 3 and 4 are "On the screen: an Alert when it matters, a mark at its point otherwise" below.
 
+The Windows notification-area flyout is the one exception to the first rule: a choice or an Esc it could not hand to
+the shell is an Alert at the top of the flyout, which stays open, until the flyout is next shown. Its window is sized to
+its menu, too small to hold the error alert dialog, and the shell that would act on the choice never received it.
+
 The Processes panel, and the rail's processes panel over its counts, keep a failed refresh visible as a warning Alert
 above their existing rows and actions. The list
 may be stale, so the warning stays until a refresh succeeds; polling continues while it is shown.
