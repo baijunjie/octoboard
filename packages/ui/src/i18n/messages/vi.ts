@@ -2922,6 +2922,7 @@ export const vi: Translation<"other"> = {
   "titleBar.processes.show": "Hiển thị bảng tiến trình",
   "titleBar.processes.hide": "Ẩn bảng tiến trình",
   "processes.allSessions": "Tất cả phiên",
+  "processes.sessionFilter.label": "Phiên",
   "processes.sessionFilter": "Lọc theo phiên",
   "processes.sessionFilter.hide": "Ẩn bộ lọc phiên",
   "processes.panelMessage": "Các tiến trình do phiên khởi động tự động dừng khi phiên kết thúc.",

@@ -3400,6 +3400,7 @@ export const en = {
   "titleBar.processes.show": "Show processes panel",
   "titleBar.processes.hide": "Hide processes panel",
   "processes.allSessions": "All sessions",
+  "processes.sessionFilter.label": "Session",
   "processes.sessionFilter": "Filter by session",
   "processes.sessionFilter.hide": "Hide session filter",
   "processes.panelMessage": "Processes started by a session stop automatically when the session ends.",

@@ -3087,6 +3087,7 @@ export const th: Translation<"other"> = {
   "titleBar.processes.show": "แสดงแผงกระบวนการ",
   "titleBar.processes.hide": "ซ่อนแผงกระบวนการ",
   "processes.allSessions": "ทุกเซสชัน",
+  "processes.sessionFilter.label": "เซสชัน",
   "processes.sessionFilter": "กรองตามเซสชัน",
   "processes.sessionFilter.hide": "ซ่อนตัวกรองเซสชัน",
   "processes.panelMessage": "กระบวนการที่เซสชันเริ่มจะหยุดโดยอัตโนมัติเมื่อเซสชันจบ",

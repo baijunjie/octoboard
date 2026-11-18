@@ -2956,6 +2956,7 @@ export const de: Translation<"one" | "other"> = {
   "titleBar.processes.show": "Prozessbereich einblenden",
   "titleBar.processes.hide": "Prozessbereich ausblenden",
   "processes.allSessions": "Alle Sitzungen",
+  "processes.sessionFilter.label": "Sitzung",
   "processes.sessionFilter": "Nach Sitzung filtern",
   "processes.sessionFilter.hide": "Sitzungsfilter ausblenden",
   "processes.panelMessage": "Von einer Sitzung gestartete Prozesse enden automatisch mit der Sitzung.",

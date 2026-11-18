@@ -2923,6 +2923,7 @@ export const ru: Translation<"one" | "few" | "many" | "other"> = {
   "titleBar.processes.show": "Показать панель процессов",
   "titleBar.processes.hide": "Скрыть панель процессов",
   "processes.allSessions": "Все сеансы",
+  "processes.sessionFilter.label": "Сеанс",
   "processes.sessionFilter": "Фильтр по сеансу",
   "processes.sessionFilter.hide": "Скрыть фильтр сеансов",
   "processes.panelMessage": "Процессы, запущенные сеансом, автоматически останавливаются при его завершении.",

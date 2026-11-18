@@ -134,7 +134,7 @@ it("reads a session whose process has ended as having none, raising nothing", as
   expect(errorAlerts.getSnapshot()).toHaveLength(0);
 });
 
-it("filters a project's trees by a session picked in a selector that starts empty, with no visible label, and goes back to all of them when cleared", async () => {
+it("filters a project's trees through a labelled session selector and shows all trees when cleared", async () => {
   await mount({ project }, async () => ({
     type: "processes_listed",
     id: null,
@@ -143,9 +143,11 @@ it("filters a project's trees by a session picked in a selector that starts empt
   expect(panel().querySelector('button[aria-haspopup="listbox"]')).toBeNull();
   act(() => panel().querySelector<HTMLButtonElement>('button[aria-label="Filter by session"]')!.click());
   const trigger = panel().querySelector<HTMLButtonElement>('button[aria-haspopup="listbox"]')!;
+  const label = panel().querySelector<HTMLElement>('[data-slot="label"]')!;
   expect(document.activeElement).toBe(trigger);
   expect(trigger.textContent).toBe("All sessions");
-  expect(trigger.getAttribute("aria-label")).toBe("Filter by session");
+  expect(label.textContent).toBe("Session");
+  expect(trigger.getAttribute("aria-labelledby")?.split(" ")).toContain(label.id);
   expect(rows()).toHaveLength(3);
   const choose = (value: string) => act(() => {
     const native = panel().querySelector("select")!;

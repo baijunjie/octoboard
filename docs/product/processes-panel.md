@@ -58,8 +58,8 @@ with a session filtered on or in a console session's panel, that nothing the ses
 
 ## The session filter
 
-A project's panel has a **session filter**, a select under its header with no visible label (its name for assistive
-technology says it filters by session). With no session filtered on the field is hidden by default. The header's funnel
+A project's panel has a **session filter** under its header, with the label and select side by side.
+With no session filtered on the field is hidden by default. The header's funnel
 button reveals it and focuses the select. Left empty it shows the placeholder "All sessions" and the panel lists every
 session's trees and the project processes. Picking a session narrows the list to that session's trees; a selected
 session keeps the field visible, including after focus leaves it.

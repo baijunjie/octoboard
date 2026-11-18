@@ -2923,6 +2923,7 @@ export const id: Translation<"other"> = {
   "titleBar.processes.show": "Tampilkan panel proses",
   "titleBar.processes.hide": "Sembunyikan panel proses",
   "processes.allSessions": "Semua sesi",
+  "processes.sessionFilter.label": "Sesi",
   "processes.sessionFilter": "Filter berdasarkan sesi",
   "processes.sessionFilter.hide": "Sembunyikan filter sesi",
   "processes.panelMessage": "Proses yang dimulai sesi berhenti otomatis saat sesi berakhir.",

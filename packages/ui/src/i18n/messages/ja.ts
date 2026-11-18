@@ -3088,6 +3088,7 @@ export const ja: Translation<"other"> = {
   "titleBar.processes.show": "プロセスパネルを表示",
   "titleBar.processes.hide": "プロセスパネルを非表示",
   "processes.allSessions": "すべてのセッション",
+  "processes.sessionFilter.label": "セッション",
   "processes.sessionFilter": "セッションで絞り込む",
   "processes.sessionFilter.hide": "セッションの絞り込みを非表示",
   "processes.panelMessage": "セッションが起動したプロセスは、セッションの終了時に自動で停止します。",

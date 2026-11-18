@@ -2923,6 +2923,7 @@ export const ar: Translation<"zero" | "one" | "two" | "few" | "many" | "other"> 
   "titleBar.processes.show": "إظهار لوحة العمليات",
   "titleBar.processes.hide": "إخفاء لوحة العمليات",
   "processes.allSessions": "جميع الجلسات",
+  "processes.sessionFilter.label": "الجلسة",
   "processes.sessionFilter": "تصفية حسب الجلسة",
   "processes.sessionFilter.hide": "إخفاء تصفية الجلسات",
   "processes.panelMessage": "تتوقف العمليات التي تبدأها جلسة تلقائياً عند انتهاء الجلسة.",

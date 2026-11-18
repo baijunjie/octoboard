@@ -2922,6 +2922,7 @@ export const hi: Translation<"one" | "other"> = {
   "titleBar.processes.show": "प्रोसेस पैनल दिखाएँ",
   "titleBar.processes.hide": "प्रोसेस पैनल छिपाएँ",
   "processes.allSessions": "सभी सेशन",
+  "processes.sessionFilter.label": "सेशन",
   "processes.sessionFilter": "सेशन के हिसाब से फ़िल्टर करें",
   "processes.sessionFilter.hide": "सेशन फ़िल्टर छिपाएँ",
   "processes.panelMessage": "सेशन के शुरू किए प्रोसेस उसके खत्म होने पर अपने आप बंद होते हैं।",

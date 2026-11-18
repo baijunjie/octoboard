@@ -3173,6 +3173,7 @@ export const zhHans: Translation<"other"> = {
   "titleBar.processes.show": "显示进程面板",
   "titleBar.processes.hide": "隐藏进程面板",
   "processes.allSessions": "所有会话",
+  "processes.sessionFilter.label": "会话",
   "processes.sessionFilter": "按会话筛选",
   "processes.sessionFilter.hide": "隐藏会话筛选",
   "processes.panelMessage": "会话启动的进程会在会话结束时自动停止。",

@@ -3089,6 +3089,7 @@ export const zhHant: Translation<"other"> = {
   "titleBar.processes.show": "顯示行程面板",
   "titleBar.processes.hide": "隱藏行程面板",
   "processes.allSessions": "所有工作階段",
+  "processes.sessionFilter.label": "工作階段",
   "processes.sessionFilter": "按工作階段篩選",
   "processes.sessionFilter.hide": "隱藏工作階段篩選",
   "processes.panelMessage": "工作階段啟動的行程會在工作階段結束時自動停止。",

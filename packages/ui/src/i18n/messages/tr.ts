@@ -3169,6 +3169,7 @@ export const tr: Translation<"one" | "other"> = {
   "titleBar.processes.show": "İşlemler panelini göster",
   "titleBar.processes.hide": "İşlemler panelini gizle",
   "processes.allSessions": "Tüm oturumlar",
+  "processes.sessionFilter.label": "Oturum",
   "processes.sessionFilter": "Oturuma göre filtrele",
   "processes.sessionFilter.hide": "Oturum filtresini gizle",
   "processes.panelMessage": "Oturumun başlattığı işlemler, oturum sonlandığında otomatik olarak durur.",

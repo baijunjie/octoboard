@@ -3089,6 +3089,7 @@ export const ko: Translation<"other"> = {
   "titleBar.processes.show": "프로세스 패널 표시",
   "titleBar.processes.hide": "프로세스 패널 가리기",
   "processes.allSessions": "모든 세션",
+  "processes.sessionFilter.label": "세션",
   "processes.sessionFilter": "세션별 필터",
   "processes.sessionFilter.hide": "세션 필터 가리기",
   "processes.panelMessage": "세션에서 시작한 프로세스는 세션이 종료되면 자동으로 중지됩니다.",

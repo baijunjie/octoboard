@@ -45,7 +45,18 @@ export function ProcessSessionSelect({ projectId, value, onChange, landing, show
   return (
     <div className="contents" {...handoff}>
       {shown && <PaneToolbar ref={toolbar} onBlur={onBlur}>
-        <OptionSelect hideLabel variant="primary" landing={landing} label={t("processes.sessionFilter")} placeholder={t("processes.allSessions")} options={options} value={value ?? null} onChange={(id: string | null) => onChange(id ?? undefined)} />
+        <div className="grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2">
+          <OptionSelect
+            besideLabel
+            variant="primary"
+            landing={landing}
+            label={t("processes.sessionFilter.label")}
+            placeholder={t("processes.allSessions")}
+            options={options}
+            value={value ?? null}
+            onChange={(id: string | null) => onChange(id ?? undefined)}
+          />
+        </div>
       </PaneToolbar>}
     </div>
   );

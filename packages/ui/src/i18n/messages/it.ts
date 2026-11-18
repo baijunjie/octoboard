@@ -2923,6 +2923,7 @@ export const it: Translation<"one" | "many" | "other"> = {
   "titleBar.processes.show": "Mostra pannello dei processi",
   "titleBar.processes.hide": "Nascondi pannello dei processi",
   "processes.allSessions": "Tutte le sessioni",
+  "processes.sessionFilter.label": "Sessione",
   "processes.sessionFilter": "Filtra per sessione",
   "processes.sessionFilter.hide": "Nascondi filtro sessioni",
   "processes.panelMessage": "I processi avviati da una sessione si fermano automaticamente quando la sessione termina.",
