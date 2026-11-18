@@ -23,7 +23,7 @@ export function SessionColourSwatches({
   autoFocus,
 }: {
   /** The session's colour now. */
-  colour: ConsoleSessionColour | null | undefined;
+  colour: string | null | undefined;
   onChoose: (colour: ConsoleSessionColour) => void;
   onClose: () => void;
   /** The submenu's item, which names the list of swatches. */

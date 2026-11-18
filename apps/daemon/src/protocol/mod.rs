@@ -66,3 +66,5 @@ mod compatibility;
 mod crosscheck;
 #[cfg(test)]
 mod schema;
+#[cfg(test)]
+mod ts_text;

@@ -20,16 +20,31 @@
 //! one whose `#[ts(type = ...)]` narrows its type, says so to the schema with an attribute of its
 //! own beside the `ts` one.
 //!
+//! A string enum is declared closed, the set of values the client knows and sends, and every type
+//! the daemon sends names it open, as `Received<Enum>` (`T | (string & {})`), since output enums
+//! may gain values within a generation: a `switch` that must cover every value, or a lookup by a
+//! received value in a `Record<Enum, …>`, then fails to type-check instead of breaking on a new
+//! value. A field narrowed to a union of string literals with `#[ts(type = ...)]` is opened the
+//! same way. A type both sides send is a type the daemon sends. The discriminant of a tagged union
+//! (`"type": "hello"`, a `kind`) is a single literal and stays closed: opened, it would no longer
+//! narrow the union, so a client handles a variant it does not know by hand (`received.rs`).
+//!
 //! A wire type's doc comment is copied into the rendering as it is, so it links only in forms that
 //! still read as prose there: a rustdoc link-definition line (`[`X`]: path`) would show up in the
 //! TypeScript as a stray line.
 
+mod layout;
+mod received;
+
 use std::any::TypeId;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::PathBuf;
 
 use ts_rs::{Config, TypeVisitor, TS};
 
+use self::layout::pretty;
+use self::received::{open_received, received_declaration};
+use super::schema::Direction;
 use super::{
     BrowseRequest, Change, Code, Event, PageNumber, PerAgent, Request, RequestBody, TermControl,
     TermEvent, GENERATION,
@@ -142,9 +157,11 @@ impl<T: TS + 'static> TS for PartialPerAgent<T> {
 struct Collector<'a> {
     cfg: &'a Config,
     seen: HashSet<TypeId>,
-    declarations: BTreeMap<String, String>,
-    /// Each declaration as `ts-rs` writes it, without its doc comment or layout, by type name.
+    /// Each declaration as `ts-rs` writes it (`type X = …;`, doc comments of fields included,
+    /// without its own doc comment or layout), by type name.
     bare: BTreeMap<String, String>,
+    /// Each declaration's own doc comment, by type name.
+    docs: BTreeMap<String, String>,
 }
 
 impl TypeVisitor for Collector<'_> {
@@ -155,13 +172,10 @@ impl TypeVisitor for Collector<'_> {
             }
             // A generic type is declared once, in its generic form, whatever it is used with.
             let name = T::ident(self.cfg);
-            self.bare
+            self.docs
                 .entry(name.clone())
-                .or_insert_with(|| T::decl(self.cfg));
-            self.declarations.entry(name).or_insert_with(|| {
-                let docs = T::docs().unwrap_or_default();
-                format!("{docs}export {}\n", pretty(&T::decl(self.cfg)))
-            });
+                .or_insert_with(|| T::docs().unwrap_or_default());
+            self.bare.entry(name).or_insert_with(|| T::decl(self.cfg));
             T::visit_dependencies(self);
         }
         // A type with no declaration of its own is reached through what it wraps, which its
@@ -170,155 +184,115 @@ impl TypeVisitor for Collector<'_> {
     }
 }
 
-/// Lays a declaration out one field and one union member to a line. `ts-rs` writes each on a
-/// single line, which would make a change to one field a change to a line of many kilobytes. Only
-/// whitespace is added or dropped, outside the doc comments, which are kept as they are.
-fn pretty(declaration: &str) -> String {
-    const INDENT: &str = "  ";
-    let mut out = String::new();
-    // What each open bracket is, so that a comma or a bar breaks a line only between the fields of
-    // an object or the members of a union, not between generic arguments.
-    let mut open: Vec<char> = Vec::new();
-    let mut chars = declaration.chars().peekable();
-    let newline = |out: &mut String, depth: usize| {
-        while out.ends_with(' ') {
-            out.pop();
-        }
-        if !out.is_empty() && !out.ends_with('\n') {
-            out.push('\n');
-        }
-        out.push_str(&INDENT.repeat(depth));
-    };
-    let depth = |open: &[char]| open.iter().filter(|bracket| **bracket == '{').count();
-    while let Some(c) = chars.next() {
-        match c {
-            '"' => {
-                out.push(c);
-                for inner in chars.by_ref() {
-                    out.push(inner);
-                    if inner == '"' {
-                        break;
-                    }
-                }
-            }
-            '/' if chars.peek() == Some(&'*') => {
-                let mut comment = String::from('/');
-                let mut previous = c;
-                for inner in chars.by_ref() {
-                    comment.push(inner);
-                    if previous == '*' && inner == '/' {
-                        break;
-                    }
-                    previous = inner;
-                }
-                let indent = INDENT.repeat(depth(&open));
-                newline(&mut out, depth(&open));
-                for (n, line) in comment.lines().enumerate() {
-                    if n > 0 {
-                        out.push('\n');
-                        out.push_str(&indent);
-                        if line.trim_start().starts_with('*') {
-                            out.push(' ');
-                        }
-                    }
-                    out.push_str(if n == 0 { line } else { line.trim_start() });
-                }
-                newline(&mut out, depth(&open));
-            }
-            '{' => {
-                open.push('{');
-                while chars.peek() == Some(&' ') {
-                    chars.next();
-                }
-                if chars.peek() == Some(&'}') {
-                    chars.next();
-                    open.pop();
-                    out.push_str("{}");
-                } else {
-                    out.push('{');
-                    newline(&mut out, depth(&open));
-                }
-            }
-            '}' => {
-                open.pop();
-                newline(&mut out, depth(&open));
-                out.push('}');
-            }
-            '<' | '(' | '[' => {
-                open.push(c);
-                out.push(c);
-            }
-            '>' | ')' | ']' => {
-                open.pop();
-                out.push(c);
-            }
-            ',' if open.last() == Some(&'{') => {
-                out.push(',');
-                while chars.peek() == Some(&' ') {
-                    chars.next();
-                }
-                if chars.peek() != Some(&'}') {
-                    newline(&mut out, depth(&open));
-                }
-            }
-            '|' if out.trim_end().ends_with('}') && open.iter().all(|bracket| *bracket == '(') => {
-                newline(&mut out, depth(&open) + open.len());
-                out.push_str("| ");
-                while chars.peek() == Some(&' ') {
-                    chars.next();
-                }
-            }
-            ' ' | '\n' => {
-                // Spaces lead nothing and follow nothing but one; a source line break is a space.
-                let leading = out.trim_end_matches(' ').ends_with('\n') || out.is_empty();
-                if !leading && !out.ends_with(' ') {
-                    out.push(' ');
-                }
-            }
-            _ => out.push(c),
-        }
-    }
-    out
+/// A root of the rendering: the type of one frame, and the direction it travels in.
+struct Root {
+    direction: Direction,
+    /// Visits the type and answers its name.
+    visit: fn(&mut Collector<'_>) -> String,
 }
 
-/// Visits every wire type from the roots, `f` reading the collected declarations.
-fn collect<R>(f: impl FnOnce(Collector) -> R) -> R {
+/// Every root, each once. Everything else is reached from them through ts-rs's dependency walk,
+/// which does not follow a type named only by `#[ts(as = ...)]` or `#[ts(type = ...)]`: such a
+/// type has to be reachable another way, or its declaration is silently left out. The direction
+/// decides which string enums are opened; the roots of each direction are the schema's
+/// (`the_roots_of_each_direction_are_the_schema_documents`).
+const ROOTS: &[Root] = &[
+    Root {
+        direction: Direction::Output,
+        visit: visit_root::<Event>,
+    },
+    Root {
+        direction: Direction::Input,
+        visit: visit_root::<Request>,
+    },
+    Root {
+        direction: Direction::Input,
+        visit: visit_root::<BrowseRequest>,
+    },
+    Root {
+        direction: Direction::Input,
+        visit: visit_root::<RequestBody>,
+    },
+    Root {
+        direction: Direction::Input,
+        visit: visit_root::<TermControl>,
+    },
+    Root {
+        direction: Direction::Output,
+        visit: visit_root::<TermEvent>,
+    },
+];
+
+fn visit_root<T: TS + 'static>(collector: &mut Collector<'_>) -> String {
+    collector.visit::<T>();
+    T::ident(collector.cfg)
+}
+
+/// The declarations of every wire type reachable from the roots, as `ts-rs` writes them, and the
+/// names of the roots by direction.
+struct Collected {
+    bare: BTreeMap<String, String>,
+    docs: BTreeMap<String, String>,
+    roots: Vec<(Direction, String)>,
+}
+
+fn collect_bare() -> Collected {
     let cfg = Config::new().with_large_int("number");
     let mut collector = Collector {
         cfg: &cfg,
         seen: HashSet::new(),
-        declarations: BTreeMap::new(),
         bare: BTreeMap::new(),
+        docs: BTreeMap::new(),
     };
-    // Everything else is reached from these roots through ts-rs's dependency walk, which does not
-    // follow a type named only by `#[ts(as = ...)]` or `#[ts(type = ...)]`: such a type has to be
-    // reachable another way, or its declaration is silently left out.
-    collector.visit::<Event>();
-    collector.visit::<Request>();
-    collector.visit::<BrowseRequest>();
-    collector.visit::<RequestBody>();
-    collector.visit::<TermControl>();
-    collector.visit::<TermEvent>();
-    f(collector)
+    let roots = ROOTS
+        .iter()
+        .map(|root| (root.direction, (root.visit)(&mut collector)))
+        .collect();
+    let Collector { bare, docs, .. } = collector;
+    Collected { bare, docs, roots }
+}
+
+/// The declarations of every wire type reachable from the roots, the string enums of the types the
+/// daemon sends opened (see `received.rs`).
+struct Declarations {
+    bare: BTreeMap<String, String>,
+    docs: BTreeMap<String, String>,
+}
+
+fn collect() -> Declarations {
+    let Collected { bare, docs, roots } = collect_bare();
+    let output_roots: Vec<String> = roots
+        .into_iter()
+        .filter(|(direction, _)| *direction == Direction::Output)
+        .map(|(_, name)| name)
+        .collect();
+    Declarations {
+        bare: open_received(bare, &output_roots),
+        docs,
+    }
 }
 
 /// Every declaration the rendering holds, as `ts-rs` writes it (`type X = …;`, doc comments of
-/// fields included), by type name: what `crosscheck.rs` compares with the schema.
+/// fields included) with the string enums of the types the daemon sends opened, by type name: what
+/// `crosscheck.rs` compares with the schema.
 pub(super) fn declarations() -> BTreeMap<String, String> {
-    collect(|collector| collector.bare)
+    collect().bare
 }
 
 fn render() -> String {
-    let declarations = collect(|collector| collector.declarations);
+    let Declarations { bare, docs } = collect();
     let mut out = HEADER.to_string();
     // The one value rendered, so that the client's generation is the daemon's and cannot drift.
     out.push_str("\n/** The protocol generation this file describes; see `hello`. */\n");
     out.push_str(&format!(
         "export const PROTOCOL_GENERATION = {GENERATION};\n"
     ));
-    for declaration in declarations.values() {
+    out.push('\n');
+    out.push_str(&received_declaration());
+    for (name, declaration) in &bare {
         out.push('\n');
-        out.push_str(declaration);
+        out.push_str(&docs[name]);
+        out.push_str(&format!("export {}\n", pretty(declaration)));
     }
     out
 }
@@ -365,26 +339,96 @@ fn line_diff(committed: &str, rendered: &str) -> String {
     lines.join("\n")
 }
 
-#[test]
-fn a_declaration_is_laid_out_by_field_and_by_union_member_and_nothing_else_changes() {
-    let declaration = "type A = { \"type\": \"x, y\", a: Record<string, B | null>, \n/**\n * Says what b is.\n */\nb?: Array<{ c: number, }>, d: {  }, } | { e: [string, number], };";
-    let expected = "\
-type A = {
-  \"type\": \"x, y\",
-  a: Record<string, B | null>,
-  /**
-   * Says what b is.
-   */
-  b?: Array<{
-    c: number,
-  }>,
-  d: {},
+/// The declaration of `name` in the rendering, from its `export` line to the blank line after it.
+fn rendered_declaration<'a>(rendered: &'a str, name: &str) -> &'a str {
+    let start = rendered
+        .find(&format!("export type {name} = "))
+        .unwrap_or_else(|| panic!("the rendering declares no `{name}`"));
+    let rest = &rendered[start..];
+    rest.split("\n\n").next().unwrap()
 }
-| {
-  e: [string, number],
-};";
-    let laid_out = pretty(declaration);
-    assert_eq!(laid_out, expected);
-    let bare = |text: &str| text.split_whitespace().collect::<String>();
-    assert_eq!(bare(&laid_out), bare(declaration));
+
+#[test]
+fn the_rendering_declares_received_once_and_keeps_every_enum_closed() {
+    let rendered = render();
+    assert_eq!(rendered.matches("export type Received<").count(), 1);
+    assert!(rendered.contains("export type Received<T extends string> = T | (string & {});"));
+    let before = collect_bare().bare;
+    let after = collect().bare;
+    let enums: Vec<&String> = before
+        .iter()
+        .filter(|(_, declaration)| received::is_string_enum(declaration))
+        .map(|(name, _)| name)
+        .collect();
+    assert!(enums.len() > 1, "no string enum was found: {enums:?}");
+    for name in enums {
+        assert_eq!(
+            after[name], before[name],
+            "the declaration of {name} was changed"
+        );
+    }
+}
+
+#[test]
+fn the_roots_of_each_direction_are_the_schema_documents() {
+    let roots = collect_bare().roots;
+    let named = |wanted: Direction| -> BTreeSet<String> {
+        roots
+            .iter()
+            .filter(|(direction, _)| *direction == wanted)
+            .map(|(_, name)| name.clone())
+            .collect()
+    };
+    let documented = |wanted: Direction| -> BTreeSet<String> {
+        let mut names = BTreeSet::new();
+        for (direction, document) in super::schema::rendered() {
+            if direction != wanted {
+                continue;
+            }
+            let references = match document["oneOf"].as_array() {
+                Some(members) => members.iter().map(|member| &member["$ref"]).collect(),
+                None => vec![&document["$ref"]],
+            };
+            for reference in references {
+                let reference = reference
+                    .as_str()
+                    .expect("a document's root is a reference");
+                names.insert(reference.trim_start_matches("#/$defs/").to_string());
+            }
+        }
+        names
+    };
+    // An output root missing here would leave the enums of what it sends closed.
+    assert_eq!(named(Direction::Output), documented(Direction::Output));
+    // The bindings also declare the body a request flattens (`RequestBody`), which a client sends
+    // without its `id`; the schema describes only whole frames.
+    let input = named(Direction::Input);
+    let missing: Vec<String> = documented(Direction::Input)
+        .into_iter()
+        .filter(|name| !input.contains(name))
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "input roots the bindings do not visit: {missing:?}"
+    );
+}
+
+#[test]
+fn a_string_enum_the_daemon_sends_is_received_and_one_it_only_receives_stays_closed() {
+    let rendered = render();
+    // `SessionRecord.status` is output: the daemon sends it in an event.
+    assert!(rendered.contains("  status: Received<SessionStatus>,"));
+    assert!(!rendered.contains("  status: SessionStatus,"));
+    // A field a request names is closed: the client sends only values it knows.
+    let request = rendered_declaration(&rendered, "RequestBody");
+    assert!(
+        !request.contains("Received"),
+        "RequestBody names an enum open:\n{request}"
+    );
+}
+
+#[test]
+fn a_field_narrowed_to_string_literals_in_an_output_type_is_received() {
+    let rendered = render();
+    assert!(rendered.contains("  status: Received<\"created\" | \"failed\">,"));
 }

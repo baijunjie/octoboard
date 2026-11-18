@@ -1,13 +1,15 @@
 import { type Console, type Project, type Session } from "../protocol";
+import { listedAmongConsoleSessions } from "./sessionKind";
 import { isLive, runsInBackground, sessionShownStatusKind, sessionStatusKind, showsSwitching, type ShownStatusKind } from "./sessionStatus";
 
 /** How soon a session wants a person: the ones that need someone to act or look come first (a raised
  * hand, a session that cannot take messages while its background agents are on view, a turn that ended
  * abnormally, a finished turn, a prompt waiting for a first instruction), then work going on elsewhere
- * (delegated or left in the background), then the sessions busy working, which are best left alone, and last
- * the ones with no process. Archived sessions are listed separately. A session starting up or switching account has no
- * rank of its own: it sorts where it will land (`outcomeKind`), so `starting` has no entry. A session whose process cannot
- * be reached (`reconnecting`) is only drawn differently: it ranks by its stored status. */
+ * (delegated or left in the background), then the sessions busy working, which are best left alone, then a status this
+ * client does not know (`unknown`), and last the ones with no process. Archived sessions are listed separately. A
+ * session starting up or switching account has no rank of its own: it sorts where it will land (`outcomeKind`), so
+ * `starting` has no entry. A session whose process cannot be reached (`reconnecting`) is only drawn differently: it
+ * ranks by its stored status. */
 export const STATUS_RANK: Record<Exclude<ShownStatusKind, "starting" | "switching" | "reconnecting">, number> = {
   waiting_user: 0,
   dormant: 1,
@@ -17,8 +19,9 @@ export const STATUS_RANK: Record<Exclude<ShownStatusKind, "starting" | "switchin
   delegated: 5,
   background: 6,
   working: 7,
-  interrupted: 8,
-  archived: 9,
+  unknown: 8,
+  interrupted: 9,
+  archived: 10,
 };
 
 /** What a session that is starting or switching account will be once that is over: working when the launch
@@ -473,7 +476,7 @@ export function sessionsInTreeOrder(
   return consoles.flatMap((console) => {
     const mine = picked.filter((s) => s.console_id === console.id);
     return [
-      ...mine.filter((s) => s.kind === "console").sort(compare),
+      ...mine.filter(listedAmongConsoleSessions).sort(compare),
       ...sortProjects(
         projects.filter((p) => p.console_id === console.id),
         (project) => sessions.filter((s) => s.project_id === project.id),
@@ -483,7 +486,7 @@ export function sessionsInTreeOrder(
       ).flatMap((project) =>
         // Nested as the project's list nests them, so a session bound to a project session follows
         // its owner rather than being ranked against it.
-        nest(mine.filter((s) => s.kind !== "console" && s.project_id === project.id).sort(compare)).map((row) => row.session),
+        nest(mine.filter((s) => !listedAmongConsoleSessions(s) && s.project_id === project.id).sort(compare)).map((row) => row.session),
       ),
     ];
   });

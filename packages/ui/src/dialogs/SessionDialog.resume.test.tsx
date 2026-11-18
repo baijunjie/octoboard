@@ -607,6 +607,19 @@ it("goes to a running session from the footer, with its fields disabled", async 
   expect(onClose).toHaveBeenCalled();
 });
 
+it("offers no resume for a session in a status this client does not know, only going to it", async () => {
+  const unknown = sessionOf("s-new", parentConsole.id, project.id, "Newer", "from_a_newer_daemon");
+  const { onOpened, onResume } = renderForResume({}, heldBy("live_session", unknown.id), { sessions: new Map([[unknown.id, unknown]]) });
+  await chooseResume();
+  typeResumeId(UUID);
+  await settle();
+  expect(buttons().some((button) => button.textContent === "Resume" || button.textContent === "Reopen")).toBe(false);
+  expect(resumeStatusText()).not.toContain("Found");
+  await submit("Go to session");
+  expect(onResume).not.toHaveBeenCalled();
+  expect(onOpened).toHaveBeenCalledWith("s-new");
+});
+
 it("takes a named session by its state now, not by the state the lookup saw", async () => {
   const { onResume } = renderForResume({}, heldBy("archived_session", running.id), { sessions: new Map([[running.id, running]]) });
   await chooseResume();

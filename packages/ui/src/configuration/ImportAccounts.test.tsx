@@ -377,6 +377,19 @@ it("offers only Leave out for an account whose name is the problem, and words th
   expect(row("Bad").querySelector("input")!.getAttribute("placeholder")).toBe("Ex. ~/.codex-work");
 });
 
+it("shows an account of a status this build does not know by its name alone, offering only Leave out", async () => {
+  const codex = ACCOUNTS.agents[1];
+  const future = account({ name: "Future", status: "from_a_newer_daemon" });
+  await reviewing({ accounts: { ...ACCOUNTS, agents: [ACCOUNTS.agents[0], { ...codex, accounts: [future] }] }, consoles: [], id: null, settings: null, settings_sections: [], settings_versions: {} });
+  await act(async () => row("Future").querySelector<HTMLButtonElement>("button[aria-haspopup=listbox]")!.click());
+  expect(Array.from(document.body.querySelectorAll("[role=option]")).map((o) => o.textContent)).toEqual(["Leave out"]);
+  await act(async () => document.body.querySelector<HTMLElement>("[role=option]")!.click());
+  expect(row("Future").textContent).toContain("Future");
+  expect(row("Future").textContent).not.toContain("New");
+  expect(row("Future").textContent).not.toContain("Already exists");
+  expect(row("Future").querySelector("button[data-status-mark]")).toBeNull();
+});
+
 it("keeps the fallback mark of a reference to an account that cannot be created for its name", async () => {
   const claude = { ...ACCOUNTS.agents[0], accounts: [account({ name: "Work", status: "invalid", error: NAME_TAKEN })] };
   await reviewing({ accounts: { ...ACCOUNTS, agents: [claude] }, consoles: CONSOLES, id: null, settings: null, settings_sections: [], settings_versions: {} });

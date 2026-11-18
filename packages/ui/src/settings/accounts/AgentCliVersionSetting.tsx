@@ -16,7 +16,7 @@ import type { Agent, CliInstallMethod } from "../../protocol";
 import { trackAgentCliUpdate, useDaemon, useDaemonStore, useProviders } from "../../store";
 import { Button } from "../../primitives";
 import { SettingRow } from "../SettingRow";
-import { hasCliUpdate, isNewerVersion } from "./cliVersion";
+import { hasCliUpdate, installMethodOf, isNewerVersion, updatesByMethod } from "./cliVersion";
 
 const METHOD_MESSAGES = {
   native: "settings.accounts.cli.method.native",
@@ -69,7 +69,7 @@ export function AgentCliVersionSetting({ agent }: { agent: Agent }): React.React
   const installed = status?.installed_version ?? undefined;
   const latest = status?.latest_version ?? undefined;
   const newer = installed && latest ? isNewerVersion(latest, installed) : undefined;
-  const method = status?.install_method;
+  const method = installMethodOf(status?.install_method);
   const sentence = !status
     ? t("settings.accounts.cli.checking")
     : running
@@ -95,7 +95,7 @@ export function AgentCliVersionSetting({ agent }: { agent: Agent }): React.React
     ...(status && !latest && status.latest_error ? [{ code: status.latest_error, detail: status.latest_detail ?? undefined }] : []),
     ...(update?.state === "failed" && newer !== false ? [{ code: updateError, detail: updateDetail }] : []),
   ];
-  const canUpdate = !!status && method !== "unknown" && !!installed && newer !== false;
+  const canUpdate = !!status && updatesByMethod(method) && !!installed && newer !== false;
   const ask = () => {
     if (askedFrom !== undefined) return;
     trackAgentCliUpdate(store, agent, update?.started_at ?? null);

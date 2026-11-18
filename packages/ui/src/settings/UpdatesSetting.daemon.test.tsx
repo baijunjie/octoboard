@@ -286,6 +286,21 @@ it("shows the daemon's own values in the window of a daemon elsewhere", () => {
   expect(channelButton(container).textContent).toContain("Beta");
 });
 
+it("shows an update channel this build does not know as an empty choice, and replaces it by choosing a known one", async () => {
+  inRemoteWindow();
+  const { container, request } = mountDesktop(IDLE, { daemon_update_channel: "nightly" });
+  expect(channelButton(container).textContent).not.toMatch(/nightly|Stable|Beta/);
+  await act(async () => channelButton(container).click());
+  await act(async () => Array.from(document.body.querySelectorAll<HTMLElement>("[role=option]")).find((option) => option.textContent?.includes("Stable"))!.click());
+  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "update_settings", daemon_update_channel: "stable", base_versions: { daemon_update_channel: 2 } });
+});
+
+it("offers no download, restart or manual command for a status of a phase this build does not know", () => {
+  const { container } = mount({ ...IDLE, phase: "from_a_newer_daemon", available: AVAILABLE, installed: { version: "0.2.0", holder_floor: null }, manual: { reason: "not_writable", path: "/x", command: MANUAL_COMMAND } });
+  for (const name of ["Download and install", "Restart now", "Copy install command"]) expect(button(container, name)).toBeUndefined();
+  expect(button(container, "Check for updates")).toBeDefined();
+});
+
 it("words the automatic check as the daemon's own in the window of a daemon elsewhere, and as the application's in the local window", async () => {
   inRemoteWindow();
   const remote = mountDesktop(IDLE);

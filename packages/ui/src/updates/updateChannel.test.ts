@@ -2,7 +2,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 
 import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
-import { effectiveUpdateChannel, isPrerelease } from "./updateChannel";
+import { effectiveUpdateChannel, isPrerelease, isUpdateChannel } from "./updateChannel";
 
 afterEach(() => localStorage.clear());
 
@@ -73,4 +73,10 @@ it("keeps the switch across a reload, and on is the absence of a stored value", 
   expect((await autoCheckWith("false")).get()).toBe(false);
   preference.set(true);
   expect(localStorage.getItem(PREFERENCE_KEYS.updateAutoCheck)).toBeNull();
+});
+
+it("knows the two release streams and no other value, not even an empty or absent one", () => {
+  expect(isUpdateChannel("stable")).toBe(true);
+  expect(isUpdateChannel("beta")).toBe(true);
+  for (const raw of ["nightly", "", "Beta", null, undefined]) expect(isUpdateChannel(raw)).toBe(false);
 });

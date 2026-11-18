@@ -89,6 +89,19 @@ it("describes the rule each development value gives, for the branch variant nami
   expect(container.textContent).toContain("directly on the current branch");
 });
 
+it("shows a development and a delivery this build does not know as empty choices, with no description for the development, and writes only a known one", async () => {
+  const container = mount({ gitWorkflow: { ...DEFAULT_GIT_WORKFLOW, development: "from_a_newer_daemon", delivery: "carrier_pigeon" } });
+  expect(picker(container, "Where sessions develop")?.textContent).not.toMatch(/from_a_newer_daemon|branch|worktree/i);
+  expect(picker(container, "Delivery")?.textContent).not.toMatch(/carrier_pigeon|merge|pull request|ask/i);
+  const descriptions = (element: HTMLElement) => element.querySelectorAll("[data-setting-description]").length;
+  expect(descriptions(container)).toBe(descriptions(mount({ gitWorkflow: { ...DEFAULT_GIT_WORKFLOW, development: "worktree", delivery: "ask" } })) - 1);
+  expect(request).not.toHaveBeenCalled();
+  await choose(container, "Where sessions develop", "On the current branch");
+  expect(request).toHaveBeenLastCalledWith({ type: "update_settings", git_workflow: { development: "in_place" } });
+  await choose(container, "Delivery", "Open a pull request");
+  expect(request).toHaveBeenLastCalledWith({ type: "update_settings", git_workflow: { delivery: "pull_request" } });
+});
+
 it("says the revert gate takes effect at once and a project's own rules come first", () => {
   const text = mount().textContent!;
   expect(text).toContain("takes effect at once, running sessions included");

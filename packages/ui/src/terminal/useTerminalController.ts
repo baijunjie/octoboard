@@ -12,6 +12,7 @@ import { useHostPaths } from "../components/hooks/useHostPaths";
 import { openPathInDefaultApplication } from "../components/host/openPathInDefaultApplication";
 import { revealPathTarget } from "../components/host/revealPathTarget";
 import { openPathTarget } from "./links/openPathTarget";
+import { pathLinkKindOf } from "./links/pathLinks";
 import type { HoveredTerminalLink } from "./links/terminalLinks";
 import { programCopyHandler } from "./osc52";
 import { pasteImageHandlers } from "./pastedImage";
@@ -104,7 +105,10 @@ export function useTerminalController({
           pathStyle,
           probe: async (paths) => {
             const reply = await latest.current.request({ type: "probe_path_links", project: latest.current.project, paths });
-            return reply.links.map(({ kind, view, viewer_only }) => ({ kind: hostActions || kind !== "directory" || view ? kind : "none", view, viewerOnly: viewer_only }));
+            return reply.links.map(({ kind: received, view, viewer_only }) => {
+              const kind = pathLinkKindOf(received);
+              return { kind: hostActions || kind !== "directory" || view ? kind : "none", view, viewerOnly: viewer_only };
+            });
           },
           open: (target, onHost) =>
             openPathTarget({

@@ -14,8 +14,10 @@ import { useNow } from "../format/useNow";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { UpdateChannel } from "../platform";
 import type { HostFacts } from "../platform/host";
+import type { Received } from "../protocol";
 import { releaseUrl } from "../components/text/releaseUrl";
 import { useHost } from "../platform/react";
+import { isUpdateChannel } from "../updates/updateChannel";
 import { installedMessageKey } from "../updates/installedMessageKey";
 import { reloadPage } from "../platform/reloadPage";
 import { restartPress } from "../updates/restartPress";
@@ -92,10 +94,11 @@ export function UpdatesSetting(): React.ReactElement {
 
 /** The switch for the automatic checks and the channel followed, the two rows every form of the section has. In the
  * window of a daemon elsewhere (`remote`) the checks are the daemon's own, so the switch's description names the daemon
- * instead of the app. */
-function UpdatePreferenceRows({ autoCheck, channel, remote, onAutoCheck, onChannel }: { autoCheck: boolean; channel: UpdateChannel; remote?: boolean; onAutoCheck: (value: boolean) => void; onChannel: (channel: UpdateChannel) => void }): React.ReactElement {
+ * instead of the app. A channel this build does not know is shown as an empty choice, and choosing one of the two
+ * replaces it. */
+function UpdatePreferenceRows({ autoCheck, channel, remote, onAutoCheck, onChannel }: { autoCheck: boolean; channel: Received<UpdateChannel>; remote?: boolean; onAutoCheck: (value: boolean) => void; onChannel: (channel: UpdateChannel) => void }): React.ReactElement {
   const t = useT();
-  const channels: { value: UpdateChannel; label: string }[] = [
+  const channels: { value: Received<UpdateChannel>; label: string }[] = [
     { value: "stable", label: t("settings.updates.channel.stable") },
     { value: "beta", label: t("settings.updates.channel.beta") },
   ];
@@ -113,7 +116,13 @@ function UpdatePreferenceRows({ autoCheck, channel, remote, onAutoCheck, onChann
         onChange={onAutoCheck}
       />
       <SettingRow fill searchId="updates.channel" label={t("settings.updates.channel.label")} description={t("settings.updates.channel.description")}>
-        <OptionSelect inline label={t("settings.updates.channel.label")} options={channels} value={channel} onChange={onChannel} />
+        <OptionSelect<Received<UpdateChannel>>
+          inline
+          label={t("settings.updates.channel.label")}
+          options={channels}
+          value={channel}
+          onChange={(value) => { if (isUpdateChannel(value)) onChannel(value); }}
+        />
       </SettingRow>
     </>
   );

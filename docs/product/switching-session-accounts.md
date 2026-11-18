@@ -25,13 +25,13 @@ sessions to switch, as two options of a radio group; the first is selected by de
   sessions, whether independent or reporting to a parent, across all projects in the console.
 
 In both, only sessions of the session's own agent are switched, and archived sessions, sessions already on the target
-account, sessions that have been deleted and sessions already being switched (see "While a session is switching" below)
-are left out. Each option shows how many sessions it would switch. When both scopes cover the same eligible sessions,
-the options are hidden and the switch covers this session and its descendants. With one eligible session there is no
-scope summary; with none or several, the scope and count are shown as plain information. The counts and whether the
-options are offered stay up to date while the confirmation is open. Confirm is disabled while the selected scope has
-no eligible sessions, including when the options are hidden. Neither scope changes the console's or projects' account
-defaults for future sessions.
+account, sessions that have been deleted, sessions already being switched (see "While a session is switching" below) and
+sessions whose status is unknown (see "Status unknown" in `docs/product/session-statuses.md`) are left out. Each option
+shows how many sessions it would switch. When both scopes cover the same eligible sessions, the options are hidden and
+the switch covers this session and its descendants. With one eligible session there is no scope summary; with none or
+several, the scope and count are shown as plain information. The counts and whether the options are offered stay up to
+date while the confirmation is open. Confirm is disabled while the selected scope has no eligible sessions, including
+when the options are hidden. Neither scope changes the console's or projects' account defaults for future sessions.
 
 The submenu disables a used-up account and one that is not logged in, and leaves out a turned-off one (see "Session
 rows" in `docs/product/sidebar-session-rows.md`), so the target account can only become unusable after the

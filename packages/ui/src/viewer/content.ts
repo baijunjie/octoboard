@@ -183,9 +183,10 @@ export function tooLargeBody(size: number | undefined): ViewerBody {
   return { kind: "tooLarge", size: size ?? null };
 }
 
-/** Classifies a body the daemon read for `path` (a wire path). */
+/** Classifies a body the daemon read for `path` (a wire path). A kind of a newer daemon is not text, so it reads as
+ * binary. */
 export function bodyFromFileContent(path: string, file: FileContent): ViewerBody {
-  if (file.kind === "binary") {
+  if (file.kind !== "text") {
     if (file.media_type && IMAGE_MEDIA_TYPES.has(file.media_type) && file.data !== null) {
       return { kind: "image", mediaType: file.media_type, url: `data:${file.media_type};base64,${file.data}`, size: file.size };
     }

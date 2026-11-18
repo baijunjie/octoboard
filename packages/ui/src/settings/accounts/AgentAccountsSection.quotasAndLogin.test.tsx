@@ -230,6 +230,21 @@ it.each([
   else expect(document.activeElement).toBe(login);
 });
 
+it("closes the login dialog, claiming no success, once the login is in a status this build does not know", async () => {
+  framesAsTimers();
+  availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);
+  accountQuotas.push(quotaOf("claude", "claude-work", { plan: null, windows: [], unavailable: { code: "quota_not_signed_in", params: { agent: "Claude Code" }, message: "x" } }));
+  const { container, set } = mount();
+  await act(async () => rowLogin(rowOf(container, "claude-work"))!.click());
+  set({ accountLogins: [{ agent: "claude", account: "claude-work", status: "starting", authorization_url: null, device_code: null, opened_by_agent: false, failure: null }] });
+  const settled = trackMountRefocus();
+  await settled();
+  expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+  set({ accountLogins: [{ agent: "claude", account: "claude-work", status: "from_a_newer_daemon", authorization_url: null, device_code: null, opened_by_agent: false, failure: null }] });
+  await settleFrames();
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+});
+
 it("gives focus back to the row's own Log in button once a login cancelled before the daemon had it has ended", async () => {
   framesAsTimers();
   availability.set("claude", { agent: "claude", availability: "available", default_account_dir: "/home/dev/.claude" } as AgentAvailability);

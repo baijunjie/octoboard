@@ -7,6 +7,7 @@ import { useT } from "../i18n/react";
 import { Label, ProgressBar, ProgressBarTrack, WaitingIcon } from "../primitives";
 import type { PlainMessageKey } from "../i18n/catalog";
 import { useProviders } from "../store";
+import { knownValues } from "../values/knownValue";
 import { FlatCard } from "../components/card/FlatCard";
 import { EntryStatus, SHARED_STATUS, STATUS_TONE, type StatusEntry, StatusLine } from "./importParts";
 import type { Inspection } from "./importPlan";
@@ -19,12 +20,15 @@ const STATUS: Record<Exclude<ItemProgress["state"], "creating" | "cloning">, Sta
   ...SHARED_STATUS,
 };
 
+const hasStatus = knownValues<keyof typeof STATUS>({ waiting: true, done: true, failed: true, not_attempted: true });
+
 const WORKING_LABEL: Record<"creating" | "cloning", PlainMessageKey> = {
   creating: "configuration.import.progress.status.creating",
   cloning: "configuration.import.progress.status.cloning",
 };
 
-/** An item's status while the import works through its stages. */
+/** An item's status while the import works through its stages; a state a newer daemon reports that this build does not
+ * know is blank, the item still listed. */
 function ItemState({ item }: { item: ItemProgress }): React.ReactElement {
   if (item.state === "creating" || item.state === "cloning") {
     return (
@@ -33,7 +37,7 @@ function ItemState({ item }: { item: ItemProgress }): React.ReactElement {
       </StatusLine>
     );
   }
-  return <EntryStatus entry={STATUS[item.state]} />;
+  return hasStatus(item.state) ? <EntryStatus entry={STATUS[item.state]} /> : <></>;
 }
 
 /** The row of a project or an account of the import: its state beside its name, and what it adds to that under it. */

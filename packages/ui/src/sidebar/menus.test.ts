@@ -1008,3 +1008,39 @@ it("offers no Git submenu without a git status, or for a project that is not a r
   expect(gitItems(undefined)).toBeUndefined();
   expect(gitItems(gitStatusOf("p", { repository: false, branch: null, upstream: null }))).toBeUndefined();
 });
+
+describe("the menu of a session in a status this client does not know", () => {
+  const nativeApp = { label: "Open in Claude app", seen: true, onOpen: () => {} };
+  const labelsOf = (session: Session) => sessionMenu(t, {} as SidebarHandlers, session, [account("w", "claude")], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false, nativeApp, bindOwners: { console: [sessionOf("hub", "c", undefined, "Hub", "idle")], project: [] } })
+    .flatMap((entry) => (typeof entry === "object" && "label" in entry ? [entry.label] : []));
+
+  it("offers no Change model, Switch account, Hand off, Open in app, Bind to or Unbind, which depend on the status", () => {
+    const labels = labelsOf(sessionOf("s", "c", "p", "Title", "from_a_newer_daemon", { bound_to: "hub" }));
+    for (const label of ["Change model", "Switch account", "Hand off", "Open in Claude app", "Bind to", "Unbind"]) expect(labels).not.toContain(label);
+  });
+
+  it("keeps what does not depend on the status", () => {
+    const labels = labelsOf(sessionOf("s", "c", "p", "Title", "from_a_newer_daemon", { bound_to: "hub" }));
+    for (const label of ["Lock", "Rename", "Archive", "Copy session ID"]) expect(labels).toContain(label);
+  });
+
+  it("offers them all on a known status, so the omission above is the status's", () => {
+    const labels = labelsOf(sessionOf("s", "c", "p", "Title", "interrupted", { bound_to: "hub" }));
+    for (const label of ["Change model", "Switch account", "Hand off", "Open in Claude app", "Bind to", "Unbind"]) expect(labels).toContain(label);
+  });
+});
+
+describe("the menu of a session of a kind this client does not know", () => {
+  const labelsOf = (session: Session) => sessionMenu(t, {} as SidebarHandlers, session, [], {}, { host: BROWSER_HOST, providers: TEST_PROVIDERS, switching: false })
+    .flatMap((entry) => (typeof entry === "object" && "label" in entry ? [entry.label] : []));
+
+  it("offers no Colour, which is a console session's own, and keeps the actions of any session", () => {
+    const labels = labelsOf({ ...sessionOf("s", "c", undefined, "Title", "idle"), kind: "from_a_newer_daemon" });
+    expect(labels).not.toContain("Colour");
+    for (const label of ["Lock", "Rename", "Archive", "Copy session ID"]) expect(labels).toContain(label);
+  });
+
+  it("offers Colour for a console session, so the omission above is the kind's", () => {
+    expect(labelsOf(sessionOf("s", "c", undefined, "Title", "idle"))).toContain("Colour");
+  });
+});

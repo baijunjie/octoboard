@@ -33,9 +33,10 @@ export function servedProvider(providers: readonly ProviderInfo[], id: string): 
   return providers.find((provider) => provider.id === id);
 }
 
-/** The effective provider switch value, falling back to its declared default before settings arrive. */
+/** The effective provider switch value, falling back to its declared default before settings arrive; a default this
+ * build does not know (a newer daemon's) reads off, so nothing is switched on by it. */
 export function switchValue(descriptor: SettingDescriptor, stored: unknown): boolean {
-  return typeof stored === "boolean" ? stored : descriptor.kind.type === "switch" && descriptor.kind.default !== "off";
+  return typeof stored === "boolean" ? stored : descriptor.kind.type === "switch" && descriptor.kind.default === "on";
 }
 
 /** How a model id of provider `id` is shown, as the daemon serves it; `undefined` while it has not served the providers

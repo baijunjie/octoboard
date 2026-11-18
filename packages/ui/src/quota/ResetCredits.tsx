@@ -19,6 +19,7 @@ import { accountQuotaOf } from "../accounts/accountQuotaOf";
 import { expiryLine, nextResetCredit, quotaNaming, resetCreditsSummary, usageBarSummary, usageBarWindows } from "../accounts/quotaFormat";
 import { useAccountQuota, type QuotaReading } from "./useAccountQuota";
 import { Button } from "../primitives";
+import { knownValues } from "../values/knownValue";
 
 /** An account's rate limit reset credits (a provider's "usage limit resets") in one line, with the action that redeems
  * one, beneath the account's quota windows: "1 usage limit reset available · expires in 6d 3h" and "Redeem reset".
@@ -69,6 +70,8 @@ const OUTCOME_NOTICE: Partial<Record<ResetCreditOutcome, "quota.resetCredits.not
   nothing_to_reset: "quota.resetCredits.nothingToReset",
   no_credit: "quota.resetCredits.noCredit",
 };
+
+const isResetCreditOutcome = knownValues<ResetCreditOutcome>({ reset: true, nothing_to_reset: true, no_credit: true, already_redeemed: true });
 
 /** How long the dialog waits for the reading the daemon takes after a use before it stops: as long as a reading may
  * take (`PROBE_TIMEOUT` in the daemon). */
@@ -137,6 +140,12 @@ export function UseResetCreditDialog({ agent, account, accountName, onClose }: {
       setPressed(undefined);
       throw error;
     });
+    // An outcome of a newer daemon is not known to be a reset: the dialog closes with no notice, claiming nothing and
+    // not inviting a second use, as the credit may be spent.
+    if (!isResetCreditOutcome(reply.outcome)) {
+      onClose();
+      return;
+    }
     const key = OUTCOME_NOTICE[reply.outcome];
     if (key === undefined) {
       const held = accountQuotaOf(store.getState().accountQuotas, agent, account);

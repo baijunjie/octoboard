@@ -1,4 +1,19 @@
-import type { AgentCliStatus } from "../../protocol";
+import type { AgentCliStatus, CliInstallMethod } from "../../protocol";
+import { knownValues } from "../../values/knownValue";
+
+const isCliInstallMethod = knownValues<CliInstallMethod>({ native: true, npm: true, homebrew: true, unknown: true });
+
+/** The install method as this client knows it: one of a newer daemon's is read as `unknown`. */
+export function installMethodOf(raw: string | null | undefined): CliInstallMethod | undefined {
+  return raw == null ? undefined : isCliInstallMethod(raw) ? raw : "unknown";
+}
+
+/** Whether the install method names a command that updates the CLI: one the daemon cannot tell, or a method this
+ * client does not know, offers none. */
+export function updatesByMethod(raw: string | null | undefined): boolean {
+  const method = installMethodOf(raw);
+  return method !== undefined && method !== "unknown";
+}
 
 const VERSION = /(\d+)\.(\d+)\.(\d+)/;
 
@@ -26,5 +41,5 @@ export function isNewerVersion(latest: string, installed: string): boolean | und
  * with a dot, and what makes the Version dialog's Update button the primary one. */
 export function hasCliUpdate(status: AgentCliStatus | undefined): boolean {
   const { installed_version: installed, latest_version: latest } = status ?? {};
-  return !!installed && !!latest && status?.install_method !== "unknown" && isNewerVersion(latest, installed) === true;
+  return !!installed && !!latest && updatesByMethod(status?.install_method) && isNewerVersion(latest, installed) === true;
 }

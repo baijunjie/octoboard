@@ -6,6 +6,7 @@ import type { ErrorPresentation } from "../errors/errorPresentation";
 import type { Agent, AgentModel, DefaultModelSource, ModelsUnavailable } from "../protocol";
 import type { RequestSender } from "../requests";
 import { shownError } from "./shownError";
+import { knownValues } from "../values/knownValue";
 
 /** `idle`: not asked, as nothing needs the list yet. `loading`: no answer for the agent and account the
  * form shows now has arrived yet in this hook's life. `ready`: the daemon has answered for them, with a
@@ -26,6 +27,9 @@ export interface AgentModels {
   unavailable: ModelsUnavailable | null;
   error?: ErrorPresentation;
 }
+
+/** A source of a newer daemon is read as none, the placeholder of a model nothing configured. */
+const isDefaultModelSource = knownValues<DefaultModelSource>({ configured: true, best_available: true });
 
 const NONE: Pick<AgentModels, "models" | "defaultModel" | "defaultModelSource" | "unavailable"> = { models: [], defaultModel: null, defaultModelSource: null, unavailable: null };
 const LOADING: AgentModels = { status: "loading", ...NONE };
@@ -67,7 +71,7 @@ export function useAgentModels(
     void send({
       request: () => request({ type: "list_agent_models", agent, ...(account && { account }) }),
       accept: (event) => {
-        const answer: AgentModels = { status: "ready", models: event.models, defaultModel: event.default_model ?? null, defaultModelSource: event.default_model_source ?? null, unavailable: event.unavailable };
+        const answer: AgentModels = { status: "ready", models: event.models, defaultModel: event.default_model ?? null, defaultModelSource: isDefaultModelSource(event.default_model_source) ? event.default_model_source : null, unavailable: event.unavailable };
         setAnswered((kept) => new Map(kept).set(key, answer));
         return () => answer;
       },

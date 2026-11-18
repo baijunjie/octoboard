@@ -1,6 +1,7 @@
 import type { IBufferRange, ILink, ILinkProvider, Terminal } from "@xterm/xterm";
 
 import type { PathLinkKind, PathLinkView } from "../../protocol";
+import { knownValues } from "../../values/knownValue";
 import { isPathLike, type PathStyle } from "../../format/hostPath";
 import { isPrimaryModifier } from "../../input/keys";
 import type { HostFacts } from "../../platform/host";
@@ -56,6 +57,13 @@ const PATH_TOKENS: Record<PathStyle, RegExp> = {
 };
 const TRAILING_PUNCTUATION = /[.,;:!?]+$/;
 const LINE_SUFFIX = /:\d+(?::\d+)?$/;
+
+const isPathLinkKind = knownValues<PathLinkKind>({ file: true, directory: true, none: true });
+
+/** What a path the daemon answered about names; a kind of a newer daemon is read as `none`, not a link. */
+export function pathLinkKindOf(kind: string): PathLinkKind {
+  return isPathLinkKind(kind) ? kind : "none";
+}
 
 /** What the daemon answered for a path: what it names and, for a file the file viewer can show (or a
  * folder's README or index file), where to read it from. */

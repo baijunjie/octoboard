@@ -293,6 +293,32 @@ it("sends the document unchanged with a resolution for every project that is pla
   ]);
 });
 
+it("leaves a project whose default this build does not know out until it is chosen for, keeping its row", async () => {
+  const [work, ...others] = REVIEW.consoles;
+  const [website, ...rest] = work.projects;
+  const future = { ...REVIEW, consoles: [{ ...work, projects: [{ ...website, default: "from_a_newer_daemon" }, ...rest] }, ...others] };
+  const mounted = await reviewing({ reply: (body) => body.type === "inspect_configuration" ? Promise.resolve({ type: "configuration_inspected", ...future }) : reply(body) });
+  expect(row("Website")).toBeDefined();
+  await press("Import");
+  const sent = mounted.sent().find((body) => body.type === "import_configuration") as Extract<ClientRequestBody, { type: "import_configuration" }>;
+  const resolutions = sent.resolutions ?? [];
+  expect(resolutions.map(({ console, project }) => [console, project])).not.toContainEqual([0, 0]);
+  expect(resolutions).toHaveLength(3);
+});
+
+it("draws and applies no card for a Settings section this build does not know, and shows a keep-awake choice it does not know as no change", async () => {
+  const settings = { ...REVIEW.settings!, current_keep_awake_when: "from_a_newer_daemon" };
+  const future = { ...REVIEW, settings, settings_sections: [...REVIEW.settings_sections, "from_a_newer_daemon"] };
+  const mounted = await reviewing({ reply: (body) => body.type === "inspect_configuration" ? Promise.resolve({ type: "configuration_inspected", ...future }) : reply(body) });
+  await checkSettings();
+  await openTab("Settings");
+  expect(tabNames()).toContain("Settings");
+  for (const label of SECTIONS) expect(regionBox(label)).toBeDefined();
+  expect(Array.from(document.body.querySelectorAll<HTMLInputElement>("input[type=checkbox]")).filter((input) => SECTIONS.includes(input.labels?.[0]?.textContent ?? "")).length).toBe(SECTIONS.length);
+  await press("Import");
+  expect(mounted.sent().at(-1)).toMatchObject({ type: "import_configuration", apply_settings: ["general", "appearance", "agent_behavior", "git", "keyboard_shortcuts", "cleanup"] });
+});
+
 it("is back at choosing the file when the import conflicts with a setting changed since the preview", async () => {
   const conflict = new CodedError("changed elsewhere", "write_conflict", { fields: "auto_pull_repositories", versions: '{"auto_pull_repositories":9}' });
   const mounted = await reviewing({ reply: (body) => (body.type === "import_configuration" ? Promise.reject(conflict) : reply(body)) });

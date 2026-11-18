@@ -5,7 +5,7 @@ import { translatorFor, type Translate } from "../i18n/catalog";
 import type { QuotaWindow } from "../protocol";
 import type { AccountQuota } from "../protocol";
 import { TEST_PROVIDERS } from "../test/testProviders";
-import { nextResetCredit, expiryLine, exhaustedQuotaWindow, orderedQuotaWindows, primaryQuotaWindow, planLabel, quotaHeadline, quotaNaming, quotaResetsIn, quotaUsedUpDetail, quotaUsedUpSentence, quotaUsedUpShort, quotaWindowLabel, quotaWindowPhrase, remainingPercentAt, resetCreditsSummary, twoLayerWindows, usageBarSummary, usageBarWindows } from "./quotaFormat";
+import { nextResetCredit, expiryLine, exhaustedQuotaWindow, knownQuotaWindows, orderedQuotaWindows, loginStateOf, primaryQuotaWindow, planLabel, quotaHeadline, quotaNaming, quotaResetsIn, quotaUsedUpDetail, quotaUsedUpSentence, quotaUsedUpShort, quotaWindowLabel, quotaWindowPhrase, remainingPercentAt, resetCreditsSummary, twoLayerWindows, usageBarSummary, usageBarWindows } from "./quotaFormat";
 
 const t: Translate = translatorFor("en");
 const MINUTE = 60_000;
@@ -133,6 +133,15 @@ it("orders account-wide windows before models without mutating or reordering mod
   expect(source).toEqual([fable, credit, sonnet, weekly, session]);
 });
 
+it("leaves out a window of a kind it does not know, keeping the rest in order", () => {
+  const future = window({ kind: "from_a_newer_daemon", label: "Future" });
+  const weekly = window({ kind: "weekly" });
+  const session = window();
+  expect(orderedQuotaWindows([future, weekly, session])).toEqual([session, weekly]);
+  expect(knownQuotaWindows([future, weekly, session])).toEqual([weekly, session]);
+  expect(knownQuotaWindows([future])).toEqual([]);
+});
+
 const reading = (windows: QuotaWindow[], patch: Partial<AccountQuota> = {}): AccountQuota => ({
   agent: "claude", account: null, fetched_at: NOW, plan: null, windows, unavailable: null, email: null, ...patch,
 });
@@ -150,6 +159,8 @@ describe("exhaustedQuotaWindow", () => {
     ["only a model-specific weekly window used up", [window({ kind: "weekly_model", label: "Fable", used_percent: 100 })], false],
     ["one window used up among several", [window({ used_percent: 20 }), window({ kind: "weekly", used_percent: 100, resets_at: NOW + MINUTE })], true],
     ["no windows", [], false],
+    ["only a window of a kind it does not know used up", [window({ kind: "from_a_newer_daemon", used_percent: 100 })], false],
+    ["a window of a kind it does not know used up beside a session window with room", [window({ kind: "from_a_newer_daemon", used_percent: 100 }), window({ used_percent: 20 })], false],
   ])("is %s: %s", (_name, windows, expected) => {
     expect(exhaustedQuotaWindow(reading(windows), NOW) !== undefined).toBe(expected);
   });
@@ -259,5 +270,36 @@ describe("resetCreditsSummary", () => {
   it("starts the expiry with a capital when it stands as a sentence of its own", () => {
     expect(expiryLine(t, NOW + 90 * MINUTE, NOW)).toBe("Expires in 1h 30m");
     expect(expiryLine(t, NOW - 1, NOW)).toBe("Expires now");
+  });
+});
+
+describe("loginStateOf", () => {
+  const reading = (patch: Partial<AccountQuota>): AccountQuota => ({ agent: "claude", account: null, fetched_at: NOW, plan: null, windows: [], unavailable: null, email: null, ...patch });
+  const failure = (code: string) => ({ code, params: {}, message: "raw" });
+  const future = window({ kind: "from_a_newer_daemon", used_percent: 100 });
+
+  it("knows nothing of a reading still to come or never asked for", () => {
+    expect(loginStateOf("loading")).toBeUndefined();
+    expect(loginStateOf(undefined)).toBeUndefined();
+  });
+
+  it("says logged in for a good reading, whatever windows it holds", () => {
+    expect(loginStateOf(reading({}))).toBe("in");
+    expect(loginStateOf(reading({ windows: [window()] }))).toBe("in");
+    expect(loginStateOf(reading({ windows: [future] }))).toBe("in");
+  });
+
+  it("says logged out for the failures that mean the account is not logged in", () => {
+    expect(loginStateOf(reading({ unavailable: failure("quota_not_signed_in") }))).toBe("out");
+  });
+
+  it("says logged in for a failed read that still holds a window it knows, as the last good reading was one", () => {
+    expect(loginStateOf(reading({ unavailable: failure("quota_command_failed"), windows: [window()] }))).toBe("in");
+  });
+
+  it("says nothing for a failed read with no window, or with windows of kinds it does not know alone, which show nothing of a login", () => {
+    expect(loginStateOf(reading({ unavailable: failure("quota_command_failed") }))).toBeUndefined();
+    expect(loginStateOf(reading({ unavailable: failure("quota_command_failed"), windows: [future] }))).toBeUndefined();
+    expect(loginStateOf(reading({ unavailable: failure("quota_command_failed"), windows: [future, window()] }))).toBe("in");
   });
 });

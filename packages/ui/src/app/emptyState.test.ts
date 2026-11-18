@@ -18,6 +18,11 @@ it("does not treat pre-snapshot empty collections as a bare console", () => {
   expect(terminalEmptyState(false, console, undefined, [], [], pending, null, TEST_PROVIDERS)).toBeUndefined();
 });
 
+it("counts a session of a kind it does not know with no project as one of the console's sessions", () => {
+  const unknown = { ...sessionOf("odd", console.id, undefined, "Odd", "idle"), kind: "from_a_newer_daemon" } as unknown as typeof owner;
+  expect(terminalEmptyState(true, console, undefined, [project], [unknown], pending, null, TEST_PROVIDERS)).not.toMatchObject({ kind: "new-console-session" });
+});
+
 it.each([
   { projects: [project], sessions: [live, { ...owner, status: "archived" as const }], kind: "new-console-session" },
   { projects: [project], sessions: [owner, archive, live], kind: "new-session" },

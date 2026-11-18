@@ -19,14 +19,14 @@ vi.mock("../preferences/theme", () => ({ useOctoboardTheme: () => ({ resolved: "
 const parentConsole = consoleOf("c-1", "Main");
 const project = projectOf("p-1", parentConsole.id, "Search API", { launch: { claude: { model: "opus", effort: "high" } } });
 
-async function mount(session: Session, models: "pending" | "unavailable" | "empty" | "listed" | "versioned" = "listed") {
+async function mount(session: Session, models: "pending" | "unavailable" | "empty" | "listed" | "versioned" | "unknownSource" = "listed") {
   const request = vi.fn(async (body: { type: string; agent?: string; account?: string | null }) => {
     if (body.type !== "list_agent_models") return { type: "ack", id: null };
     if (models === "pending") return new Promise<never>(() => {});
     return { type: "agent_models", agent: body.agent, account: body.account ?? null, ...(models === "unavailable"
       ? { models: [], unavailable: { code: "models_binary_not_found", params: { binary: "claude" }, message: "claude was not found" } }
       : models === "empty" ? { models: [], unavailable: null }
-        : models === "versioned" ? { models: [
+        : models === "versioned" || models === "unknownSource" ? { ...(models === "unknownSource" && { default_model_source: "from_a_newer_daemon" }), models: [
           { id: "fable", name: "Fable", efforts: ["low", "max"], version: "Fable 5.1", available: true },
           { id: "opus", name: "Opus", efforts: ["low", "high"], version: "Opus 5.5", available: true },
         ], default_model: "fable", unavailable: null }
@@ -132,6 +132,12 @@ it("names the version of the best available model an unset Model picker resolves
   expect(picker("Model").textContent).toContain("Best available, Fable 5.1");
   await act(async () => picker("Reasoning effort").click());
   expect(optionElements().map((option) => option.textContent)).toEqual(["low", "max"]);
+});
+
+it("words the default model of a source this build does not know as the best available one", async () => {
+  const session = sessionOf("s-1", parentConsole.id, undefined, "Fix search", "interrupted");
+  await mount(session, "unknownSource");
+  expect(picker("Model").textContent).toContain("Best available, Fable 5.1");
 });
 
 it("takes clearing the Model picker back to unset over a stored retired `best` for no change", async () => {

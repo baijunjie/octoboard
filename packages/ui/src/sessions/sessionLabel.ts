@@ -112,6 +112,7 @@ const STATUS_KEY = {
   idle: "session.status.idle",
   interrupted: "session.status.interrupted",
   archived: "session.status.archived",
+  unknown: "session.status.unknown",
 } as const satisfies Record<ShownStatusKind, MessageKey>;
 
 export function statusLabel(t: Translate, status: ShownStatusKind): string {

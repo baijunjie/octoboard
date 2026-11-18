@@ -196,23 +196,28 @@ which the Linux release archive ships and the website's `install.sh` installs wi
 - `src/protocol/` — Rust types of the wire protocol, one file per concern, re-exported as `crate::protocol`; `codes.rs`
   is the `Code` registry (a core code can be made only there; a provider's code only through `Code::of_provider` from
   its declaration), `errors.rs` the one mapping from a failure to an `error` reply (with `CodedError::require_offered`,
-  which refuses an operation a provider does not offer as `provider_unsupported`), `version.rs` the protocol generation and the daemon's version the `hello` frame states, `daemon_update.rs` the daemon's own update status (`DaemonUpdateStatus`) and its channel, `host.rs` `HostInfo`, the snapshot's `host` (os, path style, file links, whether the host can be held awake, and how the host names its Trash and settings app, built from `platform::HostFacts`), `bindings.rs` the test
-  that renders the types (and the generation) into `packages/ui/src/protocol.generated.ts`, `schema.rs` the one that
-  renders them as JSON Schema into `contracts/protocol/`, `crosscheck.rs` the one that holds the two renderings to the
-  same optional and nullable fields, property by property, and checks that every `ts(...)` attribute that narrows a
-  field has a `schemars(...)` counterpart; `schema.rs` also holds the field helpers `nullable` and `required_nullable`
-  that a field uses to say what its Rust type does not. `compatibility/` is the compatibility guard: the schema may only
-  grow against the snapshot of the last release in `contracts/protocol/released/` (`release.json` and that release's
-  schema files), unless `GENERATION` is raised. `mod.rs` holds the record, the check and the test on the real files,
-  `norm.rs` reads a schema node as the values it accepts, `compare.rs` compares two of them by direction, and
-  `release:version` refreshes the snapshot ([`apps/desktop/scripts/`](../../apps/desktop/scripts/README.md)).
-  `page_content/` is a report page's content: the `Component` tree a session pushes with `show_page` and the
-  `Submission` a form on it comes back with. `kinds.rs` holds every kind with the JSON Schema `show_page` enforces and
-  `page_guide` hands out, `check.rs` is the validator that reads those schemas and names the failing path (and kind),
-  `rules.rs` the cross-checks a schema cannot state (names, defaults and ranges, `visible_when`, a form's submitters,
-  the `pattern` of a text field compiled with `regress`), `chart.rs` the chart kind's allow-listed ECharts subset, and
-  `submission.rs` what a submission may carry; `PageContent::parse` and `PageContent::check_submission` in `mod.rs` are
-  the entry points.
+  which refuses an operation a provider does not offer as `provider_unsupported`), `version.rs` the protocol generation
+  and the daemon's version the `hello` frame states, `daemon_update.rs` the daemon's own update status
+  (`DaemonUpdateStatus`) and its channel, `host.rs` `HostInfo`, the snapshot's `host` (os, path style, file links,
+  whether the host can be held awake, and how the host names its Trash and settings app, built from
+  `platform::HostFacts`), `bindings/` the test that renders the types (and the generation) into
+  `packages/ui/src/protocol.generated.ts` (`mod.rs`), opening the string enums of every type the daemon sends as
+  `Received<…>` (`received.rs`) and laying each declaration out one field to a line (`layout.rs`), `schema.rs` the one
+  that renders them as JSON Schema into `contracts/protocol/`, `crosscheck.rs` the one that holds the two renderings to
+  the same optional and nullable fields, property by property, and checks that every `ts(...)` attribute that narrows a
+  field has a `schemars(...)` counterpart, and `ts_text.rs` the lexing of a rendered declaration that `bindings/` and
+  `crosscheck.rs` share; `schema.rs` also holds the field helpers `nullable` and `required_nullable` that a field uses
+  to say what its Rust type does not. `compatibility/` is the compatibility guard: the schema may only grow against the
+  snapshot of the last release in `contracts/protocol/released/` (`release.json` and that release's schema files),
+  unless `GENERATION` is raised. `mod.rs` holds the record, the check and the test on the real files, `norm.rs` reads a
+  schema node as the values it accepts, `compare.rs` compares two of them by direction, and `release:version` refreshes
+  the snapshot ([`apps/desktop/scripts/`](../../apps/desktop/scripts/README.md)). `page_content/` is a report page's
+  content: the `Component` tree a session pushes with `show_page` and the `Submission` a form on it comes back with.
+  `kinds.rs` holds every kind with the JSON Schema `show_page` enforces and `page_guide` hands out, `check.rs` is the
+  validator that reads those schemas and names the failing path (and kind), `rules.rs` the cross-checks a schema cannot
+  state (names, defaults and ranges, `visible_when`, a form's submitters, the `pattern` of a text field compiled with
+  `regress`), `chart.rs` the chart kind's allow-listed ECharts subset, and `submission.rs` what a submission may carry;
+  `PageContent::parse` and `PageContent::check_submission` in `mod.rs` are the entry points.
 - `src/cli/` — the command line and the modes above; `hook.rs` is the `hook` mode, `background.rs` the user's `start`,
   `stop`, `restart` and `status`, the start of a planned restart's successor and the loopback request the commands send
   (`request_over_loopback`), `address.rs` the user's `address` and `address --rotate` and the notes `address` says on

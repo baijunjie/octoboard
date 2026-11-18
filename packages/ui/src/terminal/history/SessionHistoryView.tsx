@@ -25,8 +25,13 @@ import { FencedCode } from "../../viewer/markdown/FencedCode";
 import { useHeldWhileHidden } from "../useHeldWhileHidden";
 import { useSessionHistory } from "./useSessionHistory";
 import { useFocusVisibleProps } from "../../primitives";
+import { knownValues } from "../../values/knownValue";
 
-type ConversationMessage = Omit<HistoryMessage, "speaker"> & { speaker: "user" | "agent" };
+/** A message of the conversation: its speaker is `undefined` for one of a newer daemon's, whose text is still shown,
+ * with no name above it and not as the user's. */
+type ConversationMessage = Omit<HistoryMessage, "speaker"> & { speaker: "user" | "agent" | undefined };
+
+const isConversationSpeaker = knownValues<"user" | "agent">({ user: true, agent: true });
 
 // The Markdown renderer, with its library, loads the first time a reply is shown.
 const markdownDocument = retryableLazy(() => import("../../viewer/markdown/MarkdownDocument").then((module) => ({ default: module.MarkdownDocument })));
@@ -64,7 +69,9 @@ export function SessionHistoryView({
     (rootRef.current?.querySelector<HTMLElement>("[role=region][tabindex]") ?? rootRef.current)?.focus();
   };
   const held = useFocusHandoff(focusMessagesOrView);
-  const messages = history.state === "loaded" ? history.messages.filter((message): message is ConversationMessage => message.speaker !== "octoboard") : [];
+  const messages = history.state === "loaded" ? history.messages
+    .filter((message) => message.speaker !== "octoboard")
+    .map((message): ConversationMessage => ({ ...message, speaker: isConversationSpeaker(message.speaker) ? message.speaker : undefined })) : [];
   const sentence =
     history.state === "loading"
       ? t("history.loading")
@@ -208,19 +215,23 @@ function Message({ message }: { message: ConversationMessage }): React.ReactElem
     ),
     [theme],
   );
-  const speaker = t(`history.speaker.${message.speaker}`);
+  const speaker = message.speaker && t(`history.speaker.${message.speaker}`);
   const speakerId = useId();
   const plain = <p dir="auto" className="break-words whitespace-pre-wrap">{message.text}</p>;
   return (
-    <article aria-labelledby={speakerId} className="flex flex-col gap-1">
-      <div className="flex items-baseline gap-2 text-xs text-app-muted">
-        <span id={speakerId} className="font-medium">
-          {speaker}
-        </span>
-        {message.at !== undefined && (
-          <time dateTime={new Date(message.at).toISOString()}>{isolate(new Date(message.at).toLocaleString(language))}</time>
-        )}
-      </div>
+    <article aria-labelledby={speaker ? speakerId : undefined} className="flex flex-col gap-1">
+      {(speaker || message.at !== undefined) && (
+        <div className="flex items-baseline gap-2 text-xs text-app-muted">
+          {speaker && (
+            <span id={speakerId} className="font-medium">
+              {speaker}
+            </span>
+          )}
+          {message.at !== undefined && (
+            <time dateTime={new Date(message.at).toISOString()}>{isolate(new Date(message.at).toLocaleString(language))}</time>
+          )}
+        </div>
+      )}
       <div data-speaker={message.speaker} className="history-message rounded-xl bg-default px-3 py-2 text-sm leading-6">
         {message.speaker === "agent" ? (
           <RendererBoundary resetKey={message.text} fallback={plain} retry={markdownDocument.retry}>

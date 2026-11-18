@@ -43,6 +43,11 @@ import { fieldHasText } from "../components/form/useTrimmedField";
 import { useDetectedAgent } from "./useDetectedAgent";
 import { projectNameDefault } from "./projectNameDefault";
 import { exceedsTextLimit, PROJECT_DESCRIPTION_LIMIT, PROJECT_NAME_LIMIT } from "../components/form/textLength";
+import { knownValues } from "../values/knownValue";
+
+/** Whether a project's `source` is one this build knows; a project of another (a newer daemon's) is edited as a local
+ * one, as the source is only chosen when adding. */
+const isProjectSource = knownValues<ProjectSource>({ local: true, parent: true, git: true });
 
 const SOURCE_OPTIONS: { value: ProjectSource; label: PlainMessageKey }[] = [
   { value: "local", label: "dialog.project.source.local" },
@@ -92,7 +97,7 @@ export function ProjectDialog({
   const accountOrder = useDaemonStore((s) => s.settings.account_order);
   const defaultNames = useDaemonStore((s) => s.settings.default_account_names);
   const disabledDefaults = useDaemonStore((s) => s.settings.disabled_default_accounts);
-  const [source, setSource] = useState<ProjectSource>(editing?.source ?? "local");
+  const [source, setSource] = useState<ProjectSource>(isProjectSource(editing?.source) ? editing.source : "local");
   const defaultCloneDir = useDaemonStore((s) => s.settings.default_clone_dir);
   const { home, style } = useHostPaths();
   // The clone directory is kept apart from the other sources' directory, so switching the source

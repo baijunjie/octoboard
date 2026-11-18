@@ -5,7 +5,10 @@ import { diagnosticText, errorDiagnostic, rawFailureText } from "./errorText";
 import { CODE } from "./codes";
 import { classifyError, type ErrorClassification, type ErrorRecovery } from "./errorRecovery";
 import { daemonOsName } from "../i18n/platformTerms";
-import type { GitStatus, HostInfo } from "../protocol";
+import type { GitStatus, HostInfo, HostOsName } from "../protocol";
+import { knownValues } from "../values/knownValue";
+
+const isHostOs = knownValues<HostOsName>({ macos: true, linux: true, windows: true });
 
 export interface ErrorAlertFailure {
   error: unknown;
@@ -311,7 +314,8 @@ function bodyOf(facts: IssueFacts, diagnostics: ReportedFailure[], diagnosticLim
     environment.daemonVersion && `- Daemon: ${environment.daemonVersion}`,
     environment.platform && `- Platform: ${environment.platform === "tauri" ? "desktop app" : "browser"}`,
     os && `- OS: ${os}`,
-    environment.daemonHost && `- Daemon host: ${daemonOsName(environment.daemonHost)}`,
+    // A system this client has no name for (a newer daemon's) is reported as the daemon sent it.
+    environment.daemonHost && `- Daemon host: ${isHostOs(environment.daemonHost.os) ? daemonOsName({ os: environment.daemonHost.os }) : environment.daemonHost.os}`,
     environment.language && `- Language: ${environment.language}`,
   ].filter((line): line is string => !!line);
   const errors = diagnostics.map((failure) => {

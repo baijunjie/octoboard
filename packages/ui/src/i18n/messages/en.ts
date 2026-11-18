@@ -1021,6 +1021,7 @@ export const en = {
   "session.status.reconnecting": "Reconnecting",
   "session.status.interrupted": "Interrupted",
   "session.status.archived": "Archived",
+  "session.status.unknown": "Status unknown",
   "session.status.named": "{name}, {status}",
   "session.status.namedPinned": "{name}, pinned, {status}",
 
@@ -3101,6 +3102,7 @@ export const en = {
   "settings.accounts.removeTrashRefused.protected": "The directory is your home folder, the root of a disk, or holds the application’s own data, so it cannot be moved to the {trash}.",
   "settings.accounts.removeTrashRefused.sharedAccount": "The directory overlaps the directory of the {agent} account {name}, so it cannot be moved to the {trash}.",
   "settings.accounts.removeTrashRefused.sharedDefaultAccount": "The directory is, holds or lies inside the default {agent} account’s directory, so it cannot be moved to the {trash}.",
+  "settings.accounts.removeTrashRefused.sharedOther": "The directory is shared with something else, so it cannot be moved to the {trash}.",
   "settings.accounts.removeTrashRefused.sharedProject": "The directory holds the folder of project {name}, so it cannot be moved to the {trash}.",
   "settings.accounts.removeTrashRefused.unlookable": "The directory could not be accessed, so it cannot be moved to the {trash}.",
   "settings.accounts.removeTrashRefused.unreadable":

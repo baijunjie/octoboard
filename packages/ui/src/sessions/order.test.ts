@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
-import type { Project, Session, SessionStatus } from "../protocol";
+import type { Project, Received, Session, SessionStatus } from "../protocol";
 import { DEFAULT_SESSION_ORDER, type SessionOrder, archiveNeedsConfirmation, archivedDeletionScope, isUnusedSession, topStatus, INACTIVE_PROJECT_RANK, STATUS_RANK, archivePreviewSessions, projectRank, liveConsoleSessions, bindableOwners, type BindOwners, archivedSessionRows, boundArchivedSessions, boundElsewhere, boundSessionsArchivedWith, focusGroups, liveSessionRows, liveSessions, notUnderConsoleSession, sessionsInTreeOrder, sortProjects, switchStrip } from "./order";
 import { FOLLOWING_GIT_WORKFLOW } from "../git/gitWorkflow";
 import { delegatingSessionIds, type ShownStatusKind } from "./sessionStatus";
@@ -9,7 +9,7 @@ import { delegatingSessionIds, type ShownStatusKind } from "./sessionStatus";
 /** No session delegates: the sessions of a test that does not look at delegated work. */
 const NONE: ReadonlySet<string> = new Set();
 
-const session = (id: string, status: SessionStatus, started_at: number, pinned = false, bound_to: string | null = null): Session => ({ compatibility: {},
+const session = (id: string, status: Received<SessionStatus>, started_at: number, pinned = false, bound_to: string | null = null): Session => ({ compatibility: {},
   id,
   agent: "claude",
   console_id: "c",
@@ -164,6 +164,7 @@ describe("topStatus", () => {
       starting: session("starting", "starting", 1),
       switching: { ...session("switching", "idle", 1), switching_account: true },
       reconnecting: { ...session("reconnecting", "idle", 1), holder_link: "pending" },
+      unknown: session("unknown", "from_a_newer_daemon", 1),
       interrupted: session("interrupted", "interrupted", 1),
     };
     const delegating = delegatingSessionIds([...Object.values(sessions), session("child", "working", 2, false, "delegated")]);
@@ -188,6 +189,11 @@ describe("topStatus", () => {
     expect(topStatus([session("interrupted", "interrupted", 1), session("working", "working", 0)], NONE, NONE)).toBe("working");
     expect(topStatus([session("archived", "archived", 2)], NONE, NONE)).toBeUndefined();
     expect(topStatus([{ ...session("switching", "idle", 3), switching_account: true }], NONE, NONE)).toBe("switching");
+  });
+
+  it("lists a session in a status this client does not know after the working ones and before interrupted", () => {
+    const sessions = [session("interrupted", "interrupted", 3), session("unknown", "from_a_newer_daemon", 2), session("working", "working", 1)];
+    expect(liveSessions(sessions, NONE, NONE).map((s) => s.id)).toEqual(["working", "unknown", "interrupted"]);
   });
 
   it("takes the newest of equally ranked sessions", () => {
@@ -472,6 +478,29 @@ describe("sessionsInTreeOrder", () => {
     // Recently used: the project whose newest session started last comes first.
     expect(ids({ ...DEFAULT_SESSION_ORDER, sessions: "started", activeProjects: "used" })).toEqual(["b-waiting", "a-new", "a-old"]);
   });
+
+  it("lists a session of a kind it does not know with no project among the console's own sessions, before the projects", () => {
+    const consoles = [consoleOf("c", "Main")];
+    const projects = [project("a", "alpha")];
+    const sessions = [
+      { ...session("a-1", "idle", 1), project_id: "a" },
+      { ...session("hub", "idle", 2), kind: "console" as const, project_id: null },
+      { ...session("odd", "idle", 3), kind: "from_a_newer_daemon", project_id: null },
+    ];
+    const ids = sessionsInTreeOrder(consoles, projects, sessions, () => true, NONE, NONE, { ...DEFAULT_SESSION_ORDER, sessions: "started" }).map((s) => s.id);
+    expect(ids).toEqual(["odd", "hub", "a-1"]);
+  });
+
+  it("leaves a session of a kind it does not know that belongs to a project under that project", () => {
+    const consoles = [consoleOf("c", "Main")];
+    const projects = [project("a", "alpha")];
+    const sessions = [
+      { ...session("a-1", "idle", 1), project_id: "a" },
+      { ...session("odd", "idle", 3), kind: "from_a_newer_daemon", project_id: "a" },
+    ];
+    const ids = sessionsInTreeOrder(consoles, projects, sessions, () => true, NONE, NONE, { ...DEFAULT_SESSION_ORDER, sessions: "started" }).map((s) => s.id);
+    expect(ids).toEqual(["odd", "a-1"]);
+  });
 });
 
 describe("notUnderConsoleSession", () => {
@@ -680,7 +709,7 @@ describe("switchStrip", () => {
 describe("STATUS_RANK", () => {
   it("lists what wants a person first, then work elsewhere, then work, then no process, archived at the very end", () => {
     const byRank = (Object.keys(STATUS_RANK) as (keyof typeof STATUS_RANK)[]).sort((a, b) => STATUS_RANK[a] - STATUS_RANK[b]);
-    expect(byRank).toEqual(["waiting_user", "dormant", "paused", "done", "idle", "delegated", "background", "working", "interrupted", "archived"]);
+    expect(byRank).toEqual(["waiting_user", "dormant", "paused", "done", "idle", "delegated", "background", "working", "unknown", "interrupted", "archived"]);
     expect(INACTIVE_PROJECT_RANK).toBe(STATUS_RANK.archived);
   });
 

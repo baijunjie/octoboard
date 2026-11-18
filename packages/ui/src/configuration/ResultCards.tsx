@@ -1,7 +1,8 @@
 import { CircleCheck, CircleDot } from "lucide-react";
 import React from "react";
 
-import type { AccountFallback, AccountOutcome, ImportFailure, ImportStatus } from "../protocol";
+import type { AccountFallback, AccountOutcome, ImportFailure, ImportStatus, Received } from "../protocol";
+import { knownValues } from "../values/knownValue";
 import { FlatCard } from "../components/card/FlatCard";
 import { CardTitle, EntryStatus, FailureReason, FallbackMark, ItemName, LEFT_OUT_STATUS, SHARED_STATUS, STATUS_TONE, type StatusEntry } from "./importParts";
 
@@ -15,9 +16,11 @@ const STATUS: Record<Status, StatusEntry> = {
   ...SHARED_STATUS,
 };
 
-/** An outcome as a glyph and its word. */
-export function Outcome({ status }: { status: Status }): React.ReactElement {
-  return <EntryStatus entry={STATUS[status]} />;
+const isStatus = knownValues<Status>({ created: true, existing: true, left_out: true, failed: true, not_attempted: true });
+
+/** An outcome as a glyph and its word; an outcome this build does not know (a newer daemon's) is blank. */
+export function Outcome({ status }: { status: Received<Status> }): React.ReactElement {
+  return isStatus(status) ? <EntryStatus entry={STATUS[status]} /> : <></>;
 }
 
 /**

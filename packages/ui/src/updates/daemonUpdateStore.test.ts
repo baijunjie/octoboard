@@ -144,6 +144,52 @@ describe("the state", () => {
   });
 });
 
+describe("what a newer daemon sends that this build does not know", () => {
+  it("reads a status of a phase it does not know as idle, offering no update, download, restart or manual install, and installs nothing", async () => {
+    const { updates, requests } = setup({
+      ...IDLE,
+      phase: "from_a_newer_daemon",
+      available: AVAILABLE,
+      progress: { downloaded: 1, total: 2 },
+      installed: { version: "0.2.0", holder_floor: null },
+      manual: { reason: "not_writable", path: "/x", command: "install /x" },
+    });
+    const state = updates.getState();
+    expect(state).toMatchObject({ phase: "idle", currentVersion: "0.1.0" });
+    expect(state.update).toBeUndefined();
+    expect(state.progress).toBeUndefined();
+    expect(state.installedVersion).toBeUndefined();
+    expect(state.manual).toBeUndefined();
+    await updates.install();
+    expect(requests).toEqual([]);
+    await updates.check("manual");
+    expect(requests.map((request) => request.type)).toEqual(["check_daemon_update"]);
+  });
+
+  it("shows no download pending for an install asked of a status whose phase it does not know", async () => {
+    const { updates, send } = setup({ ...IDLE, available: AVAILABLE });
+    const asked = updates.install();
+    send({ ...IDLE, phase: "from_a_newer_daemon", available: AVAILABLE });
+    await asked;
+    expect(updates.getState().phase).toBe("idle");
+  });
+
+  it("keeps the time of a last check whose outcome it does not know, counting it as neither failed nor up to date", () => {
+    const { updates } = setup({ ...IDLE, last_check: { outcome: "from_a_newer_daemon", at: 5, error: null, detail: null } });
+    const { lastCheck } = updates.getState();
+    expect(lastCheck?.at).toBe(5);
+    expect(lastCheck?.outcome).toBeUndefined();
+  });
+
+  it("does not take the channel an update was found on as one it knows, and shows a channel setting of its own as it came", () => {
+    const { updates, store } = setup({ ...IDLE, available: { ...AVAILABLE, channel: "from_a_newer_daemon" } });
+    expect(updates.getState().update).toMatchObject({ version: "0.2.0" });
+    expect(updates.getState().updateChannel).toBeUndefined();
+    store.setState((state) => ({ settings: { ...state.settings, daemon_update_channel: "nightly" } }));
+    expect(updates.getState().channel).toBe("nightly");
+  });
+});
+
 describe("requests", () => {
   it("asks the daemon to check, and to install the update it found", async () => {
     const { updates, requests } = setup({ ...IDLE, available: AVAILABLE });

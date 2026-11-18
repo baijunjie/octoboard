@@ -34,9 +34,10 @@ import { sshServerNames, sshServerWords } from "./sshServerWords";
 import { useRemoteLogin } from "./useRemoteLogin";
 import { useSectionRefocus } from "./useSectionRefocus";
 import { parsePort } from "../remoteDaemons/port";
+import { knownValues } from "../values/knownValue";
 
 /** The client's own sentence for why the owner socket is not served, per `RemoteAccessFailure.reason`; the daemon's
- * `detail` stands beside it. */
+ * `detail` stands beside it, and alone for a reason of a newer daemon. */
 const FAILURE_REASON: Record<RemoteAccessFailureReason, PlainMessageKey> = {
   no_ui: "settings.remoteAccess.failed.noUi",
   not_private: "settings.remoteAccess.failed.notPrivate",
@@ -46,6 +47,8 @@ const FAILURE_REASON: Record<RemoteAccessFailureReason, PlainMessageKey> = {
   port_failed: "settings.remoteAccess.failed.portFailed",
   pipe_failed: "settings.remoteAccess.failed.pipeFailed",
 };
+
+const isFailureReason = knownValues<RemoteAccessFailureReason>({ no_ui: true, not_private: true, socket_failed: true, owner_key_failed: true, port_in_use: true, port_failed: true, pipe_failed: true });
 
 /** What the SSH server sentences take (see `SSH_SERVER_NAMES`), as `V`. */
 type SshParams<V> = Record<"path" | keyof typeof SSH_SERVER_NAMES, V>;
@@ -208,7 +211,7 @@ export function RemoteAccessSection(): React.ReactElement {
                 title={t("settings.remoteAccess.failed.titleWays")}
                 details={<DiagnosticBlock>{failure.detail}</DiagnosticBlock>}
               >
-                <Message id={FAILURE_REASON[failure.reason]} />
+                {isFailureReason(failure.reason) && <Message id={FAILURE_REASON[failure.reason]} />}
               </ErrorAlert>
             </div>
           </SettingsSearchBlock>

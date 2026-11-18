@@ -97,6 +97,9 @@ What happens after **Use reset** depends on Codex's answer:
   that the account's usage does not need a reset right now. Whether Codex keeps the reset then has not been measured.
 - **No reset was left** to redeem. The dialog closes and a notice says that the account has no usage limit resets
   available.
+- **An answer the window does not know**, from a daemon newer than the window (see
+  `docs/product/values-a-newer-daemon-sends.md`): the dialog closes with no notice, claiming neither a reset nor its
+  absence.
 - **The request failed or was refused.** An error alert titled "Could not reset usage" opens over the dialog, which
   stays open on its question:
   - the account is not logged in: says so, with the remedy to log in to the account and redeem the reset again, and a

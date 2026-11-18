@@ -3,7 +3,10 @@ import { useEffect } from "react";
 import { useLatest } from "../components/hooks/useLatest";
 import { useLatestRequest } from "../components/hooks/useLatestRequest";
 import type { SessionRecordPresence } from "../protocol";
+import { knownValues } from "../values/knownValue";
 import { useDaemon } from "../store";
+
+const isPresence = knownValues<SessionRecordPresence>({ present: true, absent: true, unknown: true });
 
 /** Checks the native records of the whole deletion scope for the confirmation's cleanup option. */
 export function useSessionRecords(sessionIds: string[]): SessionRecordPresence {
@@ -17,7 +20,9 @@ export function useSessionRecords(sessionIds: string[]): SessionRecordPresence {
     const { request, send } = latest.current;
     void send({
       request: () => request({ type: "inspect_session_records", sessions: JSON.parse(key) as string[] }),
-      accept: (result) => () => result.presence,
+      // A presence this client does not know (a newer daemon's) is `unknown`, which leaves the cleanup option
+      // available.
+      accept: (result) => () => (isPresence(result.presence) ? result.presence : "unknown"),
       // An unavailable inspection must leave the cleanup option available.
       failed: () => "unknown",
     });

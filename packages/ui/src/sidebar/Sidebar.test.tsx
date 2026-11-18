@@ -270,6 +270,21 @@ it("lists a project session's own sessions under it, and the binding badge only 
   act(() => root.unmount());
 });
 
+it("lists a session of a kind it does not know with no project among the console's sessions, with no console session's colour badge", () => {
+  const odd = { ...sessionOf("s-odd", main.id, undefined, "Odd hub", "idle", { colour: "teal" }), kind: "from_a_newer_daemon" };
+  const { container } = mountSidebar({ sessions: [hub1, odd, unbound] });
+  const heading = Array.from(container.querySelectorAll("h3, h2")).find((node) => node.textContent?.startsWith("Console sessions"));
+  expect(heading?.textContent).toBe("Console sessions (2)");
+  const rowOf = (title: string) => Array.from(container.querySelectorAll<HTMLElement>("div[role=button]")).find((row) => row.getAttribute("aria-label")?.includes(title));
+  // Listed among the console's sessions, not among the project's.
+  expect(rowOf("Odd hub")).toBeDefined();
+  expect(rowOf("Odd hub")!.closest("[data-sessions]")).toBeNull();
+  expect(rowOf("Tidy the changelog")!.closest("[data-sessions]")).not.toBeNull();
+  // The colour badge is a console session's own.
+  expect(rowOf("Odd hub")!.querySelector(".session-colour-dot")).toBeNull();
+  expect(rowOf("Hub")!.querySelector(".session-colour-dot")).not.toBeNull();
+});
+
 it("names a row whose process cannot be reached Reconnecting, ranked by the status it stores", () => {
   const pending = sessionOf("web-pending", main.id, web.id, "Watch the build", "working", { holder_link: "pending" });
   const { container, root } = mountSidebar({ sessions: [unbound, pending] });

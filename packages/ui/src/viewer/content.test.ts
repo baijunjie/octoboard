@@ -14,6 +14,12 @@ it.each([
   expect(bodyFromFileContent(path, file)).toEqual(body);
 });
 
+it("treats a body of a kind this build does not know as binary, an image among them where it names one", () => {
+  const future = (media_type: string | null): FileContent => ({ size: 3, kind: "from_a_newer_daemon", media_type, text: null, data: "AAEC" });
+  expect(bodyFromFileContent("a.wasm", future(null))).toEqual({ kind: "binary", size: 3 });
+  expect(bodyFromFileContent("a.png", future("image/png"))).toMatchObject({ kind: "image", mediaType: "image/png" });
+});
+
 it("shows an SVG, which arrives as text, as an image that keeps its text", () => {
   const body = bodyFromFileContent("logo.SVG", textFile("<svg/>"));
   expect(body).toMatchObject({ kind: "image", mediaType: "image/svg+xml", text: "<svg/>" });

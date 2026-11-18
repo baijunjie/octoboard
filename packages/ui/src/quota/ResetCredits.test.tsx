@@ -4,7 +4,7 @@ import { afterEach, beforeEach, expect, it, onTestFinished, vi } from "vitest";
 
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
 import { currentLanguage, setLanguage } from "../i18n/language";
-import type { AccountQuota, Event, ClientRequestBody, ResetCredit, ResetCreditOutcome } from "../protocol";
+import type { AccountQuota, Event, ClientRequestBody, Received, ResetCredit, ResetCreditOutcome } from "../protocol";
 import type { Daemon } from "../store";
 import { mountHost } from "../test/mountHost";
 import { testDaemon } from "../test/testDaemon";
@@ -59,7 +59,7 @@ function fakeDaemon(quota: AccountQuota, reply: (body: ClientRequestBody) => Pro
 const mount = (daemon: Daemon, ui: React.ReactElement) => mountHost(ui, { daemon });
 
 const press = (element: Element) => act(() => (element as HTMLElement).click());
-const used = (outcome: ResetCreditOutcome) => (_body: ClientRequestBody) => Promise.resolve({ type: "reset_credit_used", id: null, outcome } as Event);
+const used = (outcome: Received<ResetCreditOutcome>) => (_body: ClientRequestBody) => Promise.resolve({ type: "reset_credit_used", id: null, outcome } as Event);
 
 it("shows the count and when the first credit expires, beside an action that asks to use it", () => {
   const { daemon } = fakeDaemon(quotaOf(undefined), used("reset"));
@@ -324,6 +324,18 @@ it.each([
   await flushPromises();
   expect(showNotice.mock.calls[0][0]).toContain(words);
   expect(onClose).toHaveBeenCalledOnce();
+});
+
+it("closes with no notice, claiming no reset and waiting for no reading, for an outcome this build does not know", async () => {
+  const { daemon, showNotice } = fakeDaemon(quotaOf({ available_count: 1, credits: [credit()] }), used("from_a_newer_daemon"));
+  const onClose = vi.fn();
+  mount(daemon, <UseResetCreditDialog agent="codex" account={null} accountName="Codex Work" onClose={onClose} />);
+  press(submit());
+  await flushPromises();
+  expect(onClose).toHaveBeenCalledOnce();
+  expect(showNotice).not.toHaveBeenCalled();
+  expect(dialogText()).not.toContain("Usage reset");
+  expect(dialogText()).not.toContain("Updating usage");
 });
 
 it("stays open when the request fails, for another try", async () => {

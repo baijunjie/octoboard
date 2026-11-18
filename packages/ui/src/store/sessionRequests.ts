@@ -1,11 +1,12 @@
 import type { Agent, Event, SessionKind, SessionRequestAction } from "../protocol";
+import { isSessionKind } from "../sessions/sessionKind";
+import { knownValues } from "../values/knownValue";
 
 /** What approving a `session_request` does, every value this client knows. A request with a value it does not know is
- * not offered, and the daemon's timeout ends the call. Written as a record's keys so the type check fails while one is
- * missing. */
-const SESSION_REQUEST_ACTIONS: readonly string[] = Object.keys({
+ * not offered, and the daemon's timeout ends the call. */
+const isRequestAction = knownValues<SessionRequestAction>({
   start: true, reopen: true, resume: true, resume_record: true, switch: true, handoff: true,
-} satisfies Record<SessionRequestAction, true>);
+});
 
 /** What every session request says, whatever an approval does. */
 interface SessionRequestBase {
@@ -69,22 +70,22 @@ export type SessionRequest = SessionRequestBase & (
 
 /** The request a `session_request` event describes, or undefined for one that does not carry what
  * its action needs (a reopen, resume, switch or handoff without a target, a record without its conversation) or
- * has an action this client does not know: the dialog is the one place an approval is enforced, so
+ * has an action or a session kind this client does not know: the dialog is the one place an approval is enforced, so
  * a request it cannot describe is not offered at all, and the daemon's own timeout ends the call. */
 export function sessionRequestOf(event: Extract<Event, { type: "session_request" }>): SessionRequest | undefined {
+  // The wire carries what a newer daemon may add, which the type does not know.
+  const { action, kind } = event;
+  if (!isRequestAction(action) || !isSessionKind(kind)) return undefined;
   const base: SessionRequestBase = {
     requestId: event.request_id,
     session: event.session,
-    kind: event.kind,
+    kind,
     console: event.console,
     project: event.project,
     agent: event.agent,
     branches: event.branches,
     requestedAt: event.requested_at,
   };
-  // The wire carries what a newer daemon may add, which the type does not know.
-  if (!SESSION_REQUEST_ACTIONS.includes(event.action)) return undefined;
-  const { action } = event;
   switch (action) {
     case "reopen":
     case "resume":

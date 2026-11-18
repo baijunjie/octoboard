@@ -1,6 +1,7 @@
 import { CodedError } from "../errors/codedError";
-import type { ProcessTree, SessionBranchItem, SessionBranchTarget } from "../protocol";
+import type { ProcessTree, SessionBranchItem, SessionBranchKind, SessionBranchState, SessionBranchTarget } from "../protocol";
 import type { Daemon } from "../store";
+import { knownValues } from "../values/knownValue";
 
 /** What an archive or deletion would find in its scope: the bound branches and worktrees, and, when
  * the inspection asked for them, the process trees an archive would stop (`ProcessTree`). `sessions`
@@ -34,10 +35,15 @@ export function lockedWorktrees(items: SessionBranchItem[]): SessionBranchItem[]
   return items.filter((item) => item.kind === "worktree" && item.state === "locked");
 }
 
+const isBranchKind = knownValues<SessionBranchKind>({ worktree: true, branch: true });
+const isBranchState = knownValues<SessionBranchState>({ removable: true, uncommitted_changes: true, submodules: true, unmerged: true, checked_out: true, locked: true, project_folder: true, failed: true });
+
 /** `items` as a request names them back: as each was shown, so that the daemon goes no further
- * than that. */
+ * than that. An item of a kind or in a state of a newer daemon cannot be named in a request, so it is left out, and the
+ * daemon leaves it as it is. */
 export function branchTargets(items: SessionBranchItem[]): SessionBranchTarget[] {
-  return items.map(({ kind, repository, branch, path, state, uncommitted, tip }) => ({ kind, repository, branch, path, state, uncommitted, tip: tip ?? null }));
+  return items.flatMap(({ kind, repository, branch, path, state, uncommitted, tip }) =>
+    isBranchKind(kind) && isBranchState(state) ? [{ kind, repository, branch, path, state, uncommitted, tip: tip ?? null }] : []);
 }
 
 /** The `force_remove` and `keep` of a request that forces `forced` and keeps `kept`, each absent

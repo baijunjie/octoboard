@@ -64,7 +64,8 @@ their cascade order does not depend on which screen opened first.
 
 ### Pure domain layers
 
-- `src/values/` — `sameValue`, the structural equality the store keeps unchanged data by; imports nothing.
+- `src/values/` — `sameValue`, the structural equality the store keeps unchanged data by, and `knownValues`, the type
+  predicate a reader of a daemon enum is built from (`knownValue.ts`); imports nothing.
 - `src/platform/` — `PlatformAdapter`, the interface to everything native, made of optional capabilities: `tauri.ts`
   (the only place that imports `@tauri-apps/*`) and `browser.ts`, exposed by `react.tsx`; `host.ts` the `HostFacts`
   every adapter carries as `host` (the system, input facts, window chrome and native capabilities). The desktop shell
@@ -288,13 +289,16 @@ the shape is:
   file inside it), on top of what its own rule below allows.
 - `protocol` imports only `protocol.generated`, and nothing but `protocol` imports that file (`GENERATED_PROTOCOL` in
   `eslint.layers.mjs`; the rule sees import declarations, not `import("…")` type expressions);
-  `values/`, `providers/` and `preferences/` import nothing else below `src/`; `platform/` imports only `protocol`. Each other pure layer imports only layers beneath it: `input/` only the `platform/` barrel; `i18n/` only
-  `preferences/`, `providers/` and `appConfig`; `format/` only `i18n/`; `agents/` only `i18n/`, `providers/` and `protocol`; `git/` only `i18n/` and `protocol`; `sessions/`
-  adds `agents/`; `accounts/` adds `sessions/` and `format/`; `errors/` adds `accounts/` and `appConfig`; `browse/`
-  imports `i18n/`, `errors/`, `format/` and `protocol`; `store/` imports `values/`, `i18n/`, `agents/`, `errors/`, `accounts/`,
-  `sessions/`, `preferences/`, `git/`, `protocol`, `requests`, `daemon` and `daemon-client`. `errors/` and `browse/`
-  do not import `daemon-client`: its `CodedError` lives in `errors/codedError.ts`, and the codes it raises are records in
-  `errors/codes.ts`.
+  `values/`, `providers/` and `preferences/` import nothing else below `src/`; `platform/` imports only `protocol`.
+  Each other pure layer imports only what its own clause names: `input/` only the `platform/` barrel; `i18n/` only
+  `preferences/`, `providers/` and `appConfig`; `format/` only `values/` and `i18n/`; `agents/` only `values/`, `i18n/`,
+  `providers/` and `protocol`; `git/` only `values/`, `i18n/` and `protocol`; `sessions/` only `values/`, `i18n/`,
+  `agents/` and `protocol`; `accounts/` only `values/`, `i18n/`, `agents/`, `sessions/`, `format/` and `protocol`;
+  `errors/` only `values/`, `i18n/`, `agents/`, `sessions/`, `accounts/`, `format/`, `protocol` and `appConfig`;
+  `browse/` only `values/`, `i18n/`, `errors/`, `format/` and `protocol`; `store/` only `values/`, `i18n/`, `agents/`,
+  `errors/`, `accounts/`, `sessions/`, `preferences/`, `git/`, `protocol`, `requests`, `daemon` and `daemon-client`.
+  `errors/` and `browse/` do not import `daemon-client`: its `CodedError` lives in `errors/codedError.ts`, and the codes
+  it raises are records in `errors/codes.ts`.
 - `components/` is the leaf layer: outside itself it imports only the pure layers, the `store/` barrel and the shared
   root files. `shortcuts/` imports `i18n/`, `platform/`, `preferences/`, `input/` and `components/`.
 - `viewer/`, `about/`, `updates/`, `layout/`, `quota/` and `statusItem/` import the leaf layer and the pure layers (`quota/` also
@@ -388,6 +392,7 @@ are the helper list; the rules that go beyond "use helper X" are in `docs/conven
 | Open a session's conversation in its agent's desktop application | `useOpenSessionInApp` (`src/components/host/useOpenSessionInApp.ts`) sends `open_session_in_app`; whether and how to offer it is `openInAppBlock` and `openInAppNote` (`src/sessions/nativeApp.ts`), the agent's label `nativeAppLabel` (`src/agents/providers.ts`, from the provider's `openInApp` message), and whether the application is installed or sees the session `useNativeAppInstalled` and `useNativeAppUnseen` (`src/store/nativeApps.ts`, refreshed by `useNativeAppsRefresh` and `useNativeAppsSync`) |
 | A tooltip with a heading, a divider and a body | `HeadedTooltip` (`src/components/hint/HeadedTooltip.tsx`) |
 | Whether an account switch holds a session, the daemon's or one this window queued | `holdsAccountSwitch` (`src/sessions/sessionStatus.ts`), or `useAccountSwitchHeld` in a component |
+| Tell whether a value the daemon sent is one this client knows (a closed enum's type predicate, built from a `Record<Value, true>`) | `knownValues` (`src/values/knownValue.ts`), as `isKnownSessionStatus` does |
 | Keep unchanged data by identity when a reducer rebuilds it | `sameValue` (`src/values/sameValue.ts`), as the `settings_updated` reducer does |
 | A tree row in a list, with its icon and mark buttons | `TreeRow`, `RowIconButton`, `RowMarkButton` and `HOVER_ACTIONS_CLASS` in `src/components/rows/`; a list that animates its reordering, and rows it hides with `hidden` while they stay mounted (a Settings search), uses `useListMotion` (`src/components/motion/`); a nested list keeps its own rows |
 | A section heading that pins while its section scrolls (sidebar row groups, Settings section groups, a side pane's categories with a note and the session groups beneath them) | `StickyHeading` with `variant` `list`, `group`, `category` or `subcategory` (a nested heading pinned below its category), and `STICKY_HEADING_HEIGHT` for fixed-height headings; the pane measures its category and subcategory headings for the scroller (`src/components/scroll/StickyHeading.tsx`); `SettingsGroup` and the Processes panel use it. The virtualized Git change list's foldable section headings are positioned by the virtualizer (`ChangeSectionHeading`, `src/project-browser/git/changeSectionHeading.tsx`) and marked by `TreeHeader` in `src/primitives/Tree.tsx`. A pinned row or strip that is not a heading (the `DirectoryPicker`'s parent-directory row, the agent strip in `src/settings/accounts/AgentAccountsSection.tsx`) calls `useStickyHeadingFocus` (`src/components/scroll/stickyHeadingFocus.ts`) directly. Its `data-sticky-heading` marker also lets `FadedScroller` (with `stickyHeadingHeight`) and `useStickyScrollFade` apply the shared exit fade automatically: `src/components/scroll/scrollFade.tsx` owns the watch, and its co-located `scrollFade.css`, loaded by `src/style.css`, paints the surface-coloured overlay |

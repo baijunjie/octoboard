@@ -28,6 +28,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde_json::{Map, Value};
 
 use super::schema::Direction;
+use super::ts_text::{pieces, Piece};
 
 /// The properties whose optionality or nullability may differ between the input schema and the
 /// bindings of a type only the client sends: the type's name, its tag value (empty for an object
@@ -451,54 +452,19 @@ fn parse_declaration(declaration: &str) -> Result<Vec<TsObject>, String> {
 }
 
 /// Splits a declaration into tokens: names, quoted strings (kept with their quotes), numbers and
-/// single punctuation characters. Comments are dropped.
+/// single punctuation characters, read as `ts_text.rs` reads them. Comments are dropped.
 fn tokenize(text: &str) -> Result<Vec<String>, String> {
-    let mut tokens = Vec::new();
-    let mut chars = text.chars().peekable();
-    while let Some(c) = chars.next() {
-        match c {
-            c if c.is_whitespace() => {}
-            '/' if chars.peek() == Some(&'*') => {
-                let mut previous = ' ';
-                loop {
-                    let inner = chars.next().ok_or("an unclosed comment")?;
-                    if previous == '*' && inner == '/' {
-                        break;
-                    }
-                    previous = inner;
-                }
+    const PUNCTUATION: &str = "{}()[]<>,:?|&=;-";
+    pieces(text)?
+        .into_iter()
+        .filter_map(|piece| match piece {
+            Piece::Gap(_) => None,
+            Piece::Mark(mark) if !PUNCTUATION.contains(mark) => {
+                Some(Err(format!("an unexpected character {mark:?}")))
             }
-            '"' => {
-                let mut literal = String::from('"');
-                loop {
-                    let inner = chars.next().ok_or("an unclosed string")?;
-                    literal.push(inner);
-                    if inner == '\\' {
-                        literal.push(chars.next().ok_or("an unclosed string")?);
-                    } else if inner == '"' {
-                        break;
-                    }
-                }
-                tokens.push(literal);
-            }
-            c if c.is_alphanumeric() || c == '_' || c == '$' => {
-                let mut word = String::from(c);
-                while let Some(&next) = chars.peek() {
-                    if next.is_alphanumeric() || next == '_' || next == '$' || next == '.' {
-                        word.push(next);
-                        chars.next();
-                    } else {
-                        break;
-                    }
-                }
-                tokens.push(word);
-            }
-            '{' | '}' | '(' | ')' | '[' | ']' | '<' | '>' | ',' | ':' | '?' | '|' | '&' | '='
-            | ';' | '-' => tokens.push(c.to_string()),
-            other => return Err(format!("an unexpected character {other:?}")),
-        }
-    }
-    Ok(tokens)
+            piece => Some(Ok(piece.text().to_string())),
+        })
+        .collect()
 }
 
 struct Parser {

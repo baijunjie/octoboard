@@ -91,6 +91,19 @@ it("gives each console a card named by its heading with its own outcome, and a r
   expect(cards[2].textContent).toContain("This console has no projects.");
 });
 
+it("keeps a row whose outcome or way of placing this build does not know, with its outcome blank and no detail", () => {
+  const consoles = [
+    { name: "Fine", status: "from_a_newer_daemon", console: "c-1", error: null, account_fallbacks: [], projects: [
+      { ...project(1), status: "from_a_newer_daemon" },
+      { ...project(2), via: "from_a_newer_daemon" },
+    ] },
+  ];
+  const container = mountHost(<ImportResult result={{ type: "configuration_imported", id: null, consoles, settings_applied: null, settings_error: null, accounts: null }} />);
+  const card = container.querySelector("section")!;
+  expect([...card.querySelectorAll("li")].map((li) => li.textContent)).toEqual(["P1", "P2Created"]);
+  expect(card.textContent).not.toContain("exported path");
+});
+
 it("colours a failed row's Details by its line, danger", () => {
   const failure = { code: "internal_error", message: "boom", params: { detail: "raw diagnostic text" } };
   const accounts = {

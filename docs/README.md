@@ -294,6 +294,9 @@ Where to start, by question:
 - [Remote daemons](product/remote-daemons.md) — the desktop app reaching daemons on other machines over SSH: the
   Remote, Dock and Windows system menus and the jump list, the saved-daemon fields, connection details, every
   connection outcome, device keys, the remote window, Disconnect and restoring remote windows at launch.
+- [Values a newer daemon sends](product/values-a-newer-daemon-sends.md) — what the window does with an enum value a
+  newer daemon of the same protocol generation sends that it does not know: shown neutrally, left out or blank, and
+  never acted on.
 - [The Remote devices page](product/remote-devices-page.md) — the main window's page for listing, adding, editing,
   removing and connecting saved remote daemons: opening and leaving it and its place in Back/Forward, the device list
   in the sidebar, the settings form and its Paste button, questions and failures handed to it, and using it while the

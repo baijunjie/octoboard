@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { sessionOf } from "../fixtures/builders";
 import type { Session, SessionStatus } from "../protocol";
 import type { ShownStatusKind } from "./sessionStatus";
-import { childCanReport, delegatingSessionIds, hasChildThatCanReport, holdsAccountSwitch, isSummaryStatus, sessionIsBusy, sessionIsWorking, sessionShownStatusKind, sessionStatusKind, showsSwitching, SUMMARY_STATUSES } from "./sessionStatus";
+import { childCanReport, delegatingSessionIds, hasChildThatCanReport, hasNoProcess, holdsAccountSwitch, isLive, isSummaryStatus, sessionIsBusy, sessionIsWorking, sessionShownStatusKind, sessionStatusKind, showsSwitching, SUMMARY_STATUSES } from "./sessionStatus";
 
 const NONE: ReadonlySet<string> = new Set();
 const kindOf = (status: SessionStatus, extra: Partial<Session> = {}, delegating: ReadonlySet<string> = NONE) =>
@@ -259,5 +259,43 @@ describe("hasChildThatCanReport", () => {
 
   it("accepts any iterable of sessions", () => {
     expect(hasChildThatCanReport(new Map([["a", child("a", "working")]]).values(), "owner")).toBe(true);
+  });
+});
+
+describe("a status this client does not know (a newer daemon's)", () => {
+  const FROM_A_NEWER_DAEMON = "from_a_newer_daemon";
+  const unknown = (extra: Partial<Session> = {}) => sessionOf("s", "c", "p", "T", FROM_A_NEWER_DAEMON, { has_conversation: true, ...extra });
+
+  it("reads as the unknown kind whatever else the record holds", () => {
+    const busy = { paused: true, background_tasks: [{ id: "b" }] };
+    expect(sessionStatusKind(unknown(), NONE)).toBe("unknown");
+    expect(sessionStatusKind(unknown(busy), new Set(["s"]))).toBe("unknown");
+    expect(sessionShownStatusKind(unknown(), NONE, NONE)).toBe("unknown");
+  });
+
+  it("is neither live, nor without a process, nor at work, nor busy, nor able to report", () => {
+    expect(isLive(FROM_A_NEWER_DAEMON)).toBe(false);
+    expect(hasNoProcess(FROM_A_NEWER_DAEMON)).toBe(false);
+    const withTasks = unknown({ background_tasks: [{ id: "b" }] });
+    expect(sessionIsWorking(withTasks)).toBe(false);
+    expect(sessionIsBusy(withTasks)).toBe(false);
+    expect(childCanReport(withTasks)).toBe(false);
+    expect(hasChildThatCanReport([unknown({ bound_to: "owner" })], "owner")).toBe(false);
+  });
+
+  it("is not reconnecting even where the daemon cannot reach its process, and is no summary status", () => {
+    expect(sessionShownStatusKind(unknown({ holder_link: "pending" }), NONE, NONE)).toBe("unknown");
+    expect(isSummaryStatus("unknown")).toBe(false);
+    expect(SUMMARY_STATUSES).not.toContain("unknown");
+  });
+
+  it("does not mark its owner as delegating", () => {
+    const owner = sessionOf("owner", "c", "p", "owner", "idle");
+    expect(delegatingSessionIds([owner, unknown({ bound_to: "owner" })])).toEqual(new Set());
+  });
+
+  it("leaves the known statuses as they were", () => {
+    expect(isLive("working")).toBe(true);
+    expect(hasNoProcess("interrupted")).toBe(true);
   });
 });

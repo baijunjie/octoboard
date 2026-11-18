@@ -84,7 +84,10 @@ function trashRefusal(outcome: AccountTrashOutcome | undefined): React.ReactElem
         ? <Message id="settings.accounts.removeTrashRefused.sharedAccount" params={{ agent: <InlineReference dir="auto" wrap>{outcome.agent ?? ""}</InlineReference>, name: <InlineReference dir="auto" wrap>{outcome.name ?? ""}</InlineReference> }} />
         : outcome.kind === "project"
           ? <Message id="settings.accounts.removeTrashRefused.sharedProject" params={{ name: <InlineReference dir="auto" wrap>{outcome.name ?? ""}</InlineReference> }} />
-          : <Message id="settings.accounts.removeTrashRefused.sharedDefaultAccount" params={{ agent: <InlineReference dir="auto" wrap>{outcome.agent ?? ""}</InlineReference> }} />;
+          : outcome.kind === "default_account"
+            ? <Message id="settings.accounts.removeTrashRefused.sharedDefaultAccount" params={{ agent: <InlineReference dir="auto" wrap>{outcome.agent ?? ""}</InlineReference> }} />
+            // Shared with something of a kind of a newer daemon's: it is said without naming it.
+            : <Message id="settings.accounts.removeTrashRefused.sharedOther" />;
     case "unlookable":
       return <Message id={outcome.cause === "unreadable" ? "settings.accounts.removeTrashRefused.unreadable" : outcome.cause === "other_unlooked" ? "settings.accounts.removeTrashRefused.otherUnlooked" : "settings.accounts.removeTrashRefused.unlookable"} />;
     default:

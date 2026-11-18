@@ -2,7 +2,8 @@ import type { ILink, ILinkProvider, Terminal } from "@xterm/xterm";
 import { expect, it, vi } from "vitest";
 
 import { BROWSER_HOST } from "../../test/hosts";
-import { foundPathMatches, installPathLinks, type PathAnswer, PathLinkCache, pathCandidates, pathMatchesIn } from "./pathLinks";
+import { hostPathsOf } from "../../format/hostPath";
+import { foundPathMatches, installPathLinks, type PathAnswer, PathLinkCache, pathCandidates, pathLinkKindOf, pathMatchesIn } from "./pathLinks";
 import type { TerminalRow } from "./terminalLines";
 import { fakeTimers } from "../../test/clock";
 
@@ -40,6 +41,20 @@ it.each([
   ["a route group", "open app/(group)/page.tsx"],
 ])("does not find a path in %s", (_name, text) => {
   expect(paths(text)).toEqual([]);
+});
+
+it("finds paths in the default style, without throwing, for a host path style this client does not know", () => {
+  const { style } = hostPathsOf({ homeDir: null, host: { path_style: "from_a_newer_daemon" } });
+  expect(pathCandidates("wrote /tmp/a.png now", style).map((candidate) => candidate.path)).toEqual(["/tmp/a.png"]);
+});
+
+it.each([
+  ["file", "file"],
+  ["directory", "directory"],
+  ["none", "none"],
+  ["from_a_newer_daemon", "none"],
+])("reads a path kind of %s as %s: only a known kind is a link", (received, kind) => {
+  expect(pathLinkKindOf(received)).toBe(kind);
 });
 
 it("starts an @ mention's path after the @", () => {

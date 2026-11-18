@@ -338,7 +338,7 @@ export function createPreviewScenario(
         {
           id: found.id,
           agent: found.agent,
-          status: found.status === "working" || found.status === "waiting_user" ? found.status : "idle",
+          status: found.status === "working" ? "working" : found.status === "waiting_user" ? "waiting_user" : "idle",
           cwd: cwdOf(found),
           background: found.background_tasks?.[0]?.description ?? undefined,
           copy: terminalCopy(found.id, copy.terminals[found.id]),

@@ -5,9 +5,9 @@ import { InlineReference } from "../i18n/InlineReference";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { useListMotion } from "../components/motion/useListMotion";
 import { OptionSelect } from "../components/form/OptionSelect";
-import { DELIVERY_CHOICES, DEVELOPMENT_CHOICES, GIT_WORKFLOW_ITEMS } from "../git/gitWorkflow";
+import { DELIVERY_CHOICES, DEVELOPMENT_CHOICES, developmentChoice, GIT_WORKFLOW_ITEMS, isGitDelivery, isGitDevelopment } from "../git/gitWorkflow";
 import { Message, useT } from "../i18n/react";
-import type { GitDelivery, GitDevelopment, GitWorkflowSettingsChanges } from "../protocol";
+import type { GitDelivery, GitDevelopment, GitWorkflowSettingsChanges, Received } from "../protocol";
 import { useDaemonStore } from "../store";
 import { CloneDirSetting } from "./CloneDirSetting";
 import { DaemonSwitchSetting } from "./DaemonSwitchSetting";
@@ -16,10 +16,12 @@ import { SettingsGroup } from "./SettingsGroup";
 import { useSettingsWrite } from "./useSettingsWrite";
 
 /** The Git settings, in three groups: the repository (where clones go, whether branches are pulled), development (see
- * `Settings.git_workflow` in protocol.generated.ts: where a project session develops, then how it merges and delivers finished
- * work) and protection (the revert gate). Each workflow change sends only its own item, based on that item's version in
- * the store, so another client's change to it is refused as a conflict and the control shows it. A project may hold its own
- * value for any of the workflow items, which the project dialog sets. */
+ * `Settings.git_workflow` in protocol.generated.ts: where a project session develops, then how it merges and delivers
+ * finished work) and protection (the revert gate). Each workflow change sends only its own item, based on that item's
+ * version in the store, so another client's change to it is refused as a conflict and the control shows it. A project
+ * may hold its own value for any of the workflow items, which the project dialog sets. A development or delivery this
+ * build does not know (a newer daemon's) is shown as an empty choice, with no description, and replaced by choosing one
+ * of the known. */
 export function GitSection(): React.ReactElement {
   const t = useT();
   const write = useSettingsWrite();
@@ -27,6 +29,7 @@ export function GitSection(): React.ReactElement {
   const gitWorkflow = useDaemonStore((s) => s.settings.git_workflow);
   // Another window, or an agent's update, can put development on the current branch while focus is on a row it hides.
   const handoff = useFocusHandoff(() => listRef.current?.querySelector("button")?.focus());
+  const development = developmentChoice(gitWorkflow.development);
 
   const change = (changes: GitWorkflowSettingsChanges) => write({ git_workflow: changes }, Object.keys(changes).map((item) => `git_workflow.${item}`));
 
@@ -45,14 +48,14 @@ export function GitSection(): React.ReactElement {
             searchId="git_workflow.development"
             motionKey="development"
             label={t(GIT_WORKFLOW_ITEMS.development.label)}
-            description={t(DEVELOPMENT_CHOICES.find(({ value }) => value === gitWorkflow.development)!.description)}
+            description={development && t(development.description)}
           >
-            <OptionSelect<GitDevelopment>
+            <OptionSelect<Received<GitDevelopment>>
               inline
               label={t(GIT_WORKFLOW_ITEMS.development.label)}
               options={DEVELOPMENT_CHOICES.map(({ value, label }) => ({ value, label: t(label) }))}
               value={gitWorkflow.development}
-              onChange={(value) => change({ development: value })}
+              onChange={(value) => { if (isGitDevelopment(value)) change({ development: value }); }}
             />
           </SettingRow>
           {/* Squashing, rebase and delivery shape the rule of a session that works on a branch of its own, so they are not shown while
@@ -76,12 +79,12 @@ export function GitSection(): React.ReactElement {
                 onChange={(value) => change({ rebase_before_delivery: value })}
               />
               <SettingRow fill searchId="git_workflow.delivery" motionKey="delivery" label={t(GIT_WORKFLOW_ITEMS.delivery.label)} description={t(GIT_WORKFLOW_ITEMS.delivery.description)}>
-                <OptionSelect<GitDelivery>
+                <OptionSelect<Received<GitDelivery>>
                   inline
                   label={t(GIT_WORKFLOW_ITEMS.delivery.label)}
                   options={DELIVERY_CHOICES.map(({ value, label }) => ({ value, label: t(label) }))}
                   value={gitWorkflow.delivery}
-                  onChange={(value) => change({ delivery: value })}
+                  onChange={(value) => { if (isGitDelivery(value)) change({ delivery: value }); }}
                 />
               </SettingRow>
             </>

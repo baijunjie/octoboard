@@ -2,6 +2,10 @@ import { expect, it } from "vitest";
 
 import type { ChangeEntry, ChangeSide, ContentSource } from "../../protocol";
 import {
+  CONFLICT_LABELS,
+  SECTION_LABELS,
+  conflictLabel,
+  sideKindOf,
   changeEvidence,
   changeGroups,
   changeItem,
@@ -46,6 +50,22 @@ it("puts the paths in conflict first, then the other sections, and paths within 
     "unstaged src/a.ts modified",
     "untracked new.txt untracked",
   ]);
+});
+
+it("drops a change of a group this build does not know and keeps the committed ones", () => {
+  const future = { group: "from_a_newer_daemon", old: absent, new: at("future.txt") } as unknown as ChangeEntry;
+  expect(changeItems([future, ...entries]).map((item) => item.path)).toEqual(changeItems(entries).map((item) => item.path));
+  expect(changeItems([future])).toEqual([]);
+  const committed: ChangeEntry = { group: "committed", old: at("kept.ts", "o"), new: at("kept.ts", "c1") };
+  const items = commitItems([{ commit: "c1", parent: "c0", subject: "first", changes: [future, committed] }]);
+  expect(items.map((item) => item.path)).toEqual(["kept.ts"]);
+});
+
+it("words a conflict kind this build does not know as the conflicted section, and a side kind it does not know as a file", () => {
+  expect(conflictLabel("both_modified")).toBe(CONFLICT_LABELS.both_modified);
+  expect(conflictLabel("from_a_newer_daemon")).toBe(SECTION_LABELS.conflicted);
+  expect(sideKindOf("symlink")).toBe("symlink");
+  expect(sideKindOf("from_a_newer_daemon")).toBe("file");
 });
 
 it("lists the committed section by commit, newest first, with a row of each for a file both changed", () => {

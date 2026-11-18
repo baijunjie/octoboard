@@ -97,6 +97,9 @@ can see. `eslint.config.mjs` applies the compiler's lint rules to `packages/ui`,
 
 ## Reading daemon state
 
+A daemon output enum is read through its normaliser, never raw: `docs/conventions/protocol-and-contracts.md`, "Versions
+and compatibility".
+
 The reducer (`store/reducer.ts`) builds a new `Map` for `sessions`, `projects`, `consoles`, `pages` and `gitStatuses` on
 every event that touches one record, so a map read through `useDaemonStore` has a new identity after every event of its
 kind.

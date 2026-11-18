@@ -248,6 +248,10 @@ describe("hostPathsOf", () => {
     expect(hostPathsOf({ homeDir: null })).toEqual({ home: null, style: "unix" });
     expect(hostPathsOf({ homeDir: "C:\\Users\\dev", host: { path_style: "windows" } })).toEqual({ home: "C:\\Users\\dev", style: "windows" });
   });
+
+  it("takes a style this client does not know, a newer daemon's, as the default one", () => {
+    expect(hostPathsOf({ homeDir: "/home/dev", host: { path_style: "from_a_newer_daemon" } })).toEqual({ home: "/home/dev", style: "unix" });
+  });
 });
 
 describe("isPathLike", () => {

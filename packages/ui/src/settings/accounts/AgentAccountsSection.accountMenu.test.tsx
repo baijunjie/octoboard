@@ -533,6 +533,7 @@ describe("an account's actions menu", () => {
     [{ status: "shared", kind: "account", name: "codex-work", agent: "Codex" }, "The directory overlaps the directory of the Codex account codex-work, so it cannot be moved to the Trash."],
     [{ status: "shared", kind: "default_account", agent: "Claude Code" }, "The directory is, holds or lies inside the default Claude Code account’s directory, so it cannot be moved to the Trash."],
     [{ status: "shared", kind: "project", name: "Site" }, "The directory holds the folder of project Site, so it cannot be moved to the Trash."],
+    [{ status: "shared", kind: "from_a_newer_daemon" }, "The directory is shared with something else, so it cannot be moved to the Trash."],
     [{ status: "unlookable", cause: "unreadable" }, "The directory could not be read"],
     [{ status: "unlookable" }, "The directory could not be accessed, so it cannot be moved to the Trash."],
     [{ status: "unlookable", cause: "other_unlooked" }, "Whether the directory holds or overlaps another account’s or a project’s directory could not be checked, so it cannot be moved to the Trash."],

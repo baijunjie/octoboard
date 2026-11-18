@@ -13,6 +13,7 @@ import { isolate } from "../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../i18n/react";
 import type { Agent, InspectedAccount, InspectedAccounts } from "../protocol";
 import { useProviders } from "../store";
+import { knownValues } from "../values/knownValue";
 import { useHostPaths } from "../components/hooks/useHostPaths";
 import { AgentCardSections, AgentSettingsCard, type CurrentAgentSettings, useAgentSettingLines } from "./AgentSettingsCard";
 import { useFailureNode } from "./failureText";
@@ -27,11 +28,13 @@ const CHOICE_LABEL: Record<AccountRowState["choice"], PlainMessageKey> = {
 };
 
 /** What an account of the document would come to here when it can be used, as the badge after its name. A directory in
- * use and an account that is not valid are a warning mark after the name instead (`UnusableMark`). */
+ * use and an account that is not valid are a warning mark after the name instead (`UnusableMark`); a status this build
+ * does not know has neither, so the account shows its name alone. */
 const STATUS: Record<"new" | "existing", Pick<StatusEntry, "label" | "icon"> & { badge: StatusBadgeColor }> = {
   new: { label: "configuration.import.accounts.status.new", icon: CircleCheck, badge: "success" },
   existing: { label: "configuration.import.accounts.status.existing", icon: CircleDot, badge: "default" },
 };
+const isSettled = knownValues<keyof typeof STATUS>({ new: true, existing: true });
 
 function AccountRow({
   agent,
@@ -50,7 +53,8 @@ function AccountRow({
   const t = useT();
   const configDir = providerConfigDir(useProviders(), agent);
   const choices = accountChoicesFor(account);
-  const settled = account.status === "new" || account.status === "existing" ? STATUS[account.status] : undefined;
+  const settled = isSettled(account.status) ? STATUS[account.status] : undefined;
+  const unusable = account.status === "directory_in_use" || account.status === "invalid";
   // An account used as it is has no directory to place, and one given another directory shows that one below.
   const showsFileDirectory = account.status !== "existing" && row.choice !== "directory";
   return (
@@ -60,7 +64,7 @@ function AccountRow({
           <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className="flex items-start gap-1">
               <ItemName>{account.name}</ItemName>
-              {!settled && (
+              {unusable && (
                 <MarkLineBox size="text-sm">
                   <UnusableMark account={account} />
                 </MarkLineBox>

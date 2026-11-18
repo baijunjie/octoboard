@@ -10,6 +10,7 @@ import { isolate } from "../i18n/isolate";
 import { useT } from "../i18n/react";
 import type { Agent, Project, Session } from "../protocol";
 import { sessionDisplayTitle } from "../sessions/sessionLabel";
+import { isKnownSessionStatus } from "../sessions/sessionStatus";
 import { useDaemon, useDaemonStore, useProviders } from "../store";
 import { useChoiceGroups } from "./useLaunchChoice";
 import { useLocatedConversation } from "./useLocatedConversation";
@@ -20,9 +21,10 @@ export const LOCATE_DELAY_MS = 300;
 /** What the Resume tab found for the ID. A session of the project is classified by its state now,
  * which may have moved on since the daemon's reply: an archived or interrupted one is resumed, any
  * other is gone to. An agent's own record opens a new session, on the agent and account that hold
- * it (`accountName` is the account as the pickers name it). */
+ * it (`accountName` is the account as the pickers name it). A session whose status this client does not know (a newer
+ * daemon's) is gone to like a running one, with `unknownStatus` set so that no sentence words it as running. */
 export type ResumeTarget =
-  | { kind: "archived" | "interrupted" | "running"; session: Session }
+  | { kind: "archived" | "interrupted" | "running"; session: Session; unknownStatus?: true }
   | { kind: "record"; agent: Agent; account: string | null; accountName: string };
 
 const FOUND_SESSION_MESSAGE = {
@@ -98,7 +100,11 @@ export function useResumeTarget(project: Project | undefined, resumeId: string, 
   const recordEntry = located?.kind === "record" ? findEntry(groups, choiceKey(located)) : undefined;
   let target: ResumeTarget | undefined;
   if (holder) {
-    target = { kind: holder.status === "archived" || holder.status === "interrupted" ? holder.status : "running", session: holder };
+    // A status this client does not know is gone to, as a running one is, so no resume is offered for it.
+    const { status } = holder;
+    target = status === "archived" ? { kind: "archived", session: holder }
+      : status === "interrupted" ? { kind: "interrupted", session: holder }
+        : { kind: "running", session: holder, ...(!isKnownSessionStatus(status) && { unknownStatus: true as const }) };
   } else if (located?.kind === "record" && recordEntry?.selectable) {
     target = { kind: "record", agent: located.agent, account: located.account, accountName: recordEntry.name };
   }
@@ -114,7 +120,7 @@ export function useResumeTarget(project: Project | undefined, resumeId: string, 
   let status: string | undefined;
   if (looking) status = t("dialog.session.resumeLooking");
   else if (target?.kind === "record") status = t("dialog.session.resumeFound", { agent: isolate(providerLabel(t, providers, target.agent)), account: isolate(target.accountName) });
-  else if (target) status = t(FOUND_SESSION_MESSAGE[target.kind], { title: isolate(sessionDisplayTitle(t, target.session)) });
+  else if (target && !target.unknownStatus) status = t(FOUND_SESSION_MESSAGE[target.kind], { title: isolate(sessionDisplayTitle(t, target.session)) });
 
   return { idProblem, target, looking, notFound, problem, status, reask: () => setReasked((count) => count + 1) };
 }

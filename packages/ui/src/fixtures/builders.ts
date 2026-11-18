@@ -1,7 +1,7 @@
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 import { FOLLOWING_GIT_WORKFLOW, GIT_WORKFLOW_ITEM_KEYS } from "../git/gitWorkflow";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
-import { PROTOCOL_GENERATION, type Account, type AccountQuota, type AccountSharing, type Agent, type AgentCliStatus, type AgentCliUpdate, type Console, type DaemonUpdateStatus, type DocumentAgentSettings, type FileContent, type Launch, type GitStatus, type Host, type HostInfo, type InspectedAgentSettings, type Page, type PageContent, type PerAgent, type ProcessTree, type Project, type ProviderInfo, type RemoteAccess, type Session, type SessionBranchItem, type SessionBranchState, type SessionContext, type SessionStatus, type Settings, type ShellTerminal } from "../protocol";
+import { PROTOCOL_GENERATION, type Account, type AccountQuota, type AccountSharing, type Agent, type AgentCliStatus, type AgentCliUpdate, type Console, type DaemonUpdateStatus, type DocumentAgentSettings, type FileContent, type Launch, type GitStatus, type Host, type HostInfo, type InspectedAgentSettings, type Page, type PageContent, type PerAgent, type ProcessTree, type Project, type ProviderInfo, type Received, type RemoteAccess, type Session, type SessionBranchItem, type SessionBranchState, type SessionContext, type SessionStatus, type Settings, type ShellTerminal } from "../protocol";
 import { type MessageParams } from "../errors/codedError";
 import type { SessionRequest, State, TrustPrompt } from "../store";
 import type { NotificationFixture } from "./fixture";
@@ -166,7 +166,8 @@ export function sessionOf(
   consoleId: string,
   projectId: string | undefined,
   title: string,
-  status: SessionStatus,
+  // Open like the wire's, so a scenario can show a status a newer daemon sends that this client does not know.
+  status: Received<SessionStatus>,
   extra: Partial<Session> = {},
 ): Session {
   return {

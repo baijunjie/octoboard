@@ -132,6 +132,25 @@ describe("the progress view", () => {
     await running.finish();
   });
 
+  it("keeps an item whose state this build does not know listed with its state blank, and drops an item of a kind it does not know", async () => {
+    const running = runningImport();
+    mountImportDialog(running);
+    await startImport();
+
+    await running.report({ item: { kind: "console", console: 0 }, state: "waiting" });
+    await running.report({ item: { kind: "project", console: 0, project: 0 }, state: "waiting" });
+    await running.report({ item: { kind: "project", console: 0, project: 1 }, state: "from_a_newer_daemon" } as never);
+    const counted = progressBar().getAttribute("aria-valuetext");
+    await running.report({ item: { kind: "from_a_newer_daemon", index: 0 } as never, state: "done" });
+    expect(rowOf("Website").textContent).toContain("Waiting");
+    // The row is still listed, and says nothing of its state.
+    expect(rowOf("Search API").textContent).toContain("Search API");
+    for (const word of ["Waiting", "Done", "Failed", "Cloning"]) expect(rowOf("Search API").textContent).not.toContain(word);
+    // The item of an unknown kind is neither listed nor counted.
+    expect(progressBar().getAttribute("aria-valuetext")).toBe(counted);
+    await running.finish();
+  });
+
   it("keeps focus on the Import button that was pressed, now pending", async () => {
     const running = runningImport();
     mountImportDialog(running);

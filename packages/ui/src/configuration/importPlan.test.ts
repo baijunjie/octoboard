@@ -24,6 +24,7 @@ import {
   importedSections,
   initialAccountReview,
   initialReview,
+  offeredDefault,
   outcomeOf,
   regionsOf,
   resolutionsOf,
@@ -56,6 +57,13 @@ it("starts every project on the daemon's default, and leaves out one that has no
     ["clone"],
     [],
   ]);
+});
+
+it("starts a project whose default this build does not know left out, as one with none", () => {
+  const future = [{ ...consoles[0], projects: [{ ...website, default: "from_a_newer_daemon" }] }];
+  expect(offeredDefault(future[0].projects[0])).toBeNull();
+  expect(offeredDefault(website)).toBe("exported_path");
+  expect(initialReview(future).map((rows) => rows.map((row) => row.choice))).toEqual([["skip"]]);
 });
 
 it("applies a choice to the projects that offer it and leaves every other row as it was", () => {
@@ -258,6 +266,13 @@ describe("accounts", () => {
     agent_settings: null,
   };
 
+  it("offers an account of a status this build does not know only leaving it out", () => {
+    const unknown = account("f", "from_a_newer_daemon");
+    expect(accountChoicesFor(unknown)).toEqual(["leave_out"]);
+    const review = initialAccountReview({ ...accounts, agents: [{ ...accounts.agents[0], accounts: [unknown] }] });
+    expect(review.rows.map((rows) => rows.map((row) => row.choice))).toEqual([["leave_out"]]);
+  });
+
   it("creates what can be created as proposed and leaves out what cannot", () => {
     expect(initialAccountReview(accounts).rows.map((rows) => rows.map((row) => row.choice))).toEqual([["create", "create", "leave_out", "leave_out"], ["create"]]);
     expect(initialAccountReview(accounts).leftOut).toEqual([]);
@@ -384,6 +399,13 @@ describe("the parts of a document", () => {
     expect(carriedParts({ consoles: [], accounts: {}, settings_sections: [] })).toEqual(["accounts"]);
     expect(carriedParts({ consoles: [], settings_sections: ["keyboard_shortcuts"] })).toEqual(["settings"]);
     expect(carriedParts({ consoles: [], settings_sections: [] })).toEqual(["consoles"]);
+  });
+
+  it("takes a section this build does not know as carrying no settings, and applies none of it", () => {
+    expect(carriedParts({ consoles: [], settings_sections: ["from_a_newer_daemon"] })).toEqual(["consoles"]);
+    expect(carriedParts({ consoles: [], settings_sections: ["from_a_newer_daemon", "git"] })).toEqual(["settings"]);
+    const checked = { general: true, appearance: true, git: true, agent_behavior: true, keyboard_shortcuts: true, cleanup: true };
+    expect(importedSections(["settings"], ["from_a_newer_daemon", "git"], checked)).toEqual(["git"]);
   });
 
   const unchecked = { consoles: false, accounts: false, settings: false };

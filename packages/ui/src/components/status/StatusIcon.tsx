@@ -1,4 +1,4 @@
-import { Archive, CircleCheck, CirclePause, LoaderCircle, MessageCircleMore, Pause } from "lucide-react";
+import { Archive, CircleCheck, CircleDashed, CirclePause, LoaderCircle, MessageCircleMore, Pause } from "lucide-react";
 import React from "react";
 
 import { useT } from "../../i18n/react";
@@ -28,10 +28,10 @@ type Naming = { "aria-hidden": true } | { role: "img"; "aria-label": string };
  * bubble for idle (waiting to be told), a ring with a dot in its centre for delegated (the sessions under
  * it are working) and a hollow ring for working in the background; the solid blue working dot, the session
  * itself busy; and, in the muted ink, a bare pause sign for interrupted (stopped where it was, and can be
- * resumed from there) and a turning arc for starting and switching account. Reconnecting uses the shared
- * amber arc. Each is drawn inside `StatusSlot`, one size for every status
- * (`small` the compact one), which holds the accessible name and centres the drawing; the bubble and the hand are
- * moved a little in it (`opticalCentring.ts`), their ink being lopsided by design. */
+ * resumed from there), a turning arc for starting and switching account, and a dashed empty circle for a status this
+ * client does not know. Reconnecting uses the shared amber arc. Each is drawn inside `StatusSlot`, one size for every
+ * status (`small` the compact one), which holds the accessible name and centres the drawing; the bubble and the hand
+ * are moved a little in it (`opticalCentring.ts`), their ink being lopsided by design. */
 function statusGlyph(status: ShownStatusKind, naming: Naming, small: boolean): React.ReactElement {
   return (
     <StatusSlot {...naming} small={small}>
@@ -74,6 +74,10 @@ function statusDrawing(status: ShownStatusKind, small: boolean): React.ReactElem
       return <WorkingDot small={small} kind="background" />;
     case "interrupted":
       return <Pause className={`${iconClass} text-app-muted`} />;
+    case "unknown":
+      // A status of a newer daemon: a dashed empty circle in the muted ink, as it says nothing about the session (and
+      // is not the "?" of the help tips).
+      return <CircleDashed className={`${iconClass} text-app-muted`} />;
     case "archived":
       return <Archive className={`${iconClass} text-app-muted`} />;
   }

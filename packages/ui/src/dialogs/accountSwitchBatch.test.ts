@@ -2,7 +2,7 @@
 import { expect, it, vi } from "vitest";
 
 import { acknowledgeAllAlerts } from "../test/alertQueue";
-import { ACCOUNT_SWITCH_CONCURRENCY, runAccountSwitchBatch } from "./accountSwitchBatch";
+import { ACCOUNT_SWITCH_CONCURRENCY, canSwitchTo, runAccountSwitchBatch } from "./accountSwitchBatch";
 import { CodedError } from "../errors/codedError";
 import { errorAlerts } from "../components/alerts/errorAlerts";
 import { consoleOf, projectOf, sessionOf } from "../fixtures/builders";
@@ -98,6 +98,27 @@ it("skips a session that was archived, deleted or already moved before its turn,
   await done;
   expect(switched).toEqual(["s0", "s1", "s2", "s3", "s4", "s5"]);
   expect(errorAlerts.getSnapshot()).toHaveLength(0);
+});
+
+it.each([
+  { case: "a session of a known status on another account", extra: {}, account: "a-1", expected: true },
+  { case: "a session of a known status on the default account, switched to an account", extra: { account_id: null }, account: "a-1", expected: true },
+  { case: "a session of a known status on that account already", extra: { account_id: "a-1" }, account: "a-1", expected: false },
+  { case: "an archived session", extra: { status: "archived" }, account: "a-1", expected: false },
+  { case: "a session of a status this client does not know", extra: { status: "from_a_newer_daemon" }, account: "a-1", expected: false },
+  { case: "a session of a status this client does not know, switched to the default account", extra: { status: "from_a_newer_daemon", account_id: "a-1" }, account: null, expected: false },
+])("says whether a switch applies to $case", ({ extra, account, expected }) => {
+  expect(canSwitchTo(session("s", extra), account)).toBe(expected);
+});
+
+it("skips a session of a status this client does not know, reporting no failure for it, and switches the others", async () => {
+  const store = storeOf([session("known"), session("odd", { status: "from_a_newer_daemon" })]);
+  const switched: string[] = [];
+  const result = await batch(store, ["odd", "known"], "a-1", async (id) => { switched.push(id); });
+  expect(switched).toEqual(["known"]);
+  expect(result).toEqual({ switched: 1, failed: 0 });
+  expect(errorAlerts.getSnapshot()).toHaveLength(0);
+  expect(switching(store, "odd")).toBe(false);
 });
 
 it("keeps going after a failure and reports every failure in one error alert once the batch is done", async () => {

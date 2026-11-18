@@ -188,6 +188,9 @@ below).
 Either way it says that the daemon's own web interface, which matches its version, can be opened in the browser
 instead. **Open in browser** connects again, holding the connection for the browser (see below).
 
+A remote daemon of the same protocol generation is connected whatever its release version. What a newer one reports
+that this application does not know is handled as `docs/product/values-a-newer-daemon-sends.md` says.
+
 ## Opening a remote daemon in the browser
 
 **Open in browser** holds the connection without a window: the application listens on its loopback port as for a window,

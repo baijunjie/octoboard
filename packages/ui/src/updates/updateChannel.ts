@@ -1,13 +1,18 @@
 import { createPersistedPreference } from "../preferences/persistedPreference";
 import type { UpdateChannel } from "../platform";
 import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
+import { knownValues } from "../values/knownValue";
+
+/** Whether `raw` names a release stream this build knows; a newer daemon may send one it does not, which is shown as it
+ * came, offers no choice of its own and is not the stream an update was found on. */
+export const isUpdateChannel = knownValues<UpdateChannel>({ stable: true, beta: true });
 
 /** The release stream the user chose in Settings, or `undefined` while they have chosen none: nothing stored, or
  * anything stored but `stable` or `beta`. Choosing either channel saves it, so a saved choice is kept whichever build
  * runs. Where nothing is saved the running build decides (`effectiveUpdateChannel`). */
 export const updateChannel = createPersistedPreference<UpdateChannel | undefined>(
   PREFERENCE_KEYS.updateChannel,
-  (raw) => (raw === "beta" || raw === "stable" ? raw : undefined),
+  (raw) => (isUpdateChannel(raw) ? raw : undefined),
   (value) => value ?? null,
 );
 

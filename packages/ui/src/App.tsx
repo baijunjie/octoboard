@@ -71,6 +71,7 @@ import { belongsToFocus } from "./sidebar/focus";
 import { consoleSessionAbove } from "./sessions/order";
 import { useWaitingCount } from "./store";
 import { indexSessions, NO_SESSIONS, sessionsOf } from "./sessions/sessionIndex";
+import { isKnownSessionStatus } from "./sessions/sessionStatus";
 import { Sidebar } from "./sidebar/Sidebar";
 import { useSidebarView } from "./sidebar/sidebarView";
 import { useDaemon, useDaemonStore, useDaemonStoreEqual, useNativeAppsRefresh, useProviders } from "./store";
@@ -575,7 +576,8 @@ export function App({ startupScreen }: { startupScreen?: React.ReactNode } = {})
   // user has typed there.
   const openSessionModel = useStableHandler((sessionId: string) => {
     const session = store.getState().sessions.get(sessionId);
-    if (session && !(otherModalOpen || settingsOpen)) openDialog({ kind: "session-model", session });
+    // A session of a status this client does not know has nothing that opens its model.
+    if (session && isKnownSessionStatus(session.status) && !(otherModalOpen || settingsOpen)) openDialog({ kind: "session-model", session });
   });
   useEffect(() => registerSessionModelLauncher(openSessionModel), [openSessionModel]);
   useEffect(() => registerDialogLauncher(stableOpenDialog), [stableOpenDialog]);

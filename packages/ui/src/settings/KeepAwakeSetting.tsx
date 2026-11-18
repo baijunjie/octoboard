@@ -4,8 +4,8 @@ import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { OptionSelect } from "../components/form/OptionSelect";
 import { useListMotion } from "../components/motion/useListMotion";
 import { useT } from "../i18n/react";
-import { KEEP_AWAKE_WHEN, KEEP_AWAKE_WHEN_DESCRIPTION, KEEP_AWAKE_WHEN_LABEL } from "../configuration/keepAwakeWhen";
-import type { KeepAwakeWhen } from "../protocol";
+import { isKeepAwakeWhen, KEEP_AWAKE_WHEN, KEEP_AWAKE_WHEN_DESCRIPTION, KEEP_AWAKE_WHEN_LABEL } from "../configuration/keepAwakeWhen";
+import type { KeepAwakeWhen, Received } from "../protocol";
 import { useDaemonStore } from "../store";
 import { DaemonSwitchSetting } from "./DaemonSwitchSetting";
 import { SettingRow } from "./SettingRow";
@@ -15,7 +15,7 @@ import { useSettingsWrite } from "./useSettingsWrite";
  * (`Settings.keep_awake` and `keep_awake_when`, changed through `update_settings`, each write based on the version the
  * store holds, as `useSettingsWrite` sends it). Rendered only where the daemon's host can hold the computer awake
  * (`GeneralSection`, from `host.keep_awake`). The choice of when is shown only while the switch is on, its value
- * kept while it is off. */
+ * kept while it is off; a value this build does not know is shown as an empty choice, replaced by choosing one. */
 export function KeepAwakeSetting(): React.ReactElement {
   const t = useT();
   const write = useSettingsWrite();
@@ -32,8 +32,8 @@ export function KeepAwakeSetting(): React.ReactElement {
     <div ref={listRef} data-list-motion="keep-awake" className="relative" onFocus={handoff.onFocus} onBlur={handoff.onBlur}>
       <DaemonSwitchSetting field="keep_awake" motionKey="keep_awake" />
       {enabled && (
-        <SettingRow fill searchId="keep_awake_when" motionKey="keep_awake_when" label={t("settings.keepAwake.when.label")} description={t(KEEP_AWAKE_WHEN_DESCRIPTION[when])}>
-          <OptionSelect<KeepAwakeWhen> inline label={t("settings.keepAwake.when.label")} options={options} value={when} onChange={setWhen} />
+        <SettingRow fill searchId="keep_awake_when" motionKey="keep_awake_when" label={t("settings.keepAwake.when.label")} description={isKeepAwakeWhen(when) ? t(KEEP_AWAKE_WHEN_DESCRIPTION[when]) : undefined}>
+          <OptionSelect<Received<KeepAwakeWhen>> inline label={t("settings.keepAwake.when.label")} options={options} value={when} onChange={(value) => { if (isKeepAwakeWhen(value)) setWhen(value); }} />
         </SettingRow>
       )}
     </div>

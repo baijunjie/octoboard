@@ -7,7 +7,7 @@ import { CodedError } from "../errors/codedError";
 import { setLanguage } from "../i18n/language";
 import { accountOf, consoleOf, projectOf, sessionOf, snapshotState } from "../fixtures/builders";
 import { CODE } from "../errors/codes";
-import type { Session } from "../protocol";
+import type { Session, SessionStatus } from "../protocol";
 import type { SessionRequest, TrustPrompt } from "../store";
 import { press } from "../components/alerts/detailsTestSupport";
 import { findButton, mountPendingQuestionDialog, pressButton } from "./pendingQuestionTestSupport";
@@ -446,7 +446,7 @@ function mountHandoffOf(target: ReturnType<typeof sessionOf>, ...others: ReturnT
   }, ack);
 }
 
-it.each<[string, Session["status"], Partial<Session>]>([
+it.each<[string, SessionStatus, Partial<Session>]>([
   ["waiting for the user", "waiting_user", {}],
   ["showing its background agents", "dormant", {}],
   ["running work in the background", "idle", { background_tasks: [{ id: "t" }] }],
@@ -463,7 +463,7 @@ it("a handoff of a session stopped at its usage limit, which shows as waiting fo
   expect(findButton("Hand off session")?.disabled).toBe(false);
 });
 
-it.each<[string, Session["status"], Partial<Session>]>([
+it.each<[string, SessionStatus, Partial<Session>]>([
   ["starting", "starting", {}],
   ["working", "working", {}],
   ["waiting for the user", "waiting_user", {}],

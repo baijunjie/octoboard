@@ -215,6 +215,7 @@ it.each<[AccountMcpInventory["unavailable"] & object, string, string, boolean]>(
   [{ reason: "timed_out", detail: null }, "Reading timed out", "Claude Code did not answer in time.", true],
   [{ reason: "unsupported_agent", detail: null }, "Not supported", "Claude Code cannot list its MCP servers or connectors.", false],
   [{ reason: "failed", detail: "claude exited with status 1" }, "Could not read connectors and MCP servers", "Try again in a moment.", true],
+  [{ reason: "from_a_newer_daemon", detail: "something new went wrong" }, "Could not read connectors and MCP servers", "Try again in a moment.", true],
 ])("words a reading that failed as %j, offering Try again where it can change the answer", async (unavailable, title, line, retries) => {
   const reading = nextReading();
   const { container } = mount();
@@ -231,6 +232,26 @@ it.each<[AccountMcpInventory["unavailable"] & object, string, string, boolean]>(
     press(buttonNamed(dialog, "Try again")!);
     expect(readMcpInventory.mock.calls.at(-1)![0].refresh).toBe(true);
   }
+});
+
+it("reads a connector, sign-in or runtime state this build does not know as the state it has for none known", async () => {
+  const reading = nextReading();
+  const { container } = mount();
+  const dialog = await openMcpOf(container, "claude-work");
+  await reading.answer(inventoryOf({
+    connectors: [
+      { id: "known", name: "Known", state: "unknown", plugins: [] },
+      { id: "future", name: "Future", state: "from_a_newer_daemon", plugins: [] },
+    ],
+    servers: [
+      serverOf({ name: "known", sign_in: "unknown", runtime: "unknown", oauth_sign_in: false }),
+      serverOf({ name: "future", sign_in: "from_a_newer_daemon", runtime: "from_a_newer_daemon", oauth_sign_in: false }),
+    ],
+  }));
+  const connectors = tableOf(dialog, "Platform connectors");
+  expect(rowOf(connectors, "Future").texts.slice(1)).toEqual(rowOf(connectors, "Known").texts.slice(1));
+  const servers = tableOf(dialog, "Local MCP servers");
+  expect(rowOf(servers, "future").texts.slice(1)).toEqual(rowOf(servers, "known").texts.slice(1));
 });
 
 it("hands focus to Refresh when Try again brings the inventory in place of the failure", async () => {

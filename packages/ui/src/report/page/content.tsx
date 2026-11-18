@@ -5,6 +5,7 @@ import React from "react";
 import { useT } from "../../i18n/react";
 import type { CalloutTone, StatSentiment, StatTrend } from "../../protocol";
 import { useOctoboardTheme } from "../../preferences/theme";
+import { knownValues } from "../../values/knownValue";
 import { FencedCode } from "../../viewer/markdown/FencedCode";
 import { useCellText } from "./cells";
 import { COPY_BUTTON_INSET, CopyBox } from "../../components/controls/CopyBox";
@@ -21,9 +22,14 @@ const CALLOUT_TONES = {
   danger: { Icon: CircleAlert, box: "border-(--tint-danger-edge) bg-(--tint-danger-bg)", icon: "text-danger-soft-foreground" },
 } satisfies Record<CalloutTone, { Icon: React.ComponentType<{ className?: string; "aria-hidden"?: "true" }>; box: string; icon: string }>;
 
+const isCalloutTone = knownValues<CalloutTone>({ info: true, success: true, warning: true, danger: true });
+const isStatTrend = knownValues<StatTrend>({ up: true, down: true, flat: true });
+const isStatSentiment = knownValues<StatSentiment>({ positive: true, negative: true, neutral: true });
+
+/** A callout of a tone this client does not know reads as `info`. */
 export function CalloutView({ component }: ComponentProps<"callout">): React.ReactElement {
   const t = useT();
-  const tone = component.tone ?? "info";
+  const tone = isCalloutTone(component.tone) ? component.tone : "info";
   const { Icon, box, icon } = CALLOUT_TONES[tone];
   const { Tag, inner } = useChildHeadingLevel(component.title !== undefined);
   return (
@@ -71,15 +77,18 @@ const TREND_TEXT = { up: "report.stat.trendUp", down: "report.stat.trendDown", f
 export function StatView({ component }: ComponentProps<"stat">): React.ReactElement {
   const t = useT();
   const cellText = useCellText();
-  const TrendIcon = component.trend && TREND_ICONS[component.trend];
+  // A trend of a kind this client does not know has no icon and no words; a sentiment of one reads as neutral.
+  const trend = isStatTrend(component.trend) ? component.trend : undefined;
+  const sentiment = isStatSentiment(component.sentiment) ? component.sentiment : "neutral";
+  const TrendIcon = trend && TREND_ICONS[trend];
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
       <span className="text-xs text-app-muted align-match-parent [overflow-wrap:anywhere]" dir="auto">{component.label}</span>
       <span className="text-2xl font-semibold tabular-nums align-match-parent [overflow-wrap:anywhere]" dir="auto">{cellText(component.value)}</span>
-      {(component.change !== undefined || component.trend !== undefined) && (
-        <span className={`inline-flex items-center gap-1 text-sm ${SENTIMENT_CLASS[component.sentiment ?? "neutral"]}`}>
+      {(component.change !== undefined || trend !== undefined) && (
+        <span className={`inline-flex items-center gap-1 text-sm ${SENTIMENT_CLASS[sentiment]}`}>
           {TrendIcon && <TrendIcon aria-hidden="true" className="size-4 shrink-0" />}
-          {component.trend && <span className="sr-only">{t(TREND_TEXT[component.trend])}</span>}
+          {trend && <span className="sr-only">{t(TREND_TEXT[trend])}</span>}
           {component.change !== undefined && <span dir="auto">{component.change}</span>}
         </span>
       )}

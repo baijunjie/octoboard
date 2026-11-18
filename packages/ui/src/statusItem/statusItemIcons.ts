@@ -55,7 +55,7 @@ const MENU_UNITS_PER_PX = 1.25;
 
 /** The glyph colours are the ones the session list draws these statuses in (`StatusIcon`): HeroUI's soft
  * foreground of the status's colour, read from the stylesheet in the system's appearance rather than
- * written down here. Every status but archived has one; `undefined` also stands for a colour the
+ * written down here. Every status but unknown and archived has one; `undefined` also stands for a colour the
  * stylesheet cannot resolve. */
 export function statusGlyph(status: ShownStatusKind, appearance: Appearance): string | undefined {
   const colour = (token: string) => resolveCssColour(`var(--${token}-soft-foreground)`, appearance);
@@ -95,6 +95,8 @@ export function statusGlyph(status: ShownStatusKind, appearance: Appearance): st
       return muted && stroked(ARC, muted);
     case "interrupted":
       return muted && stroked(PAUSE, muted);
+    // Neither is listed under a heading: the menu lists the summary statuses only (`SUMMARY_STATUSES`).
+    case "unknown":
     case "archived":
       return undefined;
   }

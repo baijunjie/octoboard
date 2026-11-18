@@ -37,6 +37,11 @@ describe("callout", () => {
     },
   );
 
+  it("reads a tone this build does not know as information", async () => {
+    const { host } = await block({ type: "callout", text: "Body", tone: "from_a_newer_daemon" });
+    expect(hiddenWords(host.querySelector('[role="note"]')!)).toEqual(["Information"]);
+  });
+
   it("shows a callout without a title", async () => {
     const { host } = await block({ type: "callout", text: "Only a body" });
     // The plain fallback is a paragraph too; only the drawn document sits inside `.report-markdown`.
@@ -57,6 +62,19 @@ describe("key_values", () => {
   });
 });
 
+describe("a component of a type this build does not know", () => {
+  it("renders nothing, leaving the components around it", async () => {
+    const { host } = await renderPage({ body: [
+      { type: "stat", label: "Before", value: 1 },
+      { type: "from_a_newer_daemon", text: "Future" } as unknown as PageContent["body"][number],
+      { type: "stat", label: "After", value: 2 },
+    ] });
+    expect(host.textContent).toContain("Before");
+    expect(host.textContent).toContain("After");
+    expect(host.textContent).not.toContain("Future");
+  });
+});
+
 describe("stat", () => {
   it("shows its label and value, and the change beside it", async () => {
     const { host } = await block({ type: "stat", label: "Revenue", value: 1234567, change: "+4.2%" });
@@ -68,6 +86,15 @@ describe("stat", () => {
   it.each([["up", "Up"], ["down", "Down"], ["flat", "Unchanged"]] as const)("gives a %s trend a word for a screen reader", async (trend, word) => {
     const { host } = await block({ type: "stat", label: "L", value: 1, change: "2", trend });
     expect(hiddenWords(host)).toEqual([word]);
+  });
+
+  it("shows no trend for one this build does not know, and reads an unknown sentiment as neutral", async () => {
+    const { host } = await block({ type: "stat", label: "L", value: 1, change: "2", trend: "from_a_newer_daemon", sentiment: "from_a_newer_daemon" });
+    expect(hiddenWords(host)).toEqual([]);
+    expect(host.textContent).toContain("2");
+    expect(host.querySelector("span.text-app-muted.inline-flex")).not.toBeNull();
+    const withTrendOnly = await block({ type: "stat", label: "L", value: 1, trend: "from_a_newer_daemon" });
+    expect(withTrendOnly.host.querySelector("span.inline-flex")).toBeNull();
   });
 
   it("shows a trend that comes with no change text, and no trend word where there is no trend", async () => {

@@ -56,7 +56,8 @@ Each inventory names the agent and the account and says when it was read. Then i
     below; never for Claude Code or Grok Build.
 
 Every state comes from what the agent itself reports. A state value the agent reports that Octoboard does not know is
-read as unknown; it never fails the reading.
+read as unknown; it never fails the reading. So is a state value a daemon newer than the window sends that the window
+does not know.
 
 ## How a Codex account is read
 
@@ -313,16 +314,17 @@ the dialog, red, worded by its reason (see "When an MCP inventory cannot be read
 | `unsupported_agent` | The agent cannot list its MCP servers or connectors |
 | `failed` | The connectors and MCP servers could not be read; try again in a moment |
 
-The reason's detail, where there is one, is behind the alert's **Details**. Every reason but `unsupported_agent` offers
-**Try again**, which reads again with refresh on. A request that is refused, or that does not reach the daemon, is shown
-as a red alert saying the connectors and MCP servers could not be read, with the failure's own message, and Try again
-where reading again can help. Either alert is announced to assistive technology as it appears, and again when a further
-reading fails in the same words (see "Failures shown on the screen" in `docs/product/error-alerts.md`); when the first
-reading answers so soon after the dialog opened that the dialog's own announcement would drown it, the alert is
-announced a moment later. When a further reading brings the inventory in place of the alert, keyboard focus that was in
-the alert, or had fallen to the page, goes to the Refresh button. When an answer replaces what held keyboard focus by
-something else — one failure's alert by another's, or the lists by an alert when a further reading fails — focus goes
-to the new alert's Try again, or to Refresh when it has none.
+A reason the window does not know, from a daemon newer than the window, is shown as `failed`. The reason's detail, where
+there is one, is behind the alert's **Details**. Every reason but `unsupported_agent` offers **Try again**, which reads
+again with refresh on. A request that is refused, or that does not reach the daemon, is shown as a red alert saying the
+connectors and MCP servers could not be read, with the failure's own message, and Try again where reading again can
+help. Either alert is announced to assistive technology as it appears, and again when a further reading fails in the
+same words (see "Failures shown on the screen" in `docs/product/error-alerts.md`); when the first reading answers so
+soon after the dialog opened that the dialog's own announcement would drown it, the alert is announced a moment later.
+When a further reading brings the inventory in place of the alert, keyboard focus that was in the alert, or had fallen
+to the page, goes to the Refresh button. When an answer replaces what held keyboard focus by something else — one
+failure's alert by another's, or the lists by an alert when a further reading fails — focus goes to the new alert's Try
+again, or to Refresh when it has none.
 
 ### Signing in and out from the dialog
 

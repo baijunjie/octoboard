@@ -913,6 +913,7 @@ export const zhHans: Translation<"other"> = {
   "session.status.reconnecting": "正在重连",
   "session.status.interrupted": "已中断",
   "session.status.archived": "已归档",
+  "session.status.unknown": "状态未知",
   "session.status.named": "{name}，{status}",
   "session.status.namedPinned": "{name}，已置顶，{status}",
 
@@ -2882,6 +2883,7 @@ export const zhHans: Translation<"other"> = {
   "settings.accounts.removeTrashRefused.protected": "该目录是你的主文件夹、磁盘的根目录，或存放着应用数据，因此不能移到{trash}。",
   "settings.accounts.removeTrashRefused.sharedAccount": "该目录与 {agent} 账户 {name} 重叠，因此不能移到{trash}。",
   "settings.accounts.removeTrashRefused.sharedDefaultAccount": "该目录就是默认 {agent} 账户的目录，或包含它、位于它之内，因此不能移到{trash}。",
+  "settings.accounts.removeTrashRefused.sharedOther": "该目录与其他内容共用，因此不能移到{trash}。",
   "settings.accounts.removeTrashRefused.sharedProject": "该目录包含项目 {name} 的文件夹，因此不能移到{trash}。",
   "settings.accounts.removeTrashRefused.unlookable": "无法访问该目录，因此不能移到{trash}。",
   "settings.accounts.removeTrashRefused.unreadable": "无法读取该目录，因此无法确认其中是否有其他账户或项目的文件，不能移到{trash}。",

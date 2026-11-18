@@ -20,6 +20,7 @@ import { RegionTabs, type Region, type RegionPanel } from "./RegionTabs";
 import { Outcome, ResultCard, ResultRow } from "./ResultCards";
 import { SettingsGroupCard, SettingsGroups } from "./SettingsGroups";
 import { useProviders } from "../store";
+import { knownValues } from "../values/knownValue";
 
 export type Imported = ReplyOf<"import_configuration">;
 
@@ -29,6 +30,9 @@ const VIA_LABEL: Record<DirectoryChoiceKind, PlainMessageKey> = {
   clone: "configuration.import.result.via.clone",
   directory: "configuration.import.result.via.directory",
 };
+
+/** Whether `via` is a way of placing a project this build knows; a project created another way has no detail. */
+const isVia = knownValues<DirectoryChoiceKind>({ exported_path: true, default_clone_dir: true, clone: true, directory: true });
 
 /** Whether `failure` is a settings write refused because a setting changed while the import ran, which its own words
  * tell apart from the generic conflict's: the consoles, projects and accounts were created, so "nothing was saved"
@@ -188,7 +192,7 @@ export function ImportResult({
                   fallbacks={project.account_fallbacks}
                   status={<Outcome status={project.status} />}
                   detail={
-                    project.status === "created" && project.via
+                    project.status === "created" && isVia(project.via)
                       ? t(VIA_LABEL[project.via])
                       : project.status === "not_attempted"
                         ? t("configuration.import.result.detail.consoleFailed")

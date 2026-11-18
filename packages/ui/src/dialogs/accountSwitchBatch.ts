@@ -3,14 +3,16 @@ import type { StoreApi } from "zustand";
 import { reportSwitchFailures, type SwitchFailure } from "./accountSwitchFailureAlert";
 import { errorPresentation } from "../errors/errorPresentation";
 import type { Session } from "../protocol";
+import { isKnownSessionStatus } from "../sessions/sessionStatus";
 import { setAccountSwitchesQueued, type State } from "../store";
 
 /** How many switches of a batch run at once; the rest wait their turn. */
 export const ACCOUNT_SWITCH_CONCURRENCY = 4;
 
-/** Whether `session` is one a switch to `account` (`null`, the default account) still applies to. */
+/** Whether `session` is one a switch to `account` (`null`, the default account) still applies to: not an archived one,
+ * nor one with a status this client does not know (a newer daemon's), which nothing is offered for. */
 export function canSwitchTo(session: Session, account: string | null): boolean {
-  return session.status !== "archived" && (session.account_id ?? null) !== account;
+  return isKnownSessionStatus(session.status) && session.status !== "archived" && (session.account_id ?? null) !== account;
 }
 
 /** What a batch of switches needs besides the sessions and the account. */

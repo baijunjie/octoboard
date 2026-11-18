@@ -21,6 +21,7 @@ import type { Console, Project } from "../protocol";
 import { INACTIVE_PROJECT_RANK, liveSessions, type ProjectStanding, projectRank, projectRecency, sortProjectsByStanding } from "../sessions/order";
 import { effectiveTags, matchesFilter } from "../sessions/projectFiltering";
 import { indexSessions, sessionsOf } from "../sessions/sessionIndex";
+import { listedAmongConsoleSessions } from "../sessions/sessionKind";
 import { sessionOrderPreference, useArchivedOwnerSessions, useDaemonStore, useDaemonStoreEqual, useProviders, useSessionProjectId } from "../store";
 import { consoleMenu } from "./menus";
 import { liveAnnouncerProps } from "../primitives";
@@ -246,7 +247,7 @@ function ConsoleSessionsSection({
   const order = sessionOrderPreference.useValue();
   const live = useDaemonStoreEqual((s) => {
     const index = indexSessions(s.sessions);
-    return liveSessions(sessionsOf(index.byConsole, thisConsole.id).filter((x) => x.kind === "console"), index.delegatingIds, s.queuedAccountSwitches, order.sessions);
+    return liveSessions(sessionsOf(index.byConsole, thisConsole.id).filter(listedAmongConsoleSessions), index.delegatingIds, s.queuedAccountSwitches, order.sessions);
   });
   // With no agent added and installed, starting a console session would only be refused by the
   // daemon the moment it tried — so the action is disabled here instead, and `agents.noneAdded` (an

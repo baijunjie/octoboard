@@ -65,6 +65,10 @@ const COLOURS: Record<ConsoleSessionColour, { hue: number; light: [number, numbe
  * colour, not a name. */
 export const CONSOLE_SESSION_COLOURS: readonly ConsoleSessionColour[] = Object.keys(COLOURS) as ConsoleSessionColour[];
 
+function isSessionColour(colour: string): colour is ConsoleSessionColour {
+  return Object.hasOwn(COLOURS, colour);
+}
+
 /** Linear-light sRGB channels of an OKLCH colour (Björn Ottosson's OKLab matrices). */
 function linearRgb(lightness: number, chroma: number, hue: number): [number, number, number] {
   const a = chroma * Math.cos((hue * Math.PI) / 180);
@@ -110,8 +114,8 @@ function oklchToHex(lightness: number, chroma: number, hue: number): string {
 /** A palette entry's colour for one appearance, as an sRGB `#rrggbb`: a value `parseColor` reads, so
  * a swatch picker can hold it, and the one value both the swatches and the badges draw from.
  * `undefined` for a label outside the palette, such as one a newer daemon assigned. */
-export function sessionColourHex(colour: ConsoleSessionColour, theme: ColourTheme): string | undefined {
-  if (!Object.hasOwn(COLOURS, colour)) return undefined;
+export function sessionColourHex(colour: string, theme: ColourTheme): string | undefined {
+  if (!isSessionColour(colour)) return undefined;
   const entry = COLOURS[colour];
   const [lightness, chroma] = entry[theme];
   return oklchToHex(lightness, chroma, entry.hue);
@@ -120,7 +124,7 @@ export function sessionColourHex(colour: ConsoleSessionColour, theme: ColourThem
 /** A palette entry's colour in both appearances, as the two custom properties the
  * `.session-colour-dot` rule in `sessionColours.css` paints with, the second one in the dark appearance;
  * `undefined` for a label outside the palette. */
-export function sessionColourVars(colour: ConsoleSessionColour): React.CSSProperties | undefined {
+export function sessionColourVars(colour: string): React.CSSProperties | undefined {
   const light = sessionColourHex(colour, "light");
   const dark = sessionColourHex(colour, "dark");
   if (!light || !dark) return undefined;

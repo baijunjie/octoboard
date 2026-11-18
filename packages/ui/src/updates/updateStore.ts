@@ -1,4 +1,5 @@
 import { startPeriodicSweep } from "../components/hooks/periodicSweep";
+import type { Received } from "../protocol";
 import { UpdaterError, type AvailableUpdate, type UpdateChannel, type UpdaterCapability, type UpdateProgress } from "../platform";
 
 /** How long after launch the first automatic check waits, so it never competes with the window opening. */
@@ -31,10 +32,12 @@ export interface UpdateState {
   /** The holder floor of the installed update (see `AvailableUpdate`); `null` when unknown (this window never saw it,
    * or the update gave none). */
   installedHolderFloor?: string | null;
-  /** How the last check ended, and when. */
-  lastCheck?: { outcome: "upToDate" | "available" | "failed"; at: number };
-  /** The channel the next check looks on, as the user chose it or the running build defaults to. */
-  channel: UpdateChannel;
+  /** How the last check ended, and when; `outcome` is absent for an end a newer daemon reports that this build does not
+   * know, which says nothing about whether it found an update or failed. */
+  lastCheck?: { outcome?: "upToDate" | "available" | "failed"; at: number };
+  /** The channel the next check looks on, as the user chose it or the running build defaults to; a daemon's may be one
+   * this build does not know, which the section shows as it came. */
+  channel: Received<UpdateChannel>;
   /** Whether the application looks for updates by itself; off, only a check the user asks for runs. */
   autoCheck: boolean;
   /** Set while the update found cannot be installed from here, the daemon's executable being a file it cannot replace
@@ -290,9 +293,10 @@ export function createUpdateStore({
     install,
     setChannel(channel) {
       setChannel(channel);
-      set({ channel: getChannel(state.currentVersion) });
+      const chosen = getChannel(state.currentVersion);
+      set({ channel: chosen });
       // With the automatic checks off nothing looks until the user asks, but what the other channel offered is withdrawn.
-      withdrawOtherChannel(state.channel);
+      withdrawOtherChannel(chosen);
       if (state.autoCheck) void check("automatic");
     },
     setAutoCheck(value) {

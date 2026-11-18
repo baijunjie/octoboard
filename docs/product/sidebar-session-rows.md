@@ -43,7 +43,9 @@ own; then Archive or Delete. A live
 console session inserts Colour as its own group between the first of these and Copy session ID. Rename sits above
 Archive, or above Delete when Delete is offered instead, with a divider between them, and Archive or Delete stays
 last. Items appear only where available as described below. An archived session's menu separates these groups, in
-order: Reopen and Open in the agent's app; Copy session ID alone; then Delete.
+order: Reopen and Open in the agent's app; Copy session ID alone; then Delete. A session whose status is unknown (see
+"Status unknown" in `docs/product/session-statuses.md`) has a live session's menu without Change model, Switch account,
+Hand off, Open in the agent's app, Bind to and Unbind.
 
 A session row's action menu offers:
 

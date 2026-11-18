@@ -6,6 +6,7 @@ import { Message, useT } from "../i18n/react";
 import type { SettingsSection } from "../protocol";
 import { APPLICATION_SWITCHES } from "./booleanSettings";
 import type { ClientSettingValue } from "./clientSettings";
+import { isKeepAwakeWhen } from "./keepAwakeWhen";
 import type { Inspection, shortcutsReview } from "./importPlan";
 import { ClientSettingLine, CompositeLine, type ImportChoice, SettingLine } from "./importParts";
 import { shortcutChangeValues, type SettingValue } from "./importValues";
@@ -16,7 +17,7 @@ import { Checkbox } from "../primitives";
  * document's own. */
 function currentSettings(settings: NonNullable<Inspection["settings"]>): CurrentSettings {
   const switches = Object.fromEntries(APPLICATION_SWITCHES.map(({ field }) => [field, settings[`current_${field}` as const]])) as Pick<CurrentSettings, (typeof APPLICATION_SWITCHES)[number]["field"]>;
-  return { ...switches, keep_awake_when: settings.current_keep_awake_when, git_workflow: settings.current_git_workflow };
+  return { ...switches, keep_awake_when: isKeepAwakeWhen(settings.current_keep_awake_when) ? settings.current_keep_awake_when : undefined, git_workflow: settings.current_git_workflow };
 }
 
 /** The default clone directory of the file, with the directory this machine has where they differ and, there, the choice
@@ -73,7 +74,7 @@ export function ImportSettings({
   cloneDir,
 }: {
   settings: NonNullable<Inspection["settings"]>;
-  sections: readonly SettingsSection[];
+  sections: readonly string[];
   choices: Record<SettingsSection, ImportChoice>;
   clientSettings: ClientSettingValue[];
   /** The items of the session order the document carries that would change; `undefined` when it carries none. */

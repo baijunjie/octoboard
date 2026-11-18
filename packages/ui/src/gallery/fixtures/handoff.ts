@@ -75,6 +75,16 @@ const startingState = snapshotState({
   settings,
 });
 
+// An independent project session whose status is one a newer daemon sent that this client does not know; kept out of
+// `state` so its row does not appear in the other scenarios.
+const unknownStatus = sessionOf("s-handoff-unknown", console_.id, api.id, "Reindex the archive", "paused_for_review", { started_at: minutesAgo(30) });
+const unknownStatusState = snapshotState({
+  consoles: [console_],
+  projects: [web, api],
+  sessions: [hub, coordinator, ...owned, ...hubOwned, working, unknownStatus],
+  settings,
+});
+
 // A bound session and its owner whose titles run to paragraphs, as a pasted brief does: the unbind confirmation
 // names each of them once, and the chips have to wrap inside the dialog.
 const longCoordinator = sessionOf(
@@ -230,6 +240,15 @@ export const handoffScenarios: Scenario[] = [
     nativeApps: ["claude", "codex"],
     nativeAppsUnseen: [stopped.id],
     steps: [openMenu(stopped.title)],
+  },
+  {
+    id: "sidebar-session-menu-unknown-status",
+    group: GROUP,
+    category: "exceptional",
+    title: "Menu of a session with a status this client does not know",
+    description: "The row reads Status unknown with the muted dashed empty circle. Its menu keeps Lock, Pin, Copy session ID, Rename and Archive, but offers no Change model, Switch account, Hand off, Open in app, Bind to or Unbind, since nothing that depends on the session's status is offered for one the client cannot name.",
+    state: unknownStatusState,
+    steps: [openMenu(unknownStatus.title)],
   },
   {
     id: "sidebar-session-menu-hand-off-blocked",

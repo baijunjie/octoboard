@@ -1,4 +1,5 @@
 import type { PlainMessageKey } from "../i18n/catalog";
+import { knownValues } from "../values/knownValue";
 import type { GitDelivery, GitDevelopment, GitWorkflowOverride, GitWorkflowOverrideChanges, GitWorkflowSettings } from "../protocol";
 
 /** The git workflow settings of a fresh installation, as the daemon starts them (see "The five settings" in
@@ -41,12 +42,24 @@ export const DEVELOPMENT_CHOICES: { value: GitDevelopment; label: PlainMessageKe
   },
 ];
 
+/** The development choice a received value names, `undefined` for one this build does not know (a newer daemon's). */
+export const developmentChoice = (value: string): (typeof DEVELOPMENT_CHOICES)[number] | undefined => DEVELOPMENT_CHOICES.find((choice) => choice.value === value);
+
+/** Whether `value` is a way of developing this build knows, which a choice can be written as. */
+export const isGitDevelopment = knownValues<GitDevelopment>({ in_place: true, branch: true, worktree: true });
+
 /** The delivery choices in the order they are offered, each with the message that words it. */
 export const DELIVERY_CHOICES: { value: GitDelivery; label: PlainMessageKey }[] = [
   { value: "ask", label: "settings.gitWorkflow.delivery.ask" },
   { value: "merge", label: "settings.gitWorkflow.delivery.merge" },
   { value: "pull_request", label: "settings.gitWorkflow.delivery.pullRequest" },
 ];
+
+/** The delivery choice a received value names, `undefined` for one this build does not know (a newer daemon's). */
+export const deliveryChoice = (value: string): (typeof DELIVERY_CHOICES)[number] | undefined => DELIVERY_CHOICES.find((choice) => choice.value === value);
+
+/** Whether `value` is a way of delivering this build knows, which a choice can be written as. */
+export const isGitDelivery = knownValues<GitDelivery>({ ask: true, merge: true, pull_request: true });
 
 /** The messages that word each git workflow item, keyed by every field of the settings (so a field added to them is a
  * type error here until it is listed), in the order the settings page lists them: its label, and for a switch the

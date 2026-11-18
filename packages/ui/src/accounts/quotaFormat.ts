@@ -1,18 +1,27 @@
 import type { Reason } from "../format/reason";
 import { isolate } from "../i18n/isolate";
 import type { Translate } from "../i18n/catalog";
-import type { AccountQuota, ProviderInfo, QuotaUnavailable, QuotaWindow, QuotaWindowNaming, ResetCredit, ResetCredits } from "../protocol";
+import type { AccountQuota, ProviderInfo, QuotaUnavailable, QuotaWindow, QuotaWindowKind, QuotaWindowNaming, ResetCredit, ResetCredits } from "../protocol";
 import { providerPlanName, servedProvider } from "../agents/providers";
+import { knownValues } from "../values/knownValue";
 
 const MINUTE = 60_000;
 const DAY_MINUTES = 24 * 60;
 
-const WINDOW_ORDER: Record<QuotaWindow["kind"], number> = {
+const WINDOW_ORDER: Record<QuotaWindowKind, number> = {
   session: 0,
   weekly: 1,
   credit_period: 2,
   weekly_model: 3,
 };
+
+const isQuotaWindowKind = knownValues<QuotaWindowKind>({ session: true, weekly: true, credit_period: true, weekly_model: true });
+
+/** The windows of a kind this client knows, in the order given. A window of a newer daemon's kind is not shown and
+ * never counts as exhausting the account, so every reader that lists or draws windows goes through this. */
+export function knownQuotaWindows(windows: readonly QuotaWindow[]): (QuotaWindow & { kind: QuotaWindowKind })[] {
+  return windows.filter((window): window is QuotaWindow & { kind: QuotaWindowKind } => isQuotaWindowKind(window.kind));
+}
 
 /** How long a credit pool's current period is, by the minutes the agent reports for it: a week (6 to 8 days), a month
  * (28 to 31 days), or neither, as with a period of unknown length. */
@@ -24,9 +33,9 @@ export function creditPeriodLength(window: QuotaWindow): "weekly" | "monthly" | 
 }
 
 /** Account-wide limits precede model-specific limits regardless of the agent's response order.
- * Copy before the stable sort so store readings and the order among model limits stay intact. */
+ * Filtering copies before the stable sort, so store readings and the order among model limits stay intact. */
 export function orderedQuotaWindows(windows: readonly QuotaWindow[]): QuotaWindow[] {
-  return [...windows].sort((a, b) => WINDOW_ORDER[a.kind] - WINDOW_ORDER[b.kind]);
+  return knownQuotaWindows(windows).sort((a, b) => WINDOW_ORDER[a.kind] - WINDOW_ORDER[b.kind]);
 }
 
 /** The quota codes that say the account is not logged in yet, rather than that reading it failed. */
@@ -43,7 +52,7 @@ export function isNotLoggedIn(unavailable: QuotaUnavailable | null): unavailable
 export function loginStateOf(quota: AccountQuota | "loading" | undefined): "in" | "out" | undefined {
   if (typeof quota !== "object") return undefined;
   if (isNotLoggedIn(quota.unavailable)) return "out";
-  return quota.unavailable === null || quota.windows.length > 0 ? "in" : undefined;
+  return quota.unavailable === null || knownQuotaWindows(quota.windows).length > 0 ? "in" : undefined;
 }
 
 /** How much of `window` is left, as a whole percent from 0 to 100. The daemon passes a used
@@ -97,6 +106,9 @@ export function quotaWindowLabel(t: Translate, naming: QuotaNaming, window: Quot
       const length = creditPeriodLength(window);
       return t(length === "weekly" ? "quota.window.weekly" : length === "monthly" ? "quota.window.monthly" : "quota.window.credits");
     }
+    default:
+      // Not drawn: `knownQuotaWindows` leaves a window of an unknown kind out.
+      return "";
   }
 }
 
@@ -173,6 +185,12 @@ export function primaryQuotaWindow(windows: QuotaWindow[]): QuotaWindow | undefi
     ?? windows.find((window) => window.kind === "credit_period");
 }
 
+/** Whether a window of `kind` can keep an account from being used: a session, weekly or credit window. A model-specific
+ * weekly limit never does, and neither does a kind this client does not know. */
+function isExhaustingKind(kind: string): boolean {
+  return kind === "session" || kind === "weekly" || kind === "credit_period";
+}
+
 /** The window that keeps `quota` from being used right now, mirroring the daemon's refusal of a session on an
  * account whose quota is used up: a session, weekly or credit window used to 100% or more whose reset time is
  * not in the past (or is not given). A model-specific weekly limit never counts. A reading that has not
@@ -183,7 +201,7 @@ export function exhaustedQuotaWindow(quota: AccountQuota | "loading" | undefined
   if (typeof quota !== "object") return undefined;
   let blocking: QuotaWindow | undefined;
   for (const window of quota.windows) {
-    if (window.kind === "weekly_model" || window.used_percent < 100) continue;
+    if (!isExhaustingKind(window.kind) || window.used_percent < 100) continue;
     if (window.resets_at != null && window.resets_at <= now) continue;
     if (!blocking || (blocking.resets_at != null && (window.resets_at == null || window.resets_at > blocking.resets_at))) blocking = window;
   }
@@ -205,6 +223,8 @@ export function quotaWindowPhrase(t: Translate, naming: QuotaNaming, window: Quo
       const length = creditPeriodLength(window);
       return t(length === "weekly" ? "quota.windowPhrase.weekly" : length === "monthly" ? "quota.windowPhrase.monthly" : "quota.windowPhrase.credits");
     }
+    default:
+      return "";
   }
 }
 

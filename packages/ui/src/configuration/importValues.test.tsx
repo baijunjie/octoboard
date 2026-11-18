@@ -5,9 +5,9 @@ import { describe, expect, it } from "vitest";
 
 import { format } from "../i18n/catalog";
 import type { Translate } from "../i18n/catalog";
-import type { ProviderInfo } from "../protocol";
+import type { ProviderInfo, SettingKind } from "../protocol";
 import { TEST_AGENT_PROVIDER, TEST_PROVIDERS, UNPRESENTED_PROVIDER } from "../test/testProviders";
-import { agentTagsValues, providerSettingLines } from "./importValues";
+import { agentTagsValues, gitWorkflowValues, providerSettingLines } from "./importValues";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -85,5 +85,39 @@ describe("agentTagsValues", () => {
 
   it("holds nothing for an agent the tags do not name", () => {
     expect(agentTagsValues(t, "en", "grok", { codex: ["a"] })).toEqual([]);
+  });
+});
+
+describe("what a newer daemon sends that this build does not know", () => {
+  const unknownKind = { type: "from_a_newer_daemon" } as unknown as SettingKind;
+  const withKind = (kind: SettingKind): ProviderInfo => ({ ...TEST_AGENT_PROVIDER, settings: TEST_AGENT_PROVIDER.settings.map((setting) => ({ ...setting, exported: true, kind })) });
+
+  it("holds no line for a provider setting of a kind it does not know", () => {
+    expect(providerSettingLines(t, [withKind(unknownKind)], "test_agent", { mode: "careful" })).toEqual([]);
+  });
+
+  it("leaves out a git workflow item whose wanted choice it does not know, and shows one whose current choice it does not know alone", () => {
+    const workflow = { development: "from_a_newer_daemon", squash_before_delivery: true, rebase_before_delivery: true, delivery: "carrier_pigeon", revert_gate: true };
+    const text = (value: React.ReactNode) => {
+      const host = document.createElement("div");
+      const root = createRoot(host);
+      try {
+        act(() => root.render(<>{value}</>));
+        return host.textContent;
+      } finally {
+        act(() => root.unmount());
+      }
+    };
+    // Wanted unknown: no item, whether or not there is a current value.
+    expect(gitWorkflowValues(t, workflow).map((value) => value.item)).not.toContain("Where sessions develop");
+    expect(gitWorkflowValues(t, workflow).map((value) => value.item)).not.toContain("Delivery");
+    expect(gitWorkflowValues(t, workflow, { ...workflow, development: "branch", delivery: "merge" }).map((value) => value.item)).not.toContain("Where sessions develop");
+    // Current unknown: the wanted choice alone, without "(now …)".
+    const against = gitWorkflowValues(t, { ...workflow, development: "branch", delivery: "merge" }, workflow);
+    expect(against.map((value) => value.item)).toEqual(["Where sessions develop", "Delivery"]);
+    for (const value of against) expect(text(value.value)).not.toMatch(/now/i);
+    // Both known: the change with what it is now.
+    const known = gitWorkflowValues(t, { ...workflow, development: "branch", delivery: "merge" }, { ...workflow, development: "worktree", delivery: "ask" });
+    expect(text(known[0]!.value)).toMatch(/now/i);
   });
 });

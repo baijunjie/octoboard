@@ -14,8 +14,8 @@ import { SETTINGS_SECTIONS } from "./settingsSections";
 type GroupedSettings = Pick<DocumentSettings, ApplicationBooleanField | "keep_awake_when" | "git_workflow">;
 
 /** This machine's values of the application settings a document carries that the daemon holds, in the shape of the
- * document's own. */
-export type CurrentSettings = { [F in ApplicationBooleanField]: boolean } & { keep_awake_when: KeepAwakeWhen; git_workflow: GitWorkflowSettings };
+ * document's own; when it is one this build does not know, `keep_awake_when` is absent. */
+export type CurrentSettings = { [F in ApplicationBooleanField]: boolean } & { keep_awake_when?: KeepAwakeWhen; git_workflow: GitWorkflowSettings };
 
 /** One group of settings as a card: `title` as its heading, then `lines` (see `SettingLine`) as its rows; nothing when
  * there are none. With a `choice` the heading carries a checkbox named by the title (see `choiceHeader`), the card stays
@@ -68,7 +68,7 @@ export function SettingsGroups({
   sorting?: React.ReactElement;
   cloneDir?: React.ReactElement;
   shortcuts?: React.ReactElement;
-  sections?: readonly SettingsSection[];
+  sections?: readonly string[];
   choices?: Record<SettingsSection, ImportChoice>;
 }): React.ReactElement {
   const t = useT();

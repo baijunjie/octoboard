@@ -68,9 +68,10 @@ this check; the confirmation lists those itself.
 The warning alert's causes are those of the refusals in "Moving the account directory to the Trash" below: the
 directory is the home folder, the root of a disk or holds Octoboard's own data; it overlaps the directory of another
 account, naming its agent and its name; it is, holds or lies inside the agent's default account's directory, naming the
-agent; it holds the folder of a project, naming the project; it could not be read, so it could not be checked for files
-of other accounts or projects; whether it holds or overlaps another account's or a project's directory could not be
-checked; or it could not be accessed.
+agent; it holds the folder of a project, naming the project; it is shared with something else, for a directory a daemon
+newer than the window finds shared with something of a kind the window does not know, which is not named; it could not
+be read, so it could not be checked for files of other accounts or projects; whether it holds or overlaps another
+account's or a project's directory could not be checked; or it could not be accessed.
 
 Unticking the option drops the check and anything it showed; an answer that arrives afterwards is ignored.
 
@@ -156,7 +157,8 @@ under **Error details** (see "Recovery and unexpected errors" in `docs/product/e
 - that the account still has that many sessions running or starting, so its directory cannot be moved to the Trash;
 - the causes of the warning alert in "Checking the directory when the option is ticked" above, for a protected or
   shared directory and for one that could not be read or whose overlap with another account's or a project's
-  directory could not be checked;
+  directory could not be checked, except that a directory shared with something of a kind the window does not know is
+  said to overlap the directory of another account or the folder of a project;
 - that the directory, the home folder or Octoboard's data folder did not respond in time, so the directory could not
   be checked;
 - that the account's login did not end in time, so the directory could not be moved to the Trash;

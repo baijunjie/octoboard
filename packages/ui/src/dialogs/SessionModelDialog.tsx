@@ -17,6 +17,7 @@ import { Message, useT } from "../i18n/react";
 import type { Launch, Session } from "../protocol";
 import type { AcknowledgementView } from "../components/alerts/errorAlerts";
 import { sessionDisplayTitle } from "../sessions/sessionLabel";
+import { isLive } from "../sessions/sessionStatus";
 import { useAccountSwitchHeld, useDaemonStore, useProviders } from "../store";
 import { Dialog } from "../components/dialog/Dialog";
 import { dialogAround } from "../components/dialog/dialogElement";
@@ -122,7 +123,8 @@ function SessionModelForm({
   // is open, so Confirm waits. Any other refusal comes after the dialog has closed, as an error alert.
   const switching = useAccountSwitchHeld(session);
   const held = session.status === "starting" || switching;
-  const running = session.status !== "interrupted" && session.status !== "archived";
+  // A status this client does not know is not running: nothing is said of a restart it may not need.
+  const running = isLive(session.status);
   // A value picked back to the session's own is no edit: the field follows the session again.
   const pick = (field: "model" | "effort", value: string | null) => setPicked((now) => {
     const next = { ...now, [field]: value };

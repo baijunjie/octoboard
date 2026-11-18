@@ -5,19 +5,21 @@ import type { AccountSharing, SharingCause, SharingLeft } from "../protocol";
 import { sharingCause } from "./causes";
 import type { MessageParams } from "./codedError";
 import { CODE, codeRecord } from "./codes";
+import { knownValues } from "../values/knownValue";
 
 /** Why an entry could not be brought in line: every `SharingCause` but `default_moved`, which only a change as a whole
  * fails with. An unknown one reads as `other`. */
 export type SharingEntryCause = Exclude<SharingCause, "default_moved">;
 
 /** What a sharing change can leave an entry as, every value of `SharingLeft`. */
-const SHARING_LEFT = Object.keys({ unchanged: 0, backed_up: 0, partly_moved: 0, linked: 0, absent: 0 } satisfies Record<SharingLeft, 0>) as SharingLeft[];
+const isSharingLeft = knownValues<SharingLeft>({ unchanged: true, backed_up: true, partly_moved: true, linked: true, absent: true });
 
 /** One entry `account_sharing_failed` or `account_sharing_repair_failed` could not bring in line, an entry of the
  * `account_sharing` event's `failure` with its cause read as an entry cause and its sessions always listed. `sessions`
  * is set for a conversation turning sharing off could not take back, and names the Octoboard sessions that record it.
  * The list travels as one JSON param. */
-export type SharingFailureItem = Omit<NonNullable<AccountSharing["failure"]>["items"][number], "cause" | "sessions"> & {
+export type SharingFailureItem = Omit<NonNullable<AccountSharing["failure"]>["items"][number], "cause" | "sessions" | "left"> & {
+  left: SharingLeft;
   sessions: string[];
   cause: SharingEntryCause;
 };
@@ -44,7 +46,7 @@ export function parseSharingItems(items: unknown): SharingFailureItem[] | undefi
     const entry = item as Partial<SharingFailureItem>;
     const sessions = entry.sessions ?? [];
     if (typeof entry.item !== "string" || entry.item.length === 0) return undefined;
-    if (typeof entry.left !== "string" || !(SHARING_LEFT as readonly string[]).includes(entry.left)) return undefined;
+    if (!isSharingLeft(entry.left)) return undefined;
     if (typeof entry.detail !== "string") return undefined;
     if (!Array.isArray(sessions) || sessions.some((id) => typeof id !== "string" || id.length === 0)) return undefined;
     const read = sharingCause(typeof entry.cause === "string" ? entry.cause : undefined);

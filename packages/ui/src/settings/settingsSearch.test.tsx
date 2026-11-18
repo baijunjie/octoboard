@@ -130,6 +130,16 @@ describe.each(CASES)("in $name", ({ platform, state }) => {
   });
 });
 
+it("shows the choice of when to prevent sleep for a value this build does not know too, as an empty choice", () => {
+  const entry = SETTINGS_SEARCH_INDEX.general.find((candidate) => candidate.id === "keep_awake_when")!;
+  const shown = (keep_awake_when: string) => {
+    const settings = { ...DEFAULT_SETTINGS, keep_awake: true, keep_awake_when } as Settings;
+    return entry.shown!({ platform: CASES[0]!.platform, keepAwake: true, settings, remoteAccess: null, reads: { launchAtLogin: false, macosPermissions: false, macosPermissionsUnreadable: false } });
+  };
+  expect(shown("always")).toBe(true);
+  expect(shown("from_a_newer_daemon")).toBe(true);
+});
+
 /** Mounts `section` on the desktop shell with the reads of the system answering as given, and holds the section's
  * rendered entries to the index's under the readiness the dialog works out. */
 async function renderedMatchesIndex(section: SettingsSectionId, overrides: Partial<PlatformAdapter>): Promise<{ rendered: (string | undefined)[]; indexed: string[] }> {

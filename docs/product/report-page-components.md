@@ -126,12 +126,13 @@ page appears or disappears as the user picks, and a follow-up question is asked 
   - its headings start one level below the heading the block sits under.
 - **`callout`**: a highlighted note: `text` as Markdown (as a `markdown` block's), an optional `title` drawn as a bold
   line above it, and `tone` — `info` (the default), `success`, `warning` or `danger` — which sets its colour and icon.
-  Assistive technology is told the tone in words.
+  Assistive technology is told the tone in words. A window draws a tone it does not know as `info`.
 - **`key_values`**: `items`, a list of `{ key, value }` drawn as two columns, the value a string, a number or a boolean.
 - **`stat`**: one figure: `label` above `value` (a number, or a string carrying its unit), and optionally `change` (as
   shown, such as "+12%"), `trend` (`up`, `down` or `flat`, drawn as an arrow and told to assistive technology in words)
-  and `sentiment` (`positive`, `negative` or `neutral`, the default), which colours the change. Several stats in a
-  `columns` make a row of figures.
+  and `sentiment` (`positive`, `negative` or `neutral`, the default), which colours the change. A window draws and says
+  nothing for a trend it does not know, and colours the change of a sentiment it does not know as `neutral`. Several
+  stats in a `columns` make a row of figures.
 - **`code`**: `code` highlighted for `language`, with an optional `label`, such as a file name, above it.
 - **`diff`**: `diff`, a unified diff as `git diff` prints it, its added and removed lines tinted and its hunk headers
   marked, with an optional `label` above it.

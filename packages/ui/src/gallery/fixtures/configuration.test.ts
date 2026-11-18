@@ -187,7 +187,7 @@ it("reports a created project as placed the way it was offered, or in a director
     result.consoles.forEach((console, c) =>
       console.projects.forEach((project, p) => {
         if (project.via === null || project.via === "directory") return;
-        expect(inspection.consoles[c].projects[p].offers[project.via], project.name).not.toBeNull();
+        expect(inspection.consoles[c].projects[p].offers[project.via as "exported_path" | "default_clone_dir" | "clone"], project.name).not.toBeNull();
       }),
     );
   }
@@ -314,7 +314,7 @@ it("carries settings sections exactly when it carries settings", () => {
 
 /** The sections of `inspection`'s settings the review has at least one line for, as the review words them: the daemon-held
  * settings from the inspection, the settings only the client holds and the keyboard shortcuts from the file's own text. */
-function sectionsWithLines(inspection: Omit<Inspection, "type">, text: string): SettingsSection[] {
+function sectionsWithLines(inspection: Omit<Inspection, "type">, text: string): readonly string[] {
   const settings = inspection.settings;
   if (!settings) return [];
   const document: unknown = JSON.parse(text);

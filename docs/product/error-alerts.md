@@ -725,7 +725,8 @@ returned by Change model (`invalid_launch_setting`), or a restart that did not c
 The remedy names Change model as an inline control reference; the restart failure explains that the session is
 interrupted and can be resumed or have its model changed. The secondary footer button acknowledges the alert, then opens
 Change model for that session. It opens nothing while another dialog, Settings or a pending question is already open,
-and nothing if the session no longer exists. The alert is still acknowledged in those cases. A session that is archived
+and nothing if the session no longer exists. The alert is still acknowledged in those cases. There is no button while
+the session's status is unknown (see "Status unknown" in `docs/product/session-statuses.md`). A session that is archived
 is handled by the Change model dialog's failure modal (see "Changing a session's model and effort" in
 `docs/product/model-and-reasoning-effort.md`).
 

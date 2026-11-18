@@ -14,7 +14,6 @@ import { Message, useCurrentLanguage, useT } from "../../i18n/react";
 import type {
   ChangeSide,
   ComparisonEndpoint,
-  ConflictKind,
   Event,
   FileContent,
   SideRead,
@@ -34,7 +33,7 @@ import {
 } from "../../viewer/content";
 import { changeBodiesFailure } from "../../viewer/viewerError";
 import { displayWirePath } from "../../format/wirePath";
-import { CONFLICT_LABELS, SECTION_LABELS, type ChangeItem, type CommitRef } from "./changes";
+import { SECTION_LABELS, conflictLabel, sideKindOf, type ChangeItem, type CommitRef } from "./changes";
 import { shortCommit } from "./shortCommit";
 import type { Shown as ShownRead } from "../viewedItem";
 
@@ -91,23 +90,27 @@ export interface ChangeReader {
 }
 
 /** How a conflict reads, from its kind. */
-function conflictText(t: Translate, conflict: ConflictKind): string {
-  return t(CONFLICT_LABELS[conflict]);
+function conflictText(t: Translate, conflict: string): string {
+  return t(conflictLabel(conflict));
 }
 
+/** A side of a state this client does not know (a newer daemon's) is read as absent, here and below. */
 function sideRef(side: ChangeSide): SideRef {
-  return side.state === "present" ? { state: "present", path: side.path } : side;
+  if (side.state === "present") return { state: "present", path: side.path };
+  return side.state === "absent" || side.state === "out_of_scope" ? side : { state: "absent" };
 }
 
 /** A side the listing named, with no body: what is shown when the change cannot be read. */
 function listedSide(side: ChangeSide): ViewerChangeSide {
   switch (side.state) {
     case "present":
-      return { state: "present", path: side.path, kind: side.kind };
+      return { state: "present", path: side.path, kind: sideKindOf(side.kind) };
     case "absent":
       return side;
     case "out_of_scope":
       return { state: "out_of_scope", repositoryPath: side.repository_path };
+    default:
+      return { state: "absent" };
   }
 }
 
@@ -116,11 +119,13 @@ function listedSide(side: ChangeSide): ViewerChangeSide {
 function readSide(side: SideRead, listed: ChangeSide): ViewerChangeSide {
   switch (side.state) {
     case "present":
-      return { state: "present", path: side.path, kind: side.kind, body: side.file ? bodyFromFileContent(side.path, side.file) : undefined, lines: side.lines };
+      return { state: "present", path: side.path, kind: sideKindOf(side.kind), body: side.file ? bodyFromFileContent(side.path, side.file) : undefined, lines: side.lines };
     case "absent":
       return side;
     case "out_of_scope":
       return { state: "out_of_scope", repositoryPath: listed.state === "out_of_scope" ? listed.repository_path : "" };
+    default:
+      return { state: "absent" };
   }
 }
 

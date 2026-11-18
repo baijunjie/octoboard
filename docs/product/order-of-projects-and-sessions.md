@@ -68,7 +68,9 @@ interrupted sessions come last of all. The statuses are those of "Session status
 6. child sessions working;
 7. working in background;
 8. working;
-9. interrupted.
+9. status unknown, a status a newer daemon gives that the window does not know (see "Status unknown" in
+   `docs/product/session-statuses.md`);
+10. interrupted.
 
 Archived sessions are not in the lists this order ranks; they are listed separately.
 

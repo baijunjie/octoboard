@@ -3,6 +3,7 @@ import { CodedError } from "../errors/codedError";
 import type { PlainMessageKey, Translate } from "../i18n/catalog";
 import type { ProcessCount, ProcessTree, UnkeepableReason, UnstoppedProcess } from "../protocol";
 import type { Daemon } from "../store";
+import { knownValues } from "../values/knownValue";
 
 type Request = Daemon["request"];
 
@@ -48,6 +49,8 @@ const UNKEEPABLE_REFUSALS: Record<UnkeepableReason, { code: string; message: Pla
   agent_console: { code: "process_shares_agent_console", message: "daemon.process_shares_agent_console" },
 };
 
+const isUnkeepableReason = knownValues<UnkeepableReason>({ agent_console: true });
+
 /** A tree the daemon says cannot be kept. */
 export type UnkeepableTree = ProcessTree & { keepable: false };
 
@@ -60,7 +63,7 @@ export function isUnkeepable(tree: ProcessTree): tree is UnkeepableTree {
 /** The refusal of keeping `tree` for its reason, when this window knows the reason (a newer daemon's it does not). */
 function refusalOf(tree: UnkeepableTree): (typeof UNKEEPABLE_REFUSALS)[UnkeepableReason] | undefined {
   const reason = tree.unkeepable_reason;
-  return reason !== undefined && Object.hasOwn(UNKEEPABLE_REFUSALS, reason) ? UNKEEPABLE_REFUSALS[reason] : undefined;
+  return isUnkeepableReason(reason) ? UNKEEPABLE_REFUSALS[reason] : undefined;
 }
 
 /** The sentence saying why `tree` cannot be kept. A reason this window does not know is said plainly, as is a tree

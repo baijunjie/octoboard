@@ -45,6 +45,9 @@ const request = vi.fn(async (_body: unknown): Promise<Event> => ({ type: "ack", 
 beforeEach(() => request.mockClear());
 const withHost = (keep_awake: boolean, settings = DEFAULT_SETTINGS) => testDaemon({ request, state: { connectionState: "open", host: { ...HOST, keep_awake }, settings } });
 
+const whenChoice = (container: HTMLElement) =>
+  container.querySelector<HTMLElement>('button[aria-label="When to prevent sleep"], [aria-label="When to prevent sleep"] button');
+
 it("has no row where the daemon's host cannot be held awake", () => {
   expect(mount(withHost(false)).textContent).not.toContain("Prevent sleep");
   expect(mount(testDaemon()).textContent).not.toContain("Prevent sleep");
@@ -68,6 +71,23 @@ it("changes the daemon's settings, showing the choice of when only while the swi
     daemon.store.setState({ settings: { ...DEFAULT_SETTINGS, keep_awake: true } });
   });
   expect(container.textContent).toContain("When to prevent sleep");
+});
+
+it("keeps the row for the choice of when to prevent sleep while it is a value this build does not know, showing no choice", () => {
+  const container = mount(withHost(true, { ...DEFAULT_SETTINGS, keep_awake: true, keep_awake_when: "from_a_newer_daemon" }));
+  expect(container.textContent).toContain("Prevent sleep");
+  expect(container.querySelector('input[role="switch"]')).not.toBeNull();
+  expect(container.textContent).toContain("When to prevent sleep");
+  expect(container.textContent).not.toContain("from_a_newer_daemon");
+  expect(whenChoice(container)!.textContent).not.toMatch(/Always|While sessions work/);
+});
+
+it("writes a known choice of when to prevent sleep chosen over a value this build does not know, and nothing before", async () => {
+  const container = mount(withHost(true, { ...DEFAULT_SETTINGS, keep_awake: true, keep_awake_when: "from_a_newer_daemon" }));
+  expect(request).not.toHaveBeenCalled();
+  await act(async () => whenChoice(container)!.click());
+  await act(async () => Array.from(document.body.querySelectorAll<HTMLElement>('[role="option"]')).find((option) => option.textContent?.includes("Always"))!.click());
+  expect(request).toHaveBeenCalledExactlyOnceWith({ type: "update_settings", keep_awake_when: "always" });
 });
 
 it("sends the choice of when to prevent sleep to the daemon", async () => {

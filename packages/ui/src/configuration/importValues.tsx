@@ -4,7 +4,7 @@ import { idWords, servedProvider, settingMessageKey } from "../agents/providers"
 import { Tag } from "../components/form/Tag";
 import { joinNodes } from "../i18n/joinPhrases";
 import type { Language } from "../i18n/languages";
-import { DELIVERY_CHOICES, DEVELOPMENT_CHOICES, GIT_WORKFLOW_ITEMS, GIT_WORKFLOW_ITEM_KEYS } from "../git/gitWorkflow";
+import { deliveryChoice, developmentChoice, GIT_WORKFLOW_ITEMS, GIT_WORKFLOW_ITEM_KEYS } from "../git/gitWorkflow";
 import type { MessageKey, PlainMessageKey, Translate } from "../i18n/catalog";
 import { Message } from "../i18n/react";
 import type { Agent, GitWorkflowSettings, InspectedAgentSettings, ProviderInfo, SettingDescriptor } from "../protocol";
@@ -33,23 +33,26 @@ function shown(value: React.ReactNode, current?: React.ReactNode): React.ReactNo
 const onOff = (on: boolean): PlainMessageKey => (on ? "configuration.import.value.on" : "configuration.import.value.off");
 
 /** How each item's value is worded in the review, by the item's field (labelled by `GIT_WORKFLOW_ITEMS`). */
-const GIT_WORKFLOW_WORDS: Record<keyof GitWorkflowSettings, (workflow: GitWorkflowSettings) => PlainMessageKey> = {
-  development: (w) => DEVELOPMENT_CHOICES.find((choice) => choice.value === w.development)!.label,
-  squash_before_delivery: (w) => onOff(w.squash_before_delivery),
-  rebase_before_delivery: (w) => onOff(w.rebase_before_delivery),
-  delivery: (w) => DELIVERY_CHOICES.find((choice) => choice.value === w.delivery)!.label,
-  revert_gate: (w) => onOff(w.revert_gate),
+const GIT_WORKFLOW_WORDS: Record<keyof GitWorkflowSettings, (t: Translate, workflow: GitWorkflowSettings) => string | undefined> = {
+  // A choice this build does not know (a newer daemon's) has no wording.
+  development: (t, w) => { const choice = developmentChoice(w.development); return choice ? t(choice.label) : undefined; },
+  squash_before_delivery: (t, w) => t(onOff(w.squash_before_delivery)),
+  rebase_before_delivery: (t, w) => t(onOff(w.rebase_before_delivery)),
+  delivery: (t, w) => { const choice = deliveryChoice(w.delivery); return choice ? t(choice.label) : undefined; },
+  revert_gate: (t, w) => t(onOff(w.revert_gate)),
 };
 
 /** Each git workflow item with its value, named as the settings page names them. With `current`, only the
- * items that differ from it, each with what it is now. */
+ * items that differ from it, each with what it is now. An item whose wanted value this build does not know is left out,
+ * and one whose current value it does not know is shown without what it is now. */
 export function gitWorkflowValues(t: Translate, wanted: GitWorkflowSettings, current?: GitWorkflowSettings): SettingValue[] {
   return GIT_WORKFLOW_ITEM_KEYS
     .filter((field) => !current || wanted[field] !== current[field])
-    .map((field) => ({
-      item: t(GIT_WORKFLOW_ITEMS[field].label),
-      value: shown(t(GIT_WORKFLOW_WORDS[field](wanted)), current && t(GIT_WORKFLOW_WORDS[field](current))),
-    }));
+    .flatMap((field) => {
+      const value = GIT_WORKFLOW_WORDS[field](t, wanted);
+      if (value === undefined) return [];
+      return [{ item: t(GIT_WORKFLOW_ITEMS[field].label), value: shown(value, current && GIT_WORKFLOW_WORDS[field](t, current)) }];
+    });
 }
 
 /** Each part of the session order `wanted` carries with its choice, named and worded as the settings page does. With
@@ -81,11 +84,13 @@ function settingWord(t: Translate, agent: string, setting: string, name: string)
   return key && (t as (key: MessageKey) => string)(key);
 }
 
-/** Whether `value` is one the setting takes: a switch's on or off, one of a choice's declared values. */
+/** Whether `value` is one the setting takes: a switch's on or off, one of a choice's declared values; a setting of a
+ * kind this build does not know (a newer daemon's) takes none. */
 function isSettingValue(descriptor: SettingDescriptor, value: unknown): value is boolean | string {
-  return descriptor.kind.type === "switch"
-    ? typeof value === "boolean"
-    : typeof value === "string" && descriptor.kind.choices.some((choice) => choice.value === value);
+  const { kind } = descriptor;
+  if (kind.type === "switch") return typeof value === "boolean";
+  if (kind.type === "choice") return typeof value === "string" && kind.choices.some((choice) => choice.value === value);
+  return false;
 }
 
 /** How a setting's value reads in the review: a switch On or Off, a choice by its provider's word for it, and a choice

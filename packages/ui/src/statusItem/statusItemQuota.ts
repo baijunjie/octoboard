@@ -8,7 +8,7 @@ import type { Language } from "../i18n/languages";
 import type { StatusItemSubmenuDraft, StatusItemSubmenuDraftItem } from "../platform";
 import { joinPhrases } from "../i18n/joinPhrases";
 import type { Account, AccountQuota, Agent, AgentAvailability, Console, ProviderInfo, QuotaWindow, Settings } from "../protocol";
-import { exhaustedQuotaWindow, isNotLoggedIn, orderedQuotaWindows, planLabel, quotaNaming, quotaResetsIn, quotaWindowLabel, remainingPercentAt, twoLayerWindows, usageBarWindows, type QuotaNaming } from "../accounts/quotaFormat";
+import { exhaustedQuotaWindow, isNotLoggedIn, knownQuotaWindows, orderedQuotaWindows, planLabel, quotaNaming, quotaResetsIn, quotaWindowLabel, remainingPercentAt, twoLayerWindows, usageBarWindows, type QuotaNaming } from "../accounts/quotaFormat";
 import { formatRelativeTime, isJustNow } from "../format/relativeTime";
 import { listedQuotaAccounts, type QuotaRow } from "../quota/quotaListing";
 import { accountQuotaLabel } from "../quota/sessionQuota";
@@ -87,7 +87,7 @@ function accountLines(t: Translate, source: StatusItemQuotaSource, agent: Agent,
   if (!quota) return [header, { kind: "note", text: t("quota.loading") }];
   // An entry with no windows is unavailable whether or not it says why, which the menu does not, except for an
   // account that is not logged in: a state to be told in a word, not a failure.
-  if (quota.windows.length === 0) return [header, { kind: "note", text: t(isNotLoggedIn(quota.unavailable) ? "statusItem.quota.notLoggedIn" : "quota.unavailable") }];
+  if (knownQuotaWindows(quota.windows).length === 0) return [header, { kind: "note", text: t(isNotLoggedIn(quota.unavailable) ? "statusItem.quota.notLoggedIn" : "quota.unavailable") }];
   const naming = quotaNaming(quota, source.providers);
   const exhausted = exhaustedQuotaWindow(quota, source.now) !== undefined;
   const statusTitle = marked(exhausted ? t("statusItem.quota.accountUsedUp", { account: planned }) : planned);

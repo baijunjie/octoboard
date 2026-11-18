@@ -16,6 +16,7 @@ import {
   choicesFor,
   directoryProblem,
   hasRecordedPath,
+  offeredDefault,
   targetOf,
   withRow,
   type DirectoryProblem,
@@ -73,7 +74,8 @@ function ProjectRow({
   const target = targetOf(project, row);
   const inPlace = row.choice === "exported_path" && target === project.path;
   const recordedPath = hasRecordedPath(project.path);
-  const state = project.default ? STATE[project.default] : undefined;
+  const preselected = offeredDefault(project);
+  const state = preselected ? STATE[preselected] : undefined;
   // A path written on another operating system says so once: in the not-found mark where the project has no way in,
   // and otherwise in a note after the exported path, with no remedy, since the way it has needs no directory.
   const foreignNote = project.foreign_path && state !== undefined && (
@@ -95,7 +97,7 @@ function ProjectRow({
         <>
           <span className="flex items-start gap-1">
             <ItemName>{project.name}</ItemName>
-            {!state && (
+            {project.default === null && (
               // A project not found that also has account fallbacks is still one point: one mark, naming both.
               <MarkLineBox size="text-sm">
                 <StatusMark
@@ -108,7 +110,7 @@ function ProjectRow({
                 </StatusMark>
               </MarkLineBox>
             )}
-            {state && <FallbackMark subject={project.name} fallbacks={project.account_fallbacks} size="text-sm" />}
+            {project.default !== null && <FallbackMark subject={project.name} fallbacks={project.account_fallbacks} size="text-sm" />}
           </span>
           {state && (
             <span className="flex items-center gap-1.5 text-sm text-app-muted">

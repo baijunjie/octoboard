@@ -41,7 +41,7 @@ function projectFields(current: Pick<Project, "accounts" | "launch">, body: Extr
 /** A project's own git workflow settings after a request's: per item, absent keeps it, `null` goes back to following the
  * application-wide value, and a value becomes the project's own. No changes at all, absent or `null` (as an added
  * project's request may carry), leaves the settings as they are. */
-function projectGitWorkflow(current: GitWorkflowOverride, changes: GitWorkflowOverrideChanges | null | undefined): GitWorkflowOverride {
+function projectGitWorkflow(current: GitWorkflowOverride, changes: Partial<GitWorkflowOverride> | GitWorkflowOverrideChanges | null | undefined): GitWorkflowOverride {
   return { ...current, ...changes };
 }
 

@@ -300,7 +300,14 @@ are out of date and, run with `OCTOBOARD_WRITE_BINDINGS=1`, rewrites them instea
   TypeScript bindings below to the same optional and nullable fields.
 - **The TypeScript bindings**, `packages/ui/src/protocol.generated.ts`:
   `OCTOBOARD_WRITE_BINDINGS=1 pnpm test:rust -p octoboardd bindings`, which also writes the generation as
-  `PROTOCOL_GENERATION`, so a client built from them cannot drift from the daemon's number.
+  `PROTOCOL_GENERATION`, so a client built from them cannot drift from the daemon's number. Every string enum is
+  declared closed, the values a client knows and sends; every position in a type the daemon sends (reachable from
+  `Event` and `TermEvent`) names it `Received<Enum>`, declared once as `Enum | (string & {})`, and a field narrowed to a
+  union of string literals is opened the same way, so a `switch` that must cover every value, or a lookup by a received
+  value in a `Record<Enum, …>`, fails to type-check until it handles a value a newer daemon of the same generation adds;
+  a plain comparison is not checked. A record a request and an event both carry is opened on both sides, so its request
+  field accepts any string in TypeScript; the daemon answers an unknown value with `unreadable_request`. A tagged
+  union's discriminant is a single literal and stays closed: a client handles an unknown variant by hand.
 
 ### The MCP contract
 

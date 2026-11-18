@@ -306,6 +306,29 @@ it.each(["modelChange", "changeModelSetting"] as const)("offers a button for %s 
   expect(document.querySelector('[role="alertdialog"]')).toBeNull();
 });
 
+describe("the Change model remedy for a session the store holds", () => {
+  const daemonWith = async (status: string) => {
+    const { sessionOf } = await import("../fixtures/builders");
+    return testDaemon({ state: { sessions: new Map([["s-1", sessionOf("s-1", "c", "p", "Fix login", status)]]) } });
+  };
+  const footerLabels = () => Array.from(document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')).filter((b) => b.textContent).map((b) => b.textContent);
+
+  it("is offered for a session of a status this client knows", async () => {
+    mount(undefined, undefined, await daemonWith("interrupted"));
+    act(() => errorAlerts.report({ message: "Action failed", session: "s-1", recovery: "modelChange" }));
+    expect(footerLabels()).toEqual(["Change model", "OK"]);
+  });
+
+  it.each(["modelChange", "changeModelSetting"] as const)("is not offered for %s recovery on a session of a status this client does not know, which keeps its OK", async (recovery) => {
+    mount(undefined, undefined, await daemonWith("from_a_newer_daemon"));
+    const open = vi.fn();
+    onTestFinished(registerSessionModelLauncher(open));
+    act(() => errorAlerts.report({ message: "Action failed", session: "s-1", recovery }));
+    expect(footerLabels()).toEqual(["OK"]);
+    expect(open).not.toHaveBeenCalled();
+  });
+});
+
 it("offers no Change model button for an alert that is about no session", () => {
   mount();
   act(() => errorAlerts.report({ message: "Action failed", recovery: "modelChange" }));

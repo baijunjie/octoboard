@@ -21,6 +21,7 @@ import { ariaBinding, type ModifierHost } from "../shortcuts/binding";
 import { bindingFor, matchesCommand } from "../shortcuts/store";
 import { archivePreviewSessions, type BindOwners, isUnusedSession } from "../sessions/order";
 import { openInAppBlock, openInAppNote } from "../sessions/nativeApp";
+import { isKnownSessionStatus } from "../sessions/sessionStatus";
 import { SessionColourSwatches } from "./SessionColourSwatches";
 import type { ArchiveScope, FocusTarget, ProjectPanelKind, SidebarHandlers } from "./types";
 
@@ -444,8 +445,11 @@ export function sessionMenu(
       deleteOrArchiveItem(t, handlers, session, hasBoundSessions),
     ];
   }
-  // The daemon refuses to switch the account of a session that is still starting.
-  const switchAccount = session.status === "starting" ? undefined : switchAccountSubmenu(t, handlers, session, accounts, defaultNames, quota, providers, sharing, disabledDefaults, accountOrder, switching);
+  // The daemon refuses to switch the account of a session that is still starting. A status this client does not know (a
+  // newer daemon's) is no ground to offer what depends on the status: a model change, an account switch, a handoff,
+  // opening in the agent's app or a binding. What does not (lock, pin, colour, rename, archive) stays.
+  const known = isKnownSessionStatus(session.status);
+  const switchAccount = session.status === "starting" || !known ? undefined : switchAccountSubmenu(t, handlers, session, accounts, defaultNames, quota, providers, sharing, disabledDefaults, accountOrder, switching);
   const focusable = focusTarget && !focused;
   return [
     { label: t(session.locked ? "sidebar.session.unlock" : "sidebar.session.lock"), icon: session.locked ? LockOpen : Lock, shortcut: "L", onClick: () => handlers.onSetLocked(session, !session.locked) },
@@ -456,12 +460,12 @@ export function sessionMenu(
     copyId,
     "separator",
     // A session still starting, or being switched to another account, is refused by the daemon; both end on their own.
-    { label: t("sidebar.session.changeModel"), shortcut: "M", icon: Cpu, disabled: session.status === "starting" || switching, onClick: () => handlers.onOpenDialog({ kind: "session-model", session }) },
+    ...(known ? [{ label: t("sidebar.session.changeModel"), shortcut: "M", icon: Cpu, disabled: session.status === "starting" || switching, onClick: () => handlers.onOpenDialog({ kind: "session-model", session }) }] : []),
     ...(switchAccount ? [switchAccount] : []),
-    { ...handoffItem(t, handlers, session, canHandoff, { switching, childActive, ownChanging: sharing?.get(session.account_id ?? "")?.progress !== undefined }), shortcut: "H" },
-    ...(openInApp ? [openInApp] : []),
-    ...(bindOwners ? [bindEntry(t, handlers, session, bindOwners, session.status === "starting" || switching, (owner) => sessionAgentLabel(t, providers, owner, accounts, defaultNames))] : []),
-    ...(session.bound_to ? [{ label: t("sidebar.session.unbind"), shortcut: "U", icon: Unlink, disabled: session.status === "starting" || switching, onClick: () => handlers.onOpenDialog({ kind: "unbind-session", session }) }] : []),
+    ...(known ? [{ ...handoffItem(t, handlers, session, canHandoff, { switching, childActive, ownChanging: sharing?.get(session.account_id ?? "")?.progress !== undefined }), shortcut: "H" }] : []),
+    ...(openInApp && known ? [openInApp] : []),
+    ...(bindOwners && known ? [bindEntry(t, handlers, session, bindOwners, session.status === "starting" || switching, (owner) => sessionAgentLabel(t, providers, owner, accounts, defaultNames))] : []),
+    ...(session.bound_to && known ? [{ label: t("sidebar.session.unbind"), shortcut: "U", icon: Unlink, disabled: session.status === "starting" || switching, onClick: () => handlers.onOpenDialog({ kind: "unbind-session", session }) }] : []),
     "separator",
     { label: t("sidebar.session.rename"), shortcut: "R", icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-session", session }) },
     "separator",

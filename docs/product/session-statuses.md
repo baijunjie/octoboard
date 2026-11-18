@@ -13,13 +13,14 @@
 | Working in background | `idle`, with a non-empty `background_tasks` | a hollow green ring, pinging outward | The process is sitting at its prompt, but its last turn ended with work still running in the background. Claude Code and Grok Build sessions only; see "Working in background" below. |
 | Switching account | any status except `archived`, with `switching_account` true, or queued in this window's account switch | the *starting* arc | An account switch holds the session, or, in the window that confirmed the switch, the session waits for its turn in it (see "While a session is switching" in `docs/product/switching-session-accounts.md`). Shown in place of the session's own status, which it does not change; lists ranked by status sort it by the status it will have once the switch is over (see "The status order" in `docs/product/order-of-projects-and-sessions.md`). |
 | Reconnecting | `starting`, `working`, `waiting_user`, `dormant` or `idle`, with `holder_link` `pending` | an amber arc turning once every two seconds | The session's process still runs but Octoboard cannot reach it for now, and retries by itself (see "A holder that cannot be connected to" in `docs/product/process-holders.md`). Worked out by the client alone and shown in place of the session's own status and of *switching account*; the stored status, which may be out of date until the process is reached again, is unchanged, and lists ranked by status sort the session by it. |
+| Status unknown | any value the window does not know | a dashed empty circle in the muted grey | A status a daemon newer than the window gives the session. The session is still shown, and nothing is decided from its status. See "Status unknown" below. |
 | Interrupted | `interrupted` | a grey pause sign, with no circle | No process is running, and it did not end by being archived. The session stays in its project's list (a console session, in the console sessions section) and can be resumed. |
 | Archived | `archived` | an archive box | Ended by being archived (see "Archiving, interruption and resuming" in `docs/product/archiving-and-resuming-sessions.md`). No longer listed among its project's sessions (a console session, no longer in the console sessions section); reached through the archive (see "Archived sessions" in `docs/product/archiving-and-resuming-sessions.md`) and can be reopened. |
 
 *Working*, *waiting for the user* and *dormant* mean a process is running, and so do the five statuses of a session **at
 its prompt** — *paused*, *done*, *awaiting instructions*, *child sessions working* and *working in background*, all
 `idle` on the wire. *Starting* means a process is about to be; *interrupted* and *archived* mean none is, and both can
-be resumed.
+be resumed. *Status unknown* says neither.
 
 *Paused*, *done*, *awaiting instructions*, *child sessions working* and *working in background* are told apart by the
 client alone: the daemon's `status` is `idle` for all five, and so is the `status` of every session record the session
@@ -34,7 +35,8 @@ A session shows the first of these that applies:
    (`holder_link: "pending"`), over every status, *switching account* included. An interrupted or archived session never
    shows it, whatever its record says.
 2. *Switching account*, while an account switch holds it, over every status but *archived*.
-3. Its wire status, when that is not `idle` — *dormant* included, which the daemon works out (see "Dormant" below).
+3. Its wire status, when that is not `idle` — *dormant* included, which the daemon works out (see "Dormant" below) —
+   or *status unknown* for a wire status the window does not know.
 4. *Paused*, while `paused` is true.
 5. *Working in background*, while it has work left running in the background (Claude Code and Grok Build only; for the
    other agents this step never applies).
@@ -62,9 +64,9 @@ held in a view until the person leaves it. Green is the session at its prompt, w
 pause of *paused*, the check mark of *done*, the speech bubble of *awaiting instructions*, the ring with a centre dot of
 *child sessions working* and the hollow ring of *working in background*. Blue is the session itself busy: the solid dot
 of *working*. The muted grey is a session that cannot be talked to now: the bare pause of *interrupted*, and the turning
-arc that *starting* and *switching account* share. *Reconnecting* is a slowly turning amber arc. *Archived* is an
-archive box. The ring of *child sessions working* is larger than the other dots, and its ping reaches less far, ending
-within the glyph's own slot.
+arc that *starting* and *switching account* share. *Reconnecting* is a slowly turning amber arc. *Status unknown* is a
+dashed empty circle, a shape of its own, not the help tips' "?". *Archived* is an archive box. The ring of *child
+sessions working* is larger than the other dots, and its ping reaches less far, ending within the glyph's own slot.
 
 **Every glyph sits in a box of one size, whatever the status**: 16 px on rows, cards, the breadcrumb and a
 confirmation's list, 14 px in a status marker (see "The top status" below), so glyphs in a column share one centre line.
@@ -77,8 +79,8 @@ leaves at the top right; each takes about 2.4 seconds to cross, the next a third
 outside the glyph's box.
 
 The waving hand, the pings, the turning arcs and the rising Zs stand still where the system asks for reduced motion.
-The glyphs distinguish most statuses by shape. The arc's label distinguishes *reconnecting*, *starting* and
-*switching account* when their shapes match.
+The glyphs distinguish most statuses by shape, and the dashed circle of *status unknown* differs from every other. The
+arc's label distinguishes *reconnecting*, *starting* and *switching account* when their shapes match.
 
 **How the status reaches a user who does not read the glyph** differs by placement:
 
@@ -444,6 +446,28 @@ shows again the moment the view is gone.
   `docs/product/application-lifecycle.md`), archiving it asks first (see "Archiving, interruption and resuming" in
   `docs/product/archiving-and-resuming-sessions.md`), it cannot be handed off (see "What can be handed off" in
   `docs/product/handing-off-sessions.md`), and the session it is bound to reads as *child sessions working*.
+
+## Status unknown
+
+A daemon newer than the window, speaking the same protocol generation, may give a session a status the window does not
+know (see `docs/product/values-a-newer-daemon-sends.md`). The session is still listed and shown, as **status unknown**,
+and nothing is decided from that status:
+
+- **It is shown as "Status unknown"** with its own glyph (see "Status glyphs" above), never by the status's wire value,
+  and sorts just before *interrupted* (see "The status order" in `docs/product/order-of-projects-and-sessions.md`).
+  *Reconnecting* never shows over it; *switching account* does, as over any status but *archived*.
+- **It counts as neither running nor without a process, and neither at work nor waiting for the user.** It does not make
+  a quit or a restart of the daemon ask for confirmation, and is not among the sessions their confirmation names (see
+  "Quitting" in `docs/product/application-lifecycle.md`); it raises no hand (see "The raised hand" below); it is not
+  among the statuses of the menu bar icon's session list or a console's avatar badge (see "The top status" above); and
+  it is not among the running sessions a removal of its account or a deletion of its project lists.
+- **Nothing resumes or reconnects it**: selecting it does not resume it, and its terminal offers neither Resume nor
+  Reconnect.
+- **Nothing that depends on the status is offered for it.** Its action menu leaves those actions out (see "Session rows"
+  in `docs/product/sidebar-session-rows.md`), and Change model opens for it from nowhere else either: an error alert
+  about it has no Change model button (see "Recovery and unexpected errors" in `docs/product/error-alerts.md`), and a
+  switch of every session in a console to another account leaves it out (see "Confirming a switch" in
+  `docs/product/switching-session-accounts.md`).
 
 ## The top status
 

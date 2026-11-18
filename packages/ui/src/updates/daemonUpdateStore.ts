@@ -1,15 +1,20 @@
 import type { StoreApi } from "zustand";
 
 import { CodedError } from "../errors/codedError";
-import type { DaemonUpdateStatus } from "../protocol";
+import type { DaemonUpdateCheckOutcome, DaemonUpdatePhase, DaemonUpdateStatus } from "../protocol";
 import type { RequestSender } from "../requests";
 import { createSettingsWriter, type State } from "../store";
+import { knownValues } from "../values/knownValue";
 import { sameValue } from "../values/sameValue";
 import type { UpdateChannel } from "../platform";
+import { isUpdateChannel } from "./updateChannel";
 import { createUpdateStoreBase, type UpdateFailure, type UpdateState, type UpdateStore } from "./updateStore";
 
 /** How long a check the daemon did not start keeps the button pending, so that the press is seen to have been heard. */
 const CHECK_UNCHANGED_HOLD_MS = 1200;
+
+const isPhase = knownValues<DaemonUpdatePhase>({ idle: true, checking: true, downloading: true, installed: true });
+const isOutcome = knownValues<DaemonUpdateCheckOutcome>({ up_to_date: true, available: true, failed: true });
 
 /**
  * The update store of a daemon that updates itself (`snapshot.daemon_update` is not null), kept in step with the daemon's
@@ -18,14 +23,17 @@ const CHECK_UNCHANGED_HOLD_MS = 1200;
  * status; a restart goes through the window's exit flow, which asks about the sessions it would interrupt and sends
  * `restart_daemon`. A successful install this page requested also asks for that restart.
  *
- * What only this window knows stays here: whether its notice was dismissed or its restart notice hidden (for the version
- * installed), whether its restart is pending (until the daemon that follows greets, `restartAwaited`), and the check and
- * the install it asked for, whose failure it alone reports, as an action the user started (another window's failure is
- * the section's mark alone). The daemon's reply tells which they are: whether the check started, with the last check's
- * `at` it started after, and the install's `started_at`. A daemon of another version than the page's own build asks for
- * a reload. A restart is held back, and said to be, while an agent's CLI is being updated (`restartBlocked`), which the
- * daemon would refuse. The channel and the automatic check are the daemon's settings, written as any setting is, based
- * on the version this window holds.
+ * What only this window knows stays here: whether its notice was dismissed or its restart notice hidden (for the
+ * version installed), whether its restart is pending (until the daemon that follows greets, `restartAwaited`), and the
+ * check and the install it asked for, whose failure it alone reports, as an action the user started (another window's
+ * failure is the section's mark alone). The daemon's reply tells which they are: whether the check started, with the
+ * last check's `at` it started after, and the install's `started_at`. A daemon of another version than the page's own
+ * build asks for a reload. A restart is held back, and said to be, while an agent's CLI is being updated
+ * (`restartBlocked`), which the daemon would refuse. The channel and the automatic check are the daemon's settings,
+ * written as any setting is, based on the version this window holds. What a newer daemon sends that this build does
+ * not know acts on nothing: a status of a phase it does not know offers no update, download or restart (the page shows
+ * the running version and can check), a last check of an outcome it does not know is a time alone, and a channel it
+ * does not know is not the one an update was found on.
  */
 export function createDaemonUpdateStore({
   daemon,
@@ -68,17 +76,20 @@ export function createDaemonUpdateStore({
     const version = held.daemon?.version;
     // Asked for and not yet begun as the status sees it: shown as begun, so that the press is seen to have taken and a
     // second one finds the download under way.
-    const installing = askedInstall !== undefined && (status?.phase ?? "idle") === "idle";
-    const installedVersion = status?.installed?.version ?? null;
-    const available = status?.available ?? undefined;
-    const progress = status?.progress ?? undefined;
-    const installed = status?.installed ?? undefined;
+    const knownPhase = status && isPhase(status.phase) ? status.phase : undefined;
+    const installing = askedInstall !== undefined && (status ? knownPhase === "idle" : true);
+    // What the status offers to act on is read only from one of a phase this build knows.
+    const offered = knownPhase ? status : null;
+    const installedVersion = offered?.installed?.version ?? null;
+    const available = offered?.available ?? undefined;
+    const progress = offered?.progress ?? undefined;
+    const installed = offered?.installed ?? undefined;
     const last = status?.last_check ?? undefined;
     const next: UpdateState = {
       currentVersion: version,
-      phase: installing ? "downloading" : status?.phase ?? "idle",
+      phase: installing ? "downloading" : knownPhase ?? "idle",
       update: available && { version: available.version, holderFloor: available.holder_floor },
-      updateChannel: available?.channel,
+      updateChannel: isUpdateChannel(available?.channel) ? available.channel : undefined,
       progress: progress ? { downloaded: progress.downloaded, total: progress.total ?? undefined } : installing ? { downloaded: 0 } : undefined,
       installedVersion: installed?.version ?? undefined,
       installedHolderFloor: installed ? installed.holder_floor : undefined,
@@ -88,10 +99,10 @@ export function createDaemonUpdateStore({
         status?.phase === "installed" && [...held.agentCliStatuses.values()].some((cli) => cli.update?.state === "running")
           ? "agentUpdate"
           : undefined,
-      lastCheck: last && { outcome: last.outcome === "up_to_date" ? "upToDate" : last.outcome, at: last.at },
+      lastCheck: last && { outcome: !isOutcome(last.outcome) ? undefined : last.outcome === "up_to_date" ? "upToDate" : last.outcome, at: last.at },
       channel: held.settings.daemon_update_channel,
       autoCheck: held.settings.daemon_update_check,
-      manual: status?.manual ? { path: status.manual.path, command: status.manual.command } : undefined,
+      manual: offered?.manual ? { path: offered.manual.path, command: offered.manual.command } : undefined,
       checkAsked,
       reloadNeeded: version !== undefined && version !== uiVersion,
       noticeDismissed: available !== undefined && dismissedVersion === available.version,

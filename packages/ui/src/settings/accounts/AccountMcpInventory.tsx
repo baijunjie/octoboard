@@ -21,8 +21,9 @@ import { isolate } from "../../i18n/isolate";
 import { joinNodes } from "../../i18n/joinPhrases";
 import { Message, useCurrentLanguage, useT } from "../../i18n/react";
 import { Button, Spinner, Table, TableBody, TableCell, TableColumn, TableHeader, TableRow, WaitingIcon } from "../../primitives";
-import type { Agent, ConnectorState, LocalMcpServer, McpInventoryUnavailable, PlatformConnector } from "../../protocol";
+import type { Agent, ConnectorState, LocalMcpServer, McpInventoryFailure, McpInventoryUnavailable, McpRuntimeState, McpSignInState, PlatformConnector } from "../../protocol";
 import { providerConnectorPlatform, providerMcpSessionSignIn } from "../../providers/registry";
+import { knownValues } from "../../values/knownValue";
 import type { McpInventoryState } from "./useAccountMcpInventory";
 
 /** The aside at the end of the account's name line, once the first answer is in (until then the body's reading line is
@@ -111,12 +112,19 @@ function McpInventoryBody({ agent, state }: { agent: Agent; state: McpInventoryS
   );
 }
 
-/** Why the inventory could not be read, in the application's words per reason, with what the agent or the daemon
- * said behind Details. A reason no retry can change (the provider lists nothing) has no Try again. */
+const isInventoryFailure = knownValues<McpInventoryFailure>({ not_signed_in: true, cli_missing: true, timed_out: true, unsupported_agent: true, failed: true });
+const isConnectorState = knownValues<ConnectorState>({ connected: true, not_connected: true, unknown: true });
+const isSignInState = knownValues<McpSignInState>({ signed_in: true, needs_sign_in: true, not_needed: true, unknown: true });
+const isRuntimeState = knownValues<McpRuntimeState>({ running: true, failed: true, unknown: true });
+
+/** Why the inventory could not be read, in the application's words per reason, with what the agent or the daemon said
+ * behind Details. A reason no retry can change (the provider lists nothing) has no Try again. A reason of a newer
+ * daemon is read as `failed`, with the daemon's `detail`. */
 function UnavailableAlert({ agent, unavailable, state }: { agent: Agent; unavailable: McpInventoryUnavailable; state: McpInventoryState }): React.ReactElement {
   const t = useT();
   const agentName = <ProviderName agent={agent} />;
-  const { reason, detail } = unavailable;
+  const { detail } = unavailable;
+  const reason = isInventoryFailure(unavailable.reason) ? unavailable.reason : "failed";
   const retry = reason !== "unsupported_agent";
   return (
     <ErrorAlert
@@ -174,7 +182,7 @@ function ConnectorGroup({ agent, connectors }: { agent: Agent; connectors: Platf
         : (
           <EntryTable labelledBy={headingId} stateColumns={[t("settings.accounts.mcp.column.status")]}>
             {connectors.map((connector) => {
-              const state = CONNECTOR_STATE[connector.state];
+              const state = CONNECTOR_STATE[isConnectorState(connector.state) ? connector.state : "unknown"];
               return (
                 <EntryRow
                   key={connector.id}
@@ -227,7 +235,7 @@ function ServerEntry({ agent, server, state }: { agent: Agent; server: LocalMcpS
     needs_sign_in: <DotStatusBadge color="warning">{t("settings.accounts.mcp.server.needsSignIn")}</DotStatusBadge>,
     not_needed: <span className="text-xs text-app-muted">{t("settings.accounts.mcp.server.signInNotNeeded")}</span>,
     unknown,
-  }[server.sign_in];
+  }[isSignInState(server.sign_in) ? server.sign_in : "unknown"];
   const runtime = {
     running: <DotStatusBadge color="success">{t("settings.accounts.mcp.server.running")}</DotStatusBadge>,
     failed: (
@@ -241,7 +249,7 @@ function ServerEntry({ agent, server, state }: { agent: Agent; server: LocalMcpS
       </span>
     ),
     unknown,
-  }[server.runtime];
+  }[isRuntimeState(server.runtime) ? server.runtime : "unknown"];
   const facts: React.ReactNode[] = [];
   if (server.origin) facts.push(<span key="origin" dir="ltr" className="wrap-anywhere">{server.origin}</span>);
   if (server.plugin) facts.push(<FromPlugins key="plugin" plugins={[server.plugin]} />);

@@ -2,7 +2,8 @@
 // and how the viewer moves through them. Pure, so the list's rendering and the viewer's navigation
 // are two readings of one order and can never disagree, as the tree's are (`tree.ts`).
 import type { PlainMessageKey } from "../../i18n/catalog";
-import type { ChangeEntry, ChangeGroup, ChangeSide, CommitChanges, ConflictKind } from "../../protocol";
+import type { ChangeEntry, ChangeGroup, ChangeSide, CommitChanges, ConflictKind, SideKind } from "../../protocol";
+import { knownValues } from "../../values/knownValue";
 import { changeStatus } from "../../viewer/content";
 import type { StatusKey } from "../../viewer/statusMarks";
 import { displayWirePath, wireBaseName } from "../../format/wirePath";
@@ -45,6 +46,29 @@ export const CONFLICT_LABELS: Record<ConflictKind, PlainMessageKey> = {
   deleted_by_them: "git.conflict.deletedByThem",
 };
 
+const isConflictKind = knownValues<ConflictKind>({ both_modified: true, both_added: true, both_deleted: true, added_by_us: true, added_by_them: true, deleted_by_us: true, deleted_by_them: true });
+
+/** The label of a conflict of `kind`; a kind of a newer daemon reads as the generic conflicted heading's name. */
+export function conflictLabel(kind: string): PlainMessageKey {
+  return isConflictKind(kind) ? CONFLICT_LABELS[kind] : SECTION_LABELS.conflicted;
+}
+
+const isSideKind = knownValues<SideKind>({ file: true, symlink: true, submodule: true });
+
+/** What a present side is: a file, a symlink or a submodule. A kind of a newer daemon reads as a file, the plain case,
+ * whose body the daemon sends the same way. */
+export function sideKindOf(kind: string): SideKind {
+  return isSideKind(kind) ? kind : "file";
+}
+
+const isChangeGroup = knownValues<ChangeEntry["group"]>({ staged: true, unstaged: true, untracked: true, conflicted: true, committed: true });
+
+/** Whether the list shows `entry`: a change of a group this client knows. A change of a newer daemon's group has no
+ * heading to stand under, so it is left out of the list. */
+function isListed(entry: ChangeEntry): boolean {
+  return isChangeGroup(entry.group);
+}
+
 /** A commit whose changes the committed section lists, as the commit list named it. */
 export interface CommitRef {
   commit: string;
@@ -76,14 +100,16 @@ export interface ChangeItem {
   versions: string;
 }
 
-function sideKey(side: ChangeSide): string {
-  switch (side.state) {
+function sideKey(side: ChangeSide | undefined): string {
+  switch (side?.state) {
     case "present":
       return `p:${side.path}`;
     case "absent":
       return "-";
     case "out_of_scope":
       return `o:${side.repository_path}`;
+    default:
+      return "?";
   }
 }
 
@@ -121,7 +147,7 @@ export function compareChanges(a: ChangeItem, b: ChangeItem): number {
 
 /** A listing's changes as the list shows them, top to bottom. */
 export function changeItems(entries: readonly ChangeEntry[]): ChangeItem[] {
-  return entries.map(changeItem).sort(compareChanges);
+  return entries.filter(isListed).map(changeItem).sort(compareChanges);
 }
 
 /** A commit list's changes as the list shows them: the committed section's changes by commit, in
@@ -133,6 +159,7 @@ export function commitItems(commits: readonly CommitChanges[]): ChangeItem[] {
     const rank = SECTION_ORDER.length + index;
     const ref: CommitRef = { commit, parent, subject };
     return changes
+      .filter(isListed)
       .map((entry): ChangeItem => {
         const item = changeItem(entry);
         const sides = entry.group === "conflicted" ? [entry.path] : [sideKey(entry.old), sideKey(entry.new)];

@@ -17,7 +17,7 @@ import { Dialog } from "../../components/dialog/Dialog";
 import { useIssueReport } from "../../components/alerts/useIssueReport";
 import { isolate } from "../../i18n/isolate";
 import { Message, useCurrentLanguage, useT } from "../../i18n/react";
-import type { AccountLogin, Agent } from "../../protocol";
+import type { AccountLogin, Agent, LoginStatus } from "../../protocol";
 import { dismissAccountLogin, trackAccountLogin, useDaemon, useDaemonStore } from "../../store";
 import { ProviderName } from "../../components/text/ProviderName";
 import { ringForAutomaticFocus } from "../../input/lastInput";
@@ -25,6 +25,9 @@ import { accountLoginOf, loginIsActive } from "../../accounts/accountRecords";
 import { useAccountLoginActions } from "./AccountLogin";
 import { raiseError } from "../../components/alerts/raiseError";
 import { Button, ModalStatusIcon, WaitingIcon } from "../../primitives";
+import { knownValues } from "../../values/knownValue";
+
+const isLoginStatus = knownValues<LoginStatus>({ starting: true, waiting: true, succeeded: true, failed: true, cancelled: true, timed_out: true });
 
 /** The login of one account (`null` for an agent's default account), in a modal of its own. With `start` it asks the
  * daemon to start the login on opening; without, it takes up one that is already running (after a reload, or started by
@@ -99,10 +102,11 @@ export function AccountLoginDialog({ agent, account, start, onClose }: {
 
   const ended = login?.status === "failed" || login?.status === "timed_out" || refusal !== undefined;
   const active = !refusal && (login === undefined ? lastSeen === undefined : loginIsActive(login));
-  // A login that succeeded, or that another window cancelled, or that has vanished, has nothing more to show.
+  // A login that succeeded, or that another window cancelled, or that has vanished, has nothing more to show, and nor
+  // has one in a status of a newer daemon, which cannot be followed.
   useEffect(() => {
     if (refusal) return;
-    if (login?.status === "succeeded" || login?.status === "cancelled" || (current === undefined && loginIsActive(lastSeen))) onClose(login?.status === "succeeded");
+    if (login?.status === "succeeded" || login?.status === "cancelled" || (login !== undefined && !isLoginStatus(login.status)) || (current === undefined && loginIsActive(lastSeen))) onClose(login?.status === "succeeded");
   }, [login, current, lastSeen, refusal]);
   // Each form is a dialog of its own, whose own focus handling may leave focus on the dialog or on `<body>`: the
   // form's primary button (Log in again, Cancel login) takes it.

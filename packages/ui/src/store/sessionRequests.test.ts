@@ -16,6 +16,10 @@ it("requires a record's conversation and rejects unknown actions", () => {
   expect(sessionRequestOf({ ...event, action: "resume_record", conversation: null })).toBeUndefined();
   expect(sessionRequestOf({ ...event, action: "future" as never })).toBeUndefined();
 });
+it("does not offer a request for a session kind this client does not know", () => {
+  expect(sessionRequestOf({ ...event, kind: "from_a_newer_daemon" })).toBeUndefined();
+  expect(sessionRequestOf({ ...event, kind: "console" })).toMatchObject({ kind: "console" });
+});
 it.each(["resume", "reopen", "resume_record", "switch", "start"] as const)("retains the fields needed to approve %s", (action) => {
   const request = sessionRequestOf({ ...event, action, conversation: "conversation", owner: "owner", reopened_owners: ["ancestor"] });
   expect(request).toMatchObject({ action, requestId: "r", branches: ["feat/a"] });

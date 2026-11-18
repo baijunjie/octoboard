@@ -74,6 +74,11 @@ it("gives an install the daemon cannot tell no Update and says on the row, not i
   expect(text()).not.toContain("Installed with");
 });
 
+it("offers no Update for an install method this build does not know, however much newer the latest version is", async () => {
+  const { update } = await mountWith(statusOf({ install_method: "from_a_newer_daemon" }));
+  expect(update()).toBeUndefined();
+});
+
 it("offers Update, as a secondary button, for an install whose method is known when the latest version is not", async () => {
   const { update } = await mountWith(statusOf({ latest_version: null, latest_error: "agent_cli_latest_failed" }));
   expect(update()).toBeDefined();
@@ -268,6 +273,7 @@ describe("the update mark on an agent's menus", () => {
     ["is up to date", { latest_version: "2.1.319" }],
     ["has no known latest version", { latest_version: null }],
     ["cannot be updated by the daemon", { install_method: "unknown" as const }],
+    ["is installed by a method this build does not know", { install_method: "from_a_newer_daemon" }],
   ])("marks nothing for a CLI that %s", async (_, patch) => {
     const { container } = withStatus(patch);
     expect(actionsOf(container, "Claude Code").getAttribute("aria-label")).toBe(`Actions for ${isolate("Claude Code")}`);

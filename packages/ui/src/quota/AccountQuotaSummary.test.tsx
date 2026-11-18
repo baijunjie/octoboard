@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act } from "react";
-import { beforeEach, expect, it, onTestFinished, vi } from "vitest";
+import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { isolate } from "../i18n/isolate";
 import { currentLanguage, setLanguage } from "../i18n/language";
@@ -73,6 +73,36 @@ it("shows short and general weekly windows before model windows with their remai
   expect(meters[2]!.getAttribute("aria-valuetext")).toBe("100% remaining");
   expect(meters.every((meter) => meter.classList.contains("quota-meter--provider"))).toBe(true);
   expect(container.querySelector('[data-slot="meter-fill"]')?.getAttribute("style")).toContain("width: 82%");
+});
+
+it("draws no meter for a window of a kind this build does not know, and none at all where every window is such", () => {
+  const future: QuotaWindow = { kind: "from_a_newer_daemon", label: "Future", used_percent: 100, resets_at: null, window_minutes: null };
+  const mixed = mount(<AccountQuotaSummary quota={quota({ windows: [future, ...windows] })} />);
+  expect(headlines(mixed)).toHaveLength(3);
+  expect(mixed.textContent).not.toContain("Future");
+  const only = mount(<AccountQuotaSummary quota={quota({ windows: [future] })} />);
+  expect(only.querySelector('[data-slot="meter"]')).toBeNull();
+  expect(only.textContent).not.toContain("Future");
+});
+
+describe("a reading holding only windows of a kind this build does not know", () => {
+  const future: QuotaWindow = { kind: "from_a_newer_daemon", label: "Future", used_percent: 100, resets_at: null, window_minutes: null };
+  const unavailable = { code: "quota_command_failed", params: { agent: "Claude Code", detail: "exit 1" }, message: "failed" };
+
+  it("says nothing of when it was read, as there is nothing of it shown, where a reading with known windows does", () => {
+    expect(mount(<AccountNameLine name="Work" quota={quota({ windows: [future] })} />).textContent).not.toContain("Updated");
+    expect(mount(<AccountNameLine name="Work" quota={quota({ windows: [future, ...windows] })} />).textContent).toContain("Updated 5 minutes ago");
+  });
+
+  it("is marked as a failed reading, not as out-of-date windows, when the latest read failed, as it holds no window to show", () => {
+    const container = mount(<AccountNameLine name="Work" quota={quota({ windows: [future], unavailable })} />);
+    expect(container.textContent).not.toContain("Updated");
+    const mark = container.querySelector("button");
+    expect(mark?.getAttribute("aria-label")).toBe("Usage unavailable");
+    // Where a window it knows is held, the failure is marked out of date instead.
+    const stale = mount(<AccountNameLine name="Work" quota={quota({ windows: [future, ...windows], unavailable })} />);
+    expect(stale.querySelector("button")?.getAttribute("aria-label")).toBe("Out of date: last read 5 minutes ago");
+  });
 });
 
 it("counts the reset down as time passes", () => {

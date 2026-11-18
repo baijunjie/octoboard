@@ -73,10 +73,12 @@ export const COMPONENT_RENDERERS: { [K in ComponentType]: React.ComponentType<Co
   chart: ChartView,
 };
 
-/** One component through its kind's renderer, or nothing while its `visible_when` is not met. */
+/** One component through its kind's renderer, or nothing while its `visible_when` is not met or for a `type` of a newer
+ * daemon, which a page leaves out (`apps/daemon/PROTOCOL.md`). */
 export function ComponentView({ component }: { component: Component }): React.ReactElement | null {
   const form = usePageForm();
   if (!form.isShown(component)) return null;
+  if (!Object.hasOwn(COMPONENT_RENDERERS, component.type)) return null;
   const Renderer = COMPONENT_RENDERERS[component.type] as React.ComponentType<{ component: Component }>;
   return <Renderer component={component} />;
 }

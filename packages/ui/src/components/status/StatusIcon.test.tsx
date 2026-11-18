@@ -20,6 +20,7 @@ const STATUS_TEXT: Array<[StatusKind, string]> = [
   ["paused", "Paused"],
   ["background", "Working in background"],
   ["interrupted", "Interrupted"],
+  ["unknown", "Status unknown"],
   ["archived", "Archived"],
 ];
 
@@ -49,6 +50,18 @@ it.each([
   const glyph = slot.firstElementChild!;
   expect(isItsShape(glyph)).toBe(true);
   expect(glyph.classList.contains(colour)).toBe(true);
+});
+
+it("draws a status this client does not know as a neutral dashed circle, still", () => {
+  const container = mountForTooltip(<StatusIcon status="unknown" />);
+  const slot = container.querySelector("[role=img]")!;
+  expect(slot.getAttribute("aria-label")).toBe("Status unknown");
+  const glyph = slot.firstElementChild!;
+  expect(glyph.classList.contains("lucide-circle-dashed")).toBe(true);
+  // Not the "?" of the help tips.
+  expect(container.querySelector(".lucide-circle-help, .lucide-circle-question-mark")).toBeNull();
+  expect(glyph.classList.contains("text-app-muted")).toBe(true);
+  expect(container.innerHTML).not.toMatch(/animate-/);
 });
 
 it("keeps the paused glyph still", () => {

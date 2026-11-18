@@ -18,11 +18,12 @@ import type { ReplyOf } from "../requests";
 import { isKnownAgent } from "../agents/providers";
 import { isAbsolute, isHomeRelative, type PathStyle } from "../format/hostPath";
 import type { PlainMessageKey } from "../i18n/catalog";
+import { knownValues } from "../values/knownValue";
 import { sameKeys, type Binding, type ModifierHost } from "../shortcuts/binding";
 import { REBINDABLE_COMMANDS } from "../shortcuts/commands";
 import { effectiveBindings, sanitizeOverrides, type Overrides } from "../shortcuts/store";
 import type { Region } from "./RegionTabs";
-import { SETTINGS_SECTIONS } from "./settingsSections";
+import { isSettingsSection, SETTINGS_SECTIONS } from "./settingsSections";
 
 /** What the daemon answers to inspecting a configuration document. */
 export type Inspection = ReplyOf<"inspect_configuration">;
@@ -32,6 +33,14 @@ export type Inspection = ReplyOf<"inspect_configuration">;
 export type OfferedChoice = Exclude<DirectoryChoiceKind, "directory">;
 
 const OFFERED_CHOICES: readonly OfferedChoice[] = ["exported_path", "default_clone_dir", "clone"];
+
+const isOfferedChoice = knownValues<OfferedChoice>({ exported_path: true, default_clone_dir: true, clone: true });
+
+/** The choice the daemon preselected for a project, `null` where it offered none; a choice this build does not know is
+ * taken as none, so the project is left out until the user chooses. */
+export function offeredDefault(project: Pick<InspectedProject, "default">): OfferedChoice | null {
+  return isOfferedChoice(project.default) ? project.default : null;
+}
 
 /** What the review holds for one project: which way it is placed and, for `directory`, the path the
  * user typed. `skip` leaves the project out of the import. */
@@ -57,7 +66,7 @@ export function choicesFor(project: InspectedProject): RowState["choice"][] {
 /** Every project on the choice the daemon preselected, and left out where it offered nothing. */
 export function initialReview(consoles: InspectedConsole[]): ReviewState {
   return consoles.map((console) =>
-    console.projects.map((project) => ({ choice: project.default ?? "skip", directory: "" })),
+    console.projects.map((project) => ({ choice: offeredDefault(project) ?? "skip", directory: "" })),
   );
 }
 
@@ -82,7 +91,7 @@ export function reviewForOffers(review: ReviewState, after: InspectedConsole[]):
   return review.map((rows, c) =>
     rows.map((row, p) => {
       const now = after[c].projects[p];
-      const fallback = now.default ?? "skip";
+      const fallback = offeredDefault(now) ?? "skip";
       if (!row.chosen) return row.choice === fallback ? row : { ...row, choice: fallback };
       if (row.choice !== "directory" && row.choice !== "skip" && now.offers[row.choice] === null) return { ...row, choice: fallback };
       return row;
@@ -209,17 +218,21 @@ export function hasForeignDirectoryProblem(account: InspectedAccount): boolean {
   return account.status === "invalid" && account.foreign_directory && !hasNameProblem(account);
 }
 
-/** The choices an account's status allows, in the order the review lists them; none for an account that exists
- * already, which is used as it is. A directory in use or a directory the form would refuse can be put right with
- * another directory; an account whose name is the problem can only be left out. */
+/** The choices an account's status allows, in the order the review lists them; none for an account that exists already,
+ * which is used as it is. A directory in use or a directory the form would refuse can be put right with another
+ * directory; an account whose name is the problem, or of a status this build does not know, can only be left out. */
 export function accountChoicesFor(account: InspectedAccount): AccountRowState["choice"][] {
   switch (account.status) {
     case "new":
       return ["create", "leave_out"];
     case "existing":
       return [];
-    default:
+    case "directory_in_use":
+    case "invalid":
       return hasNameProblem(account) ? ["leave_out"] : ["directory", "leave_out"];
+    default:
+      // A status this build does not know says nothing of what would fix it: the account can only be left out.
+      return ["leave_out"];
   }
 }
 
@@ -347,9 +360,9 @@ export type ImportPart = "consoles" | "settings" | "accounts";
 /** The parts a document carries, in the order the dialog lists them: the consoles and projects, the settings, then the
  * accounts; the settings count as carried when the document carries at least one Settings section. A document with nothing in
  * it at all still counts as carrying its (empty) consoles. */
-export function carriedParts(document: { consoles: InspectedConsole[]; accounts?: unknown; settings_sections: readonly SettingsSection[] }): ImportPart[] {
+export function carriedParts(document: { consoles: InspectedConsole[]; accounts?: unknown; settings_sections: readonly string[] }): ImportPart[] {
   const parts: ImportPart[] = [];
-  const settings = document.settings_sections.length > 0;
+  const settings = document.settings_sections.some(isSettingsSection);
   if (document.consoles.length > 0 || (!document.accounts && !settings)) parts.push("consoles");
   if (settings) parts.push("settings");
   if (document.accounts) parts.push("accounts");
@@ -364,7 +377,7 @@ export function importedParts(carried: ImportPart[], checked: Record<ImportPart,
 
 /** The Settings sections an import applies: none unless the settings are among the `parts` imported, else the sections
  * the document `carries` that are checked, in Settings order. */
-export function importedSections(parts: ImportPart[], carries: readonly SettingsSection[], checked: Record<SettingsSection, boolean>): SettingsSection[] {
+export function importedSections(parts: ImportPart[], carries: readonly string[], checked: Record<SettingsSection, boolean>): SettingsSection[] {
   return parts.includes("settings") ? SETTINGS_SECTIONS.filter((section) => carries.includes(section) && checked[section]) : [];
 }
 

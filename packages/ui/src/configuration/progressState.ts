@@ -1,5 +1,6 @@
 import type { ImportFailure, ImportItem } from "../protocol";
 import type { ImportProgressEvent } from "../store";
+import { knownValues } from "../values/knownValue";
 
 /** Where one item of a running import stands, as the last progress event for it said (the event's `item` and `import_id`
  * are what the maps below are keyed by). */
@@ -29,9 +30,13 @@ export function itemKey(item: ImportItem): string {
   }
 }
 
-/** `progress` with `event` applied. */
+const isItemKind = knownValues<ImportItem["kind"]>({ console: true, project: true, account: true, clone_dir: true, agent_settings: true, settings: true });
+
+/** `progress` with `event` applied; an event of an item of a kind this build does not know (a newer daemon's) is not
+ * listed or counted, as nothing here could say which item it is. */
 export function withProgress(progress: ImportProgress, event: ImportProgressEvent): ImportProgress {
   const { type: _type, import_id: _import, item, ...state } = event;
+  if (!isItemKind(item.kind)) return progress;
   return new Map(progress).set(itemKey(item), state);
 }
 

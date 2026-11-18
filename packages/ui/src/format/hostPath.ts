@@ -1,8 +1,12 @@
+import { knownValues } from "../values/knownValue";
+
 /** How the daemon host writes an absolute path (`snapshot.host.path_style`, the protocol's `HostPathStyle`). Absolute paths travel in the host's
  * own spelling, so what a client does with one (splitting, shortening, telling it is absolute) depends on this and
  * never on the client's own platform. Project-relative wire paths are `/`-separated whatever the style and do not
  * come through here (see `wirePath`). */
 export type PathStyle = "unix" | "windows";
+
+const isPathStyle = knownValues<PathStyle>({ unix: true, windows: true });
 
 /** The facts about the host that showing its paths needs: its home directory (null while unknown) and its path style. */
 export interface HostPaths {
@@ -13,9 +17,11 @@ export interface HostPaths {
 /** The style before the first snapshot has said, so a client shows paths the way it did before hosts differed. */
 export const DEFAULT_PATH_STYLE: PathStyle = "unix";
 
-/** The `HostPaths` of the store's state: its home directory and its host's path style, `unix` until the first snapshot. */
-export function hostPathsOf(state: { homeDir?: string | null; host?: { path_style: PathStyle } | null }): HostPaths {
-  return { home: state.homeDir, style: state.host?.path_style ?? DEFAULT_PATH_STYLE };
+/** The `HostPaths` of the store's state: its home directory and its host's path style, `unix` until the first snapshot
+ * and for a style this client does not know (a newer daemon's). */
+export function hostPathsOf(state: { homeDir?: string | null; host?: { path_style: string } | null }): HostPaths {
+  const style = state.host?.path_style;
+  return { home: state.homeDir, style: isPathStyle(style) ? style : DEFAULT_PATH_STYLE };
 }
 
 const WINDOWS_DRIVE_ROOT = /^[A-Za-z]:[\\/]/;

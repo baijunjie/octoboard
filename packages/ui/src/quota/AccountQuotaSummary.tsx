@@ -11,7 +11,7 @@ import type { QuotaUnavailable } from "../protocol";
 import { formatRelativeTime } from "../format/relativeTime";
 import { useNow } from "../format/useNow";
 import { QuotaMeter, QuotaMeterPair } from "./QuotaMeter";
-import { isNotLoggedIn, loginStateOf, orderedQuotaWindows, planLabel, quotaNaming, twoLayerWindows } from "../accounts/quotaFormat";
+import { isNotLoggedIn, knownQuotaWindows, loginStateOf, orderedQuotaWindows, planLabel, quotaNaming, twoLayerWindows } from "../accounts/quotaFormat";
 import type { QuotaReading } from "./useAccountQuota";
 import { useProviders } from "../store";
 
@@ -49,7 +49,7 @@ export function LoginStateBadge({ quota, separated }: { quota: QuotaReading; sep
  * held. Neither for a reading still to come, a good one, or an account that is simply not logged in. */
 function readingFailure(quota: QuotaReading | undefined): "failed" | "stale" | undefined {
   if (typeof quota !== "object" || !quota.unavailable || isNotLoggedIn(quota.unavailable)) return undefined;
-  return quota.windows.length > 0 ? "stale" : "failed";
+  return knownQuotaWindows(quota.windows).length > 0 ? "stale" : "failed";
 }
 
 /** The mark of a reading that failed with no windows to show, placed beside the account's name or, in a table row, in
@@ -78,7 +78,7 @@ export function QuotaStaleMark({ quota }: { quota: QuotaReading }): React.ReactE
 /** When the reading with windows was taken ("Updated 3 minutes ago"), followed by the out-of-date mark when the latest
  * read failed (`QuotaStaleMark`). Nothing for an account with no windows. */
 export function QuotaUpdated({ quota }: { quota: QuotaReading }): React.ReactElement | null {
-  if (typeof quota !== "object" || quota.windows.length === 0) return null;
+  if (typeof quota !== "object" || knownQuotaWindows(quota.windows).length === 0) return null;
   return (
     <span className="ms-auto flex shrink-0 items-center gap-1 text-xs font-normal text-app-muted">
       <UpdatedAge at={quota.fetched_at} copy={{ now: "quota.updatedNow", age: "quota.updated" }} />
@@ -132,7 +132,7 @@ export function AccountQuotaNotice({ quota }: { quota: QuotaReading }): React.Re
   if (quota === "loading") return <div className="text-sm text-app-muted">{t("quota.loading")}</div>;
   // An account that is not logged in is a state, not a failure: the line says what to do and nothing else. Any other
   // failure with no windows is the mark on the account's name line (`AccountNameLine`).
-  if (quota && quota.windows.length === 0 && isNotLoggedIn(quota.unavailable)) {
+  if (quota && knownQuotaWindows(quota.windows).length === 0 && isNotLoggedIn(quota.unavailable)) {
     return <div className="text-sm text-app-muted"><QuotaFailure unavailable={quota.unavailable} /></div>;
   }
   return null;
@@ -158,8 +158,8 @@ export function AccountQuotaSummary({ quota, single, usedUp }: {
   usedUp?: boolean;
 }): React.ReactElement | null {
   const providers = useProviders();
-  if (quota === "loading" || !quota || quota.windows.length === 0) return <AccountQuotaNotice quota={quota} />;
-  const { windows } = quota;
+  const windows = typeof quota === "object" ? knownQuotaWindows(quota.windows) : [];
+  if (quota === "loading" || !quota || windows.length === 0) return <AccountQuotaNotice quota={quota} />;
   const naming = quotaNaming(quota, providers);
   // An account with a 5-hour window shows it with the weekly window as one two-layer meter; the
   // other windows (a model's weekly limit) keep a meter of their own.

@@ -105,6 +105,41 @@ it("shows user messages and agent replies while omitting Octoboard messages", as
   expect(container.querySelector("[role=region]")?.getAttribute("aria-label")).toBe("Messages of this session");
 });
 
+it("shows a message of a speaker this build does not know, its text intact, with no speaker label and not as the user's", async () => {
+  const messages: HistoryMessage[] = [
+    { speaker: "user", text: "Why is it slow?", turn: 1 },
+    { speaker: "from_a_newer_daemon", text: "A word from elsewhere", turn: 1 },
+  ];
+  const container = await mount({ type: "session_history", id: null, session: "s-1", messages });
+  const nodes = [...container.querySelectorAll("article")];
+  expect(nodes).toHaveLength(2);
+  expect(nodes[1].textContent).toContain("A word from elsewhere");
+  expect(nodes[1].hasAttribute("aria-labelledby")).toBe(false);
+  expect(nodes[1].textContent).not.toContain("You");
+  expect(nodes[1].textContent).not.toContain("Agent");
+  expect(articles(container)).toEqual(["You", undefined]);
+});
+
+it("draws no header over a message of a speaker this build does not know that has no time, and a header of the time alone for one that has", async () => {
+  const messages: HistoryMessage[] = [
+    { speaker: "user", text: "Why is it slow?", turn: 1 },
+    { speaker: "from_a_newer_daemon", text: "No time here", turn: 1 },
+    { speaker: "from_a_newer_daemon", text: "Timed word", turn: 2, at: 1_700_000_000_000 },
+  ];
+  const container = await mount({ type: "session_history", id: null, session: "s-1", messages });
+  const [known, undated, dated] = [...container.querySelectorAll("article")];
+  // A known speaker is headed by its name, the same message box beneath.
+  expect(known!.children).toHaveLength(2);
+  // Only the message box: no empty line above it.
+  expect(undated!.children).toHaveLength(1);
+  expect(undated!.querySelector("time")).toBeNull();
+  // The time stands alone in its header, with no name beside it.
+  expect(dated!.children).toHaveLength(2);
+  expect(dated!.firstElementChild!.children).toHaveLength(1);
+  expect(dated!.querySelector("time")?.dateTime).toBe("2023-11-14T22:13:20.000Z");
+  expect(dated!.firstElementChild!.textContent).toBe(dated!.querySelector("time")!.textContent);
+});
+
 it("renders agent replies as Markdown without a toggle", async () => {
   const container = await mount({ type: "session_history", id: null, session: "s-1", messages: history });
   expect([...container.querySelectorAll("[data-testid=markdown]")].map((node) => node.textContent)).toEqual([

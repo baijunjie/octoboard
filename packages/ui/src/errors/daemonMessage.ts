@@ -5,7 +5,7 @@ import { daemonOs, daemonOsName } from "../i18n/platformTerms";
 import { sessionDisplayTitle } from "../sessions/sessionLabel";
 import { countdown, quotaWindowPhrase, type QuotaNaming } from "../accounts/quotaFormat";
 import type { Language } from "../i18n/languages";
-import type { PathStyle } from "../format/hostPath";
+import { hostPathsOf } from "../format/hostPath";
 import { leftBranchesText, leftBranchGroups, leftBranchItems } from "./branchCleanupItems";
 import { providerLabel } from "../agents/providers";
 import { CODE, codeRecord, messageFacets, messageKey } from "./codes";
@@ -30,7 +30,7 @@ export interface RecordNames {
   projects: Map<string, Project>;
   sessions: Map<string, Session>;
   homeDir?: string | null;
-  host?: { path_style: PathStyle } | null;
+  host?: { path_style: string } | null;
   shellTerminals?: Map<string, ShellTerminal>;
   accounts?: Settings["accounts"];
   settings?: Settings;
@@ -197,7 +197,7 @@ export function daemonParams<V = never>(
   const running = code === CODE.session_has_running_sessions ? runningSessionIds(all) : undefined;
   if (running) shown.sessions = joinPhrases(language, running.map((id) => paramText(records, "session", id, CODE.unknown_session, language)));
   const left = leftBranchItems(code, all);
-  if (left) shown.items = leftBranchesText(language, left, records.homeDir, records.host?.path_style);
+  if (left) shown.items = leftBranchesText(language, left, records.homeDir, hostPathsOf(records).style);
   // A count arrives as text; as a number it selects the singular or plural wording.
   if (/^\d+$/.test(all.count ?? "")) shown.count = Number(all.count);
   if ((code === CODE.account_in_use || code === CODE.account_has_running_sessions) && /^\d+$/.test(all.sessions ?? "")) shown.count = Number(all.sessions);

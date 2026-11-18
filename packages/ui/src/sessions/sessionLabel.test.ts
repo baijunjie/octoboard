@@ -48,6 +48,7 @@ describe("statusLabel", () => {
     ["paused", "en", "Paused"],
     ["dormant", "zh-Hans", "已休眠"],
     ["paused", "zh-Hans", "已暂停"],
+    ["unknown", "en", "Status unknown"],
   ] as const)("words %s in %s as just that, with no reason", (status, language, text) => {
     const translate = ((key: string, ...args: unknown[]) => format(language, key as never, args[0] as never)) as Translate;
     expect(statusLabel(translate, status)).toBe(text);

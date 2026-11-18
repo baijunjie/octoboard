@@ -111,6 +111,20 @@ tolerates) are in `apps/daemon/PROTOCOL.md`, "Versions and compatibility". What 
   (`git ls-remote --tags origin 'desktop-v[0-9]*'`), not only local ones. A prerelease tag counts.
 - **After a release, a removed, moved or renamed field or column is bridged by the raised version and its step**, never
   by keeping the old one readable beside the new.
+- **A UI reader of a daemon output enum reads it through that value's normaliser, never the raw value.** The bindings
+  type a received enum as `Received<Foo>`, open to values a newer daemon of the same generation adds, and the store
+  keeps the value as sent. The normaliser is a `knownValues<Foo>` predicate (`packages/ui/src/values/knownValue.ts`)
+  beside the rule that owns the value (`isKnownSessionStatus` in `sessions/sessionStatus.ts`). It yields a known value
+  only where `apps/daemon/PROTOCOL.md` states a fallback, the enum has its own `unknown` member, or the reader names
+  beside the predicate a neutral reading that offers, enables and counts nothing (a switch off, an `info` tone, a plain
+  file, no link); otherwise the record is shown neutrally (how is in `docs/conventions/ui-standard.md`, "A value a newer
+  daemon sends"), and nothing is offered, enabled or counted because of it. Not: an `as Foo` cast, a `switch` without a
+  default, `Record<Foo, X>[raw]`, a message key built from the raw value, or `.find(...)!` over it. A tagged union (an
+  object discriminated by `type`, `kind`, `group` or `state`) is not caught by the types: each of its readers handles an
+  unknown tag by hand. Every entry point to an action follows the rule of the menu that offers it: a dialog reachable
+  from an alert or a shortcut refuses what the menu hides. Error causes are the case `docs/conventions/error-codes.md`
+  sets out for `params.cause`. Why: one unguarded reader throws during render, and the single error boundary takes the
+  whole window down.
 
 ## Store schema
 

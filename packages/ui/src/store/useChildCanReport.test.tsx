@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { expect, it, onTestFinished } from "vitest";
 
 import { sessionOf } from "../fixtures/builders";
-import type { Session } from "../protocol";
+import type { Session, SessionStatus } from "../protocol";
 import { TestHost } from "../test/TestHost";
 import { testDaemon } from "../test/testDaemon";
 import { useChildCanReport } from "./useSessions";
@@ -29,7 +29,7 @@ function mount(sessions: Session[]) {
 }
 
 const owner = sessionOf("owner", "c", "p", "Owner", "idle");
-const child = (status: Session["status"], extra: Partial<Session> = {}) => sessionOf("child", "c", "p", "Child", status, { bound_to: "owner", ...extra });
+const child = (status: SessionStatus, extra: Partial<Session> = {}) => sessionOf("child", "c", "p", "Child", status, { bound_to: "owner", ...extra });
 
 it("is true while a session bound to the owner is at work, and false while it is at rest", () => {
   expect(mount([owner, child("working")]).seen.current).toBe(true);

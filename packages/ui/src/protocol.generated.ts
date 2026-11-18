@@ -6,6 +6,14 @@
 export const PROTOCOL_GENERATION = 5;
 
 /**
+ * A value of a string enum as the daemon sends it: one of the values of `T`, or one a newer daemon
+ * of the same generation added. A client takes a value it does not know as the enum's stated
+ * fallback, or shows the record and does not act on the value (`apps/daemon/PROTOCOL.md`,
+ * "Versions and compatibility"). `T` is the closed set a client sends and can tell apart.
+ */
+export type Received<T extends string> = T | (string & {});
+
+/**
  * A named config directory of one agent, kept once for the whole application and referred to by
  * id wherever a config directory is referred to — a console's per-agent setting, a session's own
  * copy of it. Every agent also has a *default* account, which is not a row here: it is the state
@@ -93,7 +101,7 @@ export type AccountLogin = {
    * The account's id; `None` for the agent's default account.
    */
   account: string | null,
-  status: LoginStatus,
+  status: Received<LoginStatus>,
   /**
    * The page the user authorizes on, once the CLI has given it. Octoboard opens it itself unless
    * `opened_by_agent`.
@@ -257,13 +265,13 @@ export type AccountTrashOutcome = {
 }
 | {
   "status": "shared",
-  kind: AccountTrashSharing,
+  kind: Received<AccountTrashSharing>,
   name?: string,
   agent?: string,
 }
 | {
   "status": "unlookable",
-  cause?: "unreadable" | "other_unlooked",
+  cause?: Received<"unreadable" | "other_unlooked">,
 }
 | {
   "status": "undecided"
@@ -294,7 +302,7 @@ export type Agent = string;
  */
 export type AgentAvailability = {
   agent: Agent,
-  availability: Availability,
+  availability: Received<Availability>,
   /**
    * The directory this agent's default account currently resolves to: the directory its own
    * variable is exported to in the snapshot, else the agent's own usual default. For Grok Build
@@ -315,7 +323,7 @@ export type AgentCliStatus = {
    * CLI is not installed or its version could not be told.
    */
   installed_version: string | null,
-  install_method: CliInstallMethod,
+  install_method: Received<CliInstallMethod>,
   /**
    * The latest version published for this install method, as the source names it; null when
    * there is no source for it (`install_method` `unknown`) or looking it up failed, in which
@@ -345,7 +353,7 @@ export type AgentCliStatus = {
  * An update of an agent's CLI as the daemon last saw it. Runtime state: never stored.
  */
 export type AgentCliUpdate = {
-  state: CliUpdateState,
+  state: Received<CliUpdateState>,
   /**
    * When the update started, in milliseconds since the epoch.
    */
@@ -480,7 +488,7 @@ export type BrowseEntry = {
    * The entry's name, as a wire path.
    */
   name: string,
-  kind: EntryKind,
+  kind: Received<EntryKind>,
   /**
    * A regular file's size in bytes; `null` for anything else.
    */
@@ -493,7 +501,7 @@ export type BrowseEntry = {
   /**
    * What a symbolic link resolves to; `null` for anything else.
    */
-  target: LinkTarget | null,
+  target: Received<LinkTarget> | null,
   /**
    * Whether Git ignores the entry; sent only when true. See `browse::ignored`.
    */
@@ -712,7 +720,7 @@ export type ChangeEntry = {
 | {
   "group": "conflicted",
   path: string,
-  conflict: ConflictKind,
+  conflict: Received<ConflictKind>,
 }
 | {
   "group": "committed",
@@ -744,7 +752,7 @@ export type ChangeRef = {
 export type ChangeSide = {
   "state": "present",
   path: string,
-  kind: SideKind,
+  kind: Received<SideKind>,
   source: ContentSource,
 }
 | {
@@ -988,7 +996,7 @@ export type Component = {
   "type": "callout",
   text: string,
   title?: string,
-  tone?: CalloutTone,
+  tone?: Received<CalloutTone>,
   visible_when?: VisibleWhen,
 }
 | {
@@ -1001,8 +1009,8 @@ export type Component = {
   label: string,
   value: StatValue,
   change?: string,
-  trend?: StatTrend,
-  sentiment?: StatSentiment,
+  trend?: Received<StatTrend>,
+  sentiment?: Received<StatSentiment>,
   visible_when?: VisibleWhen,
 }
 | {
@@ -1223,7 +1231,7 @@ export type DaemonUpdateAvailable = {
   /**
    * The channel the manifest was read from.
    */
-  channel: DaemonUpdateChannel,
+  channel: Received<DaemonUpdateChannel>,
 };
 
 /**
@@ -1235,7 +1243,7 @@ export type DaemonUpdateChannel = "stable" | "beta";
  * The last check that ended.
  */
 export type DaemonUpdateCheck = {
-  outcome: DaemonUpdateCheckOutcome,
+  outcome: Received<DaemonUpdateCheckOutcome>,
   /**
    * When it ended, in milliseconds since the epoch.
    */
@@ -1260,7 +1268,7 @@ export type DaemonUpdateCheckOutcome = "up_to_date" | "available" | "failed";
  * stored.
  */
 export type DaemonUpdateInstall = {
-  state: DaemonUpdateInstallState,
+  state: Received<DaemonUpdateInstallState>,
   /**
    * When it started, in milliseconds since the epoch.
    */
@@ -1304,7 +1312,7 @@ export type DaemonUpdateInstalled = {
  * An update the daemon found and cannot install itself.
  */
 export type DaemonUpdateManual = {
-  reason: DaemonUpdateManualReason,
+  reason: Received<DaemonUpdateManualReason>,
   /**
    * The executable that would be replaced, as a path on the daemon's host.
    */
@@ -1347,7 +1355,7 @@ export type DaemonUpdateProgress = {
  * application's daemon, a host it has no release for).
  */
 export type DaemonUpdateStatus = {
-  phase: DaemonUpdatePhase,
+  phase: Received<DaemonUpdatePhase>,
   /**
    * The newer release the last check found and none has replaced yet; null otherwise.
    */
@@ -1580,7 +1588,7 @@ export type DocumentDefaultAccount = {
 export type DocumentProject = {
   name: string,
   path: string,
-  source: ProjectSource,
+  source: Received<ProjectSource>,
   remote_url: string | null,
   default_agent: Agent | null,
   pinned: boolean,
@@ -1725,14 +1733,14 @@ export type Event = {
   id: string | null,
   session: string,
   interrupted: boolean,
-  status: SessionStatus,
+  status: Received<SessionStatus>,
   note: string,
 }
 | {
   "type": "session_model_set",
   id: string | null,
   session: string,
-  outcome: ModelChangeOutcome,
+  outcome: Received<ModelChangeOutcome>,
   continued?: boolean,
 }
 | {
@@ -1745,7 +1753,7 @@ export type Event = {
 | {
   "type": "session_records_inspected",
   id: string | null,
-  presence: SessionRecordPresence,
+  presence: Received<SessionRecordPresence>,
 }
 | {
   "type": "session_branches_inspected",
@@ -2002,12 +2010,12 @@ export type Event = {
   /**
    * What an approval does.
    */
-  action: SessionRequestAction,
+  action: Received<SessionRequestAction>,
   /**
    * Whether the session asked for would be a console session or a project session; for
    * `switch` and `handoff`, which the target is.
    */
-  kind: SessionKind,
+  kind: Received<SessionKind>,
   /**
    * The console the new session would be in, or the console of the session to bring back,
    * switch or hand off.
@@ -2076,7 +2084,7 @@ export type Event = {
 | {
   "type": "session_request_closed",
   request_id: string,
-  reason: SessionRequestEnding,
+  reason: Received<SessionRequestEnding>,
 }
 | {
   "type": "session_opened",
@@ -2108,7 +2116,7 @@ export type Event = {
   /**
    * Where `default_model` came from; absent with it.
    */
-  default_model_source?: DefaultModelSource,
+  default_model_source?: Received<DefaultModelSource>,
   unavailable: ModelsUnavailable | null,
 }
 | {
@@ -2119,7 +2127,7 @@ export type Event = {
 | {
   "type": "reset_credit_used",
   id: string | null,
-  outcome: ResetCreditOutcome,
+  outcome: Received<ResetCreditOutcome>,
 }
 | {
   "type": "account_mcp_inventory_read",
@@ -2144,7 +2152,7 @@ export type Event = {
    * The sections of Settings the document's settings carry, in Settings order; empty when
    * it carries no settings.
    */
-  settings_sections: Array<SettingsSection>,
+  settings_sections: Array<Received<SettingsSection>>,
   accounts: InspectedAccounts | null,
   consoles: Array<InspectedConsole>,
   /**
@@ -2305,7 +2313,7 @@ export type Event = {
   id: string | null,
   project: string,
   worktree: string | null,
-  group: ChangeGroup,
+  group: Received<ChangeGroup>,
   head: string | null,
   old: SideRead,
   new: SideRead,
@@ -2354,7 +2362,7 @@ export type Event = {
   id: string | null,
   project: string,
   worktree: string | null,
-  group: ChangeGroup,
+  group: Received<ChangeGroup>,
   old: SideRead,
   new: SideRead,
 }
@@ -2440,7 +2448,7 @@ export type ExportedConsoles = "one" | "all" | "none";
  */
 export type FileContent = {
   size: number,
-  kind: ContentKind,
+  kind: Received<ContentKind>,
   /**
    * The image type the bytes start like (`image/png`, …), a hint only; `null` when none.
    */
@@ -2506,7 +2514,7 @@ export type GitStatus = {
   upstream: string | null,
   ahead: number,
   behind: number,
-  activity: GitActivity,
+  activity: Received<GitActivity>,
   /**
    * The verbatim, untranslatable `git` or operating-system message from the last failed step,
    * cleared only by that same step succeeding again — a failed fetch does not stop the local
@@ -2525,10 +2533,10 @@ export type GitStatus = {
  * A project's own choices; an item left `None` follows the application-wide value.
  */
 export type GitWorkflowOverride = {
-  development: GitDevelopment | null,
+  development: Received<GitDevelopment> | null,
   squash_before_delivery: boolean | null,
   rebase_before_delivery: boolean | null,
-  delivery: GitDelivery | null,
+  delivery: Received<GitDelivery> | null,
   revert_gate: boolean | null,
 };
 
@@ -2548,7 +2556,7 @@ export type GitWorkflowOverrideChanges = {
  * The values the git workflow settings take, application-wide or resolved for a project.
  */
 export type GitWorkflowSettings = {
-  development: GitDevelopment,
+  development: Received<GitDevelopment>,
   /**
    * Whether a branch's commits are squashed into one commit for the feature it delivers, a
    * separate commit kept only for an unrelated bug fix, before delivering finished work by
@@ -2563,7 +2571,7 @@ export type GitWorkflowSettings = {
   /**
    * Moot while `development` is `InPlace`.
    */
-  delivery: GitDelivery,
+  delivery: Received<GitDelivery>,
   /**
    * Whether a branch update that quietly undoes changes already on the target branch is
    * blocked. Independent of `development`.
@@ -2586,7 +2594,7 @@ export type GitWorkflowSettingsChanges = {
  * One message of a session's history, as `read_session_history` returns it.
  */
 export type HistoryMessage = {
-  speaker: HistorySpeaker,
+  speaker: Received<HistorySpeaker>,
   text: string,
   /**
    * The turn it belongs to, counted from 1: a message that opens a turn and the reply to it
@@ -2613,7 +2621,7 @@ export type HolderLink = "pending";
 export type Host = {
   id: string,
   name: string,
-  kind: HostKind,
+  kind: Received<HostKind>,
   ssh_config: string | null,
 };
 
@@ -2622,12 +2630,12 @@ export type Host = {
  * platform, since the two may be different machines.
  */
 export type HostInfo = {
-  os: HostOsName,
+  os: Received<HostOsName>,
   /**
    * How the host writes an absolute path. Paths travel in the host's own spelling; a client
    * uses this only to split and shorten them for display.
    */
-  path_style: HostPathStyle,
+  path_style: Received<HostPathStyle>,
   /**
    * Whether the host can make the file links configuration sharing needs. When false,
    * `set_account_sharing` is refused with `sharing_unavailable_on_host`.
@@ -2636,11 +2644,11 @@ export type HostInfo = {
   /**
    * How the host names its Trash, for wording what a removal does there.
    */
-  trash: HostTrashName,
+  trash: Received<HostTrashName>,
   /**
    * The host's system settings app, for wording a setting to change there.
    */
-  settings: HostSettingsName,
+  settings: Received<HostSettingsName>,
   /**
    * Whether the host can be held awake (Prevent sleep, `Settings.keep_awake`): always on macOS
    * and Windows, and on Linux only where logind answers on the system bus. When false, the
@@ -2715,7 +2723,7 @@ export type ImportStatus = "created" | "left_out" | "failed" | "not_attempted";
 
 export type ImportedAccount = {
   name: string,
-  status: AccountOutcome,
+  status: Received<AccountOutcome>,
   /**
    * The id of the account created, or of the one that existed.
    */
@@ -2763,7 +2771,7 @@ export type ImportedConsole = {
   /**
    * `created` or `failed`.
    */
-  status: "created" | "failed",
+  status: Received<"created" | "failed">,
   error: ImportFailure | null,
   /**
    * Empty unless the console was created.
@@ -2777,11 +2785,11 @@ export type ImportedConsole = {
 
 export type ImportedProject = {
   name: string,
-  status: ImportStatus,
+  status: Received<ImportStatus>,
   /**
    * How its directory was obtained, for a created project.
    */
-  via: DirectoryChoiceKind | null,
+  via: Received<DirectoryChoiceKind> | null,
   /**
    * The id of the project created.
    */
@@ -2810,7 +2818,7 @@ export type InspectedAccount = {
    * cannot be resolved.
    */
   proposed_directory: string | null,
-  status: AccountStatus,
+  status: Received<AccountStatus>,
   /**
    * The name of the account that uses the proposed directory, for `directory_in_use`.
    */
@@ -2903,7 +2911,7 @@ export type InspectedProject = {
   foreign_path: boolean,
   remote_url: string | null,
   offers: DirectoryOffers,
-  default: "exported_path" | "default_clone_dir" | "clone" | null,
+  default: Received<"exported_path" | "default_clone_dir" | "clone"> | null,
   /**
    * What the clone-dependent choices (`default_clone_dir`, `clone`) come to under the document's
    * own default clone directory, which an import takes when it applies the settings and is not
@@ -2953,8 +2961,8 @@ export type InspectedSettings = {
    * The document's choice of when it holds, or this machine's own when the document carries
    * none or names one this build does not know.
    */
-  keep_awake_when: KeepAwakeWhen,
-  current_keep_awake_when: KeepAwakeWhen,
+  keep_awake_when: Received<KeepAwakeWhen>,
+  current_keep_awake_when: Received<KeepAwakeWhen>,
   git_workflow: GitWorkflowSettings,
   current_git_workflow: GitWorkflowSettings,
   /**
@@ -3047,8 +3055,8 @@ export type LocalMcpServer = {
    * The plugin that brings the server; null for one the user configured.
    */
   plugin: string | null,
-  sign_in: McpSignInState,
-  runtime: McpRuntimeState,
+  sign_in: Received<McpSignInState>,
+  runtime: Received<McpRuntimeState>,
   /**
    * Why the server failed, when `runtime` is `failed` and the agent says.
    */
@@ -3088,7 +3096,7 @@ export type McpInventoryFailure = "not_signed_in" | "cli_missing" | "timed_out" 
  * client words itself; `detail` is what the agent or the daemon said, for the cases it helps.
  */
 export type McpInventoryUnavailable = {
-  reason: McpInventoryFailure,
+  reason: Received<McpInventoryFailure>,
   detail: string | null,
 };
 
@@ -3098,7 +3106,7 @@ export type McpRuntimeState = "running" | "failed" | "unknown";
  * How a sign-in to or sign-out of an MCP server ended (`account_mcp_server_auth_ended`).
  */
 export type McpServerAuthOutcome = {
-  status: McpServerAuthStatus,
+  status: Received<McpServerAuthStatus>,
   /**
    * What the agent's CLI said, for `failed`; null otherwise.
    */
@@ -3156,7 +3164,7 @@ export type ModelsUnavailable = {
  */
 export type OffersUnderCloneDir = {
   offers: DirectoryOffers,
-  default: "exported_path" | "default_clone_dir" | "clone" | null,
+  default: Received<"exported_path" | "default_clone_dir" | "clone"> | null,
 };
 
 export type Origin = "console" | "user";
@@ -3201,7 +3209,7 @@ export type PathLink = {
    * The path as asked.
    */
   path: string,
-  kind: PathLinkKind,
+  kind: Received<PathLinkKind>,
   /**
    * Where the client reads the file with `read_project_file`, for a file inside the project or
    * one of its worktrees, or for a directory there, its README or index file when it has one;
@@ -3252,7 +3260,7 @@ export type PlatformConnector = {
    */
   id: string,
   name: string,
-  state: ConnectorState,
+  state: Received<ConnectorState>,
   /**
    * The plugins that bring the connector (Codex); empty for Claude Code.
    */
@@ -3329,7 +3337,7 @@ export type ProcessTree = {
    * A `keep_processes` naming the tree can keep it; when not, `unkeepable_reason` says why.
    */
   keepable: boolean,
-  unkeepable_reason?: UnkeepableReason,
+  unkeepable_reason?: Received<UnkeepableReason>,
 };
 
 export type Project = {
@@ -3339,7 +3347,7 @@ export type Project = {
   name: string,
   path: string,
   default_agent: Agent | null,
-  source: ProjectSource,
+  source: Received<ProjectSource>,
   remote_url: string | null,
   /**
    * The account each agent's sessions opened in this project read; one setting per agent, and
@@ -3548,7 +3556,7 @@ export type QuotaUnavailable = {
  * One window of an account's plan quota.
  */
 export type QuotaWindow = {
-  kind: QuotaWindowKind,
+  kind: Received<QuotaWindowKind>,
   /**
    * The model's display name for `weekly_model`; absent for the other kinds.
    */
@@ -3581,11 +3589,11 @@ export type QuotaWindowNaming = {
   /**
    * The kinds of window the provider reports at all.
    */
-  kinds: Array<QuotaWindowKind>,
+  kinds: Array<Received<QuotaWindowKind>>,
   /**
    * What it calls the five-hour window.
    */
-  session_window: SessionWindowName,
+  session_window: Received<SessionWindowName>,
   /**
    * Whether an account-wide weekly window beside a model's own is named "Weekly · all models".
    */
@@ -3639,7 +3647,7 @@ export type RemoteAccess = {
   /**
    * What the daemon does with it right now.
    */
-  state: RemoteAccessState,
+  state: Received<RemoteAccessState>,
   /**
    * On Windows, whose SSH server cannot forward to a socket, the loopback port the daemon serves
    * the browser at while remote access is on, in place of the owner socket, as the user set it
@@ -3689,7 +3697,7 @@ export type RemoteAccess = {
  * served though remote access is on.
  */
 export type RemoteAccessFailure = {
-  reason: RemoteAccessFailureReason,
+  reason: Received<RemoteAccessFailureReason>,
   /**
    * The system's own words for it, in English, with the path concerned: for the user to act on
    * or to report, shown beside the client's own sentence for `reason`.
@@ -5568,7 +5576,7 @@ export type Session = {
   console_id: string,
   project_id: string | null,
   host_id: string,
-  kind: SessionKind,
+  kind: Received<SessionKind>,
   /**
    * Whether the session may own sessions (`Coordinator`) or reports to one and may not
    * (`Worker`), independent of the parent in `bound_to`: a project coordinator under a console
@@ -5579,8 +5587,8 @@ export type Session = {
    * transfer to another console session preserves that; a transfer to a project session makes
    * it a worker, and a release makes it a coordinator again.
    */
-  role: Role,
-  origin: Origin,
+  role: Received<Role>,
+  origin: Received<Origin>,
   title: string,
   /**
    * Last title emitted by the terminal, retained when its process ends. The store keeps it as
@@ -5609,7 +5617,7 @@ export type Session = {
    * receives (`AppState::wire_session`), and absent otherwise.
    */
   default_effort?: string,
-  status: SessionStatus,
+  status: Received<SessionStatus>,
   /**
    * The work the agent has left running in the background while the session is `Idle`: the
    * session is then waiting for instructions and, at the same time, not finished. Never stored:
@@ -5674,7 +5682,7 @@ export type Session = {
    * resumed, and what is asked of its process fails. Never stored: it is filled in on the
    * record a client receives (`AppState::wire_session`).
    */
-  holder_link?: HolderLink,
+  holder_link?: Received<HolderLink>,
   /**
    * Whether this session has a conversation on the agent's side: a turn taken, or one resumed
    * at open. Until it has, the agent has stored no conversation to resume: `claude --resume`
@@ -5696,7 +5704,7 @@ export type Session = {
    * `set_session_colour` (see `ConsoleSessionColour`). `None` for a project session, which
    * carries no colour of its own.
    */
-  colour: ConsoleSessionColour | null,
+  colour: Received<ConsoleSessionColour> | null,
   /**
    * A console session's place in its console's history, one past the highest ordinal ever
    * used there. Never reused after archiving or deletion. `None` for a project session.
@@ -5760,7 +5768,7 @@ export type SessionBranchCause = "project_folder_unknown" | "protected_folder";
  * worktrees bound to no session (`inspect_project_removal`).
  */
 export type SessionBranchItem = {
-  kind: SessionBranchKind,
+  kind: Received<SessionBranchKind>,
   /**
    * The repository's canonical common directory, as a wire path.
    */
@@ -5793,7 +5801,7 @@ export type SessionBranchItem = {
    * no session is bound to it.
    */
   session: string | null,
-  state: SessionBranchState,
+  state: Received<SessionBranchState>,
   /**
    * Git's own message, for `failed`.
    */
@@ -5802,7 +5810,7 @@ export type SessionBranchItem = {
    * Why a `failed` item is left, where a client words that itself; `detail` then says it in
    * English.
    */
-  cause?: SessionBranchCause,
+  cause?: Received<SessionBranchCause>,
 };
 
 export type SessionBranchKind = "worktree" | "branch";
@@ -5918,7 +5926,7 @@ export type SettingKind = {
 }
 | {
   "type": "switch",
-  default: SwitchDefault,
+  default: Received<SwitchDefault>,
 };
 
 /**
@@ -5994,7 +6002,7 @@ export type Settings = {
   /**
    * When Prevent sleep holds. `working` unless the user chose `always`.
    */
-  keep_awake_when: KeepAwakeWhen,
+  keep_awake_when: Received<KeepAwakeWhen>,
   /**
    * Whether a new session whose account was left out runs on the account of its agent whose
    * weekly quota resets soonest and still has some left. Off unless the user turned it on.
@@ -6033,7 +6041,7 @@ export type Settings = {
   /**
    * The release line the daemon's update check follows. `stable` unless the user chose `beta`.
    */
-  daemon_update_channel: DaemonUpdateChannel,
+  daemon_update_channel: Received<DaemonUpdateChannel>,
   /**
    * The directory a `git` association clones into when none is named: the one the user set, or
    * `~/Projects` (expanded) while none is. Always an absolute, lexically normalised path.
@@ -6122,7 +6130,7 @@ export type SharingFailure = {
    * Why, as a whole: the cause the entries share (`other` when they differ), or why the
    * change could not start when there are none.
    */
-  cause: SharingCause,
+  cause: Received<SharingCause>,
   /**
    * Each entry not brought in line, as the error's `items`.
    */
@@ -6138,8 +6146,8 @@ export type SharingItemFailure = {
    * An entry of the account's directory, or for a conversation the agent's own id of it.
    */
   item: string,
-  left: SharingLeft,
-  cause: SharingCause,
+  left: Received<SharingLeft>,
+  cause: Received<SharingCause>,
   detail: string,
   /**
    * The Octoboard sessions a conversation belongs to, for a failure about one.
@@ -6168,7 +6176,7 @@ export type SharingProgress = {
    * The direction: turning sharing on, or off.
    */
   share: boolean,
-  phase: SharingPhase,
+  phase: Received<SharingPhase>,
   /**
    * The entries processed so far, out of `total`: none before `changing`, all of them once
    * `resuming`.
@@ -6210,7 +6218,7 @@ export type ShellTerminal = {
    * The user renamed it, so the shell's own titles no longer change `title`.
    */
   renamed: boolean,
-  state: ShellTerminalState,
+  state: Received<ShellTerminalState>,
   /**
    * The shell is running something: the terminal's foreground process group is not the
    * shell's own, or the shell has a child process (a job sent to the background included).
@@ -6233,7 +6241,7 @@ export type ShellTerminal = {
    * Whether the holder that runs the shell can be reached: `pending` while it runs but cannot
    * be linked to, the shell going on unreachable, and absent while it can.
    */
-  holder_link?: HolderLink,
+  holder_link?: Received<HolderLink>,
 };
 
 /**
@@ -6252,7 +6260,7 @@ export type SideKind = "file" | "symlink" | "submodule";
 export type SideRead = {
   "state": "present",
   path: string,
-  kind: SideKind,
+  kind: Received<SideKind>,
   source: ContentSource,
   file: FileContent | null,
   lines: number | null,
@@ -6330,7 +6338,7 @@ export type TabPane = {
  */
 export type TableColumn = {
   label: string,
-  align?: ColumnAlign,
+  align?: Received<ColumnAlign>,
 };
 
 /**
@@ -6398,7 +6406,7 @@ export type UnstoppedProcess = {
    * The process's name; empty when it cannot be read.
    */
   name: string,
-  reason: UnstoppedReason,
+  reason: Received<UnstoppedReason>,
 };
 
 /**

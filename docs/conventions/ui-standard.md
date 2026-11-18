@@ -1551,6 +1551,24 @@ look like the dialog's sections. Switching tabs shows the chosen panel at once, 
 indicator slides): a panel of setting rows is `SettingsTabPanel`, whose rows the section's list motion leaves alone,
 so a swap does not read as rows removed and added. (Source: user decision.)
 
+### A value a newer daemon sends
+
+A daemon newer than this client, in the same protocol generation, may send an enum value this client does not know. It
+is never shown as its raw wire identifier, and it is never explained with another state's copy ("Session running",
+"could not be accessed"):
+
+- **A session status** shows as "Status unknown", with a dashed empty circle in the muted ink: a shape of its own, not
+  the help tip's "?". It sorts just before Interrupted, and its menu keeps only the actions that do not depend on the
+  status.
+- **An entry of a list** (a quota window, a Git change group, an import progress item) is left out; a label or status
+  within an entry that is still shown (a history speaker, an import outcome) is left blank, and the entry keeps its
+  other content.
+- **A settings control holding one** keeps its row and shows an empty value, without the description that belongs to a
+  value (a fixed description of the row stays), so the user can choose a known value; only a known value is written. A
+  review line comparing it shows the known side alone, and a line whose own value is unknown is left out.
+- **A reason or kind that picks a sentence** gets the generic sentence where one exists, or none, leaving the daemon's
+  own detail.
+
 ### Loading text with a trailing indicator
 
 When a loading status has a spinner, waiting arc or rotating refresh icon immediately after its text, the text takes no trailing

@@ -193,6 +193,16 @@ it("says why no browser is served, beside the daemon's own words", async () => {
   expect(document.body.textContent).toContain("/Users/me/.octoboard is not private");
 });
 
+it("shows only the daemon's own words for a failure reason this build does not know", async () => {
+  const { container } = await mount(
+    remoteAccessOf({ allowed: true, state: "failed", failure: { reason: "from_a_newer_daemon", detail: "the socket could not be served for a new reason" } }),
+  );
+  expect(container.textContent).toContain("Remote access is on, but this computer cannot be reached");
+  for (const known of ["is not private to your account", "could not open the named pipe"]) expect(container.textContent).not.toContain(known);
+  await act(async () => buttonNamed(container, "Details")!.click());
+  expect(document.body.textContent).toContain("the socket could not be served for a new reason");
+});
+
 it("shows Remote Login on, or off with the way to System Settings", async () => {
   loginStatus.mockResolvedValue(true);
   const on = await mount(SERVING);

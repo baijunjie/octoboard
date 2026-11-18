@@ -100,7 +100,8 @@ const markerState = switchingAccount(
 
 // One session per status the sidebar draws, each titled by its status and started in the order they sort in.
 // Switching account and Starting sort where they will land: the first has had a conversation, so with Done;
-// the second launches with a prompt, so with Working (older than it, to follow it).
+// the second launches with a prompt, so with Working (older than it, to follow it). The unknown one carries a status
+// this client has no name for, as a newer daemon would send, and ranks between Working and Interrupted.
 const glyphConsole = consoleOf("c-glyphs", "Main");
 const glyphProject = projectOf("p-glyphs", glyphConsole.id, "Status glyphs");
 const glyphSessions = [
@@ -115,6 +116,7 @@ const glyphSessions = [
   sessionOf("s-glyph-background", glyphConsole.id, glyphProject.id, "Working in background", "idle", { started_at: minutesAgo(60), background_tasks: watching.background_tasks }),
   sessionOf("s-glyph-working", glyphConsole.id, glyphProject.id, "Working", "working", { started_at: minutesAgo(70) }),
   sessionOf("s-glyph-starting", glyphConsole.id, glyphProject.id, "Starting", "starting", { started_at: minutesAgo(80), prompt_on_launch: true }),
+  sessionOf("s-glyph-unknown", glyphConsole.id, glyphProject.id, "Status unknown", "paused_for_review", { started_at: minutesAgo(85) }),
   sessionOf("s-glyph-interrupted", glyphConsole.id, glyphProject.id, "Interrupted", "interrupted", { started_at: minutesAgo(90) }),
 ];
 const glyphState = switchingAccount(
@@ -136,7 +138,7 @@ export const activityScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Every session status glyph, side by side",
-    description: "One session per status, titled by its status and in the order the sidebar ranks them: Waiting for you (orange waving hand), Dormant (orange zz, Zs rising from the bottom left to the top right and shrinking to a speck as they go, a still large and small Z with reduced motion on, between the hand and the green glyphs), Paused (green circled pause sign, ranked above Done), Done (green circled check mark), Awaiting instructions (green speech bubble), Child sessions working (pinging green ring with a dot in its centre; its only child, nested below, is idle with a watcher still running and shows Working in background, which is enough to read as delegated rather than Done), Working in background (pinging hollow green ring), Working (solid blue dot) and Interrupted (grey pause). Switching account and Starting, both a grey turning arc, sort with the status they will reach: Switching account, which has had a conversation, follows Done; Starting, launching with a prompt, follows Working. Hover a glyph for its label.",
+    description: "One session per status, titled by its status and in the order the sidebar ranks them: Waiting for you (orange waving hand), Dormant (orange zz, Zs rising from the bottom left to the top right and shrinking to a speck as they go, a still large and small Z with reduced motion on, between the hand and the green glyphs), Paused (green circled pause sign, ranked above Done), Done (green circled check mark), Awaiting instructions (green speech bubble), Child sessions working (pinging green ring with a dot in its centre; its only child, nested below, is idle with a watcher still running and shows Working in background, which is enough to read as delegated rather than Done), Working in background (pinging hollow green ring), Working (solid blue dot), Status unknown (muted dashed empty circle, a status a newer daemon sent that this client does not know; it is not counted as working) and Interrupted (grey pause). Switching account and Starting, both a grey turning arc, sort with the status they will reach: Switching account, which has had a conversation, follows Done; Starting, launching with a prompt, follows Working. Hover a glyph for its label.",
     state: glyphState,
   },
   {

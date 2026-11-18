@@ -2,6 +2,7 @@ import { noAgentState, type NoAgentReason } from "../agents/agents";
 import type { NewSessionBinding } from "../dialogs/dialogRequest";
 import type { Agent, AgentAvailability, Console, Project, ProviderInfo, Session } from "../protocol";
 import { consoleSessionAbove } from "../sessions/order";
+import { listedAmongConsoleSessions } from "../sessions/sessionKind";
 import type { FocusTarget } from "../sidebar/types";
 
 export type TerminalEmptyState =
@@ -35,7 +36,7 @@ export function terminalEmptyState(
     if (inConsole.some((s) => s.project_id === focus.project.id && s.status !== "archived" && !consoleSessionAbove(s, (id) => byId.get(id)))) return undefined;
     return noAgents ?? { kind: "new-session", project: focus.project, binding: { kind: "unbound" } };
   }
-  if (!inConsole.some((s) => s.kind === "console" && s.status !== "archived")) {
+  if (!inConsole.some((s) => listedAmongConsoleSessions(s) && s.status !== "archived")) {
     return noAgents ?? { kind: "new-console-session" };
   }
   if (listedProjects.length === 0) return { kind: "add-project" };

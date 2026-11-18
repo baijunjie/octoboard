@@ -4,14 +4,13 @@ import { expect, it, onTestFinished, vi } from "vitest";
 
 import { framesAsTimers, settleFrames } from "../components/dialog/dialogTestSupport";
 import { mountForTooltip } from "../components/hint/tooltipTestSupport";
-import { type ConsoleSessionColour } from "../protocol";
 import { CONSOLE_SESSION_COLOURS } from "../sessions/sessionColours";
 import { ThemeProvider } from "../preferences/theme";
 import { SessionColourSwatches } from "./SessionColourSwatches";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-function mount(colour: ConsoleSessionColour | null = "teal") {
+function mount(colour: string | null = "teal") {
   vi.stubGlobal("matchMedia", (media: string) => ({ media, matches: false, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }));
   onTestFinished(() => void vi.unstubAllGlobals());
   const onChoose = vi.fn();
@@ -37,6 +36,12 @@ it("lists the palette, names every swatch from its colour alone and focuses the 
   const current = options[CONSOLE_SESSION_COLOURS.indexOf("teal")];
   expect(options.filter((option) => option.getAttribute("aria-selected") === "true")).toEqual([current]);
   expect(document.activeElement).toBe(current);
+});
+
+it("selects no swatch for a colour outside the palette, such as one a newer daemon assigned", () => {
+  const { options } = mount("from_a_newer_daemon");
+  expect(options).toHaveLength(CONSOLE_SESSION_COLOURS.length);
+  expect(options.filter((option) => option.getAttribute("aria-selected") === "true")).toEqual([]);
 });
 
 it("applies a swatch at once, whether clicked or chosen with Enter on the focused one", () => {

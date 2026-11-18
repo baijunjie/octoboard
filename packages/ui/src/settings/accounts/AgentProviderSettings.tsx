@@ -123,14 +123,18 @@ function SwitchSetting({ agent, descriptor }: { agent: Agent; descriptor: Settin
 
 /** An agent's provider settings, one row for each the daemon serves for it (`ProviderInfo.settings`), in the agent's
  * settings dialog: each applies to every account of the agent (see `docs/product/per-agent-settings.md`).
- * A setting the provider's presentation module has no words for is not shown. */
+ * A setting the provider's presentation module has no words for is not shown, nor is one of a kind this build does not
+ * know. */
 export function AgentProviderSettings({ agent }: { agent: Agent }): React.ReactElement {
   const provider = servedProvider(useProviders(), agent);
   return (
     <>
-      {provider?.settings.map((descriptor) => descriptor.kind.type === "choice"
-        ? <ChoiceSetting key={descriptor.id} agent={agent} descriptor={descriptor} choices={descriptor.kind.choices} />
-        : <SwitchSetting key={descriptor.id} agent={agent} descriptor={descriptor} />)}
+      {provider?.settings.map((descriptor) => {
+        const { kind } = descriptor;
+        if (kind.type === "choice") return <ChoiceSetting key={descriptor.id} agent={agent} descriptor={descriptor} choices={kind.choices} />;
+        if (kind.type === "switch") return <SwitchSetting key={descriptor.id} agent={agent} descriptor={descriptor} />;
+        return null;
+      })}
     </>
   );
 }

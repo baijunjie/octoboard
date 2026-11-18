@@ -9,7 +9,7 @@ import { Dialog } from "../../components/dialog/Dialog";
 import { Message, useT } from "../../i18n/react";
 import type { Agent } from "../../protocol";
 import { AccountQuotaSummary, LoginStateBadge, NoUsageReading, QuotaFailureMark, QuotaPlan, QuotaUpdated } from "../../quota/AccountQuotaSummary";
-import { loginStateOf } from "../../accounts/quotaFormat";
+import { knownQuotaWindows, loginStateOf } from "../../accounts/quotaFormat";
 import { ResetCreditsLine, UseResetCreditDialog, useResetFocusReturn } from "../../quota/ResetCredits";
 import { useAccountQuota } from "../../quota/useAccountQuota";
 import { useDaemonStore } from "../../store";
@@ -69,7 +69,7 @@ export function AccountDetailsDialog({ agent, account, onClose }: {
   if (gone) return null;
   const path = stored ? stored.config_dir : defaultDir;
   const known = loginStateOf(quota) !== undefined;
-  const showsUsage = quota === "loading" || (typeof quota === "object" && (quota.windows.length > 0 || loginStateOf(quota) === "out"));
+  const showsUsage = quota === "loading" || (typeof quota === "object" && (knownQuotaWindows(quota.windows).length > 0 || loginStateOf(quota) === "out"));
   return (
     <>
       <Dialog

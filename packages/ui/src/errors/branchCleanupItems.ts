@@ -7,18 +7,18 @@ import { type MessageParams } from "./codedError";
 import { CODE } from "./codes";
 
 /** Whether `item` is a worktree kept because whether it is or holds another project's folder could not be told. */
-export function isProjectFolderUnknown(item: { state: SessionBranchState; cause?: SessionBranchCause | null }): boolean {
+export function isProjectFolderUnknown(item: { state: string; cause?: string | null }): boolean {
   return item.state === "failed" && item.cause === "project_folder_unknown";
 }
 
 /** Whether `item` is a worktree kept because it is the home folder, the root of a disk or a folder holding Octoboard's
  * data. */
-export function isProtectedFolder(item: { state: SessionBranchState; cause?: SessionBranchCause | null }): boolean {
+export function isProtectedFolder(item: { state: string; cause?: string | null }): boolean {
   return item.state === "failed" && item.cause === "protected_folder";
 }
 
 /** Whether `item` is a worktree kept for what its folder is or may be, which the UI words itself. */
-export function isKeptForItsFolder(item: { state: SessionBranchState; cause?: SessionBranchCause | null }): boolean {
+export function isKeptForItsFolder(item: { state: string; cause?: string | null }): boolean {
   return isProjectFolderUnknown(item) || isProtectedFolder(item);
 }
 
