@@ -165,11 +165,12 @@ beyond the server's SSH: whoever can log in over SSH as the daemon's user can us
    machines may not know. When your devices reach the server at another name or port, say so:
    `octoboardd connection --host server.example.com --ssh-port 2222`. `--text` prints the line alone. The QR code holds
    the same line, for a mobile app to come; nothing scans it yet.
-2. In the app, choose **New Remote Window** (macOS: the **Remote** menu or the Dock menu; Windows: the window's system
-   menu, opened from its title bar icon or with Alt+Space, or the taskbar icon's jump list). In the window that opens,
-   press **Add remote daemon** and paste the line into **Connection details**: it fills the host, port, user, name and
-   the path of `octoboardd`, and pins the host key, so a server that shows another key is refused. Choose a password
-   or one of your SSH key files, save, and connect; the same window then shows that daemon. Without the
+2. In the app, open the **Remote devices** page: the Remote devices button in the main window's rail, or **Remote
+   Devices** (macOS: the **Remote** menu or the Dock menu; Windows: the window's system menu, opened from its title bar
+   icon or with Alt+Space, or the taskbar icon's jump list). Press **Add remote daemon** and paste the line into
+   **Connection details** (its Paste button reads the clipboard): it fills the host, port, user, name and the path of
+   `octoboardd`, and pins the host key, so a server that shows another key is refused. Choose a password or one of your
+   SSH key files, save, and connect; that daemon then opens in a window of its own. Without the
    details, type the host, port and user in; the app then shows the server's host key at the first connection and pins
    it once you confirm it, which you can check against `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the
    server. After the first sign-in the app installs an SSH key of its own for this device and uses it from then on; no
