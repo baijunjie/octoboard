@@ -301,11 +301,15 @@ the field's `--field-border` and `--field-focus`, computed from the root's `--de
 dark it takes the floating fills like every floating surface: the secondary search field draws every state from the
 `--default` family there, `--field-border` is transparent and `--field-focus` shows only on an invalid field.
 
-A dialog's Advanced section opens from a small ghost button (`AdvancedSection` in
-`packages/ui/src/components/form/AdvancedSection.tsx`) whose label is in `--app-muted` at rest and the foreground on
-hover and keyboard focus, instead of the ghost variant's `--default-foreground`, by the user's decision: its box lines
-up with the fields above, so its label sits in from theirs, and in their colour it would read as a field label out of
-line.
+A disclosure that folds away something rarely needed opens from a small ghost button whose label is in `--app-muted`
+at rest and the foreground on hover and keyboard focus, instead of the ghost variant's `--default-foreground`, by the
+user's decision: at rest it reads as an action rather than a label or a heading. It is drawn by
+`QuietDisclosureTrigger`, with `FlushDisclosureContent` for what it folds
+(`packages/ui/src/components/disclosure/QuietDisclosure.tsx`), and used by a dialog's Advanced section
+(`AdvancedSection` in `packages/ui/src/components/form/AdvancedSection.tsx`) and by the welcome screen's tools not
+detected (`WelcomeScreen`). In the Advanced section its box lines up with the fields above, so its label sits in from
+theirs, and in their colour it would read as a field label out of line. Another such disclosure uses the same pair
+rather than copying its classes.
 
 The file viewer's find bar (`FindBar` in `packages/ui/src/viewer/find/FindBar.tsx`) draws two things of its own, both the
 user's decision. Its option switches — match case, whole word, regular expression — keep one icon each, so their
@@ -3113,7 +3117,9 @@ additions and removals retain the horizontal presence effect. Pass the tree's pa
 motion so it can tell the two apart. The sidebar's project session body uses the same vertical fold effect as one
 block, with its motion container kept mounted so closing it can animate an inert visual copy; session changes inside
 an open body retain their ordinary collection movement. Static
-choices, a replacement page or directory listing, and fixed result snapshots do not require collection motion. A live
+choices, a replacement page or directory listing, and fixed result snapshots do not require collection motion. A list
+whose rows leave or join it when a result arrives in the background, even once (the welcome screen's tools leaving for
+their fold when detection lands), is not such a snapshot and uses collection motion (source: user decision). A live
 filter is not such a snapshot: the Settings search moves its section tabs and its rows as the query changes (source:
 user decision). Its rows stay mounted and are hidden with `hidden`, so a half-typed value survives being filtered out;
 `useListMotion` treats an item hidden that way (its own `hidden` or a wrapper's inside the list) as leaving and coming
