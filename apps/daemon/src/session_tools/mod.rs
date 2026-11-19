@@ -8,6 +8,7 @@
 
 pub mod catalogue;
 pub mod console_instructions;
+mod memory_index;
 pub mod page_guide;
 pub mod role;
 

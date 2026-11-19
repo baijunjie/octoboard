@@ -945,6 +945,7 @@ async fn removing_a_project_stops_its_processes() {
         &state,
         None,
         RequestBody::DeleteProject {
+            delete_memory: false,
             project: "project-1".to_string(),
             stop_sessions: true,
             trash_directory: false,

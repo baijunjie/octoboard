@@ -69,6 +69,7 @@ pub struct SettingsChanges {
     pub auto_approve_handoffs: Option<bool>,
     pub ask_questions_as_choices: Option<bool>,
     pub keep_sessions_in_own_project: Option<bool>,
+    pub memory_enabled: Option<bool>,
     /// Refused unless it is a tag the interface offers.
     pub interface_language: Option<String>,
     pub keep_awake: Option<bool>,
@@ -107,6 +108,7 @@ impl SettingsChanges {
             self.auto_approve_handoffs.is_some(),
             self.ask_questions_as_choices.is_some(),
             self.keep_sessions_in_own_project.is_some(),
+            self.memory_enabled.is_some(),
             self.interface_language.is_some(),
             self.keep_awake.is_some(),
             self.keep_awake_when.is_some(),
@@ -190,6 +192,7 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
         auto_approve_handoffs,
         ask_questions_as_choices,
         keep_sessions_in_own_project,
+        memory_enabled,
         interface_language,
         keep_awake,
         keep_awake_when,
@@ -264,6 +267,9 @@ pub(crate) fn update_settings(state: &Arc<AppState>, changes: SettingsChanges) -
     }
     if let Some(value) = keep_sessions_in_own_project {
         changed |= state.store.set_keep_sessions_in_own_project(value)?;
+    }
+    if let Some(value) = memory_enabled {
+        changed |= state.store.set_memory_enabled(value)?;
     }
     if let Some(tag) = interface_language {
         changed |= state.store.set_interface_language(&tag)?;

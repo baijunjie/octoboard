@@ -225,7 +225,9 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   validator that reads those schemas and names the failing path (and kind), `rules.rs` the cross-checks a schema cannot
   state (names, defaults and ranges, `visible_when`, a form's submitters, the `pattern` of a text field compiled with
   `regress`), `chart.rs` the chart kind's allow-listed ECharts subset, and `submission.rs` what a submission may carry;
-  `PageContent::parse` and `PageContent::check_submission` in `mod.rs` are the entry points.
+  `PageContent::parse` and `PageContent::check_submission` in `mod.rs` are the entry points. `memory.rs` is the wire
+  types of Octoboard's memory (`MemoryScope`, `MemoryEntry`, `MemoryDraft`, `MemoryIndexEntry`, `OrphanedMemory`) and its
+  size limits.
 - `src/cli/` — the command line and the modes above; `hook.rs` is the `hook` mode, `background.rs` the user's `start`,
   `stop`, `restart` and `status`, the start of a planned restart's successor and the loopback request the commands send
   (`request_over_loopback`), `address.rs` the user's `address` and `address --rotate` and the notes `address` says on
@@ -258,7 +260,10 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   conversation in its agent's desktop application, `open_session_in_app`, which archives a session that is not archived
   first, and the `probe_native_apps` answer: which
   agents' applications are installed and which sessions' conversations they can see), `account_switch`, `model_change`,
-  `account_sharing`, `accounts`, `settings`, `pages` (a session's page list and a form's submission), `processes`
+  `account_sharing`, `accounts`, `settings`, `pages` (a session's page list and a form's submission), `memory` (Octoboard's
+  memory, the one place its entry rules and operations live for every caller: the sessions' memory tools, the clients'
+  requests of the same names (its `requests` submodule), a project's removal and the configuration import; a write goes
+  through the `*_and_announce` functions, which tell every client), `processes`
   (listing, stopping and keeping the process trees a client sees), `messages` (the user's own `send_message`, with its images, and `send_command`), `interactions` (`answer_interaction`: the user's answer to a session's published prompt, pressed by `session/interaction/press.rs`), `auto_switch` (moving a session off an
   account whose usage limit stopped a turn; lower layers reach it through `AppState`'s hooks), `validate` for the checks
   of request text fields; the requests that edit settings, a console, a project or an account carry `base_versions` and
@@ -269,7 +274,7 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   `unsubscribe_session_conversation` in order and forwards the feed's events to it, and in `conversation_feed/follow.rs`
   the task per followed session that polls the conversation's files, finds them again when they move and rebuilds or
   replaces the feed; `mod.rs`'s dispatcher refuses these three, which the connection serves), `console_workdir.rs` (a console's working directory: the canonical
-  `octoboard-instructions.md` content exposed under each provider's declared instruction filename by a link, import or
+  `octoboard-instructions.md` content, with the console's memory index while the memory setting is on, exposed under each provider's declared instruction filename by a link, import or
   copy, and its removal), `exit_watch.rs` (the exit watcher every launch starts, and `unregister_live`), `adopt.rs` (at
   start, matches the terminals the holders kept running with the store: a session's is adopted into a rebuilt
   `LiveSession` and watched like a launch of the daemon's own, with its messages going through the private server its
@@ -326,14 +331,15 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   a push, `report.rs` words a rejection, `content.rs` the content criteria, `git.rs` the gate's own `git`.
 - `src/config_document/` — export and import of the configuration document that carries state between devices, selectable by Settings section (`protocol::SettingsSection`) and, for accounts, by agent (`import/accounts.rs`)
   (`upgrade.rs` brings a document of an older version up to the current one before it is read, so an inspection and an import see the same document; `import/projects.rs` places an imported project, `import/progress.rs` broadcasts the `configuration_import_progress` events of a running import); provider settings travel as the explicit choices of the settings
-  their descriptor marks `exported`.
+  their descriptor marks `exported`; a console's memory entries travel in the document too (the entries that are not
+  local), each stored again as a new entry at import.
 
 ### Storage and state
 
 - `src/store/` — the coordinator's SQLite `Store`: `schema.rs` (the current schema, the `MIGRATIONS` that bring an older
   database up to it and the checks on a file before it is opened, `Store::SCHEMA_VERSION` and the reads of a file's schema version and of the copies a migration kept (`Store::peek_schema_version`, `Store::migration_backups`) that the self-update's rollback checks use; `schema/v{N}.sql` keeps each released past version's
   schema for the migration tests once there is one), `rows.rs`, one file per table family (`settings.rs` the application
-  settings, `provider_settings.rs` the user's explicit choices of each provider's settings and the value in effect of
+  settings, `memory.rs` the entries of each console's memory and of each place's (a host and a directory), `provider_settings.rs` the user's explicit choices of each provider's settings and the value in effect of
   every one, `held_terminals.rs` which holder runs each session's launch and each shell terminal, and the names users
   gave shell terminals), and `failure.rs`, the store's own `Result` and `StoreError`, which codes the SQLite failures to read or
   write Octoboard's database the user can fix (read-only data folder, full disk, a file that cannot be opened or read)
@@ -829,23 +835,28 @@ which the Linux release archive ships and the website's `install.sh` installs wi
   instruction file, tool-name prefix, ask-question tool and detection markers are read from the descriptors by
   `session_tools/`, `coordinator/console_workdir.rs` and `agents/detect.rs`.
 - `src/session_tools/` — the static description of the Octoboard MCP tools and what sessions are told of them:
-  `catalogue/` the tool catalogue (`mod.rs` which tools a role sees, then one file per tool family and `schemas.rs`
-  the shared schema builders), `role.rs` the role description, `console_instructions.rs` the console session's
-  instruction text (written to the console's directory by `coordinator/console_workdir.rs`), `page_guide.rs` the
+  `catalogue/` the tool catalogue (`mod.rs` which tools a role sees, and `tools_offered`, which also withholds the memory
+  tools while memory is off, then one file per tool family, `memory.rs` among them with its console and project wording,
+  and `schemas.rs` the shared schema builders), `role.rs` the role description (with a project session's memory section),
+  `console_instructions.rs` the console session's instruction text (written to the console's directory by
+  `coordinator/console_workdir.rs`; with its memory section), `memory_index.rs` the index of a memory as a session is
+  given it at launch, which both of those embed, `page_guide.rs` the
   topics of the `page_guide` tool (the usage of report pages and the schemas of the component kinds, taken from
   `protocol/page_content/`), and `Owner` and `CALL_TIMEOUT` in `mod.rs`.
 - `src/mcp/` — the Octoboard MCP server a session drives Octoboard with, over the catalogue in `src/session_tools/`:
   - `dispatch.rs` checks and runs one call through the same coordinator and reporting functions the control socket uses.
   - `tools/` has one file per tool or small group of related tools, named for it — for example `sessions.rs`,
     `messaging.rs`, `archive.rs`, `bindings.rs`, `handoff.rs`, `transfer/` (branches and process trees), `settings.rs`,
-    `pages.rs`, `account_switch.rs`, `session_model.rs`, `history.rs`, `agents.rs` and `models.rs`, and the reads
+    `pages.rs`, `memory.rs` (the memory tools, over `coordinator::memory`; the memory is resolved from the calling session),
+    `account_switch.rs`, `session_model.rs`, `history.rs`, `agents.rs` and `models.rs`, and the reads
     (`reads.rs`, `project_changes.rs`, `project_branches.rs`, `session_branches.rs`). Two files are shared wording and
     helpers rather than tools: `relaunch.rs` (what the tools that relaunch a session tell the caller) and
     `project_browse.rs` (which project a repository read may touch, and running its browse request).
   - `lookup.rs` reads the arguments of a call (including the per-agent ones) and finds the records they name,
     `resolve_account` and `page_bounds` among them; `views.rs` describes a session, project or console back to the
     agent and holds the result fields tools share.
-  - `stdio.rs` is the `mcp` mode and `test_support.rs` the tests' shared fixtures.
+  - `stdio.rs` is the `mcp` mode (its `--memory` flag, set at launch while memory is on, makes it announce the memory
+    tools) and `test_support.rs` the tests' shared fixtures.
 
 ## Dependency direction
 
@@ -979,6 +990,10 @@ them is `docs/README.md`, "Coding conventions".
   `src/records/feed/`, `src/state/conversation_feeds.rs` and `src/coordinator/conversation_feed.rs` never branches on the
   agent. A new kind of entry is a type in `src/protocol/conversation.rs`.
 - A provider's reading of its prompts to the user (permission prompts, ask-the-user questions), and the keys that answer them: an `InteractionReader` in `src/adapter/<id>/interaction.rs`, returned by `AgentProvider::interactions` and enabled by the descriptor's `Capabilities::interactions`; the publishing, the answer's checks and the key pressing in `src/session/interaction/` never branch on the agent. Likewise images in a message and slash commands: the descriptor's `message_images` and `slash_commands`, with the box and completion readings in the provider's `ScreenReader`; the writing is `src/session/composer.rs`.
+- A change to what Octoboard's memory holds or how an entry is checked: `src/coordinator/memory.rs` (the rules and the
+  operations every caller shares), its rows in `src/store/memory.rs` and its wire types in `src/protocol/memory.rs`; the
+  sessions' tools are `src/mcp/tools/memory.rs` over the catalogue's `memory.rs`, and the text a session is told is
+  `src/session_tools/console_instructions.rs`, `role.rs` and `memory_index.rs`.
 - A new MCP tool: the catalogue in `src/session_tools/catalogue/`, its dispatch in `src/mcp/dispatch.rs` and the tool in
   a file of `src/mcp/tools/` (the rules: `docs/conventions/protocol-and-contracts.md`, "MCP tools and the MCP
   contract").
@@ -1047,6 +1062,8 @@ helper list; the rules for using them, including the ones that go beyond "use it
 | A value for every provider (a setting per provider, a model and effort per provider) | `protocol::PerAgent<T>` (`src/protocol/agents.rs`), indexed by `AgentId` and serialised in registry order |
 | A provider's behavior (launch plan, work before the terminal starts, installed version, titles, terminal screens and dialogs, accounts, model catalogue, status line) | `adapter::provider(agent)` giving the `AgentProvider` (`src/adapter/mod.rs`); its accounts through `AccountOps` (`src/accounts/ops.rs`), its models through `ModelCatalogue` (`src/agents/models.rs`) |
 | Open a session's conversation in its agent's desktop application | `coordinator::native_app::open_session_in_app` (`src/coordinator/native_app.rs`) checks the session and the host, archives a session that is not archived first (`lifecycle::archive_keeping_branches`, which removes no branch or worktree, after `lifecycle::ensure_group_unlocked`) and keeps the trees the user chose (`processes::keep_chosen`, shared with `lifecycle::archive_requested`); what each agent's application is asked is `AgentProvider::native_app` giving a `NativeApp` (`src/adapter/mod.rs`), which an agent declares through `Capabilities::native_app_scheme` (`src/providers/mod.rs`), and a refusal is `adapter::native_app_unavailable`; whether the application is installed comes from `platform::open::native_app`, the URL is opened by `host_open::native_app::open_url` |
+| Save, read, delete or announce an entry of a console's or a place's memory; check a draft against the entry rules | `coordinator::memory` (`src/coordinator/memory.rs`: `save_memory`, `read_memory`, `delete_memory`, the `*_and_announce` writes, `checked_draft`, `place_of`, `refuse_while_place_in_use`); a refusal is a `MemoryRefusal` that each caller words for itself |
+| Whether a launch turns an agent's own memory across sessions off | `adapter::turns_native_memory_off` (`src/adapter/mod.rs`) sets `LaunchSpec::native_memory_off` for every session while memory is on, for a provider whose descriptor declares `native_memory_switch` (`src/providers/mod.rs`); the provider applies its own switch |
 | Call CoreFoundation on macOS | `src/platform/cf.rs` (`Object`, `string`, `url`), not a second set of declarations |
 | Whether a session with a process is at rest, or what it is busy with (a handoff and an open in the agent's application judge by it) | `AppState::what_it_is_doing` (`src/state/status.rs`) |
 | Wait for a session whose process was ended to be recorded down | `coordinator::launch::wait_until_stopped` (`src/coordinator/launch.rs`), with its `stop_timeout` |

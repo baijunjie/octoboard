@@ -170,6 +170,31 @@ pub struct LaunchSpec<'a> {
     /// The cross-project guard to inject, which the launch wrote the list of; absent for a
     /// console session and while the setting that keeps sessions to their own project is off.
     pub guard: Option<GuardHook<'a>>,
+    /// Whether this launch turns the agent's own memory across sessions off. Set by generic code
+    /// through [`turns_native_memory_off`], never by an adapter; a provider whose descriptor
+    /// declares `native_memory_switch` applies its own switch when it is set, and every other
+    /// provider never sees it set.
+    pub native_memory_off: bool,
+    /// The index of the session's Octoboard memory at this launch, the most recently updated
+    /// first: a project session's place's, which its role description carries as a launch
+    /// snapshot. Empty for a console session, whose index is in its instruction file instead, and
+    /// while `memory_enabled` is off.
+    pub memory: &'a [crate::protocol::MemoryIndexEntry],
+    /// The application setting `memory_enabled` at this launch: whether the session is offered
+    /// the memory tools and told of its memory, and its agent's own memory is turned off.
+    pub memory_enabled: bool,
+}
+
+/// Whether a launch for a provider described by `descriptor` turns the agent's own memory across
+/// sessions off: while Octoboard's memory is on (`memory_enabled`, the application setting at the
+/// launch), wherever the provider declares a per-launch switch for it, for every session. A
+/// console session keeps what it learns in its console's Octoboard memory, and a project session
+/// what holds only on this machine in its project's place's, each read by every agent and
+/// account; the agent's own memory is split by agent and account, and a second place to save
+/// would compete with it. While Octoboard's memory is off, the agent's own memory is left as the
+/// agent and the user set it.
+pub fn turns_native_memory_off(descriptor: &ProviderDescriptor, memory_enabled: bool) -> bool {
+    memory_enabled && descriptor.native_memory_switch
 }
 
 /// What a guard's hook command is built from: the installation's entry point, which an update
@@ -199,6 +224,8 @@ impl LaunchSpec<'_> {
             git_workflow: self.git_workflow.as_ref(),
             ask_as_choices: self.ask_questions_as_choices,
             user_language: self.user_language,
+            memory: self.memory,
+            memory_enabled: self.memory_enabled,
         }
     }
 }
@@ -245,6 +272,9 @@ pub fn mcp_server_command(spec: &LaunchSpec<'_>) -> (String, Vec<String>) {
     ];
     if spec.owner.as_ref().is_some_and(Owner::of_worker) {
         args.push("--worker".to_string());
+    }
+    if spec.memory_enabled {
+        args.push("--memory".to_string());
     }
     (spec.self_exe.to_string(), args)
 }
@@ -730,6 +760,48 @@ pub mod tests {
     use crate::protocol::TerminalAppearance;
     use crate::session_tools::Owner;
 
+    /// While Octoboard's memory is on, every session's launch turns the agent's own memory off,
+    /// console and project alike, for a provider that declares a per-launch switch for it; while
+    /// it is off, no launch does. Which provider it is decides nothing else.
+    #[test]
+    fn a_launch_turns_native_memory_off_only_while_memory_is_on_and_a_switch_is_declared() {
+        use crate::protocol::AgentId;
+
+        let mut declaring = 0;
+        for descriptor in crate::providers::descriptors() {
+            assert_eq!(
+                super::turns_native_memory_off(descriptor, true),
+                descriptor.native_memory_switch,
+                "{}",
+                descriptor.id
+            );
+            assert!(
+                !super::turns_native_memory_off(descriptor, false),
+                "{}",
+                descriptor.id
+            );
+            declaring += usize::from(descriptor.native_memory_switch);
+        }
+        // Both sides are covered: a provider with the switch and one without it.
+        assert!(declaring > 0);
+        assert!(!AgentId::TEST.descriptor().native_memory_switch);
+    }
+
+    /// The MCP server is told whether Octoboard's memory was on at the launch, which decides
+    /// whether it offers the memory tools.
+    #[test]
+    fn the_mcp_server_is_told_whether_memory_is_on() {
+        let fixture = spec_fixture();
+        let mut spec = fixture.spec();
+        assert!(!super::mcp_server_command(&spec)
+            .1
+            .contains(&"--memory".to_string()));
+        spec.memory_enabled = true;
+        assert!(super::mcp_server_command(&spec)
+            .1
+            .contains(&"--memory".to_string()));
+    }
+
     /// The file cases [`agent_file`] makes on this host: a FIFO only where there are FIFOs.
     pub(crate) const FILE_CASES: &[&str] = &[
         "regular",
@@ -861,6 +933,9 @@ pub mod tests {
                 daemon_key: "feedface",
                 mcp_token: &self.mcp_token,
                 guard: None,
+                native_memory_off: false,
+                memory: &[],
+                memory_enabled: false,
             }
         }
     }

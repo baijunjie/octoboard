@@ -50,6 +50,7 @@ impl Store {
             auto_approve_handoffs: read_setting(&conn, "auto_approve_handoffs")?,
             ask_questions_as_choices: read_setting(&conn, "ask_questions_as_choices")?,
             keep_sessions_in_own_project: read_setting(&conn, "keep_sessions_in_own_project")?,
+            memory_enabled: read_setting(&conn, "memory_enabled")?,
             interface_language: read_setting(&conn, "interface_language")?,
             keep_awake: read_setting(&conn, "keep_awake")?,
             keep_awake_when: read_keep_awake_when(&conn)?,
@@ -347,6 +348,7 @@ bool_settings! {
     auto_approve_handoffs, set_auto_approve_handoffs;
     ask_questions_as_choices, set_ask_questions_as_choices;
     keep_sessions_in_own_project, set_keep_sessions_in_own_project;
+    memory_enabled, set_memory_enabled;
     auto_select_account, set_auto_select_account;
     auto_switch_on_usage_limit, set_auto_switch_on_usage_limit;
     auto_start_quota_windows, set_auto_start_quota_windows;
@@ -716,6 +718,13 @@ mod tests {
                 read: |settings| settings.keep_sessions_in_own_project,
                 get: Store::keep_sessions_in_own_project,
                 set: Store::set_keep_sessions_in_own_project,
+            },
+            Setting {
+                column: "memory_enabled",
+                default: false,
+                read: |settings| settings.memory_enabled,
+                get: Store::memory_enabled,
+                set: Store::set_memory_enabled,
             },
             Setting {
                 column: "auto_select_account",

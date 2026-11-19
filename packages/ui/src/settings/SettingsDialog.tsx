@@ -1,4 +1,4 @@
-import { Bell, BrushCleaning, Cable, CircleArrowUp, FileCog, FolderCheck, GitBranch, Info, Keyboard, KeyRound, Palette, SearchX, Settings2, ShieldCheck, ShieldUser, type LucideIcon } from "lucide-react";
+import { Bell, Brain, BrushCleaning, Cable, CircleArrowUp, FileCog, FolderCheck, GitBranch, Info, Keyboard, KeyRound, Palette, SearchX, Settings2, ShieldCheck, ShieldUser, type LucideIcon } from "lucide-react";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { StatusAnnouncer } from "../components/announce/StatusAnnouncer";
@@ -25,6 +25,7 @@ import { AccountsNavigationContext } from "./accounts/AccountsNavigationContext"
 import { AgentAccountsSection, AGENT_STRIP_HEIGHT } from "./accounts/AgentAccountsSection";
 import { AgentBehaviorSection } from "./AgentBehaviorSection";
 import { CleanupSection } from "./CleanupSection";
+import { MemorySection } from "./MemorySection";
 import { ConfigurationSection } from "./ConfigurationSection";
 import { GeneralSection } from "./GeneralSection";
 import { GitSection } from "./GitSection";
@@ -60,6 +61,7 @@ const SECTIONS: Record<SettingsSectionId, Section> = {
   appearance: { label: "settings.section.appearance", Icon: Palette, Content: AppearanceSection },
   git: { label: "settings.section.git", Icon: GitBranch, Content: GitSection, stickyHeadingHeight: STICKY_HEADING_HEIGHT.group },
   accounts: { label: "settings.section.accounts", Icon: KeyRound, Content: AgentAccountsSection, stickyHeadingHeight: AGENT_STRIP_HEIGHT },
+  memory: { label: "settings.section.memory", Icon: Brain, Content: MemorySection },
   "agent-permissions": { label: "settings.section.agentPermissions", Icon: ShieldUser, Content: AgentBehaviorSection },
   "trusted-folders": { label: "settings.section.trustedFolders", Icon: FolderCheck, Content: TrustedFoldersSection },
   permissions: { label: "settings.section.permissions", Icon: ShieldCheck, Content: PermissionsSection },

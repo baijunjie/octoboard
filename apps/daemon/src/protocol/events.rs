@@ -28,6 +28,7 @@ use super::fields::is_true;
 use super::history::{ConversationLocation, HistoryMessage, SessionRecordPresence};
 use super::host::HostInfo;
 use super::mcp_inventory::{AccountMcpInventory, McpServerAuthOutcome};
+use super::memory::{MemoryEntry, MemoryIndexEntry, MemoryScope, OrphanedMemory};
 use super::models::{AgentModel, DefaultModelSource, ModelChangeOutcome, ModelsUnavailable};
 use super::page_content::Submission;
 #[cfg(test)]
@@ -607,6 +608,41 @@ pub enum Event {
     PagesDeleted {
         session_id: String,
         pages: Vec<String>,
+    },
+    /// The reply to `list_memories`: the index of a memory, the most recently updated first. A
+    /// client that keeps it asks again after every `snapshot`, which is what keeps it correct
+    /// across a `memory_saved` or `memories_deleted` it was too far behind to receive.
+    MemoryList {
+        id: Option<String>,
+        scope: MemoryScope,
+        memories: Vec<MemoryIndexEntry>,
+    },
+    /// The reply to `read_memory`: one entry, content included.
+    MemoryContent {
+        id: Option<String>,
+        entry: MemoryEntry,
+    },
+    /// An entry of a memory was created or updated, by a session's `save_memory` tool or by a
+    /// client's `save_memory`. Broadcast in the order the writes were made. Its `scope` names the
+    /// memory: a place's reaches the windows showing any project at that place.
+    MemorySaved {
+        entry: MemoryEntry,
+    },
+    /// Entries of a memory were deleted, by id: by a session's `delete_memory` tool, or by a
+    /// client's `delete_memory`, `delete_memories`, `delete_orphaned_memory`,
+    /// `delete_orphaned_memories` or a `delete_project` that deleted its place's memory. Never
+    /// empty.
+    MemoriesDeleted {
+        scope: MemoryScope,
+        /// The ids of the entries deleted.
+        memories: Vec<String>,
+    },
+    /// The places whose memory no project is at any more, the most recently updated first: the
+    /// reply to `list_orphaned_memories`, and broadcast (with no `id`) whenever that may have changed: a project added or removed, a
+    /// place's memory deleted.
+    OrphanedMemoryList {
+        id: Option<String>,
+        places: Vec<OrphanedMemory>,
     },
     /// The reply to `save_pasted_image`: the absolute path, on the daemon host, of the file the image
     /// was saved as.

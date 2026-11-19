@@ -12,6 +12,7 @@ import { DeleteConsoleDialog } from "./confirmations/DeleteConsoleDialog";
 import { DeleteProjectDialog } from "./confirmations/DeleteProjectDialog";
 import { DeleteSessionDialog } from "./confirmations/DeleteSessionDialog";
 import { OpenSessionInAppDialog } from "./confirmations/OpenSessionInAppDialog";
+import { MemoryDialog } from "./memory/MemoryDialog";
 import { PullMergeProjectBranchDialog } from "./confirmations/PullMergeProjectBranchDialog";
 import { RestoreProjectChangesDialog } from "./confirmations/RestoreProjectChangesDialog";
 import { UnbindSessionDialog } from "./confirmations/UnbindSessionDialog";
@@ -70,6 +71,10 @@ export function RequestedDialog({
       return <ConsoleDialog console={dialog.console} onClose={onClose} />;
     case "import-configuration":
       return <ImportConfigurationDialog onClose={onClose} />;
+    case "console-memory":
+      return <MemoryDialog target={{ kind: "console", console: dialog.console }} onClose={onClose} />;
+    case "project-memory":
+      return <MemoryDialog target={{ kind: "project", project: dialog.project }} onClose={onClose} />;
     case "delete-console":
       return <DeleteConsoleDialog console={dialog.console} onClose={onClose} />;
     case "new-project":

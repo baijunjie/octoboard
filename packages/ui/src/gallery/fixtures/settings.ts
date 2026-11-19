@@ -11,6 +11,7 @@ import { withCliStatus } from "../../fixtures/fixtureAgentClis";
 import { browserHost } from "../../platform/host";
 import { MAC_HOST, WINDOWS_HOST } from "../../test/hosts";
 import { noneAddedState } from "./empty";
+import { entryOf, placeScope } from "../../fixtures/memoryBuilders";
 import { accountLoginSucceeded, accountQuotaUpdated, agentAvailability } from "./liveChanges";
 import { USED_UP_MIX, manyClaudeAccounts, quotaFailure, quotaOf, quotaWindow, PERSONAL_RESET_CREDITS, resetCreditOf, resetCreditsOf } from "../../fixtures/quotas";
 
@@ -48,6 +49,24 @@ const browserState: Scenario["state"] = {
     ["codex", { agent: "codex", availability: "unavailable", default_account_dir: "/Users/dev/.codex" }],
     ["grok", { agent: "grok", availability: "not_determined", default_account_dir: null }],
   ]),
+};
+
+// Memory that removed projects left behind: places no project of the state is at. Two are on this Mac, one on a saved
+// remote machine, and one on a machine the daemon does not list.
+const REMOTE_HOST = { id: "ssh-dev", name: "Dev server", kind: "ssh", ssh_config: null } as const;
+const placeEntries = (path: string, host: string, count: number, minutes: number) =>
+  Array.from({ length: count }, (_, index) => entryOf(`${path.slice(-4).replace(/\W/g, "x")}${String(index).padStart(4, "0")}`, { scope: placeScope(host, path), updated_at: minutesAgo(minutes + index), created_at: minutesAgo(minutes + 600) }));
+const leftBehind = [
+  ...placeEntries("/Users/dev/code/old-site", "local", 4, 60 * 30),
+  ...placeEntries("/srv/legacy/app", "ssh-gone", 1, 10),
+  ...placeEntries("/home/dev/code/search-prototype", "ssh-dev", 12, 60 * 24 * 9),
+  ...placeEntries("/Users/dev/code/experiments", "local", 2, 60 * 24 * 45),
+];
+/** Memory turned on, on a daemon that also knows the saved remote machine Dev server. */
+const memoryOnState: Scenario["state"] = {
+  ...browserState,
+  hosts: new Map([...browserState.hosts!, [REMOTE_HOST.id, REMOTE_HOST]]),
+  settings: { ...browserState.settings!, memory_enabled: true },
 };
 
 /** The desktop app with "Resume sessions on start" on, so the description it gives the macOS app shows, and Prevent sleep
@@ -956,11 +975,93 @@ export const settingsScenarios: Scenario[] = [
     group: GROUP,
     category: "normal",
     title: "Cleanup",
-    description: "The section after Keyboard shortcuts, directly above Configuration, with a single row and no group heading: \"Automatically delete archived sessions whose conversation is gone\", on, its description saying when archived sessions are checked and that pinned and locked sessions are kept. Switch it off to read the description that starts with \"Once this is on\".",
+    description: "The section after Keyboard shortcuts, directly above Configuration, with one row and no group heading: \"Automatically delete archived sessions whose conversation is gone\", on, its description saying when archived sessions are checked and that pinned and locked sessions are kept. Switch it off to read the description that starts with \"Once this is on\".",
     state: browserState,
     steps: [
       (ui) => ui.press(ui.t("rail.settings")),
       (ui) => ui.press(ui.t("settings.section.cleanup")),
+    ],
+  },
+  {
+    id: "settings-memory",
+    group: GROUP,
+    category: "normal",
+    title: "Memory, off and nothing left behind",
+    description: "The section after Agent accounts: two rows with no group heading, one divider between them and none above the first or under the last. The switch, \"Let sessions share Octoboard's memory\", is off, as it is by default, its description starting with \"Once this is on\": sessions launched afterwards share the memory and their agent's own memory is turned off. Under it, \"Memory of removed projects\" says a removed project's memory is kept and adding a project at the same folder picks it up again; with nothing left behind no folder count is shown and its Manage button is faded, its tooltip saying \"No memory left behind\". Switch it on to read the other description.",
+    state: browserState,
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.section.memory")),
+    ],
+  },
+  {
+    id: "settings-memory-left-behind",
+    group: GROUP,
+    category: "normal",
+    title: "Memory, on, with memory left behind",
+    description: "The switch is on. The second row, \"Memory of removed projects\", shows \"4 folders\" in muted text before its Manage button, which is available; the two rows are parted by one divider. The row is the same with the switch off. Manage opens the list (Memory of removed projects dialog).",
+    state: memoryOnState,
+    memory: { entries: leftBehind },
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.section.memory")),
+    ],
+  },
+  {
+    id: "settings-memory-left-behind-failed",
+    group: GROUP,
+    category: "exceptional",
+    title: "Memory of removed projects that could not be listed",
+    description: "The listing of the memory left behind was refused, so the second row shows no folder count: a danger mark sits before Manage, which is faded, its tooltip saying the memory left behind could not be listed. Press the mark for the reason in the application's own words, with the raw database error and Try again, which asks again and fails again here.",
+    state: memoryOnState,
+    memory: { entries: leftBehind, orphanListing: { code: "store_write_failed", params: { cause: "other", detail: "disk I/O error: Error code 10: SQLITE_IOERR" }, message: "Octoboard could not read or write its own data: disk I/O error: Error code 10: SQLITE_IOERR" } },
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.section.memory")),
+    ],
+  },
+  {
+    id: "settings-memory-left-behind-manage",
+    group: GROUP,
+    category: "normal",
+    title: "Memory of removed projects dialog",
+    description: "The dialog titled \"Memory of removed projects\" lists the four places, the most recently updated first, one to a line, with a hairline between lines and none above the first or under the last: the directory in monospace, and under it the machine, the number of entries and when the latest was written, with a Delete button. The first is on a machine the daemon does not list, shown as \"Unknown machine\"; the others are on this Mac and the saved remote machine Dev server. The footer holds Delete all, a soft danger button, then Close. Pressing Delete asks first (Memory left behind delete confirmation), and Delete all asks for every place at once (Memory left behind delete-all confirmation); once the last place is deleted the dialog says \"No memory left behind\" and Delete all is unavailable.",
+    state: memoryOnState,
+    memory: { entries: leftBehind },
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.section.memory")),
+      (ui) => ui.press(ui.t("settings.memory.leftBehind.manage")),
+    ],
+  },
+  {
+    id: "settings-memory-left-behind-delete",
+    group: GROUP,
+    category: "normal",
+    title: "Memory left behind delete confirmation",
+    description: "The confirmation names the directory and the machine it was on, says how many entries the memory holds (4) and that this cannot be undone, with a destructive Delete button. The Memory of removed projects dialog stays behind it.",
+    state: memoryOnState,
+    memory: { entries: leftBehind },
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.section.memory")),
+      (ui) => ui.press(ui.t("settings.memory.leftBehind.manage")),
+      (ui) => ui.press(ui.t("settings.memory.leftBehind.deleteLabel", { path: "/Users/dev/code/old-site" })),
+    ],
+  },
+  {
+    id: "settings-memory-left-behind-delete-all",
+    group: GROUP,
+    category: "normal",
+    title: "Memory left behind delete-all confirmation",
+    description: "The confirmation titled \"Delete all memory\" says the memory kept for 4 folders will be deleted, that it holds 19 entries in all and that this cannot be undone. Its destructive Delete all stays unavailable until DELETE is typed. The Memory of removed projects dialog stays behind it.",
+    state: memoryOnState,
+    memory: { entries: leftBehind },
+    steps: [
+      (ui) => ui.press(ui.t("rail.settings")),
+      (ui) => ui.press(ui.t("settings.section.memory")),
+      (ui) => ui.press(ui.t("settings.memory.leftBehind.manage")),
+      (ui) => ui.press(ui.t("settings.memory.leftBehind.deleteAll")),
     ],
   },
   {

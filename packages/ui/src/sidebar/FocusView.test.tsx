@@ -9,7 +9,7 @@ import { TEST_AGENTS } from "../test/testProviders";
 import { expectIndependentMarquees, stubMarquee } from "../components/motion/marqueeTestSupport";
 import { isolate } from "../i18n/isolate";
 import { accountOf, consoleOf, gitStatusOf, projectOf, sessionOf } from "../fixtures/builders";
-import type { Agent, AgentAvailability, GitStatus, Session } from "../protocol";
+import type { Agent, AgentAvailability, GitStatus, Session, Settings } from "../protocol";
 import { PREFERENCE_KEYS } from "../preferences/preferenceKeys";
 import { sessionColourHex } from "../sessions/sessionColours";
 import { TestHost } from "../test/TestHost";
@@ -56,9 +56,9 @@ const withTeams = [...sessions, coordinator, underCoordinator, underFree];
 
 /** `stored` is what the store holds of the console's sessions, which a console session's focus mode's
  * project groups read themselves. */
-function mount(render: (handlers: SidebarHandlers) => React.ReactElement, stored: Session[] = [], agentAvailability?: Map<Agent, AgentAvailability>, gitStatuses: GitStatus[] = []): { text: () => string; container: HTMLElement; handlers: SidebarHandlers; unmount: () => void } {
+function mount(render: (handlers: SidebarHandlers) => React.ReactElement, stored: Session[] = [], agentAvailability?: Map<Agent, AgentAvailability>, gitStatuses: GitStatus[] = [], settings: Partial<Settings> = {}): { text: () => string; container: HTMLElement; handlers: SidebarHandlers; unmount: () => void } {
   const daemon = testDaemon({
-    state: { ...(agentAvailability && { agentAvailability }), gitStatuses: new Map(gitStatuses.map((status) => [status.project, status])), sessions: new Map(stored.map((session) => [session.id, session])), settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/p", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [accountOf("work", "claude", "Work", "/w")] } },
+    state: { ...(agentAvailability && { agentAvailability }), gitStatuses: new Map(gitStatuses.map((status) => [status.project, status])), sessions: new Map(stored.map((session) => [session.id, session])), settings: { ...DEFAULT_SETTINGS, auto_pull_repositories: false, auto_delete_unresumable_archives: true, added_agents: null, default_clone_dir: "/p", git_workflow: DEFAULT_GIT_WORKFLOW, accounts: [accountOf("work", "claude", "Work", "/w")], ...settings } },
   });
   const handlers = { onFocus: vi.fn(), onOpenDialog: vi.fn(), onQuickCreateSession: vi.fn(), onOpenArchive: vi.fn(), onSelectSession: vi.fn(), onSetPinned: vi.fn(), onSetLocked: vi.fn(), onSwitchConsoleSession: vi.fn(), onPullProjectBranch: vi.fn() } as unknown as SidebarHandlers;
   const container = document.body.appendChild(document.createElement("div"));
@@ -665,4 +665,14 @@ it.each(focusPlacements)("offers Pull current branch in %s when the branch has a
   expect(pull.getAttribute("aria-disabled")).not.toBe("true");
   await act(async () => pull.click());
   expect(handlers.onPullProjectBranch).toHaveBeenCalledExactlyOnceWith(web);
+});
+
+// The project menu's Memory item follows the memory setting, wherever the menu is: the focus header's and a console session's
+// project heading's.
+it.each(focusPlacements.flatMap(([placement, render]) => [[placement, true, render], [placement, false, render]] as const))("in %s the project menu offers Memory only while the memory setting is on (on: %s)", (_placement, on, render) => {
+  const { container } = mount(render, sessions, undefined, [], { memory_enabled: on });
+  act(() => container.querySelector<HTMLElement>('button[aria-label^="Actions for project"]')!.click());
+  const labels = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].map((el) => el.querySelector(".label")?.textContent ?? el.textContent);
+  expect(labels).toContain("Rename");
+  expect(labels.includes("Memory")).toBe(on);
 });

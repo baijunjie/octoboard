@@ -41,6 +41,7 @@ async fn a_session_record_takes_what_is_held_for_it_with_it() {
             keep: Vec::new(),
         },
         RequestBody::DeleteProject {
+            delete_memory: false,
             project: "project-1".to_string(),
             stop_sessions: false,
             trash_directory: false,

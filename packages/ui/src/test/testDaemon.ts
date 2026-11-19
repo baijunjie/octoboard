@@ -19,6 +19,7 @@ export function testDaemon({ state, request = () => Promise.reject(new Error("no
     onNotification: () => () => {},
     onImportProgress: () => () => {},
     onContentSearch: () => () => {},
+    onMemoryChange: () => () => {},
     dismissTrustPrompt: () => {},
     reconnect: () => {},
     terminalUrl: () => "",
@@ -32,11 +33,13 @@ const EMPTY_REPLIES: { [K in RequestType]?: ReplyOf<K> } = {
   inspect_session_branches: { type: "session_branches_inspected", id: null, items: [] },
   inspect_session_records: { type: "session_records_inspected", id: null, presence: "unknown" },
   inspect_project_removal: { type: "project_removal_inspected", id: null, items: [], processes: [] },
+  list_orphaned_memories: { type: "orphaned_memory_list", id: null, places: [] },
 };
 
 function emptyDaemonReply(body: ClientRequestBody): ReplyOf<RequestType> | undefined {
   if (body.type === "list_agent_models") return { type: "agent_models", id: null, agent: body.agent, account: body.account ?? null, models: [], unavailable: null };
   if (body.type === "read_session_history") return { type: "session_history", id: null, session: body.session, messages: [] };
+  if (body.type === "list_memories") return { type: "memory_list", id: null, scope: body.console !== undefined ? { kind: "console", console_id: body.console } : { kind: "place", host_id: "", path: "" }, memories: [] };
   if (body.type === "list_pages") return { type: "page_list", id: null, pages: [], session_id: body.session };
   return EMPTY_REPLIES[body.type];
 }

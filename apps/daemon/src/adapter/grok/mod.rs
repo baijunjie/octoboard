@@ -403,6 +403,13 @@ fn plan_under(spec: &LaunchSpec<'_>, system_dir: Option<&Path>) -> Result<Launch
             (var.to_string(), on.to_string())
         }));
     }
+    // Grok's memory off for this process: neither its `<memory>` instructions nor anything under
+    // the home's `memory-v2/` (1.0.89, measured). Off by default, but `config.toml` or a managed
+    // remote setting can turn it on; this outranks both, and only a pin in `requirements.toml`
+    // outranks it. The documented variable rather than the `--no-memory` flag `--help` leaves out.
+    if spec.native_memory_off {
+        env.push((MEMORY_OFF.0.to_string(), MEMORY_OFF.1.to_string()));
+    }
     let writeback = shared_config_writeback(&source_home, &grok_home, spec.model);
     let adoption = adoption::record(&carried_trust, writeback.as_ref());
     Ok(LaunchPlan {
@@ -474,6 +481,9 @@ fn copied_release_version(launcher: &Path) -> Option<super::AgentVersion> {
     }
     found
 }
+
+/// The environment entry that turns Grok's memory off for one launch.
+const MEMORY_OFF: (&str, &str) = ("GROK_MEMORY", "0");
 
 /// The environment variables of Grok's `compat.claude.{skills,rules,agents,mcps,hooks}`
 /// configuration, which outrank the configuration files.

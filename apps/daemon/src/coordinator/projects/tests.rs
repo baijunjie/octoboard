@@ -59,6 +59,7 @@ async fn deleting_a_project_with_stop_sessions_refuses_a_launch_in_flight() {
         })
         .unwrap();
     let delete = || RequestBody::DeleteProject {
+        delete_memory: false,
         project: "project-1".to_string(),
         stop_sessions: true,
         trash_directory: false,
@@ -1093,6 +1094,7 @@ async fn removing_a_project_with_a_bound_coordinator_leaves_its_console_session_
         &state,
         None,
         RequestBody::DeleteProject {
+            delete_memory: false,
             project: "project-1".to_string(),
             stop_sessions: true,
             trash_directory: false,
@@ -1485,6 +1487,7 @@ async fn no_project_or_console_is_removed_once_the_handover_barrier_is_raised() 
     state.settle_for_planned_stop().await;
     let requests = [
         RequestBody::DeleteProject {
+            delete_memory: false,
             project: "project-1".to_string(),
             stop_sessions: true,
             trash_directory: true,
@@ -1643,4 +1646,279 @@ async fn skipping_import_model_checks_still_checks_compatibility_switches() {
             );
         }
     }
+}
+
+/// Removing a project keeps its place's memory unless asked, which leaves it listed as left
+/// behind; asked to delete it while another project, of another console, is at the same place, the
+/// removal is refused with nothing changed; once that project is gone too, its removal deletes the
+/// memory and tells every client.
+#[tokio::test]
+async fn removing_a_project_deletes_its_places_memory_only_when_asked_and_unshared() {
+    use crate::coordinator::memory::{place_of, save_memory};
+    use crate::protocol::{MemoryDraft, MemoryTarget, MemoryWriter};
+
+    let (state, dir) = crate::test_support::app_state("coordinator-delete-project-memory");
+    let workdir = console_workdir_in(&dir);
+    state
+        .store
+        .insert_console(&console(AgentId::CLAUDE, &workdir))
+        .unwrap();
+    let mut second_console = console(AgentId::CLAUDE, &workdir);
+    second_console.id = "console-2".to_string();
+    state.store.insert_console(&second_console).unwrap();
+    let first = project_of("console-1", "repo");
+    let mut second = project_of("console-2", "repo");
+    second.id = "project-2".to_string();
+    second.path = first.path.clone();
+    state.store.insert_project(&first).unwrap();
+    state.store.insert_project(&second).unwrap();
+    let place = place_of(&first);
+    let id = save_memory(
+        &state.store,
+        &place,
+        &MemoryTarget::Create,
+        MemoryDraft {
+            summary: "Docker needs a prompt here".to_string(),
+            content: "x".to_string(),
+            local: None,
+        },
+        &MemoryWriter::User,
+    )
+    .unwrap()
+    .unwrap()
+    .id;
+    let delete = |project: &str, delete_memory: bool| RequestBody::DeleteProject {
+        delete_memory,
+        project: project.to_string(),
+        stop_sessions: false,
+        trash_directory: false,
+        force_remove: Vec::new(),
+        inspection: None,
+    };
+
+    let refused = handle(&state, None, delete(&first.id, true))
+        .await
+        .expect_err("shared");
+    let coded = refused.downcast_ref::<CodedError>().expect("a coded error");
+    assert_eq!(coded.code, error_code::MEMORY_PLACE_IN_USE);
+    assert_eq!(coded.params.get("project"), Some(&second.id));
+    assert!(state.store.get_project(&first.id).unwrap().is_some());
+
+    let mut events = state.subscribe();
+    handle(&state, None, delete(&first.id, false))
+        .await
+        .unwrap();
+    assert!(state.store.get_memory(&place, &id).unwrap().is_some());
+    let heard: Vec<Event> = std::iter::from_fn(|| events.try_recv().ok()).collect();
+    assert!(heard.iter().any(
+        |event| matches!(event, Event::OrphanedMemoryList { id: None, places } if places.is_empty())
+    ));
+
+    handle(&state, None, delete(&second.id, true))
+        .await
+        .unwrap();
+    assert!(state.store.get_memory(&place, &id).unwrap().is_none());
+    let heard: Vec<Event> = std::iter::from_fn(|| events.try_recv().ok()).collect();
+    assert!(heard.iter().any(|event| matches!(
+        event,
+        Event::MemoriesDeleted { scope, memories } if scope == &place && memories == std::slice::from_ref(&id)
+    )));
+    assert!(state.store.orphaned_memories().unwrap().is_empty());
+}
+
+/// A project removed without its memory leaves the memory listed as left behind, which every
+/// client is told.
+#[tokio::test]
+async fn a_project_removed_without_its_memory_leaves_it_behind() {
+    use crate::coordinator::memory::{place_of, save_memory};
+    use crate::protocol::{MemoryDraft, MemoryTarget, MemoryWriter};
+
+    let (state, dir) = crate::test_support::app_state("coordinator-delete-project-orphan");
+    let workdir = console_workdir_in(&dir);
+    state
+        .store
+        .insert_console(&console(AgentId::CLAUDE, &workdir))
+        .unwrap();
+    let project = project_of("console-1", "repo");
+    state.store.insert_project(&project).unwrap();
+    save_memory(
+        &state.store,
+        &place_of(&project),
+        &MemoryTarget::Create,
+        MemoryDraft {
+            summary: "s".to_string(),
+            content: "x".to_string(),
+            local: None,
+        },
+        &MemoryWriter::User,
+    )
+    .unwrap()
+    .unwrap();
+    let mut events = state.subscribe();
+    handle(
+        &state,
+        None,
+        RequestBody::DeleteProject {
+            delete_memory: false,
+            project: project.id.clone(),
+            stop_sessions: false,
+            trash_directory: false,
+            force_remove: Vec::new(),
+            inspection: None,
+        },
+    )
+    .await
+    .unwrap();
+    let heard: Vec<Event> = std::iter::from_fn(|| events.try_recv().ok()).collect();
+    assert!(heard.iter().any(|event| matches!(
+        event,
+        Event::OrphanedMemoryList { places, .. }
+            if places.len() == 1 && places[0].path == project.path && places[0].entries == 1
+    )));
+    assert_eq!(state.store.orphaned_memories().unwrap().len(), 1);
+}
+
+/// A project stored at a place whose memory was left behind takes it up again, which every client
+/// is told (what is left behind shrinks); one stored at a place with no memory announces nothing
+/// of the kind.
+#[tokio::test]
+async fn a_project_stored_where_memory_was_left_behind_announces_it_taken_up() {
+    use crate::coordinator::memory::{place_of, save_memory};
+    use crate::protocol::{MemoryDraft, MemoryTarget, MemoryWriter};
+
+    let (state, dir) = crate::test_support::app_state("coordinator-insert-takes-up-memory");
+    let workdir = console_workdir_in(&dir);
+    state
+        .store
+        .insert_console(&console(AgentId::CLAUDE, &workdir))
+        .unwrap();
+    let remembered = project_of("console-1", "remembered");
+    let plain = project_of("console-1", "plain");
+    save_memory(
+        &state.store,
+        &place_of(&remembered),
+        &MemoryTarget::Create,
+        MemoryDraft {
+            summary: "s".to_string(),
+            content: "x".to_string(),
+            local: None,
+        },
+        &MemoryWriter::User,
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(state.store.orphaned_memories().unwrap().len(), 1);
+
+    let mut events = state.subscribe();
+    assert!(insert_unless_associated(&state, &plain).unwrap());
+    let heard: Vec<Event> = std::iter::from_fn(|| events.try_recv().ok()).collect();
+    assert!(
+        !heard
+            .iter()
+            .any(|event| matches!(event, Event::OrphanedMemoryList { .. })),
+        "a place with no memory announces nothing of it"
+    );
+
+    assert!(insert_unless_associated(&state, &remembered).unwrap());
+    let heard: Vec<Event> = std::iter::from_fn(|| events.try_recv().ok()).collect();
+    assert!(heard.iter().any(|event| matches!(
+        event,
+        Event::OrphanedMemoryList { id: None, places } if places.is_empty()
+    )));
+    assert!(state.store.orphaned_memories().unwrap().is_empty());
+}
+
+/// Deleting a console takes its projects with it, so their places' memory is left behind, and
+/// every client is told.
+#[tokio::test]
+async fn a_deleted_consoles_projects_leave_their_memory_behind() {
+    use crate::coordinator::memory::{place_of, save_memory};
+    use crate::protocol::{MemoryDraft, MemoryTarget, MemoryWriter};
+
+    let (state, dir) = crate::test_support::app_state("coordinator-delete-console-orphan");
+    let workdir = console_workdir_in(&dir);
+    state
+        .store
+        .insert_console(&console(AgentId::CLAUDE, &workdir))
+        .unwrap();
+    let project = project_of("console-1", "repo");
+    state.store.insert_project(&project).unwrap();
+    save_memory(
+        &state.store,
+        &place_of(&project),
+        &MemoryTarget::Create,
+        MemoryDraft {
+            summary: "s".to_string(),
+            content: "x".to_string(),
+            local: None,
+        },
+        &MemoryWriter::User,
+    )
+    .unwrap()
+    .unwrap();
+    let mut events = state.subscribe();
+    handle(
+        &state,
+        None,
+        RequestBody::DeleteConsole {
+            console: "console-1".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+    let heard: Vec<Event> = std::iter::from_fn(|| events.try_recv().ok()).collect();
+    assert!(heard.iter().any(|event| matches!(
+        event,
+        Event::OrphanedMemoryList { id: None, places }
+            if places.len() == 1 && places[0].path == project.path && places[0].entries == 1
+    )));
+}
+
+/// Once the project is removed, its removal stands even when its place's memory cannot be read or
+/// deleted: the request succeeds and every client still hears of the removal.
+#[tokio::test]
+async fn a_removal_stands_when_its_memory_cannot_be_deleted() {
+    let (state, dir) = crate::test_support::app_state("coordinator-delete-project-memory-fails");
+    state
+        .store
+        .insert_console(&console(AgentId::CLAUDE, &console_workdir_in(&dir)))
+        .unwrap();
+    let project = project_of("console-1", "repo");
+    state.store.insert_project(&project).unwrap();
+    state.store.drop_memories().unwrap();
+    let mut events = state.subscribe();
+    handle(
+        &state,
+        None,
+        RequestBody::DeleteProject {
+            delete_memory: true,
+            project: project.id.clone(),
+            stop_sessions: false,
+            trash_directory: false,
+            force_remove: Vec::new(),
+            inspection: None,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(state.store.get_project(&project.id).unwrap().is_none());
+    let heard: Vec<Event> = std::iter::from_fn(|| events.try_recv().ok()).collect();
+    assert!(heard.iter().any(
+        |event| matches!(event, Event::ProjectDeleted { project: removed } if removed == &project.id)
+    ));
+}
+
+/// A project is stored even when whether its place holds memory cannot be read.
+#[tokio::test]
+async fn an_added_project_is_kept_when_its_places_memory_cannot_be_read() {
+    let (state, dir) = crate::test_support::app_state("coordinator-add-project-memory-fails");
+    state
+        .store
+        .insert_console(&console(AgentId::CLAUDE, &console_workdir_in(&dir)))
+        .unwrap();
+    std::fs::create_dir_all(dir.join("repo")).unwrap();
+    state.store.drop_memories().unwrap();
+    let added = add_local(state.clone(), dir.join("repo")).await.unwrap();
+    assert_eq!(added.len(), 1);
+    assert!(state.store.get_project(&added[0].id).unwrap().is_some());
 }

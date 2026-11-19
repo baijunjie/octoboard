@@ -348,6 +348,14 @@ the fades give way to its ring (see "Visible focus"), so a keyboard user finds t
 it. At the breakpoint and below the sections are the shared content-fit tab strip with HeroUI's look (and the
 search-time override under "Conformance level and exceptions").
 
+#### A Settings section's blocks
+
+A Settings section that holds more than one block puts every block in a `SettingsGroup`
+(`packages/ui/src/settings/SettingsGroup.tsx`), each named by its own heading, as the General and Git sections do. The
+space and the dividers between blocks come only from the group and its rows: no block is set apart by padding or
+margin set by hand, and no block goes without a heading after another one. A section of one block needs no group.
+(Source: user decision, after a section's second block stood under a hand-set gap with no heading of its own.)
+
 #### A menu's filter field
 
 A menu with a filter field (`MenuFilter` in `packages/ui/src/primitives/MenuFilter.tsx`, reached through
@@ -412,7 +420,9 @@ When location matters, distinguish the environment where sessions run from the i
 Installation and project-directory instructions concern the session environment; clipboard access, file downloads,
 notifications and keyboard-shortcut preferences concern the current interface. Do not use an unqualified "this machine"
 or "your device" for server-side files or tools. A section that exists only in the desktop window (Remote access) may
-say "this computer".
+say "this computer". A console memory entry's "This machine only" is the exception, by the user's decision: it means
+the machine running the daemon, where the console lives. Project memory, whose project may be on a remote host, says
+"the machine the project is on".
 
 Use the shared platform adapter and its capabilities for differences in what the user must do, such as opening
 system notification settings versus browser site settings. Desktop versus browser is not itself a local-versus-remote
@@ -587,6 +597,10 @@ a mark or goes.
 dismissing it, the dialog's own close button (the × at its top trailing corner) is the way to dismiss it and the footer
 leaves out Cancel; the footer is then the secondary action and the primary one. A dialog with one action keeps Cancel
 beside it.
+
+**Quiet status about the dialog's content sits at the footer's start** (by the user's decision), such as the memory
+dialog's entry count: `Dialog`'s `footerStart`, level with the buttons, which stay at the end in their order; when the
+footer wraps, it keeps the start of the first line. It holds text only, never a control.
 
 Every button is the wrapper layer's `Button` (HeroUI's, through `primitives`). A custom-drawn button, such as a whole
 band or row that is itself the control, uses the layer's `BareButton`, which marks the states React Aria's buttons
@@ -2193,6 +2207,9 @@ its own is plain text.
   title uses the non-monospace chip with `dir="auto"` and wrapping. A technical literal — a path, a file name, a URL,
   a branch, a commit id, an ID, a command or a setting value — uses its monospace, left-to-right and wrapping options,
   stands without quotation marks, and is bare in its plain-text form.
+- **A name is referenced once per piece of copy.** A sentence or a short run of copy (a dialog's intro, a
+  description, a message) names its subject once; later mentions use a pronoun or a plain reference ("each console
+  session", "the project"), in every language. (Source: user decision.)
 - **A name shown on its own takes no chip.** A name or value displayed by itself rather than inside a sentence —
   a row's title, a list entry, a heading that is just the name, a label naming its control, a value on a line of its
   own — is plain text in the style of where it sits (a technical value keeps the

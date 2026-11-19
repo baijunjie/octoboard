@@ -10,6 +10,7 @@ import { currentLanguage, t } from "../i18n/language";
 import type { Event, ClientRequestBody } from "../protocol";
 import { createContentSearchListeners, isContentSearchEvent, type ContentSearchEvent } from "./contentSearchListeners";
 import { createImportProgressListeners, type ImportProgressEvent } from "./importProgressListeners";
+import { createMemoryListeners, isMemoryChangeEvent, type MemoryChangeEvent } from "./memoryListeners";
 import { createOwnTrustNotices } from "./ownTrustNotices";
 import { reducer, type Action } from "./reducer";
 import { createStateStore, type State } from "./state";
@@ -43,6 +44,10 @@ export interface Daemon {
    * batches of matches and its end, until the returned unsubscribe is called. Events go to the asking connection only,
    * and those of a search no listener holds are dropped. */
   onContentSearch: (search: string, listener: (event: ContentSearchEvent) => void) => () => void;
+  /** Calls `listener` for every change to any memory (a console's, or a project place's) and to the set of places left
+   * with memory no project is at, from now on, in the order the daemon wrote them, until the returned unsubscribe is called. Memory is not in the store: what shows it lists it with `list_memories`, again
+   * after every `snapshot`, and keeps it by these. */
+  onMemoryChange: (listener: (event: MemoryChangeEvent) => void) => () => void;
   /** Drops a trust prompt from the queue, whether it was answered or declined — declining leaves the
    * confirmation for the user in the terminal, and the daemon asks again for it only after a
    * `snapshot`. */
@@ -86,6 +91,7 @@ export function createDaemon(
   );
   const importProgress = createImportProgressListeners();
   const contentSearches = createContentSearchListeners();
+  const memoryListeners = createMemoryListeners();
   const notificationListeners = new Set<(notification: WindowNotification) => void>();
   const pendingNotifications: WindowNotification[] = [];
   const notify = (notification: WindowNotification) => {
@@ -108,6 +114,10 @@ export function createDaemon(
     }
     if (isContentSearchEvent(event)) {
       contentSearches.deliver(event);
+      return;
+    }
+    if (isMemoryChangeEvent(event)) {
+      memoryListeners.deliver(event);
       return;
     }
     if (event.type === "session_notice" && ownTrustNotices.claim(event)) return;
@@ -155,6 +165,7 @@ export function createDaemon(
     },
     onImportProgress: importProgress.subscribe,
     onContentSearch: contentSearches.subscribe,
+    onMemoryChange: memoryListeners.subscribe,
     dismissTrustPrompt: (session) => dispatch({ kind: "dismiss_trust_prompt", session }),
     reconnect: () => client.reconnect(),
     terminalUrl: (session) => daemonWsUrl(address, `/ws/term/${session}`),
@@ -178,6 +189,7 @@ export function createInertDaemon(): Daemon {
     onNotification: () => () => {},
     onImportProgress: () => () => {},
     onContentSearch: () => () => {},
+    onMemoryChange: () => () => {},
     dismissTrustPrompt: () => {},
     reconnect: () => {},
     terminalUrl: () => "",

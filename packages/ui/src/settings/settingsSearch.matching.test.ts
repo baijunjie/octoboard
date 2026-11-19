@@ -31,6 +31,7 @@ const SECTION_LABELS: Record<SettingsSectionId, Parameters<typeof sectionMatches
   git: "settings.section.git",
   accounts: "settings.section.accounts",
   "agent-permissions": "settings.section.agentPermissions",
+  memory: "settings.section.memory",
   "trusted-folders": "settings.section.trustedFolders",
   permissions: "settings.section.permissions",
   "remote-access": "settings.section.remoteAccess",

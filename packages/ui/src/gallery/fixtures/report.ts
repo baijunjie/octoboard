@@ -156,7 +156,7 @@ const invalidForm: PageContent = {
     { type: "text", name: "name", label: "Release name", required: true },
     { type: "text", name: "version", label: "Release version", description: "Like 1.4.0.", pattern: "\\d+\\.\\d+\\.\\d+" },
     { type: "text", name: "reference", label: "Reference code", description: "Only a's.", pattern: "^(a+)+$" },
-    { type: "textarea", name: "summary", label: "Summary", min_length: 20, rows: 2 },
+    { type: "textarea", name: "summary", label: "Release notes", min_length: 20, rows: 2 },
     { type: "number", name: "retries", label: "Retries", min: 0, max: 10, step: 5 },
     { type: "date", name: "freeze", label: "Code freeze", min: "2026-12-01" },
     { type: "select", name: "region", label: "Region", required: true, placeholder: "Choose an option", options: [{ value: "eu", label: "Europe" }, { value: "us", label: "United States" }] },
@@ -490,7 +490,7 @@ export const reportScenarios: Scenario[] = [
       // long, and the field says so.
       (ui) => ui.focus("Reference code"),
       (ui) => ui.type(`${"a".repeat(40)}!`),
-      (ui) => ui.focus("Summary"),
+      (ui) => ui.focus("Release notes"),
       (ui) => ui.type("Too short"),
       (ui) => ui.focus("Retries"),
       (ui) => ui.type("7"),

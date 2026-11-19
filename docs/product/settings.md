@@ -13,7 +13,7 @@ account details dialog, and on the sharing row of an account's settings dialog (
 `docs/product/per-agent-settings.md`, "The accounts table", "The account details dialog" and "Sharing the default
 configuration" in `docs/product/agent-accounts.md`, and "Explanations in help tips" in
 `docs/product/labels-and-tooltips.md`). The sections, in order, are **General**, **Appearance**, **Agent
-behavior**, **Agent accounts**, **Git**, **Trusted folders**, **Permissions**, **Remote access**, **Notifications**,
+behavior**, **Agent accounts**, **Memory**, **Git**, **Trusted folders**, **Permissions**, **Remote access**, **Notifications**,
 **Keyboard shortcuts**, **Cleanup**, **Configuration**, **Updates** and **About**; the dialog opens on General unless it
 was asked to open on another section. **Permissions** is there in the macOS application's main window and in a browser
 running on a Mac, an iPhone or an iPad — judged from the platform the browser reports, not from the system the daemon
@@ -30,8 +30,8 @@ the settings that match what is typed (see `docs/product/searching-settings.md`)
 A console session can read and change the default clone directory, the automatic pulling of repositories, the
 automatic deletion of archived sessions whose conversation is gone, resuming sessions on start, Prevent sleep and when
 it holds, closing idle shell terminals with their panel, the application-wide git workflow settings, the language the
-daemon holds for the user (see "The language the daemon holds" in `docs/product/language.md`) and the daemon's own
-automatic update check and update channel. It can read, but not change, automatic account
+daemon holds for the user (see "The language the daemon holds" in `docs/product/language.md`), whether Octoboard's
+memory is on, and the daemon's own automatic update check and update channel. It can read, but not change, automatic account
 selection, Claude compatibility, Codex compatibility, Claude Code's Simple shell commands, the agent tags, the agent accounts (without their directories) and the trusted
 folders. The switches of Agent behavior, the approval modes, and the switches that switch accounts at the usage limit
 and start usage windows, it can neither read nor change (see "Who reads and changes what" and "Application settings:
@@ -175,7 +175,7 @@ A row's switch whose value the daemon holds saves when it is turned, on its own:
 start**, **Prevent sleep** and **Close idle terminals when closing the panel**; in Git, **Automatically pull
 repositories**, **Squash commits before delivery**, **Rebase before delivery** and **Revert gate**; in Agent accounts,
 **Automatically select an account**, **Automatically switch accounts at the usage limit** and **Start usage windows
-automatically**; the five of Agent behavior; in Cleanup, **Automatically delete archived sessions whose conversation
+automatically**; the five of Agent behavior; in Memory, **Let sessions share Octoboard's memory**; in Cleanup, **Automatically delete archived sessions whose conversation
 is gone**; and, in a browser open on a daemon that updates itself, Updates' **Check for updates automatically**. The
 switch always shows the value the daemon has stored, which every window shares: it moves when that value changes, not
 on the press itself. Once a press has sent a save, further presses are ignored until the stored value shows
@@ -260,6 +260,14 @@ windows automatically**. Where those switches sit, and what the rest of the sect
 `docs/product/starting-usage-windows.md`. Every setting of the section is the user's alone: no agent changes one through the
 settings tools, though a console session reads some of them (see "Who reads and changes what" in
 `docs/product/agent-settings-tools.md`).
+
+## Memory
+
+Two rows, without group headings: **Let sessions share Octoboard's memory**, the switch that turns Octoboard's memory on
+for sessions launched afterwards, and **Memory of removed projects**, with the number of folders whose memory is left
+behind and a **Manage** button that lists them for deletion. The rows and the Manage dialog are in "The Memory section
+of Settings" in `docs/product/memory.md`. A console session can read and change the switch; nothing of the section
+travels in a configuration export.
 
 ## Git
 

@@ -258,6 +258,10 @@ const INDEX = {
     shown: ({ platform }) => isAvailable(command.availability, clientCapabilities(platform)),
   }))),
   cleanup: [daemonSwitch("auto_delete_unresumable_archives")],
+  memory: [
+    daemonSwitch("memory_enabled"),
+    { id: "memory.leftBehind", label: "settings.memory.leftBehind.title", description: ["settings.memory.leftBehind.description"] },
+  ],
   configuration: [
     {
       id: "configuration.export",

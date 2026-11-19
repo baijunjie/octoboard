@@ -104,7 +104,13 @@ pub(super) fn store_new_console(
     // Written before the record is stored: nothing else can touch a console no one has been told
     // of yet, and a failed write then leaves no console behind. Either failing takes the new
     // working directory with it, so a refused create leaves nothing under `consoles/`.
-    let stored = write_console_session_instructions_from_settings(&state.store, &console)
+    let stored = state
+        .store
+        .memory_enabled()
+        .map_err(anyhow::Error::from)
+        .and_then(|memory_enabled| {
+            write_console_session_instructions_from_settings(&state.store, &console, memory_enabled)
+        })
         .and_then(|()| Ok(state.store.insert_console(&console)?));
     if let Err(err) = stored {
         if let Err(removal) = remove_console_workdir(&console.workdir) {
@@ -325,6 +331,10 @@ pub(super) async fn delete_console(state: &Arc<AppState>, id: String) -> Result<
         }
     }
     state.broadcast(Event::ConsoleDeleted { console: id });
+    // Its projects went with it, so their places' memory may now be left behind.
+    if !projects.is_empty() {
+        super::memory::announce_orphaned(state);
+    }
     Ok(())
 }
 

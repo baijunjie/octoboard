@@ -106,6 +106,13 @@ pub fn readable_utc_minute(millis: i64) -> String {
     )
 }
 
+/// The UTC date of `millis` since the epoch, `2026-10-24`.
+pub fn utc_date(millis: i64) -> String {
+    let days = millis.div_euclid(1_000).div_euclid(86_400);
+    let (year, month, day) = civil_from_days(days);
+    format!("{year:04}-{month:02}-{day:02}")
+}
+
 /// The proleptic Gregorian date `days` after 1970-01-01, the inverse of [`days_from_civil`].
 fn civil_from_days(days: i64) -> (i64, i64, i64) {
     let z = days + 719_468;
@@ -143,6 +150,13 @@ mod tests {
             "2026-10-24 11:59 UTC"
         );
         assert_eq!(readable_utc_minute(951_782_400_000), "2000-02-29 00:00 UTC");
+    }
+
+    #[test]
+    fn a_utc_date_is_the_day_in_utc() {
+        assert_eq!(utc_date(1_792_843_199_899), "2026-10-24");
+        assert_eq!(utc_date(951_782_399_999), "2000-02-28");
+        assert_eq!(utc_date(-1), "1969-12-31");
     }
 
     #[test]

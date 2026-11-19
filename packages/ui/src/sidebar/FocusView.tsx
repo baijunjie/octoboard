@@ -126,6 +126,7 @@ export function ProjectFocusView({
   selectedSessionId?: string;
 }): React.ReactElement {
   const t = useT();
+  const memory = useDaemonStore((s) => s.settings.memory_enabled);
   // Read directly rather than taking it as a prop threaded through `Sidebar.tsx`: this project's
   // own entry, which keeps the same `GitStatus` reference until that entry itself changes, so no
   // `useShallow` is needed.
@@ -162,7 +163,7 @@ export function ProjectFocusView({
           <NewSessionButton shortcut label={t("sidebar.project.openSession")} quickLabel={t("sidebar.project.openSessionQuick")} target={newSession} onOpen={handlers.onOpenDialog} onQuickCreate={handlers.onQuickCreateSession} />
           <ActionMenu
             label={t("sidebar.project.actions", { name: isolate(project.name) })}
-            items={projectMenu(t, handlers, project, archived, { placement: "focused", gitStatus })}
+            items={projectMenu(t, handlers, project, archived, { placement: "focused", gitStatus, memory })}
             contextTargetRef={headerRef}
           />
         </RowIconGroup>
@@ -430,6 +431,7 @@ const FocusProjectGroup = memo(function FocusProjectGroup({
   selectedSessionId?: string;
 }): React.ReactElement {
   const t = useT();
+  const memory = useDaemonStore((s) => s.settings.memory_enabled);
   const { store } = useDaemon();
   // Read as `ProjectFocusView` does, for the Git badge and submenu.
   const gitStatus = useDaemonStore((s) => s.gitStatuses.get(project.id));
@@ -477,7 +479,7 @@ const FocusProjectGroup = memo(function FocusProjectGroup({
           />
           <ActionMenu
             label={t("sidebar.project.actions", { name: isolate(project.name) })}
-            items={projectMenu(t, handlers, project, archived, { placement: "nested", gitStatus, archiveScope: { console: parentConsole.id, consoleSession: consoleSessionId } })}
+            items={projectMenu(t, handlers, project, archived, { placement: "nested", gitStatus, archiveScope: { console: parentConsole.id, consoleSession: consoleSessionId }, memory })}
             contextTargetRef={headerRef}
           />
         </RowControls>

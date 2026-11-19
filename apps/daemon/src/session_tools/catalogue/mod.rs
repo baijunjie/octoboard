@@ -10,6 +10,7 @@
 //! Each tool family's definitions sit in a file of their own; which tools a session is offered,
 //! and in what order, is set here.
 
+mod memory;
 mod messages;
 mod moves;
 mod pages;
@@ -28,6 +29,10 @@ use serde_json::Value;
 
 use crate::protocol::{AgentId, SessionKind};
 
+use memory::{
+    CONSOLE_DELETE_MEMORY, CONSOLE_LIST_MEMORIES, CONSOLE_READ_MEMORY, CONSOLE_SAVE_MEMORY,
+    PROJECT_DELETE_MEMORY, PROJECT_LIST_MEMORIES, PROJECT_READ_MEMORY, PROJECT_SAVE_MEMORY,
+};
 use messages::{INFORM_SESSION, REPORT};
 use moves::{
     BIND_TO_SESSION, HANDOFF_SESSION, RELEASE_SESSION, SET_SESSION_MODEL, SWITCH_SESSION_ACCOUNT,
@@ -98,6 +103,29 @@ pub fn tools_for(kind: SessionKind, worker: bool) -> &'static [ToolDef] {
     }
 }
 
+/// The memory tools, offered only while the application setting `memory_enabled` is on.
+pub const MEMORY_TOOLS: [&str; 4] = [
+    "save_memory",
+    "list_memories",
+    "read_memory",
+    "delete_memory",
+];
+
+/// Whether `name` is one of the [`MEMORY_TOOLS`].
+pub fn is_memory_tool(name: &str) -> bool {
+    MEMORY_TOOLS.contains(&name)
+}
+
+/// The tools a session is offered: [`tools_for`] its kind and binding, without the memory tools
+/// while `memory` (the application setting `memory_enabled`, as it stood at the session's launch)
+/// is off.
+pub fn tools_offered(kind: SessionKind, worker: bool, memory: bool) -> Vec<&'static ToolDef> {
+    tools_for(kind, worker)
+        .iter()
+        .filter(|tool| memory || !is_memory_tool(tool.name))
+        .collect()
+}
+
 pub fn tool_by_name(kind: SessionKind, worker: bool, name: &str) -> Option<&'static ToolDef> {
     tools_for(kind, worker)
         .iter()
@@ -123,6 +151,10 @@ static CONSOLE_SESSION_TOOLS: LazyLock<Vec<ToolDef>> = LazyLock::new(|| {
         UPDATE_CONSOLE,
         GET_SETTINGS,
         UPDATE_SETTINGS,
+        CONSOLE_SAVE_MEMORY,
+        CONSOLE_LIST_MEMORIES,
+        CONSOLE_READ_MEMORY,
+        CONSOLE_DELETE_MEMORY,
         CONSOLE_OPEN_SESSION,
         INSTRUCT_SESSION,
         INTERRUPT_SESSION,
@@ -180,6 +212,10 @@ static WORKER_PROJECT_SESSION_TOOLS: LazyLock<Vec<ToolDef>> = LazyLock::new(|| {
         list_agents(),
         REQUEST_SESSION,
         REQUEST_RESUME_SESSION,
+        PROJECT_SAVE_MEMORY,
+        PROJECT_LIST_MEMORIES,
+        PROJECT_READ_MEMORY,
+        PROJECT_DELETE_MEMORY,
     ]
 });
 
@@ -225,5 +261,9 @@ static COORDINATOR_PROJECT_SESSION_TOOLS: LazyLock<Vec<ToolDef>> = LazyLock::new
         SHOW_PAGE,
         PAGE_GUIDE,
         DELETE_PAGES,
+        PROJECT_SAVE_MEMORY,
+        PROJECT_LIST_MEMORIES,
+        PROJECT_READ_MEMORY,
+        PROJECT_DELETE_MEMORY,
     ]
 });

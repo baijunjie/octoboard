@@ -18,7 +18,7 @@ use rusqlite::Connection;
 /// test-only `PAST_SCHEMAS`, for the test that migrates a database built from each and compares the
 /// result with a fresh one. A version is released once a `desktop-v*` tag is on a commit that carries
 /// it; prerelease tags count.
-pub(super) const SCHEMA_VERSION: i64 = 5;
+pub(super) const SCHEMA_VERSION: i64 = 6;
 
 /// The `application_id` of an Octoboard database, "OCTB" in ASCII, written into the file's header
 /// when it is created, so that a SQLite file of another program is told apart from one of ours.
@@ -79,6 +79,36 @@ pub(super) const MIGRATIONS: &[&str] = &[
      ALTER TABLE settings ADD COLUMN remote_access_port INTEGER;
      UPDATE settings SET interface_language = 'zh-CN' WHERE interface_language = 'zh-Hans';
      UPDATE settings SET interface_language = 'zh-TW' WHERE interface_language = 'zh-Hant';",
+    // 5 to 6: Octoboard's memory, the entries a console's console sessions and a place's project
+    // sessions keep, and the setting that turns it on (see `SCHEMA`).
+    "ALTER TABLE settings ADD COLUMN memory_enabled INTEGER NOT NULL DEFAULT 0;
+     CREATE TABLE memories (
+         console_id         TEXT NOT NULL DEFAULT '',
+         host_id            TEXT NOT NULL DEFAULT '',
+         path               TEXT NOT NULL DEFAULT '',
+         id                 TEXT NOT NULL,
+         summary            TEXT NOT NULL,
+         content            TEXT NOT NULL,
+         local              INTEGER NOT NULL DEFAULT 0,
+         created_at         INTEGER NOT NULL,
+         updated_at         INTEGER NOT NULL,
+         updated_by         TEXT NOT NULL CHECK (updated_by IN ('user', 'agent')),
+         version            INTEGER NOT NULL,
+         PRIMARY KEY (console_id, host_id, path, id)
+     );
+     CREATE TABLE memory_ids (
+         console_id TEXT NOT NULL DEFAULT '',
+         host_id    TEXT NOT NULL DEFAULT '',
+         path       TEXT NOT NULL DEFAULT '',
+         id         TEXT NOT NULL,
+         PRIMARY KEY (console_id, host_id, path, id)
+     );
+     CREATE TRIGGER delete_console_memory
+     AFTER DELETE ON consoles
+     BEGIN
+         DELETE FROM memories WHERE console_id = OLD.id;
+         DELETE FROM memory_ids WHERE console_id = OLD.id;
+     END;",
 ];
 
 /// Every table, index and trigger of the current schema.
@@ -380,12 +410,13 @@ CREATE TABLE settings (
     squash_before_delivery INTEGER NOT NULL DEFAULT 0,
     rebase_before_delivery INTEGER NOT NULL DEFAULT 1,
     delivery            TEXT NOT NULL DEFAULT 'ask',
-    revert_gate         INTEGER NOT NULL DEFAULT 0 , resume_sessions_on_start INTEGER NOT NULL DEFAULT 0, keep_awake INTEGER NOT NULL DEFAULT 0, keep_awake_when TEXT NOT NULL DEFAULT 'working', keep_sessions_in_own_project INTEGER NOT NULL DEFAULT 0, daemon_update_check INTEGER NOT NULL DEFAULT 1, daemon_update_channel TEXT NOT NULL DEFAULT 'stable', allow_remote_access INTEGER NOT NULL DEFAULT 0, remote_access_port INTEGER);
+    revert_gate         INTEGER NOT NULL DEFAULT 0 , resume_sessions_on_start INTEGER NOT NULL DEFAULT 0, keep_awake INTEGER NOT NULL DEFAULT 0, keep_awake_when TEXT NOT NULL DEFAULT 'working', keep_sessions_in_own_project INTEGER NOT NULL DEFAULT 0, daemon_update_check INTEGER NOT NULL DEFAULT 1, daemon_update_channel TEXT NOT NULL DEFAULT 'stable', allow_remote_access INTEGER NOT NULL DEFAULT 0, remote_access_port INTEGER, memory_enabled INTEGER NOT NULL DEFAULT 0);
 -- `resume_sessions_on_start`, `keep_awake`, `keep_awake_when`, `keep_sessions_in_own_project`,
--- `daemon_update_check`, `daemon_update_channel`, `allow_remote_access` and `remote_access_port` are the
--- last columns, spelled as a migration leaves them; see `Store::resume_sessions_on_start`,
--- `Store::keep_awake`, `Store::keep_sessions_in_own_project`, `Store::daemon_update_check`,
--- `Store::allow_remote_access` and `Store::remote_access_port`.
+-- `daemon_update_check`, `daemon_update_channel`, `allow_remote_access`, `remote_access_port` and
+-- `memory_enabled` are the last columns, spelled as a migration leaves them; see
+-- `Store::resume_sessions_on_start`, `Store::keep_awake`, `Store::keep_sessions_in_own_project`,
+-- `Store::daemon_update_check`, `Store::allow_remote_access`, `Store::remote_access_port` and
+-- `Store::memory_enabled`.
 -- The user's explicit choice for a setting of a provider, as JSON (`true`, `false` or a quoted
 -- choice); a setting with no row follows its default. Rows naming a provider or setting this
 -- build does not declare are kept and ignored. See `Store::provider_settings`.
@@ -408,6 +439,45 @@ CREATE TABLE held_terminals (
     launch_id   TEXT NOT NULL,
     PRIMARY KEY (kind, owner_id)
 );
+-- Octoboard's memory: the entries sessions keep across sessions, whatever their agent or account
+-- (see `Store::save_memory`). A row belongs to one memory: a console's (`console_id` set,
+-- `host_id` and `path` empty), which its console sessions keep and which goes with the console,
+-- or a place's (`console_id` empty, `host_id` and `path` the host and stored path of the projects
+-- there), which the project sessions of every project at the place keep and which outlives them.
+-- `id` is the daemon's, unique within the memory. `local` marks a console's entry that holds only
+-- on this machine. `updated_by` says who wrote the entry last, the user or an agent. `version`
+-- starts at 1 and is raised by every update, which names the version it read.
+CREATE TABLE memories (
+    console_id         TEXT NOT NULL DEFAULT '',
+    host_id            TEXT NOT NULL DEFAULT '',
+    path               TEXT NOT NULL DEFAULT '',
+    id                 TEXT NOT NULL,
+    summary            TEXT NOT NULL,
+    content            TEXT NOT NULL,
+    local              INTEGER NOT NULL DEFAULT 0,
+    created_at         INTEGER NOT NULL,
+    updated_at         INTEGER NOT NULL,
+    updated_by         TEXT NOT NULL CHECK (updated_by IN ('user', 'agent')),
+    version            INTEGER NOT NULL,
+    PRIMARY KEY (console_id, host_id, path, id)
+);
+-- Every id a memory has given an entry, kept after the entry is deleted, so that no later entry of
+-- the memory is given it: a session holding the id of a deleted entry never reaches another.
+CREATE TABLE memory_ids (
+    console_id TEXT NOT NULL DEFAULT '',
+    host_id    TEXT NOT NULL DEFAULT '',
+    path       TEXT NOT NULL DEFAULT '',
+    id         TEXT NOT NULL,
+    PRIMARY KEY (console_id, host_id, path, id)
+);
+-- A console's memory, and the ids it gave, go with the console. A trigger rather than a
+-- `REFERENCES`, since a place's rows name no console.
+CREATE TRIGGER delete_console_memory
+AFTER DELETE ON consoles
+BEGIN
+    DELETE FROM memories WHERE console_id = OLD.id;
+    DELETE FROM memory_ids WHERE console_id = OLD.id;
+END;
 -- The name the user gave a shell terminal, by its id, which a daemon that puts the terminal back
 -- from its holder shows again. Forgotten with the terminal. See `Store::shell_terminal_title`.
 CREATE TABLE shell_terminal_titles (
@@ -928,6 +998,7 @@ mod tests {
         include_str!("schema/v2.sql"),
         include_str!("schema/v3.sql"),
         include_str!("schema/v4.sql"),
+        include_str!("schema/v5.sql"),
     ];
 
     /// The files next to `path` that are backups from before a migration.
@@ -1075,7 +1146,7 @@ mod tests {
         }
 
         let store = Store::open(&path).expect("migrated");
-        assert_eq!(user_version(&store.lock()).unwrap(), 5);
+        assert_eq!(user_version(&store.lock()).unwrap(), SCHEMA_VERSION);
         assert!(!store.allow_remote_access().unwrap());
         assert_eq!(store.remote_access_port().unwrap(), None);
         let backup = backups(&path);
@@ -1192,6 +1263,59 @@ mod tests {
         let reopened = Store::open(&path).expect("reopened");
         assert!(reopened.allow_remote_access().unwrap());
         assert_eq!(reopened.remote_access_port().unwrap(), Some(4000));
+    }
+
+    /// Migrating a version 5 database leaves Octoboard's memory off and keeps the values the settings
+    /// row holds; the migrated database holds memory, which goes with its console, and the switch
+    /// survives reopening the store.
+    #[test]
+    fn migrating_a_version_5_database_adds_a_working_memory_switched_off() {
+        use crate::protocol::{MemoryDraft, MemoryScope, MemoryTarget, MemoryWriter};
+        let path = temp_db("migrate-memory");
+        {
+            let conn = Connection::open(&path).expect("version 5 database");
+            conn.execute_batch(PAST_SCHEMAS[4])
+                .expect("version 5 schema");
+            conn.pragma_update(None, "user_version", 5)
+                .expect("version");
+            conn.pragma_update(None, "application_id", APPLICATION_ID)
+                .expect("application id");
+            conn.execute_batch(
+                "INSERT INTO settings (id, auto_pull_repositories) VALUES ('singleton', 1);",
+            )
+            .expect("settings");
+        }
+
+        let store = Store::open(&path).expect("migrated");
+        assert!(!store.memory_enabled().unwrap());
+        assert!(store.get_settings().unwrap().auto_pull_repositories);
+        store.set_memory_enabled(true).unwrap();
+        let console = crate::store::test_support::console(None, None, None);
+        store.insert_console(&console).unwrap();
+        let scope = MemoryScope::Console {
+            console_id: console.id.clone(),
+        };
+        let draft = MemoryDraft {
+            summary: "s".to_string(),
+            content: "x".to_string(),
+            local: None,
+        };
+        store
+            .save_memory(
+                &scope,
+                &MemoryTarget::Create,
+                &draft,
+                &MemoryWriter::User,
+                1,
+                200,
+            )
+            .unwrap();
+        assert_eq!(store.memory_index(&scope).unwrap().len(), 1);
+        store.delete_console(&console.id).unwrap();
+        assert!(store.memory_index(&scope).unwrap().is_empty());
+        drop(store);
+        let reopened = Store::open(&path).expect("reopened");
+        assert!(reopened.memory_enabled().unwrap());
     }
 
     /// Migrating a version 3 database adds the switch that keeps sessions to their own project,

@@ -29,16 +29,17 @@ The top of the sidebar names the console being shown, followed by a **+** button
 action menu. The **+** opens the session dialog before launching anything (see "The session dialog" in
 `docs/product/opening-sessions.md`), or, with the primary modifier held, opens a console session at once without it (see
 "Opening a session with defaults" in `docs/product/opening-sessions.md`). The menu offers **Add project** and **View
-archive**, then a separator, **Console settings**, another separator and **Delete console** (see "Associating a project" in
-`docs/product/projects.md`, and "Editing a console" and "Deleting a console" in `docs/product/consoles.md`; deleting
-asks for a typed confirmation first). **View archive** is a submenu of the console's archive preview (see "The archive
+archive**, then a separator, **Console settings** and, while Octoboard's memory is on, **Memory**, another separator and
+**Delete console** (see "Associating a project" in `docs/product/projects.md`, "Editing a console" and "Deleting a
+console" in `docs/product/consoles.md`, and "The memory dialog" in `docs/product/memory.md`; deleting asks for a typed
+confirmation first). **View archive** is a submenu of the console's archive preview (see "The archive
 view" in `docs/product/archive-view.md` for what it lists and how each item looks); choosing one selects it (see
 "Selecting a session" below). After them, **View all** opens the archive view of all of them whenever the console has an
 archived console session (see "The archive view" in `docs/product/archive-view.md`). A console with no archived console
 session shows only a disabled item saying so. The console's avatar is not repeated here; the rail marks it.
 
 While the console's action menu is open, its top-level actions have fixed letter shortcuts: **Add project** takes
-`A`, **Console settings** takes `E` and **Delete console** takes `D`. They act on the console the menu belongs to,
+`A`, **Console settings** takes `E`, **Memory** takes `M` and **Delete console** takes `D`. They act on the console the menu belongs to,
 including when opened from its avatar on the rail, under "Menu keyboard shortcuts" in
 `docs/product/keyboard-shortcuts.md`. View archive is a submenu and has no temporary letter shortcut.
 

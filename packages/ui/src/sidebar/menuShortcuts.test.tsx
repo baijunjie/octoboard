@@ -20,8 +20,8 @@ const project = projectOf("project", console.id, "Website");
 function mountMenus() {
   const handlers = { onOpenDialog: vi.fn(), onSetPinned: vi.fn(), onFocus: vi.fn(), onSelectSession: vi.fn(), onOpenArchive: vi.fn(), onOpenProjectDirectory: vi.fn(), onOpenSystemTerminal: vi.fn() } as unknown as SidebarHandlers;
   const host = mountHost(<>
-    <ActionMenu label="Project actions" items={() => projectMenu(t, handlers, project, [], { gitStatus: gitStatusOf(project.id) })} />
-    <ActionMenu label="Console actions" items={() => consoleMenu(t, console, handlers, [])} />
+    <ActionMenu label="Project actions" items={() => projectMenu(t, handlers, project, [], { gitStatus: gitStatusOf(project.id), memory: true })} />
+    <ActionMenu label="Console actions" items={() => consoleMenu(t, console, handlers, [], { memory: true })} />
   </>);
   const open = async (label: string) => {
     await act(async () => host.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!.click());
@@ -34,7 +34,7 @@ function mountMenus() {
 const item = (menu: HTMLElement, label: string) => [...menu.querySelectorAll<HTMLElement>("[role=menuitem]")].find((entry) => entry.querySelector(partSelector.itemLabel)?.textContent === label)!;
 
 it.each([
-  ["Pin", "P"], ["Focus mode", "F"], ["Rename", "R"], ["Project settings", "E"], ["Remove project", "D"],
+  ["Pin", "P"], ["Focus mode", "F"], ["Rename", "R"], ["Project settings", "E"], ["Memory", "M"], ["Remove project", "D"],
 ])("takes the project's %s action with %s only in its open menu", async (label, letter) => {
   const { handlers, open, key } = mountMenus();
   key(document.body, letter.toLowerCase());
@@ -49,12 +49,12 @@ it.each([
   key(menu, letter.toLowerCase());
   if (letter === "P") expect(handlers.onSetPinned).toHaveBeenCalledExactlyOnceWith({ project }, true);
   else if (letter === "F") expect(handlers.onFocus).toHaveBeenCalledExactlyOnceWith({ project });
-  else expect(handlers.onOpenDialog).toHaveBeenCalledExactlyOnceWith({ kind: letter === "R" ? "rename-project" : letter === "E" ? "edit-project" : "delete-project", project });
+  else expect(handlers.onOpenDialog).toHaveBeenCalledExactlyOnceWith({ kind: letter === "R" ? "rename-project" : letter === "E" ? "edit-project" : letter === "M" ? "project-memory" : "delete-project", project });
   expect(document.querySelector("[role=menu]")).toBeNull();
 });
 
 describe("console menu letters", () => {
-  it.each([["Add project", "A", "new-project"], ["Console settings", "E", "edit-console"], ["Delete console", "D", "delete-console"]])("takes %s with %s", async (label, letter, kind) => {
+  it.each([["Add project", "A", "new-project"], ["Console settings", "E", "edit-console"], ["Memory", "M", "console-memory"], ["Delete console", "D", "delete-console"]])("takes %s with %s", async (label, letter, kind) => {
     const { handlers, open, key } = mountMenus();
     const menu = await open("Console actions");
     expect(item(menu, label).querySelector("kbd")?.textContent).toBe(letter);

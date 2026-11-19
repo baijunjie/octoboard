@@ -24,7 +24,7 @@ use std::sync::Arc;
 use anyhow::{anyhow, bail, Result};
 use serde_json::{Map, Value};
 
-use crate::session_tools::catalogue::{runs_on_the_call, tool_by_name};
+use crate::session_tools::catalogue::{is_memory_tool, runs_on_the_call, tool_by_name};
 use crate::state::AppState;
 
 use super::tools::archive::{archive_self, archive_session};
@@ -35,7 +35,7 @@ use super::tools::sessions::{
 };
 use super::tools::settings::add_project;
 use super::tools::{
-    account_switch, agents, bindings, handoff, history, models, pages, project_branches,
+    account_switch, agents, bindings, handoff, history, memory, models, pages, project_branches,
     project_changes, reads, resume_request, session_branches, session_model, settings, transfer,
 };
 
@@ -78,6 +78,14 @@ async fn dispatch(
     if tool_by_name(session.kind, session.is_worker(), tool).is_none() {
         bail!("`{tool}` is not a tool this session can call");
     }
+    // Read at each call: the catalogue the session was offered followed the setting at its launch,
+    // and an agent may call a tool it was not offered.
+    if is_memory_tool(tool) && !state.store.memory_enabled()? {
+        bail!(
+            "Octoboard's memory is turned off, so `{tool}` cannot be used; the user turns it on in \
+             Settings, Memory, and a session launched afterwards is offered the memory tools"
+        );
+    }
 
     match tool {
         "list_projects" => reads::list_projects(state, &session, arguments).await,
@@ -88,6 +96,10 @@ async fn dispatch(
         "update_console" => settings::update_console(state, &session, arguments).await,
         "get_settings" => settings::get_settings(state),
         "update_settings" => settings::update_settings(state, arguments),
+        "save_memory" => memory::save_memory(state, &session, arguments),
+        "list_memories" => memory::list_memories(state, &session, arguments),
+        "read_memory" => memory::read_memory(state, &session, arguments),
+        "delete_memory" => memory::delete_memory(state, &session, arguments),
         "open_session" => {
             open_session(state, &session, arguments, crate::session::term::launch).await
         }

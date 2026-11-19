@@ -1698,6 +1698,10 @@
               "type": "string",
               "description": "With `trash_directory`, the `inspection` token of the `inspect_project_removal`\nrefusal this removal was confirmed after, which it then repeats; absent means none."
             },
+            "delete_memory": {
+              "type": "boolean",
+              "description": "Deletes the memory of the project's place as well (see `list_memories`). Refused with\n`memory_place_in_use` while another project, of any console, is at the same place.\nAbsent is false, which keeps it: `list_orphaned_memories` finds it afterwards."
+            },
             "type": {
               "type": "string",
               "const": "delete_project"
@@ -2901,6 +2905,191 @@
         {
           "type": "object",
           "properties": {
+            "console": {
+              "type": "string",
+              "description": "The console whose memory this is; exactly one of `console` and `project` is given."
+            },
+            "project": {
+              "type": "string",
+              "description": "A project whose place's memory this is (its host and stored path, shared by every\nproject there); exactly one of `console` and `project` is given."
+            },
+            "type": {
+              "type": "string",
+              "const": "list_memories"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "description": "The index of a memory, a console's (`console`) or a project's place's (`project`): every\nentry without its content, the most recently updated first. Answered with `memory_list`.\nNeither or both of `console` and `project` is refused with `field_required` (`field`\n`console`) or `unreadable_request`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "console": {
+              "type": "string",
+              "description": "The console whose memory this is; exactly one of `console` and `project` is given."
+            },
+            "project": {
+              "type": "string",
+              "description": "A project whose place's memory this is (its host and stored path, shared by every\nproject there); exactly one of `console` and `project` is given."
+            },
+            "memory": {
+              "type": "string",
+              "description": "The entry's id."
+            },
+            "type": {
+              "type": "string",
+              "const": "read_memory"
+            }
+          },
+          "required": [
+            "type",
+            "memory"
+          ],
+          "description": "One entry of a memory, content included, by its id. Answered with `memory_content`;\nrefused with `unknown_memory` when the memory has no entry of that id."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "console": {
+              "type": "string",
+              "description": "The console whose memory this is; exactly one of `console` and `project` is given."
+            },
+            "project": {
+              "type": "string",
+              "description": "A project whose place's memory this is (its host and stored path, shared by every\nproject there); exactly one of `console` and `project` is given."
+            },
+            "memory": {
+              "type": "string",
+              "description": "The id of the entry to update; absent creates one."
+            },
+            "summary": {
+              "type": "string",
+              "description": "One sentence summing up the content, the entry's label."
+            },
+            "content": {
+              "type": "string",
+              "description": "Markdown."
+            },
+            "local": {
+              "type": "boolean",
+              "description": "Whether a console's entry holds only on this machine: absent is false for a new entry\nand keeps the entry's value on an update. Ignored for a project's place, every entry of\nwhich holds only on this machine."
+            },
+            "version": {
+              "type": "integer",
+              "format": "int64",
+              "description": "The version of the entry the update is based on; absent creates the entry."
+            },
+            "type": {
+              "type": "string",
+              "const": "save_memory"
+            }
+          },
+          "required": [
+            "type",
+            "summary",
+            "content"
+          ],
+          "description": "Creates an entry of a memory, or updates one, written by the user. Without `memory` and\n`version` it creates an entry, with an id the daemon assigns; with both, it updates the\nentry `memory` when `version` is its current version, refused with `memory_changed` when\nit is not and with `unknown_memory` when there is no such entry. One of the two without the\nother is refused with `field_required`, naming the missing one. An entry breaking a rule is\nrefused with `invalid_memory_summary`, `memory_content_empty` or\n`memory_content_too_long`; a new one past the memory's limit with `memory_full`. Answered\nwith `ack`; every client hears of the entry saved, with its id, from `memory_saved`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "console": {
+              "type": "string",
+              "description": "The console whose memory this is; exactly one of `console` and `project` is given."
+            },
+            "project": {
+              "type": "string",
+              "description": "A project whose place's memory this is (its host and stored path, shared by every\nproject there); exactly one of `console` and `project` is given."
+            },
+            "memory": {
+              "type": "string",
+              "description": "The entry's id."
+            },
+            "type": {
+              "type": "string",
+              "const": "delete_memory"
+            }
+          },
+          "required": [
+            "type",
+            "memory"
+          ],
+          "description": "Deletes one entry of a memory by its id, refused with `unknown_memory` when there is no\nsuch entry. Answered with `ack`; every client hears of it from `memories_deleted`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "console": {
+              "type": "string",
+              "description": "The console whose memory this is; exactly one of `console` and `project` is given."
+            },
+            "project": {
+              "type": "string",
+              "description": "A project whose place's memory this is (its host and stored path, shared by every\nproject there); exactly one of `console` and `project` is given."
+            },
+            "type": {
+              "type": "string",
+              "const": "delete_memories"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "description": "Deletes every entry of a memory. Answered with `ack`; every client hears of the entries\ndeleted from `memories_deleted`, unless there were none."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "list_orphaned_memories"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "description": "The places whose memory no project is at any more, with how many entries each holds, the\nmost recently updated first. Answered with `orphaned_memory_list`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "host_id": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string",
+              "const": "delete_orphaned_memory"
+            }
+          },
+          "required": [
+            "type",
+            "host_id",
+            "path"
+          ],
+          "description": "Deletes the memory of a place no project is at any more, refused with\n`memory_place_in_use` while a project is at it. Answered with `ack`; every client hears of\nthe entries deleted from `memories_deleted` and of what is left behind from\n`orphaned_memory_list`."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "delete_orphaned_memories"
+            }
+          },
+          "required": [
+            "type"
+          ],
+          "description": "Deletes the memory of every place no project is at any more, at once; a place a project is\nadded at meanwhile keeps its memory. Answered with `ack`; every client hears of the entries\ndeleted from `memories_deleted`, one per place, and of what is left behind from one\n`orphaned_memory_list`."
+        },
+        {
+          "type": "object",
+          "properties": {
             "page": {
               "type": "string"
             },
@@ -3038,6 +3227,9 @@
               "type": "boolean"
             },
             "keep_sessions_in_own_project": {
+              "type": "boolean"
+            },
+            "memory_enabled": {
               "type": "boolean"
             },
             "interface_language": {

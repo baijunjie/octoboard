@@ -301,8 +301,10 @@ When it goes through, deleting a console also deletes every project association 
 to it, archived sessions included, with the last output Octoboard kept for each, and every page its sessions pushed to
 the report panel, ends every shell terminal of its projects (see "Closing a shell terminal" in
 `docs/product/shell-terminals.md`), stops each project's processes (see "Removing a project" in
-`docs/product/background-processes.md`), and removes the console's own working directory under `~/.octoboard`. No
-project directory is touched. A running shell terminal does not count as a running session: it never refuses the
+`docs/product/background-processes.md`), and removes the console's own working directory under `~/.octoboard`. It
+deletes the console's memory too, whatever the memory setting says; the memory of its projects' places stays, left
+behind where no other project is at the place (see "Console memory" and "Memory left behind" in
+`docs/product/memory.md`). No project directory is touched. A running shell terminal does not count as a running session: it never refuses the
 deletion.
 
 Deleting the **last** console leaves the window with none, which it shows as the welcome screen (see

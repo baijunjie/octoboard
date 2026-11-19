@@ -335,6 +335,23 @@ pub mod error_code {
     pub const PAGE_NOT_CURRENT: Code = Code("page_not_current");
     /// The page's form was already submitted: it takes one submission, whichever window sent it.
     pub const PAGE_ALREADY_SUBMITTED: Code = Code("page_already_submitted");
+    /// A memory has no entry of that id. `params` names it as `memory`.
+    pub const UNKNOWN_MEMORY: Code = Code("unknown_memory");
+    /// A memory entry's summary is blank, longer than `limit` characters, or more than one
+    /// line.
+    pub const INVALID_MEMORY_SUMMARY: Code = Code("invalid_memory_summary");
+    /// A memory entry's content is blank.
+    pub const MEMORY_CONTENT_EMPTY: Code = Code("memory_content_empty");
+    /// A memory entry's content is longer than `limit` bytes of UTF-8; it has `bytes`.
+    pub const MEMORY_CONTENT_TOO_LONG: Code = Code("memory_content_too_long");
+    /// An update of a memory entry names a version other than its current one: someone saved it
+    /// since. `params` names it by its id as `memory` and its current summary as `summary`.
+    pub const MEMORY_CHANGED: Code = Code("memory_changed");
+    /// The memory holds `limit` entries already, as many as it may.
+    pub const MEMORY_FULL: Code = Code("memory_full");
+    /// A request to delete a place's memory while a project other than the one being removed is
+    /// at the place, which still reads it. `params` names the project there as `project`.
+    pub const MEMORY_PLACE_IN_USE: Code = Code("memory_place_in_use");
     pub const BINARY_NOT_FOUND: Code = Code("binary_not_found");
     pub const SHELL_ENVIRONMENT_TIMEOUT: Code = Code("shell_environment_timeout");
     /// A session's resolved agent has been determined unavailable (its binary does not resolve on

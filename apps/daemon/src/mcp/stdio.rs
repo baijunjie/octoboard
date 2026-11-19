@@ -1,9 +1,9 @@
 //! `octoboardd mcp` — the MCP server each adapter registers as a `command`-type server, one child
 //! process per session.
 //!
-//! It owns no state of its own but which catalogue it announces. That comes from
-//! [`tools_for`] for the kind and binding it was launched with, and follows the binding as
-//! the daemon reports it with every answer: a session whose binding changes while it runs has its
+//! It owns no state of its own but which catalogue it announces. That comes from [`tools_offered`]
+//! for the kind, binding and memory setting it was launched with, and follows the binding as the
+//! daemon reports it with every answer: a session whose binding changes while it runs has its
 //! agent told the tool list changed (`notifications/tools/list_changed`), for an agent that reads
 //! it again on that. The daemon checks every call against the binding as it stands either way.
 //! Every call is forwarded to the running daemon, which is where the sessions and the store
@@ -35,7 +35,9 @@ use rmcp::{ErrorData, RoleServer, ServerHandler, ServiceExt};
 use serde_json::{json, Value};
 
 use crate::protocol::SessionKind;
-use crate::session_tools::catalogue::{tool_by_name, tools_for, SERVER_KEY, WITHDRAWN_ON_CANCEL};
+use crate::session_tools::catalogue::{
+    tool_by_name, tools_offered, SERVER_KEY, WITHDRAWN_ON_CANCEL,
+};
 use crate::session_tools::CALL_TIMEOUT;
 
 /// Runs the server until the agent closes the connection.
@@ -43,6 +45,7 @@ pub fn run(
     session: String,
     kind: SessionKind,
     worker: bool,
+    memory: bool,
     port: u16,
     key_file: &Path,
     token: String,
@@ -58,6 +61,7 @@ pub fn run(
             session: Arc::new(session),
             kind,
             worker: Arc::new(AtomicBool::new(worker)),
+            memory,
             port,
             key: Arc::new(key),
             token: Arc::new(token),
@@ -78,11 +82,35 @@ struct OctoboardMcp {
     /// Whether the session is a worker, which decides the catalogue along with the kind: the
     /// launch argument at first, then what the daemon's latest answer said.
     worker: Arc<AtomicBool>,
+    /// Whether Octoboard's memory was on at the session's launch (`--memory`), which decides
+    /// whether the memory tools are announced. A memory tool called anyway is forwarded, and the
+    /// daemon refuses it while the setting is off at the time of the call.
+    memory: bool,
     port: u16,
     /// The daemon's key, which every connection to it has to carry; the token only says which
     /// session a call is for.
     key: Arc<String>,
     token: Arc<String>,
+}
+
+impl OctoboardMcp {
+    /// The tools this server announces: the catalogue for its kind, its binding as it now stands
+    /// and the memory setting it was launched with.
+    fn announced_tools(&self) -> Vec<Tool> {
+        tools_offered(self.kind, self.worker.load(Ordering::Relaxed), self.memory)
+            .into_iter()
+            .map(|tool| {
+                Tool::new(
+                    tool.name,
+                    tool.description,
+                    (tool.schema)()
+                        .as_object()
+                        .cloned()
+                        .expect("every tool schema is a JSON object"),
+                )
+            })
+            .collect()
+    }
 }
 
 impl ServerHandler for OctoboardMcp {
@@ -112,20 +140,7 @@ impl ServerHandler for OctoboardMcp {
         _request: Option<PaginatedRequestParams>,
         _context: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, ErrorData> {
-        let tools = tools_for(self.kind, self.worker.load(Ordering::Relaxed))
-            .iter()
-            .map(|tool| {
-                Tool::new(
-                    tool.name,
-                    tool.description,
-                    (tool.schema)()
-                        .as_object()
-                        .cloned()
-                        .expect("every tool schema is a JSON object"),
-                )
-            })
-            .collect();
-        Ok(ListToolsResult::with_all_items(tools))
+        Ok(ListToolsResult::with_all_items(self.announced_tools()))
     }
 
     async fn call_tool(
@@ -500,6 +515,7 @@ mod tests {
             session: Arc::new("s-1".to_string()),
             kind,
             worker: Arc::new(AtomicBool::new(worker)),
+            memory: false,
             port: 0,
             key: Arc::new("k".to_string()),
             token: Arc::new("t".to_string()),
@@ -531,6 +547,31 @@ mod tests {
             assert!(!project.is_known_tool("no_such_tool"));
         }
         assert!(!server(SessionKind::Console, false).is_known_tool("report"));
+    }
+
+    /// The memory tools are announced exactly when the server was launched with `--memory`, for
+    /// either kind of session.
+    #[test]
+    fn the_memory_tools_are_announced_only_with_memory_on() {
+        for kind in [SessionKind::Console, SessionKind::Project] {
+            for memory in [false, true] {
+                let announced: Vec<String> = OctoboardMcp {
+                    memory,
+                    ..server(kind, false)
+                }
+                .announced_tools()
+                .into_iter()
+                .map(|tool| tool.name.to_string())
+                .collect();
+                for name in crate::session_tools::catalogue::MEMORY_TOOLS {
+                    assert_eq!(
+                        announced.iter().any(|tool| tool == name),
+                        memory,
+                        "{kind:?} {name} with memory {memory}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]

@@ -33,28 +33,50 @@ pub fn remove_console_workdir(workdir: &str) -> std::io::Result<()> {
 }
 
 /// Writes the console's instruction file from the console as it is stored right now, under the
-/// lock that keeps concurrent refreshes from leaving an older record's text on disk.
+/// lock that keeps concurrent refreshes from leaving an older record's text on disk, with the
+/// memory text the stored `memory_enabled` calls for.
 pub fn refresh_console_session_instructions(store: &Store, console_id: &str) -> Result<()> {
+    refresh_console_session_instructions_with(store, console_id, store.memory_enabled()?)
+}
+
+/// [`refresh_console_session_instructions`] with the memory text `memory_enabled` calls for: a
+/// launch reads the setting once and passes the same value here and to the agent, so the file,
+/// the tools offered and the agent's own memory never follow two different values of it.
+pub fn refresh_console_session_instructions_with(
+    store: &Store,
+    console_id: &str,
+    memory_enabled: bool,
+) -> Result<()> {
     let _writing = INSTRUCTION_FILE_WRITES
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let console = store.require_console(console_id)?;
-    write_console_session_instructions_from_settings(store, &console)
+    write_console_session_instructions_from_settings(store, &console, memory_enabled)
 }
 
-/// Writes the console's instruction file with the guidance the stored settings call for: asking as
-/// choices, and replying in the interface's language. No lock: see
-/// [`write_console_session_instructions`].
+/// Writes the console's instruction file with the guidance the stored settings call for (asking
+/// as choices, and replying in the interface's language) and, with `memory_enabled`, the index of
+/// the console's memory as it is stored now. No lock: see [`write_console_session_instructions`].
 pub fn write_console_session_instructions_from_settings(
     store: &Store,
     console: &Console,
+    memory_enabled: bool,
 ) -> Result<()> {
     let user_language = store.interface_language()?;
+    let memory = if memory_enabled {
+        store.memory_index(&crate::protocol::MemoryScope::Console {
+            console_id: console.id.clone(),
+        })?
+    } else {
+        Vec::new()
+    };
     write_console_session_instructions(
         console,
         &RoleOptions {
             ask_as_choices: store.ask_questions_as_choices()?,
             user_language: user_language.as_deref(),
+            memory: &memory,
+            memory_enabled,
             ..RoleOptions::default()
         },
     )
@@ -244,10 +266,10 @@ mod tests {
         );
     }
 
-    /// Where the host makes no file links, every instruction file is a regular file, in place of the
-    /// links a run that made them left: `CLAUDE.md` is Claude Code's import line for `AGENTS.md`,
-    /// and the test provider's file, a provider with no import line, a copy of the text rewritten
-    /// with it. Once the host makes file links again, links replace them.
+    /// Where the host makes no file links, every instruction file is a regular file, in place of
+    /// the links a run that made them left: `CLAUDE.md` is Claude Code's import line for
+    /// `AGENTS.md`, and the test provider's file, a provider with no import line, a copy of the
+    /// text rewritten with it. Once the host makes file links again, links replace them.
     #[test]
     fn a_console_without_file_links_writes_regular_instruction_files() {
         let workdir = ScratchDir::new("console-instructions-copied");
@@ -290,6 +312,132 @@ mod tests {
             );
         }
         assert_eq!(workdir.read_dir().unwrap().count(), names.len());
+    }
+
+    /// A refresh writes the console's memory index as it is stored at that moment, so a console
+    /// session launched after another saved an entry starts with it in its index.
+    #[test]
+    fn a_refresh_writes_the_stored_memory_index() {
+        use crate::protocol::{MemoryDraft, MemoryScope, MemoryWriter};
+
+        let (state, dir) = crate::test_support::app_state("console-instructions-memory");
+        let console = crate::test_support::console(&dir);
+        std::fs::create_dir_all(&console.workdir).unwrap();
+        state.store.insert_console(&console).unwrap();
+        // The index is written only while Octoboard's memory is on, which it is not by default.
+        state.store.set_memory_enabled(true).unwrap();
+        refresh_console_session_instructions(&state.store, &console.id).unwrap();
+        let file = Path::new(&console.workdir).join(INSTRUCTION_FILE);
+        assert!(std::fs::read_to_string(&file)
+            .unwrap()
+            .contains("(no entries yet)"));
+
+        let draft = MemoryDraft {
+            summary: "Web requests go to site".to_string(),
+            content: "the entry's own body".to_string(),
+            local: None,
+        };
+        let writer = MemoryWriter::User;
+        let saved = crate::coordinator::memory::save_memory(
+            &state.store,
+            &MemoryScope::Console {
+                console_id: console.id.clone(),
+            },
+            &crate::protocol::MemoryTarget::Create,
+            draft,
+            &writer,
+        )
+        .unwrap()
+        .unwrap();
+        refresh_console_session_instructions(&state.store, &console.id).unwrap();
+        let text = std::fs::read_to_string(&file).unwrap();
+        assert!(
+            text.contains(&format!(
+                "- `{}` (updated {}): Web requests go to site",
+                saved.id,
+                crate::time::utc_date(saved.updated_at)
+            )),
+            "{text}"
+        );
+        assert!(!text.contains("(no entries yet)"));
+        assert!(!text.contains("the entry's own body"));
+    }
+
+    /// A refresh follows the memory setting as it is stored at that moment: while it is off, the
+    /// file says nothing of memory, not even of an entry the console holds; turned on, the index is
+    /// in it; turned off again, it is gone and the entry is still held.
+    #[test]
+    fn a_refresh_writes_the_memory_text_only_while_memory_is_on() {
+        use crate::protocol::{MemoryDraft, MemoryScope, MemoryTarget, MemoryWriter};
+
+        let (state, dir) = crate::test_support::app_state("console-instructions-memory-switch");
+        let console = crate::test_support::console(&dir);
+        std::fs::create_dir_all(&console.workdir).unwrap();
+        state.store.insert_console(&console).unwrap();
+        let scope = MemoryScope::Console {
+            console_id: console.id.clone(),
+        };
+        let saved = crate::coordinator::memory::save_memory(
+            &state.store,
+            &scope,
+            &MemoryTarget::Create,
+            MemoryDraft {
+                summary: "Web requests go to site".to_string(),
+                content: "the entry's own body".to_string(),
+                local: None,
+            },
+            &MemoryWriter::User,
+        )
+        .unwrap()
+        .unwrap();
+        let file = Path::new(&console.workdir).join(INSTRUCTION_FILE);
+        let refreshed = || {
+            refresh_console_session_instructions(&state.store, &console.id).unwrap();
+            std::fs::read_to_string(&file).unwrap()
+        };
+        let says_nothing_of_memory = |text: &str| {
+            for absent in [
+                "## Memory",
+                "console_memory",
+                saved.id.as_str(),
+                "Web requests go to site",
+            ] {
+                assert!(!text.contains(absent), "{absent}");
+            }
+            for tool in crate::session_tools::catalogue::MEMORY_TOOLS {
+                assert!(!text.contains(tool), "{tool}");
+            }
+        };
+
+        says_nothing_of_memory(&refreshed());
+        state.store.set_memory_enabled(true).unwrap();
+        let on = refreshed();
+        assert!(on.contains("<console_memory>"), "{on}");
+        assert!(on.contains(&saved.id), "{on}");
+        assert!(on.contains("Web requests go to site"), "{on}");
+        state.store.set_memory_enabled(false).unwrap();
+        says_nothing_of_memory(&refreshed());
+        assert_eq!(state.store.memories(&scope).unwrap().len(), 1);
+    }
+
+    /// A refresh given the setting's value follows that value, not the one stored meanwhile, so a
+    /// launch's file agrees with the tools and the agent's own memory it read the setting for.
+    #[test]
+    fn a_refresh_given_the_setting_follows_it_over_the_stored_one() {
+        let (state, dir) = crate::test_support::app_state("console-instructions-memory-given");
+        let console = crate::test_support::console(&dir);
+        std::fs::create_dir_all(&console.workdir).unwrap();
+        state.store.insert_console(&console).unwrap();
+        let file = Path::new(&console.workdir).join(INSTRUCTION_FILE);
+        let read = || std::fs::read_to_string(&file).unwrap();
+
+        state.store.set_memory_enabled(true).unwrap();
+        refresh_console_session_instructions_with(&state.store, &console.id, false).unwrap();
+        assert!(!read().contains("save_memory"), "{}", read());
+
+        state.store.set_memory_enabled(false).unwrap();
+        refresh_console_session_instructions_with(&state.store, &console.id, true).unwrap();
+        assert!(read().contains("(no entries yet)"), "{}", read());
     }
 
     /// Rewriting the instruction file keeps the permissions the user gave it.

@@ -3,7 +3,7 @@ import type { Translate } from "../i18n/catalog";
 import type { ReplyOf } from "../requests";
 import type { Imported } from "../configuration/ImportResult";
 import type { Inspection } from "../configuration/importPlan";
-import type { AccountMcpInventory, AccountTrashOutcome, McpServerAuthOutcome, Agent, AgentModel, ConversationLocation, DirEntry, GitStatus, HistoryMessage, ImportFailure, ImportItem, ModelsUnavailable, PathLinkKind, PathLinkView, ProcessTree, PullOutcome, QuotaUnavailable, ResetCreditOutcome, SessionBranchItem, SessionRecordPresence, UnstoppedReason } from "../protocol";
+import type { AccountMcpInventory, AccountTrashOutcome, McpServerAuthOutcome, Agent, AgentModel, ConversationLocation, DirEntry, GitStatus, HistoryMessage, MemoryEntry, ImportFailure, ImportItem, ModelsUnavailable, PathLinkKind, PathLinkView, ProcessTree, PullOutcome, QuotaUnavailable, ResetCreditOutcome, SessionBranchItem, SessionRecordPresence, UnstoppedReason } from "../protocol";
 import type { MessageParams } from "../errors/codedError";
 import type { PathLinkRefusedCause } from "../errors/causes";
 import type { State } from "../store";
@@ -50,6 +50,26 @@ export interface RaisedNotificationFixture {
 export interface NoticeNotificationFixture {
   kind: "notice";
   message: string | ((t: Translate) => string);
+}
+
+/** What the daemon holds of the memories, and how it answers the dialogs that show them (`fixtureMemory.ts`). Each entry
+ * names its scope: a console, or the place (host and path) that a project shown there is at. The requests are answered as
+ * the daemon does: a save creates or updates the entry as the user, a deletion removes it, and every client hears of the
+ * change from `memory_saved` or `memories_deleted`. The places whose memory no project is at (`list_orphaned_memories`)
+ * follow from the entries and the projects of the scenario's state. */
+export interface MemoryFixture {
+  /** The entries held, of any memory. */
+  entries?: readonly MemoryEntry[];
+  /** `list_memories` is never answered (`"pending"`) or refused with this error. Left out, it is answered from `entries`. */
+  listing?: FixtureError | "pending";
+  /** Entries as the daemon holds them now, newer than the `entries` the window was told of: a console session saved them and
+   * the window did not hear (a broadcast lost across a reconnection). Listings answer from `entries`, and so do reads until a save
+   * is refused: a save is checked against these, so an update of the version the window knows is refused with
+   * `memory_changed` (the session saved after the window read the entry), and a read after that finds the newer one. */
+  unheard?: readonly MemoryEntry[];
+  /** `list_orphaned_memories` is never answered (`"pending"`) or refused with this error. Left out, it is answered from
+   * `entries` and the projects. */
+  orphanListing?: FixtureError | "pending";
 }
 
 /** One answer of `inspect_account_trash`: an outcome, a failure of the request, or `"pending"` for one never answered. */
@@ -417,4 +437,7 @@ export interface Fixture {
    * `read_project_change`); without it, `SAMPLE_GIT`; `null` for a project in no repository. */
   git?: FixtureGit | null;
   configuration?: ConfigurationFixture;
+  /** The memories (`list_memories`, `read_memory`, `save_memory`, `delete_memory`, `delete_memories`, and the places left
+   * behind by removed projects); without it every memory is empty. */
+  memory?: MemoryFixture;
 }

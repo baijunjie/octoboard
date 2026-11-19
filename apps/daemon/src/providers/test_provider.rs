@@ -69,6 +69,7 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
     },
     model_display: ModelDisplay::PLAIN,
     compatibility_source: false,
+    native_memory_switch: false,
     settings: &[SettingDescriptor {
         id: "mode",
         kind: SettingKind::Choice {

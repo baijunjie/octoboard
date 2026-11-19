@@ -10,6 +10,8 @@ import { statusLabel } from "../sessions/sessionLabel";
 import { type ShownStatusKind } from "../sessions/sessionStatus";
 import { eventKey, type Binding, type ModifierHost } from "../shortcuts/binding";
 import type { Daemon, State } from "../store";
+import { isMemoryChangeEvent } from "../store/memoryListeners";
+import type { FixtureDaemon } from "./fixtureDaemon";
 import type { TerminalElement } from "../terminal/terminalTextView";
 import { readHost } from "../platform/host";
 import { renderedCodeRange } from "../viewer/code/rendererDom";
@@ -528,8 +530,10 @@ export interface Ui {
    * collection changes under an open view the way another window or the machine changes it (an account added, a
    * terminal closed there). An event may be written as a function of the store's state by then, for a whole-list
    * event that must keep the rest of the list; such a function answers `null` when the daemon would send nothing at
-   * that state (a deletion of pages that are not there), so no event the daemon never sends reaches the store. It
-   * returns once the changes have had time to animate. */
+   * that state (a deletion of pages that are not there), so no event the daemon never sends reaches the store. A change
+   * to a memory (`memory_saved`, `memories_deleted`), which the store does not hold, is delivered to what shows
+   * the memory, and recorded in what the fixture daemon holds, as the connection does; it needs the gallery's fixture
+   * daemon. It returns once the changes have had time to animate. */
   daemonEvents: (...events: (DaemonEvent | ((state: State) => DaemonEvent | null))[]) => Promise<void>;
 }
 
@@ -595,7 +599,7 @@ export type PressInput = "virtual" | "mouse";
 /** The steps' driver for the page `doc`. `host` says which key is the shortcut modifier for a step that presses it (a chord, a
  * click that carries it): the machine the page runs on by default, the scenario's own host in the gallery. With `input: "mouse"`
  * the presses of `press` and the steps built on it are mouse presses, for a picture that must not show a keyboard ring. */
-export function createUi(doc: Document, language: Language, daemon?: Daemon, host: ModifierHost = readHost(), options: { input?: PressInput } = {}): Ui {
+export function createUi(doc: Document, language: Language, daemon?: Daemon | FixtureDaemon, host: ModifierHost = readHost(), options: { input?: PressInput } = {}): Ui {
   const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
   /** Whether the window uses the single-panel tablet layout. A document whose stylesheet does not declare the
@@ -976,7 +980,10 @@ export function createUi(doc: Document, language: Language, daemon?: Daemon, hos
       const { applyDaemonEvent } = await import("../store");
       for (const event of events) {
         const sent = typeof event === "function" ? event(daemon.store.getState()) : event;
-        if (sent) applyDaemonEvent(daemon.store, sent);
+        if (!sent) continue;
+        if (!isMemoryChangeEvent(sent)) applyDaemonEvent(daemon.store, sent);
+        else if ("deliverMemoryChange" in daemon) daemon.deliverMemoryChange(sent);
+        else throw new Error("This scenario's daemon cannot deliver a change to a memory");
       }
       await wait(300);
     },

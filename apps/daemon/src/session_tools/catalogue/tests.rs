@@ -104,7 +104,11 @@ fn the_tools_offered_follow_from_kind_and_binding() {
             "get_project",
             "list_agents",
             "request_session",
-            "request_resume_session"
+            "request_resume_session",
+            "save_memory",
+            "list_memories",
+            "read_memory",
+            "delete_memory"
         ]
     );
     assert_eq!(
@@ -146,7 +150,11 @@ fn the_tools_offered_follow_from_kind_and_binding() {
             "list_pages",
             "show_page",
             "page_guide",
-            "delete_pages"
+            "delete_pages",
+            "save_memory",
+            "list_memories",
+            "read_memory",
+            "delete_memory"
         ]
     );
     assert_eq!(
@@ -159,6 +167,10 @@ fn the_tools_offered_follow_from_kind_and_binding() {
             "update_console",
             "get_settings",
             "update_settings",
+            "save_memory",
+            "list_memories",
+            "read_memory",
+            "delete_memory",
             "open_session",
             "instruct_session",
             "interrupt_session",

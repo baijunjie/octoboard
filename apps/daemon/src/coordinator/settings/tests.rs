@@ -763,6 +763,13 @@ fn each_settings_change_names_the_path_it_writes() {
             },
         ),
         (
+            "memory_enabled",
+            SettingsChanges {
+                memory_enabled: Some(true),
+                ..SettingsChanges::default()
+            },
+        ),
+        (
             "interface_language",
             SettingsChanges {
                 interface_language: Some(String::new()),

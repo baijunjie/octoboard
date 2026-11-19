@@ -88,6 +88,7 @@ function DialogFrame({
   onClose,
   children,
   footer,
+  footerStart,
   submitLabel,
   busy = false,
   submitDisabled,
@@ -108,6 +109,10 @@ function DialogFrame({
   title: string | React.ReactElement;
   /** Controls beside the title, outside the heading's accessible name. */
   headerLeading?: React.ReactNode;
+  /** Quiet status at the start of the footer (a count), before its buttons, which stay at the end in their order. When
+   * the footer wraps at a narrow width it stays on the first line at the start, and the buttons wrap after it. Not for
+   * controls: the footer's actions are its buttons. */
+  footerStart?: React.ReactNode;
   /** A line under the title that belongs to it (where a compared change is from): in the header, so
    * it reads after the title and is never clipped by the body's scroller. It brings its own height. */
   subtitle?: React.ReactElement;
@@ -253,6 +258,7 @@ function DialogFrame({
       </ModalBody>
       {footer !== null && (
         <ModalFooter className="flex-wrap">
+          {footerStart !== undefined && footerStart !== null && footerStart !== false && <div className="me-auto min-w-0">{footerStart}</div>}
           {footer ?? (
             <>
               <Button ref={cancelRef} type="button" variant="secondary" onPress={onClose} autoFocus={autoFocusSubmit && submitDisabled}>

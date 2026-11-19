@@ -597,6 +597,146 @@ async fn a_claude_resume_takes_its_instruction_as_the_launch_prompt() {
     }
 }
 
+/// What a launch hands the agent of Octoboard's memory follows the setting at the launch: while it
+/// is off, nothing, whatever the place holds; while it is on, a project session is given the index
+/// of its place's memory, the most recently updated first, as its launch snapshot.
+#[tokio::test]
+async fn a_project_sessions_launch_carries_the_setting_and_its_places_index() {
+    use crate::coordinator::memory::{place_of, save_memory};
+    use crate::protocol::{MemoryDraft, MemoryTarget, MemoryWriter};
+    use crate::test_support::{stand_in_launch, Launched, StandIn};
+    use std::sync::Mutex;
+
+    let (state, _dir) = console_with_project_and_accounts("coordinator-launch-memory");
+    let place = place_of(&state.store.require_project("project-1").unwrap());
+    let ids: Vec<String> = ["older", "newer"]
+        .into_iter()
+        .map(|summary| {
+            save_memory(
+                &state.store,
+                &place,
+                &MemoryTarget::Create,
+                MemoryDraft {
+                    summary: summary.to_string(),
+                    content: "x".to_string(),
+                    local: None,
+                },
+                &MemoryWriter::Agent,
+            )
+            .unwrap()
+            .unwrap()
+            .id
+        })
+        .collect();
+    for (enabled, id) in [(false, "off"), (true, "on")] {
+        state.store.set_memory_enabled(enabled).unwrap();
+        state
+            .store
+            .insert_session(&Session {
+                agent_session_id: Some(format!("conversation-{id}")),
+                has_conversation: true,
+                ..project_session(id, AgentId::CLAUDE, SessionStatus::Interrupted)
+            })
+            .unwrap();
+        let seen = Arc::new(Mutex::new(Vec::<(bool, Vec<String>)>::new()));
+        let launches = Arc::new(Mutex::new(Vec::<Launched>::new()));
+        let started = Arc::new(Mutex::new(Vec::<StandIn>::new()));
+        let inner = stand_in_launch(&started, &launches, || {});
+        let record = seen.clone();
+        let claim = state.begin_launch(id).unwrap();
+        relaunch_session_with(&state, &claim, id, None, true, None, None, move |request| {
+            record.lock().unwrap().push((
+                request.memory_enabled,
+                request
+                    .memory
+                    .iter()
+                    .map(|entry| entry.id.clone())
+                    .collect(),
+            ));
+            inner(request)
+        })
+        .await
+        .unwrap();
+        let expected = if enabled {
+            vec![ids[1].clone(), ids[0].clone()]
+        } else {
+            Vec::new()
+        };
+        assert_eq!(*seen.lock().unwrap(), [(enabled, expected)], "{id}");
+    }
+}
+
+/// A console session's launch carries the setting but no index of its own: its index is in its
+/// instruction file, written at the launch from the console's memory as it stands.
+#[tokio::test]
+async fn a_console_sessions_launch_carries_the_setting_and_writes_its_index_to_the_file() {
+    use crate::coordinator::memory::save_memory;
+    use crate::protocol::{MemoryDraft, MemoryScope, MemoryTarget, MemoryWriter};
+    use crate::test_support::{console_session, stand_in_launch, Launched, StandIn};
+    use std::sync::Mutex;
+
+    let (state, dir) = crate::test_support::app_state("coordinator-launch-console-memory");
+    let workdir = crate::coordinator::test_support::console_workdir_in(&dir);
+    state
+        .store
+        .insert_console(&console(AgentId::CODEX, &workdir))
+        .unwrap();
+    state
+        .store
+        .insert_session(&Session {
+            agent: AgentId::CODEX,
+            ..console_session("hub", SessionStatus::Interrupted)
+        })
+        .unwrap();
+    let saved = save_memory(
+        &state.store,
+        &MemoryScope::Console {
+            console_id: "console-1".to_string(),
+        },
+        &MemoryTarget::Create,
+        MemoryDraft {
+            summary: "Web requests go to site".to_string(),
+            content: "the entry's own body".to_string(),
+            local: None,
+        },
+        &MemoryWriter::User,
+    )
+    .unwrap()
+    .unwrap();
+    state.store.set_memory_enabled(true).unwrap();
+    crate::coordinator::console_workdir::FILE_LINKS_OVERRIDE.set(Some(false));
+    let seen = Arc::new(Mutex::new(Vec::<(bool, usize)>::new()));
+    let launches = Arc::new(Mutex::new(Vec::<Launched>::new()));
+    let started = Arc::new(Mutex::new(Vec::<StandIn>::new()));
+    let inner = stand_in_launch(&started, &launches, || {});
+    let record = seen.clone();
+    let claim = state.begin_launch("hub").unwrap();
+    relaunch_session_with(
+        &state,
+        &claim,
+        "hub",
+        None,
+        false,
+        None,
+        None,
+        move |request| {
+            record
+                .lock()
+                .unwrap()
+                .push((request.memory_enabled, request.memory.len()));
+            inner(request)
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(*seen.lock().unwrap(), [(true, 0)]);
+    let file = std::fs::read_to_string(workdir.join("AGENTS.md")).unwrap();
+    assert!(file.contains("<console_memory>"), "{file}");
+    assert!(file.contains(&saved.id), "{file}");
+    assert!(file.contains("Web requests go to site"), "{file}");
+    assert!(!file.contains("the entry's own body"));
+}
+
 /// Clients are shown a relaunch as handing the agent a prompt exactly while it is under way and
 /// given an instruction (a carried-on turn, say), and not once its claim is released.
 #[tokio::test]

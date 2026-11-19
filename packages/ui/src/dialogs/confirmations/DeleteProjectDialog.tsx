@@ -1,16 +1,19 @@
 import React, { useState } from "react";
 
+import { ConfirmOption } from "../../components/form/ConfirmOption";
 import { ConfirmDialog } from "../../components/dialog/ConfirmDialog";
 import { ConsequenceLines, SessionList } from "../../components/dialog/ConfirmConsequences";
+import { InlinePath } from "../../i18n/InlinePath";
 import { InlineReference } from "../../i18n/InlineReference";
 import { Message, useT } from "../../i18n/react";
 import { useProjectProcesses } from "../../process/useProjectProcesses";
 import { type Project } from "../../protocol";
 import { isLive } from "../../sessions/sessionStatus";
 import { compareSessions } from "../../sessions/order";
-import { sessionOrderPreference, useDaemon, useDelegatingIds, useProjectSessions, useQueuedAccountSwitches } from "../../store";
+import { sessionOrderPreference, useDaemon, useDaemonStore, useDelegatingIds, useProjectSessions, useQueuedAccountSwitches } from "../../store";
 import { useProjectRemovalCleanup } from "../BranchCleanupOptions";
 import { isRemovalRefusal } from "../branchInspection";
+import { useMemory } from "../memory/useMemory";
 import { ConfirmSection } from "./ConfirmSection";
 import { ProjectProcessesSection } from "./ProjectProcessesSection";
 
@@ -20,12 +23,23 @@ import { ProjectProcessesSection } from "./ProjectProcessesSection";
  * when it cannot. With the folder go the worktrees outside it that the daemon lists and, where the
  * repository outlives the folder, the branches of the project's sessions, listed once the option is
  * chosen; a locked worktree only when the user also says so, with the branch it has checked out.
+ * Where the project's place (its host and path) has memory and no other project, of any console, is at it, the user may
+ * delete that memory too, unchecked by default, while the memory setting is on; otherwise it stays, to be found in
+ * Settings, Memory.
  * The running sessions it stops are read live: a session that starts or stops while the dialog is open
  * joins or leaves the list. */
 export function DeleteProjectDialog({ project, onClose }: { project: Project; onClose: () => void }): React.ReactElement {
   const t = useT();
   const { request } = useDaemon();
   const [trash, setTrash] = useState(false);
+  const [deleteMemory, setDeleteMemory] = useState(false);
+  const sharesPlace = useDaemonStore((s) => Array.from(s.projects.values()).some((other) => other.id !== project.id && other.host_id === project.host_id && other.path === project.path));
+  // Offered only once the place's memory is known to have entries; another project at the place keeps it.
+  // While the memory setting is off the confirmation says nothing of memory, which stays to be found in Settings, Memory,
+  // and the memory is not even listed.
+  const memoryEnabled = useDaemonStore((s) => s.settings.memory_enabled);
+  const placeMemory = useMemory({ kind: "project", project }, { enabled: memoryEnabled });
+  const memoryOffered = memoryEnabled && !sharesPlace && placeMemory.status === "ready" && placeMemory.memory.index.length > 0;
   const cleanup = useProjectRemovalCleanup(project.id, trash, setTrash);
   const projectProcesses = useProjectProcesses([project.id]);
   const projectSessions = useProjectSessions(project.id);
@@ -55,16 +69,26 @@ export function DeleteProjectDialog({ project, onClose }: { project: Project; on
             <ConsequenceLines lines={cleanup.consequences} />
           </ConfirmSection>
           <ProjectProcessesSection processes={projectProcesses} divided />
+          <ConfirmSection heading={t("dialog.removeProject.memoryHeading")} shown={memoryOffered} divided>
+            <ConfirmOption
+              isSelected={deleteMemory}
+              onChange={setDeleteMemory}
+              label={t("dialog.removeProject.memory")}
+              hint={<Message id="dialog.removeProject.memoryHint" params={{ count: placeMemory.memory.index.length, path: <InlinePath steps={[t("settings.title"), t("settings.section.memory")]} /> }} />}
+            />
+          </ConfirmSection>
         </>
       )}
       onCancel={onClose}
       onConfirm={async () => {
+        const memoryChoice = memoryOffered && deleteMemory ? { delete_memory: true } : {};
         try {
           await request({
             type: "delete_project",
             project: project.id,
             stop_sessions: running.length > 0,
             trash_directory: trash,
+            ...memoryChoice,
             ...cleanup.choices,
           });
         } catch (err) {

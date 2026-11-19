@@ -15,6 +15,7 @@ import { Rail } from "./Rail";
 import { enter, leave, mountForTooltip, openTooltip } from "../components/hint/tooltipTestSupport";
 import { BROWSER_HOST, MAC_HOST } from "../test/hosts";
 import { fakeTimers, runOutTimers } from "../test/clock";
+import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -356,4 +357,42 @@ it("puts the Forwarded ports button of a remote window above the settings, only 
   vi.unstubAllGlobals();
   window.history.replaceState(null, "", "/");
   expect(avatarOf(["idle"]).closest("nav")!.querySelector("#rail-forwards")).toBeNull();
+});
+
+// A console avatar's context menu follows the memory setting, which the rail reads from the store.
+it.each([true, false])("offers Memory in a console avatar's context menu only while the memory setting is on (on: %s)", (on) => {
+  fakeTimers();
+  const daemon = testDaemon({ state: { settings: { ...DEFAULT_SETTINGS, memory_enabled: on } } });
+  const container = mountForTooltip(
+    <PlatformProvider value={{ kind: "browser", host: BROWSER_HOST }}>
+      <DaemonProvider value={daemon}>
+        <Rail
+          consoles={[main]}
+          currentConsoleId={main.id}
+          onSelectConsole={() => {}}
+          onConsoleEnter={() => {}}
+          onConsoleLeave={() => {}}
+          hoverOpensSidebar={false}
+          remoteDevicesShown={false}
+          onOpenRemoteDevices={() => {}}
+          onOpenDialog={() => {}}
+          onSelectSession={() => {}}
+          onOpenArchive={() => {}}
+          waitingCount={0}
+          onNextWaiting={() => {}}
+          onOpenProcesses={() => true}
+          onOpenSettings={() => {}}
+          onOpenSettingsAt={() => {}}
+          focusTerminal={() => {}}
+          onDemand={false}
+          away={false}
+        />
+      </DaemonProvider>
+    </PlatformProvider>,
+  );
+  const tile = container.querySelector<HTMLElement>("[data-sidebar-peek-keep]")!.closest<HTMLElement>("[data-list-motion]")!;
+  act(() => void tile.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 4, clientY: 4 })));
+  const labels = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].map((el) => el.querySelector(".label")?.textContent ?? el.textContent);
+  expect(labels).toContain("Console settings");
+  expect(labels.includes("Memory")).toBe(on);
 });

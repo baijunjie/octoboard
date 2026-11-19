@@ -21,7 +21,7 @@ import { RailUpdateEntry } from "./RailUpdateEntry";
 import { RailForwardsEntry } from "./RailForwardsEntry";
 import { RailCountBadge } from "./RailCountBadge";
 import type { ProcessJump } from "../process/processJump";
-import { useArchivedOwnerSessions, useConsoleStatus, useConsoleStatusCounts } from "../store";
+import { useArchivedOwnerSessions, useConsoleStatus, useConsoleStatusCounts, useDaemonStore } from "../store";
 import { ActionMenu } from "../components/menus/ActionMenu";
 import { AvatarStatusBadge } from "../components/status/TopStatusMarker";
 import { CHROME_BUTTON_FILLS, CHROME_CURRENT_FILLS, ChromeButton } from "./ChromeButton";
@@ -81,6 +81,7 @@ const ConsoleTile = memo(function ConsoleTile({
   handlers: ConsoleMenuHandlers;
 }): React.ReactElement {
   const t = useT();
+  const memory = useDaemonStore((s) => s.settings.memory_enabled);
   // Read here rather than handed down, so an event about a session renders only its console's tile.
   const status = useConsoleStatus(thisConsole.id);
   const counts = useConsoleStatusCounts(thisConsole.id);
@@ -136,7 +137,7 @@ const ConsoleTile = memo(function ConsoleTile({
         className="hidden"
         label={t("sidebar.console.actions", { name: isolate(thisConsole.name) })}
         tooltip={false}
-        items={consoleMenu(t, thisConsole, handlers, sessions)}
+        items={consoleMenu(t, thisConsole, handlers, sessions, { memory })}
         contextTargetRef={tileRef}
       />
     </div>

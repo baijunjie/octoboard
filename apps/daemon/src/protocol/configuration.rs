@@ -503,7 +503,25 @@ pub struct DocumentConsole {
     pub project_session_launch: PerAgent<Launch>,
     /// The user's own addition to the console session's instructions; absent is none.
     pub console_session_prompt: Option<String>,
+    /// The console's memory entries, the most recently updated first, without its local ones,
+    /// which hold only on the exporting machine. Absent in a document written before memory
+    /// travelled, which gives the console none. A project's place's memory never travels.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(test, ts(optional))]
+    pub memories: Option<Vec<DocumentMemoryEntry>>,
     pub projects: Vec<DocumentProject>,
+}
+
+/// One entry of a console's memory as a document carries it: what its writer gave, without its
+/// id, who wrote it, when, or its version, which belong to the machine it was written on; an
+/// import gives it a new id, not local.
+#[cfg_attr(test, derive(ts_rs::TS, schemars::JsonSchema))]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DocumentMemoryEntry {
+    /// One sentence summing up the content, the entry's label in the index.
+    pub summary: String,
+    /// Markdown.
+    pub content: String,
 }
 
 /// One project's configuration. `path` is an absolute path of the exporting machine, or only the

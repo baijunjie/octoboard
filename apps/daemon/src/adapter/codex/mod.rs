@@ -531,6 +531,16 @@ impl AgentProvider for CodexProvider {
         args.push("-c".to_string());
         args.push("check_for_update_on_startup=false".to_string());
 
+        // Codex's memories off for this launch: neither the summary injected into the
+        // instructions nor anything written under the home's `memories/` (0.167.1, measured). Off
+        // by default, but the user's `config.toml` can turn it on. Set as configuration rather
+        // than `--disable memories`, which refuses a feature name an older Codex does not know.
+        // Before the private server's plan below, which starts its server with these arguments.
+        if spec.native_memory_off {
+            args.push("-c".to_string());
+            args.push(MEMORIES_OFF.to_string());
+        }
+
         args.push("-c".to_string());
         args.push(format!("tui.terminal_title={TERMINAL_TITLE}"));
         if spec.resume_agent_session_id.is_some() {
@@ -632,6 +642,9 @@ fn resolves_approvals_itself(spec: &LaunchSpec<'_>, config: &ConfigFile) -> bool
         .get("approvals_reviewer")
         .is_some_and(|value| mentions(value, AUTO_REVIEW))
 }
+
+/// The configuration override that turns Codex's memories off for one launch.
+const MEMORIES_OFF: &str = "features.memories=false";
 
 /// The terminal title items every launch is given, in the order Codex's default title draws them.
 /// `thread-title` is left out: until a thread is named it falls back to the thread id.

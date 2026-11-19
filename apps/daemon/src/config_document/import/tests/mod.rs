@@ -1,6 +1,7 @@
 mod creating;
 mod failures;
 mod inspecting;
+mod memory;
 pub(super) mod progress;
 mod reading;
 mod settings;
@@ -51,6 +52,7 @@ pub(super) fn console(name: &str, projects: Vec<DocumentProject>) -> DocumentCon
         accounts: Default::default(),
         launch: Default::default(),
         console_session_prompt: None,
+        memories: None,
         projects,
     }
 }

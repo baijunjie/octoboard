@@ -199,15 +199,18 @@ pub(super) const UPDATE_CONSOLE: ToolDef = ToolDef {
 
 pub(super) const GET_SETTINGS: ToolDef = ToolDef {
     name: "get_settings",
-    description: "The application-wide settings: `auto_close_idle_shell_terminals`, `auto_pull_repositories`, \
-                  `auto_delete_unresumable_archives`, `resume_sessions_on_start`, \
+    description: "The application-wide settings: `auto_close_idle_shell_terminals`, \
+                  `auto_pull_repositories`, `auto_delete_unresumable_archives`, `resume_sessions_on_start`, \
                   `keep_awake` (Prevent sleep: whether Octoboard keeps the computer it runs on \
                   awake), `keep_awake_when` (`always`, or `working` for while any session \
                   works), `daemon_update_check` (whether a daemon that updates itself checks \
                   for a newer release on its own), `daemon_update_channel` (`stable` or \
-                  `beta`, the release line it follows), `auto_select_account`, `interface_language` (the language of the windows connected to \
-                  this daemon and the one you are told to reply in, a tag; `null` until a window \
-                  reported one), \
+                  `beta`, the release line it follows), `memory_enabled` (whether Octoboard's \
+                  memory is on: sessions launched while it is on are offered the memory tools \
+                  and are given the memory's index, and their agents' own memory is turned \
+                  off), `auto_select_account`, `interface_language` (the language of the \
+                  windows connected to this daemon and the one you are told to reply in, a tag; \
+                  `null` until a window reported one), \
                   `default_clone_dir`, the `git_workflow` settings, \
                   `provider_settings` (the settings the user made for each agent's \
                   provider that you may read, by agent and then setting id, with the value \
@@ -250,6 +253,15 @@ pub(super) const UPDATE_SETTINGS: ToolDef = ToolDef {
                     "description": "Whether archived sessions whose agent conversation is \
                                     gone are deleted automatically (pinned and locked ones \
                                     are kept).",
+                },
+                "memory_enabled": {
+                    "type": "boolean",
+                    "description": "Whether Octoboard's memory is on. Sessions launched \
+                                    afterwards follow it: while it is on they are offered the \
+                                    memory tools and given the memory's index, and their \
+                                    agents' own memory is turned off; while it is off, \
+                                    neither, and a memory tool is refused. Turning it off \
+                                    deletes no entry.",
                 },
                 "resume_sessions_on_start": {
                     "type": "boolean",

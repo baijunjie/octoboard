@@ -9,6 +9,7 @@ import { refuseUnfillable } from "./banner";
 import { projectOf } from "./builders";
 import { permissionDenied, sourceUnavailable, type FixtureError } from "./sampleFiles";
 import { genericListing } from "./fixtureFiles";
+import type { ProjectMemoryHooks } from "./fixtureMemory";
 import type { ProcessLedger } from "./fixtureProcesses";
 import { neverReplied, normalizedPath, trimmedOrNull, changedPerAgent, changedLaunch, normalizeTags, type Ack, type FixtureContext, type Handlers } from "./fixtureContext";
 
@@ -46,7 +47,7 @@ function projectGitWorkflow(current: GitWorkflowOverride, changes: Partial<GitWo
 }
 
 /** The replies about projects and their shell terminals. */
-export function createProjectReplies({ scenario, store, fail, git, restored, startedShellTerminals, refuseUnknownProject, refuseLocked }: FixtureContext, ledger: ProcessLedger): Handlers {
+export function createProjectReplies({ scenario, store, fail, git, restored, startedShellTerminals, refuseUnknownProject, refuseLocked }: FixtureContext, ledger: ProcessLedger, memory: ProjectMemoryHooks): Handlers {
   let createdProjectCount = 0;
   let createdShellTerminalCount = 0;
   /** A project action the host would carry out: refused for an unknown project, failed with the scenario's error when it
@@ -133,7 +134,9 @@ export function createProjectReplies({ scenario, store, fail, git, restored, sta
     delete_project: (body) => {
       refuseUnknownProject(body.project);
       refuseLocked([...store.getState().sessions.values()].filter((session) => session.project_id === body.project));
+      memory.refuseRemoval(body.project, body.delete_memory);
       if (body.trash_directory && scenario.projectDeleteError) return fail(scenario.projectDeleteError);
+      memory.removed(body.project, body.delete_memory);
       return { type: "ack", id: null };
     },
     inspect_project_removal: (body) => {

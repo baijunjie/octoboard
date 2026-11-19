@@ -622,14 +622,20 @@ describe("a project's menu", () => {
 
   it("puts Pin first, then groups viewing, copying and opening, managing the project, and removing it", () => {
     const handlers = local();
-    const menu = projectMenu(t, handlers, { id: "p", pinned: false } as Project, [], { gitStatus: gitStatusOf("p") });
+    const menu = projectMenu(t, handlers, { id: "p", pinned: false } as Project, [], { gitStatus: gitStatusOf("p"), memory: true });
     expect(menu.map((entry) => (entry === "separator" ? entry : entry.label))).toEqual([
       "Pin", "Focus mode", "View archive", "separator",
       "Copy project name", "Copy absolute path", "separator",
       "Open in", "Open panel", "Git", "separator",
-      "Rename", "Project settings", "separator",
+      "Rename", "Project settings", "Memory", "separator",
       "Remove project",
     ]);
+  });
+
+  it("offers no Memory item while the memory setting is off", () => {
+    const labels = projectMenu(t, local(), { id: "p", pinned: false } as Project, []).map((entry) => (entry === "separator" ? entry : entry.label));
+    expect(labels).not.toContain("Memory");
+    expect(labels.slice(-4)).toEqual(["Rename", "Project settings", "separator", "Remove project"]);
   });
 
   it("groups outside tools for every project", () => {
@@ -741,9 +747,11 @@ describe("a console's menu", () => {
   it("groups project and archive actions before settings and deletion", () => {
     const handlers = { onOpenDialog: vi.fn(), onOpenArchive: vi.fn(), onSelectSession: vi.fn() };
     const hub = sessionOf("hub", "c", undefined, "Old hub", "archived", { kind: "console" });
-    const menu = consoleMenu(t, consoleOf("c", "Main"), handlers, [hub]);
+    const menu = consoleMenu(t, consoleOf("c", "Main"), handlers, [hub], { memory: true });
     const labels = menu.map((entry) => (entry === "separator" ? entry : entry.label));
-    expect(labels).toEqual(["Add project", "View archive", "separator", "Console settings", "separator", "Delete console"]);
+    expect(labels).toEqual(["Add project", "View archive", "separator", "Console settings", "Memory", "separator", "Delete console"]);
+    // While the memory setting is off, there is no Memory item.
+    expect(consoleMenu(t, consoleOf("c", "Main"), handlers, [hub]).map((entry) => (entry === "separator" ? entry : entry.label))).not.toContain("Memory");
     const archive = menu[1] as { items: { label: string; onClick: () => void }[] };
     expect(archive.items.map((item) => item.label)).toEqual(["Old hub", "View all"]);
     archive.items[1].onClick();
@@ -991,12 +999,12 @@ describe("menu-only letters on direct actions", () => {
   it.each(["list", "focused", "nested"] as const)("keeps project letters unique in the %s menu, pinned or not", (placement) => {
     for (const pinned of [false, true]) {
       const project = { id: "p", pinned } as Project;
-      const menu = projectMenu(t, local(), project, [], { placement, gitStatus: gitStatusOf("p") });
+      const menu = projectMenu(t, local(), project, [], { placement, gitStatus: gitStatusOf("p"), memory: true });
       expect(letters(menu)).toEqual([
         ...(placement !== "focused" ? [[pinned ? "Unpin" : "Pin", "P"]] : []),
         ...(placement === "list" ? [["Focus mode", "F"]] : []),
         ["Copy project name", "C"], ["Copy absolute path", "A"],
-        ["Rename", "R"], ["Project settings", "E"], ["Remove project", "D"],
+        ["Rename", "R"], ["Project settings", "E"], ["Memory", "M"], ["Remove project", "D"],
       ]);
       noNestedLetters(menu);
       uniqueLetters(menu);
@@ -1004,8 +1012,10 @@ describe("menu-only letters on direct actions", () => {
   });
 
   it("gives a console's direct actions letters and leaves its archive submenu unbound", () => {
-    const menu = consoleMenu(t, consoleOf("c", "Main"), { onOpenDialog: vi.fn(), onSelectSession: vi.fn(), onOpenArchive: vi.fn() }, []);
-    expect(letters(menu)).toEqual([["Add project", "A"], ["Console settings", "E"], ["Delete console", "D"]]);
+    const menu = consoleMenu(t, consoleOf("c", "Main"), { onOpenDialog: vi.fn(), onSelectSession: vi.fn(), onOpenArchive: vi.fn() }, [], { memory: true });
+    expect(letters(menu)).toEqual([["Add project", "A"], ["Console settings", "E"], ["Memory", "M"], ["Delete console", "D"]]);
+    // With the memory setting off, M is no shortcut of the menu.
+    expect(letters(consoleMenu(t, consoleOf("c", "Main"), { onOpenDialog: vi.fn(), onSelectSession: vi.fn(), onOpenArchive: vi.fn() }, []))).toEqual([["Add project", "A"], ["Console settings", "E"], ["Delete console", "D"]]);
     noNestedLetters(menu);
     uniqueLetters(menu);
   });

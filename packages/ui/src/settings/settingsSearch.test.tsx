@@ -7,7 +7,7 @@ import { translatorFor } from "../i18n/catalog";
 import { LanguageProvider } from "../i18n/react";
 import type { PlatformAdapter } from "../platform";
 import { ThemeProvider } from "../preferences/theme";
-import type { Event, Settings } from "../protocol";
+import type { ClientRequestBody, Event, Settings } from "../protocol";
 import type { State } from "../store";
 import { DEFAULT_SETTINGS } from "../store/defaultSettings";
 import { flushPromises } from "../test/clock";
@@ -84,7 +84,10 @@ function ReadsProbe({ onReads }: { onReads: (reads: SettingsReads) => void }): n
 
 async function mountSection(section: SettingsSectionId, platform: PlatformAdapter, state: Partial<State>): Promise<{ panel: Element; reads: SettingsSearchContext["reads"] }> {
   let dialogReads!: SettingsReads;
-  const daemon = testDaemon({ state: { connectionState: "open", ...state }, request: async (): Promise<Event> => ({ type: "ack", id: null }) });
+  // A listing is answered as the daemon answers it (the memory section lists what removed projects left behind); every
+  // other request is acknowledged.
+  const request = async (body: ClientRequestBody): Promise<Event> => (body.type === "list_orphaned_memories" ? { type: "orphaned_memory_list", id: null, places: [] } : { type: "ack", id: null });
+  const daemon = testDaemon({ state: { connectionState: "open", ...state }, request: request as never });
   mountHost(
     <LanguageProvider>
       <ThemeProvider>

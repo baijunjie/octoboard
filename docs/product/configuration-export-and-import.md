@@ -57,6 +57,13 @@ gives the console none. A document that does not carry a default agent for proje
 its project sessions follow its default agent for console sessions. The project session models and efforts are always
 in the document, one entry per agent; an agent whose entry leaves a model or effort out has it unset.
 
+A console also carries its memory (see "Console memory" in `docs/product/memory.md`), under `memories`, most recently
+updated first: each entry's summary and content alone, without its id, who wrote it, when, its version or its local
+mark. Entries marked local, "this machine only", are left out, since they hold only on the exporting machine. An export
+writes `memories` for every console, whatever the memory setting says, empty for one with nothing to carry. Whether the
+memory is turned on does not travel (see "Which settings travel"
+in `docs/product/settings-in-a-configuration.md`).
+
 A console's working directory is **not** in the document. It is no directory of the user's choosing: Octoboard creates
 it under its own data directory and names it after the console, so it would carry nothing another machine could use. An
 import creates the console, and with it a working directory of its own.
@@ -167,8 +174,9 @@ as switches of that agent, dropping any other without refusing the document, and
 
 ### What is not configuration and never travels
 
-Sessions and their records, the pages sessions pushed to the report panel, the conversations the agents keep, and folder
-trust — a project's trust permission and the trusted folders alike — are the state of one machine rather than
+Sessions and their records, the pages sessions pushed to the report panel, the conversations the agents keep, folder
+trust — a project's trust permission and the trusted folders alike — and a project's memory, which belongs to its place
+on one machine (see "Project memory" in `docs/product/memory.md`), are the state of one machine rather than
 configuration, and are in no document. No console, project or account carries its stored id. Nothing to log an account
 in with — credentials, login state — is in any document, so every account an import creates starts not logged in; nor
 is the default account's directory. The added agents, the accounts and their order, the turned-off choices and the
@@ -405,7 +413,13 @@ resolving to the same directory runs into — the second of them is reported as
 failed. What the document says about a project — its pin, its tags, its default agent (none stays none, and nothing is
 detected from the directory), its account references, its models and efforts, its own git workflow settings — is applied
 as it stands. How the project was associated on the exporting machine does not carry over: what is recorded is how the
-daemon's host placed it, as a clone or as a local directory.
+daemon's host placed it, as a clone or as a local directory. A project placed where a memory was left behind on the
+importing machine takes that memory up (see "Memory left behind" in `docs/product/memory.md`).
+
+**Each console created receives the memory its document carries**, as a console session would create the entries: each
+with a new id, its summary trimmed, not local, written by the user at the time of the import, in the document's order.
+Memory is imported only into the consoles an import creates, so nothing is merged with entries already on the machine;
+a console whose document carries no `memories` gets none.
 
 **An imported project is untrusted like any other.** Folder trust is in no document, so the first session opened under
 an imported project goes through its agent's trust confirmation just as one added by hand would, unless its directory
@@ -420,7 +434,9 @@ import fills the window in as it goes.
 Refused before anything at all is created:
 
 - a document that is not a configuration document, one of a version this Octoboard does not read (see "Versions"
-  above), and one that cannot be read;
+  above), and one that cannot be read — among them one carrying a memory entry the memory's rules refuse, or more
+  entries for a console than a memory holds (see "Entries" in `docs/product/memory.md`), the reason naming the console
+  and the entry;
 - a choice for a project that cannot be right: it names a project the document does not have, it names one project
   twice, or the directory it points at is neither absolute nor starts with `~/`;
 - a choice for an account that cannot be right: it names an account the document does not have, it names one account

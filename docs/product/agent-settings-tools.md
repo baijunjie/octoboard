@@ -18,6 +18,9 @@ tool is in the tool tables of `docs/product/hub-orchestration.md`, and the reads
 - **Every session**, of either kind, reads the settings of every project of its own console with `list_projects`; of
   another console's projects it reads only each one's id, name, description and tags (see "Listing a console's
   projects" in `docs/product/what-every-session-reads.md`).
+- **Octoboard's memory** is not a setting: while it is on, a console session reads and writes its console's memory, and
+  a project session its project's place's, with the memory tools, not the settings tools (see "The memory tools" in
+  `docs/product/memory.md`).
 
 **One rule decides which settings the tools expose: the settings of Settings' Agent behavior and Agent accounts
 sections, and the permission settings (approval modes, trusted folders and a project's trust permission), are the user's
@@ -234,6 +237,7 @@ working directory. Neither the avatar itself nor the console's console session i
 | `keep_awake_when` | When Prevent sleep holds: `always`, or `working` for while any session is working (see "When the computer is kept awake" in `docs/product/keeping-the-computer-awake.md`). |
 | `daemon_update_check` | Whether a daemon that updates itself checks for a newer release by itself, `true` unless the user turned it off (see "Check for updates automatically" in `docs/product/update-settings.md` and "When the daemon checks" in `docs/product/server-form-updates.md`). Held by every daemon, but only a daemon that updates itself acts on it. |
 | `daemon_update_channel` | The release channel that daemon follows, `stable` (the default) or `beta` (see "Channels" in `docs/product/server-form-updates.md`). |
+| `memory_enabled` | Whether Octoboard's memory is on, `false` unless the user or a session turned it on (see "Turning the memory on and off" in `docs/product/memory.md`). |
 | `auto_select_account` | Whether a new session whose account was not named chooses a usable account automatically, preferring the initial agent's soonest weekly reset and trying another added agent when needed (see "Which account a session uses" and "Automatically select an account" in `docs/product/opening-sessions.md`). Read-only. |
 | `interface_language` | The language the daemon holds, which every window of that daemon shows and sessions are told to talk to the user in, as its tag, or `null` while it holds none (see "The language the daemon holds" in `docs/product/language.md`). |
 | `default_clone_dir` | The default clone directory (see "Default clone directory" in `docs/product/git-settings.md`). |
@@ -245,7 +249,7 @@ working directory. Neither the avatar itself nor the console's console session i
 
 `update_settings` takes `auto_close_idle_shell_terminals`, `auto_pull_repositories`,
 `auto_delete_unresumable_archives`, `resume_sessions_on_start`, `keep_awake`, `keep_awake_when`, `daemon_update_check`,
-`daemon_update_channel`, `interface_language`, `default_clone_dir` and `git_workflow`, under the rules of the same
+`daemon_update_channel`, `memory_enabled`, `interface_language`, `default_clone_dir` and `git_workflow`, under the rules of the same
 settings in Settings: the switches take `true` or `false`, `keep_awake_when` is `always` or `working` and
 `daemon_update_channel` is `stable` or `beta` (any other text is refused, surrounding whitespace ignored), a clone
 directory must be absolute or start with `~/`, and a blank one goes back to the built-in default. `interface_language`
@@ -282,7 +286,10 @@ session sets that value itself. A changed `development`, `squash_before_delivery
 application-wide or a project's own, is sure to reach only project sessions begun after it (see "When a change reaches a
 session" in `docs/product/git-workflow-settings.md`). A changed `revert_gate` reaches running sessions at once (see "The
 switch" in `docs/product/revert-gate.md`). A changed `interface_language` reaches sessions as a change made from a
-window does (see "The guidance on the user's language" in `docs/product/launching-agents.md`).
+window does (see "The guidance on the user's language" in `docs/product/launching-agents.md`). A changed
+`memory_enabled` reaches only sessions launched afterwards, the caller's own next launch included, while whether a
+memory tool call is refused follows it at once; turning it off deletes no entry (see "Turning the memory on and off" in
+`docs/product/memory.md`).
 
 ## Refusals
 

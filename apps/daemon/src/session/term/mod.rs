@@ -44,6 +44,10 @@ pub struct LaunchRequest {
     pub ask_questions_as_choices: bool,
     /// See `LaunchSpec::user_language`.
     pub user_language: Option<String>,
+    /// See `LaunchSpec::memory`.
+    pub memory: Vec<crate::protocol::MemoryIndexEntry>,
+    /// See `LaunchSpec::memory_enabled`.
+    pub memory_enabled: bool,
     pub cwd: PathBuf,
     /// Initial task, only on a fresh launch.
     pub task: Option<String>,
@@ -102,6 +106,8 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
         git_workflow,
         ask_questions_as_choices,
         user_language,
+        memory,
+        memory_enabled,
         cwd,
         task,
         resume_agent_session_id,
@@ -243,6 +249,9 @@ pub fn launch(request: LaunchRequest) -> Result<Launch> {
                 list,
                 script,
             }),
+        native_memory_off: adapter::turns_native_memory_off(adapter.descriptor(), memory_enabled),
+        memory: &memory,
+        memory_enabled,
     };
     let plan = adapter.plan(&spec)?;
     // A stash key is used only where the provider says this launch was measured to take it.

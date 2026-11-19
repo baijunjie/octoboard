@@ -166,6 +166,34 @@ fn the_terminal_appearance_sets_grok_theme() {
     assert_eq!(theme(Some(TerminalAppearance::Dark)), "groknight");
 }
 
+/// Grok's memory is turned off through its environment exactly when the launch says so, on a
+/// resume too.
+#[test]
+fn memory_is_turned_off_only_when_the_launch_says_so() {
+    assert!(
+        crate::protocol::AgentId::GROK
+            .descriptor()
+            .native_memory_switch
+    );
+    let mut fixture = spec_fixture();
+    with_default_home(&mut fixture);
+    let memory = |spec: &LaunchSpec<'_>| {
+        plan_isolated(spec)
+            .expect("plan")
+            .env
+            .into_iter()
+            .filter(|(key, _)| key == MEMORY_OFF.0)
+            .collect::<Vec<_>>()
+    };
+    let mut spec = fixture.spec();
+    assert_eq!(memory(&spec), []);
+    spec.native_memory_off = true;
+    let expected = [(MEMORY_OFF.0.to_string(), MEMORY_OFF.1.to_string())];
+    assert_eq!(memory(&spec), expected);
+    spec.resume_agent_session_id = Some("agent-side-id");
+    assert_eq!(memory(&spec), expected);
+}
+
 /// Claude compatibility turns Grok's own switches for Claude Code's configuration on at launch;
 /// off, none of them is passed and Grok follows its own configuration.
 #[test]

@@ -481,6 +481,10 @@ pub async fn update_project_checked(
 /// included and an unmerged branch only as `force_remove` names it. Refused with
 /// `daemon_shutting_down`, with nothing changed, once a planned stop has raised its handover
 /// barrier; one the barrier stops waiting for part-way leaves the folder where it is.
+///
+/// With `delete_memory` the memory of the project's place goes with it, refused with
+/// `memory_place_in_use` before anything changes while another project is at the place;
+/// without it the memory stays, for the place's next project or for `list_orphaned_memories`.
 pub(super) async fn delete_project(
     state: &Arc<AppState>,
     id: String,
@@ -488,10 +492,19 @@ pub(super) async fn delete_project(
     trash_directory: bool,
     force_remove: Vec<SessionBranchTarget>,
     inspection: Option<String>,
+    delete_memory: bool,
 ) -> Result<()> {
     let admission = state.admit_change()?;
     let _removal = state.claim_session_removal();
     let deleted = state.store.require_project(&id)?;
+    if delete_memory {
+        super::memory::refuse_while_place_in_use(
+            &state.store,
+            &deleted.host_id,
+            &deleted.path,
+            Some(&deleted.id),
+        )?;
+    }
     let in_project = |session: &Session| session.project_id.as_deref() == Some(&id);
     ensure_unlocked(state.store.list_sessions()?.into_iter().filter(in_project))?;
     // A session still being launched has no process to stop, so it refuses either way.
@@ -606,6 +619,10 @@ pub(super) async fn delete_project(
     state.broadcast(Event::ProjectDeleted {
         project: id.clone(),
     });
+    if delete_memory {
+        delete_memory_of_removed(state, &deleted);
+    }
+    super::memory::announce_orphaned(state);
     if let Some(err) = undetermined {
         state.broadcast(Event::from_error(
             None,
@@ -817,13 +834,47 @@ async fn directory_agents(
     .collect()
 }
 
+/// Deletes the memory of the removed project `deleted`'s place, unless a project was added at the
+/// place meanwhile, which reads it now. The removal stands either way, so a failure here is logged
+/// and the memory kept, never raised.
+fn delete_memory_of_removed(state: &Arc<AppState>, deleted: &Project) {
+    let place = super::memory::place_of(deleted);
+    match super::memory::project_at_place(&state.store, &deleted.host_id, &deleted.path, None) {
+        Ok(None) => {
+            if let Err(err) = super::memory::delete_all_and_announce(state, &place) {
+                tracing::warn!(project = %deleted.id, %err, "deleting the removed project's memory failed; it is kept");
+            }
+        }
+        Ok(Some(project)) => {
+            tracing::info!(project = %deleted.id, at_place = %project.id, "the removed project's memory is kept: a project was added at its place meanwhile");
+        }
+        Err(err) => {
+            tracing::warn!(project = %deleted.id, %err, "reading whether a project is at the removed project's place failed; its memory is kept");
+        }
+    }
+}
+
 /// Stores `project`, answering whether it was: `false` when the store's unique index on a
 /// console's project paths refuses it. The claim and the identity check keep that from happening
 /// for one directory twice; the index is the backstop for what they cannot tell apart, such as two
 /// non-UTF-8 names that collide once converted to text. Any other failure is the caller's.
+///
+/// A project stored at a place whose memory was left behind takes it up again, which clients are
+/// told (`orphaned_memory_list`).
 fn insert_unless_associated(state: &AppState, project: &Project) -> Result<bool> {
     match state.store.insert_project(project) {
-        Ok(()) => Ok(true),
+        Ok(()) => {
+            // The project is stored either way; a failure to read the place's memory only leaves
+            // clients to learn of it at their next `snapshot`.
+            match state.store.has_memory(&super::memory::place_of(project)) {
+                Ok(true) => super::memory::announce_orphaned(state),
+                Ok(false) => {}
+                Err(err) => {
+                    tracing::warn!(project = %project.id, %err, "reading whether the new project's place holds memory failed")
+                }
+            }
+            Ok(true)
+        }
         Err(err) => {
             let err = anyhow::Error::from(err);
             let already = err

@@ -97,6 +97,9 @@ Where to start, by question:
 
 - [Supported agents](product/supported-agents.md) — the agents Octoboard supports, their ids and order, how an agent
   the window has no presentation for is shown, and what happens to stored data of an agent the build does not support.
+- [Octoboard's memory](product/memory.md) — the console and project memory every agent shares: the switch that turns it
+  on (and the agents' own memory off), entries and their limits, the session tools, the index a session starts with,
+  memory left behind by removed projects, and the memory dialog and Settings section.
 - [Launching agents](product/launching-agents.md) — what every agent launch injects, what is never modified, and the
   launch environment.
 - [Per-agent launch specifics](product/per-agent-launch-specifics.md) — what Claude Code, Codex and Grok Build each do

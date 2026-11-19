@@ -1,4 +1,4 @@
-import { AppWindow, Archive, ArrowLeftRight, Copy, Cpu, Download, Focus, Forward, Folder, FolderPlus, GitBranch, KeyRound, Link, List, Lock, LockOpen, Palette, PanelRight, Pencil, Pin, PinOff, RotateCcw, Settings2, Terminal, Trash2, Undo2, Unlink, Upload, SquareArrowOutUpRight } from "lucide-react";
+import { AppWindow, Archive, Brain, ArrowLeftRight, Copy, Cpu, Download, Focus, Forward, Folder, FolderPlus, GitBranch, KeyRound, Link, List, Lock, LockOpen, Palette, PanelRight, Pencil, Pin, PinOff, RotateCcw, Settings2, Terminal, Trash2, Undo2, Unlink, Upload, SquareArrowOutUpRight } from "lucide-react";
 
 import { handoffBlock, switchEntries, switchEntryBlock } from "../accounts/switchEntries";
 import type { QuotaReadings } from "../accounts/choiceEntries";
@@ -75,12 +75,13 @@ export type ConsoleMenuHandlers = Pick<SidebarHandlers, "onOpenDialog" | "onSele
 
 /** A console's actions, in the sidebar's header and on the console's avatar in the rail: among
  * them the console's archived console sessions, which `archived` lists (the callers pass exactly
- * those, in no particular order). */
+ * those, in no particular order). Memory is offered only while `memory` says the memory setting is on. */
 export function consoleMenu(
   t: Translate,
   console: Console,
   handlers: ConsoleMenuHandlers,
   archived: Session[],
+  { memory = false }: { memory?: boolean } = {},
 ): ActionMenuEntry[] {
   return [
     { label: t("sidebar.console.addProject"), shortcut: "A", icon: FolderPlus, onClick: () => handlers.onOpenDialog({ kind: "new-project", console }) },
@@ -89,6 +90,7 @@ export function consoleMenu(
     ),
     "separator",
     { label: t("sidebar.console.edit"), shortcut: "E", icon: Settings2, onClick: () => handlers.onOpenDialog({ kind: "edit-console", console }) },
+    ...(memory ? [{ label: t("sidebar.console.memory"), shortcut: "M", icon: Brain, onClick: () => handlers.onOpenDialog({ kind: "console-memory", console }) }] : []),
     "separator",
     { label: t("sidebar.console.delete"), shortcut: "D", icon: Trash2, onClick: () => handlers.onOpenDialog({ kind: "delete-console", console }), destructive: true },
   ];
@@ -138,7 +140,8 @@ const PULL_BLOCK_COPY = {
 } as const;
 
 /** The project's actions, in the project row and in a focus mode (the project's own header, and a
- * console session's project headings); `placement` says which. Pin / Unpin comes first, as in a
+ * console session's project headings); `placement` says which. Memory is offered only while `memory` says the
+ * memory setting is on. Pin / Unpin comes first, as in a
  * session's menu; then the actions are grouped as viewing the project inside the app (focus mode,
  * archive), copying it, opening it (Open in, Open panel, Git), managing the project itself,
  * and removing it.
@@ -161,7 +164,8 @@ export function projectMenu(
     placement = "list",
     gitStatus,
     archiveScope = { console: project.console_id, project: project.id },
-  }: { placement?: MenuPlacement; gitStatus?: GitStatus; archiveScope?: ArchiveScope } = {},
+    memory = false,
+  }: { placement?: MenuPlacement; gitStatus?: GitStatus; archiveScope?: ArchiveScope; memory?: boolean } = {},
 ): ActionMenuEntry[] {
   const pushing = gitStatus?.activity === "pushing";
   const pullBlock = pullBlockOf(gitStatus);
@@ -207,6 +211,7 @@ export function projectMenu(
     "separator",
     { label: t("sidebar.project.rename"), shortcut: "R", icon: Pencil, onClick: () => handlers.onOpenDialog({ kind: "rename-project", project }) },
     { label: t("sidebar.project.edit"), shortcut: "E", icon: Settings2, onClick: () => handlers.onOpenDialog({ kind: "edit-project", project }) },
+    ...(memory ? [{ label: t("sidebar.project.memory"), shortcut: "M", icon: Brain, onClick: () => handlers.onOpenDialog({ kind: "project-memory", project }) }] : []),
     "separator",
     { label: t("sidebar.project.remove"), shortcut: "D", icon: Trash2, onClick: () => handlers.onOpenDialog({ kind: "delete-project", project }), destructive: true },
   ];

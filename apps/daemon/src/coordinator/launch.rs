@@ -488,6 +488,23 @@ pub(super) async fn checked_launch_overrides(
     }))
 }
 
+/// The index of a project session's place's memory as it stands now, which its role description
+/// carries as a launch snapshot; empty for a console session, whose index its instruction file
+/// carries instead, and while Octoboard's memory is off.
+fn launch_memory(
+    state: &AppState,
+    session: &Session,
+    memory_enabled: bool,
+) -> Result<Vec<crate::protocol::MemoryIndexEntry>> {
+    let Some(project) = session.project_id.as_deref().filter(|_| memory_enabled) else {
+        return Ok(Vec::new());
+    };
+    let project = state.store.require_project(project)?;
+    Ok(state
+        .store
+        .memory_index(&super::memory::place_of(&project))?)
+}
+
 /// The git workflow settings in force for a project session's project as this launch is assembled,
 /// which shape the rule its role text carries; none for a console session, which is given no rule.
 fn launch_git_workflow_settings(
@@ -534,12 +551,16 @@ pub(super) async fn start_process(
         state.display_fallback.clone(),
         terminal_appearance,
     );
+    // Read once, so that the instruction file, the tools offered, the memory text and the agent's
+    // own memory all follow the same value of the setting.
+    let memory_enabled = state.store.memory_enabled()?;
     // Refresh the instruction file on every console launch, resume and account switch. A missing
     // directory is left to the launch, whose refusal names it, rather than failing here on the write.
     if session.kind == SessionKind::Console && cwd.is_dir() {
-        super::console_workdir::refresh_console_session_instructions(
+        super::console_workdir::refresh_console_session_instructions_with(
             &state.store,
             &session.console_id,
+            memory_enabled,
         )?;
     }
     let (model, effort) = launch_settings(state, session)?;
@@ -586,6 +607,8 @@ pub(super) async fn start_process(
         git_workflow: launch_git_workflow_settings(state, session)?,
         ask_questions_as_choices: state.store.ask_questions_as_choices()?,
         user_language: state.store.interface_language()?,
+        memory: launch_memory(state, session, memory_enabled)?,
+        memory_enabled,
         cwd: cwd.to_path_buf(),
         task: task.map(str::to_string),
         resume_agent_session_id: resume_agent_session_id.map(str::to_string),

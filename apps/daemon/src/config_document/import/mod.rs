@@ -26,12 +26,12 @@ use crate::coordinator::{self, consoles::NewConsole, settings::SettingsChanges};
 use crate::project_git::remote_url;
 use crate::protocol::{
     error_code, Account, AccountFallback, AccountName, AccountResolution, AgentId, CodedError,
-    ConfigurationDocument, DirectoryChoice, DirectoryOffers, DocumentConsole, DocumentProject,
-    DocumentSettings, ImportFailure, ImportItem, ImportItemState, ImportStatus, ImportedAccounts,
-    ImportedConsole, ImportedProject, InspectedAccounts, InspectedConsole, InspectedProject,
-    InspectedSettings, KeepAwakeWhen, OffersUnderCloneDir, PerAgent, ProjectAccount,
-    ProjectAccountRef, ProjectResolution, SettingsSection, CONFIGURATION_FORMAT,
-    CONFIGURATION_VERSION,
+    ConfigurationDocument, DirectoryChoice, DirectoryOffers, DocumentConsole, DocumentMemoryEntry,
+    DocumentProject, DocumentSettings, ImportFailure, ImportItem, ImportItemState, ImportStatus,
+    ImportedAccounts, ImportedConsole, ImportedProject, InspectedAccounts, InspectedConsole,
+    InspectedProject, InspectedSettings, KeepAwakeWhen, MemoryDraft, MemoryTarget, MemoryWriter,
+    OffersUnderCloneDir, PerAgent, ProjectAccount, ProjectAccountRef, ProjectResolution,
+    SettingsSection, CONFIGURATION_FORMAT, CONFIGURATION_VERSION,
 };
 use crate::providers::SettingValue;
 use crate::state::{AppState, RecordKey};
@@ -148,8 +148,61 @@ fn parse(value: &serde_json::Value) -> Result<ConfigurationDocument> {
     }
     let mut upgraded = object.clone();
     upgrade::upgrade(&mut upgraded, version as u32);
-    serde_json::from_value(serde_json::Value::Object(upgraded))
-        .map_err(|err| unreadable(&err.to_string()))
+    let document: ConfigurationDocument =
+        serde_json::from_value(serde_json::Value::Object(upgraded))
+            .map_err(|err| unreadable(&err.to_string()))?;
+    check_memories(&document).map_err(|detail| unreadable(&detail))?;
+    Ok(document)
+}
+
+/// Refuses, with what is wrong, a console's memory entries that the memory tools would not hold:
+/// an entry that breaks a rule of the entry, or more entries than a console holds. An entry is
+/// named by its place in the console's list and its summary, which need not be unique. An
+/// export only writes entries that were held, so only a hand-edited document meets this, and it is
+/// refused as unreadable before anything is created, the inspection included, rather than
+/// imported short of entries.
+fn check_memories(document: &ConfigurationDocument) -> std::result::Result<(), String> {
+    use crate::coordinator::memory::{checked_draft, MemoryRefusal};
+    use crate::protocol::{MEMORY_MAX_CONTENT_BYTES, MEMORY_MAX_ENTRIES, MEMORY_MAX_SUMMARY_CHARS};
+    for (index, console) in document.consoles.iter().enumerate() {
+        let at = format!("console {index} ({:?})", console.name.trim());
+        let memories = console.memories.as_deref().unwrap_or_default();
+        if memories.len() > MEMORY_MAX_ENTRIES {
+            return Err(format!(
+                "{at} carries {} memory entries, more than the {MEMORY_MAX_ENTRIES} a console holds",
+                memories.len()
+            ));
+        }
+        for (entry_index, entry) in memories.iter().enumerate() {
+            let draft = MemoryDraft {
+                summary: entry.summary.clone(),
+                content: entry.content.clone(),
+                local: None,
+            };
+            let entry_at = format!(
+                "{at}, memory entry {entry_index} ({:?})",
+                entry.summary.trim()
+            );
+            checked_draft(draft).map_err(|refusal| {
+                let rule = match refusal {
+                    MemoryRefusal::InvalidSummary => format!(
+                        "the summary is not one line of 1 to {MEMORY_MAX_SUMMARY_CHARS} characters"
+                    ),
+                    MemoryRefusal::EmptyContent => "the content is blank".to_string(),
+                    MemoryRefusal::ContentTooLong(bytes) => format!(
+                        "the content is {bytes} bytes, more than {MEMORY_MAX_CONTENT_BYTES}"
+                    ),
+                    MemoryRefusal::StaleVersion(_)
+                    | MemoryRefusal::Unknown
+                    | MemoryRefusal::Full => {
+                        unreachable!("checking a draft refuses only what breaks its rules")
+                    }
+                };
+                format!("{entry_at}: {rule}")
+            })?;
+        }
+    }
+    Ok(())
 }
 
 /// The document's account references bound to this machine's accounts.
@@ -641,7 +694,12 @@ fn naming_console(mut err: anyhow::Error, name: &str) -> anyhow::Error {
 /// out and never announced. A console is `done` as soon as it is created, its projects reporting
 /// for themselves after it. What can fail of the accounts runs before the announcements; the
 /// reads after them, of this machine's clone directory and of the accounts the consoles bind to,
-/// can still fail, which ends the import with an error reply.
+/// and the store's writes of a created console's memory entries, can still fail, which ends the
+/// import with an error reply.
+///
+/// Each console created receives the memory entries its document carries, each with a new id, as
+/// the user's, written at the time of the import, in the document's order; they were checked when
+/// the document was read (see `parse`).
 pub async fn apply_reporting(
     state: &Arc<AppState>,
     document: &serde_json::Value,
@@ -821,11 +879,17 @@ pub async fn apply_reporting(
         let accounts = rebinder.console(&document_console);
         let fallbacks = accounts.fallbacks.clone();
         let projects = document_console.projects.clone();
-        prepared.push((new_console(document_console, accounts), fallbacks, projects));
+        let memories = document_console.memories.clone().unwrap_or_default();
+        prepared.push((
+            new_console(document_console, accounts),
+            fallbacks,
+            projects,
+            memories,
+        ));
     }
 
     let mut imported = Vec::new();
-    for (console_index, (new, account_fallbacks, document_projects)) in
+    for (console_index, (new, account_fallbacks, document_projects, memories)) in
         prepared.into_iter().enumerate()
     {
         let name = new.name.clone();
@@ -864,6 +928,13 @@ pub async fn apply_reporting(
                 continue;
             }
         };
+        // Part of creating the console, before it is done. The entries were checked with the
+        // document and the console is new, so a write can only fail as the store does.
+        // Stored last first, so that the index, which lists the latest stored first of entries
+        // saved in one millisecond, keeps the document's order.
+        for entry in memories.into_iter().rev() {
+            save_imported_memory(state, &created.id, entry)?;
+        }
         // The console is done once it exists; its projects report for themselves.
         progress.report(console_item, ImportItemState::Done);
         let mut projects = Vec::new();
@@ -942,6 +1013,38 @@ pub async fn apply_reporting(
         clone_dir_applied,
         accounts: imported_accounts,
         consoles: imported,
+    })
+}
+
+/// Stores `entry` in the console `console_id` an import has just created, with a new id, not
+/// local, as the user's, created now: the session that wrote it is on another machine, and the
+/// times and version it had there say nothing of this one. Every client hears of it
+/// (`memory_saved`): the console was published when it was created.
+fn save_imported_memory(
+    state: &Arc<AppState>,
+    console_id: &str,
+    entry: DocumentMemoryEntry,
+) -> Result<()> {
+    let draft = MemoryDraft {
+        summary: entry.summary,
+        content: entry.content,
+        local: Some(false),
+    };
+    let summary = draft.summary.clone();
+    coordinator::memory::save_and_announce(
+        state,
+        &crate::protocol::MemoryScope::Console {
+            console_id: console_id.to_string(),
+        },
+        &MemoryTarget::Create,
+        draft,
+        &MemoryWriter::User,
+    )?
+    .map(drop)
+    .map_err(|refusal| {
+        anyhow::anyhow!(
+            "the memory entry {summary:?} checked with the document was refused: {refusal:?}"
+        )
     })
 }
 

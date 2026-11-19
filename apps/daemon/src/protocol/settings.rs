@@ -81,6 +81,14 @@ pub struct Settings {
     /// launched with, so a change reaches it only in sessions launched afterwards. Only the
     /// user's own client changes it.
     pub keep_sessions_in_own_project: bool,
+    /// Whether Octoboard's memory is on: sessions are offered the memory tools, a console session's
+    /// instruction file and a project session's role description carry the memory's index, and
+    /// each session's launch turns its agent's own memory off where the agent has a switch for it.
+    /// Off unless the user turned it on. The launch-time effects follow it at each launch, so a
+    /// change reaches only sessions launched afterwards; a memory tool called while it is off is
+    /// refused at the time of the call. Turning it off deletes nothing, and the clients' memory
+    /// requests work whatever it says.
+    pub memory_enabled: bool,
     /// The tag of the interface language, one of the tags the interface offers; `null` until a
     /// client reports one. It is the one language every client of this daemon shows (each keeps a
     /// copy only to render in before it has connected) and the one sessions are told to reply in,
@@ -184,6 +192,7 @@ impl Default for Settings {
             auto_approve_handoffs: false,
             ask_questions_as_choices: true,
             keep_sessions_in_own_project: false,
+            memory_enabled: false,
             interface_language: None,
             keep_awake: false,
             keep_awake_when: KeepAwakeWhen::Working,

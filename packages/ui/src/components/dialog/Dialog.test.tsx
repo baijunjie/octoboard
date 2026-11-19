@@ -1593,3 +1593,60 @@ it("forgets the control focus was taken from when the dialog is reused for anoth
   expect(field.disabled).toBe(false);
   expect(document.activeElement).toBe(savingButton());
 });
+
+describe("a dialog's footerStart", () => {
+  /** Renders a dialog with the frame's own footer unless `footer` is given, and returns what it finds in it. */
+  function mountFooter(props: { footerStart?: React.ReactNode; footer?: React.ReactNode }) {
+    const container = document.body.appendChild(document.createElement("div"));
+    const root = createRoot(container);
+    onTestFinished(() => {
+      act(() => root.unmount());
+      container.remove();
+    });
+    act(() => {
+      root.render(
+        <DaemonProvider value={testDaemon()}>
+          {props.footer === undefined ? (
+            <Dialog title="Memory" onClose={() => {}} submitLabel="Save" onSubmit={() => {}} footerStart={props.footerStart}>
+              <span>body</span>
+            </Dialog>
+          ) : (
+            <Dialog title="Memory" onClose={() => {}} footer={props.footer} footerStart={props.footerStart}>
+              <span>body</span>
+            </Dialog>
+          )}
+        </DaemonProvider>,
+      );
+    });
+    const named = (label: string) => [...document.querySelectorAll("button")].find((button) => button.textContent === label);
+    const status = [...document.querySelectorAll("span, p, div")].find((element) => element.children.length === 0 && element.textContent === "3 of 200 entries");
+    return { named, status };
+  }
+
+  it("shows the status first in the footer, before the frame's own buttons", () => {
+    const { named, status } = mountFooter({ footerStart: <span>3 of 200 entries</span> });
+    const cancel = named("Cancel")!;
+    expect(status).toBeDefined();
+    const footer = cancel.parentElement!;
+    expect(status!.closest("div")!.parentElement).toBe(footer);
+    expect(footer.firstElementChild).toBe(status!.closest("div"));
+    expect(status!.compareDocumentPosition(cancel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(status!.compareDocumentPosition(named("Save")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("shows the status before a footer of the dialog's own too", () => {
+    const { named, status } = mountFooter({ footerStart: <span>3 of 200 entries</span>, footer: <button type="button">Own</button> });
+    expect(status).toBeDefined();
+    expect(status!.compareDocumentPosition(named("Own")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it.each([["undefined", undefined], ["null", null], ["false", false]])("adds nothing to the footer for %s", (_name, footerStart) => {
+    const { named } = mountFooter({ footerStart });
+    expect(named("Cancel")!.parentElement!.firstElementChild).toBe(named("Cancel"));
+  });
+
+  it("shows no status where the dialog has no footer", () => {
+    const { status } = mountFooter({ footerStart: <span>3 of 200 entries</span>, footer: null });
+    expect(status).toBeUndefined();
+  });
+});

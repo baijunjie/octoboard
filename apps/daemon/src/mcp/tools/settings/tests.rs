@@ -1475,3 +1475,44 @@ async fn compatibility_agent_settings_remain_read_only_and_separate_from_launche
         Some(crate::providers::SettingValue::Switch(false))
     );
 }
+
+/// Whether Octoboard's memory is on is a setting an agent may read and change, like the General
+/// ones: it is off until turned on, and a value that is not a boolean is refused with nothing
+/// changed.
+#[tokio::test]
+async fn the_memory_switch_is_read_and_changed_through_the_tools() {
+    let (state, _dir) = settings_state("app-settings-memory");
+    let read = call(&state, "a", "get_settings", &Map::new())
+        .await
+        .unwrap();
+    assert_eq!(read["memory_enabled"], false);
+    let on = call(
+        &state,
+        "a",
+        "update_settings",
+        &arguments(json!({ "memory_enabled": true })),
+    )
+    .await
+    .unwrap();
+    assert_eq!(on["memory_enabled"], true);
+    assert!(state.store.memory_enabled().unwrap());
+    let message = refused(
+        &state,
+        "a",
+        "update_settings",
+        json!({ "memory_enabled": "no" }),
+    )
+    .await;
+    assert!(message.contains("true or false"), "{message}");
+    assert!(state.store.memory_enabled().unwrap());
+    let off = call(
+        &state,
+        "a",
+        "update_settings",
+        &arguments(json!({ "memory_enabled": false })),
+    )
+    .await
+    .unwrap();
+    assert_eq!(off["memory_enabled"], false);
+    assert!(!state.store.memory_enabled().unwrap());
+}

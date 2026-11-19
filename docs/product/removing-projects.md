@@ -11,7 +11,7 @@ everything in it are left as they are**, and so are the repository's branches an
 move the folder to the Trash as well (see "Moving the project folder to the Trash" below).
 
 Removing a project asks for confirmation. **Sessions of the project that are still running do not block it.** Under
-its message the confirmation has up to three sections, each under its own heading, in this order, each set apart from
+its message the confirmation has up to four sections, each under its own heading, in this order, each set apart from
 the one above it by a divider:
 
 - **Sessions that will be ended (n)**, shown only while some are running: each with its status glyph, its agent's icon
@@ -27,6 +27,8 @@ the one above it by a divider:
 - **Project folder**, always shown: the option to also move the folder to the Trash, and what goes with it (below).
 - **Project processes**, shown while the project has any, or while its process list could not be read (see "The
   project's processes" below).
+- **Project memory**, shown only while it offers to delete the project's memory as well (see "The project's memory"
+  below).
 
 The **Project folder** section carries an option to **also move the project folder to the Trash**, unticked each time
 the confirmation opens, with a hint that the whole folder goes, including anything not committed to Git, and that it
@@ -61,6 +63,26 @@ stopped whatever is chosen. A line under the rows says how many are stopped. Whe
 shows an amber warning instead, titled that the project processes could not be listed and saying that any that are
 running will still be stopped, announced as it appears, and no count (see "Failures shown on the screen" in
 `docs/product/error-alerts.md`).
+
+## The project's memory
+
+A project's memory belongs to its place — its machine and its stored path — rather than to the project, and is shared
+with every project of any console at that place (see "Project memory" in `docs/product/memory.md`). **Removing a project
+keeps that memory by default**: it stays for the next project added at the place, and is listed meanwhile as left
+behind (see "Memory left behind" in `docs/product/memory.md`).
+
+The confirmation's **Project memory** section offers **Also delete this project's memory**, unticked each time the
+confirmation opens, only while all of these hold: Octoboard's memory is turned on (see "Turning the memory on and off"
+in `docs/product/memory.md`), the place's memory has been read and holds at least one entry, and no other project, in
+any console, is at the same place. Its hint says how many entries are kept for this folder on the
+machine the project is on, and that without the option they stay and can be deleted later in Settings, Memory. While the
+memory is off the confirmation says nothing of memory, and the memory stays.
+
+With the option ticked, the place's memory is deleted with the project (`delete_project`'s `delete_memory`). The
+removal is refused, before anything is ended, moved or removed, with `memory_place_in_use` while another project, of
+any console, is at the same place, since that project still reads the memory. Once the project is removed, the place is
+looked at again: if a project was added at it meanwhile, the memory is kept, and the removal stands either way. A
+console session's tools never remove a project, so they never delete a project's memory either.
 
 ## Moving the project folder to the Trash
 

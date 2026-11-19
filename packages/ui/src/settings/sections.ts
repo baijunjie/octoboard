@@ -4,6 +4,7 @@ export const SETTINGS_SECTION_IDS = [
   "appearance",
   "agent-permissions",
   "accounts",
+  "memory",
   "git",
   "trusted-folders",
   "permissions",

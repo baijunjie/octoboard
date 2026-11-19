@@ -221,6 +221,7 @@ pub(in crate::mcp) fn get_settings(state: &Arc<AppState>) -> Result<Value> {
         "keep_awake_when": state.store.keep_awake_when()?,
         "daemon_update_check": state.store.daemon_update_check()?,
         "daemon_update_channel": state.store.daemon_update_channel()?,
+        "memory_enabled": state.store.memory_enabled()?,
         "auto_select_account": state.store.auto_select_account()?,
         "interface_language": state.store.interface_language()?,
         "default_clone_dir": state.store.default_clone_dir()?,
@@ -290,6 +291,9 @@ pub(in crate::mcp) fn update_settings(
             auto_approve_handoffs: None,
             ask_questions_as_choices: None,
             keep_sessions_in_own_project: None,
+            // Settings' Memory section is not the user's alone: an agent may turn it on or off
+            // when the user asks.
+            memory_enabled: optional_bool(arguments, "memory_enabled")?,
             keep_awake: optional_bool(arguments, "keep_awake")?,
             keep_awake_when: keep_awake_when_argument(arguments)?,
             auto_select_account: None,

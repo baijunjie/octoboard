@@ -147,6 +147,7 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
     },
     model_display: ModelDisplay::PLAIN,
     compatibility_source: true,
+    native_memory_switch: true,
     settings: &[
         SettingDescriptor {
             id: "approval_reviewer",

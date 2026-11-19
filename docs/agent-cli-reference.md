@@ -1355,6 +1355,45 @@ registered under the key `k` exposes its tool `t` as `mcp__k__t` on Claude Code 
 already running by the time the TUI is drawn. So whether an injected server was accepted is observable without a prompt
 ever being submitted.
 
+### Each agent's own memory, and turning it off for one launch
+
+All three keep a memory of their own across sessions: notes the agent writes by itself and reads back in a later
+session, apart from the instruction files. Each can be turned off for one launch without touching any configuration,
+and the switch outranks the user's own settings. Measured on macOS with Claude Code 2.1.328 (the off switch also read out
+of 2.1.274), Codex 0.167.1 and Grok Build 1.0.89, each from a scratch home with a fake API key and inference on a local
+stand-in endpoint that recorded the request and answered HTTP 400, so nothing reached a provider. "Off" was read from
+the recorded request (the memory instructions gone) and from the home (nothing created where the memory is kept), each
+against a run with memory on in the same setup.
+
+| | Claude Code | Codex | Grok Build |
+|---|---|---|---|
+| Name | auto memory | memories (`features.memories`) | memory (`memory_v2`) |
+| On by default | yes | no (`stable`, default `false`) | no ("experimental"); a managed remote setting can turn it on |
+| Where it is kept | `<config dir>/projects/<key>/memory/` (`MEMORY.md` and topic files), or `autoMemoryDirectory` | `$CODEX_HOME/memories/` (`memory_summary.md`, `MEMORY.md`, `rollout_summaries/`, `extensions/`), with a `memories_1.sqlite` state database beside it | `$GROK_HOME/memory-v2/` (`global/` and `workspaces/<project>-<hash>/`, each with `topics/`, `observations/` and a generated `MEMORY.md`) |
+| What the model is given | a "persistent file-based memory" section naming the directory, and the index | the `memory_summary.md` text, between `MEMORY_SUMMARY BEGINS`/`ENDS` markers | a `<memory>` section naming both directories, and the index of each scope |
+| Off for one launch | `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1` | `-c features.memories=false` | `GROK_MEMORY=0` |
+
+- **Claude Code.** The variable is read before every setting: a truthy value is off whatever `autoMemoryEnabled` says,
+  and `0` forces memory on. Off, the section is missing from the system prompt and no `memory/` directory is created
+  (with memory on, a `-p` run with no turn of its own creates the directory). `autoMemoryEnabled: false` in a settings
+  layer turns it off too, but loses to the variable. It leaves `CLAUDE_CODE_REMOTE_MEMORY_DIR` (see "Sharing a
+  configuration directory between accounts") without effect on auto memory.
+- **Codex.** `--disable memories` and `-c memories.use_memories=false` turn the injection off as well, but `--disable`
+  refuses a feature name the installed Codex does not know (`Error: Unknown feature flag`), while an unknown
+  configuration key is ignored. Off, two runs wrote nothing under `memories/`; with memory on, a run created
+  `extensions/`, `rollout_summaries/` and `memories.lock`. The `memories_1.sqlite` database is created either way.
+  `codex debug prompt-input` shows no memory text even with the feature on, so it cannot settle this; the request has to
+  be read.
+- **Grok Build.** The undocumented `--no-memory` flag (absent from `--help`) works the same as the documented variable.
+  Its guide's priority order puts only a `requirements.toml` pin above either. Off, no `memory-v2/` directory is
+  created. Grok also keeps memory off by itself in a temporary directory.
+
+While Octoboard's own memory is on (the application setting `memory_enabled`, off by default), Octoboard turns each
+agent's memory off in every session it launches, console and project sessions alike, with the switch in the table:
+each session keeps what it learns in Octoboard's memory instead (a console's, or a project's place's), which every
+agent and account reads. While the setting is off, each agent's memory is left as the agent and the user set it.
+Memory files an agent wrote before are left where they are.
+
 ### Exiting ends the process groups of running commands
 
 Measured on macOS with Claude Code 2.1.327 and Codex 0.167.1, by sending `SIGTERM` to `claude -p` and `codex exec` and
@@ -2953,10 +2992,27 @@ in `docs/product/per-agent-launch-specifics.md`.
   well (Codex 0.142.5 excepted), and a Grok session never within its life.
 - **Codex truncates the project instruction files it reads at `project_doc_max_bytes`, 32 KiB by default**, so a long
   user text in a console's `AGENTS.md` can be cut off for Codex alone: Claude Code and Grok have no such cap that
-  Octoboard knows of. Verified only partly on Codex 0.162.1: the binary's own default-config snapshot reads
-  `project_doc_max_bytes = 32768`, and the key is a documented `config.toml` setting. Whether the cap counts the
-  built-in guidance, a global `~/.codex/AGENTS.md` and the console's text together, and what exactly is cut, was not
-  measured, because that needs a model request. Octoboard sets no limit on the user's text.
+  Octoboard knows of. The binary's own default-config snapshot reads `project_doc_max_bytes = 32768` (0.162.1 and
+  0.167.1), and the key is a documented `config.toml` setting. Measured on Codex 0.167.1 with `codex exec` from a
+  scratch `CODEX_HOME`, a fake key and a local stand-in endpoint that recorded the request, the file generated by
+  `console_session_instructions` as the working directory's `AGENTS.md`, outside any git repository:
+  - With the asking guidance, the language guidance (`zh-Hans`) and a memory index filled to its limit (4,050 bytes
+    of index, the line saying how many more entries there are included), the file holds 27,002 bytes before any user
+    section: 20,723 bytes of built-in text and 6,279 bytes of memory section. A user section adds 397 bytes of heading
+    and tags to the user's text.
+  - Recounted from the current `console_session_instructions` (not run through Codex again): with the same guidance
+    (`zh-CN`) and the index filled to its limit (4,095 bytes of index lines), the file holds 27,760 bytes before any
+    user section, 21,247 of built-in text and 6,513 of memory section; a user section adds 398 bytes to the user's
+    text. A test keeps the built-in text with every addition at its fullest, plus an empty user section's heading and
+    tags, within 28 KiB, leaving at least 4 KiB of user text under the cap.
+  - With 4,167 bytes of user text, the 31,566-byte file reached the model whole, its last line included.
+  - A 34,086-byte variant was cut silently: the request carried the first 32,768 bytes of it, the text ended
+    mid-line, and nothing in the output said so.
+  - A global `$CODEX_HOME/AGENTS.md` does not share the budget. With a 3,000-byte one beside the 31,566-byte file,
+    both reached the model whole.
+
+  So in that arrangement a console's own text fits up to about 4,600 bytes (32,768 less 27,760 less 398), or about
+  1,530 characters of Chinese at three bytes each. Past that the end of it is lost for Codex alone. Octoboard sets no limit on the user's text.
 - **Hook scripts must fail silently and fast on all three.** Every agent surfaces a failing hook, and a hook with no
   timeout blocks the turn for its full duration. Octoboard's scripts exit 0 unconditionally, write nothing to stderr,
   set a short explicit timeout (3 s; command hooks 15 s on Windows, HTTP hooks and Codex's `Interrupt` 3 s everywhere, where the first hook of a launch took 4.6 s to start under Codex's `pwsh`; Codex clamps some events to 3 s), are asynchronous where the agent allows it, and give

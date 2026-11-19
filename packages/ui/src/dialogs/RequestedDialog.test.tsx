@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, StrictMode } from "react";
 import { setInteractionModality } from "react-aria";
-import { expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { RequestHandler } from "../requests";
 import { AFTER_FOCUS_MOVE_DELAY_MS } from "../components/announce/StatusAnnouncer";
@@ -12,7 +12,7 @@ import { isolate } from "../i18n/isolate";
 import type { Account, Project, Session, SessionBranchItem } from "../protocol";
 import { CodedError } from "../errors/codedError";
 import { DaemonProvider, type Daemon } from "../store";
-import { testDaemon, withEmptyReplies } from "../test/testDaemon";
+import { defaultDaemonReply, testDaemon, withEmptyReplies } from "../test/testDaemon";
 import type { DialogRequest } from "./dialogRequest";
 import { RequestedDialog } from "./RequestedDialog";
 import { DEFAULT_GIT_WORKFLOW } from "../git/gitWorkflow";
@@ -1645,4 +1645,84 @@ it.each([
   expect(buttons).toContain("Pull and merge");
   expect(buttons).toContain("Cancel");
   expect(document.querySelector('[role="alertdialog"]')!.textContent).toContain(next.project.name);
+});
+
+it("opens the memory dialog of the console a console-memory request names", async () => {
+  const request = vi.fn(async (body: Parameters<RequestHandler>[0]) =>
+    body.type === "list_memories" ? { type: "memory_list", id: null, scope: { kind: "console", console_id: console_.id }, memories: [] } : defaultDaemonReply(body));
+  mount({ kind: "console-memory", console: console_ }, [], [], { request: request as never });
+  await act(async () => {});
+  expect(request).toHaveBeenCalledWith({ type: "list_memories", console: console_.id });
+  expect(document.body.querySelector('[role="dialog"] h2')?.textContent).toBe("Console memory");
+  expect(document.body.textContent).toContain(console_.name);
+  expect(document.body.textContent).toContain("No memory yet");
+});
+
+it("opens the memory dialog of the project a project-memory request names", async () => {
+  const request = vi.fn(async (body: Parameters<RequestHandler>[0]) =>
+    body.type === "list_memories" ? { type: "memory_list", id: null, scope: { kind: "place", host_id: project.host_id, path: project.path }, memories: [] } : defaultDaemonReply(body));
+  mount({ kind: "project-memory", project }, [], [], { request: request as never });
+  await act(async () => {});
+  expect(request).toHaveBeenCalledWith({ type: "list_memories", project: project.id });
+  expect(document.body.querySelector('[role="dialog"] h2')?.textContent).toBe("Project memory");
+});
+
+describe("removing a project whose place has memory", () => {
+  const entry = { id: "m1", summary: "Port 5432", local: false, created_at: 1, updated_at: 2, updated_by: { kind: "user" }, version: 1 };
+  /** Answers each request the removal confirmation sends with its own reply: the place's memory listing, what goes
+   * along (nothing), the project's processes (none) and the removal itself; an ambient read gets its empty fixture. */
+  const listing = (memories: unknown[]) => async (body: Parameters<RequestHandler>[0]) => {
+    switch (body.type) {
+      case "list_memories": return { type: "memory_list", id: null, scope: { kind: "place", host_id: project.host_id, path: project.path }, memories };
+      case "inspect_project_removal": return { type: "project_removal_inspected", id: null, items: [], processes: [] };
+      case "list_processes": return { type: "processes_listed", id: null, trees: [] };
+      case "delete_project": return { type: "ack", id: null };
+      default: return defaultDaemonReply(body);
+    }
+  };
+  const memoryOption = () => [...document.querySelectorAll<HTMLInputElement>('[role=alertdialog] input[type="checkbox"]')].find((box) => box.labels?.[0]?.textContent === "Also delete this project\u2019s memory");
+  /** Turns the memory setting on, which the option is offered under. */
+  const memoryOn = (daemon: Daemon) => act(() => daemon.store.setState((state) => ({ settings: { ...state.settings, memory_enabled: true } })));
+
+  it("offers deleting the memory, unchecked, and sends it only when chosen", async () => {
+    const { daemon } = mount({ kind: "delete-project", project }, [], [], { request: listing([entry]) as never });
+    memoryOn(daemon);
+    await act(async () => {});
+    expect(memoryOption()?.checked).toBe(false);
+    expect(document.querySelector("[role=alertdialog]")?.textContent).toContain("1 entry is kept for this folder");
+    // The place it can be deleted later is named as a path through Settings.
+    expect(document.querySelector("[role=alertdialog]")?.textContent).toContain("can be deleted later in Settings > Memory.");
+    await submitDialog();
+    expect(sent(daemon, "delete_project")).toEqual([{ type: "delete_project", project: project.id, stop_sessions: false, trash_directory: false }]);
+    act(() => memoryOption()!.click());
+    await submitDialog();
+    expect(sent(daemon, "delete_project").at(-1)).toEqual({ type: "delete_project", project: project.id, stop_sessions: false, trash_directory: false, delete_memory: true });
+  });
+
+  it("leaves the option out when the place has no memory", async () => {
+    const { daemon } = mount({ kind: "delete-project", project }, [], [], { request: listing([]) as never });
+    memoryOn(daemon);
+    await act(async () => {});
+    expect(memoryOption()).toBeUndefined();
+  });
+
+  it("says nothing of memory while the memory setting is off, neither listing it nor sending its deletion", async () => {
+    const { daemon } = mount({ kind: "delete-project", project }, [], [], { request: listing([entry]) as never });
+    await act(async () => {});
+    // The place's memory is not even listed while the setting is off.
+    expect(sent(daemon, "list_memories")).toEqual([]);
+    expect(memoryOption()).toBeUndefined();
+    expect(document.querySelector("[role=alertdialog]")?.textContent).not.toContain("memory");
+    await submitDialog();
+    expect(sent(daemon, "delete_project")).toEqual([{ type: "delete_project", project: project.id, stop_sessions: false, trash_directory: false }]);
+  });
+
+  it("leaves the option out while another project, of any console, is at the same place", async () => {
+    const twin = { ...projectOf("p-9", "c-2", "Twin"), host_id: project.host_id, path: project.path };
+    const { daemon } = mount({ kind: "delete-project", project }, [], [], { request: listing([entry]) as never });
+    memoryOn(daemon);
+    act(() => daemon.store.setState({ projects: new Map([[project.id, project], [twin.id, twin]]) }));
+    await act(async () => {});
+    expect(memoryOption()).toBeUndefined();
+  });
 });

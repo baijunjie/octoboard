@@ -127,7 +127,7 @@ their cascade order does not depend on which screen opened first.
   browse requests, the shared slot names and the lanes every browse request goes through), the lane primitive
   (`lane.ts`), and how a failed browse request is treated and worded (`failure.ts`).
 - `src/store/` — the Zustand store of the connection and the state derived from daemon events (state, reducer, actions,
-  session requests, the notification bus in `notifications.ts`, `contentSearchListeners.ts`: the events of a running Find in files search, which `Daemon.onContentSearch` hands to its listener outside the store and reducer, the installed desktop applications of the agents (`nativeApps.ts`: `State.nativeApps`, `nativeAppsUnseen`, `useNativeAppsRefresh`), connection, React bindings, session-group hooks),
+  session requests, the notification bus in `notifications.ts`, `contentSearchListeners.ts`: the events of a running Find in files search, which `Daemon.onContentSearch` hands to its listener outside the store and reducer, the installed desktop applications of the agents (`nativeApps.ts`: `State.nativeApps`, `nativeAppsUnseen`, `useNativeAppsRefresh`), `memoryListeners.ts` (the changes to Octoboard's memory, which `Daemon.onMemoryChange` hands to its listeners: memory is not held in the store state, what shows it lists it itself), connection, React bindings, session-group hooks),
   re-exported by `index.ts`; `settingsWrite.ts` is the checked settings writer (`createSettingsWriter`) that
   `useSettingsWrite` and the daemon's update store share.
 
@@ -251,6 +251,8 @@ their cascade order does not depend on which screen opened first.
   the terminals' font size, a `NumberField` from `src/primitives/`), `CleanupSection.tsx` the Cleanup section;
   `accounts/` the Agent accounts section, where `AgentProviderSettings.tsx` renders every setting the daemon serves for an agent
   and `providerSettingCopy.tsx` is the copy and help of any provider setting, shared with the dialogs that hold a setting's value,
+  `MemorySection.tsx` the Memory section (the switch for Octoboard's memory, and the memory that removed projects left
+  behind: `useOrphanedMemory.ts` keeps that set current and `OrphanedMemoryDialog.tsx` lists and deletes it),
   `AgentMenus.tsx` holds an agent tab's menu and actions button, which open `AgentSettingsDialog.tsx` (the per-agent
   settings) and `AgentVersionDialog.tsx` (the agent's CLI version, its content `AgentCliVersionSetting.tsx`, with
   `cliVersion.ts` judging whether an update exists), both on `agentDialogSubject.tsx` (the heading and the closing of
@@ -263,7 +265,12 @@ their cascade order does not depend on which screen opened first.
   `useLatestRequest`; `branchInspection.ts` holds the pure part of a branch inspection and `useBranchInspections.ts`
   its hooks, with `useArchiveScope`, what an archive of a session takes along, shared by the archive and open-in-application confirmations. A launch level's compatibility switches (console, project, session, request, handoff and model dialogs) are
   generic rows built from the served setting descriptors by `AgentCompatibilityField.tsx`, whose `CompatibilityPicker`
-  the console launch matrix reuses.
+  the console launch matrix reuses. `memory/` is the memory dialogs, for a console's memory and for a project place's
+  (the `console-memory` and `project-memory` requests of `dialogRequest.ts`): `MemoryDialog.tsx` the list, with
+  `MemoryViewDialog.tsx` and `MemoryFormDialog.tsx` over it, `MemoryRow.tsx` and `MemoryUpdated.tsx` its parts,
+  `useMemory.ts` the memory as the daemon holds it kept current for the mounted dialog, `memoryState.ts` the pure state it
+  keeps, `memoryTarget.ts` whose memory a dialog shows, and `memoryRules.ts` the entry limits the form checks beside the
+  daemon's.
 - `src/process/` — the Processes panel and its data, the polled global process count the rail shows
   (`processPolling.ts` holds the polling paces), and the rail's process panel (`ProcessCounts`).
 - `src/configuration/` — configuration export and import dialogs, by Settings section and by agent. Shared cards and parts: `SettingsGroups.tsx` (the sections' cards), `AgentSettingsCard.tsx` (the per-agent cards: `AgentCardSections` lays out an agent's card, `useAgentSettingLines` words one line per setting of that agent, from the served schema and the providers' copy, naming an unpresented setting by `idWords` of its id) and `importParts.tsx` (review rows, status lines, `ImportChoice` and `choiceHeader`, `LEFT_OUT_STATUS`); `settingsSections.ts` holds the Settings sections a document carries, in Settings order, with their labels; `useImportChoices.ts` holds the review's choice state (which parts, sections and agents are taken) and `useClientSettingsReview.ts` the values this client holds now, for the review to compare against; `clientSettings.ts` carries the settings only this client holds (appearance, Markdown style, terminal font size, run in the background, menu bar icon, language, session order) into and out of the document, with `clientSettingsPlatform` saying which of them this platform has; `ImportProgress.tsx` shows a running import item by item, its state kept in `progressState.ts`, with `ResultCards.tsx` shared by progress and result; `keepAwakeWhen.ts` holds the labels of Prevent sleep's choices of when, and the descriptions the Settings search indexes, shared by its Settings row, the search index and the import's cards; and the list of plain switch settings (`booleanSettings.ts`, grouped by the Settings section each belongs to).
@@ -271,10 +278,10 @@ their cascade order does not depend on which screen opened first.
 
 ### Dev-only and website-facing
 
-- [`src/fixtures/`](../../packages/ui/src/fixtures/README.md) — the fixtures runtime (fixture daemon with its per-domain reply modules, fake terminal,
-  builders, step driver, sample data) shared by the gallery, the website preview and the application tests.
+- [`src/fixtures/`](../../packages/ui/src/fixtures/README.md) — the fixtures runtime (fixture daemon with its per-domain reply modules, among them `fixtureMemory.ts` for the memory requests, fake terminal,
+  builders, `memoryBuilders.ts` for memory entries and changes, step driver, sample data) shared by the gallery, the website preview and the application tests.
 - [`src/gallery/`](../../packages/ui/src/gallery/README.md) — the UI state gallery: pages, the `Scenario` type and the
-  scenarios under `fixtures/`; its README also holds the conventions for writing scenarios, sweeping the gallery and
+  scenarios under `fixtures/` (the memory dialogs' are `consoleMemory.ts` and `projectMemory.ts`); its README also holds the conventions for writing scenarios, sweeping the gallery and
   manually comparing screenshots.
 - `src/website-preview/` — the fixture-backed build the website embeds: the real `App` over a preview daemon, scenes,
   simulated agent terminals, `features/` focused views, and `messages.ts`, the `postMessage` contract with the embedding
@@ -458,6 +465,7 @@ are the helper list; the rules that go beyond "use helper X" are in `docs/conven
 | Send focus into a panel the user opened deliberately | `landInPanel` (`src/panels/panelLanding.ts`), as `useFloatingPanel` and `useProcessJump` do |
 | Queue best-effort pushes to the native shell in order | `useSerialPush` (`src/components/hooks/useSerialPush.ts`) in a component, `createSerialQueue` (`src/components/hooks/serialQueue.ts`) outside one |
 | A setting the desktop shell must know before the page loads | `createShellPreference` (`src/lifecycle/shellSettings.ts`) |
+| A quiet status (a count) at the start of a dialog's footer, before its buttons | `Dialog`'s `footerStart` prop (`src/components/dialog/Dialog.tsx`), as the memory dialog's entry count uses it; not for controls |
 | Browse directories in a picker | `useDirectoryBrowse` (`src/components/dialog/DirectoryPicker.tsx`), which routes local desktop browsing through the platform's `directoryPicker` capability and otherwise uses the daemon-backed `DirectoryPicker`; locality comes from `Daemon.isLocal`, derived by `isLocalDaemon` (`src/daemon.ts`) and false in a remote window |
 | Delete options of a dialog that deletes sessions | `useSessionDeletionOptions` (`src/dialogs/`) |
 | A provider's name, install page or configuration directory; the file and folder names that detect it | `providerLabel`, `providerShortName`, `providerInstallUrl`, `providerConfigDir`, `detectionMarkers` (`src/agents/providers.ts`) over `useProviders()` |

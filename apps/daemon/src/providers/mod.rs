@@ -192,6 +192,12 @@ pub struct ProviderDescriptor {
     /// Whether other providers can be made compatible with this one, reading its configuration
     /// (MCP servers, instructions) the way it does.
     pub compatibility_source: bool,
+    /// Whether the agent's own memory across sessions (the notes it keeps and reads back by itself,
+    /// apart from the instruction files) can be turned off for one launch, without a change to the
+    /// agent's or the user's configuration. Where it can, the provider's launch turns it off when
+    /// [`crate::adapter::LaunchSpec::native_memory_off`] says so, which generic code sets for every
+    /// session (`crate::adapter::turns_native_memory_off`).
+    pub native_memory_switch: bool,
     /// The settings the user can make for the provider, in the order a client lists them. The
     /// provider reads its own at launch (`crate::adapter::LaunchSpec::settings`).
     pub settings: &'static [SettingDescriptor],

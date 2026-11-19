@@ -10,6 +10,7 @@ pub(super) mod archive;
 pub(super) mod bindings;
 pub(super) mod handoff;
 pub(super) mod history;
+pub(super) mod memory;
 pub(super) mod messaging;
 pub(super) mod models;
 pub(super) mod pages;

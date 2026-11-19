@@ -275,6 +275,7 @@ async fn a_removal_after_an_inspection_that_held_a_worktree_back_leaves_it() {
             state,
             None,
             RequestBody::DeleteProject {
+                delete_memory: false,
                 project: "p1".to_string(),
                 stop_sessions: true,
                 trash_directory: true,
@@ -324,6 +325,7 @@ async fn a_retried_removal_still_holds_back_what_its_inspection_held_back() {
             state,
             None,
             RequestBody::DeleteProject {
+                delete_memory: false,
                 project: "p1".to_string(),
                 stop_sessions: true,
                 trash_directory: true,

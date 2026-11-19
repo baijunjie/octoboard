@@ -292,6 +292,9 @@ pub(crate) enum Command {
         /// The session is a worker, which narrows what it is offered.
         #[arg(long)]
         worker: bool,
+        /// Octoboard's memory was on at the session's launch, which offers the memory tools.
+        #[arg(long)]
+        memory: bool,
         #[arg(long)]
         port: u16,
         /// The owner-only file holding the key the daemon requires of every connection.
@@ -434,10 +437,11 @@ pub(crate) fn run(command: Command) -> Result<()> {
             session,
             kind,
             worker,
+            memory,
             port,
             key_file,
             token,
-        } => mcp::stdio::run(session, kind.into(), worker, port, &key_file, token),
+        } => mcp::stdio::run(session, kind.into(), worker, memory, port, &key_file, token),
     }
 }
 

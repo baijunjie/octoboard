@@ -112,6 +112,7 @@ async fn removing_a_project_takes_its_outside_worktrees_only_with_its_folder() {
             &fixture.state,
             None,
             RequestBody::DeleteProject {
+                delete_memory: false,
                 project: "p1".to_string(),
                 stop_sessions: true,
                 trash_directory: trash,
@@ -146,6 +147,7 @@ async fn a_project_removal_that_cannot_find_out_what_goes_along_says_so_and_leav
         &fixture.state,
         None,
         RequestBody::DeleteProject {
+            delete_memory: false,
             project: "p1".to_string(),
             stop_sessions: true,
             trash_directory: true,
@@ -190,6 +192,7 @@ async fn a_project_removal_without_git_nests_its_refusal_in_the_notice() {
         &fixture.state,
         None,
         RequestBody::DeleteProject {
+            delete_memory: false,
             project: "p1".to_string(),
             stop_sessions: true,
             trash_directory: true,
@@ -334,6 +337,7 @@ async fn a_removal_after_an_unresolved_inspection_repeats_its_refusal() {
             state,
             None,
             RequestBody::DeleteProject {
+                delete_memory: false,
                 project: "p1".to_string(),
                 stop_sessions: true,
                 trash_directory: true,

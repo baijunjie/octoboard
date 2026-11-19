@@ -121,7 +121,9 @@ the launch environment described below:
   each, and `list_project_changes` and `read_project_diff` for what has changed in a project of its console — to be
   used, rather than `git status` or `git diff`, for another session's worktree or branch and for the project's folder,
   which another session may be working in, while in its own worktree it runs `git` as usual (see "Reading a project's
-  changes" in `docs/product/what-every-session-reads.md`). Where its project's effective git workflow settings have
+  changes" in `docs/product/what-every-session-reads.md`). While Octoboard's memory is on at the launch, it next carries
+  a section on its project's memory, with that memory's index as it stands at the launch (see "The index a session
+  starts with" in `docs/product/memory.md`). Where its project's effective git workflow settings have
   sessions develop on a branch or in a worktree of their own at the launch, it also carries the development rule (see
   "The development rule" in `docs/product/git-workflow-settings.md`), where **Ask questions as choices** is on at the
   launch, the guidance on asking the user after it (see "The guidance on asking the user" below), and where the language
@@ -217,7 +219,10 @@ asking the user (see "The guidance on asking the user" below) after the rest of 
 more: a decision among a few options goes through that question tool rather than a page pushed with `show_page`, which
 is for a choice that needs a page — a rich comparison, many items, a form. When the language the daemon holds is not
 English as the file is written, the guidance on the user's language (see "The guidance on the user's language" below)
-follows, as the built-in part's last section. When the console has console session instructions of the user's (see
+follows. When Octoboard's memory is on as the file is written, a section on the console's memory, holding its index as it
+stands then, follows as the built-in part's last section, and the file's list of tools names the memory tools; while it
+is off the file says nothing of memory (see "The index a session starts with" in `docs/product/memory.md`). When the
+console has console session instructions of the user's (see
 "Console session instructions" in `docs/product/consoles.md`), they are the file's last section, held between a
 `<user_instructions>` and a `</user_instructions>` tag under a heading of the file's own. That heading's paragraph says
 the tags hold the user's own text, that any heading inside them belongs to that text and not to the file's sections, and
@@ -243,7 +248,9 @@ a change to **Ask questions as choices** or to the language the daemon holds, ne
 each is read at the next write. A Claude Code or Codex console session resumed after it reads it too (on Codex 0.142.5,
 only after a compaction), while a Grok Build console session never does within its life, resumed or not: only a new one
 does. Codex reads at most 32 KiB of a project's instruction files by default (its own `project_doc_max_bytes` setting),
-so a very long text can be cut off for Codex console sessions; Octoboard sets no limit on the text itself.
+so a very long text can be cut off for Codex console sessions, its end lost without notice; Octoboard sets no limit on
+the text itself. The built-in part, with every optional section at its fullest and the memory index at its limit, is
+kept within 28 KiB, so at least 4 KiB of the user's text always fits under that default.
 
 ### The guidance on asking the user
 
@@ -434,7 +441,10 @@ Besides the terminal type, the variables set over the snapshot are:
   `docs/product/compatibility-between-agents.md`);
 - for a Claude Code session whose account's directory shares the default configuration, `CLAUDE_CODE_REMOTE_MEMORY_DIR`
   (when exactly, an account whose last change of sharing is incomplete included, is in "Claude Code's auto memory" in
-  `docs/product/sharing-the-default-configuration.md`).
+  `docs/product/sharing-the-default-configuration.md`);
+- while Octoboard's memory is on at the launch, for a Claude Code or Grok Build session, the variable that turns the
+  agent's own memory off; a Codex session is given a launch argument for it instead (see "The agents' own memory" in
+  `docs/product/memory.md`);
 - for a project session, a `core.hooksPath` entry through `GIT_CONFIG_PARAMETERS`, after the entries the user's shell
   exports there, together with `OCTOBOARD_SESSION_ID`, `OCTOBOARD_DAEMON_PORT` and `OCTOBOARD_DAEMON_CREDENTIAL_PATH` —
   the port of the process holder that runs the session and the path of the owner-only file holding the key it issued for

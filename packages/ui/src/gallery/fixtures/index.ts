@@ -7,6 +7,7 @@ import { archiveScenarios } from "./archive";
 import { busyScenarios } from "./busy";
 import { configurationScenarios } from "./configuration";
 import { connectionScenarios } from "./connection";
+import { consoleMemoryScenarios } from "./consoleMemory";
 import { consoleSessionsScenarios } from "./consoleSessions";
 import { dialogScenarios } from "./dialogs";
 import { emptyScenarios } from "./empty";
@@ -19,6 +20,7 @@ import { processScenarios } from "./processes";
 import { projectContentSearchScenarios } from "./projectContentSearch";
 import { projectFilesScenarios } from "./projectFiles";
 import { projectGitScenarios } from "./projectGit";
+import { projectMemoryScenarios } from "./projectMemory";
 import { noticeScenarios } from "./notices";
 import { quotaGatingScenarios } from "./quotaGating";
 import { railQuotaScenarios } from "./railQuota";
@@ -76,6 +78,8 @@ export const SCENARIOS: Scenario[] = [
   ...aboutScenarios,
   ...shortcutsScenarios,
   ...dialogScenarios,
+  ...consoleMemoryScenarios,
+  ...projectMemoryScenarios,
   ...handoffScenarios,
   ...sessionModelScenarios,
   ...quotaGatingScenarios,

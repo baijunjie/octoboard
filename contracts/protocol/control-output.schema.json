@@ -3353,6 +3353,13 @@
           ],
           "description": "The user's own addition to the console session's instructions; absent is none."
         },
+        "memories": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DocumentMemoryEntry"
+          },
+          "description": "The console's memory entries, the most recently updated first, without its local ones,\nwhich hold only on the exporting machine. Absent in a document written before memory\ntravelled, which gives the console none. A project's place's memory never travels."
+        },
         "projects": {
           "type": "array",
           "items": {
@@ -3403,6 +3410,24 @@
         "disabled"
       ],
       "description": "What the document says of an agent's default account. Its directory is whatever the agent\nresolves on the machine, so it is not carried."
+    },
+    "DocumentMemoryEntry": {
+      "type": "object",
+      "properties": {
+        "summary": {
+          "type": "string",
+          "description": "One sentence summing up the content, the entry's label in the index."
+        },
+        "content": {
+          "type": "string",
+          "description": "Markdown."
+        }
+      },
+      "required": [
+        "summary",
+        "content"
+      ],
+      "description": "One entry of a console's memory as a document carries it: what its writer gave, without its\nid, who wrote it, when, or its version, which belong to the machine it was written on; an\nimport gives it a new id, not local."
     },
     "DocumentProject": {
       "type": "object",
@@ -5477,6 +5502,130 @@
             "pages"
           ],
           "description": "Pages a session withdrew with `delete_pages`, by id. `session_id` names the session that\npushed them. The panel showing that session drops them."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "scope": {
+              "$ref": "#/$defs/MemoryScope"
+            },
+            "memories": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/MemoryIndexEntry"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "memory_list"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "scope",
+            "memories"
+          ],
+          "description": "The reply to `list_memories`: the index of a memory, the most recently updated first. A\nclient that keeps it asks again after every `snapshot`, which is what keeps it correct\nacross a `memory_saved` or `memories_deleted` it was too far behind to receive."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "entry": {
+              "$ref": "#/$defs/MemoryEntry"
+            },
+            "type": {
+              "type": "string",
+              "const": "memory_content"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "entry"
+          ],
+          "description": "The reply to `read_memory`: one entry, content included."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "entry": {
+              "$ref": "#/$defs/MemoryEntry"
+            },
+            "type": {
+              "type": "string",
+              "const": "memory_saved"
+            }
+          },
+          "required": [
+            "type",
+            "entry"
+          ],
+          "description": "An entry of a memory was created or updated, by a session's `save_memory` tool or by a\nclient's `save_memory`. Broadcast in the order the writes were made. Its `scope` names the\nmemory: a place's reaches the windows showing any project at that place."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "scope": {
+              "$ref": "#/$defs/MemoryScope"
+            },
+            "memories": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "The ids of the entries deleted."
+            },
+            "type": {
+              "type": "string",
+              "const": "memories_deleted"
+            }
+          },
+          "required": [
+            "type",
+            "scope",
+            "memories"
+          ],
+          "description": "Entries of a memory were deleted, by id: by a session's `delete_memory` tool, or by a\nclient's `delete_memory`, `delete_memories`, `delete_orphaned_memory`,\n`delete_orphaned_memories` or a `delete_project` that deleted its place's memory. Never\nempty."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "places": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/OrphanedMemory"
+              }
+            },
+            "type": {
+              "type": "string",
+              "const": "orphaned_memory_list"
+            }
+          },
+          "required": [
+            "type",
+            "id",
+            "places"
+          ],
+          "description": "The places whose memory no project is at any more, the most recently updated first: the\nreply to `list_orphaned_memories`, and broadcast (with no `id`) whenever that may have changed: a project added or removed, a\nplace's memory deleted."
         },
         {
           "type": "object",
@@ -8391,6 +8540,175 @@
         }
       ]
     },
+    "MemoryEntry": {
+      "type": "object",
+      "properties": {
+        "scope": {
+          "$ref": "#/$defs/MemoryScope"
+        },
+        "id": {
+          "type": "string",
+          "description": "The entry's id, assigned by the daemon (see [`MEMORY_ID_LENGTH`])."
+        },
+        "summary": {
+          "type": "string",
+          "description": "One sentence summing up the content, the entry's only label; not unique."
+        },
+        "content": {
+          "type": "string",
+          "description": "Markdown."
+        },
+        "local": {
+          "type": "boolean",
+          "description": "Whether the entry holds only on this machine; always false in a place's memory, every entry\nof which holds only here. A console's local entries stay out of a configuration export."
+        },
+        "created_at": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Milliseconds since the epoch."
+        },
+        "updated_at": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Milliseconds since the epoch."
+        },
+        "updated_by": {
+          "$ref": "#/$defs/MemoryWriter"
+        },
+        "version": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Starts at 1 and is raised by every update."
+        }
+      },
+      "required": [
+        "scope",
+        "id",
+        "summary",
+        "content",
+        "local",
+        "created_at",
+        "updated_at",
+        "updated_by",
+        "version"
+      ],
+      "description": "One entry of a memory as stored."
+    },
+    "MemoryIndexEntry": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "local": {
+          "type": "boolean",
+          "description": "As in [`MemoryEntry::local`]."
+        },
+        "created_at": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Milliseconds since the epoch."
+        },
+        "updated_at": {
+          "type": "integer",
+          "format": "int64",
+          "description": "Milliseconds since the epoch."
+        },
+        "updated_by": {
+          "$ref": "#/$defs/MemoryWriter"
+        },
+        "version": {
+          "type": "integer",
+          "format": "int64",
+          "description": "The entry's current version, as in [`MemoryEntry::version`]."
+        }
+      },
+      "required": [
+        "id",
+        "summary",
+        "local",
+        "created_at",
+        "updated_at",
+        "updated_by",
+        "version"
+      ],
+      "description": "One line of a memory's index: an entry without its content."
+    },
+    "MemoryScope": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "console_id": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "console"
+            }
+          },
+          "required": [
+            "kind",
+            "console_id"
+          ],
+          "description": "A console's memory, which its console sessions keep; deleted with the console."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "host_id": {
+              "type": "string"
+            },
+            "path": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "const": "place"
+            }
+          },
+          "required": [
+            "kind",
+            "host_id",
+            "path"
+          ],
+          "description": "A place's memory, which the project sessions of every project at the place keep: the\nproject's host and its stored path. It outlives the projects, and is deleted only when the\nuser asks."
+        }
+      ],
+      "description": "Which memory an entry belongs to."
+    },
+    "MemoryWriter": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "user"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "agent"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      ],
+      "description": "Who wrote an entry last: the user, in a window, or an agent, through a session's memory tools."
+    },
     "ModelChangeOutcome": {
       "oneOf": [
         {
@@ -8506,6 +8824,36 @@
         "console",
         "user"
       ]
+    },
+    "OrphanedMemory": {
+      "type": "object",
+      "properties": {
+        "host_id": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string",
+          "description": "The path the projects at the place were stored with."
+        },
+        "entries": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0,
+          "description": "How many entries the memory holds, at least one."
+        },
+        "updated_at": {
+          "type": "integer",
+          "format": "int64",
+          "description": "When its most recently updated entry was, in milliseconds since the epoch."
+        }
+      },
+      "required": [
+        "host_id",
+        "path",
+        "entries",
+        "updated_at"
+      ],
+      "description": "A place whose memory no project is at any more: what removing its projects left behind."
     },
     "Page": {
       "type": "object",
@@ -10350,6 +10698,10 @@
           "type": "boolean",
           "description": "Whether a project session is kept to its own project: its git is refused a ref update in\nthe repository of another registered project, and its file-edit tools are refused a path\nin one. Off unless the user turned it on. The git check reads it at every ref update, so a\nchange reaches running sessions at once; the edit check keeps the value a session was\nlaunched with, so a change reaches it only in sessions launched afterwards. Only the\nuser's own client changes it."
         },
+        "memory_enabled": {
+          "type": "boolean",
+          "description": "Whether Octoboard's memory is on: sessions are offered the memory tools, a console session's\ninstruction file and a project session's role description carry the memory's index, and\neach session's launch turns its agent's own memory off where the agent has a switch for it.\nOff unless the user turned it on. The launch-time effects follow it at each launch, so a\nchange reaches only sessions launched afterwards; a memory tool called while it is off is\nrefused at the time of the call. Turning it off deletes nothing, and the clients' memory\nrequests work whatever it says."
+        },
         "interface_language": {
           "type": [
             "string",
@@ -10489,6 +10841,7 @@
         "auto_approve_handoffs",
         "ask_questions_as_choices",
         "keep_sessions_in_own_project",
+        "memory_enabled",
         "interface_language",
         "keep_awake",
         "keep_awake_when",

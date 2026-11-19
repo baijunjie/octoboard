@@ -25,6 +25,8 @@
 //!   confirmation lists.
 //! - [`messages`], [`pages`]: the user's own message into a session; the report panel's page list
 //!   and form submission, withdrawing a new worker's pages and the sweep of stray ones at start-up.
+//! - [`memory`]: a console's and a place's memory, its entry rules and the requests on it, which
+//!   the sessions' memory tools share.
 //! - [`validate`]: the checks of the text fields requests carry.
 //! - [`archive_cleanup`], [`resume_on_start`], [`exit_watch`], [`adopt`], [`unlinked`],
 //!   [`planned_stop`]: not request handlers. `archive_cleanup` is the daemon task that deletes
@@ -61,6 +63,7 @@ pub mod handover_check;
 mod interactions;
 pub mod launch;
 pub mod lifecycle;
+pub mod memory;
 mod messages;
 pub mod model_change;
 pub mod native_app;
@@ -337,6 +340,7 @@ async fn handle_inner(
             trash_directory,
             force_remove,
             inspection,
+            delete_memory,
         } => {
             delete_project(
                 state,
@@ -345,6 +349,7 @@ async fn handle_inner(
                 trash_directory,
                 force_remove,
                 inspection,
+                delete_memory,
             )
             .await?;
             Ok(None)
@@ -1017,6 +1022,67 @@ async fn handle_inner(
 
         RequestBody::ListPages { session } => list_pages(state, request_id, session),
 
+        RequestBody::ListMemories { console, project } => {
+            let scope = memory::requests::scope(state, console, project)?;
+            memory::requests::list(state, request_id, scope)
+        }
+
+        RequestBody::ReadMemory {
+            console,
+            project,
+            memory: id,
+        } => {
+            let scope = memory::requests::scope(state, console, project)?;
+            memory::requests::read(state, request_id, scope, id)
+        }
+
+        RequestBody::SaveMemory {
+            console,
+            project,
+            memory: id,
+            summary,
+            content,
+            local,
+            version,
+        } => {
+            let scope = memory::requests::scope(state, console, project)?;
+            let draft = crate::protocol::MemoryDraft {
+                summary,
+                content,
+                local,
+            };
+            memory::requests::save(state, &scope, id, version, draft)?;
+            Ok(None)
+        }
+
+        RequestBody::DeleteMemory {
+            console,
+            project,
+            memory: id,
+        } => {
+            let scope = memory::requests::scope(state, console, project)?;
+            memory::requests::delete(state, &scope, &id)?;
+            Ok(None)
+        }
+
+        RequestBody::DeleteMemories { console, project } => {
+            let scope = memory::requests::scope(state, console, project)?;
+            memory::requests::delete_all(state, &scope)?;
+            Ok(None)
+        }
+
+        RequestBody::ListOrphanedMemories => memory::requests::list_orphaned(state, request_id),
+
+        RequestBody::DeleteOrphanedMemory { host_id, path } => {
+            memory::requests::delete_orphaned(state, host_id, path)?;
+            Ok(None)
+        }
+
+        RequestBody::DeleteOrphanedMemories => {
+            memory::requests::delete_all_orphaned(state)?;
+            Ok(None)
+        }
+
         RequestBody::SubmitPage {
             page: page_id,
             data,
@@ -1075,6 +1141,7 @@ async fn handle_inner(
             auto_approve_handoffs,
             ask_questions_as_choices,
             keep_sessions_in_own_project,
+            memory_enabled,
             interface_language,
             keep_awake,
             keep_awake_when,
@@ -1101,6 +1168,7 @@ async fn handle_inner(
                     auto_approve_handoffs,
                     ask_questions_as_choices,
                     keep_sessions_in_own_project,
+                    memory_enabled,
                     interface_language,
                     keep_awake,
                     keep_awake_when,

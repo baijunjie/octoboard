@@ -1743,6 +1743,12 @@ export type DocumentConsole = {
    * The user's own addition to the console session's instructions; absent is none.
    */
   console_session_prompt: string | null,
+  /**
+   * The console's memory entries, the most recently updated first, without its local ones,
+   * which hold only on the exporting machine. Absent in a document written before memory
+   * travelled, which gives the console none. A project's place's memory never travels.
+   */
+  memories?: Array<DocumentMemoryEntry>,
   projects: Array<DocumentProject>,
 };
 
@@ -1764,6 +1770,22 @@ export type DocumentDefaultAccount = {
    * carry the flag: importing it leaves this machine's flag as it is.
    */
   disabled: boolean | null,
+};
+
+/**
+ * One entry of a console's memory as a document carries it: what its writer gave, without its
+ * id, who wrote it, when, or its version, which belong to the machine it was written on; an
+ * import gives it a new id, not local.
+ */
+export type DocumentMemoryEntry = {
+  /**
+   * One sentence summing up the content, the entry's label in the index.
+   */
+  summary: string,
+  /**
+   * Markdown.
+   */
+  content: string,
 };
 
 /**
@@ -2461,6 +2483,34 @@ export type Event = {
   "type": "pages_deleted",
   session_id: string,
   pages: Array<string>,
+}
+| {
+  "type": "memory_list",
+  id: string | null,
+  scope: MemoryScope,
+  memories: Array<MemoryIndexEntry>,
+}
+| {
+  "type": "memory_content",
+  id: string | null,
+  entry: MemoryEntry,
+}
+| {
+  "type": "memory_saved",
+  entry: MemoryEntry,
+}
+| {
+  "type": "memories_deleted",
+  scope: MemoryScope,
+  /**
+   * The ids of the entries deleted.
+   */
+  memories: Array<string>,
+}
+| {
+  "type": "orphaned_memory_list",
+  id: string | null,
+  places: Array<OrphanedMemory>,
 }
 | {
   "type": "pasted_image_saved",
@@ -3427,6 +3477,91 @@ export type McpServerAuthStatus = "succeeded" | "cancelled" | "timed_out" | "fai
 export type McpSignInState = "signed_in" | "needs_sign_in" | "not_needed" | "unknown";
 
 /**
+ * One entry of a memory as stored.
+ */
+export type MemoryEntry = {
+  scope: MemoryScope,
+  /**
+   * The entry's id, assigned by the daemon (see [`MEMORY_ID_LENGTH`]).
+   */
+  id: string,
+  /**
+   * One sentence summing up the content, the entry's only label; not unique.
+   */
+  summary: string,
+  /**
+   * Markdown.
+   */
+  content: string,
+  /**
+   * Whether the entry holds only on this machine; always false in a place's memory, every entry
+   * of which holds only here. A console's local entries stay out of a configuration export.
+   */
+  local: boolean,
+  /**
+   * Milliseconds since the epoch.
+   */
+  created_at: number,
+  /**
+   * Milliseconds since the epoch.
+   */
+  updated_at: number,
+  updated_by: MemoryWriter,
+  /**
+   * Starts at 1 and is raised by every update.
+   */
+  version: number,
+};
+
+/**
+ * One line of a memory's index: an entry without its content.
+ */
+export type MemoryIndexEntry = {
+  id: string,
+  summary: string,
+  /**
+   * As in [`MemoryEntry::local`].
+   */
+  local: boolean,
+  /**
+   * Milliseconds since the epoch.
+   */
+  created_at: number,
+  /**
+   * Milliseconds since the epoch.
+   */
+  updated_at: number,
+  updated_by: MemoryWriter,
+  /**
+   * The entry's current version, as in [`MemoryEntry::version`].
+   */
+  version: number,
+};
+
+/**
+ * Which memory an entry belongs to.
+ */
+export type MemoryScope = {
+  "kind": "console",
+  console_id: string,
+}
+| {
+  "kind": "place",
+  host_id: string,
+  path: string,
+};
+
+/**
+ * Who wrote an entry last: the user, in a window, or an agent, through a session's memory tools.
+ */
+export type MemoryWriter = {
+  "kind": "user"
+}
+| {
+  "kind": "agent"
+};
+
+/**
  * What a `set_session_model` did (`Event::SessionModelSet`).
  */
 export type ModelChangeOutcome = "unchanged" | "recorded" | "restarted";
@@ -3477,6 +3612,25 @@ export type OffersUnderCloneDir = {
 };
 
 export type Origin = "console" | "user";
+
+/**
+ * A place whose memory no project is at any more: what removing its projects left behind.
+ */
+export type OrphanedMemory = {
+  host_id: string,
+  /**
+   * The path the projects at the place were stored with.
+   */
+  path: string,
+  /**
+   * How many entries the memory holds, at least one.
+   */
+  entries: number,
+  /**
+   * When its most recently updated entry was, in milliseconds since the epoch.
+   */
+  updated_at: number,
+};
 
 /**
  * One page a session pushed to its report panel: a console session, or a project session that
@@ -4415,6 +4569,12 @@ export type Request = {
    * refusal this removal was confirmed after, which it then repeats; absent means none.
    */
   inspection?: string,
+  /**
+   * Deletes the memory of the project's place as well (see `list_memories`). Refused with
+   * `memory_place_in_use` while another project, of any console, is at the same place.
+   * Absent is false, which keeps it: `list_orphaned_memories` finds it afterwards.
+   */
+  delete_memory?: boolean,
 }
   | {
   "type": "list_dir",
@@ -4855,6 +5015,107 @@ export type Request = {
   session: string,
 }
   | {
+  "type": "list_memories",
+  /**
+   * The console whose memory this is; exactly one of `console` and `project` is given.
+   */
+  console?: string,
+  /**
+   * A project whose place's memory this is (its host and stored path, shared by every
+   * project there); exactly one of `console` and `project` is given.
+   */
+  project?: string,
+}
+  | {
+  "type": "read_memory",
+  /**
+   * The console whose memory this is; exactly one of `console` and `project` is given.
+   */
+  console?: string,
+  /**
+   * A project whose place's memory this is (its host and stored path, shared by every
+   * project there); exactly one of `console` and `project` is given.
+   */
+  project?: string,
+  /**
+   * The entry's id.
+   */
+  memory: string,
+}
+  | {
+  "type": "save_memory",
+  /**
+   * The console whose memory this is; exactly one of `console` and `project` is given.
+   */
+  console?: string,
+  /**
+   * A project whose place's memory this is (its host and stored path, shared by every
+   * project there); exactly one of `console` and `project` is given.
+   */
+  project?: string,
+  /**
+   * The id of the entry to update; absent creates one.
+   */
+  memory?: string,
+  /**
+   * One sentence summing up the content, the entry's label.
+   */
+  summary: string,
+  /**
+   * Markdown.
+   */
+  content: string,
+  /**
+   * Whether a console's entry holds only on this machine: absent is false for a new entry
+   * and keeps the entry's value on an update. Ignored for a project's place, every entry of
+   * which holds only on this machine.
+   */
+  local?: boolean,
+  /**
+   * The version of the entry the update is based on; absent creates the entry.
+   */
+  version?: number,
+}
+  | {
+  "type": "delete_memory",
+  /**
+   * The console whose memory this is; exactly one of `console` and `project` is given.
+   */
+  console?: string,
+  /**
+   * A project whose place's memory this is (its host and stored path, shared by every
+   * project there); exactly one of `console` and `project` is given.
+   */
+  project?: string,
+  /**
+   * The entry's id.
+   */
+  memory: string,
+}
+  | {
+  "type": "delete_memories",
+  /**
+   * The console whose memory this is; exactly one of `console` and `project` is given.
+   */
+  console?: string,
+  /**
+   * A project whose place's memory this is (its host and stored path, shared by every
+   * project there); exactly one of `console` and `project` is given.
+   */
+  project?: string,
+}
+  | {
+  "type": "list_orphaned_memories"
+}
+  | {
+  "type": "delete_orphaned_memory",
+  host_id: string,
+  path: string,
+}
+  | {
+  "type": "delete_orphaned_memories"
+}
+  | {
   "type": "submit_page",
   page: string,
   data: unknown,
@@ -4899,6 +5160,7 @@ export type Request = {
   auto_approve_handoffs?: boolean,
   ask_questions_as_choices?: boolean,
   keep_sessions_in_own_project?: boolean,
+  memory_enabled?: boolean,
   /**
    * A tag the interface offers (`interface_language::display_name` knows it); any other
    * is refused.
@@ -5401,6 +5663,12 @@ export type RequestBody = {
    * refusal this removal was confirmed after, which it then repeats; absent means none.
    */
   inspection?: string,
+  /**
+   * Deletes the memory of the project's place as well (see `list_memories`). Refused with
+   * `memory_place_in_use` while another project, of any console, is at the same place.
+   * Absent is false, which keeps it: `list_orphaned_memories` finds it afterwards.
+   */
+  delete_memory?: boolean,
 }
 | {
   "type": "list_dir",
@@ -5841,6 +6109,107 @@ export type RequestBody = {
   session: string,
 }
 | {
+  "type": "list_memories",
+  /**
+   * The console whose memory this is; exactly one of `console` and `project` is given.
+   */
+  console?: string,
+  /**
+   * A project whose place's memory this is (its host and stored path, shared by every
+   * project there); exactly one of `console` and `project` is given.
+   */
+  project?: string,
+}
+| {
+  "type": "read_memory",
+  /**
+   * The console whose memory this is; exactly one of `console` and `project` is given.
+   */
+  console?: string,
+  /**
+   * A project whose place's memory this is (its host and stored path, shared by every
+   * project there); exactly one of `console` and `project` is given.
+   */
+  project?: string,
+  /**
+   * The entry's id.
+   */
+  memory: string,
+}
+| {
+  "type": "save_memory",
+  /**
+   * The console whose memory this is; exactly one of `console` and `project` is given.
+   */
+  console?: string,
+  /**
+   * A project whose place's memory this is (its host and stored path, shared by every
+   * project there); exactly one of `console` and `project` is given.
+   */
+  project?: string,
+  /**
+   * The id of the entry to update; absent creates one.
+   */
+  memory?: string,
+  /**
+   * One sentence summing up the content, the entry's label.
+   */
+  summary: string,
+  /**
+   * Markdown.
+   */
+  content: string,
+  /**
+   * Whether a console's entry holds only on this machine: absent is false for a new entry
+   * and keeps the entry's value on an update. Ignored for a project's place, every entry of
+   * which holds only on this machine.
+   */
+  local?: boolean,
+  /**
+   * The version of the entry the update is based on; absent creates the entry.
+   */
+  version?: number,
+}
+| {
+  "type": "delete_memory",
+  /**
+   * The console whose memory this is; exactly one of `console` and `project` is given.
+   */
+  console?: string,
+  /**
+   * A project whose place's memory this is (its host and stored path, shared by every
+   * project there); exactly one of `console` and `project` is given.
+   */
+  project?: string,
+  /**
+   * The entry's id.
+   */
+  memory: string,
+}
+| {
+  "type": "delete_memories",
+  /**
+   * The console whose memory this is; exactly one of `console` and `project` is given.
+   */
+  console?: string,
+  /**
+   * A project whose place's memory this is (its host and stored path, shared by every
+   * project there); exactly one of `console` and `project` is given.
+   */
+  project?: string,
+}
+| {
+  "type": "list_orphaned_memories"
+}
+| {
+  "type": "delete_orphaned_memory",
+  host_id: string,
+  path: string,
+}
+| {
+  "type": "delete_orphaned_memories"
+}
+| {
   "type": "submit_page",
   page: string,
   data: unknown,
@@ -5885,6 +6254,7 @@ export type RequestBody = {
   auto_approve_handoffs?: boolean,
   ask_questions_as_choices?: boolean,
   keep_sessions_in_own_project?: boolean,
+  memory_enabled?: boolean,
   /**
    * A tag the interface offers (`interface_language::display_name` knows it); any other
    * is refused.
@@ -6649,6 +7019,16 @@ export type Settings = {
    * user's own client changes it.
    */
   keep_sessions_in_own_project: boolean,
+  /**
+   * Whether Octoboard's memory is on: sessions are offered the memory tools, a console session's
+   * instruction file and a project session's role description carry the memory's index, and
+   * each session's launch turns its agent's own memory off where the agent has a switch for it.
+   * Off unless the user turned it on. The launch-time effects follow it at each launch, so a
+   * change reaches only sessions launched afterwards; a memory tool called while it is off is
+   * refused at the time of the call. Turning it off deletes nothing, and the clients' memory
+   * requests work whatever it says.
+   */
+  memory_enabled: boolean,
   /**
    * The tag of the interface language, one of the tags the interface offers; `null` until a
    * client reports one. It is the one language every client of this daemon shows (each keeps a

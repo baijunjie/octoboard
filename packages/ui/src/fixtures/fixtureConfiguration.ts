@@ -209,6 +209,8 @@ export function exportedDocument(
         launch: console.launch,
         project_session_launch: console.project_session_launch,
         console_session_prompt: console.console_session_prompt,
+        // The fixture export leaves memory out: no scenario reads the memory of an exported document.
+        memories: [],
         projects: Array.from(state.projects.values())
           .filter((project) => project.console_id === console.id)
           .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : a.id < b.id ? -1 : 1))

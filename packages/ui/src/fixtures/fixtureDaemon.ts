@@ -4,7 +4,7 @@ import { daemonMessage } from "../errors/daemonMessage";
 import type { Translate } from "../i18n/catalog";
 import { currentLanguage, t } from "../i18n/language";
 import type { Event, ClientRequestBody } from "../protocol";
-import { createContentSearchListeners, createImportProgressListeners, type Daemon, type WindowNotification } from "../store";
+import { createContentSearchListeners, createImportProgressListeners, createMemoryListeners, type Daemon, type MemoryChangeEvent, type WindowNotification } from "../store";
 import { broadcastNotification, errorNotification } from "../store/notifications";
 import type { Fixture, NotificationFixture } from "./fixture";
 import { terminalFixtureUrl } from "./fakeTerminal";
@@ -16,6 +16,7 @@ import { createConsoleReplies } from "./fixtureConsoles";
 import { createFixtureContext, mergeHandlers, neverReplied } from "./fixtureContext";
 import { createFileReplies, FILE_REQUESTS } from "./fixtureFiles";
 import { createLifecycleReplies } from "./fixtureLifecycle";
+import { createMemoryReplies } from "./fixtureMemory";
 import { createProcessLedger, createProcessReplies } from "./fixtureProcesses";
 import { createProjectReplies } from "./fixtureProjects";
 import { createSessionReplies } from "./fixtureSessions";
@@ -28,7 +29,12 @@ export const NOTIFICATION_DELAY_MS = 300;
 /** The daemon the gallery runs a scenario over: `scenarioNotificationsRaised` settles once the scenario's own
  * notifications have been handed to the stack, which the page waits for before it calls itself ready. It never settles
  * if nothing subscribes to notifications. */
-export type FixtureDaemon = Daemon & { readonly scenarioNotificationsRaised: Promise<void> };
+export type FixtureDaemon = Daemon & {
+  readonly scenarioNotificationsRaised: Promise<void>;
+  /** A change a session made to a memory while the window shows something: applied to what the daemon holds and
+   * broadcast to the window, as the connection delivers `memory_saved`, `memories_deleted` and `orphaned_memory_list`. */
+  readonly deliverMemoryChange: (event: MemoryChangeEvent) => void;
+};
 
 /** The requests that read what a project's folder holds, which a page showing several repositories behind one daemon
  * has to send to the repository the project belongs to: the Git ones (`fixtureGit.ts`) and the file ones
@@ -91,7 +97,9 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
   const gitReply = createGitReplies(git, fail);
   const importProgress = createImportProgressListeners();
   const contentSearches = createContentSearchListeners();
+  const memoryListeners = createMemoryListeners();
   const configurationReply = createConfigurationReplies(scenario.configuration, store.getState, fail, () => providerSettingChoices.current, importProgress.deliver, (tag) => store.setState((current) => ({ settings: { ...current.settings, interface_language: tag } })));
+  const memory = createMemoryReplies(context, memoryListeners.deliver);
   const guards = createAccountGuards(context);
   const ledger = createProcessLedger(context);
   const replies = mergeHandlers(
@@ -100,15 +108,17 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
     createAccountReplies(context),
     createAgentCliReplies(context),
     createSettingsReplies(context),
-    createProjectReplies(context, ledger),
+    createProjectReplies(context, ledger, memory.projects),
     createFileReplies(context, contentSearches.deliver),
     createProcessReplies(context, ledger),
     createLifecycleReplies(context),
+    memory.replies,
   );
 
   return {
     store,
     scenarioNotificationsRaised,
+    deliverMemoryChange: memory.hear,
     request: looseRequestSender(async (body: ClientRequestBody): Promise<Event> => {
       if (body.type === "get_project_source") {
         const result = scenario.projectSources?.[body.project];
@@ -140,6 +150,7 @@ export function createFixtureDaemon(scenario: Fixture): FixtureDaemon {
     // (see `apps/daemon/PROTOCOL.md`, "Configuration import"); a scenario does not rely on either order.
     onImportProgress: importProgress.subscribe,
     onContentSearch: contentSearches.subscribe,
+    onMemoryChange: memoryListeners.subscribe,
     dismissTrustPrompt: (session) =>
       store.setState((state) => ({ trustPrompts: state.trustPrompts.filter((p) => p.session !== session) })),
     reconnect: () => {},

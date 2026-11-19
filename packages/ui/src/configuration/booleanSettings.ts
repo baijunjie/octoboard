@@ -1,5 +1,5 @@
 import type { PlainMessageKey } from "../i18n/catalog";
-import type { DocumentAgentSettings, DocumentSettings } from "../protocol";
+import type { DocumentAgentSettings, DocumentSettings, Settings } from "../protocol";
 import type { ClientSettings } from "./clientSettings";
 
 /** The fields of `T` that are a switch, picked by their type so a setting of another kind cannot be listed below. A
@@ -14,11 +14,19 @@ export type ApplicationBooleanField = SwitchFields<DocumentSettings, keyof Clien
 /** The settings of the Agent accounts section, which travel with the accounts, that are a switch. */
 export type AgentBooleanField = SwitchFields<DocumentAgentSettings>;
 
-export type BooleanField = ApplicationBooleanField | AgentBooleanField;
+/** The fields named that are a switch of the daemon's settings and not carried by a configuration document, so a name
+ * the daemon does not hold, or one a document carries, fails to compile. */
+type Untravelled<K extends Exclude<SwitchFields<Settings>, keyof DocumentSettings>> = K;
 
-/** The Settings dialog sections a switch is shown in: the four of the application settings, and the Agent accounts
- * section, whose settings travel with the accounts. */
-export type SwitchSection = "general" | "git" | "agentBehavior" | "cleanup" | "agentAccounts";
+/** The application settings that are a switch the daemon holds but a configuration document does not carry: whether
+ * Octoboard's memory is on, which the daemon keeps to the machine it runs on. No import card lists them. */
+export type UntravelledBooleanField = Untravelled<"memory_enabled">;
+
+export type BooleanField = ApplicationBooleanField | AgentBooleanField | UntravelledBooleanField;
+
+/** The Settings dialog sections a switch is shown in: the four of the application settings that travel, Memory, whose
+ * switch does not, and the Agent accounts section, whose settings travel with the accounts. */
+export type SwitchSection = "general" | "git" | "agentBehavior" | "cleanup" | "memory" | "agentAccounts";
 
 /** One daemon setting that is a switch: its field (see `Settings.<field>` in protocol.generated.ts for what it
  * does), the Settings dialog section it is shown in and its place among that section's lines, the name and the two
@@ -33,7 +41,8 @@ export interface BooleanSetting<F extends BooleanField = BooleanField> {
   description: { on: PlainMessageKey; off: PlainMessageKey };
   /** The help tip that ends the label's line: its accessible name and its text. */
   help?: { label: PlainMessageKey; text: PlainMessageKey };
-  /** What turning it on means in the import cards; `null` for a setting whose line says no more than "turns on". */
+  /** What turning it on means in the import cards; `null` for a setting whose line says no more than "turns on", and for
+   * one a configuration document does not carry (`UntravelledBooleanField`), which no import card shows. */
   consequence: PlainMessageKey | null;
 }
 
@@ -81,6 +90,14 @@ const COPY: { [F in BooleanField]: Copy<F> } = {
     label: "settings.archiveCleanup.label",
     description: { on: "settings.archiveCleanup.description.on", off: "settings.archiveCleanup.description.off" },
     consequence: "configuration.import.settings.consequence.archiveCleanup",
+  },
+  memory_enabled: {
+    section: "memory",
+    order: 1,
+    label: "settings.memory.enabled.label",
+    description: { on: "settings.memory.enabled.description.on", off: "settings.memory.enabled.description.off" },
+    // It does not travel in a configuration document, so no import card words it.
+    consequence: null,
   },
   auto_select_account: {
     section: "agentAccounts",

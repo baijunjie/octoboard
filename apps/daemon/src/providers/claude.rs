@@ -132,6 +132,7 @@ pub(super) const DESCRIPTOR: ProviderDescriptor = ProviderDescriptor {
         retired: &["best"],
     },
     compatibility_source: true,
+    native_memory_switch: true,
     settings: &[
         SettingDescriptor {
             id: "approval_mode",

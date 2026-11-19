@@ -14,6 +14,10 @@ export type DialogRequest =
   | { kind: "import-configuration" }
   | { kind: "edit-console"; console: Console }
   | { kind: "delete-console"; console: Console }
+  /** Shows and edits the memory the console's console sessions share. */
+  | { kind: "console-memory"; console: Console }
+  /** Shows and edits the memory of the place the project is at, which every agent working there shares. */
+  | { kind: "project-memory"; project: Project }
   | { kind: "new-project"; console: Console }
   | { kind: "edit-project"; project: Project }
   | { kind: "delete-project"; project: Project }

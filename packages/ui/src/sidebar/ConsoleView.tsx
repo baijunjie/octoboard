@@ -38,6 +38,7 @@ import type { SidebarHandlers } from "./types";
  * switches consoles and carries what is going on in every console. */
 export function ConsoleHeader({ handlers, current }: { handlers: SidebarHandlers; current: Console }): React.ReactElement {
   const t = useT();
+  const memory = useDaemonStore((s) => s.settings.memory_enabled);
   const headerRef = useRef<HTMLDivElement>(null);
   const sessions = useArchivedOwnerSessions(current.id);
   return (
@@ -58,7 +59,7 @@ export function ConsoleHeader({ handlers, current }: { handlers: SidebarHandlers
         />
         <ActionMenu
           label={t("sidebar.console.actions", { name: isolate(current.name) })}
-          items={consoleMenu(t, current, handlers, sessions)}
+          items={consoleMenu(t, current, handlers, sessions, { memory })}
           contextTargetRef={headerRef}
         />
       </RowIconGroup>

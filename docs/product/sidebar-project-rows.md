@@ -44,7 +44,7 @@ in `docs/product/focus-mode.md`). Choosing an action closes the menu at once; su
 Separators split it into five groups, in this order: the first holds **Pin** / **Unpin**, as in a session's menu, and
 the actions for viewing the project inside the app (**Focus mode**, **View archive**); then the top-level **Copy project
 name** and **Copy absolute path** actions; the **Open in**, **Open panel** and **Git** submenus, in that order; managing
-the project itself (**Rename**, **Project settings**); and **Remove project**. An item a view does not offer is left out
+the project itself (**Rename**, **Project settings**, **Memory**); and **Remove project**. An item a view does not offer is left out
 without moving the others.
 
 - **Pin** / **Unpin** — see "Pinning" in `docs/product/order-of-projects-and-sessions.md`.
@@ -97,6 +97,8 @@ without moving the others.
   `docs/product/project-git-actions.md`).
 - **Rename** — a dialog with the name alone; an empty name is rejected.
 - **Project settings** — the project dialog, see "Editing a project" in `docs/product/projects.md`.
+- **Memory** — offered only while Octoboard's memory is on: the memory dialog over the memory of the project's place,
+  see "The memory dialog" in `docs/product/memory.md`.
 - **Remove project** — see `docs/product/removing-projects.md`; it asks for confirmation first.
 
 An expanded project lists its sessions that are not archived as session rows, with a connector bending smoothly toward
@@ -127,6 +129,7 @@ belongs to under "Menu keyboard shortcuts" in `docs/product/keyboard-shortcuts.m
 | Copy absolute path | A |
 | Rename | R |
 | Project settings | E |
+| Memory | M |
 | Remove project | D |
 
 The focus header leaves out Pin / Unpin and Focus mode; a heading inside a console session's focus mode leaves out Focus

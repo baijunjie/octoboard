@@ -21,6 +21,9 @@ accounts** section: the accounts themselves (see "The accounts" in `docs/product
 and the settings that apply to all of an agent's accounts or to every agent (see "The agent account settings an export
 carries" below). The one setting of those sections left out is an account's sharing of the default configuration (see
 "What is not configuration and never travels" in `docs/product/configuration-export-and-import.md`). Nothing of the
+Memory section travels — whether Octoboard's memory is on stays a choice of the machine it runs on, and the memory
+removed projects left behind is that machine's — though a console's memory travels with the console (see "What each
+console carries" in `docs/product/configuration-export-and-import.md`). Nothing of the
 Trusted folders, Permissions, Notifications and Updates sections travels — neither form's update channel or automatic
 update check (see `docs/product/update-settings.md`) — nor does a choice a client keeps elsewhere, such as a project's
 focus mode (see `docs/product/focus-mode.md`). Nor does anything of the Remote access section, Allow remote access and

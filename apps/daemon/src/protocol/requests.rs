@@ -253,6 +253,12 @@ pub enum RequestBody {
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]
         inspection: Option<String>,
+        /// Deletes the memory of the project's place as well (see `list_memories`). Refused with
+        /// `memory_place_in_use` while another project, of any console, is at the same place.
+        /// Absent is false, which keeps it: `list_orphaned_memories` finds it afterwards.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional = nullable))]
+        delete_memory: bool,
     },
     ListDir {
         path: String,
@@ -865,6 +871,117 @@ pub enum RequestBody {
     ListPages {
         session: String,
     },
+    /// The index of a memory, a console's (`console`) or a project's place's (`project`): every
+    /// entry without its content, the most recently updated first. Answered with `memory_list`.
+    /// Neither or both of `console` and `project` is refused with `field_required` (`field`
+    /// `console`) or `unreadable_request`.
+    ListMemories {
+        /// The console whose memory this is; exactly one of `console` and `project` is given.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        console: Option<String>,
+        /// A project whose place's memory this is (its host and stored path, shared by every
+        /// project there); exactly one of `console` and `project` is given.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        project: Option<String>,
+    },
+    /// One entry of a memory, content included, by its id. Answered with `memory_content`;
+    /// refused with `unknown_memory` when the memory has no entry of that id.
+    ReadMemory {
+        /// The console whose memory this is; exactly one of `console` and `project` is given.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        console: Option<String>,
+        /// A project whose place's memory this is (its host and stored path, shared by every
+        /// project there); exactly one of `console` and `project` is given.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        project: Option<String>,
+        /// The entry's id.
+        memory: String,
+    },
+    /// Creates an entry of a memory, or updates one, written by the user. Without `memory` and
+    /// `version` it creates an entry, with an id the daemon assigns; with both, it updates the
+    /// entry `memory` when `version` is its current version, refused with `memory_changed` when
+    /// it is not and with `unknown_memory` when there is no such entry. One of the two without the
+    /// other is refused with `field_required`, naming the missing one. An entry breaking a rule is
+    /// refused with `invalid_memory_summary`, `memory_content_empty` or
+    /// `memory_content_too_long`; a new one past the memory's limit with `memory_full`. Answered
+    /// with `ack`; every client hears of the entry saved, with its id, from `memory_saved`.
+    SaveMemory {
+        /// The console whose memory this is; exactly one of `console` and `project` is given.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        console: Option<String>,
+        /// A project whose place's memory this is (its host and stored path, shared by every
+        /// project there); exactly one of `console` and `project` is given.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        project: Option<String>,
+        /// The id of the entry to update; absent creates one.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        memory: Option<String>,
+        /// One sentence summing up the content, the entry's label.
+        summary: String,
+        /// Markdown.
+        content: String,
+        /// Whether a console's entry holds only on this machine: absent is false for a new entry
+        /// and keeps the entry's value on an update. Ignored for a project's place, every entry of
+        /// which holds only on this machine.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        local: Option<bool>,
+        /// The version of the entry the update is based on; absent creates the entry.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        version: Option<i64>,
+    },
+    /// Deletes one entry of a memory by its id, refused with `unknown_memory` when there is no
+    /// such entry. Answered with `ack`; every client hears of it from `memories_deleted`.
+    DeleteMemory {
+        /// The console whose memory this is; exactly one of `console` and `project` is given.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        console: Option<String>,
+        /// A project whose place's memory this is (its host and stored path, shared by every
+        /// project there); exactly one of `console` and `project` is given.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        project: Option<String>,
+        /// The entry's id.
+        memory: String,
+    },
+    /// Deletes every entry of a memory. Answered with `ack`; every client hears of the entries
+    /// deleted from `memories_deleted`, unless there were none.
+    DeleteMemories {
+        /// The console whose memory this is; exactly one of `console` and `project` is given.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        console: Option<String>,
+        /// A project whose place's memory this is (its host and stored path, shared by every
+        /// project there); exactly one of `console` and `project` is given.
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        project: Option<String>,
+    },
+    /// The places whose memory no project is at any more, with how many entries each holds, the
+    /// most recently updated first. Answered with `orphaned_memory_list`.
+    ListOrphanedMemories,
+    /// Deletes the memory of a place no project is at any more, refused with
+    /// `memory_place_in_use` while a project is at it. Answered with `ack`; every client hears of
+    /// the entries deleted from `memories_deleted` and of what is left behind from
+    /// `orphaned_memory_list`.
+    DeleteOrphanedMemory {
+        host_id: String,
+        path: String,
+    },
+    /// Deletes the memory of every place no project is at any more, at once; a place a project is
+    /// added at meanwhile keeps its memory. Answered with `ack`; every client hears of the entries
+    /// deleted from `memories_deleted`, one per place, and of what is left behind from one
+    /// `orphaned_memory_list`.
+    DeleteOrphanedMemories,
     /// What a report panel form was submitted with. The page it came from is named rather than the
     /// console session, because that is what the panel knows and it is also what decides whether the
     /// submission is allowed at all: only its console session's newest page is live. The page also
@@ -951,6 +1068,9 @@ pub enum RequestBody {
         #[serde(default)]
         #[cfg_attr(test, ts(optional))]
         keep_sessions_in_own_project: Option<bool>,
+        #[serde(default)]
+        #[cfg_attr(test, ts(optional))]
+        memory_enabled: Option<bool>,
         /// A tag the interface offers (`interface_language::display_name` knows it); any other
         /// is refused.
         #[serde(default)]
@@ -1615,6 +1735,14 @@ impl RequestBody {
             | Self::ReleaseSession { .. }
             | Self::BindSession { .. }
             | Self::ListPages { .. }
+            | Self::ListMemories { .. }
+            | Self::ReadMemory { .. }
+            | Self::SaveMemory { .. }
+            | Self::DeleteMemory { .. }
+            | Self::DeleteMemories { .. }
+            | Self::ListOrphanedMemories
+            | Self::DeleteOrphanedMemory { .. }
+            | Self::DeleteOrphanedMemories
             | Self::SubmitPage { .. }
             | Self::ConfirmTrust { .. }
             | Self::RemoveTrustedDirectory { .. }

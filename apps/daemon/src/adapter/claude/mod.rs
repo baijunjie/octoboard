@@ -577,6 +577,14 @@ impl AgentProvider for ClaudeProvider {
                 dir.to_string_lossy().into_owned(),
             ));
         }
+        // Auto memory off for this launch, its instructions to the model and its directory
+        // included (2.1.274 and 2.1.328, measured). The variable outranks every setting of the
+        // user's, `autoMemoryEnabled` included, and a user's own `0` loses to it because the plan's
+        // environment is layered over the shell's. The shared memory root above stays set, without
+        // effect on auto memory (see "Each agent's own memory" in `docs/agent-cli-reference.md`).
+        if spec.native_memory_off {
+            env.push((AUTO_MEMORY_OFF.0.to_string(), AUTO_MEMORY_OFF.1.to_string()));
+        }
 
         Ok(LaunchPlan {
             args,
@@ -605,6 +613,9 @@ impl AgentProvider for ClaudeProvider {
         }
     }
 }
+
+/// The environment entry that turns Claude Code's auto memory off for one launch.
+const AUTO_MEMORY_OFF: (&str, &str) = ("CLAUDE_CODE_DISABLE_AUTO_MEMORY", "1");
 
 #[cfg(test)]
 mod tests {
@@ -889,6 +900,49 @@ mod tests {
         assert_eq!(
             memory(ClaudeProvider.plan(&fixture.spec()).expect("plan")),
             Some(shared.to_string_lossy().into_owned())
+        );
+    }
+
+    /// Auto memory is turned off through the launch's environment exactly when the launch says so,
+    /// on a resume too, and beside the shared memory root of a sharing account, which stays.
+    #[test]
+    fn auto_memory_is_turned_off_only_when_the_launch_says_so() {
+        assert!(
+            crate::protocol::AgentId::CLAUDE
+                .descriptor()
+                .native_memory_switch
+        );
+        let mut fixture = spec_fixture();
+        let shared = fixture.scratch.join("default");
+        let memory = |spec: &LaunchSpec<'_>| {
+            ClaudeProvider
+                .plan(spec)
+                .expect("plan")
+                .env
+                .into_iter()
+                .filter(|(key, _)| key.contains("MEMORY"))
+                .collect::<Vec<_>>()
+        };
+        let off = (AUTO_MEMORY_OFF.0.to_string(), AUTO_MEMORY_OFF.1.to_string());
+        let mut spec = fixture.spec();
+        assert_eq!(memory(&spec), []);
+        spec.native_memory_off = true;
+        assert_eq!(memory(&spec), std::slice::from_ref(&off));
+        spec.resume_agent_session_id = Some("agent-side-id");
+        assert_eq!(memory(&spec), std::slice::from_ref(&off));
+
+        fixture.shared_default_dir = Some(shared.clone());
+        let mut spec = fixture.spec();
+        spec.native_memory_off = true;
+        assert_eq!(
+            memory(&spec),
+            [
+                (
+                    "CLAUDE_CODE_REMOTE_MEMORY_DIR".to_string(),
+                    shared.to_string_lossy().into_owned()
+                ),
+                off
+            ]
         );
     }
 

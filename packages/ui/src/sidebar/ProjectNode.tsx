@@ -44,6 +44,7 @@ export const ProjectNode = memo(function ProjectNode({
   onToggle: (projectId: string) => void;
 }): React.ReactElement {
   const t = useT();
+  const memory = useDaemonStore((s) => s.settings.memory_enabled);
   const language = useCurrentLanguage();
   const listRef = useListMotion<HTMLDivElement>();
   const bodiesRef = useListMotion<HTMLDivElement>({ foldPresence: true, fitHeight: true });
@@ -105,7 +106,7 @@ export const ProjectNode = memo(function ProjectNode({
         {isCollapsed && <TopStatusMarker status={status} />}
         <RowControls fixed={project.pinned ? <PinButton name={project.name} onUnpin={() => handlers.onSetPinned({ project }, false)} returnFocusTo={rowRef} /> : undefined}>
           <NewSessionButton label={t("sidebar.project.openSession")} quickLabel={t("sidebar.project.openSessionQuick")} target={newSession} onOpen={handlers.onOpenDialog} onQuickCreate={handlers.onQuickCreateSession} />
-          <ActionMenu label={t("sidebar.project.actions", { name: isolate(project.name) })} items={projectMenu(t, handlers, project, archived, { gitStatus })} contextTargetRef={rowRef} />
+          <ActionMenu label={t("sidebar.project.actions", { name: isolate(project.name) })} items={projectMenu(t, handlers, project, archived, { gitStatus, memory })} contextTargetRef={rowRef} />
         </RowControls>
       </TreeRow>
       {/* Beside the row rather than in it: the row is a `role="button"`, whose children are never read. */}

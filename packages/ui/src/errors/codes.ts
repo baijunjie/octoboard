@@ -235,6 +235,10 @@ const CORE_CODES = {
   // know, is the code's own sentence.
   invalid_file_mask: { origin: "daemon", recovery: "none", codeParams: ["glob"], variants: { unclosed_class: { codeParams: ["glob"] }, unclosed_alternation: { codeParams: ["glob"] }, unopened_alternation: { codeParams: ["glob"] }, invalid_range: { codeParams: ["glob"] } }, variantOf: (params) => { const cause = invalidFileMaskCause(params.cause); return cause === "other" ? undefined : cause; } },
   invalid_launch_setting: { origin: "daemon", recovery: "launchSetting", codeParams: ["field", "value"] },
+  // The memory entry form holds an entry to the daemon's rules, so this refusal, like `memory_content_empty`,
+  // `memory_content_too_long` and `memory_full`, reaches an alert only when something the window did not know of has
+  // changed the memory; each of their sentences says what the rule is.
+  invalid_memory_summary: { origin: "daemon", recovery: "none" },
   invalid_path: { origin: "daemon", recovery: "path", codeParams: ["path"] },
   invalid_remote_url: { origin: "daemon", recovery: "remote", codeParams: ["url"] },
   // Worded from its `cause` and where the query fails (`offset`, shown as the 1-based `position`), never from the regex
@@ -249,6 +253,11 @@ const CORE_CODES = {
   login_not_running: { origin: "daemon", recovery: "none" },
   mcp_server_auth_busy: { origin: "daemon", recovery: "none" },
   mcp_sign_in_not_running: { origin: "daemon", recovery: "none" },
+  memory_changed: { origin: "daemon", recovery: "none", nameParams: ["summary"] },
+  memory_content_empty: { origin: "daemon", recovery: "none" },
+  memory_content_too_long: { origin: "daemon", recovery: "none" },
+  memory_full: { origin: "daemon", recovery: "none" },
+  memory_place_in_use: { origin: "daemon", recovery: "none" },
   message_acceptance_unconfirmed: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, recoveryLine: true },
   message_refused: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, detailBlock: true },
   message_not_written: { origin: "daemon", recovery: "none", failureNotice: true, alertTitle: true, detailBlock: true },
@@ -403,6 +412,7 @@ const CORE_CODES = {
   unknown_branch: { origin: "daemon", recovery: "branch", codeParams: ["branch"] },
   unknown_commit: { origin: "daemon", recovery: "refresh", codeParams: ["commit"] },
   unknown_console: { origin: "daemon", recovery: "refresh", recordIds: ["console"], nameParams: ["console"] },
+  unknown_memory: { origin: "daemon", recovery: "none" },
   unknown_page: { origin: "daemon", recovery: "refresh", recordIds: ["page"], nameParams: ["page"] },
   unknown_project: { origin: "daemon", recovery: "refresh", recordIds: ["project"], nameParams: ["project"] },
   unknown_session: { origin: "daemon", recovery: "session", recordIds: ["session"], nameParams: ["session"] },

@@ -31,9 +31,9 @@ use crate::project_git::remote_url;
 use crate::protocol::{
     error_code, Account, AccountName, AgentId, CodedError, ConfigurationDocument, Console,
     DocumentAccount, DocumentAccounts, DocumentAgentAccounts, DocumentAgentSettings,
-    DocumentConsole, DocumentDefaultAccount, DocumentProject, DocumentSettings, ExportedConsoles,
-    PerAgent, Project, ProjectAccount, ProjectAccountRef, SettingsSection, CONFIGURATION_FORMAT,
-    CONFIGURATION_VERSION,
+    DocumentConsole, DocumentDefaultAccount, DocumentMemoryEntry, DocumentProject,
+    DocumentSettings, ExportedConsoles, MemoryScope, PerAgent, Project, ProjectAccount,
+    ProjectAccountRef, SettingsSection, CONFIGURATION_FORMAT, CONFIGURATION_VERSION,
 };
 use crate::store::Store;
 
@@ -219,9 +219,16 @@ pub fn build(store: &Store, selection: &Selection) -> Result<ConfigurationDocume
                 .filter(|project| project.console_id == console.id)
                 .cloned()
                 .collect();
-            document_console(&console, own, &accounts, include_paths)
+            let memories = document_memories(store, &console.id)?;
+            Ok(document_console(
+                &console,
+                own,
+                memories,
+                &accounts,
+                include_paths,
+            ))
         })
-        .collect();
+        .collect::<Result<_>>()?;
     Ok(ConfigurationDocument {
         format: CONFIGURATION_FORMAT.to_string(),
         version: CONFIGURATION_VERSION,
@@ -341,9 +348,28 @@ fn document_directory(dir: &str, home: &Path) -> String {
     }
 }
 
+/// The memory entries of `console_id` a document carries, the most recently updated first: every
+/// one but the local ones, which hold only on this machine and would be wrong on another. Their
+/// ids stay behind: an import gives each a new one. A project's place's memory never travels.
+fn document_memories(store: &Store, console_id: &str) -> Result<Vec<DocumentMemoryEntry>> {
+    let scope = MemoryScope::Console {
+        console_id: console_id.to_string(),
+    };
+    Ok(store
+        .memories(&scope)?
+        .into_iter()
+        .filter(|entry| !entry.local)
+        .map(|entry| DocumentMemoryEntry {
+            summary: entry.summary,
+            content: entry.content,
+        })
+        .collect())
+}
+
 fn document_console(
     console: &Console,
     projects: Vec<Project>,
+    memories: Vec<DocumentMemoryEntry>,
     accounts: &HashMap<String, Account>,
     include_paths: bool,
 ) -> DocumentConsole {
@@ -358,6 +384,7 @@ fn document_console(
         launch: super::exported_launches(console.launch.clone()),
         project_session_launch: super::exported_launches(console.project_session_launch.clone()),
         console_session_prompt: console.console_session_prompt.clone(),
+        memories: Some(memories),
         projects: projects
             .into_iter()
             .map(|project| document_project(project, accounts, include_paths))

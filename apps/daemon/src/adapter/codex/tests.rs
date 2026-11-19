@@ -359,6 +359,42 @@ fn the_cross_project_guard_is_a_synchronous_apply_patch_group_beside_the_status_
     assert_eq!(private_plan(&plain).guard_command, None);
 }
 
+/// Codex's memories are turned off by a configuration override exactly when the launch says so,
+/// on a resume too, and the private server beside the terminal is started with it as well.
+#[test]
+fn memories_are_turned_off_only_when_the_launch_says_so() {
+    assert!(
+        crate::protocol::AgentId::CODEX
+            .descriptor()
+            .native_memory_switch
+    );
+    let mut fixture = spec_fixture();
+    fixture.agent_version = Some((0, 166, 0));
+    let mut spec = fixture.spec();
+    let off = |plan: &LaunchPlan| {
+        overrides(&plan.args)
+            .iter()
+            .filter(|o| o.starts_with("features.memories"))
+            .cloned()
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        off(&CodexProvider.plan(&spec).unwrap()),
+        Vec::<String>::new()
+    );
+
+    spec.native_memory_off = true;
+    for resume in [None, Some("thread-id")] {
+        spec.resume_agent_session_id = resume;
+        let plan = CodexProvider.plan(&spec).unwrap();
+        assert_eq!(off(&plan), [MEMORIES_OFF], "{resume:?}");
+        assert!(
+            overrides(&private_plan(&plan).args).contains(&MEMORIES_OFF.to_string()),
+            "{resume:?}"
+        );
+    }
+}
+
 #[test]
 fn a_resume_names_the_subcommand_first_and_still_re_injects() {
     let fixture = spec_fixture();

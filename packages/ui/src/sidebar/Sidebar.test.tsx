@@ -868,3 +868,18 @@ it("shows no creation shortcut in a project row's \"+\" tooltip", () => {
   expect(tooltip?.textContent).toBe("New session");
   expect(tooltip?.querySelector("kbd")).toBeNull();
 });
+
+// The console header's menu and a project row's follow the memory setting, which the sidebar reads from the store.
+it.each([
+  { menu: "console", trigger: 'button[aria-label^="Actions for console"]', sibling: "Console settings", on: true },
+  { menu: "console", trigger: 'button[aria-label^="Actions for console"]', sibling: "Console settings", on: false },
+  { menu: "project", trigger: 'button[aria-label^="Actions for project"]', sibling: "Project settings", on: true },
+  { menu: "project", trigger: 'button[aria-label^="Actions for project"]', sibling: "Project settings", on: false },
+])("offers Memory in the $menu menu only while the memory setting is on (on: $on)", ({ trigger, sibling, on }) => {
+  const { container, daemon } = mountSidebar({});
+  act(() => daemon.store.setState((state) => ({ settings: { ...state.settings, memory_enabled: on } })));
+  act(() => container.querySelector<HTMLElement>(trigger)!.click());
+  const labels = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].map((el) => el.querySelector(".label")?.textContent ?? el.textContent);
+  expect(labels).toContain(sibling);
+  expect(labels.includes("Memory")).toBe(on);
+});

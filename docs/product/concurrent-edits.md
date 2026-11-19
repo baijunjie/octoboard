@@ -38,6 +38,9 @@ on the old value is refused afterwards:
   Claude compatibility);
 - every change a console session makes through the settings tools (see `docs/product/agent-settings-tools.md`).
 
+An entry of Octoboard's memory is checked by a version of its own, one for the whole entry, whether a session's memory
+tool or the window's form saves it (see "Entries" in `docs/product/memory.md`).
+
 ## The version check
 
 Every record of those four kinds carries its fields' versions wherever the daemon sends the record — its state at
