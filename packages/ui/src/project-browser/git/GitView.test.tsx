@@ -612,6 +612,112 @@ it.each(["together", "loading", "failed"] as const)("keeps the commit grouping c
 });
 
 
+/** The Changes view with `branch` shown (or none) and the branch list as given, mounted with a clipboard to copy to. */
+function mountBranchCopy(branch: string | undefined, branches: ChangesViewProps["branches"], clipboard: { writeText: (text: string) => Promise<void> }) {
+  const selectorsRef = { current: null as HTMLDivElement | null };
+  const container = mountRows(
+    <GitView
+      source={{ state: "loaded", source: source("/r", "/r"), sentAt: 0 }}
+      branches={branches}
+      branch={branch}
+      onBranchChange={() => {}}
+      uncommitted={{ state: "none" }}
+      committed={{ state: "none" }}
+      items={[]}
+      selectedChange={undefined}
+      onOpen={() => {}}
+      onRetry={() => {}}
+      listRef={() => {}}
+      selectorsRef={selectorsRef}
+      changeView={changeViewFixture()}
+      selectedSessionId={undefined}
+    />,
+    { clipboard },
+  );
+  const copyButton = () => selectorsRef.current!.querySelector<HTMLButtonElement>('button[aria-label="Copy branch name"], button[aria-label="Copied"]');
+  return { container, selectorsRef, copyButton };
+}
+
+const LISTED_FEATURE: ChangesViewProps["branches"] = { state: "loaded", branches: [{ name: "feat/sign-as-owner-auth", commit: "c1" }], complete: true, sentAt: 0 };
+
+it("copies the shown branch's name from a button beside the branch selector, which says Copied afterwards", async () => {
+  const writeText = vi.fn(async () => {});
+  const { copyButton, selectorsRef } = mountBranchCopy("feat/sign-as-owner-auth", LISTED_FEATURE, { writeText });
+  const button = copyButton()!;
+  expect(button).not.toBeNull();
+  expect(button.textContent).toBe("");
+  // Beside the selector, after it, in the selector row.
+  const selector = selectorsRef.current!.querySelector("[data-slot=select-trigger]")!;
+  expect(selector.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  await copied(button);
+  expect(writeText).toHaveBeenCalledExactlyOnceWith("feat/sign-as-owner-auth");
+  expect(button.getAttribute("aria-label")).toBe("Copied");
+});
+
+it("copies the name of the branch the view shows, not of another one in the list", async () => {
+  const writeText = vi.fn(async () => {});
+  const branches: ChangesViewProps["branches"] = {
+    state: "loaded",
+    branches: [{ name: "main", commit: "c1" }, { name: "feature", commit: "c2" }],
+    complete: true,
+    sentAt: 0,
+  };
+  const { copyButton } = mountBranchCopy("feature", branches, { writeText });
+  await copied(copyButton());
+  expect(writeText).toHaveBeenCalledExactlyOnceWith("feature");
+});
+
+it("copies a branch name in its display form, the escaped percent of its wire name decoded", async () => {
+  const writeText = vi.fn(async () => {});
+  const branches: ChangesViewProps["branches"] = { state: "loaded", branches: [{ name: "fix%25rate", commit: "c1" }], complete: true, sentAt: 0 };
+  const { copyButton } = mountBranchCopy("fix%25rate", branches, { writeText });
+  await copied(copyButton());
+  expect(writeText).toHaveBeenCalledExactlyOnceWith("fix%rate");
+});
+
+it("draws no copy button when no branch is shown", () => {
+  const { container, selectorsRef } = mountBranchCopy(undefined, { state: "loading" }, { writeText: async () => {} });
+  expect(container.querySelector('button[aria-label="Copy branch name"]')).toBeNull();
+  expect(selectorsRef.current!.querySelector("button[aria-label^='Cop']")).toBeNull();
+});
+
+it("alerts with the branch-name title when the clipboard cannot be written to", async () => {
+  const execCommand = vi.fn(() => false);
+  const original = document.execCommand;
+  Object.assign(document, { execCommand });
+  onTestFinished(() => void Object.assign(document, { execCommand: original }));
+  const { copyButton } = mountBranchCopy("feat/sign-as-owner-auth", LISTED_FEATURE, { writeText: async () => Promise.reject(new Error("denied")) });
+  const button = copyButton()!;
+  await copied(button);
+  expect(errorAlerts.getSnapshot()[0]).toMatchObject({ title: "Could not copy the branch name" });
+  expect(button.getAttribute("aria-label")).toBe("Copy branch name");
+});
+
+it("keeps the branch name copyable when the branch is gone from the list", async () => {
+  const writeText = vi.fn(async () => {});
+  const gone: ChangesViewProps["branches"] = { state: "loaded", branches: [{ name: "main", commit: "c1" }], complete: true, sentAt: 1 };
+  const { copyButton, selectorsRef } = mountBranchCopy("feature", gone, { writeText });
+  expect(selectorsRef.current!.textContent).toContain("No longer exists");
+  await copied(copyButton());
+  expect(writeText).toHaveBeenCalledExactlyOnceWith("feature");
+});
+
+it("keeps the branches-failure mark in the selector row, after the copy button", () => {
+  const failed: ChangesViewProps["branches"] = {
+    state: "loaded",
+    branches: [{ name: "feature", commit: "c1" }],
+    complete: true,
+    sentAt: 0,
+    error: new CodedError("git failed", "git_failed", {}),
+  };
+  const { copyButton, selectorsRef } = mountBranchCopy("feature", failed, { writeText: async () => {} });
+  const button = copyButton()!;
+  const mark = selectorsRef.current!.querySelector<HTMLButtonElement>('button[aria-label="Could not list this repository\'s branches"]')!;
+  expect(mark).not.toBeNull();
+  expect(button.parentElement).toBe(mark.closest("div.grid"));
+  expect(button.compareDocumentPosition(mark) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+
 it("puts a pending branch list's loading state inside its selector", () => {
   const container = mountRows(
     <GitView

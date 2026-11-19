@@ -1418,6 +1418,8 @@ export const th: Translation<"other"> = {
   "git.changes.commitsFailed": "แสดงรายการคอมมิตของแบรนช์นี้ไม่ได้",
   "git.changes.commitsError": "แสดงรายการคอมมิตไม่ได้: {message}",
   "git.changes.listError": "แสดงรายการการเปลี่ยนแปลงที่ยังไม่คอมมิตไม่ได้: {message}",
+  "git.changes.copyBranch": "คัดลอกชื่อแบรนช์",
+  "git.changes.copyBranchFailed": "คัดลอกชื่อแบรนช์ไม่ได้",
   "git.changes.copyWorktreePath": "คัดลอกพาธเวิร์กทรี",
   "git.changes.copyWorktreePathFailed": "คัดลอกพาธเวิร์กทรีไม่ได้",
   "git.changes.worktree": "เวิร์กทรี {name}",

@@ -141,7 +141,8 @@ The helper for each need is in `docs/structure/ui.md`, "Shared entry points"; th
 - **A search field takes no placeholder of its own**; see `docs/conventions/ui-standard.md`, "Input placeholders".
 - **A field with a button or another field beside it in one row stands in a `FieldRow`, and a button there, icon or
   text, takes the wrapper `Button`'s `besideField` (shared by `ToggleButton`, passed on by `IconToggle` and
-  `PasteButton`)**, never a gap, a height, corners or an icon-only look of its own; see
+  `PasteButton`)**, never a gap, a height, corners or an icon-only look of its own; a select whose label stands beside
+  it (`OptionSelect`'s `besideLabel`) stands in a `labelled` `FieldRow`, the grid its label and trigger take; see
   `docs/conventions/ui-standard.md`, "Pointer target size" ("A field and what stands beside it in one row").
 - **Pinned section headings use `StickyHeading`; a pinned row or strip that is not a heading spreads
   `useStickyHeadingFocus`.** The scroll fade's padding would otherwise scroll the list on every focus move onto the

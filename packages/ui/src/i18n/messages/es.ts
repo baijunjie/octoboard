@@ -1380,6 +1380,8 @@ export const es: Translation<"one" | "many" | "other"> = {
   "git.changes.commitsFailed": "No se pudieron enumerar los commits de esta rama",
   "git.changes.commitsError": "No se pudieron enumerar los commits: {message}",
   "git.changes.listError": "No se pudieron enumerar los cambios sin commit: {message}",
+  "git.changes.copyBranch": "Copiar nombre de la rama",
+  "git.changes.copyBranchFailed": "No se pudo copiar el nombre de la rama",
   "git.changes.copyWorktreePath": "Copiar ruta del worktree",
   "git.changes.copyWorktreePathFailed": "No se pudo copiar la ruta del worktree",
   "git.changes.worktree": "Worktree {name}",

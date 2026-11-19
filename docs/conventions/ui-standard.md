@@ -2842,23 +2842,26 @@ columns with actions hidden, hovered, focused and open, including right-to-left 
 shape: as tall as the field at every width, so a row never mixes 36- and 40-pixel controls, and with the field's
 corners, never a button's pill or circle. An icon button (an action on the field, such as Paste, or a toggle that
 changes what it searches) is a square of that height, not a 24-pixel row icon, which beside a field reads as a stray
-glyph; a text button (Browse, Go) keeps its own width. Each keeps its usual fill: an action is HeroUI's `secondary`
-button and a toggle its filled `default` toggle. The field and each control beside it are 8 pixels apart
-(`--field-row-gap`), the gap between two fields in a row, never the 4-pixel gap of a row's icons. A single-line field
-is 36 pixels tall, 40 below 768 pixels (`sm`, which the project sets to 768), where HeroUI grows a field's text to 16
-pixels so a phone does not zoom into it; HeroUI's search field keeps 36 at every width, so
+glyph; a text button (Browse, Go) keeps its own width. Its fill says how it bears on the field: an action that fills the
+field (Paste, Browse) or submits what it holds (Go) is HeroUI's `secondary` button; an action that leaves the field
+alone, such as copying the value it shows (the Changes view's branch name), is the grey `tertiary` button, the same fill
+as a toggle beside a field, its filled `default` toggle (by the user's decision). The field and each control beside it
+are 8 pixels apart (`--field-row-gap`), the gap between two fields in a row, never the 4-pixel gap of a row's icons. A
+single-line field is 36 pixels tall, 40 below 768 pixels (`sm`, which the project sets to 768), where HeroUI grows a
+field's text to 16 pixels so a phone does not zoom into it; HeroUI's search field keeps 36 at every width, so
 `packages/ui/src/primitives/Field.css` sizes its group by its input as a text field is, in the components layer so a
 caller's own height (a menu's filter row) still wins. The rule lives in two places and no call site restates it:
-`FieldRow` (`packages/ui/src/components/form/FieldRow.tsx`) lays out the row and its gap, and `TextInput`'s `trailing`
-is drawn in one; the wrapper `Button`'s `besideField`, which `ToggleButton` shares and `IconToggle` and `PasteButton`
-pass on, gives any button the one `field-control` utility (`FIELD_CONTROL_CLASS`): the height of
-`--field-control-size` (`packages/ui/src/styles/layout.css`), the field's radius, and the same width when icon-only.
-Built this way: the Files mode's filter row, Find in files' file mask row, the remote daemon form's connection details
-with Paste, every directory field with Browse (`useDirectoryBrowse`) and the directory picker's path with Go. Two
-kinds of row are outside the rule: a control drawn inside the field's frame (a search field's Clear button, Find in
-files' match options), which is the field's own and sized by it; and a compact toolbar whose field is cut to the
-row-control height (the viewer's find bar, a 24-pixel field among 24-pixel step and close icons, 4 pixels apart),
-where field and icons already share one height.
+`FieldRow` (`packages/ui/src/components/form/FieldRow.tsx`) lays out the row and its gap (`labelled` for a select whose
+label stands beside it, whose label and trigger take the row's first two columns), and `TextInput`'s `trailing` is drawn
+in one; the wrapper `Button`'s `besideField`, which `ToggleButton` shares and `IconToggle` and `PasteButton` pass on,
+gives any button the one `field-control` utility (`FIELD_CONTROL_CLASS`): the height of `--field-control-size`
+(`packages/ui/src/styles/layout.css`), the field's radius, and the same width when icon-only. Built this way: the Files
+mode's filter row, Find in files' file mask row, the remote daemon form's connection details with Paste, every directory
+field with Browse (`useDirectoryBrowse`), the directory picker's path with Go, and, `labelled`, the Changes view's
+branch selector with its copy button and the Processes panel's session filter. Two kinds of row are outside the rule: a
+control drawn inside the field's frame (a search field's Clear button, Find in files' match options), which is the
+field's own and sized by it; and a compact toolbar whose field is cut to the row-control height (the viewer's find bar,
+a 24-pixel field among 24-pixel step and close icons, 4 pixels apart), where field and icons already share one height.
 
 WCAG 2.2 SC 2.5.8 also excepts an **Inline** target: one "in a sentence, or its size is otherwise constrained by the
 line-height of non-target text". A status mark standing in running text (the inline form in "How a mark is drawn and

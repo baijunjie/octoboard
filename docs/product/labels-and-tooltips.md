@@ -135,11 +135,11 @@ application buttons and the Keyboard shortcuts section's Cancel and Reset button
   button that is named Expand all commits or Collapse all commits by what pressing it will do (see "Grouped by commit"
   in the same doc), and the file
   viewer's Previous file and Next file buttons (see `docs/product/file-viewer.md`);
-- the copy buttons — the file viewer's Copy path, the Git mode's Copy worktree path on the change list's line naming
-  the worktree, and a diagnostic block's Copy — whose tooltip, and the name announced with it, turns to the copied
-  wording after a press (see "Copy buttons" below), and the Remote devices page's Paste button, whose tooltip and
-  name turn from "Paste" to "Pasted" the same way (see "Pasting connection details" in
-  `docs/product/remote-devices-page.md`);
+- the copy buttons — the file viewer's Copy path, the Git mode's Copy branch name after the branch selector and Copy
+  worktree path on the change list's line naming the worktree, and a diagnostic block's Copy — whose tooltip, and the
+  name announced with it, turns to the copied wording after a press (see "Copy buttons" below), and the Remote devices
+  page's Paste button, whose tooltip and name turn from "Paste" to "Pasted" the same way (see "Pasting connection
+  details" in `docs/product/remote-devices-page.md`);
 - the file viewer's File manager and Default application buttons, whose tooltip is the short "File manager" or "Default
   application" that names the action in a project pane row's menu, while the name announced for each says what pressing
   it does, "Open in file manager" or "Open in default application" (see "The header" in `docs/product/file-viewer.md`),
@@ -308,16 +308,17 @@ outline (see "The find bar" in `docs/product/finding-in-the-file-viewer.md`).
 
 A copy button is an icon button that puts a text on the clipboard and says it did so on the button itself rather than in
 a toast. These are the file viewer's Copy path (see "The header" in `docs/product/file-viewer.md`), the button after the
+Git mode's branch selector (see "The branch selector" in `docs/product/project-pane-git-mode.md`), the button after the
 worktree's name on the Git mode's change list (see "Uncommitted changes" in
 `docs/product/project-pane-git-change-list.md`), each diagnostic block's Copy (see "Names and diagnostic details" in
 `docs/product/error-alerts.md`), and the copy button of a report page's code, diff and copyable blocks (see "Content"
 in `docs/product/report-page-components.md`). For all of them:
 
-- Before a press, its tooltip and name say what it copies — "Copy path", "Copy worktree path" — and its icon is the
-  copy glyph. A diagnostic block's says simply "Copy", and so does a report page block's, which adds the block's label
-  where it has one: "Copy" and the label.
+- Before a press, its tooltip and name say what it copies — "Copy path", "Copy branch name", "Copy worktree path" —
+  and its icon is the copy glyph. A diagnostic block's says simply "Copy", and so does a report page block's, which
+  adds the block's label where it has one: "Copy" and the label.
 - Once the text is on the clipboard, **the tooltip turns to the copied wording and stays open through the press**: "Path
-  copied" for Copy path, "Copied" for the worktree's, the diagnostic block's and a report page block's. The name assistive technology is given
+  copied" for Copy path, "Copied" for the branch's, the worktree's, the diagnostic block's and a report page block's. The name assistive technology is given
   changes with it, and the copied wording is also announced as a status message, since a control that keeps focus is not
   reliably read again. The icon changes to a check that fades in.
 - **It goes back once the tooltip has closed** — the pointer or keyboard focus leaving it — its copy glyph fading in

@@ -1437,6 +1437,8 @@ export const tr: Translation<"one" | "other"> = {
   "git.changes.commitsFailed": "Bu dalın işlemeleri listelenemedi",
   "git.changes.commitsError": "İşlemeler listelenemedi: {message}",
   "git.changes.listError": "İşlenmemiş değişiklikler listelenemedi: {message}",
+  "git.changes.copyBranch": "Dal adını kopyala",
+  "git.changes.copyBranchFailed": "Dal adı kopyalanamadı",
   "git.changes.copyWorktreePath": "Çalışma ağacının yolunu kopyala",
   "git.changes.copyWorktreePathFailed": "Çalışma ağacının yolu kopyalanamadı",
   "git.changes.worktree": "{name} çalışma ağacı",

@@ -1407,6 +1407,8 @@ export const de: Translation<"one" | "other"> = {
   "git.changes.commitsFailed": "Commits dieses Branches konnten nicht aufgelistet werden",
   "git.changes.commitsError": "Die Commits konnten nicht aufgelistet werden: {message}",
   "git.changes.listError": "Die uncommitteten Änderungen konnten nicht aufgelistet werden: {message}",
+  "git.changes.copyBranch": "Branch-Namen kopieren",
+  "git.changes.copyBranchFailed": "Branch-Name konnte nicht kopiert werden",
   "git.changes.copyWorktreePath": "Worktree-Pfad kopieren",
   "git.changes.copyWorktreePathFailed": "Worktree-Pfad konnte nicht kopiert werden",
   "git.changes.worktree": "Worktree {name}",

@@ -1420,6 +1420,8 @@ export const ko: Translation<"other"> = {
   "git.changes.commitsFailed": "이 브랜치의 커밋 목록을 가져오지 못했습니다",
   "git.changes.commitsError": "커밋 목록을 가져오지 못했습니다: {message}",
   "git.changes.listError": "미커밋 변경 목록을 가져오지 못했습니다: {message}",
+  "git.changes.copyBranch": "브랜치 이름 복사",
+  "git.changes.copyBranchFailed": "브랜치 이름을 복사하지 못했습니다",
   "git.changes.copyWorktreePath": "작업 트리 경로 복사",
   "git.changes.copyWorktreePathFailed": "작업 트리 경로를 복사하지 못했습니다",
   "git.changes.worktree": "작업 트리 {name}",

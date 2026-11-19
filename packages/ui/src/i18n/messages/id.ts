@@ -1380,6 +1380,8 @@ export const id: Translation<"other"> = {
   "git.changes.commitsFailed": "Tidak dapat mencantumkan commit cabang ini",
   "git.changes.commitsError": "Commit tidak dapat dicantumkan: {message}",
   "git.changes.listError": "Perubahan yang belum di-commit tidak dapat dicantumkan: {message}",
+  "git.changes.copyBranch": "Salin nama cabang",
+  "git.changes.copyBranchFailed": "Tidak dapat menyalin nama cabang",
   "git.changes.copyWorktreePath": "Salin jalur worktree",
   "git.changes.copyWorktreePathFailed": "Tidak dapat menyalin jalur worktree",
   "git.changes.worktree": "Worktree {name}",

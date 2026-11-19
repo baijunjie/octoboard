@@ -2,6 +2,7 @@ import { FileCheck, GitBranch, GitFork } from "lucide-react";
 import React, { useMemo, useState } from "react";
 
 import { CopyButton } from "../../components/controls/CopyButton";
+import { FieldRow } from "../../components/form/FieldRow";
 import { errorDetails, failureParam } from "../../components/alerts/errorParts";
 import { RecoveryGuidance, RecoveryLink, recoveryAction } from "../../components/alerts/ErrorGuidance";
 import { CenteredEmptyPanel } from "../../components/panel/EmptyPanel";
@@ -358,7 +359,7 @@ function ChangesView({
   return (
     <>
       <div ref={selectorsRef} className="shrink-0 groove-b py-2 px-(--pane-inset)" onFocus={handoff.onFocus} onBlur={handoff.onBlur}>
-        <div className={`grid min-w-0 ${branchesMark ? "grid-cols-[auto_minmax(0,1fr)_auto]" : "grid-cols-[auto_minmax(0,1fr)]"} items-center gap-x-2`}>
+        <FieldRow labelled>
           <BranchSelect
             label={t("git.changes.branch")}
             branches={listed}
@@ -369,12 +370,21 @@ function ChangesView({
             selectedSessionId={selectedSessionId}
             onChange={onBranchChange}
           />
+          {branch !== undefined && (
+            <CopyButton
+              text={displayWirePath(branch)}
+              beforeCopyText={t("git.changes.copyBranch")}
+              failedText={t("git.changes.copyBranchFailed")}
+              variant="tertiary"
+              besideField
+            />
+          )}
           {branchesMark && branchesError !== undefined && (
             <div className="flex items-center gap-1">
               <PartFailureMark label={t("git.branch.branchesFailed")} line="git.branch.branchesError" message={branchesError} onRetry={() => onRetry(null)} />
             </div>
           )}
-        </div>
+        </FieldRow>
         {branch !== undefined && (
           <>
             <div className="mt-2 flex flex-col text-xs leading-6 text-app-muted empty:hidden">

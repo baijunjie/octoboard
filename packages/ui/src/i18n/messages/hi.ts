@@ -1379,6 +1379,8 @@ export const hi: Translation<"one" | "other"> = {
   "git.changes.commitsFailed": "इस ब्रांच के कमिट की सूची नहीं मिल सकी",
   "git.changes.commitsError": "कमिट की सूची नहीं मिल सकी: {message}",
   "git.changes.listError": "बिना कमिट किए बदलावों की सूची नहीं मिल सकी: {message}",
+  "git.changes.copyBranch": "ब्रांच का नाम कॉपी करें",
+  "git.changes.copyBranchFailed": "ब्रांच का नाम कॉपी नहीं हो सका",
   "git.changes.copyWorktreePath": "वर्कट्री का पाथ कॉपी करें",
   "git.changes.copyWorktreePathFailed": "वर्कट्री का पाथ कॉपी नहीं हो सका",
   "git.changes.worktree": "वर्कट्री {name}",

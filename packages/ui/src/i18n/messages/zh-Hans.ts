@@ -1464,6 +1464,8 @@ export const zhHans: Translation<"other"> = {
   "git.changes.commitsFailed": "无法列出此分支的提交",
   "git.changes.commitsError": "无法列出提交：{message}",
   "git.changes.listError": "无法列出未提交的更改：{message}",
+  "git.changes.copyBranch": "复制分支名称",
+  "git.changes.copyBranchFailed": "无法复制分支名称",
   "git.changes.copyWorktreePath": "复制工作树路径",
   "git.changes.copyWorktreePathFailed": "无法复制工作树路径",
   "git.changes.worktree": "工作树 {name}",

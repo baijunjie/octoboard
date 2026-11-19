@@ -3,6 +3,7 @@ import React, { useEffect, useRef } from "react";
 import { useLatest } from "../components/hooks/useLatest";
 import { useFocusHandoff } from "../components/focus/useFocusHandoff";
 import { PaneToolbar } from "../components/panel/PaneToolbar";
+import { FieldRow } from "../components/form/FieldRow";
 import { OptionSelect, type Option } from "../components/form/OptionSelect";
 import { useT } from "../i18n/react";
 import { sessionDisplayTitle } from "../sessions/sessionLabel";
@@ -45,7 +46,7 @@ export function ProcessSessionSelect({ projectId, value, onChange, landing, show
   return (
     <div className="contents" {...handoff}>
       {shown && <PaneToolbar ref={toolbar} onBlur={onBlur}>
-        <div className="grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2">
+        <FieldRow labelled className="flex-1">
           <OptionSelect
             besideLabel
             variant="primary"
@@ -56,7 +57,7 @@ export function ProcessSessionSelect({ projectId, value, onChange, landing, show
             value={value ?? null}
             onChange={(id: string | null) => onChange(id ?? undefined)}
           />
-        </div>
+        </FieldRow>
       </PaneToolbar>}
     </div>
   );

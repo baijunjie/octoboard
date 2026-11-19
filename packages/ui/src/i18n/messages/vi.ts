@@ -1379,6 +1379,8 @@ export const vi: Translation<"other"> = {
   "git.changes.commitsFailed": "Không liệt kê được commit của nhánh này",
   "git.changes.commitsError": "Không liệt kê được commit: {message}",
   "git.changes.listError": "Không liệt kê được thay đổi chưa commit: {message}",
+  "git.changes.copyBranch": "Sao chép tên nhánh",
+  "git.changes.copyBranchFailed": "Không sao chép được tên nhánh",
   "git.changes.copyWorktreePath": "Sao chép đường dẫn cây làm việc",
   "git.changes.copyWorktreePathFailed": "Không sao chép được đường dẫn cây làm việc",
   "git.changes.worktree": "Cây làm việc {name}",

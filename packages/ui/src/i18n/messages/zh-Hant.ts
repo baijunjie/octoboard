@@ -1420,6 +1420,8 @@ export const zhHant: Translation<"other"> = {
   "git.changes.commitsFailed": "無法列出此分支的提交",
   "git.changes.commitsError": "無法列出提交：{message}",
   "git.changes.listError": "無法列出未提交的更改：{message}",
+  "git.changes.copyBranch": "複製分支名稱",
+  "git.changes.copyBranchFailed": "無法複製分支名稱",
   "git.changes.copyWorktreePath": "複製工作樹路徑",
   "git.changes.copyWorktreePathFailed": "無法複製工作樹路徑",
   "git.changes.worktree": "工作樹 {name}",

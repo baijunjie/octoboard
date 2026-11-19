@@ -1380,6 +1380,8 @@ export const fr: Translation<"one" | "many" | "other"> = {
   "git.changes.commitsFailed": "Impossible de répertorier les commits de cette branche",
   "git.changes.commitsError": "Les commits n’ont pas pu être répertoriés : {message}",
   "git.changes.listError": "Les modifications non commitées n’ont pas pu être répertoriées : {message}",
+  "git.changes.copyBranch": "Copier le nom de la branche",
+  "git.changes.copyBranchFailed": "Impossible de copier le nom de la branche",
   "git.changes.copyWorktreePath": "Copier le chemin du worktree",
   "git.changes.copyWorktreePathFailed": "Impossible de copier le chemin du worktree",
   "git.changes.worktree": "Worktree {name}",

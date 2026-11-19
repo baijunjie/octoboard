@@ -1419,6 +1419,8 @@ export const ja: Translation<"other"> = {
   "git.changes.commitsFailed": "このブランチのコミット一覧を取得できませんでした",
   "git.changes.commitsError": "コミット一覧を取得できませんでした: {message}",
   "git.changes.listError": "未コミットの変更一覧を取得できませんでした: {message}",
+  "git.changes.copyBranch": "ブランチ名をコピー",
+  "git.changes.copyBranchFailed": "ブランチ名をコピーできませんでした",
   "git.changes.copyWorktreePath": "ワークツリーのパスをコピー",
   "git.changes.copyWorktreePathFailed": "ワークツリーのパスをコピーできませんでした",
   "git.changes.worktree": "ワークツリー {name}",

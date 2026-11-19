@@ -407,9 +407,9 @@ The places with an error mark:
 - an account whose quota could not be read, in Settings and the rail's quota panel (see "Quota states" in
   `docs/product/account-quotas.md`);
 - in the Git mode, the committed part of the change list that could not be read — the branch not compared, or its
-  commits not listed — on the Committed heading, and a list of branches that could not be read again, beside the
-  branch selector (see "What the list says instead" in `docs/product/project-pane-git-change-list.md` and "The branch
-  selector" in `docs/product/project-pane-git-mode.md`);
+  commits not listed — on the Committed heading, and a list of branches that could not be read again, ending the
+  branch selector's row (see "What the list says instead" in `docs/product/project-pane-git-change-list.md` and "The
+  branch selector" in `docs/product/project-pane-git-mode.md`);
 - the handoff dialog's check of the branches a session is responsible for that failed, right after the **Moves to the
   new session** heading, with **Try again** where trying again can help; a retry that fails again is announced again
   (see "Handing off from the window" in `docs/product/handing-off-sessions.md`).

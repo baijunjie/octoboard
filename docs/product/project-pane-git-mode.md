@@ -121,6 +121,11 @@ from the repository (see "Committed changes" in `docs/product/project-pane-git-c
   change is cleared and the viewer closes.
 - A chosen branch's name too long for its space fades out (see "Names too long for their space" in
   `docs/product/labels-and-tooltips.md`), in the selector and in its list.
+- **A copy button follows the selector** whenever the selector shows a branch — chosen, the default, or one marked as
+  no longer existing — and is absent while it shows none. Its tooltip and name are "Copy branch name", turning to
+  "Copied" once pressed (see "Copy buttons" in `docs/product/labels-and-tooltips.md`). It copies the branch's name as
+  the selector shows it, for a human to paste: a byte of the name that is not valid UTF-8 is copied as the replacement
+  character U+FFFD. A copy that fails raises an error alert saying the branch name could not be copied.
 - **A chosen branch that a complete branch list no longer has** — merged and deleted, say — is chosen no more,
   whether it was chosen in the selector or set by following a session: the view goes back to the default branch,
   following it as when no branch has been chosen, its selected change is cleared and the viewer closes, before
@@ -149,10 +154,10 @@ selected and when the worktree the changes are read from is found gone. A branch
 meantime shows in the selector then.
 
 When the branches cannot be read, the view says so: in place of the change list, as an empty-state failure with
-**Try again**, while no branch is shown and no list of branches has been read yet; otherwise as a red mark beside the
-selector, named as the branches that could not be listed, whose popover holds the reason and **Try again**, the
-branches already offered staying on offer, until the branches are read again. Either is announced to assistive
-technology once when it appears after the view was drawn.
+**Try again**, while no branch is shown and no list of branches has been read yet; otherwise as a red mark ending the
+selector's row, after the copy button where there is one, named as the branches that could not be listed, whose
+popover holds the reason and **Try again**, the branches already offered staying on offer, until the branches are read
+again. Either is announced to assistive technology once when it appears after the view was drawn.
 
 ## Following the selected session
 

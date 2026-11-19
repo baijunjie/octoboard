@@ -1591,6 +1591,8 @@ export const en = {
   "git.changes.commitsFailed": "Could not list this branch's commits",
   "git.changes.commitsError": "The commits could not be listed: {message}",
   "git.changes.listError": "The uncommitted changes could not be listed: {message}",
+  "git.changes.copyBranch": "Copy branch name",
+  "git.changes.copyBranchFailed": "Could not copy the branch name",
   "git.changes.copyWorktreePath": "Copy worktree path",
   "git.changes.copyWorktreePathFailed": "Could not copy the worktree path",
   "git.changes.worktree": "Worktree {name}",

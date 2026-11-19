@@ -1380,6 +1380,8 @@ export const ar: Translation<"zero" | "one" | "two" | "few" | "many" | "other"> 
   "git.changes.commitsFailed": "تعذر عرض قائمة إيداعات هذا الفرع",
   "git.changes.commitsError": "تعذر عرض قائمة الإيداعات: {message}",
   "git.changes.listError": "تعذر عرض قائمة التغييرات غير المودعة: {message}",
+  "git.changes.copyBranch": "نسخ اسم الفرع",
+  "git.changes.copyBranchFailed": "تعذر نسخ اسم الفرع",
   "git.changes.copyWorktreePath": "نسخ مسار شجرة العمل",
   "git.changes.copyWorktreePathFailed": "تعذر نسخ مسار شجرة العمل",
   "git.changes.worktree": "شجرة العمل {name}",

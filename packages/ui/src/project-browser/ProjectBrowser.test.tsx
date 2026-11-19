@@ -247,7 +247,9 @@ it("keeps grouping by commit out of the pane header", async () => {
 // A live region inserted already holding its text is not announced (WebKit, VoiceOver), so each
 // status region is on the page empty and says its text a moment later, then follows the loading.
 // The spinner is a `role=status` of HeroUI's, hidden from assistive technology here.
-const statuses = () => [...document.querySelectorAll("[role=status]:not([aria-hidden])")];
+// The branch copy button keeps an empty region of its own right after it, for its "Copied"; it is not a loading
+// announcement, so it is left out.
+const statuses = () => [...document.querySelectorAll("[role=status]:not([aria-hidden])")].filter((region) => !region.previousElementSibling?.matches('button[aria-label="Copy branch name"], button[aria-label="Copied"]'));
 
 it("says the files are loading from a status region that outlives the loading", async () => {
   await mount("files-live", "files");

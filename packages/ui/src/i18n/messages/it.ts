@@ -1380,6 +1380,8 @@ export const it: Translation<"one" | "many" | "other"> = {
   "git.changes.commitsFailed": "Impossibile elencare i commit di questo branch",
   "git.changes.commitsError": "Impossibile elencare i commit: {message}",
   "git.changes.listError": "Impossibile elencare le modifiche senza commit: {message}",
+  "git.changes.copyBranch": "Copia nome del branch",
+  "git.changes.copyBranchFailed": "Impossibile copiare il nome del branch",
   "git.changes.copyWorktreePath": "Copia percorso del worktree",
   "git.changes.copyWorktreePathFailed": "Impossibile copiare il percorso del worktree",
   "git.changes.worktree": "Worktree {name}",

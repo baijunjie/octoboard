@@ -1380,6 +1380,8 @@ export const ru: Translation<"one" | "few" | "many" | "other"> = {
   "git.changes.commitsFailed": "Не удалось получить список коммитов этой ветки",
   "git.changes.commitsError": "Не удалось получить список коммитов: {message}",
   "git.changes.listError": "Не удалось получить список незакоммиченных изменений: {message}",
+  "git.changes.copyBranch": "Скопировать название ветки",
+  "git.changes.copyBranchFailed": "Не удалось скопировать название ветки",
   "git.changes.copyWorktreePath": "Скопировать путь рабочего дерева",
   "git.changes.copyWorktreePathFailed": "Не удалось скопировать путь рабочего дерева",
   "git.changes.worktree": "Рабочее дерево {name}",

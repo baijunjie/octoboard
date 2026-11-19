@@ -1379,6 +1379,8 @@ export const pt: Translation<"one" | "many" | "other"> = {
   "git.changes.commitsFailed": "Não foi possível listar os commits desta branch",
   "git.changes.commitsError": "Não foi possível listar os commits: {message}",
   "git.changes.listError": "Não foi possível listar as alterações sem commit: {message}",
+  "git.changes.copyBranch": "Copiar nome da branch",
+  "git.changes.copyBranchFailed": "Não foi possível copiar o nome da branch",
   "git.changes.copyWorktreePath": "Copiar caminho do worktree",
   "git.changes.copyWorktreePathFailed": "Não foi possível copiar o caminho do worktree",
   "git.changes.worktree": "Worktree {name}",
